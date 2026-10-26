@@ -57,13 +57,15 @@ export async function initiateSpotifyLogin(): Promise<void> {
 
   window.localStorage.setItem('spotify_code_verifier', codeVerifier);
 
+  const redirectUri = getRedirectUri();
+
   const params = new URLSearchParams({
     response_type: 'code',
     client_id: CLIENT_ID,
     scope: SCOPES,
     code_challenge_method: 'S256',
     code_challenge: codeChallenge,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
   });
 
   window.location.href = `https://accounts.spotify.com/authorize?${params.toString()}`;
@@ -71,12 +73,13 @@ export async function initiateSpotifyLogin(): Promise<void> {
 
 export async function handleSpotifyCallback(code: string): Promise<boolean> {
   const codeVerifier = window.localStorage.getItem('spotify_code_verifier') || '';
+  const redirectUri = getRedirectUri();
 
   const body = new URLSearchParams({
     client_id: CLIENT_ID,
     grant_type: 'authorization_code',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: redirectUri,
   });
 
   if (codeVerifier) {
