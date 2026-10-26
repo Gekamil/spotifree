@@ -1,4 +1,5 @@
 import type { Playlist, Track, UserProfile } from '../types/spotify';
+import { getValidAccessToken } from './spotifyAuth';
 
 export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
   try {
@@ -15,6 +16,21 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
 }
 
 export async function fetchCurrentUser(): Promise<UserProfile | null> {
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+  if (token && token !== 'session-bridge-active') {
+    try {
+      const validToken = await getValidAccessToken();
+      const res = await fetch('https://api.spotify.com/v1/me', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (err) {
+      console.warn('Error fetching /v1/me from Spotify API, falling back to session:', err);
+    }
+  }
+
   try {
     const res = await fetch('/api/spotify/session');
     if (!res.ok) return null;
@@ -27,6 +43,22 @@ export async function fetchCurrentUser(): Promise<UserProfile | null> {
 }
 
 export async function fetchUserPlaylists(): Promise<Playlist[]> {
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+  if (token && token !== 'session-bridge-active') {
+    try {
+      const validToken = await getValidAccessToken();
+      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.items || [];
+      }
+    } catch (err) {
+      console.warn('Error fetching /v1/me/playlists from Spotify API, falling back:', err);
+    }
+  }
+
   try {
     const res = await fetch('/api/spotify/session');
     if (!res.ok) return [];
@@ -51,6 +83,19 @@ export async function fetchNewReleases(): Promise<any[]> {
 }
 
 export async function fetchTopTracks(): Promise<Track[]> {
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+  if (token && token !== 'session-bridge-active') {
+    try {
+      const validToken = await getValidAccessToken();
+      const res = await fetch('https://api.spotify.com/v1/me/top/tracks?limit=20', {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.items || [];
+      }
+    } catch {}
+  }
   return [];
 }
 

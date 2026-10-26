@@ -338,6 +338,13 @@ const store = create<SpotifyDataState>((set, get) => ({
       }
     }
 
+    // 2. Prioritize active user OAuth session if logged in
+    const oauthToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+    if (oauthToken && oauthToken !== 'session-bridge-active') {
+      await get().refreshData();
+      return;
+    }
+
     // 2. Try Chrome session sync if available (skip if user explicitly logged out)
     if (typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true') {
       set({
