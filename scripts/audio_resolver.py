@@ -12,7 +12,7 @@ ydl_opts = {
     'prefer_insecure': False,
     'extractor_args': {
         'youtube': {
-            'player_client': ['android', 'ios', 'mweb'],
+            'player_client': ['android'],
         }
     }
 }
