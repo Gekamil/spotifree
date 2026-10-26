@@ -1,0 +1,17 @@
+[
+  {
+    "id": "shelf-0",
+    "title": "A continuación en la cola",
+    "subtitle": "Peli De Terror",
+    "hasSeeAll": false,
+    "cards": [
+      {
+        "id": "card-0",
+        "title": "Peli De Terror",
+        "subtitle": "",
+        "image": "https://i.scdn.co/image/ab67616d000011eb69486e4f8b0192aadba8c847",
+        "href": "https://open.spotify.com/intl-es/artist/4N1uqOIvymj2CbBSH33cks"
+      }
+    ]
+  }
+]

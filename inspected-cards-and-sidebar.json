@@ -1,0 +1,517 @@
+{
+  "cards": [
+    {
+      "title": "Canciones que te gustan",
+      "rect": {
+        "x": 376,
+        "y": 132,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 376,
+        "y": 132,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 500,
+          "y": 140,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "J+L(2026)",
+      "rect": {
+        "x": 548,
+        "y": 132,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 548,
+        "y": 132,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 672,
+          "y": 140,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Romeo & Prince",
+      "rect": {
+        "x": 376,
+        "y": 188,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 376,
+        "y": 188,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 500,
+          "y": 196,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "♡ nuestro amor ♡ (2024-25)",
+      "rect": {
+        "x": 548,
+        "y": 188,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 548,
+        "y": 188,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 672,
+          "y": 196,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Bd 🎉🎂",
+      "rect": {
+        "x": 376,
+        "y": 244,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 376,
+        "y": 244,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 500,
+          "y": 252,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Cooking gaming Songs",
+      "rect": {
+        "x": 376,
+        "y": 300,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 376,
+        "y": 300,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 500,
+          "y": 308,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Random",
+      "rect": {
+        "x": 548,
+        "y": 300,
+        "width": 164,
+        "height": 48
+      },
+      "css": {
+        "display": "flex",
+        "width": "164px",
+        "height": "48px",
+        "padding": "0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 548,
+        "y": 300,
+        "width": 48,
+        "height": 48
+      },
+      "imgRadius": "0px",
+      "playBtn": {
+        "rect": {
+          "x": 672,
+          "y": 308,
+          "width": 32,
+          "height": 32
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "32px",
+          "height": "32px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "paths": [
+            "M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z"
+          ]
+        }
+      }
+    },
+    {
+      "title": "Novedades Viernes España",
+      "rect": {
+        "x": 364,
+        "y": 436,
+        "width": 178,
+        "height": 228
+      },
+      "css": {
+        "display": "flex",
+        "width": "177.725px",
+        "height": "228.125px",
+        "padding": "12px",
+        "margin": "0px",
+        "gap": "8px normal",
+        "borderRadius": "6px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      },
+      "imgRect": {
+        "x": 376,
+        "y": 448,
+        "width": 154,
+        "height": 154
+      },
+      "imgRadius": "6px",
+      "playBtn": {
+        "rect": {
+          "x": 474,
+          "y": 554,
+          "width": 48,
+          "height": 48
+        },
+        "css": {
+          "display": "inline-block",
+          "width": "48px",
+          "height": "48px",
+          "padding": "0px",
+          "margin": "0px",
+          "gap": "normal",
+          "borderRadius": "9999px",
+          "backgroundColor": "rgba(0, 0, 0, 0)",
+          "color": "rgb(179, 179, 179)",
+          "fontSize": "13.3333px",
+          "fontWeight": "400",
+          "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+        },
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      }
+    }
+  ],
+  "filterPills": [
+    {
+      "text": "Tu biblioteca",
+      "rect": {
+        "x": 0,
+        "y": 82,
+        "width": 122,
+        "height": 30
+      },
+      "css": {
+        "display": "flex",
+        "width": "121.938px",
+        "height": "30.4px",
+        "padding": "4px 0px",
+        "margin": "0px",
+        "gap": "normal",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "13.3333px",
+        "fontWeight": "400",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      }
+    },
+    {
+      "text": "Recientes",
+      "rect": {
+        "x": 218,
+        "y": 173,
+        "width": 86,
+        "height": 32
+      },
+      "css": {
+        "display": "flex",
+        "width": "86.3875px",
+        "height": "32px",
+        "padding": "4px 0px",
+        "margin": "0px",
+        "gap": "8px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "14px",
+        "fontWeight": "700",
+        "fontFamily": "SpotifyMixUI, SpotifyMixUI-Arab, SpotifyMixUI-Cyrl, SpotifyMixUI-Grek, SpotifyMixUI-Hebr, SpotifyMixUI-Thai, DevanagariFallback, \"Helvetica Neue\", helvetica, arial, \"Hiragino Sans\", \"Hiragino Kaku Gothic ProN\", Meiryo, \"MS Gothic\", \"Apple Color Emoji\", \"Segoe UI Emoji\", \"Noto Color Emoji\""
+      }
+    }
+  ],
+  "playlistItems": []
+}

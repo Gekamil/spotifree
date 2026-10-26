@@ -1,0 +1,923 @@
+{
+  "actionButtons": [
+    {
+      "ariaLabel": "",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606\"></path>",
+      "className": "ztYqUDd1sSSciiGjjeuc"
+    },
+    {
+      "ariaLabel": "Reproducir J+L(2026)",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606\"></path>",
+      "className": "e-101040-legacy-button-primary e-101040-legacy-button"
+    },
+    {
+      "ariaLabel": "",
+      "svgViewBox": "0 0 16 16",
+      "svgInner": "<path d=\"M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z\"></path>",
+      "className": "Ysyd0q_kZWnihpDNsPWo"
+    },
+    {
+      "ariaLabel": "Descubrir J+L(2026)",
+      "svgViewBox": "0 0 16 16",
+      "svgInner": "<path d=\"M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z\"></path>",
+      "className": "b3iIMsP1OSWfGN4sKd8l"
+    },
+    {
+      "ariaLabel": "Habilitar la reproducción aleatoria en J+L(2026)",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"M18.788 3.702a1 1 0 0 1 1.414-1.414L23.914 6l-3.712 3.712a1 1 0 1 1-1.414-1.414L20.086 7h-1.518a5 5 0 0 0-3.826 1.78l-7.346 8.73a7 7 0 0 1-5.356 2.494H1v-2h1.04a5 5 0 0 0 3.826-1.781l7.345-8.73A7 7 0 0 1 18.569 5h1.518l-1.298-1.298z\"></path><path d=\"M18.788 14.289a1 1 0 0 0 0 1.414L20.086 17h-1.518a5 5 0 0 1-3.826-1.78l-1.403-1.668-1.306 1.554 1.178 1.4A7 7 0 0 0 18.568 19h1.518l-1.298 1.298a1 1 0 1 0 1.414 1.414L23.914 18l-3.712-3.713a1 1 0 0 0-1.414 0zM7.396 6.49l2.023 2.404-1.307 1.553-2.246-2.67a5 5 0 0 0-3.826-1.78H1v-2h1.04A7 7 0 0 1 7.396 6.49\"></path>",
+      "className": "e-101040-legacy-button e-101040-legacy-button-tertiary e-101040-overflow-wrap-anywhere e-101040-button-tertiary--icon-only-large e-101040-button-tertiary--icon-only e-101040-button-tertiary--condensed-all e-101040-button-tertiary--text-subdued encore-internal-color-text-subdued rObICu0YywW0T4jdSCaZ"
+    },
+    {
+      "ariaLabel": "Eliminar de Tu biblioteca",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12m16.398-2.38a1 1 0 0 0-1.414-1.413l-6.011 6.01-1.894-1.893a1 1 0 0 0-1.414 1.414l3.308 3.308z\"></path>",
+      "className": "e-101040-legacy-button e-101040-legacy-button-tertiary e-101040-overflow-wrap-anywhere e-101040-button-tertiary--icon-only-large e-101040-button-tertiary--icon-only e-101040-button-tertiary--condensed encore-internal-color-text-bright-accent"
+    },
+    {
+      "ariaLabel": "Descargar",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12\"></path><path d=\"M12 6.05a1 1 0 0 1 1 1v7.486l1.793-1.793a1 1 0 1 1 1.414 1.414L12 18.364l-4.207-4.207a1 1 0 1 1 1.414-1.414L11 14.536V7.05a1 1 0 0 1 1-1\"></path>",
+      "className": "e-101040-legacy-button e-101040-legacy-button-tertiary e-101040-overflow-wrap-anywhere e-101040-button-tertiary--icon-only-large e-101040-button-tertiary--icon-only e-101040-button-tertiary--condensed e-101040-button-tertiary--text-subdued encore-internal-color-text-subdued"
+    },
+    {
+      "ariaLabel": "Más opciones para J+L(2026)",
+      "svgViewBox": "0 0 24 24",
+      "svgInner": "<path d=\"M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3\"></path>",
+      "className": "e-101040-legacy-button e-101040-legacy-button-tertiary e-101040-overflow-wrap-anywhere e-101040-button-tertiary--icon-only-large e-101040-button-tertiary--icon-only e-101040-button-tertiary--condensed e-101040-button-tertiary--text-subdued encore-internal-color-text-subdued"
+    },
+    {
+      "ariaLabel": "Lista",
+      "svgViewBox": "0 0 16 16",
+      "svgInner": "<path d=\"M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z\"></path>",
+      "className": "OZdCmEnk2hu895dM4ACa"
+    },
+    {
+      "ariaLabel": "Lista",
+      "svgViewBox": "0 0 16 16",
+      "svgInner": "<path d=\"M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z\"></path>",
+      "className": "uZw_fW1DcgWWRM_3Ftpr"
+    }
+  ],
+  "headerCols": [
+    {
+      "text": "#",
+      "style": null
+    },
+    {
+      "text": "Título",
+      "style": null
+    },
+    {
+      "text": "Álbum",
+      "style": null
+    },
+    {
+      "text": "Añadido por",
+      "style": null
+    },
+    {
+      "text": "Fecha en la que se añadió",
+      "style": null
+    },
+    {
+      "text": "",
+      "style": null
+    }
+  ],
+  "tableHeader": "#\nTítulo\nÁlbum\nAñadido por\nFecha en la que se añadió",
+  "trackCount": 47,
+  "tracks": [
+    {
+      "index": 1,
+      "title": "Te Robaré",
+      "artists": [
+        "Prince Royce"
+      ],
+      "album": "Soy el Mismo",
+      "img": "https://i.scdn.co/image/ab67616d000048511a9d42dbbfa5a0b440654321",
+      "cells": [
+        "1",
+        "Te Robaré Prince Royce",
+        "Soy el Mismo",
+        "Jorgete",
+        "12 jul 2026",
+        "3:39"
+      ]
+    },
+    {
+      "index": 2,
+      "title": "Me EnRD",
+      "artists": [
+        "Prince Royce"
+      ],
+      "album": "LLAMADA PERDIDA",
+      "img": "https://i.scdn.co/image/ab67616d0000485187d73d8e4bd7cb2afd778a05",
+      "cells": [
+        "2",
+        "Me EnRD Prince Royce",
+        "LLAMADA PERDIDA",
+        "Jorgete",
+        "12 jul 2026",
+        "3:05"
+      ]
+    },
+    {
+      "index": 3,
+      "title": "Bailando Bachata",
+      "artists": [
+        "Chayanne"
+      ],
+      "album": "Bailemos Otra Vez",
+      "img": "https://i.scdn.co/image/ab67616d000048516bf0ce87e2004f9fed53151c",
+      "cells": [
+        "3",
+        "Bailando Bachata Chayanne",
+        "Bailemos Otra Vez",
+        "Jorgete",
+        "12 jul 2026",
+        "2:50"
+      ]
+    },
+    {
+      "index": 4,
+      "title": "Sensualidad",
+      "artists": [
+        "Bad Bunny",
+        "Prince Royce",
+        "J Balvin",
+        "Mambo Kingz",
+        "DJ Luian"
+      ],
+      "album": "Sensualidad",
+      "img": "https://i.scdn.co/image/ab67616d00004851c0ca1263b2966ddff794d3bb",
+      "cells": [
+        "4",
+        "Sensualidad Bad Bunny, Prince Royce, J Balvin, Mambo Kingz, DJ Luian",
+        "Sensualidad",
+        "Jorgete",
+        "12 jul 2026",
+        "4:57"
+      ]
+    },
+    {
+      "index": 5,
+      "title": "Reina Pepiada",
+      "artists": [
+        "Alvaro Diaz"
+      ],
+      "album": "Diaz Antes: La Ciudad De Los Niños Tristes",
+      "img": "https://i.scdn.co/image/ab67616d0000485174d62f9a88da68519fa864f4",
+      "cells": [
+        "5",
+        "Reina Pepiada Alvaro Diaz",
+        "Diaz Antes: La Ciudad De Los Niños Tristes",
+        "Jorgete",
+        "12 jul 2026",
+        "4:04"
+      ]
+    },
+    {
+      "index": 6,
+      "title": "Hecha Pa' Mi",
+      "artists": [
+        "Boza"
+      ],
+      "album": "Más Negro Que Rojo",
+      "img": "https://i.scdn.co/image/ab67616d000048515921096535733d90092393b6",
+      "cells": [
+        "6",
+        "Hecha Pa' Mi Boza",
+        "Más Negro Que Rojo",
+        "Jorgete",
+        "12 jul 2026",
+        "3:06"
+      ]
+    },
+    {
+      "index": 7,
+      "title": "Chicago",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "XSCAPE",
+      "img": "https://i.scdn.co/image/ab67616d0000485135f36cb686b0d5a12ab3a9f0",
+      "cells": [
+        "7",
+        "Chicago Michael Jackson",
+        "XSCAPE",
+        "Jorgete",
+        "12 jul 2026",
+        "4:05"
+      ]
+    },
+    {
+      "index": 8,
+      "title": "Cuenta Conmigo",
+      "artists": [
+        "Cruzzi"
+      ],
+      "album": "Maracucho Bueno Muere Chiquito",
+      "img": "https://i.scdn.co/image/ab67616d0000485171fa1f493824349117812e60",
+      "cells": [
+        "8",
+        "Cuenta Conmigo E Cruzzi",
+        "Maracucho Bueno Muere Chiquito",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:32"
+      ]
+    },
+    {
+      "index": 9,
+      "title": "honeybee",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "img": "https://i.scdn.co/image/ab67616d000048515cf234eeb7a2edf44bf64a46",
+      "cells": [
+        "9",
+        "honeybee Olivia Rodrigo",
+        "you seem pretty sad for a girl so in love",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:43"
+      ]
+    },
+    {
+      "index": 10,
+      "title": "stupid song",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "img": "https://i.scdn.co/image/ab67616d000048515cf234eeb7a2edf44bf64a46",
+      "cells": [
+        "10",
+        "stupid song Olivia Rodrigo",
+        "you seem pretty sad for a girl so in love",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:29"
+      ]
+    },
+    {
+      "index": 11,
+      "title": "drop dead",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "img": "https://i.scdn.co/image/ab67616d000048516949b83f85d782b21ce70583",
+      "cells": [
+        "11",
+        "drop dead Olivia Rodrigo",
+        "you seem pretty sad for a girl so in love",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:44"
+      ]
+    },
+    {
+      "index": 12,
+      "title": "VAMOaCOCHI",
+      "artists": [
+        "Omar Courtz"
+      ],
+      "album": "POR SI MAÑANA NO ESTOY",
+      "img": "https://i.scdn.co/image/ab67616d0000485190af5246adcaa93acb721c17",
+      "cells": [
+        "12",
+        "VAMOaCOCHI E Omar Courtz",
+        "POR SI MAÑANA NO ESTOY",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:19"
+      ]
+    },
+    {
+      "index": 13,
+      "title": "L a k e n o s h i",
+      "artists": [
+        "Omar Courtz"
+      ],
+      "album": "POR SI MAÑANA NO ESTOY",
+      "img": "https://i.scdn.co/image/ab67616d0000485190af5246adcaa93acb721c17",
+      "cells": [
+        "13",
+        "L a k e n o s h i E Omar Courtz",
+        "POR SI MAÑANA NO ESTOY",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:27"
+      ]
+    },
+    {
+      "index": 14,
+      "title": "Scat Pack",
+      "artists": [
+        "Clarent",
+        "Omar Courtz"
+      ],
+      "album": "Scat Pack",
+      "img": "https://i.scdn.co/image/ab67616d000048518b21916d3008980fef5a2fda",
+      "cells": [
+        "14",
+        "Scat Pack E Clarent, Omar Courtz",
+        "Scat Pack",
+        "Lucía :)",
+        "12 jul 2026",
+        "4:13"
+      ]
+    },
+    {
+      "index": 15,
+      "title": "AURORA",
+      "artists": [
+        "Mora",
+        "De La Rose"
+      ],
+      "album": "LO MISMO DE SIEMPRE",
+      "img": "https://i.scdn.co/image/ab67616d000048514cbf1f88953e2f87db81f9bd",
+      "cells": [
+        "15",
+        "AURORA E Mora, De La Rose",
+        "LO MISMO DE SIEMPRE",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:12"
+      ]
+    },
+    {
+      "index": 16,
+      "title": "DROGA",
+      "artists": [
+        "Mora",
+        "C. Tangana"
+      ],
+      "album": "DROGA",
+      "img": "https://i.scdn.co/image/ab67616d00004851d564c520884558ffbd9106cd",
+      "cells": [
+        "16",
+        "DROGA E Mora, C. Tangana",
+        "DROGA",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:42"
+      ]
+    },
+    {
+      "index": 17,
+      "title": "I Knew It, I Knew You - From \"Toy Story 5\"",
+      "artists": [
+        "Taylor Swift"
+      ],
+      "album": "I Knew It, I Knew You (From \"Toy Story 5\")",
+      "img": "https://i.scdn.co/image/ab67616d00004851a35a1d4983e2b4fd0094f910",
+      "cells": [
+        "17",
+        "I Knew It, I Knew You - From \"Toy Story 5\" Taylor Swift",
+        "I Knew It, I Knew You (From \"Toy Story 5\")",
+        "Lucía :)",
+        "12 jul 2026",
+        "2:58"
+      ]
+    },
+    {
+      "index": 18,
+      "title": "Stateside + Zara Larsson",
+      "artists": [
+        "PinkPantheress",
+        "Zara Larsson"
+      ],
+      "album": "Fancy Some More?",
+      "img": "https://i.scdn.co/image/ab67616d00004851684ecc5bc1b724d0106ad694",
+      "cells": [
+        "18",
+        "Stateside + Zara Larsson PinkPantheress, Zara Larsson",
+        "Fancy Some More?",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:04"
+      ]
+    },
+    {
+      "index": 19,
+      "title": "House Tour",
+      "artists": [
+        "Sabrina Carpenter"
+      ],
+      "album": "Man’s Best Friend",
+      "img": "https://i.scdn.co/image/ab67616d00004851b1863bf95557ea7f357c4947",
+      "cells": [
+        "19",
+        "House Tour Sabrina Carpenter",
+        "Man’s Best Friend",
+        "Lucía :)",
+        "12 jul 2026",
+        "2:49"
+      ]
+    },
+    {
+      "index": 20,
+      "title": "Into You",
+      "artists": [
+        "Ariana Grande"
+      ],
+      "album": "Dangerous Woman",
+      "img": "https://i.scdn.co/image/ab67616d0000485133342c57a9b2c4e04c97b3f5",
+      "cells": [
+        "20",
+        "Into You Ariana Grande",
+        "Dangerous Woman",
+        "Lucía :)",
+        "12 jul 2026",
+        "4:04"
+      ]
+    },
+    {
+      "index": 21,
+      "title": "Entre la Playa Ella y Yo",
+      "artists": [
+        "Big Yamo",
+        "Vato 18k"
+      ],
+      "album": "Big Yamo o Nada",
+      "img": "https://i.scdn.co/image/ab67616d0000485107ee92aded2c099916b20418",
+      "cells": [
+        "21",
+        "Entre la Playa Ella y Yo Big Yamo, Vato 18k",
+        "Big Yamo o Nada",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:05"
+      ]
+    },
+    {
+      "index": 22,
+      "title": "EoO",
+      "artists": [
+        "Bad Bunny"
+      ],
+      "album": "DeBÍ TiRAR MáS FOToS",
+      "img": "https://i.scdn.co/image/ab67616d00004851bbd45c8d36e0e045ef640411",
+      "cells": [
+        "22",
+        "EoO E Bad Bunny",
+        "DeBÍ TiRAR MáS FOToS",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:24"
+      ]
+    },
+    {
+      "index": 23,
+      "title": "VeLDÁ",
+      "artists": [
+        "Bad Bunny",
+        "Omar Courtz",
+        "Dei V"
+      ],
+      "album": "DeBÍ TiRAR MáS FOToS",
+      "img": "https://i.scdn.co/image/ab67616d00004851bbd45c8d36e0e045ef640411",
+      "cells": [
+        "23",
+        "VeLDÁ E Bad Bunny, Omar Courtz, Dei V",
+        "DeBÍ TiRAR MáS FOToS",
+        "Lucía :)",
+        "12 jul 2026",
+        "3:55"
+      ]
+    },
+    {
+      "index": 24,
+      "title": "Ojitos Lindos",
+      "artists": [
+        "Bad Bunny",
+        "Bomba Estéreo"
+      ],
+      "album": "Un Verano Sin Ti",
+      "img": "https://i.scdn.co/image/ab67616d0000485149d694203245f241a1bcaa72",
+      "cells": [
+        "24",
+        "Ojitos Lindos Bad Bunny, Bomba Estéreo",
+        "Un Verano Sin Ti",
+        "Lucía :)",
+        "12 jul 2026",
+        "4:18"
+      ]
+    },
+    {
+      "index": 25,
+      "title": "Seguro Te Pierdo",
+      "artists": [
+        "Sergi",
+        "KID FLEX"
+      ],
+      "album": "Seguro Te Pierdo",
+      "img": "https://i.scdn.co/image/ab67616d00004851693c59cb6f792932447e4edc",
+      "cells": [
+        "25",
+        "Seguro Te Pierdo Sergi, KID FLEX",
+        "Seguro Te Pierdo",
+        "Jorgete",
+        "14 jul 2026",
+        "2:54"
+      ]
+    },
+    {
+      "index": 26,
+      "title": "Dopamina",
+      "artists": [
+        "Sergi"
+      ],
+      "album": "Dopamina",
+      "img": "https://i.scdn.co/image/ab67616d0000485116fe2adf9e2062f0e02052a4",
+      "cells": [
+        "26",
+        "Dopamina Sergi",
+        "Dopamina",
+        "Jorgete",
+        "14 jul 2026",
+        "3:27"
+      ]
+    },
+    {
+      "index": 27,
+      "title": "Ayer Me Llamó Mi Ex",
+      "artists": [
+        "KHEA",
+        "Lenny Santos"
+      ],
+      "album": "Ayer Me Llamó Mi Ex",
+      "img": "https://i.scdn.co/image/ab67616d00004851e24dfb09cfd0a735237759c1",
+      "cells": [
+        "27",
+        "Ayer Me Llamó Mi Ex E KHEA, Lenny Santos",
+        "Ayer Me Llamó Mi Ex",
+        "Jorgete",
+        "14 jul 2026",
+        "3:26"
+      ]
+    },
+    {
+      "index": 28,
+      "title": "golden hour",
+      "artists": [
+        "JVKE"
+      ],
+      "album": "this is what falling in love feels like (554Hz)",
+      "img": "https://i.scdn.co/image/ab67616d000048510af4476af141051c728ee8b9",
+      "cells": [
+        "28",
+        "golden hour JVKE",
+        "this is what falling in love feels like (554Hz)",
+        "Jorgete",
+        "14 jul 2026",
+        "3:29"
+      ]
+    },
+    {
+      "index": 29,
+      "title": "Fuera Del Planeta (Remix)",
+      "artists": [
+        "Eloy",
+        "Randy Nota Loca",
+        "Zion",
+        "Jowell & Randy"
+      ],
+      "album": "Fuera Del Planeta (Remix)",
+      "img": "https://i.scdn.co/image/ab67616d000048515592adc56e63d9e6ec60a30f",
+      "cells": [
+        "29",
+        "Fuera Del Planeta (Remix) Eloy, Randy Nota Loca, Zion, Jowell & Randy",
+        "Fuera Del Planeta (Remix)",
+        "Jorgete",
+        "14 jul 2026",
+        "3:42"
+      ]
+    },
+    {
+      "index": 30,
+      "title": "Dutty Love",
+      "artists": [
+        "Don Omar",
+        "NATTI NATASHA"
+      ],
+      "album": "Don Omar Presents MTO2: New Generation",
+      "img": "https://i.scdn.co/image/ab67616d00004851a5e45cc0dc2afb858f861736",
+      "cells": [
+        "30",
+        "Dutty Love Don Omar, NATTI NATASHA",
+        "Don Omar Presents MTO2: New Generation",
+        "Jorgete",
+        "14 jul 2026",
+        "4:45"
+      ]
+    },
+    {
+      "index": 31,
+      "title": "Deportivo",
+      "artists": [
+        "Alvaro Diaz",
+        "Cazzu",
+        "Caleb Calloway"
+      ],
+      "album": "Diaz Antes",
+      "img": "https://i.scdn.co/image/ab67616d000048512e44e0c7f88373121d939ea0",
+      "cells": [
+        "31",
+        "Deportivo Alvaro Diaz, Cazzu, Caleb Calloway",
+        "Diaz Antes",
+        "Jorgete",
+        "14 jul 2026",
+        "3:15"
+      ]
+    },
+    {
+      "index": 32,
+      "title": "(When You Gonna) Give It Up to Me - Radio Version",
+      "artists": [
+        "Sean Paul",
+        "Keyshia Cole"
+      ],
+      "album": "(When You Gonna) Give It Up to Me",
+      "img": "https://i.scdn.co/image/ab67616d00004851a539563b3d77bd3ba17d016e",
+      "cells": [
+        "32",
+        "(When You Gonna) Give It Up to Me - Radio Version Sean Paul, Keyshia Cole",
+        "(When You Gonna) Give It Up to Me",
+        "Jorgete",
+        "14 jul 2026",
+        "4:03"
+      ]
+    },
+    {
+      "index": 33,
+      "title": "LA FAMA",
+      "artists": [
+        "ROSALÍA",
+        "The Weeknd"
+      ],
+      "album": "MOTOMAMI",
+      "img": "https://i.scdn.co/image/ab67616d00004851ac8367a27c0eb7195dc3a58d",
+      "cells": [
+        "33",
+        "LA FAMA ROSALÍA, The Weeknd",
+        "MOTOMAMI",
+        "Jorgete",
+        "14 jul 2026",
+        "3:08"
+      ]
+    },
+    {
+      "index": 34,
+      "title": "La Noche Mas Linda",
+      "artists": [
+        "Adalberto Santiago"
+      ],
+      "album": "Sex Symbol",
+      "img": "https://i.scdn.co/image/ab67616d00004851e4be1c14ef7b4fe0e8511ba5",
+      "cells": [
+        "34",
+        "La Noche Mas Linda Adalberto Santiago",
+        "Sex Symbol",
+        "Jorgete",
+        "14 jul 2026",
+        "5:43"
+      ]
+    },
+    {
+      "index": 35,
+      "title": "Ay Mi Dios",
+      "artists": [
+        "IAmChino",
+        "Pitbull",
+        "Yandel",
+        "El Chacal"
+      ],
+      "album": "Ay Mi Dios",
+      "img": "https://i.scdn.co/image/ab67616d0000485107e80dd12fc157ce0c9f01a1",
+      "cells": [
+        "35",
+        "Ay Mi Dios IAmChino, Pitbull, Yandel, El Chacal",
+        "Ay Mi Dios",
+        "Jorgete",
+        "14 jul 2026",
+        "4:12"
+      ]
+    },
+    {
+      "index": 36,
+      "title": "Llorarás",
+      "artists": [
+        "La Dimensión Latina",
+        "Oscar D'León"
+      ],
+      "album": "Los Oscares De Oscar",
+      "img": "https://i.scdn.co/image/ab67616d00004851b8812c47569d39a797a1410d",
+      "cells": [
+        "36",
+        "Llorarás La Dimensión Latina, Oscar D'León",
+        "Los Oscares De Oscar",
+        "Jorgete",
+        "14 jul 2026",
+        "3:48"
+      ]
+    },
+    {
+      "index": 37,
+      "title": "Tú Con Él",
+      "artists": [
+        "Frankie Ruiz"
+      ],
+      "album": "Show",
+      "img": "https://i.scdn.co/image/ab67616d000048518181d8122c4f608df8ef5a4f",
+      "cells": [
+        "37",
+        "Tú Con Él Frankie Ruiz",
+        "Show",
+        "Jorgete",
+        "15 jul 2026",
+        "5:02"
+      ]
+    },
+    {
+      "index": 38,
+      "title": "Tiroteo - Remix",
+      "artists": [
+        "Marc Seguí",
+        "Rauw Alejandro",
+        "Pol Granch"
+      ],
+      "album": "Tiroteo (Remix)",
+      "img": "https://i.scdn.co/image/ab67616d00004851cf206ae0c2100b85d30ab24c",
+      "cells": [
+        "38",
+        "Tiroteo - Remix Marc Seguí, Rauw Alejandro, Pol Granch",
+        "Tiroteo (Remix)",
+        "Lucía :)",
+        "16 jul 2026",
+        "5:21"
+      ]
+    },
+    {
+      "index": 39,
+      "title": "Dardos",
+      "artists": [
+        "Romeo Santos",
+        "Prince Royce"
+      ],
+      "album": "Better Late Than Never",
+      "img": "https://i.scdn.co/image/ab67616d0000485191750ed467a5ecc14beaa03f",
+      "cells": [
+        "39",
+        "Dardos Romeo Santos, Prince Royce",
+        "Better Late Than Never",
+        "Lucía :)",
+        "16 jul 2026",
+        "4:03"
+      ]
+    },
+    {
+      "index": 40,
+      "title": "SUPERESTRELLA",
+      "artists": [
+        "Aitana"
+      ],
+      "album": "CUARTO AZUL",
+      "img": "https://i.scdn.co/image/ab67616d00004851e9c382b5b9b3221428da47c2",
+      "cells": [
+        "40",
+        "SUPERESTRELLA E Aitana",
+        "CUARTO AZUL",
+        "Lucía :)",
+        "16 jul 2026",
+        "3:03"
+      ]
+    },
+    {
+      "index": 41,
+      "title": "Cancioncitas de Amor",
+      "artists": [
+        "Romeo Santos"
+      ],
+      "album": "Fórmula, Vol. 2 (Deluxe Edition)",
+      "img": "https://i.scdn.co/image/ab67616d00004851e0e4b48b060715c9aa7fca18",
+      "cells": [
+        "41",
+        "Cancioncitas de Amor Romeo Santos",
+        "Fórmula, Vol. 2 (Deluxe Edition)",
+        "Lucía :)",
+        "16 jul 2026",
+        "3:57"
+      ]
+    },
+    {
+      "index": 42,
+      "title": "The Morning",
+      "artists": [
+        "The Weeknd"
+      ],
+      "album": "Trilogy",
+      "img": "https://i.scdn.co/image/ab67616d00004851b298538481c52f7e217ed000",
+      "cells": [
+        "42",
+        "The Morning E The Weeknd",
+        "Trilogy",
+        "Lucía :)",
+        "16 jul 2026",
+        "5:12"
+      ]
+    },
+    {
+      "index": 43,
+      "title": "run for the hills",
+      "artists": [
+        "Tate McRae"
+      ],
+      "album": "THINK LATER",
+      "img": "https://i.scdn.co/image/ab67616d00004851c4258b134ff5756932f9c46f",
+      "cells": [
+        "43",
+        "run for the hills E Tate McRae",
+        "THINK LATER",
+        "Lucía :)",
+        "16 jul 2026",
+        "2:23"
+      ]
+    },
+    {
+      "index": 44,
+      "title": "Opalite",
+      "artists": [
+        "Taylor Swift"
+      ],
+      "album": "The Life of a Showgirl",
+      "img": "https://i.scdn.co/image/ab67616d00004851d7812467811a7da6e6a44902",
+      "cells": [
+        "44",
+        "Opalite Taylor Swift",
+        "The Life of a Showgirl",
+        "Lucía :)",
+        "16 jul 2026",
+        "3:55"
+      ]
+    },
+    {
+      "index": 45,
+      "title": "WHERE IS MY HUSBAND!",
+      "artists": [
+        "RAYE"
+      ],
+      "album": "THIS MUSIC MAY CONTAIN HOPE.",
+      "img": "https://i.scdn.co/image/ab67616d0000485197c0928704e5a2bd8d4c5b90",
+      "cells": [
+        "45",
+        "WHERE IS MY HUSBAND! RAYE",
+        "THIS MUSIC MAY CONTAIN HOPE.",
+        "Lucía :)",
+        "16 jul 2026",
+        "3:17"
+      ]
+    },
+    {
+      "index": 46,
+      "title": "So Easy (To Fall In Love)",
+      "artists": [
+        "Olivia Dean"
+      ],
+      "album": "The Art of Loving",
+      "img": "https://i.scdn.co/image/ab67616d000048519a336bfb6d40bbd90a507417",
+      "cells": [
+        "46",
+        "So Easy (To Fall In Love) Olivia Dean",
+        "The Art of Loving",
+        "Lucía :)",
+        "16 jul 2026",
+        "2:49"
+      ]
+    },
+    {
+      "index": 47,
+      "title": "When Did You Get Hot?",
+      "artists": [
+        "Sabrina Carpenter"
+      ],
+      "album": "Man’s Best Friend",
+      "img": "https://i.scdn.co/image/ab67616d00004851b1863bf95557ea7f357c4947",
+      "cells": [
+        "47",
+        "When Did You Get Hot? Sabrina Carpenter",
+        "Man’s Best Friend",
+        "Lucía :)",
+        "16 jul 2026",
+        "2:25"
+      ]
+    }
+  ],
+  "colorBg": ""
+}

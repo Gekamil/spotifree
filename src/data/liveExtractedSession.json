@@ -1,0 +1,989 @@
+{
+  "user": {
+    "id": "e6yr34zzwnf1yybcw49po6nrw",
+    "display_name": "Jorgeperezvk",
+    "avatarLetter": "J",
+    "image": null
+  },
+  "playback": {
+    "isPlaying": false,
+    "trackName": "Solita",
+    "artistName": "Kenny Die, Neutro Shorty, Dalex, Los Money Makers",
+    "trackImage": "https://i.scdn.co/image/ab67616d000011eb54df907e04bde991a198f0d5"
+  },
+  "playlists": [
+    {
+      "id": "liked-songs",
+      "name": "Canciones que te gustan",
+      "description": "FijadaLista • 23 canciones",
+      "images": [
+        {
+          "url": "https://misc.scdn.co/liked-songs/liked-songs-64.png"
+        }
+      ],
+      "is_pinned": true,
+      "owner": {
+        "display_name": "23 canciones"
+      },
+      "tracks": {
+        "total": 23
+      }
+    },
+    {
+      "id": "my-top-tracks-playlist",
+      "name": "My top tracks playlist",
+      "description": "Lista • Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://mosaic.scdn.co/60/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "7b3MrCWtettvBKlfBSdorn",
+      "name": "J+L(2026)",
+      "description": "Lista • Lucía :)",
+      "images": [
+        {
+          "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Lucía :)",
+        "id": "user"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "43GWp9FbN9nHihudedyVQM",
+      "name": "Romeo & Prince",
+      "description": "Lista • Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "radio-prince-royce",
+      "name": "Radio Prince Royce",
+      "description": "Lista • Hecha para Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Hecha para Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "tus-canciones-mas-escuchadas-2025",
+      "name": "Tus canciones más escuchadas en 2025",
+      "description": "Lista • Hecha para Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/wrapped25/yts/en"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Hecha para Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "random",
+      "name": "Random",
+      "description": "Lista • Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://mosaic.scdn.co/60/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "spidey",
+      "name": "Spidey",
+      "description": "Lista • Jorgeperezvk",
+      "images": [
+        {
+          "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "7HsL4sBaR3dJMa0UJ5e4zG",
+      "name": "♡ nuestro amor ♡ (2024-25)",
+      "description": "Lista • Lucía :)",
+      "images": [
+        {
+          "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Lucía :)",
+        "id": "user"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "nueva-carpeta",
+      "name": "Nueva carpeta",
+      "description": "7 listas",
+      "images": [
+        {
+          "url": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Jorgeperezvk"
+      },
+      "tracks": {
+        "total": 30
+      }
+    },
+    {
+      "id": "3x7gz85amxEplGx7LQxE7Z",
+      "name": "Romeo Santos",
+      "description": "Artista",
+      "type": "artist",
+      "images": [
+        {
+          "url": "https://i.scdn.co/image/ab6761610000101fc8be3c6e5a824360d1bffc03"
+        }
+      ],
+      "is_pinned": false,
+      "owner": {
+        "display_name": "Spotify",
+        "id": "spotify"
+      },
+      "tracks": {
+        "total": 30
+      }
+    }
+  ],
+  "quickAccess": [
+    {
+      "id": "37i9dQZF1DWZdsS73T1ogG",
+      "name": "el nuevo urbano",
+      "image": "https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426",
+      "color": "#704838"
+    },
+    {
+      "id": "7b3MrCWtettvBKlfBSdorn",
+      "name": "J+L(2026)",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc",
+      "color": "#5a483a"
+    },
+    {
+      "id": "4f0YTBqSbvM1iJpuY9r3yQ",
+      "name": "ZIZI",
+      "image": "https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31",
+      "color": "#2e4a52"
+    },
+    {
+      "id": "37i9dQZF1DX2EiUAL7Wdfc",
+      "name": "míticas",
+      "image": "https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6",
+      "color": "#8b3a1a"
+    }
+  ],
+  "shelves": [
+    {
+      "id": "shelf-editorial-novedades",
+      "prefix": "",
+      "title": "Novedades populares",
+      "subtitle": "Novedades y lanzamientos seleccionados",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1DWZdsS73T1ogG",
+          "title": "el nuevo urbano",
+          "subtitle": "De Spotify",
+          "image": "https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX2EiUAL7Wdfc",
+          "title": "míticas",
+          "subtitle": "De Spotify",
+          "image": "https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "7b3MrCWtettvBKlfBSdorn",
+          "title": "J+L(2026)",
+          "subtitle": "De Jorgeperezvk",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "4f0YTBqSbvM1iJpuY9r3yQ",
+          "title": "ZIZI",
+          "subtitle": "Ozuna, Omar Courtz",
+          "image": "https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXdmwx8doFIc0",
+          "title": "New Year's Reggaeton Party",
+          "subtitle": "De Spotify",
+          "image": "https://i.scdn.co/image/ab67706f000000029bb9a25f3da0023ac92b1d6c",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX2apWzyECwyZ",
+          "title": "This Is Bad Bunny",
+          "subtitle": "De Spotify",
+          "image": "https://i.scdn.co/image/ab67706f00000002a548bbf4cd54767b735f9701",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-0-jorgeperezvk",
+      "prefix": "Hecho para",
+      "title": "Jorgeperezvk",
+      "subtitle": "",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZEVXcHqU92M8nGCZ",
+          "title": "Descubrimiento semanal",
+          "subtitle": "Joyas ocultas y canciones que no podrás parar de escuchar, actualizadas cada lunes. Amor a primera escucha.",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/dw/cover/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E35QYVMBRlDph",
+          "title": "Mix diario 1",
+          "subtitle": "Nacho, Bad Bunny, Tainy y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E39G7BcNRMw7W",
+          "title": "Mix diario 2",
+          "subtitle": "Bruno Mars, Taylor Swift, Maroon 5 y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E38mn8YFuPgE2",
+          "title": "Mix diario 3",
+          "subtitle": "Romeo Santos, Aventura, Prince Royce y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E37WRLP4fZmP6",
+          "title": "Mix diario 4",
+          "subtitle": "Malcolm Todd, PinkPantheress, kuala y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E37UsvZHnETCz",
+          "title": "Mix diario 5",
+          "subtitle": "DIA, Quevedo, Cruzzi y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1E39YlnoZk8GqV",
+          "title": "Mix diario 6",
+          "subtitle": "The Rare Occasions, Vacations, Surf Curse y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZEVXbcvA1FAYKESf",
+          "title": "Radar de Novedades",
+          "subtitle": "Las novedades de los artistas que sigues y nuevos temas seleccionados para ti. Se actualiza cada viernes.",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000bada/dt/v1/img/release-radar-v4/1i8SpTcr7yvPOmcqrbnVXY/es",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-2-recientes",
+      "prefix": "",
+      "title": "Recientes",
+      "subtitle": "Canciones que te gustan",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "tracks",
+          "title": "Canciones que te gustan",
+          "subtitle": "Lista • Jorgeperezvk",
+          "image": "https://misc.scdn.co/liked-songs/liked-songs-300.png",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWZdsS73T1ogG",
+          "title": "el nuevo urbano",
+          "subtitle": "Lista • Spotify",
+          "image": "https://image-cdn-ak.spotifycdn.com/image/ab67706f000036f3acc0778b688c66b07afc5426",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "4Jf0fa5p0ajOnSriA9cYGS",
+          "title": "My top tracks playlist",
+          "subtitle": "5 canciones añadidas",
+          "image": "https://image-cdn-ak.spotifycdn.com/image/ab67616d000090d5c019056033dfa6c6987f25ce",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "4f0YTBqSbvM1iJpuY9r3yQ",
+          "title": "ZIZI",
+          "subtitle": "Álbum • Ozuna, Omar Courtz",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000ab87eb31ebdbca6acd99c23b4d31",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX2EiUAL7Wdfc",
+          "title": "míticas",
+          "subtitle": "Lista • Spotify",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706f000036f32072b736ac89da8c376e3fe6",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "6qYxkhMJ2vzxkRrlXzsP1m",
+          "title": "ALL WHITE REMIX (feat. Conep, VEI HABACHE)",
+          "subtitle": "Álbum • FANTA ROSARIO, Tommy Blanco, De La Ghetto, Brray",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67616d0000ab87dfad4a578d5776e307c02194",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "7b3MrCWtettvBKlfBSdorn",
+          "title": "J+L(2026)",
+          "subtitle": "Lista • Lucía :)",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "43GWp9FbN9nHihudedyVQM",
+          "title": "Romeo & Prince",
+          "subtitle": "Lista • Jorgeperezvk",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-4-el-nuevo-urbano",
+      "prefix": "Más como",
+      "title": "el nuevo urbano",
+      "subtitle": "",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1DXaxEKcoCdWHD",
+          "title": "Éxitos España",
+          "subtitle": "Los hits de ahora en la playlist más grande de España. Feat. La Pantera, Quevedo",
+          "image": "https://i.scdn.co/image/ab67706f00000002e37528f3dc4b08a330fe9b04",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX10zKzsJ2jva",
+          "title": "Viva Latino",
+          "subtitle": "Today's top Latin hits, elevando nuestra música. Cover: Nsqk",
+          "image": "https://i.scdn.co/image/ab67706f00000002ecb9880a04014f6aa0a0c651",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWZjqjZMudx9T",
+          "title": "MANSIÓN REGGAETÓN",
+          "subtitle": "De la Calle a la Cima con Dei V y Rauw Alejandro.",
+          "image": "https://i.scdn.co/image/ab67706f00000002159060240e041a8f6b1ae560",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX1HCSfq0nSal",
+          "title": "PEGAO",
+          "subtitle": "Si está pegao, está aquí. Feat. La Pantera, Quevedo",
+          "image": "https://i.scdn.co/image/ab67706f000000021727b5f359c8b9ba6e0feb0b",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWY7IeIP1cdjF",
+          "title": "Baila Reggaeton",
+          "subtitle": "Reggaeton hits from Fuerza Regida Judeline  Anuel AA, KAROL G, Bad Bunny and more. 🔥🍑",
+          "image": "https://i.scdn.co/image/ab67706f00000002659411bf37fd66cec6d3ea22",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXc9orRugI29r",
+          "title": "HOT NOW - Myke Towers",
+          "subtitle": "LAS CANCIONES MÁS 🔥🔥🔥",
+          "image": "https://i.scdn.co/image/ab67706f00000002ceeb931ff6337da45fe04a6a",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX963rxJxOMIA",
+          "title": "FINO",
+          "subtitle": "Fino y elegante como Kris R.",
+          "image": "https://i.scdn.co/image/ab67706f000000023cbc53da63058a2330cf4d2e",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8sljIJzI0oo",
+          "title": "Fuego",
+          "subtitle": "Anuel AA is bringing the heat this week. Tap in every Thursday for a refresh  (and subscribe to our substack!)",
+          "image": "https://i.scdn.co/image/ab67706f000000021b568d61bbdf6bcdea272d89",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX6sLKL3qdVO1",
+          "title": "Dale Flow",
+          "subtitle": "Shawty lo que necesitas es darle flow.  Kreamly, Cachirula y  Harry Nach en portada",
+          "image": "https://i.scdn.co/image/ab67706f00000002b0a4b4bb0e0f820a4af4b5c6",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWT34oeYRnJ0R",
+          "title": "Vibras",
+          "subtitle": "Just vibes. Cover: Zulia & Hamilton",
+          "image": "https://i.scdn.co/image/ab67706f000000021c6294823b02377c26c8a358",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-9-tus-mixes-m-s-escuchados",
+      "prefix": "",
+      "title": "Tus mixes más escuchados",
+      "subtitle": "Mix relajante",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1EVHGWrwldPRtj",
+          "title": "Mix relajante",
+          "subtitle": "The Rare Occasions, Olivia Rodrigo, Bruno Mars y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/1QfpRUtH14JLoY6F6AYmwt/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EIXyrqgTb1UJk",
+          "title": "Mix de Aventura",
+          "subtitle": "Romeo Santos, Monchy & Alexandra y Los Toros Band",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/1qto4hHid1P71emI6Fd8xi/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQm2eC3Aj5U5P",
+          "title": "Mix de bachata",
+          "subtitle": "Romeo Santos, Aventura, Prince Royce y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/bachata/5lwmRuXgjX8xIwlnauTZIP/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQmK1rjZuPGDt",
+          "title": "Mix latino",
+          "subtitle": "Darho, Don Omar, Rauw Alejandro y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/3Vzymy9i8OqVAbiCbAXCWq/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQncLwOalG3K7",
+          "title": "Mix de pop",
+          "subtitle": "PinkPantheress, Shawn Mendes, Chayanne y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/78rUTD7y6Cy67W1RVzYs7t/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EIV1oCGxzhRed",
+          "title": "Mix de Taylor Swift",
+          "subtitle": "Olivia Rodrigo, Chappell Roan y Selena Gomez",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/06HL4z0CvFAxyc27GXpf02/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQmg9rwHdCwFW",
+          "title": "Mix de reggaetón",
+          "subtitle": "Jedis, Myke Towers, Quevedo y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/reggaeton/3RJORoXd6fJDeyOZJ4YgTN/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQnsJ0xmvpihE",
+          "title": "Mix de los 2020",
+          "subtitle": "Chayanne, PinkPantheress, RAYE y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_twenties/1JbemQ1fPt2YmSLjAFhPBv/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EQqedj0y9Uwvu",
+          "title": "Mix de los 2010",
+          "subtitle": "Don Omar, Ozuna, Romeo Santos y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_tens/33ScadVnbm2X8kkUqOkC6Z/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1EVGJJ3r00UGAt",
+          "title": "Mix de amor",
+          "subtitle": "Micro TDH, Malcolm Todd, Jesse & Joy y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/romantic/1aWJsBQa67l72j1VT3D6Ow/es",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-1-emisoras-recomendadas",
+      "prefix": "",
+      "title": "Emisoras recomendadas",
+      "subtitle": "Música sin fin basada en tus canciones y artistas favoritos.",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1E4uMVXUeT9lW3",
+          "title": "Radio Romeo Santos",
+          "subtitle": "Con Monchy & Alexandra, Ozuna, Prince Royce y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5lwmRuXgjX8xIwlnauTZIP/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4rIBRtvqoJh8",
+          "title": "Radio Aventura",
+          "subtitle": "Con Monchy & Alexandra, Romeo Santos, El Chaval de la Bachata y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1qto4hHid1P71emI6Fd8xi/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4xrayq6Von4C",
+          "title": "Radio sma$her",
+          "subtitle": "Con DJ Asul, Flame Runner, MXZI y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1Fl1fc7bZfRVUCffh9Uudx/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4DTZUur7HqeC",
+          "title": "Radio The Weeknd",
+          "subtitle": "Con Doja Cat, Drake, Ariana Grande y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1Xyo4u8uXC1ZmMpatF05PJ/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4l5POm4tdfTL",
+          "title": "Radio 3AM",
+          "subtitle": "Con Panther, KYOTTO, Alex Mora y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1LU7BxbUvvuA4eNDdEO22D/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4tSd0qnf3TTN",
+          "title": "Radio Rauw Alejandro",
+          "subtitle": "Con KAROL G, Alvaro Diaz, Quevedo y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1mcTU81TzQhprhouKaTkpq/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4xp7eKFWSOVW",
+          "title": "Radio Milo j",
+          "subtitle": "Con Bizarrap, ROCKO, Dasgotti y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/19HM5j0ULGSmEoRcrSe5x3/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4AfEUiirXPyP",
+          "title": "Radio Taylor Swift",
+          "subtitle": "Con Olivia Rodrigo, Chappell Roan, Selena Gomez y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/06HL4z0CvFAxyc27GXpf02/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4zHckSzFUjbY",
+          "title": "Radio DJ FKU",
+          "subtitle": "Con LXNGVX, ATLXS, CHAXZER y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3QMpCp3GHiHXgnX1LldXWe/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1E4vxGRkRB3zej",
+          "title": "Radio MXZI",
+          "subtitle": "Con Jmilton, Nakama, DJ Asul y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/7kk9ucvRJim0NMM89Lml2Y/es",
+          "video": null,
+          "isRadio": true
+        }
+      ]
+    },
+    {
+      "id": "shelf-3-sum-rgete-de-nuevo-en-tu-m-sica",
+      "prefix": "",
+      "title": "Sumérgete de nuevo en tu música",
+      "subtitle": "Radio Bad Bunny",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1E4CWDuYF7GiUo",
+          "title": "Radio Bad Bunny",
+          "subtitle": "Con KAROL G, Arcángel, Beéle y más",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4q3ewBCX7sLwd24euuV69X/es",
+          "video": null,
+          "isRadio": true
+        },
+        {
+          "id": "37i9dQZF1DX9gKTxAbfFfX",
+          "title": "Verano 2026",
+          "subtitle": "Tu banda sonora de este verano. Foto: Quevedo.",
+          "image": "https://i.scdn.co/image/ab67706f000000025b14bc0bdbe5ad06c67fc881",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "25O3YarlDXld50hcp63zZ9",
+          "title": "FRIENDS (Hoodtrap)",
+          "subtitle": "neverbadagain",
+          "image": "https://i.scdn.co/image/ab67616d00001e020e3a16a31ed7da2178228a68",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "3x7gz85amxEplGx7LQxE7Z",
+          "title": "Random",
+          "subtitle": "De Jorgeperezvk",
+          "image": "https://mosaic.scdn.co/300/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "7HsL4sBaR3dJMa0UJ5e4zG",
+          "title": "♡ nuestro amor ♡ (2024-25)",
+          "subtitle": "De Lucía :)",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c94fb1489122f222f1a57c7c8",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "52hwjB5Cg9X8u5t12qJRa4",
+          "title": "Cooking gaming Songs",
+          "subtitle": "De Tor-Anders Bildøy Lillås",
+          "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c1163c32abb5c8ae7518edb09",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-5-m-s-cosas-que-te-van",
+      "prefix": "",
+      "title": "Más cosas que te van",
+      "subtitle": "Un poco de todo, pero siempre lo que te gusta.",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1DX0Tkc6ltcBfU",
+          "title": "No Cap",
+          "subtitle": "The hottest out the South. Cover: Yung Miami",
+          "image": "https://i.scdn.co/image/ab67706f000000027b02ceb45acd930c69443bc7",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX1hVRardJ30X",
+          "title": "All New Latin",
+          "subtitle": "New music by Victor Mendivi, Myke Towers, Xavi,Rubí and more.",
+          "image": "https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX0XUsuxWHRQd",
+          "title": "RapCaviar",
+          "subtitle": "New music from Yeat, Yung Miami and Anderson .Paak & Cordae.",
+          "image": "https://i.scdn.co/image/ab67706f00000002326607e99b599379d061bd48",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWY7IeIP1cdjF",
+          "title": "Baila Reggaeton",
+          "subtitle": "Reggaeton hits from Fuerza Regida Judeline  Anuel AA, KAROL G, Bad Bunny and more. 🔥🍑",
+          "image": "https://i.scdn.co/image/ab67706f00000002659411bf37fd66cec6d3ea22",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXc9orRugI29r",
+          "title": "HOT NOW - Myke Towers",
+          "subtitle": "LAS CANCIONES MÁS 🔥🔥🔥",
+          "image": "https://i.scdn.co/image/ab67706f00000002ceeb931ff6337da45fe04a6a",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8sljIJzI0oo",
+          "title": "Fuego",
+          "subtitle": "Anuel AA is bringing the heat this week. Tap in every Thursday for a refresh  (and subscribe to our substack!)",
+          "image": "https://i.scdn.co/image/ab67706f000000021b568d61bbdf6bcdea272d89",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX6sLKL3qdVO1",
+          "title": "Dale Flow",
+          "subtitle": "Shawty lo que necesitas es darle flow.  Kreamly, Cachirula y  Harry Nach en portada",
+          "image": "https://i.scdn.co/image/ab67706f00000002b0a4b4bb0e0f820a4af4b5c6",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-6-nueva-m-sica-fresca",
+      "prefix": "",
+      "title": "Nueva música fresca",
+      "subtitle": "Novedades Viernes España",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1DX6PYajiT4pAf",
+          "title": "Novedades Viernes España",
+          "subtitle": "La Pantera & Quevedo, Myke Towers, YOLAMASCARA, Natalia Lacunza y más novedades de la semana.",
+          "image": "https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZEVXbcvA1FAYKESf",
+          "title": "Radar de Novedades",
+          "subtitle": "Las novedades de los artistas que sigues y nuevos temas seleccionados para ti. Se actualiza cada viernes.",
+          "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000bada/dt/v1/img/release-radar-v4/1i8SpTcr7yvPOmcqrbnVXY/es",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXc9orRugI29r",
+          "title": "HOT NOW - Myke Towers",
+          "subtitle": "LAS CANCIONES MÁS 🔥🔥🔥",
+          "image": "https://i.scdn.co/image/ab67706f00000002ceeb931ff6337da45fe04a6a",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8EnL5nCWhbP",
+          "title": "nuevo urbano 2026",
+          "subtitle": "El nuevo urbano 'Made in Spain' que se te queda pegado como chicle en la suela. Foto: El Bugg.",
+          "image": "https://i.scdn.co/image/ab67706f00000002a973a9cc67d246b7865e3e43",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8womvTyUjrN",
+          "title": "el nuevo pop",
+          "subtitle": "The new wave of Latin pop 🌊 Cover: Irepelusa",
+          "image": "https://i.scdn.co/image/ab67706f00000002d801d203523522c916ff7e78",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXcUK8kkNqfRN",
+          "title": "fantasía",
+          "subtitle": "Como hundir los pies en gelatina de fresa. Foto: Daniela Garsal.",
+          "image": "https://i.scdn.co/image/ab67706f000000020d3134542da32ee66663c23a",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWTfSXuMnFLQ8",
+          "title": "la nueva electrónica",
+          "subtitle": "La fusión perfecta de música electrónica con sonidos latinos. Foto: MOSKA.",
+          "image": "https://i.scdn.co/image/ab67706f0000000266e6afa29c48fe22e5c2c659",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8f6LHxMjnzD",
+          "title": "Singled Out",
+          "subtitle": "If it's buzzing, it's here. The hottest new songs of the week. Cover: Fontaines D.C.",
+          "image": "https://i.scdn.co/image/ab67706f000000023a4d04b799a47ef8fb185987",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX0cNYCfLOrsu",
+          "title": "Dancehall Queen",
+          "subtitle": "The best in Dancehall for the gyaldem. Cover: Jada Kingdom",
+          "image": "https://i.scdn.co/image/ab67706f0000000200a8ebe52760614301504b8e",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    },
+    {
+      "id": "shelf-8-lo-que-no-te-puedes-perder",
+      "prefix": "",
+      "title": "Lo que no te puedes perder",
+      "subtitle": "Concentración Perfecta",
+      "hasSeeAll": true,
+      "cards": [
+        {
+          "id": "37i9dQZF1DX0MqBmOXvo6b",
+          "title": "Concentración Perfecta",
+          "subtitle": "Concéntrate al máximo, sin distracciones.",
+          "image": "https://i.scdn.co/image/ab67706f0000000282a07d7d13edd5426b55ec94",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWVJv1UsWItkB",
+          "title": "Viral España 2026",
+          "subtitle": "así suena internet, con Clarent, Quevedo",
+          "image": "https://i.scdn.co/image/ab67706f00000002dfe50ca8a63afd5994b8983c",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8Uebhn9wzrS",
+          "title": "chill lofi study beats",
+          "subtitle": "🎧 hit play, lock in, get stuff done 📚",
+          "image": "https://i.scdn.co/image/ab67706f000000021498ddc160581579f9b55979",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DXb0AsvHMF4aM",
+          "title": "Los 2000 España",
+          "subtitle": "Lo mejor de la primera década del milenio. Foto: Estopa.",
+          "image": "https://i.scdn.co/image/ab67706f00000002e3e5714c9ba7adbbeff48449",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8wtrGDH81Oa",
+          "title": "House Focus",
+          "subtitle": "Instrumental house for when you need to focus!",
+          "image": "https://i.scdn.co/image/ab67706f00000002a41d6907630b593d75f9688f",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWZeKCadgRdKQ",
+          "title": "Concentración profunda",
+          "subtitle": "Mantén la calma y concéntrate con música ambiental con guitarra eléctrica.",
+          "image": "https://i.scdn.co/image/ab67706f000000020eb9dc193fe3ae98e54c823e",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX8wWHvPMMfNA",
+          "title": "Focus Jazz",
+          "subtitle": "Soft instrumental jazz for working or studying.",
+          "image": "https://i.scdn.co/image/ab67706f000000023194636a464c3742a1ad2b03",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DWZZbwlv3Vmtr",
+          "title": "Focus Flow",
+          "subtitle": "Instrumental beats to lock-in.",
+          "image": "https://i.scdn.co/image/ab67706f000000025d66e1a1ab39e425bac18d48",
+          "video": null,
+          "isRadio": false
+        },
+        {
+          "id": "37i9dQZF1DX7EF8wVxBVhG",
+          "title": "Binaural Beats: Focus",
+          "subtitle": "Enhance your concentration by traveling through different brainwave frequencies until you reach peak awareness in Gamma state.",
+          "image": "https://i.scdn.co/image/ab67706f000000021d5f8876dc9c222b5246ef32",
+          "video": null,
+          "isRadio": false
+        }
+      ]
+    }
+  ]
+}

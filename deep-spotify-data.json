@@ -1,0 +1,359 @@
+{
+  "topNav": {
+    "buttons": [
+      {
+        "tag": "BUTTON",
+        "ariaLabel": "Contraer Tu biblioteca",
+        "text": "Tu biblioteca",
+        "width": "121.938px",
+        "height": "30.4px",
+        "padding": "4px 0px",
+        "margin": "0px",
+        "borderRadius": "0px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(255, 255, 255)",
+        "fontSize": "13.3333px",
+        "fontWeight": "400",
+        "gap": "normal",
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "width": 16,
+          "height": 16,
+          "fill": "rgb(179, 179, 179)",
+          "paths": [
+            "M10.97 5.47a.75.75 0 1 1 1.06 1.06L10.56 8l1.47 1.47a.75.75 0 1 1-1.06 1.06l-2-2a.75.75 0 0 1 0-1.06z",
+            "M1 0a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm.5 1.5H5v13H1.5zm13 13h-8v-13h8z"
+          ]
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "ariaLabel": "Crear",
+        "text": "",
+        "width": "35px",
+        "height": "35px",
+        "padding": "8px",
+        "margin": "0px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgb(31, 31, 31)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "13.3333px",
+        "fontWeight": "400",
+        "gap": "8px",
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "width": 16,
+          "height": 16,
+          "fill": "rgb(179, 179, 179)",
+          "paths": [
+            "M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75"
+          ]
+        }
+      },
+      {
+        "tag": "BUTTON",
+        "ariaLabel": "Ampliar Tu biblioteca",
+        "text": "",
+        "width": "35px",
+        "height": "35px",
+        "padding": "8px",
+        "margin": "0px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "gap": "normal",
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "width": 16,
+          "height": 16,
+          "fill": "rgb(179, 179, 179)",
+          "paths": [
+            "M6.53 9.47a.75.75 0 0 1 0 1.06l-2.72 2.72h1.018a.75.75 0 0 1 0 1.5H1.25v-3.579a.75.75 0 0 1 1.5 0v1.018l2.72-2.72a.75.75 0 0 1 1.06 0zm2.94-2.94a.75.75 0 0 1 0-1.06l2.72-2.72h-1.018a.75.75 0 1 1 0-1.5h3.578v3.579a.75.75 0 0 1-1.5 0V3.81l-2.72 2.72a.75.75 0 0 1-1.06 0"
+          ]
+        }
+      }
+    ],
+    "headerStyle": {
+      "height": "59px",
+      "padding": "16px 16px 8px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "display": "flex",
+      "justifyContent": "normal",
+      "alignItems": "normal"
+    }
+  },
+  "player": {
+    "footerStyle": {
+      "height": "136px",
+      "padding": "0px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderTop": "0px none rgba(255, 255, 255, 0.7)"
+    },
+    "img": null,
+    "trackTitle": null,
+    "artist": null,
+    "controls": [
+      {
+        "ariaLabel": "big-card-toggle-preview-button",
+        "testId": "big-card-toggle-preview-button",
+        "width": "106.15px",
+        "height": "32px",
+        "padding": "4px 16px 4px 36px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0.54)",
+        "color": "rgb(255, 255, 255)",
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "width": 16,
+          "height": 16,
+          "paths": [
+            "M13.86 5.47a.75.75 0 0 0-1.061 0l-1.47 1.47-1.47-1.47A.75.75 0 0 0 8.8 6.53L10.269 8l-1.47 1.47a.75.75 0 1 0 1.06 1.06l1.47-1.47 1.47 1.47a.75.75 0 0 0 1.06-1.06L12.39 8l1.47-1.47a.75.75 0 0 0 0-1.06",
+            "M10.116 1.5A.75.75 0 0 0 8.991.85l-6.925 4a3.64 3.64 0 0 0-1.33 4.967 3.64 3.64 0 0 0 1.33 1.332l6.925 4a.75.75 0 0 0 1.125-.649v-1.906a4.7 4.7 0 0 1-1.5-.694v1.3L2.817 9.852a2.14 2.14 0 0 1-.781-2.92c.187-.324.456-.594.78-.782l5.8-3.35v1.3c.45-.313.956-.55 1.5-.694z"
+          ]
+        }
+      },
+      {
+        "ariaLabel": "Más",
+        "testId": "more-button",
+        "width": "32px",
+        "height": "56px",
+        "padding": "12px 0px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 32,
+          "height": 32,
+          "paths": [
+            "M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"
+          ]
+        }
+      },
+      {
+        "ariaLabel": "Guardar en Tu biblioteca",
+        "testId": "add-button",
+        "width": "32px",
+        "height": "56px",
+        "padding": "12px 0px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 32,
+          "height": 32,
+          "paths": [
+            "M11.999 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18m-11 9c0-6.075 4.925-11 11-11s11 4.925 11 11-4.925 11-11 11-11-4.925-11-11",
+            "M17.999 12a1 1 0 0 1-1 1h-4v4a1 1 0 1 1-2 0v-4h-4a1 1 0 1 1 0-2h4V7a1 1 0 1 1 2 0v4h4a1 1 0 0 1 1 1"
+          ]
+        }
+      },
+      {
+        "ariaLabel": "Reproducir Radio FANTA ROSARIO de Spotify",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "padding": "0px",
+        "borderRadius": "9999px",
+        "backgroundColor": "rgba(0, 0, 0, 0)",
+        "color": "rgb(179, 179, 179)",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      }
+    ]
+  },
+  "sidebar": {
+    "buttons": [
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Canciones que te gustan",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir J+L(2026)",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Romeo & Prince",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Radio Prince Royce",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Tus canciones más escuchadas en 2025",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Random",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Spidey",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir ♡ nuestro amor ♡ (2024-25)",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Expandir carpeta",
+        "testId": "",
+        "width": "32px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 16 16",
+          "width": 16,
+          "height": 16,
+          "paths": [
+            "m14 6-6 6-6-6z"
+          ]
+        }
+      },
+      {
+        "text": "",
+        "ariaLabel": "Reproducir Romeo Santos",
+        "testId": "play-button",
+        "width": "48px",
+        "height": "48px",
+        "fontSize": "16px",
+        "fontWeight": "400",
+        "borderRadius": "9999px",
+        "svg": {
+          "viewBox": "0 0 24 24",
+          "width": 24,
+          "height": 24,
+          "paths": [
+            "m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.212L7.05 20.394A.7.7 0 0 1 6 19.788V4.212a.7.7 0 0 1 1.05-.606"
+          ]
+        }
+      }
+    ]
+  },
+  "timestamp": "2026-10-23T11:30:42.885Z"
+}

@@ -1,0 +1,94 @@
+{
+  "topBar": {
+    "height": "59px",
+    "backgroundColor": "rgba(0, 0, 0, 0)",
+    "padding": "16px 16px 8px",
+    "svgCount": 3,
+    "svgs": [
+      {
+        "viewBox": "0 0 16 16",
+        "path": "M10.97 5.47a.75.75 0 1 1 1.06 1.06L10.56 8l1.47 1.47a.75.75 0 1 1-1.06 1.06l-2-2a.75.75 0 0 1 0-1.06z",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "viewBox": "0 0 16 16",
+        "path": "M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75",
+        "width": 16,
+        "height": 16
+      },
+      {
+        "viewBox": "0 0 16 16",
+        "path": "M6.53 9.47a.75.75 0 0 1 0 1.06l-2.72 2.72h1.018a.75.75 0 0 1 0 1.5H1.25v-3.579a.75.75 0 0 1 1.5 0v1.018l2.72-2.72a.75.75 0 0 1 1.06 0zm2.94-2.94a.75.75 0 0 1 0-1.06l2.72-2.72h-1.018a.75.75 0 1 1 0-1.5h3.578v3.579a.75.75 0 0 1-1.5 0V3.81l-2.72 2.72a.75.75 0 0 1-1.06 0",
+        "width": 16,
+        "height": 16
+      }
+    ]
+  },
+  "quickAccess": [
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "",
+      "height": "64px",
+      "backgroundColor": "rgba(0, 0, 0, 0)",
+      "borderRadius": "0px"
+    }
+  ],
+  "bottomPlayer": {
+    "height": "72px",
+    "backgroundColor": "rgba(0, 0, 0, 0)"
+  }
+}

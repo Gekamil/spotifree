@@ -1,0 +1,1067 @@
+{
+  "user": {
+    "name": "J",
+    "avatarLetter": "J"
+  },
+  "quickAccess": [
+    {
+      "id": "quick-0",
+      "name": "Canciones que te gustan",
+      "image": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "href": "https://open.spotify.com/collection/tracks",
+      "isLiked": true
+    },
+    {
+      "id": "quick-1",
+      "name": "J+L(2026)",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc",
+      "href": "https://open.spotify.com/playlist/7b3MrCWtettvBKlfBSdorn",
+      "isLiked": false
+    },
+    {
+      "id": "quick-2",
+      "name": "Romeo & Prince",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7",
+      "href": "https://open.spotify.com/playlist/43GWp9FbN9nHihudedyVQM",
+      "isLiked": false
+    },
+    {
+      "id": "quick-3",
+      "name": "♡ nuestro amor ♡ (2024-25)",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c94fb1489122f222f1a57c7c8",
+      "href": "https://open.spotify.com/playlist/7HsL4sBaR3dJMa0UJ5e4zG",
+      "isLiked": false
+    },
+    {
+      "id": "quick-4",
+      "name": "ZIZI",
+      "image": "https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31",
+      "href": "https://open.spotify.com/intl-es/album/4f0YTBqSbvM1iJpuY9r3yQ",
+      "isLiked": false
+    },
+    {
+      "id": "quick-5",
+      "name": "Bd 🎉🎂",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c8b5e9b3204bf524cd440e883",
+      "href": "https://open.spotify.com/playlist/5MYgKapvLFVehsFdRW846B",
+      "isLiked": false
+    },
+    {
+      "id": "quick-6",
+      "name": "Random",
+      "image": "https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce",
+      "href": "https://open.spotify.com/playlist/3x7gz85amxEplGx7LQxE7Z",
+      "isLiked": false
+    },
+    {
+      "id": "quick-7",
+      "name": "míticas",
+      "image": "https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX2EiUAL7Wdfc",
+      "isLiked": false
+    }
+  ],
+  "sidebarItems": [
+    {
+      "href": "https://open.spotify.com/collection/tracks",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/7b3MrCWtettvBKlfBSdorn",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/43GWp9FbN9nHihudedyVQM",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/7HsL4sBaR3dJMa0UJ5e4zG",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c94fb1489122f222f1a57c7c8",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/5MYgKapvLFVehsFdRW846B",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c8b5e9b3204bf524cd440e883",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/3x7gz85amxEplGx7LQxE7Z",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX2EiUAL7Wdfc",
+      "title": "",
+      "subtitle": "Lista",
+      "img": "https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX6PYajiT4pAf",
+      "title": "Novedades Viernes España",
+      "subtitle": "Novedades Viernes España",
+      "img": "https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZEVXbcvA1FAYKESf",
+      "title": "Radar de Novedades",
+      "subtitle": "Radar de Novedades",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000bada/dt/v1/img/release-radar-v4/1i8SpTcr7yvPOmcqrbnVXY/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXc9orRugI29r",
+      "title": "HOT NOW - Myke Towers",
+      "subtitle": "HOT NOW - Myke Towers",
+      "img": "https://i.scdn.co/image/ab67706f00000002ceeb931ff6337da45fe04a6a",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DWZdsS73T1ogG",
+      "title": "el nuevo urbano",
+      "subtitle": "el nuevo urbano",
+      "img": "https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX8EnL5nCWhbP",
+      "title": "nuevo urbano 2026",
+      "subtitle": "nuevo urbano 2026",
+      "img": "https://i.scdn.co/image/ab67706f00000002a973a9cc67d246b7865e3e43",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX07X8UDWKEwP",
+      "title": "el nuevo tropical",
+      "subtitle": "el nuevo tropical",
+      "img": "https://i.scdn.co/image/ab67706f000000029e2b94ba77914439b74c02fe",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXcUK8kkNqfRN",
+      "title": "fantasía",
+      "subtitle": "fantasía",
+      "img": "https://i.scdn.co/image/ab67706f000000020d3134542da32ee66663c23a",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX1hVRardJ30X",
+      "title": "All New Latin",
+      "subtitle": "All New Latin",
+      "img": "https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX0cNYCfLOrsu",
+      "title": "Dancehall Queen",
+      "subtitle": "Dancehall Queen",
+      "img": "https://i.scdn.co/image/ab67706f0000000200a8ebe52760614301504b8e",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX7r3u5HAAB4A",
+      "title": "Fever",
+      "subtitle": "Fever",
+      "img": "https://i.scdn.co/image/ab67706f00000002d6c41cea4ff7fad375fd321d",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E35QYVMBRlDph",
+      "title": "Mix diario 1",
+      "subtitle": "Mix diario 1",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E39G7BcNRMw7W",
+      "title": "Mix diario 2",
+      "subtitle": "Mix diario 2",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E38mn8YFuPgE2",
+      "title": "Mix diario 3",
+      "subtitle": "Mix diario 3",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E37WRLP4fZmP6",
+      "title": "Mix diario 4",
+      "subtitle": "Mix diario 4",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E37UsvZHnETCz",
+      "title": "Mix diario 5",
+      "subtitle": "Mix diario 5",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E39YlnoZk8GqV",
+      "title": "Mix diario 6",
+      "subtitle": "Mix diario 6",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZEVXcHqU92M8nGCZ",
+      "title": "Descubrimiento semanal",
+      "subtitle": "Descubrimiento semanal",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/dw/cover/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/4Jf0fa5p0ajOnSriA9cYGS",
+      "title": "My top tracks playlist",
+      "subtitle": "My top tracks playlist",
+      "img": "https://mosaic.scdn.co/300/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXGwygmqthNa",
+      "title": "Mix de Romeo Santos",
+      "subtitle": "Mix de Romeo Santos",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/5lwmRuXgjX8xIwlnauTZIP/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIUpIrQi45CG4",
+      "title": "Mix de Romeo Santos",
+      "subtitle": "Mix de Romeo Santos",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/5lwmRuXgjX8xIwlnauTZIP/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXheQYsXvFLF",
+      "title": "Mix de Romeo Santos",
+      "subtitle": "Mix de Romeo Santos",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/5lwmRuXgjX8xIwlnauTZIP/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIYDokc7yq16f",
+      "title": "Mix de Romeo Santos",
+      "subtitle": "Mix de Romeo Santos",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/5lwmRuXgjX8xIwlnauTZIP/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EVHGWrwldPRtj",
+      "title": "Mix relajante",
+      "subtitle": "Mix relajante",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/0sfCfF62IjeupwxdvH7KM3/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWkH6B2syRQA",
+      "title": "Mix relajante",
+      "subtitle": "Mix relajante",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/0sfCfF62IjeupwxdvH7KM3/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXZUG6a65T4P",
+      "title": "Mix relajante",
+      "subtitle": "Mix relajante",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/0sfCfF62IjeupwxdvH7KM3/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIW9rQoy0mX7Q",
+      "title": "Mix relajante",
+      "subtitle": "Mix relajante",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/0sfCfF62IjeupwxdvH7KM3/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQm2eC3Aj5U5P",
+      "title": "Mix de bachata",
+      "subtitle": "Mix de bachata",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/bachata/3MHaV05u0io8fQbZ2XPtlC/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIW8REhrkwiJb",
+      "title": "Mix de bachata",
+      "subtitle": "Mix de bachata",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/bachata/3MHaV05u0io8fQbZ2XPtlC/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIVDDBd6wazBm",
+      "title": "Mix de bachata",
+      "subtitle": "Mix de bachata",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/bachata/3MHaV05u0io8fQbZ2XPtlC/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQmK1rjZuPGDt",
+      "title": "Mix latino",
+      "subtitle": "Mix latino",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/2oQX8QiMXOyuqbcZEFsZfm/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXSJiOtmFSHk",
+      "title": "Mix latino",
+      "subtitle": "Mix latino",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/2oQX8QiMXOyuqbcZEFsZfm/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIYifR9OLueGc",
+      "title": "Mix latino",
+      "subtitle": "Mix latino",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/2oQX8QiMXOyuqbcZEFsZfm/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQncLwOalG3K7",
+      "title": "Mix de pop",
+      "subtitle": "Mix de pop",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/1McMsnEElThX1knmY4oliG/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIV5ihzgPnqBl",
+      "title": "Mix de pop",
+      "subtitle": "Mix de pop",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/1McMsnEElThX1knmY4oliG/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIZnDLW6eOQdp",
+      "title": "Mix de pop",
+      "subtitle": "Mix de pop",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/1McMsnEElThX1knmY4oliG/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIZDQMaC7WlGq",
+      "title": "Mix de pop",
+      "subtitle": "Mix de pop",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/1McMsnEElThX1knmY4oliG/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIV1oCGxzhRed",
+      "title": "Mix de Taylor Swift",
+      "subtitle": "Mix de Taylor Swift",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/06HL4z0CvFAxyc27GXpf02/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIW0gmEV4Vhyx",
+      "title": "Mix de Taylor Swift",
+      "subtitle": "Mix de Taylor Swift",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/06HL4z0CvFAxyc27GXpf02/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWAwdcQmhVWB",
+      "title": "Mix de Taylor Swift",
+      "subtitle": "Mix de Taylor Swift",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/06HL4z0CvFAxyc27GXpf02/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQmg9rwHdCwFW",
+      "title": "Mix de reggaetón",
+      "subtitle": "Mix de reggaetón",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/reggaeton/2R21vXR83lH98kGeO99Y66/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWQWjctf49S5",
+      "title": "Mix de reggaetón",
+      "subtitle": "Mix de reggaetón",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/reggaeton/2R21vXR83lH98kGeO99Y66/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXvCxkLmcbWz",
+      "title": "Mix de reggaetón",
+      "subtitle": "Mix de reggaetón",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/reggaeton/2R21vXR83lH98kGeO99Y66/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXNujbVo1pgE",
+      "title": "Mix de reggaetón",
+      "subtitle": "Mix de reggaetón",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/reggaeton/2R21vXR83lH98kGeO99Y66/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQnsJ0xmvpihE",
+      "title": "Mix de los 2020",
+      "subtitle": "Mix de los 2020",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_twenties/1fctva4kpRbg2k3v7kwRuS/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIVbHGTWZtRzS",
+      "title": "Mix de los 2020",
+      "subtitle": "Mix de los 2020",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_twenties/1fctva4kpRbg2k3v7kwRuS/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWAm80ZUQHVF",
+      "title": "Mix de los 2020",
+      "subtitle": "Mix de los 2020",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_twenties/1fctva4kpRbg2k3v7kwRuS/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWuEXDSd3lD4",
+      "title": "Mix de los 2020",
+      "subtitle": "Mix de los 2020",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_twenties/1fctva4kpRbg2k3v7kwRuS/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQqedj0y9Uwvu",
+      "title": "Mix de los 2010",
+      "subtitle": "Mix de los 2010",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_tens/7pQKmVxIJROJ9FpYq3cLie/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIUuaDaNlgVT3",
+      "title": "Mix de los 2010",
+      "subtitle": "Mix de los 2010",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/twenty_tens/7pQKmVxIJROJ9FpYq3cLie/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EVGJJ3r00UGAt",
+      "title": "Mix de amor",
+      "subtitle": "Mix de amor",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/romantic/1mcTU81TzQhprhouKaTkpq/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIUrwLaCiPH6d",
+      "title": "Mix de amor",
+      "subtitle": "Mix de amor",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/romantic/1mcTU81TzQhprhouKaTkpq/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIVxI9pd28BFH",
+      "title": "Mix de amor",
+      "subtitle": "Mix de amor",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/romantic/1mcTU81TzQhprhouKaTkpq/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIUHV8U88tVxf",
+      "title": "Mix de amor",
+      "subtitle": "Mix de amor",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/romantic/1mcTU81TzQhprhouKaTkpq/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4FpP3OTY6OyV",
+      "title": "Radio Rels B",
+      "subtitle": "Radio Rels B",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/2IMZYfNi21MGqxopj9fWx8/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4oYmauGa1rTt",
+      "title": "Radio Prince Royce",
+      "subtitle": "Radio Prince Royce",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4rIBRtvqoJh8",
+      "title": "Radio Aventura",
+      "subtitle": "Radio Aventura",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1qto4hHid1P71emI6Fd8xi/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4CWDuYF7GiUo",
+      "title": "Radio Bad Bunny",
+      "subtitle": "Radio Bad Bunny",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4q3ewBCX7sLwd24euuV69X/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4E4AHSnhk842",
+      "title": "Radio Myke Towers",
+      "subtitle": "Radio Myke Towers",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/7iK8PXO48WeuP03g8YR51W/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4vbGjHA3nr7r",
+      "title": "Radio Quevedo",
+      "subtitle": "Radio Quevedo",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/52iwsT98xCoGgiGntTiR7K/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4DbQH0ZTYSWO",
+      "title": "Radio Alvaro Diaz",
+      "subtitle": "Radio Alvaro Diaz",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5J7rXWjtn5HzUkJ4Jet8Fr/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4BQ2mFSIr9w4",
+      "title": "Radio Trueno",
+      "subtitle": "Radio Trueno",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/2x7PC78TmgqpEIjaGAZ0Oz/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4kmkDk2aY9Qx",
+      "title": "Radio Micro TDH",
+      "subtitle": "Radio Micro TDH",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1aWJsBQa67l72j1VT3D6Ow/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4AfEUiirXPyP",
+      "title": "Radio Taylor Swift",
+      "subtitle": "Radio Taylor Swift",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/06HL4z0CvFAxyc27GXpf02/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX9gKTxAbfFfX",
+      "title": "Verano 2026",
+      "subtitle": "Verano 2026",
+      "img": "https://i.scdn.co/image/ab67706f000000025b14bc0bdbe5ad06c67fc881",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/52hwjB5Cg9X8u5t12qJRa4",
+      "title": "Cooking gaming Songs",
+      "subtitle": "Cooking gaming Songs",
+      "img": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000d72c1163c32abb5c8ae7518edb09",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4k8iFIrwwqkW",
+      "title": "Radio KAROL G",
+      "subtitle": "Radio KAROL G",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/790FomKkXshlbRYZFtlgla/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4vTHVDH1FT3Y",
+      "title": "Radio Bruno Mars",
+      "subtitle": "Radio Bruno Mars",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/0du5cEVh5yTK9QJze8zA0C/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4FhRRLh0mmxG",
+      "title": "Radio Coldplay",
+      "subtitle": "Radio Coldplay",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/4gzpq5DPGxSnKTe4SA8HAU/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4BC4ALHV05cu",
+      "title": "Radio Beéle",
+      "subtitle": "Radio Beéle",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/7a0XAaPaK2aDSqa8p3QnC7/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4xbxqPEGP0qr",
+      "title": "Radio Melendi",
+      "subtitle": "Radio Melendi",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1EXjXQpDx2pROygh8zvHs4/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4qDwDzsnmY8e",
+      "title": "Radio Estopa",
+      "subtitle": "Radio Estopa",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5ZqnEfVdEGmoPxtELhN7ai/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4Afg7Ob0j8Vf",
+      "title": "Radio Fito y Fitipaldis",
+      "subtitle": "Radio Fito y Fitipaldis",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/1tZ99AnqyjgrmPwLfGU5eo/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4D7zE9UPGmKT",
+      "title": "Radio Arde Bogotá",
+      "subtitle": "Radio Arde Bogotá",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/2Wwiu1wnq1W8AMYbWuRFDH/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4yspAq5ygvPw",
+      "title": "Radio Leiva",
+      "subtitle": "Radio Leiva",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5Hsv8dUHHOdnn72q4XIVz7/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX2WSz2bIXl9B",
+      "title": "RADAR Creators España",
+      "subtitle": "RADAR Creators España",
+      "img": "https://i.scdn.co/image/ab67706f00000002076d61b3147833d51fd2dc85",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4uMVXUeT9lW3",
+      "title": "Radio Romeo Santos",
+      "subtitle": "Radio Romeo Santos",
+      "img": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5lwmRuXgjX8xIwlnauTZIP/es",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX43c0ftmnMBx",
+      "title": "Bachatéame",
+      "subtitle": "Bachatéame",
+      "img": "https://i.scdn.co/image/ab67706f00000002e3d9a11cfffcee602dcd6a3a",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXcPINDdHzDqa",
+      "title": "Dos Íconos: Romeo Santos x Prince Royce",
+      "subtitle": "Dos Íconos: Romeo Santos x Prince Royce",
+      "img": "https://i.scdn.co/image/ab67706f000000028c6a0fdb0cb500b87bce6d5b",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX7nYPAAgv1Tj",
+      "title": "Latin Hits 2011",
+      "subtitle": "Latin Hits 2011",
+      "img": "https://i.scdn.co/image/ab67706f000000027e521c0e1f8dde8e992671b5",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4matGAxMqvFk",
+      "title": "Radio Ozuna",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWSXuMTXSqMp",
+      "title": "Mix de Young Cister",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIUlINltfua4z",
+      "title": "Pablo Chill-E",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIZ1m5GJtbxlX",
+      "title": "Yan Block",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIWqSrfwW8NAh",
+      "title": "Bad Bunny",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E8NE7HHvyM1rn",
+      "title": "Radio Es un Secreto",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4xQtf0IXZY8i",
+      "title": "Radio Doja Cat",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4wlCo9TT83wg",
+      "title": "Radio FANTA ROSARIO",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXaxEKcoCdWHD",
+      "title": "Éxitos España",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EQn2GRFTFMl2A",
+      "title": "Mix de los 90",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXdBs2NPwstJ",
+      "title": "Grupo Niche",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIZmukTOXPX5Y",
+      "title": "Juan Luis Guerra 4.40",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIZBGQToB5rjb",
+      "title": "2Pac",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DWVJv1UsWItkB",
+      "title": "Viral España 2026",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DWWekySnB4xpt",
+      "title": "Made In Venezuela",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX29qo6meCGNU",
+      "title": "Romantiqueo",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX4KeocBrdbJg",
+      "title": "Hits de Internet",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX24r38hOT4JG",
+      "title": "Romántico 2026",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXby1SeMgeoLS",
+      "title": "Top Canciones Ecuador 2025",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DXdo9iIZiH7LB",
+      "title": "Top Canciones 2025 España",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1CLcTo7UzL0sYK",
+      "title": "Top letras",
+      "subtitle": "Lista",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    },
+    {
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DWZdsS73T1ogG?uid=47646364382b7642796849&uri=spotify%3Atrack%3A60en70VzA0uqMAFTzShVit",
+      "title": "el nuevo urbano",
+      "subtitle": "el nuevo urbano",
+      "img": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "isPinned": false
+    }
+  ],
+  "dailyMixes": [
+    {
+      "id": "dm-1",
+      "title": "Mix diario 1",
+      "subtitle": "Nacho, Bad Bunny, Quevedo, Mora y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es",
+      "color": "#00F0FF"
+    },
+    {
+      "id": "dm-2",
+      "title": "Mix diario 2",
+      "subtitle": "Bruno Mars, Taylor Swift, Coldplay y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es",
+      "color": "#FFE600"
+    },
+    {
+      "id": "dm-3",
+      "title": "Mix diario 3",
+      "subtitle": "Romeo Santos, Prince Royce, Aventura y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es",
+      "color": "#FF4632"
+    },
+    {
+      "id": "dm-4",
+      "title": "Mix diario 4",
+      "subtitle": "Malcolm Todd, Steve Lacy, Omar Apollo y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es",
+      "color": "#FF64B4"
+    },
+    {
+      "id": "dm-5",
+      "title": "Mix diario 5",
+      "subtitle": "Delaossa, Quevedo, Cruz Cafuné, Duki y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es",
+      "color": "#1ED760"
+    },
+    {
+      "id": "dm-6",
+      "title": "Mix diario 6",
+      "subtitle": "The Weeknd, Post Malone, Travis Scott y más",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es",
+      "color": "#8C52FF"
+    }
+  ],
+  "novedadesViernes": [
+    {
+      "id": "nv-1",
+      "title": "Novedades Viernes España",
+      "subtitle": "La Pantera & Quevedo, Myke Towers, Saiko...",
+      "image": "https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e"
+    },
+    {
+      "id": "nv-2",
+      "title": "Radar de Novedades",
+      "subtitle": "Las novedades de los artistas que sigues y más.",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000bada/dt/v1/img/release-radar-v4/1i8SpTcr7yvPOmcqrbnVXY/es"
+    },
+    {
+      "id": "nv-3",
+      "title": "HOT NOW - Myke Towers",
+      "subtitle": "LAS CANCIONES MÁS 🔥🔥🔥",
+      "image": "https://i.scdn.co/image/ab67706f00000002ceeb931ff6337da45fe04a6a"
+    },
+    {
+      "id": "nv-4",
+      "title": "el nuevo urbano",
+      "subtitle": "Descubre lo más nuevo del género urbano en español.",
+      "image": "https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426"
+    },
+    {
+      "id": "nv-5",
+      "title": "nuevo urbano 2026",
+      "subtitle": "El nuevo urbano 'Made in Spain' que se pega en todo el mundo.",
+      "image": "https://i.scdn.co/image/ab67706f00000002a973a9cc67d246b7865e3e43"
+    },
+    {
+      "id": "nv-6",
+      "title": "el trap",
+      "subtitle": "Lo mejor del trap en español actual.",
+      "image": "https://i.scdn.co/image/ab67706f000000029e2b94ba77914439b74c02fe"
+    }
+  ],
+  "sidebarPlaylists": [
+    {
+      "id": "37i9dQZF1DX6PYajiT4pAf",
+      "name": "Novedades Viernes España",
+      "subtitle": "Novedades Viernes España",
+      "image": "https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX6PYajiT4pAf",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZEVXbcvA1FAYKESf",
+      "name": "Radar de Novedades",
+      "subtitle": "Radar de Novedades",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000bada/dt/v1/img/release-radar-v4/1i8SpTcr7yvPOmcqrbnVXY/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZEVXbcvA1FAYKESf",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E35QYVMBRlDph",
+      "name": "Mix diario 1",
+      "subtitle": "Mix diario 1",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E35QYVMBRlDph",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E39G7BcNRMw7W",
+      "name": "Mix diario 2",
+      "subtitle": "Mix diario 2",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E39G7BcNRMw7W",
+      "isPinned": true
+    },
+    {
+      "id": "4Jf0fa5p0ajOnSriA9cYGS",
+      "name": "My top tracks playlist",
+      "subtitle": "My top tracks playlist",
+      "image": "https://mosaic.scdn.co/300/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59",
+      "href": "https://open.spotify.com/playlist/4Jf0fa5p0ajOnSriA9cYGS",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1DWZdsS73T1ogG",
+      "name": "el nuevo urbano",
+      "subtitle": "el nuevo urbano",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706f000036f3acc0778b688c66b07afc5426",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DWZdsS73T1ogG",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1EIXGwygmqthNa",
+      "name": "Mix de Romeo Santos",
+      "subtitle": "Mix de Romeo Santos",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/5lwmRuXgjX8xIwlnauTZIP/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EIXGwygmqthNa",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1EVHGWrwldPRtj",
+      "name": "Mix relajante",
+      "subtitle": "Mix relajante",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/chill/0sfCfF62IjeupwxdvH7KM3/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1EVHGWrwldPRtj",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E4FpP3OTY6OyV",
+      "name": "Radio Rels B",
+      "subtitle": "Radio Rels B",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/2IMZYfNi21MGqxopj9fWx8/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4FpP3OTY6OyV",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E4oYmauGa1rTt",
+      "name": "Radio Prince Royce",
+      "subtitle": "Radio Prince Royce",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4oYmauGa1rTt",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1DX9gKTxAbfFfX",
+      "name": "Verano 2026",
+      "subtitle": "Verano 2026",
+      "image": "https://i.scdn.co/image/ab67706f000000025b14bc0bdbe5ad06c67fc881",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1DX9gKTxAbfFfX",
+      "isPinned": true
+    },
+    {
+      "id": "album-25O3YarlDXld50hcp63zZ9",
+      "name": "FRIENDS (Hoodtrap)",
+      "subtitle": "FRIENDS (Hoodtrap)",
+      "image": "https://i.scdn.co/image/ab67616d00001e020e3a16a31ed7da2178228a68",
+      "href": "https://open.spotify.com/intl-es/album/25O3YarlDXld50hcp63zZ9",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E4k8iFIrwwqkW",
+      "name": "Radio KAROL G",
+      "subtitle": "Radio KAROL G",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/790FomKkXshlbRYZFtlgla/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4k8iFIrwwqkW",
+      "isPinned": true
+    },
+    {
+      "id": "37i9dQZF1E4vTHVDH1FT3Y",
+      "name": "Radio Bruno Mars",
+      "subtitle": "Radio Bruno Mars",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/0du5cEVh5yTK9QJze8zA0C/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4vTHVDH1FT3Y",
+      "isPinned": true
+    },
+    {
+      "id": "",
+      "name": "Pareja in Crime",
+      "subtitle": "Pareja in Crime",
+      "image": "https://i.scdn.co/image/ab67656300005f1f01d4cbed7f7d54839f440a78",
+      "href": "https://open.spotify.com/show/5kZoxoTKOrVIB5oM5Wgp9w",
+      "isPinned": false
+    },
+    {
+      "id": "",
+      "name": "Ahora me entero",
+      "subtitle": "Ahora me entero",
+      "image": "https://i.scdn.co/image/ab67656300005f1fb6f0bb9c52389ad7d0c695df",
+      "href": "https://open.spotify.com/show/1KOIc2AOrYJMsYn56kWiZg",
+      "isPinned": false
+    },
+    {
+      "id": "37i9dQZF1E4uMVXUeT9lW3",
+      "name": "Radio Romeo Santos",
+      "subtitle": "Radio Romeo Santos",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/5lwmRuXgjX8xIwlnauTZIP/es",
+      "href": "https://open.spotify.com/playlist/37i9dQZF1E4uMVXUeT9lW3",
+      "isPinned": true
+    },
+    {
+      "id": "album-57tmzh0hsnWU8znnvEWJbe",
+      "name": "The Last",
+      "subtitle": "The Last",
+      "image": "https://i.scdn.co/image/ab67616d00001e02791d6daf3d05cde2a646c3cd",
+      "href": "https://open.spotify.com/intl-es/album/57tmzh0hsnWU8znnvEWJbe",
+      "isPinned": true
+    },
+    {
+      "id": "album-7odOEHZzb4ROtmS6wBkYtp",
+      "name": "Generation Next",
+      "subtitle": "Generation Next",
+      "image": "https://i.scdn.co/image/ab67616d00001e024ced2cec7470960ad2385da7",
+      "href": "https://open.spotify.com/intl-es/album/7odOEHZzb4ROtmS6wBkYtp",
+      "isPinned": true
+    },
+    {
+      "id": "album-4o8ZyBzwPxPVc2bqNG5Xfe",
+      "name": "Soy el Mismo",
+      "subtitle": "Soy el Mismo",
+      "image": "https://i.scdn.co/image/ab67616d00001e021a9d42dbbfa5a0b440654321",
+      "href": "https://open.spotify.com/intl-es/album/4o8ZyBzwPxPVc2bqNG5Xfe",
+      "isPinned": true
+    }
+  ],
+  "userLibrary": []
+}

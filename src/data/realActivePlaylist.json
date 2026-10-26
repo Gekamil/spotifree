@@ -1,0 +1,257 @@
+{
+  "title": "Tu biblioteca",
+  "coverImg": "https://misc.scdn.co/liked-songs/liked-songs-64.png",
+  "creators": [
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Jorgete",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)",
+    "Lucía :)"
+  ],
+  "trackCount": 47,
+  "sampleTracks": [
+    {
+      "index": 1,
+      "trackName": "Te Robaré",
+      "artists": [
+        "Prince Royce"
+      ],
+      "album": "Soy el Mismo",
+      "duration": "Te Robaré",
+      "img": "https://i.scdn.co/image/ab67616d000048511a9d42dbbfa5a0b440654321"
+    },
+    {
+      "index": 2,
+      "trackName": "Me EnRD",
+      "artists": [
+        "Prince Royce"
+      ],
+      "album": "LLAMADA PERDIDA",
+      "duration": "Me EnRD",
+      "img": "https://i.scdn.co/image/ab67616d0000485187d73d8e4bd7cb2afd778a05"
+    },
+    {
+      "index": 3,
+      "trackName": "Bailando Bachata",
+      "artists": [
+        "Chayanne"
+      ],
+      "album": "Bailemos Otra Vez",
+      "duration": "Bailando Bachata",
+      "img": "https://i.scdn.co/image/ab67616d000048516bf0ce87e2004f9fed53151c"
+    },
+    {
+      "index": 4,
+      "trackName": "Sensualidad",
+      "artists": [
+        "Bad Bunny",
+        "Prince Royce",
+        "J Balvin",
+        "Mambo Kingz",
+        "DJ Luian"
+      ],
+      "album": "Sensualidad",
+      "duration": "Sensualidad",
+      "img": "https://i.scdn.co/image/ab67616d00004851c0ca1263b2966ddff794d3bb"
+    },
+    {
+      "index": 5,
+      "trackName": "Reina Pepiada",
+      "artists": [
+        "Alvaro Diaz"
+      ],
+      "album": "Diaz Antes: La Ciudad De Los Niños Tristes",
+      "duration": "Reina Pepiada",
+      "img": "https://i.scdn.co/image/ab67616d0000485174d62f9a88da68519fa864f4"
+    },
+    {
+      "index": 6,
+      "trackName": "Hecha Pa' Mi",
+      "artists": [
+        "Boza"
+      ],
+      "album": "Más Negro Que Rojo",
+      "duration": "Hecha Pa' Mi",
+      "img": "https://i.scdn.co/image/ab67616d000048515921096535733d90092393b6"
+    },
+    {
+      "index": 7,
+      "trackName": "Chicago",
+      "artists": [
+        "Michael Jackson"
+      ],
+      "album": "XSCAPE",
+      "duration": "Chicago",
+      "img": "https://i.scdn.co/image/ab67616d0000485135f36cb686b0d5a12ab3a9f0"
+    },
+    {
+      "index": 8,
+      "trackName": "Cuenta Conmigo",
+      "artists": [
+        "Cruzzi"
+      ],
+      "album": "Maracucho Bueno Muere Chiquito",
+      "duration": "Cuenta Conmigo",
+      "img": "https://i.scdn.co/image/ab67616d0000485171fa1f493824349117812e60"
+    },
+    {
+      "index": 9,
+      "trackName": "honeybee",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "duration": "honeybee",
+      "img": "https://i.scdn.co/image/ab67616d000048515cf234eeb7a2edf44bf64a46"
+    },
+    {
+      "index": 10,
+      "trackName": "stupid song",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "duration": "stupid song",
+      "img": "https://i.scdn.co/image/ab67616d000048515cf234eeb7a2edf44bf64a46"
+    },
+    {
+      "index": 11,
+      "trackName": "drop dead",
+      "artists": [
+        "Olivia Rodrigo"
+      ],
+      "album": "you seem pretty sad for a girl so in love",
+      "duration": "drop dead",
+      "img": "https://i.scdn.co/image/ab67616d000048516949b83f85d782b21ce70583"
+    },
+    {
+      "index": 12,
+      "trackName": "VAMOaCOCHI",
+      "artists": [
+        "Omar Courtz"
+      ],
+      "album": "POR SI MAÑANA NO ESTOY",
+      "duration": "VAMOaCOCHI",
+      "img": "https://i.scdn.co/image/ab67616d0000485190af5246adcaa93acb721c17"
+    },
+    {
+      "index": 13,
+      "trackName": "L a k e n o s h i",
+      "artists": [
+        "Omar Courtz"
+      ],
+      "album": "POR SI MAÑANA NO ESTOY",
+      "duration": "L a k e n o s h i",
+      "img": "https://i.scdn.co/image/ab67616d0000485190af5246adcaa93acb721c17"
+    },
+    {
+      "index": 14,
+      "trackName": "Scat Pack",
+      "artists": [
+        "Clarent",
+        "Omar Courtz"
+      ],
+      "album": "Scat Pack",
+      "duration": "Scat Pack",
+      "img": "https://i.scdn.co/image/ab67616d000048518b21916d3008980fef5a2fda"
+    },
+    {
+      "index": 15,
+      "trackName": "AURORA",
+      "artists": [
+        "Mora",
+        "De La Rose"
+      ],
+      "album": "LO MISMO DE SIEMPRE",
+      "duration": "AURORA",
+      "img": "https://i.scdn.co/image/ab67616d000048514cbf1f88953e2f87db81f9bd"
+    }
+  ],
+  "actionButtons": [
+    {
+      "ariaLabel": "Reproducir J+L(2026)",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"m7.05 3.606 13.49 7.788a.7.7 0 0 1 0 1.21"
+    },
+    {
+      "ariaLabel": "Descubrir J+L(2026)",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288"
+    },
+    {
+      "ariaLabel": "Habilitar la reproducción aleatoria en J+L(2026)",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"M18.788 3.702a1 1 0 0 1 1.414-1.414L23.91"
+    },
+    {
+      "ariaLabel": "Eliminar de Tu biblioteca",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11"
+    },
+    {
+      "ariaLabel": "Descargar",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C"
+    },
+    {
+      "ariaLabel": "Más opciones para J+L(2026)",
+      "title": null,
+      "text": "",
+      "svg": "<path d=\"M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0"
+    },
+    {
+      "ariaLabel": null,
+      "title": null,
+      "text": "Lista",
+      "svg": "<path d=\"M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H"
+    }
+  ],
+  "rawHeader": "Lista pública\nJ+L(2026)\nLucía :) y 4 más\n•\nguardada 4 veces\n•\n88 canciones\n, \n5 h aproximadamente\nLista\nAñadir\n#\nTítulo\nÁlbum\nAñadido por\nFecha en la que se añadió\n1\nTe Robaré\nPrince Royce\nSoy el Mismo\nJorgete\n12 jul 2026\n3:39\n2\nMe EnRD\nPrince Royce\nLLAMADA PERDIDA\nJorgete\n12 jul 2026\n3:05\n3\nBailando Bachata\nChayanne\nBailemos Otra Vez\nJorgete\n12 jul 2026\n2:50\n4\nSensualidad\nBad Bunny, Prince Royce, J Balvin, Mambo Kingz, DJ Luian\nSensualidad\nJorgete\n12 jul 2026\n4:57\n5\nReina Pepiada\nAlvaro Diaz\nDiaz Antes: La Ciudad De Los Niños Tristes\nJorgete\n12 jul 2026\n4:04\n6\nHecha Pa' Mi\nBoza\nMás Negro Que Rojo\nJorgete\n12 jul 2026\n3:06\n7\nChicago\nMichael Jackson\nXSCAPE\nJorgete\n12 jul 2026\n4:05\n8\nCuenta Conmigo\nE\nCruzzi\nMaracucho Bueno Muere Chiquito\nLucía :)\n12 jul 2026\n3:32\n9\nhoneybee\nOlivia Rodrigo\nyou seem pretty sad for a girl so in love\nLucía :)\n12 jul 2026\n3:43\n10\nstupid song\nOlivia Rodrigo\nyou seem pretty sad for a girl so in love\nLucía :)\n12 jul 2026\n3:29\n11\ndrop dead\nOlivia Rodrigo\nyou seem "
+}
