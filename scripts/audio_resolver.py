@@ -10,9 +10,13 @@ ydl_opts = {
     'extract_flat': False,
     'nocheckcertificate': True,
     'prefer_insecure': False,
+    'js_runtimes': {
+        'node': {}
+    },
+    'remote_components': ['ejs:github'],
     'extractor_args': {
         'youtube': {
-            'player_client': ['android'],
+            'player_client': ['android', 'web', 'ios'],
         }
     }
 }
