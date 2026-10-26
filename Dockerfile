@@ -8,8 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp with system packages flag (latest version with ejs support)
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]"
+# Install yt-dlp with system packages flag (latest version with ejs and deno support)
+RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default,deno]"
 
 WORKDIR /app
 

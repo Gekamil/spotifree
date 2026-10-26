@@ -40,10 +40,6 @@ ydl_opts = {
     'extract_flat': False,
     'nocheckcertificate': True,
     'prefer_insecure': False,
-    'js_runtimes': {
-        'node': {}
-    },
-    'remote_components': ['ejs:github'],
 }
 
 if cookie_file:
