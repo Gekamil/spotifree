@@ -334,7 +334,7 @@ const store = create<SpotifyDataState>((set, get) => ({
     if (code) {
       const success = await handleSpotifyCallback(code);
       if (success) {
-        window.history.replaceState({}, document.title, window.location.pathname);
+        window.history.replaceState({}, document.title, '/');
       }
     }
 
