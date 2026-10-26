@@ -10,12 +10,77 @@ let pythonProcess = null;
 let rl = null;
 let isReady = false;
 
+export async function resolveYouTubeVideoId(query) {
+  const cleanQ = query.trim();
+  if (!cleanQ) return null;
+  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanQ)) return cleanQ;
+
+  // 1. YouTube Music API / Innertube search
+  try {
+    const ytmRes = await fetch('https://music.youtube.com/youtubei/v1/search', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify({
+        context: {
+          client: {
+            clientName: 'WEB_REMIX',
+            clientVersion: '1.20240318.01.00',
+            hl: 'es',
+            gl: 'ES',
+          },
+        },
+        query: cleanQ,
+        params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
+      }),
+    });
+    if (ytmRes.ok) {
+      const data = await ytmRes.json();
+      const sections = data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+      for (const sec of sections) {
+        const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
+        if (shelf) {
+          if (shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId) {
+            return shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId;
+          }
+          for (const item of shelf.contents || []) {
+            const itemRenderer = item.musicResponsiveListItemRenderer;
+            const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
+            const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
+            if (videoId) return videoId;
+          }
+        }
+      }
+      const text = JSON.stringify(data);
+      const matches = Array.from(text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
+      if (matches.length > 0) return matches[0];
+    }
+  } catch {}
+
+  // 2. Fallback to YouTube web search
+  try {
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQ + ' audio')}`;
+    const res = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    const html = await res.text();
+    const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map((m) => m[1]);
+    if (matches.length > 0) return matches[0];
+  } catch {}
+
+  return null;
+}
+
 function ensureWorker() {
   if (pythonProcess && !pythonProcess.killed) return;
 
   const scriptPath = path.resolve('scripts/audio_resolver.py');
   const pythonCmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
-  pythonProcess = spawn(pythonCmd, [scriptPath], {
+  pythonProcess = spawn(pythonCmd, ['-u', scriptPath], {
     stdio: ['pipe', 'pipe', 'inherit'],
   });
 
@@ -66,6 +131,15 @@ export async function resolveAudio(target) {
     return cached;
   }
 
+  // Pre-resolve search queries to YouTube Video IDs to prevent slow/blocked searches
+  let finalTarget = cleanTarget;
+  if (!cleanTarget.startsWith('http') && !/^[a-zA-Z0-9_-]{11}$/.test(cleanTarget)) {
+    const videoId = await resolveYouTubeVideoId(cleanTarget);
+    if (videoId) {
+      finalTarget = `https://www.youtube.com/watch?v=${videoId}`;
+    }
+  }
+
   ensureWorker();
 
   const req_id = String(++reqCounter);
@@ -74,7 +148,7 @@ export async function resolveAudio(target) {
     const timeout = setTimeout(() => {
       pendingRequests.delete(req_id);
       reject(new Error(`Timeout resolving audio for "${cleanTarget}"`));
-    }, 20000);
+    }, 45000);
 
     pendingRequests.set(req_id, {
       resolve: (data) => {
@@ -91,7 +165,7 @@ export async function resolveAudio(target) {
     });
   });
 
-  pythonProcess.stdin.write(JSON.stringify({ req_id, target: cleanTarget }) + '\n');
+  pythonProcess.stdin.write(JSON.stringify({ req_id, target: finalTarget }) + '\n');
   return promise;
 }
 
