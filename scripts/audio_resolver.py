@@ -44,11 +44,6 @@ ydl_opts = {
         'node': {}
     },
     'remote_components': ['ejs:github'],
-    'extractor_args': {
-        'youtube': {
-            'player_client': ['android', 'web', 'ios'],
-        }
-    }
 }
 
 if cookie_file:
@@ -88,6 +83,14 @@ for line in sys.stdin:
             continue
 
         audio_url = info.get("url")
+        if not audio_url and "formats" in info:
+            audio_formats = [f for f in info["formats"] if f.get("vcodec") == "none" and f.get("url")]
+            if not audio_formats:
+                audio_formats = [f for f in info["formats"] if f.get("url")]
+            if audio_formats:
+                best_audio = max(audio_formats, key=lambda f: f.get("tbr") or f.get("abr") or 0)
+                audio_url = best_audio.get("url")
+
         duration = info.get("duration") or 0
         title = info.get("title") or ""
         v_id = info.get("id") or ""
