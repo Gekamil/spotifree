@@ -10,6 +10,11 @@ ydl_opts = {
     'extract_flat': False,
     'nocheckcertificate': True,
     'prefer_insecure': False,
+    'extractor_args': {
+        'youtube': {
+            'player_client': ['android', 'ios', 'mweb'],
+        }
+    }
 }
 
 ydl = YoutubeDL(ydl_opts)

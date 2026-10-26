@@ -5,6 +5,7 @@
  */
 
 import { usePlayerStore } from '../store/usePlayerStore';
+import { API_BASE } from '../config';
 
 class AudioEngine {
   private audio: HTMLAudioElement;
@@ -114,7 +115,7 @@ class AudioEngine {
     this.currentTrackId = trackId;
     this.isSeeking = false;
 
-    const streamUrl = `/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+    const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
     this.audio.src = streamUrl;
     if (startSeconds > 0) {
       this.audio.currentTime = startSeconds;
