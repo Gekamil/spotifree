@@ -95,7 +95,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/' || pathname === '/health') {
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
-    return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.0' }));
+    return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.1', build: 'ejs-active' }));
   }
 
   // 2. Direct Audio Streaming (/api/audio/stream)
