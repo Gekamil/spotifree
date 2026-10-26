@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import time
 import traceback
 from yt_dlp import YoutubeDL
 
@@ -9,16 +10,31 @@ cookies_env = os.environ.get('YOUTUBE_COOKIES')
 if cookies_env:
     cookie_path = '/tmp/yt_cookies.txt' if os.path.exists('/tmp') else 'yt_cookies.txt'
     try:
+        raw_text = cookies_env.strip()
+        if raw_text.startswith('['):
+            cookies_json = json.loads(raw_text)
+            netscape = '# Netscape HTTP Cookie File\n\n'
+            for c in cookies_json:
+                domain = c.get('domain', '.youtube.com')
+                flag = 'TRUE' if domain.startswith('.') else 'FALSE'
+                path = c.get('path', '/')
+                secure = 'TRUE' if c.get('secure') else 'FALSE'
+                exp = int(c.get('expirationDate') or (time.time() + 31536000))
+                name = c.get('name', '')
+                val = c.get('value', '')
+                if name and val:
+                    netscape += f"{domain}\t{flag}\t{path}\t{secure}\t{exp}\t{name}\t{val}\n"
+            raw_text = netscape
         with open(cookie_path, 'w', encoding='utf-8') as f:
-            f.write(cookies_env)
+            f.write(raw_text)
         cookie_file = cookie_path
     except Exception as e:
-        print(f"[warning] Failed to write cookie file: {e}", file=sys.stderr)
+        print(f"[warning] Failed to process YOUTUBE_COOKIES: {e}", file=sys.stderr)
 elif os.path.exists('cookies.txt'):
     cookie_file = 'cookies.txt'
 
 ydl_opts = {
-    'format': 'ba/b[ext=m4a]/b',
+    'format': 'bestaudio/best',
     'quiet': True,
     'no_warnings': True,
     'extract_flat': False,
