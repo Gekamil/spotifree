@@ -1,7 +1,21 @@
+import os
 import sys
 import json
 import traceback
 from yt_dlp import YoutubeDL
+
+cookie_file = None
+cookies_env = os.environ.get('YOUTUBE_COOKIES')
+if cookies_env:
+    cookie_path = '/tmp/yt_cookies.txt' if os.path.exists('/tmp') else 'yt_cookies.txt'
+    try:
+        with open(cookie_path, 'w', encoding='utf-8') as f:
+            f.write(cookies_env)
+        cookie_file = cookie_path
+    except Exception as e:
+        print(f"[warning] Failed to write cookie file: {e}", file=sys.stderr)
+elif os.path.exists('cookies.txt'):
+    cookie_file = 'cookies.txt'
 
 ydl_opts = {
     'format': 'ba/b[ext=m4a]/b',
@@ -20,6 +34,9 @@ ydl_opts = {
         }
     }
 }
+
+if cookie_file:
+    ydl_opts['cookiefile'] = cookie_file
 
 ydl = YoutubeDL(ydl_opts)
 
