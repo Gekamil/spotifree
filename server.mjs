@@ -207,6 +207,53 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 4b. Spotify Token Proxy (/api/spotify/token)
+  if (pathname === '/api/spotify/token' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const tokenParams = new URLSearchParams();
+
+        if (payload.grant_type === 'refresh_token') {
+          tokenParams.append('grant_type', 'refresh_token');
+          tokenParams.append('refresh_token', payload.refresh_token);
+          tokenParams.append('client_id', payload.client_id || 'ea3003771e264c4690a2ac289afd22a4');
+        } else {
+          tokenParams.append('grant_type', 'authorization_code');
+          tokenParams.append('code', payload.code);
+          tokenParams.append('redirect_uri', payload.redirect_uri);
+          tokenParams.append('client_id', payload.client_id || 'ea3003771e264c4690a2ac289afd22a4');
+          if (payload.code_verifier) {
+            tokenParams.append('code_verifier', payload.code_verifier);
+          }
+        }
+
+        const authHeader = 'Basic ' + Buffer.from('ea3003771e264c4690a2ac289afd22a4:3976fc2dadf04e9c857ff2afdcc07d2b').toString('base64');
+
+        const spotifyRes = await fetch('https://accounts.spotify.com/api/token', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Authorization': authHeader,
+          },
+          body: tokenParams.toString(),
+        });
+
+        const data = await spotifyRes.json();
+        res.statusCode = spotifyRes.status;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify(data));
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 5. Audio Status (/api/audio/status)
   if (pathname === '/api/audio/status') {
     res.statusCode = 200;

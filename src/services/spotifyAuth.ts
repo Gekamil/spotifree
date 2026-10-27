@@ -75,19 +75,49 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
   const codeVerifier = window.localStorage.getItem('spotify_code_verifier') || '';
   const redirectUri = getRedirectUri();
 
-  const body = new URLSearchParams({
-    client_id: CLIENT_ID,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: redirectUri,
-  });
-
-  if (codeVerifier) {
-    body.append('code_verifier', codeVerifier);
-  }
-
   try {
-    // 1. Standard PKCE token exchange (No Authorization header)
+    // 1. Try secure backend token proxy first (CORS and header safe)
+    try {
+      const proxyRes = await fetch('/api/spotify/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          code_verifier: codeVerifier,
+          redirect_uri: redirectUri,
+          client_id: CLIENT_ID,
+        }),
+      });
+
+      if (proxyRes.ok) {
+        const data = await proxyRes.json();
+        if (data.access_token) {
+          const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+          window.localStorage.setItem('spotify_access_token', data.access_token);
+          if (data.refresh_token) {
+            window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
+          }
+          window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
+          window.localStorage.removeItem('spotify_logged_out');
+          return true;
+        }
+      }
+    } catch (proxyErr) {
+      console.warn('Backend token proxy failed, falling back to direct exchange:', proxyErr);
+    }
+
+    // 2. Direct PKCE exchange fallback
+    const body = new URLSearchParams({
+      client_id: CLIENT_ID,
+      grant_type: 'authorization_code',
+      code,
+      redirect_uri: redirectUri,
+    });
+
+    if (codeVerifier) {
+      body.append('code_verifier', codeVerifier);
+    }
+
     let response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
       headers: {
@@ -96,7 +126,6 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
       body: body.toString(),
     });
 
-    // 2. Fallback with Basic auth header if standard PKCE failed
     if (!response.ok) {
       response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
@@ -115,13 +144,14 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
     }
 
     const data = await response.json();
-    const expiresAt = Date.now() + data.expires_in * 1000;
+    const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
 
     window.localStorage.setItem('spotify_access_token', data.access_token);
     if (data.refresh_token) {
       window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
     }
     window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
+    window.localStorage.removeItem('spotify_logged_out');
 
     return true;
   } catch (error) {
@@ -170,6 +200,32 @@ export async function refreshAccessToken(): Promise<string | null> {
   }
 
   try {
+    // 1. Try proxy first
+    try {
+      const proxyRes = await fetch('/api/spotify/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          grant_type: 'refresh_token',
+          refresh_token: refreshToken,
+          client_id: CLIENT_ID,
+        }),
+      });
+
+      if (proxyRes.ok) {
+        const data = await proxyRes.json();
+        if (data.access_token) {
+          const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
+          window.localStorage.setItem('spotify_access_token', data.access_token);
+          if (data.refresh_token) {
+            window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
+          }
+          window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
+          return data.access_token;
+        }
+      }
+    } catch {}
+
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,

@@ -427,6 +427,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       const success = await handleSpotifyCallback(code);
       if (success) {
         window.history.replaceState({}, document.title, '/');
+        await get().refreshData();
+        return;
       }
     }
 
@@ -568,9 +570,17 @@ const store = create<SpotifyDataState>((set, get) => ({
       const livePlaylists = playlists && playlists.length > 0 ? playlists : DEFAULT_PUBLIC_PLAYLISTS;
       const shelves = buildDynamicShelves(user, livePlaylists, defaultMsg, featured || [], top || []);
 
+      const userProfile: UserProfile = user || {
+        id: 'spotify-user',
+        display_name: 'Usuario Spotify',
+        images: [],
+        email: '',
+        followers: { total: 0 },
+      };
+
       set({
-        isAuthenticated: !!user,
-        user: user || null,
+        isAuthenticated: true,
+        user: userProfile,
         playlists: livePlaylists,
         categories: categories || [],
         featuredPlaylists: featured || [],
