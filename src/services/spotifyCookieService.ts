@@ -1,4 +1,3 @@
-import sessionData from '../data/parsedSpotifySession.json';
 import type { UserProfile, Playlist } from '../types/spotify';
 import type { DynamicShelf } from '../store/useSpotifyDataStore';
 
@@ -14,7 +13,7 @@ export function validateSpotifyCookie(cookie: string): { valid: boolean; error?:
   if (!trimmed) {
     return { valid: false, error: 'Por favor, introduce tu cookie de sesión sp_dc.' };
   }
-  // Spotify sp_dc cookies always start with AQ and have standard base64/cookie length
+  // Spotify sp_dc cookies always start with AQ and have standard length >= 50
   if (!trimmed.startsWith('AQ') || trimmed.length < 50) {
     return {
       valid: false,
@@ -24,30 +23,54 @@ export function validateSpotifyCookie(cookie: string): { valid: boolean; error?:
   return { valid: true };
 }
 
+/**
+ * Dynamically extracts real Spotify user data from any provided sp_dc cookie.
+ * Calls the backend extractor which authenticates directly with Spotify's Web Player API.
+ */
 export async function extractSpotifySessionFromCookie(cookie: string): Promise<ExtractedSession> {
   const validation = validateSpotifyCookie(cookie);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  // 1. Attempt server-side extraction if online
+  const trimmedCookie = cookie.trim();
+
+  // Try extraction endpoint
+  let res: Response;
   try {
-    const res = await fetch('/api/spotify/extract-session', {
+    res = await fetch('/api/spotify/extract-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cookie: cookie.trim() }),
-      signal: AbortSignal.timeout(4000),
+      body: JSON.stringify({ cookie: trimmedCookie }),
+      signal: AbortSignal.timeout(20000),
     });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.user && data.playlists && data.playlists.length > 0) {
-        return data as ExtractedSession;
-      }
+  } catch (err: any) {
+    // Retry with /api/extract-session directly if network failed or proxy route was bypassed
+    try {
+      res = await fetch('/api/extract-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: trimmedCookie }),
+        signal: AbortSignal.timeout(20000),
+      });
+    } catch {
+      throw new Error('Tiempo de espera agotado al conectar con los servidores de Spotify. Por favor, inténtalo de nuevo.');
     }
-  } catch (err) {
-    // Backend timeout or offline: fallback to loaded high-fidelity parsed session
   }
 
-  // 2. Return real parsed session
-  return sessionData as unknown as ExtractedSession;
+  if (!res.ok) {
+    let errorMsg = 'Error al verificar la cookie con Spotify.';
+    try {
+      const errData = await res.json();
+      if (errData?.error) errorMsg = errData.error;
+    } catch {}
+    throw new Error(errorMsg);
+  }
+
+  const data = await res.json();
+  if (!data || !data.user || !data.playlists) {
+    throw new Error('La respuesta de Spotify no contiene datos de usuario válidos. Comprueba que tu sesión siga activa.');
+  }
+
+  return data as ExtractedSession;
 }

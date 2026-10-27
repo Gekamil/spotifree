@@ -12,6 +12,14 @@
       "destination": "/api/token"
     },
     {
+      "source": "/api/spotify/extract-session",
+      "destination": "/api/extract-session"
+    },
+    {
+      "source": "/api/extract-session",
+      "destination": "/api/extract-session"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },
