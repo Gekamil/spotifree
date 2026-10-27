@@ -171,46 +171,71 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     const title = currentTrack.name || '';
     const artist = currentTrack.artists?.[0]?.name || '';
 
+    const parseLyricsData = (data: any) => {
+      if (data && data.syncedLyrics) {
+        const lines: SyncedLine[] = [];
+        const rawLines = data.syncedLyrics.split('\n');
+        for (const raw of rawLines) {
+          const match = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)/);
+          if (match) {
+            const min = parseInt(match[1], 10);
+            const sec = parseFloat(`${match[2]}.${match[3]}`);
+            const timeMs = Math.round((min * 60 + sec) * 1000);
+            const text = match[4].trim();
+            if (text) {
+              lines.push({ timeMs, text });
+            }
+          }
+        }
+        if (lines.length > 0) {
+          setSyncedLyrics(lines);
+          setPlainLyrics([]);
+          return true;
+        }
+      }
+      if (data && data.plainLyrics) {
+        const plain = data.plainLyrics.split('\n').map((l: string) => l.trim()).filter(Boolean);
+        if (plain.length > 0) {
+          setPlainLyrics(plain);
+          setSyncedLyrics([]);
+          return true;
+        }
+      }
+      return false;
+    };
+
     fetch(`/api/lyrics?title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}`)
       .then((r) => r.json())
       .then((data) => {
         if (cancelled) return;
-        if (data && data.syncedLyrics) {
-          const lines: SyncedLine[] = [];
-          const rawLines = data.syncedLyrics.split('\n');
-          for (const raw of rawLines) {
-            const match = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)/);
-            if (match) {
-              const min = parseInt(match[1], 10);
-              const sec = parseFloat(`${match[2]}.${match[3]}`);
-              const timeMs = Math.round((min * 60 + sec) * 1000);
-              const text = match[4].trim();
-              if (text) {
-                lines.push({ timeMs, text });
-              }
-            }
-          }
-          if (lines.length > 0) {
-            setSyncedLyrics(lines);
-            setPlainLyrics([]);
-            return;
-          }
-        }
+        if (parseLyricsData(data)) return;
 
-        if (data && data.plainLyrics) {
-          const plain = data.plainLyrics.split('\n').map((l: string) => l.trim()).filter(Boolean);
-          setPlainLyrics(plain.length > 0 ? plain : getFallbackLyrics(title, artist));
-          setSyncedLyrics([]);
-        } else {
-          setSyncedLyrics([]);
-          setPlainLyrics(getFallbackLyrics(title, artist));
-        }
+        // Direct client fallback to LRCLib
+        return fetch(`https://lrclib.net/api/get?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`)
+          .then((r) => r.json())
+          .then((lrclibData) => {
+            if (cancelled) return;
+            if (parseLyricsData(lrclibData)) return;
+            setSyncedLyrics([]);
+            setPlainLyrics(getFallbackLyrics(title, artist));
+          });
       })
       .catch(() => {
-        if (!cancelled) {
-          setSyncedLyrics([]);
-          setPlainLyrics(getFallbackLyrics(title, artist));
-        }
+        if (cancelled) return;
+        fetch(`https://lrclib.net/api/get?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`)
+          .then((r) => r.json())
+          .then((lrclibData) => {
+            if (cancelled) return;
+            if (parseLyricsData(lrclibData)) return;
+            setSyncedLyrics([]);
+            setPlainLyrics(getFallbackLyrics(title, artist));
+          })
+          .catch(() => {
+            if (!cancelled) {
+              setSyncedLyrics([]);
+              setPlainLyrics(getFallbackLyrics(title, artist));
+            }
+          });
       });
 
     return () => {
@@ -236,7 +261,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   if (activeRightSidebar === 'none') return null;
 
   const isLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
-  const upcomingQueue = queue.filter((t) => t.id !== currentTrack?.id);
+  const currentTrackIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+  const upcomingQueue = currentTrackIndex >= 0 ? queue.slice(currentTrackIndex + 1) : queue;
 
   // Find current context playlist name
   const currentPlaylist = playlists.find(
@@ -588,7 +614,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
             {/* Section: A continuación en la cola */}
             <div>
               <h4 className="font-bold text-base text-white mb-3">
-                A continuación en la cola
+                {currentPlaylist?.name ? `A continuación en: ${currentPlaylist.name}` : 'A continuación en la cola'}
               </h4>
               {upcomingQueue.length > 0 ? (
                 <div className="space-y-1">

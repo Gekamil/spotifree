@@ -11,6 +11,13 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
 
+const TRACK_COVER_CACHE = new Map<string, string>();
+
+function toHDImage(url: string): string {
+  if (!url) return url;
+  return url;
+}
+
 interface DesktopPlaylistViewProps {
   playlist: Playlist;
 }
@@ -51,12 +58,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           if (!cancelled && data.tracks?.items) {
             const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
             const hasValidScrapedImage = data.images?.length > 0 && data.images[0].url && !data.images[0].url.includes('liked-songs');
+            const hasInitialHdImage = playlist.images && playlist.images.length > 0 && playlist.images[0].url && !playlist.images[0].url.includes('liked-songs');
             const updated: Playlist = {
               ...playlist,
               ...data,
               name: (data.name && data.name !== 'Tu biblioteca' && data.name !== 'Playlist' && !isSlugName) ? data.name : playlist.name,
               description: data.description || playlist.description,
-              images: hasValidScrapedImage ? data.images : playlist.images,
+              images: hasInitialHdImage ? playlist.images : (hasValidScrapedImage ? data.images : playlist.images),
               color: data.color || playlist.color,
               owner: data.owner || playlist.owner,
               tracks: data.tracks,
@@ -67,7 +75,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               useSpotifyDataStore.getState().cachePlaylistDetails(updated);
               useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
                 tracks: data.tracks,
-                ...(hasValidScrapedImage ? { images: data.images } : {}),
+                ...(hasInitialHdImage ? {} : (hasValidScrapedImage ? { images: data.images } : {})),
                 ...(data.color ? { color: data.color } : {}),
                 ...(data.owner ? { owner: data.owner } : {}),
               });
@@ -86,6 +94,69 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       cancelled = true;
     };
   }, [playlist.id, playlist.tracks]);
+
+  // Asynchronously resolve individual album covers for tracks that share the playlist's cover
+  useEffect(() => {
+    if (!dynamicTracks || dynamicTracks.length === 0) return;
+    let cancelled = false;
+
+    const playlistCover = dynamicPlaylist.images?.[0]?.url;
+    const tracksToResolve = dynamicTracks.filter((t) => {
+      const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
+      if (!isSpotifyId) return false;
+      const currentCover = t.album?.images?.[0]?.url;
+      return !currentCover || currentCover === playlistCover || !TRACK_COVER_CACHE.has(t.id);
+    });
+
+    if (tracksToResolve.length === 0) return;
+
+    // Resolve up to 30 tracks concurrently via oEmbed
+    const batch = tracksToResolve.slice(0, 30);
+    Promise.all(
+      batch.map(async (t) => {
+        if (TRACK_COVER_CACHE.has(t.id)) {
+          return { id: t.id, cover: TRACK_COVER_CACHE.get(t.id)! };
+        }
+        try {
+          const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json.thumbnail_url) {
+              const hd = toHDImage(json.thumbnail_url);
+              TRACK_COVER_CACHE.set(t.id, hd);
+              return { id: t.id, cover: hd };
+            }
+          }
+        } catch {}
+        return null;
+      })
+    ).then((results) => {
+      if (cancelled) return;
+      const updates = new Map(results.filter(Boolean).map((r) => [r!.id, r!.cover]));
+      if (updates.size > 0) {
+        setDynamicTracks((prev) =>
+          prev.map((track) => {
+            if (updates.has(track.id)) {
+              return {
+                ...track,
+                album: {
+                  ...track.album,
+                  id: track.album?.id || `alb-${track.id}`,
+                  name: track.album?.name || track.name,
+                  images: [{ url: updates.get(track.id)! }],
+                },
+              };
+            }
+            return track;
+          })
+        );
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dynamicPlaylist.id, dynamicTracks.length]);
 
   const tracks = dynamicTracks;
   const isLikedPlaylist =
@@ -215,14 +286,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
               </svg>
-            </div>
-          )}
-          {isUserCreatedPlaylist && (
-            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M14.06 2.94a2.25 2.25 0 0 1 3.18 0l3.82 3.82a2.25 2.25 0 0 1 0 3.18L8.18 22.82a.75.75 0 0 1-.53.22H3a.75.75 0 0 1-.75-.75v-4.65a.75.75 0 0 1 .22-.53L14.06 2.94zm2.12 1.06a.75.75 0 0 0-1.06 0l-1.5 1.5 3.82 3.82 1.5-1.5a.75.75 0 0 0 0-1.06l-2.76-2.76zM12.56 6.56 4.75 14.37v2.88h2.88l7.81-7.81-2.88-2.88z" />
-              </svg>
-              <span className="text-sm font-bold">Elegir foto</span>
             </div>
           )}
         </div>

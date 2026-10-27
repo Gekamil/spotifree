@@ -29,6 +29,7 @@ export const CreateMenuDropdown: React.FC = () => {
       <button
         onClick={() => {
           const newPl = useSpotifyDataStore.getState().createPlaylist();
+          (newPl as any).is_new = true;
           useUIStore.getState().openEditPlaylistModal(newPl);
           closeCreateMenu();
         }}

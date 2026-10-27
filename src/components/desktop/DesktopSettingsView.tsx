@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
@@ -13,7 +13,6 @@ interface FrequencyPoint {
 }
 
 const PRESETS: Record<string, number[]> = {
-  custom: [0, 0, 0, 0, 0, 0],
   flat: [0, 0, 0, 0, 0, 0],
   bassBoost: [6, 4.5, 2, 0, 0, 0],
   acoustic: [3.5, 2.5, 0.5, 1.5, 3, 3.5],
@@ -21,6 +20,18 @@ const PRESETS: Record<string, number[]> = {
   pop: [-1, 2, 4, 3, 1, -1],
   rock: [4.5, 3, -1, 1.5, 3.5, 5],
   vocal: [-2, 0.5, 3.5, 4, 2, -1],
+  custom: [0, 0, 0, 0, 0, 0],
+};
+
+const PRESET_LABELS: Record<string, string> = {
+  flat: 'Plano',
+  bassBoost: 'Refuerzo de graves',
+  acoustic: 'Acústico',
+  electronic: 'Electrónica',
+  pop: 'Pop',
+  rock: 'Rock',
+  vocal: 'Vocal',
+  custom: 'Personalizado',
 };
 
 const SpotifyToggle: React.FC<{
@@ -48,9 +59,91 @@ const SpotifyToggle: React.FC<{
   );
 };
 
+interface SelectOption {
+  value: string;
+  label: string;
+}
+
+const SpotifyCustomSelect: React.FC<{
+  value: string;
+  options: SelectOption[];
+  onChange: (val: string) => void;
+  minWidth?: string;
+}> = ({ value, options, onChange, minWidth = '220px' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    if (isOpen) {
+      document.addEventListener('mousedown', handleOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, [isOpen]);
+
+  const selectedOption = options.find((o) => o.value === value) || options[0];
+
+  return (
+    <div ref={containerRef} className="relative inline-block text-left select-none">
+      <button
+        type="button"
+        onClick={() => setIsOpen(!isOpen)}
+        style={{ minWidth }}
+        className="h-8 px-3 rounded-[4px] bg-[#242424] hover:bg-[#2a2a2a] text-white text-xs font-semibold flex items-center justify-between gap-3 border border-[#727272] hover:border-white transition-colors cursor-pointer shadow-sm"
+      >
+        <span className="truncate">{selectedOption?.label}</span>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 16 16"
+          fill="currentColor"
+          className={`text-[#b3b3b3] transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}
+        >
+          <path d="M.47 4.97a.75.75 0 0 1 1.06 0L8 11.44l6.47-6.47a.75.75 0 1 1 1.06 1.06L8.53 12.5a.75.75 0 0 1-1.06 0L.47 6.03a.75.75 0 0 1 0-1.06" />
+        </svg>
+      </button>
+
+      {isOpen && (
+        <div
+          style={{ minWidth }}
+          className="absolute right-0 mt-1.5 bg-[#282828] rounded-[4px] shadow-[0_16px_24px_rgba(0,0,0,0.6),0_6px_8px_rgba(0,0,0,0.4)] border border-white/10 p-1 z-50 animate-in fade-in zoom-in-95 duration-100 max-h-64 overflow-y-auto"
+        >
+          {options.map((opt) => {
+            const isSelected = opt.value === value;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-[2px] text-xs font-semibold text-left transition-colors cursor-pointer ${
+                  isSelected ? 'bg-white/10 text-[#1ed760]' : 'text-white hover:bg-[#3e3e3e]'
+                }`}
+              >
+                <span className="truncate">{opt.label}</span>
+                {isSelected && (
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0 ml-2">
+                    <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+                  </svg>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab } = useUIStore();
+  const { setActiveMainTab, viewMode, setViewMode } = useUIStore();
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
@@ -61,6 +154,7 @@ export const DesktopSettingsView: React.FC = () => {
   const [savedSpotifyCookieSuccess, setSavedSpotifyCookieSuccess] = useState(false);
   const [cookieError, setCookieError] = useState<string | null>(null);
   const [isExtractingCookie, setIsExtractingCookie] = useState(false);
+  const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
 
   const handleSaveSpotifyCookie = async () => {
     setCookieError(null);
@@ -89,7 +183,7 @@ export const DesktopSettingsView: React.FC = () => {
       setTimeout(() => {
         setSavedSpotifyCookieSuccess(false);
         setActiveMainTab('home');
-      }, 1200);
+      }, 1000);
     } catch (err: any) {
       setCookieError(err.message || 'Error al procesar la cookie.');
     } finally {
@@ -102,57 +196,10 @@ export const DesktopSettingsView: React.FC = () => {
       ? window.localStorage.getItem('spotifree_audio_engine') || 'hybrid'
       : 'hybrid';
   });
-  const [youtubeCookies, setYoutubeCookies] = useState<string>(() => {
-    return typeof window !== 'undefined'
-      ? window.localStorage.getItem('user_youtube_cookies') || ''
-      : '';
-  });
-  const [savedCookiesSuccess, setSavedCookiesSuccess] = useState(false);
-  const [testingAudio, setTestingAudio] = useState(false);
-  const [testResult, setTestResult] = useState<string | null>(null);
-
-  const [customClientId, setCustomClientId] = useState<string>(() => {
-    return typeof window !== 'undefined'
-      ? window.localStorage.getItem('custom_spotify_client_id') || ''
-      : '';
-  });
-  const [savedClientIdSuccess, setSavedClientIdSuccess] = useState(false);
-
-  const handleSaveClientId = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('custom_spotify_client_id', customClientId.trim());
-      setSavedClientIdSuccess(true);
-      setTimeout(() => setSavedClientIdSuccess(false), 3000);
-    }
-  };
-
-  const handleSaveCookies = () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('user_youtube_cookies', youtubeCookies.trim());
-      window.localStorage.setItem('spotifree_audio_engine', engineMode);
-      setSavedCookiesSuccess(true);
-      setTimeout(() => setSavedCookiesSuccess(false), 3000);
-    }
-  };
-
-  const handleTestAudio = async () => {
-    setTestingAudio(true);
-    setTestResult(null);
-    try {
-      await audioEngine.playTrack('test-coldplay-yellow', 'Coldplay Yellow', 0);
-      setTestResult('¡Reproducción iniciada con éxito! Comprueba la barra inferior.');
-    } catch (e: any) {
-      setTestResult('Error: ' + e.message);
-    } finally {
-      setTestingAudio(false);
-    }
-  };
 
   // Settings State
   const [language, setLanguage] = useState('es-ES');
   const [audioQuality, setAudioQuality] = useState('very_high');
-  const [normalizeVolume, setNormalizeVolume] = useState(true);
-  const [compactLibrary, setCompactLibrary] = useState(false);
   const [showNowPlayingOnClick, setShowNowPlayingOnClick] = useState(true);
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
@@ -163,15 +210,15 @@ export const DesktopSettingsView: React.FC = () => {
     { label: '60Hz', value: 0 },
     { label: '150Hz', value: 0 },
     { label: '400Hz', value: 0 },
-    { label: '1KHz', value: 0 },
-    { label: '2.4KHz', value: 0 },
-    { label: '15KHz', value: 0 },
+    { label: '1kHz', value: 0 },
+    { label: '2.4kHz', value: 0 },
+    { label: '15kHz', value: 0 },
   ]);
 
   const syncEqWithEngine = (bands: FrequencyPoint[]) => {
-    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-      (window as any).__audioEngine.setAllEqualizerBands(bands);
-    }
+    try {
+      audioEngine.setAllEqualizerBands(bands);
+    } catch {}
   };
 
   const handleBandChange = (index: number, newVal: number) => {
@@ -198,13 +245,13 @@ export const DesktopSettingsView: React.FC = () => {
   };
 
   // Equalizer curve coordinates
-  const eqWidth = 720;
-  const eqHeight = 160;
+  const eqWidth = 700;
+  const eqHeight = 140;
   const zeroY = eqHeight / 2;
 
   const points = eqBands.map((band, idx) => {
     const x = 50 + (idx / (eqBands.length - 1)) * (eqWidth - 100);
-    const y = zeroY - (band.value / 12) * (eqHeight / 2 - 20);
+    const y = zeroY - (band.value / 12) * (eqHeight / 2 - 15);
     return { x, y, value: band.value, label: band.label };
   });
 
@@ -217,22 +264,46 @@ export const DesktopSettingsView: React.FC = () => {
       const p2 = points[i + 1];
       const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
 
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      const cp1x = p1.x + (p2.x - p0.x) / 5;
+      const cp1y = p1.y + (p2.y - p0.y) / 5;
+      const cp2x = p2.x - (p3.x - p1.x) / 5;
+      const cp2y = p2.y - (p3.y - p1.y) / 5;
 
       curvePath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
   }
 
+  const LANGUAGE_OPTIONS = [
+    { value: 'es-ES', label: 'Español de España (European Spanish)' },
+    { value: 'en-US', label: 'English (English)' },
+    { value: 'es-419', label: 'Español de Latinoamérica (Latin American)' },
+    { value: 'fr-FR', label: 'Français (French)' },
+    { value: 'de-DE', label: 'Deutsch (German)' },
+    { value: 'it-IT', label: 'Italiano (Italian)' },
+    { value: 'pt-BR', label: 'Português do Brasil (Brazilian Portuguese)' },
+    { value: 'ja-JP', label: '日本語 (Japanese)' },
+  ];
 
+  const QUALITY_OPTIONS = [
+    { value: 'auto', label: 'Automática' },
+    { value: 'low', label: 'Baja (96 kbps)' },
+    { value: 'normal', label: 'Normal (160 kbps)' },
+    { value: 'high', label: 'Alta (320 kbps)' },
+    { value: 'very_high', label: 'Muy alta (Sin pérdida)' },
+  ];
+
+  const PRESET_OPTIONS = Object.keys(PRESET_LABELS).map((k) => ({
+    value: k,
+    label: PRESET_LABELS[k],
+  }));
 
   return (
-    <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-4xl mx-auto pb-16">
+    <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-4xl mx-auto pb-24 font-['SpotifyMixUI',sans-serif]">
       {/* Title & Search Bar */}
       <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-4">Configuración</h1>
+        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-4 font-['SpotifyMixUITitle']">
+          Configuración
+        </h1>
         <div className="relative max-w-sm">
           <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#b3b3b3]">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -249,282 +320,145 @@ export const DesktopSettingsView: React.FC = () => {
         </div>
       </div>
 
-      <div className="space-y-10">
-        {/* 1. CUENTA Y SESIÓN INDEPENDIENTE */}
-        {matchesSearch('cuenta métodos inicio sesión spotify usuario invitado cookies sp_dc') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Cuenta & Sesión de Spotify</h2>
-            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760] animate-pulse' : 'bg-[#a7a7a7]'}`} />
-                    <span className="text-sm font-bold text-white">
-                      {isAuthenticated ? `Conectado como: ${user?.display_name || 'Usuario'}` : 'Sesión local (No conectado)'}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#a7a7a7] mt-1">
-                    {isAuthenticated
-                      ? 'Tu sesión es privada e independiente en este dispositivo.'
-                      : 'Introduce tu cookie de sesión para sincronizar tus listas de reproducción sin restricciones.'}
-                  </p>
-                </div>
-                <div>
-                  {isAuthenticated ? (
-                    <button
-                      onClick={logout}
-                      className="px-4 py-1.5 rounded-full border border-white/20 text-[#b3b3b3] hover:text-white hover:border-white text-xs font-bold transition-all"
-                    >
-                      Desconectar
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setActiveMainTab('guide')}
-                      className="px-4 py-1.5 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow cursor-pointer"
-                    >
-                      Guía paso a paso
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Cookie de sesión sp_dc */}
-              <div className="pt-3 border-t border-white/5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-white">
-                    Cookie de sesión de Spotify (sp_dc)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {savedSpotifyCookieSuccess && (
-                      <span className="text-[11px] font-bold text-[#1ed760] animate-in fade-in">
-                        Guardada en este navegador
-                      </span>
-                    )}
-                    <button
-                      onClick={() => setActiveMainTab('guide')}
-                      className="text-[11px] text-[#b3b3b3] hover:text-white underline cursor-pointer"
-                    >
-                      ¿Cómo obtener tu cookie?
-                    </button>
-                  </div>
-                </div>
-                <p className="text-[11px] text-[#a7a7a7] leading-relaxed">
-                  Permite sincronizar tu biblioteca de Spotify de forma directa sin limitaciones de cuenta de desarrollador. Se almacena localmente en tu navegador.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="password"
-                    value={spotifyCookie}
-                    onChange={(e) => {
-                      setSpotifyCookie(e.target.value);
-                      if (cookieError) setCookieError(null);
-                    }}
-                    placeholder="Pega aquí tu cookie sp_dc (AQD...)"
-                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-white transition-colors font-mono"
-                  />
-                  <button
-                    onClick={handleSaveSpotifyCookie}
-                    disabled={isExtractingCookie}
-                    className="px-4 py-1.5 bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer shadow disabled:opacity-50"
-                  >
-                    {isExtractingCookie ? 'Extrayendo...' : 'Guardar cookie'}
-                  </button>
-                </div>
-                {cookieError && (
-                  <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
-                    {cookieError}
-                  </p>
-                )}
-              </div>
-
-              {/* Custom Spotify Client ID field (Opcional) */}
-              <div className="pt-3 border-t border-white/5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#b3b3b3]">
-                    Client ID de Spotify Developer (Opcional)
-                  </label>
-                  {savedClientIdSuccess && (
-                    <span className="text-[11px] font-bold text-[#1ed760] animate-in fade-in">
-                      Guardado correctamente
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-[#a7a7a7]">
-                  Si dispones de una cuenta de desarrollador de Spotify, puedes vincular tu propio Client ID.
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customClientId}
-                    onChange={(e) => setCustomClientId(e.target.value)}
-                    placeholder="ea3003771e264c4690a2ac289afd22a4 (por defecto)"
-                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-white"
-                  />
-                  <button
-                    onClick={handleSaveClientId}
-                    className="px-4 py-1.5 bg-[#282828] hover:bg-[#333] text-white text-xs font-bold rounded transition-all shrink-0 cursor-pointer"
-                  >
-                    Guardar
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* 1.5 MOTOR DE REPRODUCCIÓN & SESIÓN DE YOUTUBE */}
-        {matchesSearch('motor reproducción youtube cookies audio stream ip conexión') && (
+      <div className="space-y-8">
+        {/* 1. CUENTA Y SESIÓN (Spotify 1:1 Clean Design) */}
+        {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar') && (
           <section className="space-y-4">
-            <h2 className="text-base font-bold text-white">Motor de Reproducción & YouTube (Por Dispositivo)</h2>
-            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-4">
-              <div>
-                <label className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider block mb-2">
-                  Modo de Reproducción de Audio
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <button
-                    onClick={() => {
-                      setEngineMode('hybrid');
-                      if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'hybrid');
-                    }}
-                    className={`p-3 rounded-lg text-left border transition-all cursor-pointer ${
-                      engineMode === 'hybrid'
-                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
-                        : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">Modo Nativo Híbrido (Recomendado)</span>
-                      {engineMode === 'hybrid' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
-                    </div>
-                    <p className="text-[11px] text-[#a7a7a7]">
-                      Reproduce directamente en tu navegador usando la IP de tu dispositivo. 100% inmune a bloqueos de centro de datos.
-                    </p>
-                  </button>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta</h2>
 
-                  <button
-                    onClick={() => {
-                      setEngineMode('stream');
-                      if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'stream');
-                    }}
-                    className={`p-3 rounded-lg text-left border transition-all cursor-pointer ${
-                      engineMode === 'stream'
-                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
-                        : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">Modo Servidor Proxy Stream</span>
-                      {engineMode === 'stream' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
-                    </div>
-                    <p className="text-[11px] text-[#a7a7a7]">
-                      Canaliza el audio a través del backend en la nube con cookies de sesión personalizadas.
-                    </p>
-                  </button>
+            {/* Row 1: Estado de la cuenta */}
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760]' : 'bg-[#727272]'}`} />
+                  <span className="text-sm font-semibold text-white">
+                    {isAuthenticated ? `Conectado como ${user?.display_name || 'Usuario'}` : 'Sesión no conectada'}
+                  </span>
                 </div>
+                <p className="text-xs text-[#a7a7a7] mt-1">
+                  {isAuthenticated
+                    ? 'Tus listas y recomendaciones están sincronizadas en este dispositivo.'
+                    : 'Vincula tu cuenta mediante tu cookie sp_dc para cargar todas tus listas privadas.'}
+                </p>
               </div>
 
-              {/* Sesión de YouTube Personal */}
-              <div className="pt-2 border-t border-white/5 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-                    Cookies / Sesión de YouTube Personal (Opcional)
-                  </label>
-                  <span className="text-[11px] text-[#1ed760]">● Almacenado local en este dispositivo</span>
-                </div>
-                <p className="text-xs text-[#a7a7a7]">
-                  Si deseas conectar tu propia cuenta de YouTube de manera independiente en este dispositivo (sin depender de una cuenta compartida), pega aquí tus cookies (formato JSON o Netscape):
-                </p>
-                <textarea
-                  value={youtubeCookies}
-                  onChange={(e) => setYoutubeCookies(e.target.value)}
-                  placeholder="Pega aquí tus cookies de YouTube (JSON exportado o Netscape)..."
-                  rows={3}
-                  className="w-full bg-[#242424] text-xs text-white p-3 rounded-lg font-mono border border-white/10 focus:border-[#1ed760] focus:outline-none transition-colors"
-                />
-                <div className="flex items-center justify-between pt-1">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleSaveCookies}
-                      className="px-4 py-2 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-104 transition-all"
-                    >
-                      Guardar configuración local
-                    </button>
-                    {savedCookiesSuccess && (
-                      <span className="text-xs text-[#1ed760] font-semibold">¡Ajustes guardados correctamente!</span>
-                    )}
-                  </div>
-
+              <div>
+                {isAuthenticated ? (
                   <button
-                    onClick={handleTestAudio}
-                    disabled={testingAudio}
-                    className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all disabled:opacity-50"
+                    onClick={logout}
+                    className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer"
                   >
-                    {testingAudio ? 'Comprobando...' : 'Probar reproducción ahora'}
+                    Cerrar sesión
                   </button>
-                </div>
-
-                {testResult && (
-                  <div className={`p-3 rounded-lg text-xs mt-2 ${testResult.startsWith('Error') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-[#1ed760]/10 text-[#1ed760] border border-[#1ed760]/20'}`}>
-                    {testResult}
-                  </div>
+                ) : (
+                  <button
+                    onClick={() => setActiveMainTab('guide')}
+                    className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 cursor-pointer"
+                  >
+                    Ver guía
+                  </button>
                 )}
               </div>
             </div>
+
+            {/* Row 2: Sincronización mediante cookie sp_dc */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">
+              <div className="space-y-1 max-w-md">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-semibold text-white">Cookie de sesión (sp_dc)</span>
+                  {savedSpotifyCookieSuccess && (
+                    <span className="text-xs font-bold text-[#1ed760] animate-in fade-in">
+                      ✓ Guardada
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#a7a7a7] leading-relaxed">
+                  Permite sincronizar tu sesión de Spotify directamente. Se almacena localmente de forma privada en tu navegador.
+                </p>
+                <button
+                  onClick={() => setActiveMainTab('guide')}
+                  className="text-xs text-[#b3b3b3] hover:text-white underline cursor-pointer inline-block pt-0.5"
+                >
+                  ¿Cómo obtener tu cookie sp_dc?
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+                <input
+                  type="password"
+                  value={spotifyCookie}
+                  onChange={(e) => {
+                    setSpotifyCookie(e.target.value);
+                    if (cookieError) setCookieError(null);
+                  }}
+                  placeholder="Pega aquí tu cookie sp_dc"
+                  className="w-full sm:w-64 bg-[#242424] border border-[#727272] focus:border-white rounded-full px-4 py-2 text-xs text-white outline-none transition-colors font-mono"
+                />
+                <button
+                  onClick={handleSaveSpotifyCookie}
+                  disabled={isExtractingCookie}
+                  className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 disabled:opacity-50 cursor-pointer"
+                >
+                  {isExtractingCookie ? 'Sincronizando...' : 'Guardar'}
+                </button>
+              </div>
+            </div>
+
+            {cookieError && (
+              <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
+                {cookieError}
+              </p>
+            )}
           </section>
         )}
 
-        {/* 2. IDIOMA */}
+        {/* 2. IDIOMA (Custom Spotify Dropdown) */}
         {matchesSearch('idioma language english español') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Idioma</h2>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-2 border-b border-white/5">
-              <p className="text-sm font-medium text-white">Elige tu idioma; los cambios se aplicarán tras reiniciar la aplicación</p>
-              <select
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Idioma</h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+              <div>
+                <p className="text-sm font-medium text-white">Idioma de la aplicación</p>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">Selecciona tu idioma preferido para la interfaz.</p>
+              </div>
+              <SpotifyCustomSelect
                 value={language}
-                onChange={(e) => setLanguage(e.target.value)}
-                className="bg-[#242424] hover:bg-[#2a2a2a] text-white text-xs font-semibold px-3 py-2 rounded-md border border-[#727272] hover:border-white focus:outline-none cursor-pointer"
-              >
-                <option value="es-ES">Español de España (European Spanish)</option>
-                <option value="en-US">English (English)</option>
-                <option value="es-419">Español de Latinoamérica (Latin American Spanish)</option>
-                <option value="fr-FR">Français (French)</option>
-                <option value="de-DE">Deutsch (German)</option>
-                <option value="it-IT">Italiano (Italian)</option>
-                <option value="pt-BR">Português do Brasil (Brazilian Portuguese)</option>
-                <option value="ja-JP">日本語 (Japanese)</option>
-              </select>
+                options={LANGUAGE_OPTIONS}
+                onChange={setLanguage}
+                minWidth="250px"
+              />
             </div>
           </section>
         )}
 
-        {/* 3. CALIDAD DEL AUDIO */}
+        {/* 3. CALIDAD DEL AUDIO (Custom Spotify Dropdown) */}
         {matchesSearch('calidad audio streaming normalizar volumen') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Calidad del audio</h2>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Calidad del audio</h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
-                <span className="text-sm font-medium text-white">Calidad de streaming</span>
-                <select
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <span className="text-sm font-medium text-white">Calidad de streaming</span>
+                  <p className="text-xs text-[#a7a7a7] mt-0.5">Ajusta el ancho de banda y la tasa de muestreo.</p>
+                </div>
+                <SpotifyCustomSelect
                   value={audioQuality}
-                  onChange={(e) => setAudioQuality(e.target.value)}
-                  className="bg-[#242424] hover:bg-[#2a2a2a] text-white text-xs font-semibold px-3 py-2 rounded-md border border-[#727272] hover:border-white focus:outline-none cursor-pointer"
-                >
-                  <option value="auto">Automática</option>
-                  <option value="low">Baja (96 kbps)</option>
-                  <option value="normal">Normal (160 kbps)</option>
-                  <option value="high">Alta (320 kbps)</option>
-                  <option value="very_high">Muy alta (Sin pérdida FLAC)</option>
-                </select>
+                  options={QUALITY_OPTIONS}
+                  onChange={setAudioQuality}
+                  minWidth="200px"
+                />
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
-                <span className="text-sm font-medium text-white">
-                  Normalizar el volumen - igualar el volumen de todas las canciones y pódcasts
-                </span>
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Normalizar el volumen</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    Establece el mismo nivel de volumen para todas las canciones y pódcasts.
+                  </div>
+                </div>
                 <SpotifyToggle
-                  checked={normalizeVolume}
-                  onChange={setNormalizeVolume}
+                  checked={true}
+                  onChange={() => {}}
                   ariaLabel="Normalizar el volumen"
                 />
               </div>
@@ -532,19 +466,20 @@ export const DesktopSettingsView: React.FC = () => {
           </section>
         )}
 
-        {/* 4. TU BIBLIOTECA */}
-        {matchesSearch('tu biblioteca compacta importar música aplicaciones') && (
+        {/* 4. BIBLIOTECA (Compact View Connected) */}
+        {matchesSearch('biblioteca compacta diseño lista') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Tu biblioteca</h2>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Tu biblioteca</h2>
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
                 <span className="text-sm font-medium text-white">Usar diseño de biblioteca compacta</span>
-                <SpotifyToggle
-                  checked={compactLibrary}
-                  onChange={setCompactLibrary}
-                  ariaLabel="Usar diseño de biblioteca compacta"
-                />
+                <p className="text-xs text-[#a7a7a7] mt-0.5">Oculta las carátulas y comprime la lista de playlists en la barra lateral.</p>
               </div>
+              <SpotifyToggle
+                checked={viewMode === 'compacta'}
+                onChange={(val) => setViewMode(val ? 'compacta' : 'lista')}
+                ariaLabel="Usar diseño de biblioteca compacta"
+              />
             </div>
           </section>
         )}
@@ -552,11 +487,14 @@ export const DesktopSettingsView: React.FC = () => {
         {/* 5. VISUALIZACIÓN */}
         {matchesSearch('visualización sonando panel reproducir') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Visualización</h2>
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <span className="text-sm font-medium text-white">
-                Mostrar el panel Sonando al hacer clic a reproducir
-              </span>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Visualización</h2>
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <span className="text-sm font-medium text-white">
+                  Mostrar el panel Sonando al reproducir
+                </span>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">Despliega automáticamente los detalles de la pista en el panel lateral.</p>
+              </div>
               <SpotifyToggle
                 checked={showNowPlayingOnClick}
                 onChange={setShowNowPlayingOnClick}
@@ -569,21 +507,13 @@ export const DesktopSettingsView: React.FC = () => {
         {/* 6. VÍDEOS Y CANVAS */}
         {matchesSearch('vídeos canvas musicales') && (
           <section className="space-y-3">
-            <div className="flex items-center gap-2 text-xs text-[#a7a7a7] mb-1">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7]">
-                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
-                <path d="M7.25 4.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z" />
-              </svg>
-              <span>Tu experiencia puede tardar un poco en actualizarse.</span>
-            </div>
-            <h2 className="text-base font-bold text-white">Vídeos y Canvas</h2>
-
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Vídeos y Canvas</h2>
             <div className="space-y-3">
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
                 <div>
                   <div className="text-sm font-medium text-white">Vídeos musicales</div>
                   <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    Si esta opción está desactivada, los vídeos musicales y las actuaciones en directo se reproducen solo con audio.
+                    Reproducir vídeos y actuaciones en directo cuando estén disponibles.
                   </div>
                 </div>
                 <SpotifyToggle
@@ -593,7 +523,7 @@ export const DesktopSettingsView: React.FC = () => {
                 />
               </div>
 
-              <div className="flex items-center justify-between py-2 border-b border-white/5">
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
                 <div>
                   <div className="text-sm font-medium text-white">Canvas</div>
                   <div className="text-xs text-[#a7a7a7] mt-0.5">
@@ -610,12 +540,12 @@ export const DesktopSettingsView: React.FC = () => {
           </section>
         )}
 
-        {/* 7. REPRODUCCIÓN (Ecualizador Real de 6 Bandas con Web Audio API) */}
+        {/* 7. REPRODUCCIÓN (Ecualizador Spotify 1:1 con Web Audio API) */}
         {matchesSearch('reproducción ecualizador decibelios hz frecuencia sonido') && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-base font-bold text-white">Reproducción</h2>
+                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Reproducción</h2>
                 <p className="text-xs text-[#a7a7a7] mt-0.5">
                   Ajusta las frecuencias de audio en tiempo real con el ecualizador activo.
                 </p>
@@ -624,27 +554,19 @@ export const DesktopSettingsView: React.FC = () => {
               {/* Presets Dropdown */}
               <div className="flex items-center gap-2">
                 <span className="text-xs text-[#a7a7a7]">Preajuste:</span>
-                <select
+                <SpotifyCustomSelect
                   value={activePreset}
-                  onChange={(e) => handlePresetSelect(e.target.value)}
-                  className="bg-[#242424] hover:bg-[#2a2a2a] text-white text-xs font-semibold px-3 py-1.5 rounded-md border border-[#727272] hover:border-white focus:outline-none cursor-pointer"
-                >
-                  <option value="flat">Plano</option>
-                  <option value="bassBoost">Refuerzo de graves</option>
-                  <option value="acoustic">Acústico</option>
-                  <option value="electronic">Electrónica</option>
-                  <option value="pop">Pop</option>
-                  <option value="rock">Rock</option>
-                  <option value="vocal">Vocal</option>
-                  {activePreset === 'custom' && <option value="custom">Personalizado</option>}
-                </select>
+                  options={PRESET_OPTIONS}
+                  onChange={handlePresetSelect}
+                  minWidth="160px"
+                />
               </div>
             </div>
 
             {/* Equalizer Container Card */}
             <div className="bg-[#181818] rounded-xl p-6 border border-white/5 shadow-2xl relative overflow-hidden">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-bold text-[#b3b3b3]">+12dB</span>
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-xs font-bold text-[#b3b3b3]">+12 dB</span>
                 <span className="text-[11px] font-bold text-[#1ed760] tracking-wider uppercase flex items-center gap-1.5">
                   <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
                   Ecualizador Activo
@@ -652,7 +574,7 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
 
               {/* Interactive Curve SVG & Sliders */}
-              <div className="relative w-full h-[180px] flex items-center justify-center">
+              <div className="relative w-full h-[160px] flex items-center justify-center">
                 {/* SVG Curve Background */}
                 <svg
                   viewBox={`0 0 ${eqWidth} ${eqHeight}`}
@@ -661,8 +583,6 @@ export const DesktopSettingsView: React.FC = () => {
                 >
                   {/* Grid Lines */}
                   <line x1="40" y1={zeroY} x2={eqWidth - 40} y2={zeroY} stroke="#333333" strokeWidth="1" strokeDasharray="3 3" />
-                  <line x1="40" y1="20" x2={eqWidth - 40} y2="20" stroke="#222222" strokeWidth="1" />
-                  <line x1="40" y1={eqHeight - 20} x2={eqWidth - 40} y2={eqHeight - 20} stroke="#222222" strokeWidth="1" />
 
                   {/* Gradient area under curve */}
                   <defs>
@@ -672,37 +592,32 @@ export const DesktopSettingsView: React.FC = () => {
                     </linearGradient>
                   </defs>
 
+                  {/* Area fill */}
+                  <path
+                    d={`${curvePath} L ${points[points.length - 1].x} ${zeroY} L ${points[0].x} ${zeroY} Z`}
+                    fill="url(#eqGradient)"
+                  />
+
                   {/* Frequency Curve */}
                   <path
                     d={curvePath}
                     fill="none"
                     stroke="#1ed760"
-                    strokeWidth="3.5"
+                    strokeWidth="3"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
-
-                  {/* Frequency Knobs */}
-                  {points.map((p, i) => (
-                    <circle
-                      key={i}
-                      cx={p.x}
-                      cy={p.y}
-                      r="6.5"
-                      fill="#ffffff"
-                      stroke="#1ed760"
-                      strokeWidth="3"
-                    />
-                  ))}
                 </svg>
 
                 {/* Vertical slider tracks */}
-                <div className="relative z-10 w-full h-full flex justify-between px-6 sm:px-12 items-end pb-6">
+                <div className="relative z-10 w-full h-full flex justify-between px-6 sm:px-12 items-end pb-4">
                   {eqBands.map((band, idx) => (
-                    <div key={idx} className="flex flex-col items-center group">
-                      <span className="text-[10px] text-[#a7a7a7] group-hover:text-white font-mono mb-1.5 transition-colors">
-                        {band.value > 0 ? `+${band.value.toFixed(1)}` : band.value.toFixed(1)}dB
+                    <div key={idx} className="flex flex-col items-center group relative">
+                      <span className={`text-[11px] font-mono mb-2 transition-colors ${band.value !== 0 ? 'text-[#1ed760] font-bold' : 'text-[#a7a7a7] group-hover:text-white'}`}>
+                        {band.value > 0 ? `+${band.value.toFixed(1)}` : band.value.toFixed(1)} dB
                       </span>
+
+                      {/* Custom clean vertical range input */}
                       <input
                         type="range"
                         min="-12"
@@ -711,9 +626,10 @@ export const DesktopSettingsView: React.FC = () => {
                         value={band.value}
                         onChange={(e) => handleBandChange(idx, parseFloat(e.target.value))}
                         aria-label={`cambiar decibelios a ${band.label}`}
-                        className="h-28 w-2 appearance-none bg-[#2e2e2e] group-hover:bg-[#404040] rounded-full cursor-pointer accent-[#1ed760] [writing-mode:vertical-lr] [direction:rtl] transition-colors"
+                        className="h-24 w-1.5 appearance-none bg-[#333] group-hover:bg-[#444] rounded-full cursor-pointer accent-[#1ed760] [writing-mode:vertical-lr] [direction:rtl] transition-colors"
                       />
-                      <label className="text-[11px] font-semibold text-[#b3b3b3] group-hover:text-white mt-2 font-mono transition-colors">
+
+                      <label className="text-xs font-semibold text-[#b3b3b3] group-hover:text-white mt-2 font-mono transition-colors">
                         {band.label}
                       </label>
                     </div>
@@ -721,16 +637,70 @@ export const DesktopSettingsView: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex justify-between items-center mt-1">
-                <span className="text-xs font-bold text-[#b3b3b3]">-12dB</span>
+              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
+                <span className="text-xs font-bold text-[#b3b3b3]">-12 dB</span>
                 <button
                   onClick={() => handlePresetSelect('flat')}
-                  className="text-xs text-[#a7a7a7] hover:text-white hover:underline transition-colors"
+                  className="text-xs text-[#a7a7a7] hover:text-white hover:underline transition-colors cursor-pointer"
                 >
                   Restablecer a plano
                 </button>
               </div>
             </div>
+          </section>
+        )}
+
+        {/* 8. AVANZADO: MOTOR DE AUDIO (Clean Collapsible) */}
+        {matchesSearch('avanzado motor audio youtube streaming proxy') && (
+          <section className="space-y-3 pt-2">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedAudio(!showAdvancedAudio)}
+              className="flex items-center gap-2 text-sm font-semibold text-[#a7a7a7] hover:text-white transition-colors cursor-pointer"
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                className={`transition-transform duration-200 ${showAdvancedAudio ? 'rotate-90' : ''}`}
+              >
+                <path d="M4.97 15.53a.75.75 0 0 1 0-1.06L11.44 8 4.97 1.53a.75.75 0 0 1 1.06-1.06l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06 0" />
+              </svg>
+              <span>Configuración avanzada de audio</span>
+            </button>
+
+            {showAdvancedAudio && (
+              <div className="p-4 rounded-lg bg-[#181818] border border-white/5 space-y-3 animate-in fade-in duration-200">
+                <p className="text-xs text-[#a7a7a7] leading-relaxed">
+                  Spotifree resuelve el streaming de audio automáticamente a través de la red global de YouTube Music sin límites.
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => {
+                      setEngineMode('hybrid');
+                      localStorage.setItem('spotifree_audio_engine', 'hybrid');
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      engineMode === 'hybrid' ? 'bg-[#1ed760] text-black' : 'bg-[#242424] text-white hover:bg-[#333]'
+                    }`}
+                  >
+                    Nativo Híbrido (Recomendado)
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEngineMode('stream');
+                      localStorage.setItem('spotifree_audio_engine', 'stream');
+                    }}
+                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      engineMode === 'stream' ? 'bg-[#1ed760] text-black' : 'bg-[#242424] text-white hover:bg-[#333]'
+                    }`}
+                  >
+                    Servidor Proxy Stream
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         )}
       </div>

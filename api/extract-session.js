@@ -390,6 +390,24 @@ export async function extractSpotifySession(spDcCookie) {
     });
   }
 
+  // Always guarantee 'Canciones que te gustan' is present & pinned at the top
+  const hasLikedSongs = playlists.some(
+    p => p.id === 'collection-tracks' || p.id === 'liked-songs' || p.name?.toLowerCase().trim() === 'canciones que te gustan'
+  );
+  if (!hasLikedSongs) {
+    playlists.unshift({
+      id: 'collection-tracks',
+      name: 'Canciones que te gustan',
+      description: 'Tus canciones favoritas guardadas',
+      type: 'playlist',
+      images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      owner: { display_name: displayName, id: userId },
+      tracks: { total: 0 },
+      is_pinned: true,
+      color: '#5038a0',
+    });
+  }
+
   // Parse Home Feed Sections
   const rawSections = homeResult.status === 'fulfilled' ? homeResult.value?.data?.home?.sectionContainer?.sections?.items || [] : [];
   const shelves = [];

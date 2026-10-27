@@ -21,13 +21,6 @@ export const ProfileDropdown: React.FC = () => {
 
   if (!isProfileOpen) return null;
 
-  const externalArrow = (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#b3b3b3]">
-      <path d="M1 2.75C1 1.784 1.784 1 2.75 1h5.5a.75.75 0 0 1 0 1.5h-5.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-5.5a.75.75 0 0 1 1.5 0v5.5A1.75 1.75 0 0 1 13.25 15H2.75A1.75 1.75 0 0 1 1 13.25V2.75z" />
-      <path d="M15 1.75a.75.75 0 0 0-.75-.75h-5.5a.75.75 0 0 0 0 1.5h3.69L7.22 7.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v3.69a.75.75 0 0 0 1.5 0v-5.5z" />
-    </svg>
-  );
-
   return (
     <div
       ref={menuRef}
@@ -59,17 +52,9 @@ export const ProfileDropdown: React.FC = () => {
         <>
           <button
             onClick={() => {
-              window.open('https://www.spotify.com/account/overview/', '_blank', 'noopener,noreferrer');
+              setActiveMainTab('profile');
               closeProfile();
             }}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-          >
-            <span>Cuenta</span>
-            {externalArrow}
-          </button>
-
-          <button
-            onClick={closeProfile}
             className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
           >
             Perfil

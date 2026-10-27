@@ -166,6 +166,35 @@ export const ContextMenu: React.FC = () => {
       {!isTrackMenu ? (
         /* Playlist Context Menu (Exact 1:1 match to Spotify Image 5 & User Screenshot) */
         <div className="space-y-0.5">
+          {/* 0. Fijar / Desfijar en tu biblioteca */}
+          {!isLikedPlaylist && (
+            <button
+              onClick={() => {
+                if (targetPlaylist) {
+                  const newPinned = !(targetPlaylist as any).is_pinned;
+                  useSpotifyDataStore.getState().updatePlaylist(targetPlaylist.id, { is_pinned: newPinned } as any);
+                  const savedRaw = localStorage.getItem('spotify_extracted_session');
+                  if (savedRaw) {
+                    try {
+                      const parsed = JSON.parse(savedRaw);
+                      if (parsed.playlists) {
+                        parsed.playlists = parsed.playlists.map((p: any) => p.id === targetPlaylist.id ? { ...p, is_pinned: newPinned } : p);
+                        localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
+                      }
+                    } catch {}
+                  }
+                }
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M8.822.797a2.72 2.72 0 0 1 3.847 0l2.534 2.534a2.72 2.72 0 0 1 0 3.847l-1.82 1.82 1.408 5.163a.75.75 0 0 1-.948.91l-4.723-1.574-3.58 3.58a.75.75 0 0 1-1.06-1.06l3.58-3.58-1.574-4.723a.75.75 0 0 1 .91-.948l5.163 1.408 1.82-1.82a1.22 1.22 0 0 0 0-1.727L11.845 2.11a1.22 1.22 0 0 0-1.727 0L8.298 3.93 6.945 2.577z" />
+              </svg>
+              <span className="truncate">{(targetPlaylist as any)?.is_pinned ? 'Desfijar de tu biblioteca' : 'Fijar en tu biblioteca'}</span>
+            </button>
+          )}
+
           {/* 1. Añadir a la cola */}
           <button
             onClick={() => {

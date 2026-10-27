@@ -4,7 +4,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 
 export const EditPlaylistModal: React.FC = () => {
   const { isEditPlaylistModalOpen, editingPlaylist, closeEditPlaylistModal } = useUIStore();
-  const updatePlaylist = useSpotifyDataStore((s) => s.updatePlaylist);
+  const { updatePlaylist, deletePlaylist } = useSpotifyDataStore();
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -43,20 +43,28 @@ export const EditPlaylistModal: React.FC = () => {
     }
   };
 
+  const handleCancel = () => {
+    if ((editingPlaylist as any)?.is_new) {
+      deletePlaylist(editingPlaylist.id);
+    }
+    closeEditPlaylistModal();
+  };
+
   const handleSave = () => {
     if (!name.trim()) return;
     updatePlaylist(editingPlaylist.id, {
       name: name.trim(),
       description: description.trim(),
-      images: [{ url: coverUrl }],
-    });
+      images: coverUrl ? [{ url: coverUrl }] : [],
+      is_new: false,
+    } as any);
     closeEditPlaylistModal();
   };
 
   return (
     <div
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150 select-none"
-      onClick={closeEditPlaylistModal}
+      onClick={handleCancel}
     >
       <div
         className="bg-[#282828] text-white rounded-lg shadow-2xl w-full max-w-[524px] p-6 relative border border-white/10"
@@ -68,7 +76,7 @@ export const EditPlaylistModal: React.FC = () => {
             Editar información
           </h2>
           <button
-            onClick={closeEditPlaylistModal}
+            onClick={handleCancel}
             className="w-8 h-8 rounded-full flex items-center justify-center text-[#a7a7a7] hover:text-white hover:bg-white/10 transition-colors"
             title="Cerrar"
           >
