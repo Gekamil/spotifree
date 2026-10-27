@@ -9,6 +9,7 @@ function App() {
     initializeSpotify();
 
     const handleFocus = () => {
+      if (typeof window !== 'undefined' && window.location.search.includes('code=')) return;
       // Re-validate OAuth token on window focus if logged in
       const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
       if (token && token !== 'session-bridge-active') {

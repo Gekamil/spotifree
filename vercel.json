@@ -4,6 +4,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/token",
+      "destination": "/api/token"
+    },
+    {
+      "source": "/api/spotify/token",
+      "destination": "/api/token"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },

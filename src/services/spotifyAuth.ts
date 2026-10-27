@@ -77,9 +77,9 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
   const redirectUri = getRedirectUri();
 
   try {
-    // 1. Try secure backend token proxy first (CORS and header safe)
+    // 1. Try secure Vercel Serverless / Backend token proxy first (CORS and secret safe)
     try {
-      const proxyRes = await fetch('/api/spotify/token', {
+      let proxyRes = await fetch('/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -89,6 +89,19 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
           client_id: CLIENT_ID,
         }),
       });
+
+      if (!proxyRes.ok) {
+        proxyRes = await fetch('/api/spotify/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri,
+            client_id: CLIENT_ID,
+          }),
+        });
+      }
 
       if (proxyRes.ok) {
         const data = await proxyRes.json();
@@ -101,6 +114,8 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
           window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
           window.localStorage.removeItem('spotify_logged_out');
           return true;
+        } else {
+          console.warn('Proxy returned error response:', data);
         }
       }
     } catch (proxyErr) {
@@ -203,7 +218,7 @@ export async function refreshAccessToken(): Promise<string | null> {
   try {
     // 1. Try proxy first
     try {
-      const proxyRes = await fetch('/api/spotify/token', {
+      let proxyRes = await fetch('/api/token', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -212,6 +227,18 @@ export async function refreshAccessToken(): Promise<string | null> {
           client_id: CLIENT_ID,
         }),
       });
+
+      if (!proxyRes.ok) {
+        proxyRes = await fetch('/api/spotify/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            grant_type: 'refresh_token',
+            refresh_token: refreshToken,
+            client_id: CLIENT_ID,
+          }),
+        });
+      }
 
       if (proxyRes.ok) {
         const data = await proxyRes.json();

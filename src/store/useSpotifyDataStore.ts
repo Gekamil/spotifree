@@ -306,6 +306,8 @@ interface SpotifyDataState {
   deletePlaylist: (id: string) => void;
 }
 
+let isInitializing = false;
+
 const store = create<SpotifyDataState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
@@ -413,38 +415,44 @@ const store = create<SpotifyDataState>((set, get) => ({
   },
 
   initialize: async () => {
+    if (isInitializing) return;
+    isInitializing = true;
     set({ isLoading: true });
 
-    // 1. Check for OAuth code in URL
-    const urlParams = new URLSearchParams(window.location.search);
-    const code = urlParams.get('code');
+    try {
+      // 1. Check for OAuth code in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
 
-    if (code) {
-      const success = await handleSpotifyCallback(code);
-      if (success) {
-        window.history.replaceState({}, document.title, '/');
+      if (code) {
+        const success = await handleSpotifyCallback(code);
+        if (success) {
+          window.history.replaceState({}, document.title, '/');
+          await get().refreshData();
+          return;
+        } else {
+          window.history.replaceState({}, document.title, '/');
+        }
+      }
+
+      // 2. Prioritize active user OAuth session if logged in
+      const oauthToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+      if (oauthToken && oauthToken !== 'session-bridge-active') {
         await get().refreshData();
         return;
-      } else {
-        window.history.replaceState({}, document.title, '/');
       }
-    }
 
-    // 2. Prioritize active user OAuth session if logged in
-    const oauthToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
-    if (oauthToken && oauthToken !== 'session-bridge-active') {
-      await get().refreshData();
-      return;
+      // 3. Unauthenticated guest: Show gray shimmer view
+      set({
+        isAuthenticated: false,
+        user: null,
+        playlists: [],
+        dynamicShelves: [],
+        isLoading: false,
+      });
+    } finally {
+      isInitializing = false;
     }
-
-    // 3. Unauthenticated guest: Show gray shimmer view
-    set({
-      isAuthenticated: false,
-      user: null,
-      playlists: [],
-      dynamicShelves: [],
-      isLoading: false,
-    });
   },
 
   login: () => {
