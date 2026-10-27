@@ -29,6 +29,22 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     return '#8a654e';
   });
 
+  // Dual-buffered crossfade states for slow, gradual gradient transitions ("poco a poco")
+  const [colorA, setColorA] = useState<string>(ambientColor);
+  const [colorB, setColorB] = useState<string>(ambientColor);
+  const [isLayerB, setIsLayerB] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!ambientColor) return;
+    if (isLayerB) {
+      setColorA(ambientColor);
+      setIsLayerB(false);
+    } else {
+      setColorB(ambientColor);
+      setIsLayerB(true);
+    }
+  }, [ambientColor]);
+
   const handleCardHover = (color?: string, name?: string, id?: string) => {
     const candidate = color && !isInvalidGrey(color) ? color : getColorFromTitle(name || '', id || '');
     if (candidate && !isInvalidGrey(candidate)) {
@@ -138,8 +154,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       : buildDynamicShelves(user, playlists, featuredMessage);
     return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
-
-  const activeBg = ambientColor;
 
   if (!isAuthenticated) {
     return <DesktopShimmerFeed />;
@@ -304,19 +318,29 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   }
 
   return (
-    <div
-      className="select-none min-h-full pb-20 relative bg-[#121212]"
-      style={{
-        background: `linear-gradient(180deg, ${activeBg}B3 0%, rgba(18, 18, 18, 0.65) 240px, #121212 400px)`,
-        transition: 'background 0.5s ease',
-      }}
-    >
-      {/* GPU Ambient Soft Bloom Layer */}
+    <div className="select-none min-h-full pb-20 relative bg-[#121212] overflow-hidden">
+      {/* Dual-buffer Crossfade Gradient Layer A (base) */}
       <div
-        className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.3,0,0.4,1)]"
+        className="absolute top-0 left-0 right-0 h-[500px] pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
         style={{
-          background: `linear-gradient(180deg, ${activeBg}80 0%, ${activeBg}25 180px, transparent 380px)`,
+          background: `linear-gradient(180deg, ${colorA}B3 0%, rgba(18, 18, 18, 0.7) 260px, #121212 480px)`,
+          opacity: isLayerB ? 0 : 1,
         }}
+      />
+
+      {/* Dual-buffer Crossfade Gradient Layer B (active crossfader) */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[500px] pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
+        style={{
+          background: `linear-gradient(180deg, ${colorB}B3 0%, rgba(18, 18, 18, 0.7) 260px, #121212 480px)`,
+          opacity: isLayerB ? 1 : 0,
+        }}
+      />
+
+      {/* Atmospheric Soft Aura with native 1.2s color transition */}
+      <div
+        className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full pointer-events-none blur-[120px] opacity-40 transition-colors duration-1000 ease-out z-0"
+        style={{ backgroundColor: ambientColor }}
       />
 
       {/* Top Filter Pills (Matching Spotify 1:1 Pixel & Animation Fidelity) */}

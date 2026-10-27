@@ -67,8 +67,9 @@ export default async function handler(req, res) {
         console.warn('Direct login attempt exception:', err.message);
       }
 
-      return res.status(400).json({
-        error: 'Tu cuenta de Spotify requiere verificación en dos pasos (2FA) o captcha. Para entrar al instante sin bloqueos de seguridad, copia tu cookie sp_dc en la pestaña de al lado.',
+      return res.status(200).json({
+        success: false,
+        error: 'Spotify requiere verificación de seguridad (código por correo) o tu cookie de sesión sp_dc.',
         needs2FA: true,
         needsCookie: true,
       });

@@ -693,16 +693,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   return (
     <div className="select-none min-h-full pb-20 relative bg-[#121212]">
-      {/* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */}
+      {/* Dynamic Reactive Hero Header with smooth gradual gradient and atmospheric aura */}
       <div
-        className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-500 overflow-hidden"
+        className="px-8 pt-8 pb-6 flex items-end gap-6 relative overflow-hidden transition-colors duration-1000"
         style={{
-          background: `linear-gradient(180deg, ${themeColor} 0%, ${themeColor}cc 65%, #121212 100%)`,
+          backgroundColor: themeColor,
         }}
       >
-        {/* Ambient atmospheric aura */}
+        {/* Soft bottom overlay gradient */}
         <div
-          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[110px] opacity-60 z-0"
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{
+            background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(18,18,18,0.5) 60%, #121212 100%)',
+          }}
+        />
+
+        {/* Ambient atmospheric aura with smooth 1000ms transition */}
+        <div
+          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[110px] opacity-60 z-0 transition-colors duration-1000 ease-out"
           style={{ backgroundColor: themeColor }}
         />
         {/* Cover Art 232x232 */}
