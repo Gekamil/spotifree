@@ -6,13 +6,19 @@ let cachedLikedSongs = null;
 function getFallbackLikedSongs() {
   if (cachedLikedSongs && cachedLikedSongs.length > 0) return cachedLikedSongs;
   try {
-    const filePath = path.join(process.cwd(), 'src', 'data', 'realLikedSongs.json');
-    if (fs.existsSync(filePath)) {
-      cachedLikedSongs = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-      return cachedLikedSongs;
-    }
+    const fileUrl = new URL('./realLikedSongs.json', import.meta.url);
+    cachedLikedSongs = JSON.parse(fs.readFileSync(fileUrl, 'utf-8'));
+    return cachedLikedSongs;
   } catch (e) {
-    console.warn('[Playlist API] Could not read realLikedSongs.json:', e.message);
+    try {
+      const filePath = path.join(process.cwd(), 'src', 'data', 'realLikedSongs.json');
+      if (fs.existsSync(filePath)) {
+        cachedLikedSongs = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        return cachedLikedSongs;
+      }
+    } catch (err2) {
+      console.warn('[Playlist API] Could not read realLikedSongs.json:', err2.message);
+    }
   }
   return [];
 }
