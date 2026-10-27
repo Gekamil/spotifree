@@ -284,6 +284,7 @@ interface SpotifyDataState {
   isLoading: boolean;
   user: UserProfile | null;
   playlists: Playlist[];
+  authWarning: string | null;
   categories: any[];
   featuredPlaylists: any[];
   featuredMessage: string | null;
@@ -312,6 +313,7 @@ const store = create<SpotifyDataState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   user: null,
+  authWarning: null,
   playlists: DEFAULT_PUBLIC_PLAYLISTS,
   categories: [],
   featuredPlaylists: [],
@@ -476,12 +478,14 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotify_expires_at');
       window.localStorage.removeItem('spotify_session_synced');
       window.localStorage.setItem('spotify_logged_out', 'true');
+      window.sessionStorage.removeItem('spotify_403_premium');
     }
     set({
       isAuthenticated: false,
       user: null,
       playlists: [],
       dynamicShelves: [],
+      authWarning: null,
       isLoading: false,
     });
   },
@@ -508,6 +512,37 @@ const store = create<SpotifyDataState>((set, get) => ({
       ]);
 
       if (!user) {
+        // If Spotify token was issued but Spotify API returned 403 (Developer Premium requirement)
+        const premiumBlocked = typeof window !== 'undefined' && window.sessionStorage.getItem('spotify_403_premium');
+        if (premiumBlocked) {
+          console.warn('Spotify 403 notice detected. Preserving authenticated session for user.');
+          const fallbackUser: UserProfile = {
+            id: 'spotify-user',
+            display_name: 'Cuenta de Spotify',
+            images: [],
+            email: '',
+          } as any;
+
+          const fallbackShelves = buildDynamicShelves(
+            fallbackUser,
+            DEFAULT_PUBLIC_PLAYLISTS,
+            'Hecho para ti',
+            [],
+            []
+          );
+
+          set({
+            isAuthenticated: true,
+            user: fallbackUser,
+            playlists: DEFAULT_PUBLIC_PLAYLISTS,
+            topTracks: [],
+            dynamicShelves: fallbackShelves,
+            authWarning: 'Active premium subscription required for the owner of the app',
+            isLoading: false,
+          });
+          return;
+        }
+
         console.warn('Spotify session token is invalid or expired');
         logoutSpotify();
         set({
@@ -515,6 +550,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           user: null,
           playlists: [],
           dynamicShelves: [],
+          authWarning: null,
           isLoading: false,
         });
         return;
@@ -535,6 +571,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         playlists: userPlaylists,
         topTracks: top || [],
         dynamicShelves: shelves,
+        authWarning: null,
         featuredMessage: `Hecho para ${user.display_name}`,
         isLoading: false,
       });

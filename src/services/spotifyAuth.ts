@@ -1,6 +1,15 @@
 // Spotify Authentication Service (PKCE + Client Credentials)
 export const CLIENT_ID = 'ea3003771e264c4690a2ac289afd22a4';
 export const CLIENT_SECRET = '3976fc2dadf04e9c857ff2afdcc07d2b';
+
+export function getClientId(): string {
+  if (typeof window !== 'undefined') {
+    const custom = window.localStorage.getItem('custom_spotify_client_id');
+    if (custom && custom.trim()) return custom.trim();
+  }
+  return CLIENT_ID;
+}
+
 export function getRedirectUri(): string {
   if (typeof window !== 'undefined') {
     if (window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost') {
@@ -61,7 +70,7 @@ export async function initiateSpotifyLogin(): Promise<void> {
 
   const params = new URLSearchParams({
     response_type: 'code',
-    client_id: CLIENT_ID,
+    client_id: getClientId(),
     scope: SCOPES,
     code_challenge_method: 'S256',
     code_challenge: codeChallenge,
@@ -76,12 +85,14 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
   const codeVerifier = window.localStorage.getItem('spotify_code_verifier') || '';
   const redirectUri = getRedirectUri();
 
+  const activeClientId = getClientId();
+
   try {
     let tokenData: any = null;
 
     // 1. Direct PKCE exchange (RFC 7636 / Spotify Web API standard for client-side SPAs)
     const body = new URLSearchParams({
-      client_id: CLIENT_ID,
+      client_id: activeClientId,
       grant_type: 'authorization_code',
       code,
       redirect_uri: redirectUri,
@@ -120,7 +131,7 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
             code,
             code_verifier: codeVerifier,
             redirect_uri: redirectUri,
-            client_id: CLIENT_ID,
+            client_id: activeClientId,
           }),
         });
 
@@ -132,7 +143,7 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
               code,
               code_verifier: codeVerifier,
               redirect_uri: redirectUri,
-              client_id: CLIENT_ID,
+              client_id: activeClientId,
             }),
           });
         }
@@ -208,6 +219,8 @@ export async function refreshAccessToken(): Promise<string | null> {
     return null;
   }
 
+  const activeClientId = getClientId();
+
   try {
     let tokenData: any = null;
 
@@ -215,7 +228,7 @@ export async function refreshAccessToken(): Promise<string | null> {
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
-      client_id: CLIENT_ID,
+      client_id: activeClientId,
     });
 
     try {
@@ -243,7 +256,7 @@ export async function refreshAccessToken(): Promise<string | null> {
           body: JSON.stringify({
             grant_type: 'refresh_token',
             refresh_token: refreshToken,
-            client_id: CLIENT_ID,
+            client_id: activeClientId,
           }),
         });
 
@@ -254,7 +267,7 @@ export async function refreshAccessToken(): Promise<string | null> {
             body: JSON.stringify({
               grant_type: 'refresh_token',
               refresh_token: refreshToken,
-              client_id: CLIENT_ID,
+              client_id: activeClientId,
             }),
           });
         }

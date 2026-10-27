@@ -61,6 +61,21 @@ export const DesktopSettingsView: React.FC = () => {
   const [testingAudio, setTestingAudio] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
 
+  const [customClientId, setCustomClientId] = useState<string>(() => {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('custom_spotify_client_id') || ''
+      : '';
+  });
+  const [savedClientIdSuccess, setSavedClientIdSuccess] = useState(false);
+
+  const handleSaveClientId = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('custom_spotify_client_id', customClientId.trim());
+      setSavedClientIdSuccess(true);
+      setTimeout(() => setSavedClientIdSuccess(false), 3000);
+    }
+  };
+
   const handleSaveCookies = () => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('user_youtube_cookies', youtubeCookies.trim());
@@ -220,6 +235,38 @@ export const DesktopSettingsView: React.FC = () => {
                       Iniciar sesión con Spotify
                     </button>
                   )}
+                </div>
+              </div>
+
+              {/* Custom Spotify Client ID field */}
+              <div className="pt-3 border-t border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#b3b3b3]">
+                    Client ID de Spotify Developer (Opcional)
+                  </label>
+                  {savedClientIdSuccess && (
+                    <span className="text-[11px] font-bold text-[#1ed760] animate-in fade-in">
+                      ¡Guardado correctamente!
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#a7a7a7]">
+                  Si dispones de una cuenta de Spotify con Premium, puedes crear una App gratuita en <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" className="text-white underline hover:text-[#1ed760]">developer.spotify.com</a> (añadiendo el redirect URI <code>https://spotifreeweb.vercel.app/callback</code>) y pegar tu Client ID aquí. Cada dispositivo guarda el suyo en su propio navegador.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customClientId}
+                    onChange={(e) => setCustomClientId(e.target.value)}
+                    placeholder="ea3003771e264c4690a2ac289afd22a4 (por defecto)"
+                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-[#1ed760]"
+                  />
+                  <button
+                    onClick={handleSaveClientId}
+                    className="px-4 py-1.5 bg-white hover:bg-white/90 text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer"
+                  >
+                    Guardar
+                  </button>
                 </div>
               </div>
             </div>

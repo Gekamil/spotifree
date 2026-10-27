@@ -36,11 +36,18 @@ export async function fetchCurrentUser(): Promise<UserProfile | null> {
       headers: { Authorization: `Bearer ${validToken}` },
     });
     if (res.ok) {
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.removeItem('spotify_403_premium');
+      }
       return await res.json();
     }
     if (res.status === 403) {
+      const errBody = await res.text().catch(() => '');
+      if (typeof window !== 'undefined') {
+        window.sessionStorage.setItem('spotify_403_premium', errBody || 'Active premium subscription required for the owner of the app.');
+      }
       console.error(
-        'Spotify /v1/me devolvió 403 Forbidden: La app de Spotify está en Development Mode. El correo de tu cuenta de Spotify debe estar registrado en el Spotify Developer Dashboard -> Settings -> Users and Access.'
+        'Spotify /v1/me devolvió 403 Forbidden:', errBody
       );
     } else {
       console.warn(`Spotify /v1/me returned ${res.status}`);

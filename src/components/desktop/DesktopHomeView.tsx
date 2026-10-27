@@ -164,6 +164,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     quickAccessCards: storeQuickAccess,
     featuredMessage,
     login,
+    authWarning,
   } = useSpotifyDataStore();
 
   const defaultMusicShortcuts = storeQuickAccess && storeQuickAccess.length > 0
@@ -366,6 +367,20 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
       {/* Main Home Content with Smooth Transition */}
       <div key={activeTab} className="px-6 space-y-8 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        {/* Informative notice for Spotify Developer Premium restriction */}
+        {authWarning && (
+          <div className="bg-[#181818] border border-[#f59e0b]/40 rounded-lg p-4 flex items-start gap-3 shadow-lg">
+            <span className="text-[#f59e0b] text-xl shrink-0">ℹ️</span>
+            <div className="text-sm space-y-1">
+              <p className="font-bold text-white font-['SpotifyMixUITitle']">Sesión de Spotify conectada</p>
+              <p className="text-[#b3b3b3] text-xs leading-relaxed">
+                Spotify Web API requiere una suscripción Premium en la cuenta de desarrollador para descargar listas privadas (Spotify Cloud: <em>"Active premium subscription required for the owner of the app"</em>).
+                Puedes buscar y reproducir cualquier canción gratis con el reproductor, o vincular tu propio Client ID de Spotify en <strong>Configuración</strong>.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Quick Access Shortcuts Grid */}
         {currentShortcuts && currentShortcuts.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">

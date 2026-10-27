@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     body = body || {};
 
     const { code, code_verifier, redirect_uri, refresh_token, grant_type } = body;
-    const CLIENT_ID = 'ea3003771e264c4690a2ac289afd22a4';
+    const CLIENT_ID = body.client_id || 'ea3003771e264c4690a2ac289afd22a4';
     const CLIENT_SECRET = '3976fc2dadf04e9c857ff2afdcc07d2b';
 
     const params = new URLSearchParams();
