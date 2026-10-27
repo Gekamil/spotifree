@@ -77,52 +77,9 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
   const redirectUri = getRedirectUri();
 
   try {
-    // 1. Try secure Vercel Serverless / Backend token proxy first (CORS and secret safe)
-    try {
-      let proxyRes = await fetch('/api/token', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code,
-          code_verifier: codeVerifier,
-          redirect_uri: redirectUri,
-          client_id: CLIENT_ID,
-        }),
-      });
+    let tokenData: any = null;
 
-      if (!proxyRes.ok) {
-        proxyRes = await fetch('/api/spotify/token', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code,
-            code_verifier: codeVerifier,
-            redirect_uri: redirectUri,
-            client_id: CLIENT_ID,
-          }),
-        });
-      }
-
-      if (proxyRes.ok) {
-        const data = await proxyRes.json();
-        if (data.access_token) {
-          const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-          window.localStorage.setItem('spotify_access_token', data.access_token);
-          if (data.refresh_token) {
-            window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
-          }
-          window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
-          window.localStorage.removeItem('spotify_logged_out');
-          return true;
-        } else {
-          console.warn('Proxy returned error response:', data);
-        }
-      }
-    } catch (proxyErr) {
-      console.warn('Backend token proxy failed, falling back to direct exchange:', proxyErr);
-    }
-
-    // 2. Direct PKCE exchange fallback
+    // 1. Direct PKCE exchange (RFC 7636 / Spotify Web API standard for client-side SPAs)
     const body = new URLSearchParams({
       client_id: CLIENT_ID,
       grant_type: 'authorization_code',
@@ -134,39 +91,75 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
       body.append('code_verifier', codeVerifier);
     }
 
-    let response = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    });
-
-    if (!response.ok) {
-      response = await fetch('https://accounts.spotify.com/api/token', {
+    try {
+      const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
         },
         body: body.toString(),
       });
+
+      if (response.ok) {
+        tokenData = await response.json();
+      } else {
+        const errJson = await response.json().catch(() => null);
+        console.warn('Direct PKCE exchange returned error:', response.status, errJson);
+      }
+    } catch (directErr) {
+      console.warn('Direct Spotify PKCE call failed (network or extension), trying /api/token proxy:', directErr);
     }
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Spotify token exchange failed:', err);
+    // 2. Fallback to /api/token proxy if direct fetch failed
+    if (!tokenData || !tokenData.access_token) {
+      try {
+        let proxyRes = await fetch('/api/token', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            code_verifier: codeVerifier,
+            redirect_uri: redirectUri,
+            client_id: CLIENT_ID,
+          }),
+        });
+
+        if (!proxyRes.ok) {
+          proxyRes = await fetch('/api/spotify/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              code,
+              code_verifier: codeVerifier,
+              redirect_uri: redirectUri,
+              client_id: CLIENT_ID,
+            }),
+          });
+        }
+
+        if (proxyRes.ok) {
+          tokenData = await proxyRes.json();
+        } else {
+          const proxyErr = await proxyRes.json().catch(() => null);
+          console.error('/api/token proxy failed:', proxyRes.status, proxyErr);
+        }
+      } catch (proxyErr) {
+        console.error('Token proxy network failure:', proxyErr);
+      }
+    }
+
+    if (!tokenData || !tokenData.access_token) {
+      console.error('All Spotify token exchange attempts failed for authorization code');
       return false;
     }
 
-    const data = await response.json();
-    const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-
-    window.localStorage.setItem('spotify_access_token', data.access_token);
-    if (data.refresh_token) {
-      window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
+    const expiresAt = Date.now() + (tokenData.expires_in || 3600) * 1000;
+    window.localStorage.setItem('spotify_access_token', tokenData.access_token);
+    if (tokenData.refresh_token) {
+      window.localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
     }
     window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
+    window.localStorage.removeItem('spotify_code_verifier');
     window.localStorage.removeItem('spotify_logged_out');
 
     return true;
@@ -216,20 +209,35 @@ export async function refreshAccessToken(): Promise<string | null> {
   }
 
   try {
-    // 1. Try proxy first
+    let tokenData: any = null;
+
+    // 1. Direct PKCE refresh (RFC 7636 standard for SPAs)
+    const body = new URLSearchParams({
+      grant_type: 'refresh_token',
+      refresh_token: refreshToken,
+      client_id: CLIENT_ID,
+    });
+
     try {
-      let proxyRes = await fetch('/api/token', {
+      const response = await fetch('https://accounts.spotify.com/api/token', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          grant_type: 'refresh_token',
-          refresh_token: refreshToken,
-          client_id: CLIENT_ID,
-        }),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: body.toString(),
       });
 
-      if (!proxyRes.ok) {
-        proxyRes = await fetch('/api/spotify/token', {
+      if (response.ok) {
+        tokenData = await response.json();
+      }
+    } catch (directErr) {
+      console.warn('Direct Spotify token refresh failed, trying proxy:', directErr);
+    }
+
+    // 2. Fallback to /api/token proxy
+    if (!tokenData || !tokenData.access_token) {
+      try {
+        let proxyRes = await fetch('/api/token', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -238,63 +246,40 @@ export async function refreshAccessToken(): Promise<string | null> {
             client_id: CLIENT_ID,
           }),
         });
-      }
 
-      if (proxyRes.ok) {
-        const data = await proxyRes.json();
-        if (data.access_token) {
-          const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-          window.localStorage.setItem('spotify_access_token', data.access_token);
-          if (data.refresh_token) {
-            window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
-          }
-          window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
-          return data.access_token;
+        if (!proxyRes.ok) {
+          proxyRes = await fetch('/api/spotify/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              grant_type: 'refresh_token',
+              refresh_token: refreshToken,
+              client_id: CLIENT_ID,
+            }),
+          });
         }
+
+        if (proxyRes.ok) {
+          tokenData = await proxyRes.json();
+        }
+      } catch (proxyErr) {
+        console.error('Token refresh proxy failed:', proxyErr);
       }
-    } catch {}
-
-    const body = new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token: refreshToken,
-      client_id: CLIENT_ID,
-    });
-
-    let response = await fetch('https://accounts.spotify.com/api/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: body.toString(),
-    });
-
-    if (!response.ok) {
-      response = await fetch('https://accounts.spotify.com/api/token', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
-        },
-        body: body.toString(),
-      });
     }
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Failed to refresh Spotify access token:', err);
+    if (!tokenData || !tokenData.access_token) {
+      console.error('Failed to refresh Spotify access token through direct or proxy');
       return null;
     }
 
-    const data = await response.json();
-    const expiresAt = Date.now() + (data.expires_in || 3600) * 1000;
-
-    window.localStorage.setItem('spotify_access_token', data.access_token);
-    if (data.refresh_token) {
-      window.localStorage.setItem('spotify_refresh_token', data.refresh_token);
+    const expiresAt = Date.now() + (tokenData.expires_in || 3600) * 1000;
+    window.localStorage.setItem('spotify_access_token', tokenData.access_token);
+    if (tokenData.refresh_token) {
+      window.localStorage.setItem('spotify_refresh_token', tokenData.refresh_token);
     }
     window.localStorage.setItem('spotify_expires_at', expiresAt.toString());
 
-    return data.access_token;
+    return tokenData.access_token;
   } catch (error) {
     console.error('Error refreshing Spotify access token:', error);
     return null;

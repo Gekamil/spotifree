@@ -38,7 +38,13 @@ export async function fetchCurrentUser(): Promise<UserProfile | null> {
     if (res.ok) {
       return await res.json();
     }
-    console.warn(`Spotify /v1/me returned ${res.status}`);
+    if (res.status === 403) {
+      console.error(
+        'Spotify /v1/me devolvió 403 Forbidden: La app de Spotify está en Development Mode. El correo de tu cuenta de Spotify debe estar registrado en el Spotify Developer Dashboard -> Settings -> Users and Access.'
+      );
+    } else {
+      console.warn(`Spotify /v1/me returned ${res.status}`);
+    }
     return null;
   } catch (err) {
     console.error('Error fetching /v1/me from Spotify API:', err);

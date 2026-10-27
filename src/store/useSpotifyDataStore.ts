@@ -420,18 +420,24 @@ const store = create<SpotifyDataState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      // 1. Check for OAuth code in URL
+      // 1. Check for OAuth code or error in URL
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
+      const error = urlParams.get('error');
 
-      if (code) {
+      if (error) {
+        console.error('Spotify OAuth error in callback:', error);
+        window.history.replaceState({}, document.title, '/');
+      } else if (code) {
+        console.log('Detected Spotify authorization code, exchanging token...');
         const success = await handleSpotifyCallback(code);
+        window.history.replaceState({}, document.title, '/');
         if (success) {
-          window.history.replaceState({}, document.title, '/');
+          console.log('Spotify token exchanged successfully, refreshing real user profile & playlists...');
           await get().refreshData();
           return;
         } else {
-          window.history.replaceState({}, document.title, '/');
+          console.error('Failed to exchange Spotify authorization code for access token.');
         }
       }
 
