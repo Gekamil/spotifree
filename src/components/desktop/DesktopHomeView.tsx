@@ -4,32 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { DesktopShimmerFeed } from './DesktopShimmerFeed';
-
-const SPOTIFY_PALETTE = [
-  '#5018F0', // Spotify Purple
-  '#1DB954', // Spotify Green
-  '#E91429', // Crimson Red
-  '#2D46B9', // Sapphire Blue
-  '#B02897', // Magenta
-  '#E13300', // Sunset Orange
-  '#148A08', // Emerald Forest
-  '#E8115B', // Hot Pink
-  '#BA5D07', // Warm Amber
-  '#1E3264', // Deep Navy
-  '#8D67AB', // Lavender
-  '#7358FF', // Electric Violet
-];
-
-function getDeterministicColor(id: string = '', name: string = ''): string {
-  const str = `${id}:${name}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  const idx = Math.abs(hash) % SPOTIFY_PALETTE.length;
-  return SPOTIFY_PALETTE[idx];
-}
+import { getColorFromTitle, isInvalidGrey } from '../../utils/colorExtractor';
 
 interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
@@ -37,7 +12,6 @@ interface DesktopHomeViewProps {
 
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
-  const [hoveredColor, setHoveredColor] = useState<string | null>(null);
   const [expandedShelf, setExpandedShelf] = useState<{
     id: string;
     prefix?: string;
@@ -45,6 +19,25 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     subtitle?: string;
     cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
   } | null>(null);
+
+  // Retain the last chosen ambient color permanently so it never flashes back to blue
+  const [ambientColor, setAmbientColor] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = window.localStorage.getItem('spotifree_last_ambient_color');
+      if (saved && !isInvalidGrey(saved)) return saved;
+    }
+    return '#8a654e';
+  });
+
+  const handleCardHover = (color?: string, name?: string, id?: string) => {
+    const candidate = color && !isInvalidGrey(color) ? color : getColorFromTitle(name || '', id || '');
+    if (candidate && !isInvalidGrey(candidate)) {
+      setAmbientColor(candidate);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('spotifree_last_ambient_color', candidate);
+      }
+    }
+  };
 
   // Reset expanded shelf on global navigate home event
   useEffect(() => {
@@ -146,11 +139,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
-  const profileColor = useMemo(() => {
-    return getDeterministicColor(user?.id || 'profile', user?.display_name || 'Spotify');
-  }, [user]);
-
-  const activeBg = hoveredColor || (currentShortcuts[0]?.color && currentShortcuts[0].color !== '#121212' ? currentShortcuts[0].color : profileColor);
+  const activeBg = ambientColor;
 
   if (!isAuthenticated) {
     return <DesktopShimmerFeed />;
@@ -222,7 +211,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   };
 
   if (expandedShelf) {
-    const shelfAmbientColor = getDeterministicColor(expandedShelf.id, expandedShelf.title);
+    const shelfAmbientColor = getColorFromTitle(expandedShelf.title, expandedShelf.id);
     return (
       <div
         className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200"
@@ -413,8 +402,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 <div
                   key={item.id}
                   onClick={() => onSelectPlaylistById(item.id)}
-                  onMouseEnter={() => setHoveredColor(item.color)}
-                  onMouseLeave={() => setHoveredColor(null)}
+                  onMouseEnter={() => handleCardHover(item.color, item.name, item.id)}
                   className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
                 >
                   <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">

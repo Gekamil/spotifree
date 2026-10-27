@@ -24,25 +24,19 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1DWY1Pf31eEcxL',
             title: 'Novedades Viernes España',
             subtitle: 'Lo más nuevo de Quevedo, Saiko, Myke Towers y más.',
-            image: 'https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e',
-          },
-          {
-            id: '37i9dQZEVXcQ9NknPpJyRU',
-            title: 'Descubrimiento semanal',
-            subtitle: 'Joyas ocultas y canciones seleccionadas para ti.',
-            image: 'https://newjams-images.scdn.co/image/ab676477000033ad/dt/v3/discover-weekly/aAbca41100000000/es',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f1/d3/c4/f1d3c41e-edfe-c6d2-1f6a-e685e71884ef/cover.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZEVXbxJjY5x43H57',
             title: 'Radar de Novedades',
             subtitle: 'Las novedades de los artistas que sigues.',
-            image: 'https://i.scdn.co/image/ab67706f00000002a973a9cc67d246b7865e3e43',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/71/2d/61/712d617d-f4a4-5904-1b11-d4b4b45c47c5/828768588925.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DXcBWIGoYBM5M',
             title: 'Éxitos España',
             subtitle: 'Los temas más escuchados ahora en España.',
-            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZEVXbNFJfN1Vw8d9',
@@ -54,7 +48,7 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1DWZdsS73T1ogG',
             title: 'el nuevo urbano',
             subtitle: 'Lo más nuevo de la música urbana.',
-            image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/46/46/6a/46466a3b-bd39-5941-9d02-0bb5da7ee705/dj.vugpwnty.jpg/600x600bb.jpg',
           },
         ],
       },
@@ -65,25 +59,25 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1DX2EiUAL7Wdfc',
             title: 'míticas',
             subtitle: 'Canciones que nunca pasarán de moda.',
-            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1EQncLwOalG3K7',
             title: 'Pop con Ñ',
             subtitle: 'El mejor pop en español fresco y actual.',
-            image: 'https://i.scdn.co/image/ab67706f000000020ad613a778fc3ef5c91f54cf',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/d7/91/a1/d791a189-3b64-b93d-e8de-478641f3e048/5064009109640.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DX10zKzsJ2jva',
             title: 'Viva Latino',
             subtitle: 'El corazón y la energía de la música latina.',
-            image: 'https://i.scdn.co/image/ab67706f00000002f232ffabeb0f993f45f20f06',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DWXRqgorJj26U',
             title: 'Rock Classics',
             subtitle: 'Grandes leyendas y clásicos del rock.',
-            image: 'https://i.scdn.co/image/ab67706f00000002b0e6e76cf0d4948a3952f481',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
           },
         ],
       },
@@ -98,19 +92,19 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1EQncLwOalG3K7',
             title: 'Pop con Ñ',
             subtitle: 'Pop actual en español.',
-            image: 'https://i.scdn.co/image/ab67706f000000020ad613a778fc3ef5c91f54cf',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/d7/91/a1/d791a189-3b64-b93d-e8de-478641f3e048/5064009109640.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DXcBWIGoYBM5M',
             title: 'Éxitos España',
             subtitle: 'Las canciones pop más escuchadas.',
-            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DX4JAvHpjipBk',
-            title: 'New Music Friday',
-            subtitle: 'Estrenos pop de la semana.',
-            image: 'https://i.scdn.co/image/ab67706f000000020fe6127163cb15bf8bfd7df3',
+            title: 'Pop Internacional',
+            subtitle: 'Estrenos pop del panorama global.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/71/2d/61/712d617d-f4a4-5904-1b11-d4b4b45c47c5/828768588925.jpg/600x600bb.jpg',
           },
         ],
       },
@@ -125,25 +119,52 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1DX10zKzsJ2jva',
             title: 'Viva Latino',
             subtitle: 'Hoy suena lo mejor de Bad Bunny, Feid, Karol G y Rauw Alejandro.',
-            image: 'https://i.scdn.co/image/ab67706f00000002f232ffabeb0f993f45f20f06',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DWZdsS73T1ogG',
             title: 'el nuevo urbano',
             subtitle: 'El sonido urbano que rompe esquemas.',
-            image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/46/46/6a/46466a3b-bd39-5941-9d02-0bb5da7ee705/dj.vugpwnty.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DXcBWIGoYBM5M',
             title: 'Éxitos España',
             subtitle: 'Los ritmos latinos más sonados en la península.',
-            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DX2EiUAL7Wdfc',
             title: 'míticas',
             subtitle: 'Los clásicos latinos que nunca pasarán de moda.',
-            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-urbano': {
+    shelves: [
+      {
+        title: 'El mejor género urbano',
+        cards: [
+          {
+            id: '37i9dQZF1DWZdsS73T1ogG',
+            title: 'el nuevo urbano',
+            subtitle: 'Bizarrap, Duki, Quevedo, Mora, Saiko.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/46/46/6a/46466a3b-bd39-5941-9d02-0bb5da7ee705/dj.vugpwnty.jpg/600x600bb.jpg',
+          },
+          {
+            id: '37i9dQZF1DX10zKzsJ2jva',
+            title: 'Viva Latino',
+            subtitle: 'Reggaetón, trap y drill latino sin límites.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Éxitos España',
+            subtitle: 'Toda la vanguardia que suena en la calle.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
           },
         ],
       },
@@ -158,19 +179,46 @@ const CATEGORY_HUBS: Record<
             id: '37i9dQZF1DWXRqgorJj26U',
             title: 'Rock Classics',
             subtitle: 'Queen, AC/DC, Led Zeppelin, Guns N Roses y más.',
-            image: 'https://i.scdn.co/image/ab67706f00000002b0e6e76cf0d4948a3952f481',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DX3oM43CtKnRV',
             title: 'Rock Español',
             subtitle: 'Fito & Fitipaldis, Extremoduro, Héroes del Silencio.',
-            image: 'https://i.scdn.co/image/ab67706f00000002da4c849095796a9e5d2c4ddb',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DX1rVvRgjX59F',
             title: '90s Rock Anthems',
             subtitle: 'Nirvana, Pearl Jam, Red Hot Chili Peppers.',
-            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-indie': {
+    shelves: [
+      {
+        title: 'Lo mejor del Indie y Alternativo',
+        cards: [
+          {
+            id: 'cat-indie-shelf-1',
+            title: 'Indie Rock',
+            subtitle: 'Arctic Monkeys, The Strokes, The Killers y Franz Ferdinand.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/69/9c/b5/699cb5d6-115c-ff73-9d26-e57ea4350d72/887828031795.png/600x600bb.jpg',
+          },
+          {
+            id: 'cat-indie-shelf-2',
+            title: 'Indie España',
+            subtitle: 'Vetusta Morla, Love of Lesbian, Lori Meyers e Izal.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/69/9c/b5/699cb5d6-115c-ff73-9d26-e57ea4350d72/887828031795.png/600x600bb.jpg',
+          },
+          {
+            id: 'cat-indie-shelf-3',
+            title: 'Chill Indie & Dream Pop',
+            subtitle: 'Sonidos etéreos, guitarras envolventes y relax.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1c/c1/e0/1cc1e064-255c-e1b8-71fa-00cc68a5918e/23UM1IM06665.rgb.jpg/600x600bb.jpg',
           },
         ],
       },
@@ -183,15 +231,153 @@ const CATEGORY_HUBS: Record<
         cards: [
           {
             id: '37i9dQZF1DX4dyzvuaRJ0n',
-            title: 'electronic circus',
-            subtitle: 'Los mejores beats para tus sesiones.',
-            image: 'https://i.scdn.co/image/ab67706f000000023f350ef9446d3eb81cfc67a4',
+            title: 'Electronic Circus',
+            subtitle: 'David Guetta, Calvin Harris, Tiësto, Alok.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/13/69/af/1369af3d-4103-ce42-65d5-57772545be7b/25CRGIM51251.rgb.jpg/600x600bb.jpg',
           },
           {
             id: '37i9dQZF1DXa8NOEUWPn9W',
             title: 'Housewerk',
-            subtitle: 'Deep house y grooves irresistibles.',
-            image: 'https://i.scdn.co/image/ab67706f00000002474a477debc822a3a45c5acb',
+            subtitle: 'Deep house y grooves irresistibles para bailar.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/13/69/af/1369af3d-4103-ce42-65d5-57772545be7b/25CRGIM51251.rgb.jpg/600x600bb.jpg',
+          },
+          {
+            id: 'cat-dance-festival',
+            title: 'Mainstage Festival EDM',
+            subtitle: 'La energía pura de Tomorrowland y Ultra.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/13/69/af/1369af3d-4103-ce42-65d5-57772545be7b/25CRGIM51251.rgb.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-listas': {
+    shelves: [
+      {
+        title: 'Las listas más escuchadas',
+        cards: [
+          {
+            id: '37i9dQZEVXbNFJfN1Vw8d9',
+            title: 'Top 50: España',
+            subtitle: 'Tu actualización diaria de los temas más reproducidos.',
+            image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_large.jpg',
+          },
+          {
+            id: '37i9dQZEVXbMDoHDwVN2tF',
+            title: 'Top 50: Global',
+            subtitle: 'Las canciones más escuchadas en todo el mundo hoy.',
+            image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_global_large.jpg',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Éxitos España',
+            subtitle: 'Grandes hits y números uno en Spotify España.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-descubrir': {
+    shelves: [
+      {
+        title: 'Descubre nuevas joyas y talentos',
+        cards: [
+          {
+            id: '37i9dQZEVXbxJjY5x43H57',
+            title: 'Radar de Novedades',
+            subtitle: 'Artistas emergentes y nuevos lanzamientos seleccionados.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c3/ea/18c3eaae-229c-c529-634c-d6219e161ccb/5059805957458_cover.jpg/600x600bb.jpg',
+          },
+          {
+            id: '37i9dQZF1DWY1Pf31eEcxL',
+            title: 'Novedades Viernes España',
+            subtitle: 'Estrenos semanales y frescura musical.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f1/d3/c4/f1d3c41e-edfe-c6d2-1f6a-e685e71884ef/cover.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-para-ti': {
+    shelves: [
+      {
+        title: 'Hecho para ti',
+        cards: [
+          {
+            id: '37i9dQZEVXbxJjY5x43H57',
+            title: 'Radar de Novedades',
+            subtitle: 'Basado en tus gustos musicales y artistas que amas.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1c/c1/e0/1cc1e064-255c-e1b8-71fa-00cc68a5918e/23UM1IM06665.rgb.jpg/600x600bb.jpg',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Mix Personalizado',
+            subtitle: 'Canciones favoritas y descubrimientos afines.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-novedades': {
+    shelves: [
+      {
+        title: 'Últimos lanzamientos',
+        cards: [
+          {
+            id: '37i9dQZF1DWY1Pf31eEcxL',
+            title: 'Novedades Viernes España',
+            subtitle: 'Todo lo nuevo recién salido de los estudios.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f1/d3/c4/f1d3c41e-edfe-c6d2-1f6a-e685e71884ef/cover.jpg/600x600bb.jpg',
+          },
+          {
+            id: '37i9dQZEVXbxJjY5x43H57',
+            title: 'Radar de Novedades',
+            subtitle: 'Lo más reciente de la escena musical.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/71/2d/61/712d617d-f4a4-5904-1b11-d4b4b45c47c5/828768588925.jpg/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-eventos': {
+    shelves: [
+      {
+        title: 'Directos y festivales',
+        cards: [
+          {
+            id: 'cat-eventos-fest',
+            title: 'Festivales de Verano',
+            subtitle: 'Lo mejor que sonará en vivo en los escenarios.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/0c/73/fc/0c73fcc7-0d61-d994-af89-2909a39ea097/mzi.bfzyhzca.jpg/600x600bb.jpg',
+          },
+          {
+            id: 'cat-eventos-conciertos',
+            title: 'Conciertos de Leyenda',
+            subtitle: 'Actuaciones históricas en directo.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-futbol': {
+    shelves: [
+      {
+        title: 'Música & Fútbol',
+        cards: [
+          {
+            id: 'cat-futbol-himnos',
+            title: 'Himnos de Estadio',
+            subtitle: 'Las canciones que retumban en cada victoria.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/d7/dd/d0/d7ddd0d9-208c-34c9-f150-e9aeada703b9/artwork.jpg/600x600bb.jpg',
+          },
+          {
+            id: 'cat-futbol-motivacion',
+            title: 'Motivación Deportiva',
+            subtitle: 'Ritmo, fuerza y concentración para darlo todo.',
+            image: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/13/69/af/1369af3d-4103-ce42-65d5-57772545be7b/25CRGIM51251.rgb.jpg/600x600bb.jpg',
           },
         ],
       },
@@ -238,79 +424,79 @@ const officialCategories = [
     id: 'cat-musica',
     title: 'Música',
     bgColor: 'rgb(220, 20, 140)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf474a477debc822a3a45c5acb',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/71/2d/61/712d617d-f4a4-5904-1b11-d4b4b45c47c5/828768588925.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-eventos',
     title: 'Eventos en directo',
     bgColor: 'rgb(115, 88, 255)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf7934c8c678ccafee89869a55',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/0c/73/fc/0c73fcc7-0d61-d994-af89-2909a39ea097/mzi.bfzyhzca.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-para-ti',
     title: 'Especialmente para ti',
     bgColor: 'rgb(30, 50, 100)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf271f9d9d50ba505b47848de0',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/1c/c1/e0/1cc1e064-255c-e1b8-71fa-00cc68a5918e/23UM1IM06665.rgb.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-novedades',
     title: 'Novedades',
     bgColor: 'rgb(45, 70, 185)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf7934c8c678ccafee89869a55',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f1/d3/c4/f1d3c41e-edfe-c6d2-1f6a-e685e71884ef/cover.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-latina',
     title: 'Latina',
     bgColor: 'rgb(13, 115, 236)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf3a44e7ae3d808c220898185c',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2d/ea/99/2dea9931-3a4c-11c7-34b4-124264b98ff6/196922098765_Cover.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-pop',
     title: 'Pop',
     bgColor: 'rgb(20, 138, 8)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf1cc5fdd288daf767c8d17643',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/d7/91/a1/d791a189-3b64-b93d-e8de-478641f3e048/5064009109640.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-rock',
     title: 'Rock',
     bgColor: 'rgb(188, 89, 0)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005cafda4c849095796a9e5d2c4ddb',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/55/b3/ac/55b3ac56-50c9-27fd-be05-093c048ffb3a/634479952395.png/600x600bb.jpg',
   },
   {
     id: 'cat-futbol',
     title: 'Fútbol',
     bgColor: 'rgb(13, 115, 236)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf009087c53d043b2365287e0b',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/d7/dd/d0/d7ddd0d9-208c-34c9-f150-e9aeada703b9/artwork.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-listas',
     title: 'Listas de éxitos',
     bgColor: 'rgb(141, 103, 171)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005cafa207f2a24ec282057d23d838',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/36/4b/09/364b095e-a5fb-b346-d189-efedc5d8abd7/8902633282728.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-urbano',
     title: 'Urbano latino',
     bgColor: 'rgb(188, 89, 0)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf3a44e7ae3d808c220898185c',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Features114/v4/46/46/6a/46466a3b-bd39-5941-9d02-0bb5da7ee705/dj.vugpwnty.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-indie',
     title: 'Indie',
     bgColor: 'rgb(96, 129, 8)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005cafa312daef93e0b23dd3d41f71',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/69/9c/b5/699cb5d6-115c-ff73-9d26-e57ea4350d72/887828031795.png/600x600bb.jpg',
   },
   {
     id: 'cat-dance',
     title: 'Dance / Electrónica',
     bgColor: 'rgb(220, 20, 140)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf3f350ef9446d3eb81cfc67a4',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/13/69/af/1369af3d-4103-ce42-65d5-57772545be7b/25CRGIM51251.rgb.jpg/600x600bb.jpg',
   },
   {
     id: 'cat-descubrir',
     title: 'Descubrir',
     bgColor: 'rgb(141, 103, 171)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf2a106f2d24d2629b168697ee',
+    imgSrc: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/18/c3/ea/18c3eaae-229c-c529-634c-d6219e161ccb/5059805957458_cover.jpg/600x600bb.jpg',
   },
 ];
 
@@ -421,6 +607,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   const { searchQuery } = useUIStore();
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
   const [selectedCategory, setSelectedCategory] = useState<typeof officialCategories[0] | null>(null);
+  const [categoryAlbums, setCategoryAlbums] = useState<Array<{ id: string; title: string; subtitle: string; image: string }>>([]);
   const [searchFilter, setSearchFilter] = useState<'todo' | 'canciones' | 'artistas' | 'albumes' | 'playlists'>('todo');
   const [searchResults, setSearchResults] = useState<FullSearchResults>({
     tracks: [],
@@ -436,6 +623,34 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       setSelectedCategory(null);
     }
   }, [searchQuery]);
+
+  useEffect(() => {
+    if (!selectedCategory) {
+      setCategoryAlbums([]);
+      return;
+    }
+
+    let active = true;
+    const q = selectedCategory.title;
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=album&limit=12`)
+      .then((res) => (res.ok ? res.json() : { results: [] }))
+      .then((data) => {
+        if (active && data.results && data.results.length > 0) {
+          const mapped = data.results.map((a: any, idx: number) => ({
+            id: `alb-${a.collectionId || idx}`,
+            title: a.collectionName || 'Álbum',
+            subtitle: a.artistName || 'Álbum',
+            image: (a.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+          }));
+          setCategoryAlbums(mapped);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [selectedCategory]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -536,6 +751,24 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     }}
                   />
                 )
+              )}
+
+              {categoryAlbums.length > 0 && (
+                <DesktopShelfCarousel
+                  key={`${selectedCategory.id}-dynamic-albums`}
+                  title={`Álbumes y lanzamientos populares de ${selectedCategory.title}`}
+                  items={categoryAlbums}
+                  onCardClick={(card) => {
+                    if (onSelectPlaylistById) {
+                      onSelectPlaylistById(card.id, card.title, card.image);
+                    }
+                  }}
+                  onPlayClick={(card) => {
+                    if (onSelectPlaylistById) {
+                      onSelectPlaylistById(card.id, card.title, card.image);
+                    }
+                  }}
+                />
               )}
             </div>
           </div>
