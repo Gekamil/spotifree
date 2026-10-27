@@ -357,7 +357,7 @@ const store = create<SpotifyDataState>((set, get) => ({
       id: `custom-playlist-${Date.now()}`,
       name: playlistName,
       description: '',
-      images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      images: [],
       owner: { display_name: s.user?.display_name || 'Jorgeperezvk', id: 'user' },
       tracks: { total: 0, items: [] },
       color: '#303030',
@@ -530,7 +530,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           quickAccessCards: importedPlaylists.slice(0, 4).map((p) => ({
             id: p.id,
             name: p.name,
-            image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+            image: p.images?.[0]?.url || '',
             color: (p as any).color || '#303030',
           })),
           isLoading: false,

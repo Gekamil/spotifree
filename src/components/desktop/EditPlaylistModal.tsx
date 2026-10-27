@@ -17,8 +17,9 @@ export const EditPlaylistModal: React.FC = () => {
       setName(editingPlaylist.name || '');
       setDescription(editingPlaylist.description || '');
       setCoverUrl(
-        editingPlaylist.images?.[0]?.url ||
-        'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+        (editingPlaylist.images?.[0]?.url && !editingPlaylist.images[0].url.includes('liked-songs'))
+          ? editingPlaylist.images[0].url
+          : ''
       );
     }
   }, [editingPlaylist]);
@@ -85,11 +86,19 @@ export const EditPlaylistModal: React.FC = () => {
             className="relative w-[180px] h-[180px] rounded-[4px] overflow-hidden bg-[#181818] shadow-2xl shrink-0 group cursor-pointer"
             title="Elegir foto"
           >
-            <img
-              src={coverUrl}
-              alt={name}
-              className="w-full h-full object-cover"
-            />
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt={name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+              </div>
+            )}
 
             {/* Hover overlay with pencil icon + "Elegir foto" */}
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white">

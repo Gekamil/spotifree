@@ -7,48 +7,115 @@ export function toHDImage(url) {
     .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
     .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
     .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
+    .replace(/\/ab67706d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706d00000002$1')
     .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
-    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/');
+    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
+    .replace('liked-songs-64.png', 'liked-songs-640.jpg')
+    .replace('liked-songs-300.png', 'liked-songs-640.jpg');
 }
 
 export function extractEntityImage(it) {
   if (!it) return null;
 
-  // 1. Artist visuals avatar
-  const avatarSources = it.visuals?.avatarImage?.sources || it.avatar?.sources;
+  // 1. Artist visuals avatar & headers
+  const avatarSources = it.visuals?.avatarImage?.sources || it.visuals?.headerImage?.sources || it.avatar?.sources;
   if (avatarSources && avatarSources.length > 0) {
     const best = avatarSources.find(s => (s.height || 0) >= 300) || avatarSources[0];
     if (best?.url) return toHDImage(best.url);
   }
 
-  // 2. Playlist / Album images.items
-  const itemsSources = it.images?.items?.[0]?.sources;
-  if (itemsSources && itemsSources.length > 0) {
-    const best = itemsSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || itemsSources[0];
+  // 2. Direct images.sources (Pathfinder libraryV3)
+  const directSources = it.images?.sources;
+  if (directSources && directSources.length > 0) {
+    const best = directSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || directSources[0];
     if (best?.url) return toHDImage(best.url);
   }
 
-  // 3. CoverArt sources (albums, podcasts, singles)
+  // 3. Playlist / Album images.items
+  if (it.images?.items && Array.isArray(it.images.items) && it.images.items.length > 0) {
+    for (const imgItem of it.images.items) {
+      if (imgItem?.sources && imgItem.sources.length > 0) {
+        const best = imgItem.sources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || imgItem.sources[0];
+        if (best?.url) return toHDImage(best.url);
+      }
+      if (imgItem?.url && typeof imgItem.url === 'string') {
+        return toHDImage(imgItem.url);
+      }
+    }
+  }
+
+  // 4. CoverArt sources (albums, podcasts, singles)
   const coverSources = it.coverArt?.sources;
   if (coverSources && coverSources.length > 0) {
     const best = coverSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || coverSources[0];
     if (best?.url) return toHDImage(best.url);
   }
 
-  // 4. visualIdentity (embeds)
+  // 5. visualIdentity (embeds)
   const visualImages = it.visualIdentity?.image;
   if (visualImages && visualImages.length > 0) {
     const best = visualImages.find(s => (s.maxHeight || 0) >= 300) || visualImages[visualImages.length - 1];
     if (best?.url) return toHDImage(best.url);
   }
 
-  // 5. Direct images array
-  if (Array.isArray(it.images) && it.images.length > 0) {
-    const img = it.images[0]?.url || it.images[0];
-    if (typeof img === 'string') return toHDImage(img);
+  // 6. defaultRepresentation (radio stations, mixes)
+  const defaultSources = it.defaultRepresentation?.sources;
+  if (defaultSources && defaultSources.length > 0) {
+    const best = defaultSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || defaultSources[0];
+    if (best?.url) return toHDImage(best.url);
   }
 
-  return null;
+  // 7. Direct images array
+  if (Array.isArray(it.images) && it.images.length > 0) {
+    for (const img of it.images) {
+      if (typeof img === 'string') return toHDImage(img);
+      if (img?.url && typeof img.url === 'string') return toHDImage(img.url);
+      if (img?.sources && img.sources.length > 0) {
+        const best = img.sources.find(s => (s.height || 0) >= 300) || img.sources[0];
+        if (best?.url) return toHDImage(best.url);
+      }
+    }
+  }
+
+  // 8. it.image object or string
+  if (it.image) {
+    if (typeof it.image === 'string') return toHDImage(it.image);
+    if (it.image.url) return toHDImage(it.image.url);
+    if (it.image.sources && it.image.sources.length > 0) return toHDImage(it.image.sources[0].url);
+  }
+
+  // 9. Deep recursive scanner for any Spotify CDN image URL in the entity
+  function findCdnUrl(obj, depth = 0) {
+    if (!obj || depth > 4) return null;
+    if (typeof obj === 'string') {
+      if (
+        obj.startsWith('http') &&
+        (obj.includes('scdn.co') || obj.includes('spotifycdn.com')) &&
+        !obj.includes('liked-songs') &&
+        !obj.includes('.svg')
+      ) {
+        return toHDImage(obj);
+      }
+      return null;
+    }
+    if (Array.isArray(obj)) {
+      for (const el of obj) {
+        const found = findCdnUrl(el, depth + 1);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (typeof obj === 'object') {
+      for (const [key, val] of Object.entries(obj)) {
+        if (key === '__typename') continue;
+        const found = findCdnUrl(val, depth + 1);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  return findCdnUrl(it);
 }
 
 // Spotify TOTP generator matching the active Web Player version
@@ -252,8 +319,13 @@ export async function extractSpotifySession(spDcCookie) {
     const uri = it.uri || '';
     const cleanId = uri.split(':').pop();
 
-    // 1. Liked Songs
-    if (uri === 'spotify:collection:tracks' || it.__typename === 'Collection') {
+    // 1. Liked Songs (Strict check so other collections or playlists never get mistaken for Liked Songs)
+    const isLikedCollection =
+      uri === 'spotify:collection:tracks' ||
+      uri.endsWith(':collection:tracks') ||
+      (it.__typename === 'Collection' && (it.name?.toLowerCase().includes('canciones') || it.name?.toLowerCase().includes('liked') || !it.name));
+
+    if (isLikedCollection) {
       playlists.push({
         id: 'collection-tracks',
         name: 'Canciones que te gustan',

@@ -97,11 +97,13 @@ export const DesktopLayout: React.FC = () => {
     let desc = foundCard?.subtitle || '';
     let ownerName = 'Spotify';
 
+    const currentUserDisplayName = useSpotifyDataStore.getState().user?.display_name || 'Spotify';
+
     if (cleanId === '7b3MrCWtettvBKlfBSdorn' || cleanId === 'jl-2026' || cleanId === 'j-l-2026' || cleanId === 'j-l-2026-') {
       title = title || 'J+L(2026)';
       image = image || 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc';
-      desc = desc || 'De Jorgeperezvk';
-      ownerName = 'Jorgeperezvk';
+      desc = desc || `De ${currentUserDisplayName}`;
+      ownerName = currentUserDisplayName;
     } else if (cleanId === '37i9dQZF1DWZdsS73T1ogG' || cleanId === 'el-nuevo-urbano') {
       title = title || 'el nuevo urbano';
       image = image || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
@@ -118,37 +120,37 @@ export const DesktopLayout: React.FC = () => {
       title = title || 'Mix diario 1';
       image = image || 'https://dailymix-images.scdn.co/v2/img/ab6761610000e5ebc8be3c6e5a824360d1bffc03/1/es/default';
       desc = desc || 'Romeo Santos, Prince Royce, Aventura y más';
-      ownerName = 'Hecha para Jorgeperezvk';
+      ownerName = `Hecha para ${currentUserDisplayName}`;
     } else if (cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection-tracks') {
       title = 'Canciones que te gustan';
       image = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
-      ownerName = useSpotifyDataStore.getState().user?.display_name || 'Spotify';
+      ownerName = currentUserDisplayName;
     } else if (cleanId === '43GWp9FbN9nHihudedyVQM' || cleanId === 'romeo-prince' || cleanId === 'romeo---prince') {
       title = title || 'Romeo & Prince';
-      ownerName = 'Jorgeperezvk';
+      ownerName = currentUserDisplayName;
     } else if (cleanId === '4Jf0fa5p0ajOnSriA9cYGS' || cleanId === 'my-top-tracks-playlist') {
       title = title || 'My top tracks playlist';
-      ownerName = 'Jorgeperezvk';
+      ownerName = currentUserDisplayName;
       image = image || 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59';
     } else if (cleanId === '7HsL4sBaR3dJMa0UJ5e4zG' || cleanId === 'nuestro-amor' || cleanId === '--nuestro-amor----2024-25-') {
       title = title || '♡ nuestro amor ♡ (2024-25)';
-      ownerName = 'Lucía :)';
+      ownerName = 'Spotify';
     } else if (cleanId === 'tus-canciones-mas-escuchadas-2025' || cleanId === 'tus-canciones-m-s-escuchadas-en-2025') {
       title = title || 'Tus canciones más escuchadas en 2025';
-      ownerName = 'Hecha para Jorgeperezvk';
+      ownerName = `Hecha para ${currentUserDisplayName}`;
     } else if (cleanId === '3x7gz85amxEplGx7LQxE7Z' || cleanId === 'romeo-santos') {
       title = title || 'Romeo Santos';
       ownerName = 'Spotify';
       desc = 'Artista';
     } else if (cleanId === 'nueva-carpeta') {
       title = title || 'Nueva carpeta';
-      ownerName = 'Jorgeperezvk';
+      ownerName = currentUserDisplayName;
       desc = '7 listas';
     }
 
     const isArtist = cleanId === '3x7gz85amxEplGx7LQxE7Z' || cleanId === '5lwmRuXgjX8xIwlnauTZIP' || cleanId === 'romeo-santos' || desc?.toLowerCase() === 'artista' || cleanId.startsWith('art-');
     const isAlbum = cleanId === '4f0YTBqSbvM1iJpuY9r3yQ' || cleanId === 'zizi' || cleanId.startsWith('alb-');
-    const isUser = (cleanId === '7b3MrCWtettvBKlfBSdorn' || cleanId === '7HsL4sBaR3dJMa0UJ5e4zG' || ownerName === 'Jorgeperezvk') && !isArtist && !isAlbum && cleanId !== 'nueva-carpeta';
+    const isUser = (cleanId === '7b3MrCWtettvBKlfBSdorn' || cleanId === '7HsL4sBaR3dJMa0UJ5e4zG' || ownerName === currentUserDisplayName) && !isArtist && !isAlbum && cleanId !== 'nueva-carpeta';
 
     const placeholder: Playlist = {
       id: cleanId,

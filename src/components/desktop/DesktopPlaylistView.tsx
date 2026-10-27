@@ -186,15 +186,37 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           }`}
           title={isUserCreatedPlaylist ? "Elegir foto" : undefined}
         >
-          <img
-            src={
-              isLikedPlaylist
-                ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-                : dynamicPlaylist.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-            }
-            alt={dynamicPlaylist.name}
-            className="w-full h-full object-cover shadow-2xl"
-          />
+          {isLikedPlaylist ? (
+            <img
+              src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+              alt="Canciones que te gustan"
+              className="w-full h-full object-cover shadow-2xl"
+            />
+          ) : dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
+            <img
+              src={dynamicPlaylist.images[0].url}
+              alt={dynamicPlaylist.name}
+              className="w-full h-full object-cover shadow-2xl"
+            />
+          ) : isArtist ? (
+            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            </div>
+          ) : isFolder ? (
+            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+              </svg>
+            </div>
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+              </svg>
+            </div>
+          )}
           {isUserCreatedPlaylist && (
             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-2 text-white">
               <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor">
@@ -439,9 +461,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 {/* Track Title + Artists */}
                 <div className="flex items-center gap-3 min-w-0 pr-2">
                   <img
-                    src={track.album?.images?.[0]?.url || dynamicPlaylist.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                    src={
+                      track.album?.images?.[0]?.url ||
+                      (dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs')
+                        ? dynamicPlaylist.images[0].url
+                        : isLikedPlaylist
+                        ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+                        : '')
+                    }
                     alt={track.name}
-                    className="w-10 h-10 rounded shrink-0 object-cover shadow"
+                    className="w-10 h-10 rounded shrink-0 object-cover shadow bg-[#282828]"
                   />
                   <div className="min-w-0 flex-1">
                     <p

@@ -6,7 +6,7 @@ export const formatDuration = (ms: number): string => {
 };
 
 export const toHDImage = (url: string | null | undefined): string => {
-  if (!url) return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  if (!url) return '';
 
   let cleaned = url
     // Album covers (640x640: b273)
