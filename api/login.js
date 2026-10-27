@@ -1,5 +1,34 @@
 import { extractSpotifySession } from './extract-session.js';
 
+async function parseRequestBody(req) {
+  if (req.body) {
+    if (Buffer.isBuffer(req.body)) {
+      try { return JSON.parse(req.body.toString('utf8')); } catch {}
+    }
+    if (typeof req.body === 'string') {
+      try { return JSON.parse(req.body); } catch {}
+    }
+    if (typeof req.body === 'object') return req.body;
+  }
+
+  try {
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+    }
+    if (chunks.length > 0) {
+      const text = Buffer.concat(chunks).toString('utf8');
+      if (text) return JSON.parse(text);
+    }
+  } catch {}
+
+  if (req.query && typeof req.query === 'object') {
+    return req.query;
+  }
+
+  return {};
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -8,17 +37,8 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(200).end();
 
   try {
-    let body = req.body;
-    if (typeof body === 'string') {
-      try { body = JSON.parse(body); } catch {}
-    } else if (!body) {
-      try {
-        let raw = '';
-        for await (const chunk of req) raw += chunk;
-        if (raw) body = JSON.parse(raw);
-      } catch {}
-    }
-    body = body || {};
+    const parsed = await parseRequestBody(req);
+    const body = { ...(req.query || {}), ...parsed };
 
     const { email, password, cookie, twoFactorCode } = body;
 
