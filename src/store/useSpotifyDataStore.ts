@@ -514,8 +514,8 @@ const store = create<SpotifyDataState>((set, get) => ({
     set({
       isAuthenticated: false,
       user: null,
-      playlists: [],
-      dynamicShelves: [],
+      playlists: DEFAULT_PUBLIC_PLAYLISTS,
+      dynamicShelves: DEFAULT_PUBLIC_SHELVES,
       isLoading: false,
     });
   },
@@ -544,15 +544,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       set({
         isAuthenticated: false,
         user: null,
-        playlists: [],
-        categories: [],
-        featuredPlaylists: [],
-        featuredMessage: null,
-        newReleases: [],
-        topTracks: [],
-        topArtists: [],
-        recentlyPlayed: [],
-        dynamicShelves: [],
+        playlists: DEFAULT_PUBLIC_PLAYLISTS,
+        dynamicShelves: DEFAULT_PUBLIC_SHELVES,
         isLoading: false,
       });
       return;
@@ -571,7 +564,7 @@ const store = create<SpotifyDataState>((set, get) => ({
 
       const defaultMsg =
         new Date().getDay() === 5 ? '¡Hoy es viernes de novedades!' : 'Novedades populares';
-      const livePlaylists = playlists && playlists.length > 0 ? playlists : [];
+      const livePlaylists = playlists && playlists.length > 0 ? playlists : DEFAULT_PUBLIC_PLAYLISTS;
       const shelves = buildDynamicShelves(user, livePlaylists, defaultMsg, featured || [], top || []);
 
       set({
@@ -583,7 +576,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         featuredMessage: defaultMsg,
         newReleases: releases || [],
         topTracks: top || [],
-        dynamicShelves: shelves,
+        dynamicShelves: shelves && shelves.length > 0 ? shelves : DEFAULT_PUBLIC_SHELVES,
         isLoading: false,
       });
     } catch (err) {

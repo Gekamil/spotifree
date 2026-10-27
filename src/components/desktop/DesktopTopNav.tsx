@@ -185,31 +185,31 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
           <FriendsNativeIcon size={16} />
         </button>
 
-        {/* User avatar & Profile dropdown (rendered only when authenticated) */}
-        {isAuthenticated && (
-          <>
-            <button
-              onClick={toggleProfile}
-              className="w-12 h-12 rounded-full bg-[#1f1f1f] hover:scale-104 active:scale-96 transition-transform flex items-center justify-center p-2 relative cursor-pointer shrink-0"
-              title={user?.display_name || 'Perfil'}
-            >
-              {user?.images && user.images.length > 0 && user.images[0]?.url ? (
-                <img
-                  src={user.images[0].url}
-                  alt={user?.display_name || 'Usuario'}
-                  className="w-8 h-8 rounded-full object-cover shadow"
-                />
-              ) : (
-                <span className="w-8 h-8 rounded-full bg-[#ff6437] text-black font-bold flex items-center justify-center text-sm shadow">
-                  {(user?.display_name || 'U').charAt(0).toUpperCase()}
-                </span>
+        {/* User avatar & Profile dropdown (rendered for both authenticated and guest users) */}
+        <button
+          onClick={toggleProfile}
+          className="w-12 h-12 rounded-full bg-[#1f1f1f] hover:scale-104 active:scale-96 transition-transform flex items-center justify-center p-2 relative cursor-pointer shrink-0"
+          title={isAuthenticated ? (user?.display_name || 'Perfil') : 'Invitado / Ajustes'}
+        >
+          {isAuthenticated && user?.images && user.images.length > 0 && user.images[0]?.url ? (
+            <img
+              src={user.images[0].url}
+              alt={user?.display_name || 'Usuario'}
+              className="w-8 h-8 rounded-full object-cover shadow"
+            />
+          ) : (
+            <span className={`w-8 h-8 rounded-full ${isAuthenticated ? 'bg-[#ff6437] text-black font-bold' : 'bg-[#333] text-[#b3b3b3] hover:text-white'} flex items-center justify-center text-sm shadow`}>
+              {isAuthenticated ? (user?.display_name || 'U').charAt(0).toUpperCase() : (
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
+                </svg>
               )}
-            </button>
+            </span>
+          )}
+        </button>
 
-            {/* Profile Dropdown */}
-            <ProfileDropdown />
-          </>
-        )}
+        {/* Profile Dropdown */}
+        <ProfileDropdown />
       </div>
     </header>
   );

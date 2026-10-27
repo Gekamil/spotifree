@@ -9,7 +9,6 @@ import {
   PinNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
 import { SortMenuDropdown } from './SortMenuDropdown';
@@ -30,7 +29,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   const [librarySearch, setLibrarySearch] = useState('');
 
   const { currentTrack, isPlaying } = usePlayerStore();
-  const { isAuthenticated } = useSpotifyDataStore();
   const {
     toggleCreateMenu,
     toggleSortMenu,
@@ -208,23 +206,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
       {/* Playlists Container */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
-        {/* Unauthenticated: render clean shimmer skeleton placeholders */}
-        {!isAuthenticated ? (
-          <div className="space-y-2 p-1">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div
-                key={`sidebar-shimmer-${i}`}
-                className="flex items-center gap-3 p-2 rounded-md animate-pulse"
-              >
-                <div className="w-12 h-12 rounded bg-[#1f1f1f] shrink-0 aspect-square" />
-                <div className="flex-1 space-y-2 min-w-0">
-                  <div className="h-4 w-3/4 bg-[#1f1f1f] rounded opacity-70" />
-                  <div className="h-3 w-1/2 bg-[#1f1f1f] rounded opacity-50" />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : processedPlaylists.length === 0 ? (
+        {processedPlaylists.length === 0 ? (
           <div className="p-4 text-center text-[#b3b3b3] space-y-2">
             <p className="text-sm font-semibold text-white">Crea tu primera lista</p>
             <p className="text-xs">Es muy fácil, te echaremos una mano.</p>

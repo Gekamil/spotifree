@@ -3,7 +3,7 @@ import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
-import { DesktopShimmerFeed } from './DesktopShimmerFeed';
+
 
 interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
@@ -156,13 +156,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
   const {
-    isAuthenticated,
     user,
     playlists,
     dynamicShelves,
     quickAccessCards: storeQuickAccess,
     featuredMessage,
-    login,
   } = useSpotifyDataStore();
 
   const defaultMusicShortcuts = storeQuickAccess && storeQuickAccess.length > 0
@@ -210,10 +208,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
   const activeBg = hoveredColor || currentShortcuts[0]?.color || '#5038a0';
-
-  if (!isAuthenticated) {
-    return <DesktopShimmerFeed onLogin={login} />;
-  }
 
   const handleQuickPlay = async (
     e: React.MouseEvent | undefined,

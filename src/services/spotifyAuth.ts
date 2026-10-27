@@ -87,16 +87,26 @@ export async function handleSpotifyCallback(code: string): Promise<boolean> {
   }
 
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
-    };
-
-    const response = await fetch('https://accounts.spotify.com/api/token', {
+    // 1. Standard PKCE token exchange (No Authorization header)
+    let response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
       body: body.toString(),
     });
+
+    // 2. Fallback with Basic auth header if standard PKCE failed
+    if (!response.ok) {
+      response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
+        },
+        body: body.toString(),
+      });
+    }
 
     if (!response.ok) {
       const err = await response.text();
@@ -160,22 +170,30 @@ export async function refreshAccessToken(): Promise<string | null> {
   }
 
   try {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
-    };
-
     const body = new URLSearchParams({
       grant_type: 'refresh_token',
       refresh_token: refreshToken,
       client_id: CLIENT_ID,
     });
 
-    const response = await fetch('https://accounts.spotify.com/api/token', {
+    let response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
       body: body.toString(),
     });
+
+    if (!response.ok) {
+      response = await fetch('https://accounts.spotify.com/api/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Authorization': `Basic ${btoa(`${CLIENT_ID}:${CLIENT_SECRET}`)}`,
+        },
+        body: body.toString(),
+      });
+    }
 
     if (!response.ok) {
       const err = await response.text();

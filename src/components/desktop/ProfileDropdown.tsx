@@ -4,6 +4,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 
 export const ProfileDropdown: React.FC = () => {
   const { isProfileOpen, closeProfile, setActiveMainTab } = useUIStore();
+  const { isAuthenticated, login, logout } = useSpotifyDataStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -30,87 +31,73 @@ export const ProfileDropdown: React.FC = () => {
   return (
     <div
       ref={menuRef}
-      className="absolute top-14 right-4 w-52 bg-[#282828] rounded-md shadow-2xl p-1 z-50 text-white text-sm font-semibold select-none border border-white/5 animate-in fade-in zoom-in-95 duration-100"
+      className="absolute top-14 right-4 w-56 bg-[#282828] rounded-md shadow-2xl p-1 z-50 text-white text-sm font-semibold select-none border border-white/5 animate-in fade-in zoom-in-95 duration-100"
     >
-      <button
-        onClick={() => {
-          window.open('https://www.spotify.com/account/overview/', '_blank', 'noopener,noreferrer');
-          closeProfile();
-        }}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        <span>Cuenta</span>
-        {externalArrow}
-      </button>
+      {!isAuthenticated ? (
+        <>
+          <button
+            onClick={() => {
+              login();
+              closeProfile();
+            }}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-[#1ed760]"
+          >
+            <span>Iniciar sesión con Spotify</span>
+          </button>
 
-      <button
-        onClick={closeProfile}
-        className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        Perfil
-      </button>
+          <button
+            onClick={() => {
+              setActiveMainTab('settings');
+              closeProfile();
+            }}
+            className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-white"
+          >
+            Configuración & Motor de Audio
+          </button>
+        </>
+      ) : (
+        <>
+          <button
+            onClick={() => {
+              window.open('https://www.spotify.com/account/overview/', '_blank', 'noopener,noreferrer');
+              closeProfile();
+            }}
+            className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
+          >
+            <span>Cuenta</span>
+            {externalArrow}
+          </button>
 
-      <button
-        onClick={closeProfile}
-        className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        Recientes
-      </button>
+          <button
+            onClick={closeProfile}
+            className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
+          >
+            Perfil
+          </button>
 
-      <button
-        onClick={() => {
-          window.open('https://www.spotify.com/premium/', '_blank', 'noopener,noreferrer');
-          closeProfile();
-        }}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        <span>Sube a Premium</span>
-        {externalArrow}
-      </button>
+          <button
+            onClick={() => {
+              setActiveMainTab('settings');
+              closeProfile();
+            }}
+            className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-white"
+          >
+            Configuración
+          </button>
 
-      <button
-        onClick={() => {
-          window.open('https://support.spotify.com/', '_blank', 'noopener,noreferrer');
-          closeProfile();
-        }}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        <span>Asistencia</span>
-        {externalArrow}
-      </button>
+          <div className="h-px bg-white/10 my-1 mx-2" />
 
-      <button
-        onClick={() => {
-          window.open('https://www.spotify.com/download/', '_blank', 'noopener,noreferrer');
-          closeProfile();
-        }}
-        className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        <span>Descargar</span>
-        {externalArrow}
-      </button>
-
-      <button
-        onClick={() => {
-          setActiveMainTab('settings');
-          closeProfile();
-        }}
-        className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-white"
-      >
-        Configuración
-      </button>
-
-      <div className="h-px bg-white/10 my-1 mx-2" />
-
-      <button
-        onClick={() => {
-          useSpotifyDataStore.getState().logout();
-          closeProfile();
-        }}
-        className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold"
-      >
-        Cerrar sesión
-      </button>
+          <button
+            onClick={() => {
+              logout();
+              closeProfile();
+            }}
+            className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-red-400 hover:text-red-300"
+          >
+            Cerrar sesión
+          </button>
+        </>
+      )}
     </div>
   );
 };
