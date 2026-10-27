@@ -34,7 +34,7 @@ const officialCategories = [
     id: 'cat-para-ti',
     title: 'Especialmente para ti',
     bgColor: 'rgb(30, 50, 100)',
-    imgSrc: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/1McMsnEElThX1knmY4oliG/en',
+    imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf271f9d9d50ba505b47848de0',
   },
   {
     id: 'cat-novedades',
@@ -104,8 +104,12 @@ const officialCategories = [
   },
 ];
 
-export const DesktopSearchView: React.FC = () => {
-  const { searchQuery } = useUIStore();
+interface DesktopSearchViewProps {
+  onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
+}
+
+export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPlaylistById }) => {
+  const { searchQuery, setSearchQuery } = useUIStore();
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
   const [liveResults, setLiveResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -165,8 +169,14 @@ export const DesktopSearchView: React.FC = () => {
             {officialCategories.map((cat) => (
               <div
                 key={cat.id}
+                onClick={() => {
+                  setSearchQuery(cat.title);
+                  if (onSelectPlaylistById && cat.id.startsWith('cat-artist')) {
+                    onSelectPlaylistById(cat.id, cat.title, cat.imgSrc);
+                  }
+                }}
                 style={{ backgroundColor: cat.bgColor }}
-                className="relative h-[180px] rounded-lg p-4 overflow-hidden cursor-pointer select-none shadow-md group hover:brightness-105 transition-all"
+                className="relative h-[180px] rounded-lg p-4 overflow-hidden cursor-pointer select-none shadow-md group hover:brightness-105 active:scale-98 transition-all"
               >
                 <h3 className="text-2xl font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle'] tracking-tight">
                   {cat.title}
@@ -175,6 +185,10 @@ export const DesktopSearchView: React.FC = () => {
                 <img
                   src={cat.imgSrc}
                   alt={cat.title}
+                  referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
                   className="absolute -bottom-2 -right-4 w-[100px] h-[100px] rounded-[4px] shadow-[-2px_4px_12px_rgba(0,0,0,0.4)] transform rotate-[25deg] translate-x-2 translate-y-1 group-hover:scale-105 group-hover:rotate-[28deg] transition-transform duration-200 object-cover"
                 />
               </div>

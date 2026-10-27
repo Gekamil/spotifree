@@ -20,12 +20,14 @@ const CarouselCard: React.FC<{
   onPlay?: () => void;
 }> = ({ card, isPlaying = false, onClick, onPlay }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const isArtist = card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || (card as any).isArtist;
-  const hasValidImage = !!card.image && card.image.trim().length > 0;
+  const hasValidImage = !!card.image && card.image.trim().length > 0 && !imageError;
 
   useEffect(() => {
+    setImageError(false);
     if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
       setImageLoaded(true);
     }
@@ -38,12 +40,18 @@ const CarouselCard: React.FC<{
     >
       {/* Artwork Container with skeleton loader */}
       <div className={`relative aspect-square w-full ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden mb-3 shadow-md bg-[#242424]`}>
-        {/* Placeholder if no image or loading */}
-        {(!imageLoaded || !hasValidImage) && (
-          <div className="absolute inset-0 bg-[#282828] flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="#535353">
-              <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-            </svg>
+        {/* Placeholder if no image, error or loading */}
+        {(!imageLoaded || !hasValidImage || imageError) && (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#2e2e2e] to-[#1a1a1a] flex items-center justify-center">
+            {isArtist ? (
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="#606060">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+              </svg>
+            ) : (
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="#606060">
+                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+              </svg>
+            )}
           </div>
         )}
 
@@ -56,16 +64,19 @@ const CarouselCard: React.FC<{
             playsInline
             className="w-full h-full object-cover"
           />
-        ) : hasValidImage ? (
+        ) : hasValidImage && !imageError ? (
           <img
             ref={imgRef}
             src={card.image}
             alt={card.title}
             referrerPolicy="no-referrer"
             onLoad={() => setImageLoaded(true)}
-            onError={() => setImageLoaded(true)}
+            onError={() => {
+              setImageError(true);
+              setImageLoaded(false);
+            }}
             className={`w-full h-full object-cover transition-opacity duration-300 ${
-              imageLoaded ? 'opacity-100' : 'opacity-0'
+              imageLoaded && !imageError ? 'opacity-100' : 'opacity-0'
             }`}
           />
         ) : null}

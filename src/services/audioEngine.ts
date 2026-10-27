@@ -10,6 +10,34 @@ import { API_BASE } from '../config';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
+// Initialize persistent cache from localStorage
+if (typeof window !== 'undefined') {
+  try {
+    const saved = window.localStorage.getItem('spotifree_yt_cache');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.entries(parsed).forEach(([k, v]) => {
+        if (typeof v === 'string') VIDEO_ID_CACHE.set(k, v);
+      });
+    }
+  } catch {}
+}
+
+function persistVideoId(query: string, videoId: string) {
+  VIDEO_ID_CACHE.set(query, videoId);
+  if (typeof window !== 'undefined') {
+    try {
+      const obj: Record<string, string> = {};
+      let count = 0;
+      for (const [k, v] of VIDEO_ID_CACHE.entries()) {
+        obj[k] = v;
+        if (++count > 500) break;
+      }
+      window.localStorage.setItem('spotifree_yt_cache', JSON.stringify(obj));
+    } catch {}
+  }
+}
+
 class AudioEngine {
   private audio: HTMLAudioElement;
   private audioContext: AudioContext | null = null;
@@ -292,7 +320,7 @@ class AudioEngine {
           const data = await res.json();
           if (data.videoId) {
             videoId = data.videoId;
-            VIDEO_ID_CACHE.set(query, videoId!);
+            persistVideoId(query, videoId!);
           }
         }
       }
@@ -498,6 +526,20 @@ class AudioEngine {
       } catch {}
     }
     return this.audio.duration || 0;
+  }
+
+  public async preloadTrack(trackId: string, query: string) {
+    if (!query || VIDEO_ID_CACHE.has(query)) return;
+    try {
+      const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+      const res = await fetch(resolveUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.videoId) {
+          persistVideoId(query, data.videoId);
+        }
+      }
+    } catch {}
   }
 }
 

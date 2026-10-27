@@ -43,6 +43,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     toggleShuffle,
     toggleRepeat,
     toggleLike,
+    queue,
   } = usePlayerStore();
 
   const { toggleRightSidebar, activeRightSidebar } = useUIStore();
@@ -73,6 +74,19 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     const query = `${currentTrack.name} ${artistName}`;
 
     audioEngine.playTrack(currentTrack.id, query, 0);
+
+    // Preload next track in background for instantaneous zero-delay switching
+    if (queue && queue.length > 0) {
+      const currIdx = queue.findIndex((t) => t.id === currentTrack.id);
+      const nextIdx = currIdx >= 0 && currIdx + 1 < queue.length ? currIdx + 1 : 0;
+      const upcoming = queue[nextIdx];
+      if (upcoming && upcoming.id !== currentTrack.id) {
+        const nextQuery = `${upcoming.name} ${upcoming.artists?.[0]?.name || ''}`;
+        setTimeout(() => {
+          audioEngine.preloadTrack(upcoming.id, nextQuery);
+        }, 1000);
+      }
+    }
   }, [currentTrack?.id]);
 
   // 2. Play / Pause Control

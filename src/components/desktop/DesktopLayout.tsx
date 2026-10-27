@@ -38,12 +38,19 @@ export const DesktopLayout: React.FC = () => {
       .replace(/^spotify:collection:/, '')
       .split('?')[0];
 
-    // If customName is provided for an artist or album, load directly
-    if (customName && (cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('alb-'))) {
+    // If artist or album id is passed, load directly with formatted name
+    if (cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('alb-')) {
       const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-');
+      const formattedName =
+        customName ||
+        cleanId
+          .replace(/^(art-|artist-|alb-)/i, '')
+          .replace(/[-_]/g, ' ')
+          .replace(/\b\w/g, (c) => c.toUpperCase());
+
       handleSelectPlaylist({
         id: cleanId,
-        name: customName,
+        name: formattedName,
         description: isArtist ? 'Artista' : 'Álbum',
         type: isArtist ? 'artist' : 'album',
         images: customImage ? [{ url: customImage }] : [],
@@ -198,10 +205,15 @@ export const DesktopLayout: React.FC = () => {
               <DesktopHomeView onSelectPlaylistById={handleSelectPlaylistById} />
             )}
 
-            {activeMainTab === 'search' && <DesktopSearchView />}
+            {activeMainTab === 'search' && (
+              <DesktopSearchView onSelectPlaylistById={handleSelectPlaylistById} />
+            )}
 
             {activeMainTab === 'playlist' && activePlaylist && (
-              <DesktopPlaylistView playlist={activePlaylist} />
+              <DesktopPlaylistView
+                playlist={activePlaylist}
+                onSelectPlaylistById={handleSelectPlaylistById}
+              />
             )}
 
             {activeMainTab === 'settings' && <DesktopSettingsView />}

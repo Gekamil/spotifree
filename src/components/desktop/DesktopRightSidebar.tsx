@@ -5,13 +5,112 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { PlayNativeIcon, AddTrackNativeIcon, CheckTrackNativeIcon } from '../icons/SpotifyNativeIcons';
 import { toHDImage } from '../../utils/formatters';
 
-interface SyncedLine {
+interface LyricWord {
   timeMs: number;
   text: string;
 }
 
+interface SyncedLine {
+  timeMs: number;
+  endTimeMs: number;
+  text: string;
+  words: LyricWord[];
+}
+
 interface DesktopRightSidebarProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
+}
+
+function getDynamicArtworkColor(trackId?: string, trackName?: string, artistName?: string): string {
+  if (!trackName && !trackId) return '#5d1f00';
+  const str = `${trackId || ''}-${trackName || ''}-${artistName || ''}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const PALETTES = [
+    '#6b21a8', // Deep Purple
+    '#1e3a8a', // Midnight Blue
+    '#9a3412', // Warm Amber
+    '#065f46', // Emerald Forest
+    '#831843', // Deep Crimson / Magenta
+    '#1e293b', // Slate Indigo
+    '#b45309', // Golden Ochre
+    '#3b0764', // Electric Violet
+    '#0f766e', // Deep Teal
+  ];
+  return PALETTES[Math.abs(hash) % PALETTES.length];
+}
+
+function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
+  const rawLines = lrcText.split('\n');
+  const tempLines: Array<{ timeMs: number; text: string; rawContent: string }> = [];
+
+  for (const raw of rawLines) {
+    const lineMatch = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
+    if (lineMatch) {
+      const min = parseInt(lineMatch[1], 10);
+      const sec = parseFloat(`${lineMatch[2]}.${lineMatch[3]}`);
+      const timeMs = Math.round((min * 60 + sec) * 1000);
+      const content = lineMatch[4].trim();
+      if (content) {
+        tempLines.push({
+          timeMs,
+          text: content.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').trim(),
+          rawContent: content,
+        });
+      }
+    }
+  }
+
+  tempLines.sort((a, b) => a.timeMs - b.timeMs);
+
+  const parsedLines: SyncedLine[] = [];
+  const wordTokenRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>([^<]*)/g;
+
+  for (let i = 0; i < tempLines.length; i++) {
+    const item = tempLines[i];
+    const nextItem = tempLines[i + 1];
+    const endTimeMs = nextItem ? nextItem.timeMs : item.timeMs + 4500;
+    const words: LyricWord[] = [];
+
+    wordTokenRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wordTokenRegex.exec(item.rawContent)) !== null) {
+      const wMin = parseInt(match[1], 10);
+      const wSec = parseFloat(`${match[2]}.${match[3]}`);
+      const wTimeMs = Math.round((wMin * 60 + wSec) * 1000);
+      const wText = match[4];
+      if (wText) {
+        words.push({ timeMs: wTimeMs, text: wText });
+      }
+    }
+
+    // Interpolate word-level timings when standard LRC is provided
+    if (words.length === 0) {
+      const tokens = item.text.split(/(\s+)/).filter(Boolean);
+      const totalChars = tokens.reduce((acc, t) => acc + t.length, 0);
+      const lineDuration = Math.max(1200, Math.min(endTimeMs - item.timeMs, 6000));
+      let elapsedMs = 0;
+
+      for (let j = 0; j < tokens.length; j++) {
+        const token = tokens[j];
+        const fraction = totalChars > 0 ? token.length / totalChars : 1 / tokens.length;
+        const wTimeMs = item.timeMs + Math.round(elapsedMs);
+        words.push({ timeMs: wTimeMs, text: token });
+        elapsedMs += fraction * lineDuration;
+      }
+    }
+
+    parsedLines.push({
+      timeMs: item.timeMs,
+      endTimeMs,
+      text: item.text,
+      words,
+    });
+  }
+
+  return parsedLines;
 }
 
 // Fallback lyrics helper for offline or unindexed tracks
@@ -173,20 +272,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
     const parseLyricsData = (data: any) => {
       if (data && data.syncedLyrics) {
-        const lines: SyncedLine[] = [];
-        const rawLines = data.syncedLyrics.split('\n');
-        for (const raw of rawLines) {
-          const match = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\]\s*(.*)/);
-          if (match) {
-            const min = parseInt(match[1], 10);
-            const sec = parseFloat(`${match[2]}.${match[3]}`);
-            const timeMs = Math.round((min * 60 + sec) * 1000);
-            const text = match[4].trim();
-            if (text) {
-              lines.push({ timeMs, text });
-            }
-          }
-        }
+        const lines = parseEnhancedLyrics(data.syncedLyrics);
         if (lines.length > 0) {
           setSyncedLyrics(lines);
           setPlainLyrics([]);
@@ -381,8 +467,14 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               )}
             </div>
 
-            {/* 3. Real Synced Lyrics Preview (Dynamically updating with playback) */}
-            <div className="rounded-xl p-4 bg-[#5d1f00] text-white space-y-2 relative shadow-lg overflow-hidden transition-all duration-300">
+            {/* 3. Real Synced Lyrics Preview (Dynamically updating with playback and matching artwork color) */}
+            <div
+              style={{
+                backgroundColor: getDynamicArtworkColor(currentTrack?.id, currentTrack?.name, primaryArtist),
+                transition: 'background-color 0.8s ease',
+              }}
+              className="rounded-xl p-4 text-white space-y-2 relative shadow-lg overflow-hidden transition-all duration-300"
+            >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-sm tracking-tight text-white flex items-center gap-2">
                   Vista previa de la letra
@@ -408,7 +500,22 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                               : 'font-bold text-[16px] text-white/50'
                           }`}
                         >
-                          {line.text}
+                          {isCurrent && line.words.length > 0 ? (
+                            line.words.map((w, wIdx) => (
+                              <span
+                                key={`pw-${displayStart + idx}-${wIdx}`}
+                                className={`transition-colors duration-150 ${
+                                  progressMs >= w.timeMs
+                                    ? 'text-white font-black drop-shadow-[0_2px_8px_rgba(255,255,255,0.7)]'
+                                    : 'text-white/50'
+                                }`}
+                              >
+                                {w.text}
+                              </span>
+                            ))
+                          ) : (
+                            line.text
+                          )}
                         </p>
                       );
                     });
@@ -678,7 +785,11 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
           {currentTrack ? (
             <div
               ref={lyricsScrollRef}
-              className="flex-1 overflow-y-auto p-5 space-y-5 bg-gradient-to-b from-[#5d1f00] to-[#121212] scroll-smooth"
+              style={{
+                background: `linear-gradient(180deg, ${getDynamicArtworkColor(currentTrack.id, currentTrack.name, primaryArtist)} 0%, rgba(18, 18, 18, 0.95) 55%, #121212 100%)`,
+                transition: 'background 0.8s ease',
+              }}
+              className="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth select-none"
             >
               <div className="space-y-1">
                 <p className="text-xs font-bold uppercase tracking-wider text-white/60">
@@ -692,7 +803,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                 </p>
               </div>
 
-              <div className="space-y-4 font-black text-xl leading-relaxed text-white/95 pt-2">
+              <div className="space-y-5 font-black text-xl leading-relaxed text-white/95 pt-2">
                 {syncedLyrics.length > 0 ? (
                   syncedLyrics.map((line, idx) => {
                     const isCurrent = idx === activeLineIndex;
@@ -700,13 +811,36 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       <p
                         key={`full-lyric-${idx}-${line.timeMs}`}
                         data-line-index={idx}
-                        className={`transition-all duration-300 cursor-pointer ${
+                        onClick={() => {
+                          if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+                            (window as any).__audioEngine.seek(line.timeMs / 1000);
+                          }
+                        }}
+                        className={`transition-all duration-300 cursor-pointer flex flex-wrap items-baseline gap-x-1.5 ${
                           isCurrent
-                            ? 'text-white text-2xl font-black scale-102'
-                            : 'text-white/60 text-xl font-bold hover:text-white'
+                            ? 'scale-102 text-2xl font-black py-1'
+                            : 'text-white/40 text-xl font-bold hover:text-white/80 py-0.5'
                         }`}
                       >
-                        {line.text}
+                        {isCurrent && line.words.length > 0
+                          ? line.words.map((w, wIdx) => {
+                              const isWordSung = progressMs >= w.timeMs;
+                              return (
+                                <span
+                                  key={`w-${idx}-${wIdx}`}
+                                  className={`transition-colors duration-150 inline-block ${
+                                    isWordSung
+                                      ? 'text-white font-black drop-shadow-[0_2px_10px_rgba(255,255,255,0.7)]'
+                                      : 'text-white/40 font-bold'
+                                  }`}
+                                >
+                                  {w.text}
+                                </span>
+                              );
+                            })
+                          : (
+                            <span>{line.text}</span>
+                          )}
                       </p>
                     );
                   })

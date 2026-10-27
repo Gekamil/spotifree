@@ -20,6 +20,10 @@
       "destination": "/api/extract-session"
     },
     {
+      "source": "/api/lyrics",
+      "destination": "/api/lyrics"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },

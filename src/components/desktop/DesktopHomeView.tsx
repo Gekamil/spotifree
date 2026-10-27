@@ -115,42 +115,6 @@ const AUDIOLIBROS_SHELVES = [
   },
 ];
 
-const SIGUIENDO_SHELVES = [
-  {
-    id: 'shelf-siguiendo-releases',
-    prefix: 'Novedades de',
-    title: 'Tus artistas seguidos',
-    subtitle: 'Nuevos álbumes y sencillos recomendados para ti',
-    hasSeeAll: true,
-    cards: [
-      {
-        id: 'art-alvaro-diaz',
-        title: 'SAYONARA FINAL',
-        subtitle: 'Álvaro Díaz • Álbum',
-        image: 'https://i.scdn.co/image/ab67616d0000b273292fe4fb67bb46dbdbd623aa',
-      },
-      {
-        id: 'art-romeo-santos',
-        title: 'Fórmula, Vol. 3',
-        subtitle: 'Romeo Santos • Álbum',
-        image: 'https://i.scdn.co/image/ab67616d0000b273434606ffc6b541300ceee24e',
-      },
-      {
-        id: 'art-prince-royce',
-        title: 'Llamada Perdida',
-        subtitle: 'Prince Royce • Álbum',
-        image: 'https://i.scdn.co/image/ab67616d0000b27389c97b830e3fe054368a5c37',
-      },
-      {
-        id: 'art-rauw',
-        title: 'Cosa Nuestra',
-        subtitle: 'Rauw Alejandro • Álbum',
-        image: 'https://i.scdn.co/image/ab67616d0000b273b4d455d3e098be9a9ba46d84',
-      },
-    ],
-  },
-];
-
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo' | 'podcasts' | 'audiolibros'>('todo');
   const [hoveredColor, setHoveredColor] = useState<string | null>(null);
@@ -198,7 +162,72 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   const currentShelves = useMemo(() => {
     if (activeTab === 'podcasts') return PODCAST_SHELVES;
     if (activeTab === 'audiolibros') return AUDIOLIBROS_SHELVES;
-    if (activeTab === 'siguiendo') return SIGUIENDO_SHELVES;
+    if (activeTab === 'siguiendo') {
+      const userArtists: Array<{ id: string; title: string; subtitle: string; image: string }> = [];
+      const seen = new Set<string>();
+
+      playlists.forEach((p) => {
+        if (/mix de|radio de/i.test(p.name)) {
+          const name = p.name.replace(/^(mix de|radio de)\s+/i, '').trim();
+          if (name && !seen.has(name.toLowerCase())) {
+            seen.add(name.toLowerCase());
+            userArtists.push({
+              id: `art-${name.toLowerCase().replace(/\s+/g, '-')}`,
+              title: name,
+              subtitle: 'Artista',
+              image: p.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
+            });
+          }
+        }
+      });
+
+      const defaultArtists = [
+        { name: 'Romeo Santos', img: 'https://i.scdn.co/image/ab6761610000e5eb56e6d183815f9bca1b4a9296' },
+        { name: 'Prince Royce', img: 'https://i.scdn.co/image/ab6761610000e5eb7dcab764f69fc39bb2f97a5b' },
+        { name: 'Bad Bunny', img: 'https://i.scdn.co/image/ab6761610000e5eb9ad3eb759082ef7ef688b56d' },
+        { name: 'Álvaro Díaz', img: 'https://i.scdn.co/image/ab6761610000e5ebfa055a1532ba706d8a3952ba' },
+        { name: 'Feid', img: 'https://i.scdn.co/image/ab6761610000e5eb604da57c9a62256c702ae07d' },
+      ];
+
+      defaultArtists.forEach((a) => {
+        if (!seen.has(a.name.toLowerCase())) {
+          seen.add(a.name.toLowerCase());
+          userArtists.push({
+            id: `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
+            title: a.name,
+            subtitle: 'Artista',
+            image: a.img,
+          });
+        }
+      });
+
+      return [
+        {
+          id: 'shelf-siguiendo-artists',
+          prefix: 'Tus favoritos',
+          title: 'Artistas que sigues',
+          subtitle: 'Acceso directo a la discografía de tus artistas',
+          cards: userArtists.slice(0, 8),
+          hasSeeAll: false,
+        },
+        {
+          id: 'shelf-siguiendo-releases',
+          prefix: 'Novedades de',
+          title: 'Tus artistas seguidos',
+          subtitle: 'Nuevos álbumes y sencillos recomendados para ti',
+          cards: playlists
+            .filter((p) => !p.id.includes('collection') && !p.name.includes('Canciones que'))
+            .slice(0, 8)
+            .map((p) => ({
+              id: p.id,
+              title: p.name,
+              subtitle: p.description || 'Lanzamiento recomendado',
+              image: p.images?.[0]?.url || '',
+            })),
+          hasSeeAll: true,
+        },
+      ];
+    }
     if (activeTab === 'musica') {
       const base = dynamicShelves && dynamicShelves.length > 0
         ? dynamicShelves

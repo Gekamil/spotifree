@@ -13,6 +13,33 @@ import { formatDuration } from '../../utils/formatters';
 
 const TRACK_COVER_CACHE = new Map<string, string>();
 
+if (typeof window !== 'undefined') {
+  try {
+    const saved = window.localStorage.getItem('spotifree_track_covers');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      Object.entries(parsed).forEach(([k, v]) => {
+        if (typeof v === 'string') TRACK_COVER_CACHE.set(k, v);
+      });
+    }
+  } catch {}
+}
+
+function persistTrackCover(id: string, url: string) {
+  TRACK_COVER_CACHE.set(id, url);
+  if (typeof window !== 'undefined') {
+    try {
+      const obj: Record<string, string> = {};
+      let count = 0;
+      for (const [k, v] of TRACK_COVER_CACHE.entries()) {
+        obj[k] = v;
+        if (++count > 1000) break;
+      }
+      window.localStorage.setItem('spotifree_track_covers', JSON.stringify(obj));
+    } catch {}
+  }
+}
+
 function toHDImage(url: string): string {
   if (!url) return url;
   return url;
@@ -20,9 +47,10 @@ function toHDImage(url: string): string {
 
 interface DesktopPlaylistViewProps {
   playlist: Playlist;
+  onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
 }
 
-export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playlist }) => {
+export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playlist, onSelectPlaylistById }) => {
   const {
     currentTrack,
     isPlaying,
@@ -40,15 +68,100 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
-  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(playlist.tracks?.items || []);
+  const initialTracks = (playlist.tracks?.items || []).map((t) => {
+    if (TRACK_COVER_CACHE.has(t.id)) {
+      return {
+        ...t,
+        album: {
+          ...t.album,
+          id: t.album?.id || `alb-${t.id}`,
+          name: t.album?.name || t.name,
+          images: [{ url: TRACK_COVER_CACHE.get(t.id)! }],
+        },
+      };
+    }
+    return t;
+  });
+  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
 
   useEffect(() => {
     let cancelled = false;
-    setDynamicTracks(playlist.tracks?.items || []);
+    const mapped = (playlist.tracks?.items || []).map((t) => {
+      if (TRACK_COVER_CACHE.has(t.id)) {
+        return {
+          ...t,
+          album: {
+            ...t.album,
+            id: t.album?.id || `alb-${t.id}`,
+            name: t.album?.name || t.name,
+            images: [{ url: TRACK_COVER_CACHE.get(t.id)! }],
+          },
+        };
+      }
+      return t;
+    });
+    setDynamicTracks(mapped);
     setDynamicPlaylist(playlist);
 
     async function loadTracks() {
+      const isArtist =
+        playlist.type === 'artist' ||
+        playlist.description === 'Artista' ||
+        playlist.id.startsWith('art-') ||
+        playlist.id.startsWith('artist-');
+
+      if (isArtist) {
+        setLoading(true);
+        try {
+          const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
+          const searchRes = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
+          );
+          if (searchRes.ok) {
+            const data = await searchRes.json();
+            const artistTracks: Track[] = (data.results || []).map((t: any, idx: number) => ({
+              id: `artist-song-${t.trackId || idx}`,
+              name: t.trackName || 'Canción',
+              duration_ms: t.trackTimeMillis || 210000,
+              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
+              album: {
+                id: `alb-${t.collectionId || idx}`,
+                name: t.collectionName || t.trackName,
+                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+              },
+            }));
+
+            if (!cancelled && artistTracks.length > 0) {
+              const artistImg =
+                playlist.images?.[0]?.url ||
+                artistTracks[0]?.album?.images?.[0]?.url ||
+                'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
+
+              const updatedArtistPlaylist: Playlist = {
+                ...playlist,
+                name: cleanArtistName,
+                description: 'Artista oficial • Verificado en Spotify',
+                images: [{ url: artistImg }],
+                tracks: {
+                  total: artistTracks.length,
+                  items: artistTracks,
+                },
+              };
+              setDynamicTracks(artistTracks);
+              setDynamicPlaylist(updatedArtistPlaylist);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.error('Error loading artist tracks:', err);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+        return;
+      }
+
       if (playlist.tracks?.items && playlist.tracks.items.length > 0) return;
       setLoading(true);
       try {
@@ -69,7 +182,21 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               owner: data.owner || playlist.owner,
               tracks: data.tracks,
             };
-            setDynamicTracks(data.tracks.items);
+            const hydrated = data.tracks.items.map((t: Track) => {
+              if (TRACK_COVER_CACHE.has(t.id)) {
+                return {
+                  ...t,
+                  album: {
+                    ...t.album,
+                    id: t.album?.id || `alb-${t.id}`,
+                    name: t.album?.name || t.name,
+                    images: [{ url: TRACK_COVER_CACHE.get(t.id)! }],
+                  },
+                };
+              }
+              return t;
+            });
+            setDynamicTracks(hydrated);
             setDynamicPlaylist(updated);
             try {
               useSpotifyDataStore.getState().cachePlaylistDetails(updated);
@@ -95,7 +222,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [playlist.id, playlist.tracks]);
 
-  // Asynchronously resolve individual album covers for tracks that share the playlist's cover
+  // Asynchronously resolve individual album covers for all tracks in chunks of 20
   useEffect(() => {
     if (!dynamicTracks || dynamicTracks.length === 0) return;
     let cancelled = false;
@@ -105,53 +232,66 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
       if (!isSpotifyId) return false;
       const currentCover = t.album?.images?.[0]?.url;
-      return !currentCover || currentCover === playlistCover || !TRACK_COVER_CACHE.has(t.id);
+      const isSameAsPlaylist = currentCover && playlistCover && currentCover === playlistCover;
+      return !currentCover || isSameAsPlaylist || !TRACK_COVER_CACHE.has(t.id);
     });
 
     if (tracksToResolve.length === 0) return;
 
-    // Resolve up to 30 tracks concurrently via oEmbed
-    const batch = tracksToResolve.slice(0, 30);
-    Promise.all(
-      batch.map(async (t) => {
-        if (TRACK_COVER_CACHE.has(t.id)) {
-          return { id: t.id, cover: TRACK_COVER_CACHE.get(t.id)! };
-        }
-        try {
-          const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`);
-          if (res.ok) {
-            const json = await res.json();
-            if (json.thumbnail_url) {
-              const hd = toHDImage(json.thumbnail_url);
-              TRACK_COVER_CACHE.set(t.id, hd);
-              return { id: t.id, cover: hd };
+    const chunkSize = 20;
+    const runAllChunks = async () => {
+      for (let i = 0; i < tracksToResolve.length; i += chunkSize) {
+        if (cancelled) break;
+        const chunk = tracksToResolve.slice(i, i + chunkSize);
+        const results = await Promise.allSettled(
+          chunk.map(async (t) => {
+            if (TRACK_COVER_CACHE.has(t.id)) {
+              return { id: t.id, cover: TRACK_COVER_CACHE.get(t.id)! };
             }
-          }
-        } catch {}
-        return null;
-      })
-    ).then((results) => {
-      if (cancelled) return;
-      const updates = new Map(results.filter(Boolean).map((r) => [r!.id, r!.cover]));
-      if (updates.size > 0) {
-        setDynamicTracks((prev) =>
-          prev.map((track) => {
-            if (updates.has(track.id)) {
-              return {
-                ...track,
-                album: {
-                  ...track.album,
-                  id: track.album?.id || `alb-${track.id}`,
-                  name: track.album?.name || track.name,
-                  images: [{ url: updates.get(track.id)! }],
-                },
-              };
-            }
-            return track;
+            try {
+              const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`);
+              if (res.ok) {
+                const json = await res.json();
+                if (json.thumbnail_url) {
+                  const hd = toHDImage(json.thumbnail_url);
+                  persistTrackCover(t.id, hd);
+                  return { id: t.id, cover: hd };
+                }
+              }
+            } catch {}
+            return null;
           })
         );
+
+        if (cancelled) break;
+        const updates = new Map(
+          results
+            .filter((r): r is PromiseFulfilledResult<{ id: string; cover: string } | null> => r.status === 'fulfilled' && !!r.value)
+            .map((r) => [r.value!.id, r.value!.cover])
+        );
+
+        if (updates.size > 0) {
+          setDynamicTracks((prev) =>
+            prev.map((track) => {
+              if (updates.has(track.id)) {
+                return {
+                  ...track,
+                  album: {
+                    ...track.album,
+                    id: track.album?.id || `alb-${track.id}`,
+                    name: track.album?.name || track.name,
+                    images: [{ url: updates.get(track.id)! }],
+                  },
+                };
+              }
+              return track;
+            })
+          );
+        }
       }
-    });
+    };
+
+    runAllChunks();
 
     return () => {
       cancelled = true;
@@ -544,7 +684,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       {track.name}
                     </p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
-                      {track.artists.map((a) => a.name).join(', ')}
+                      {track.artists.map((a, aIdx) => (
+                        <span
+                          key={`${track.id}-art-${aIdx}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (onSelectPlaylistById) {
+                              onSelectPlaylistById(
+                                `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
+                                a.name
+                              );
+                            }
+                          }}
+                          className="hover:underline hover:text-white cursor-pointer"
+                        >
+                          {a.name}
+                          {aIdx < track.artists.length - 1 ? ', ' : ''}
+                        </span>
+                      ))}
                     </p>
                   </div>
                 </div>
