@@ -4,7 +4,18 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { DesktopShimmerFeed } from './DesktopShimmerFeed';
-import { getColorFromTitle, isInvalidGrey } from '../../utils/colorExtractor';
+import { resolveVibrantColor } from '../../utils/spotifyColor';
+
+const DEFAULT_SHORTCUTS = [
+  { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
+  { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
+  { id: 'my-top-tracks-playlist', name: 'My top tracks playlist', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59', color: '#5E3D82' },
+  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
+  { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es', color: '#EAB308' },
+  { id: 'tus-canciones-mas-escuchadas-2025', name: 'Your Top Songs 2025', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/wrapped25/yts/en', color: '#E05A36' },
+  { id: 'random', name: 'Random', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce', color: '#2D6852' },
+  { id: 'spidey', name: 'Spidey', image: 'https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f', color: '#D11B24' },
+];
 
 interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
@@ -20,41 +31,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
   } | null>(null);
 
-  // Retain the last chosen ambient color permanently so it never flashes back to blue
-  const [ambientColor, setAmbientColor] = useState<string>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = window.localStorage.getItem('spotifree_last_ambient_color');
-      if (saved && !isInvalidGrey(saved)) return saved;
-    }
-    return '#8a654e';
-  });
-
-  // Dual-buffered crossfade states for slow, gradual gradient transitions ("poco a poco")
-  const [colorA, setColorA] = useState<string>(ambientColor);
-  const [colorB, setColorB] = useState<string>(ambientColor);
-  const [isLayerB, setIsLayerB] = useState<boolean>(false);
-
-  useEffect(() => {
-    if (!ambientColor) return;
-    if (isLayerB) {
-      setColorA(ambientColor);
-      setIsLayerB(false);
-    } else {
-      setColorB(ambientColor);
-      setIsLayerB(true);
-    }
-  }, [ambientColor]);
-
-  const handleCardHover = (color?: string, name?: string, id?: string) => {
-    const candidate = color && !isInvalidGrey(color) ? color : getColorFromTitle(name || '', id || '');
-    if (candidate && !isInvalidGrey(candidate)) {
-      setAmbientColor(candidate);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('spotifree_last_ambient_color', candidate);
-      }
-    }
-  };
-
   // Reset expanded shelf on global navigate home event
   useEffect(() => {
     const handleHomeNav = () => setExpandedShelf(null);
@@ -68,8 +44,29 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     user,
     playlists,
     dynamicShelves,
+    quickAccessCards: storeQuickAccess,
     featuredMessage,
   } = useSpotifyDataStore();
+
+  const currentShortcuts = useMemo(() => {
+    const raw = storeQuickAccess && storeQuickAccess.length > 0 ? storeQuickAccess : DEFAULT_SHORTCUTS;
+    return raw.map((item) => ({
+      ...item,
+      color: resolveVibrantColor(item.id, item.name, item.color),
+    }));
+  }, [storeQuickAccess]);
+
+  // Keep background on the last hovered color smoothly
+  const [activeBg, setActiveBg] = useState<string>(() => {
+    return currentShortcuts[0]?.color || '#5018F0';
+  });
+
+  // If shortcuts update and activeBg is still initial, sync gently
+  useEffect(() => {
+    if (currentShortcuts[0]?.color && activeBg === '#5018F0') {
+      setActiveBg(currentShortcuts[0].color);
+    }
+  }, [currentShortcuts]);
 
   const currentShelves = useMemo(() => {
     if (activeTab === 'siguiendo') {
@@ -214,7 +211,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   };
 
   if (expandedShelf) {
-    const shelfAmbientColor = getColorFromTitle(expandedShelf.title, expandedShelf.id);
+    const shelfAmbientColor = resolveVibrantColor(expandedShelf.id, expandedShelf.title);
     return (
       <div
         className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200"
@@ -307,29 +304,19 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   }
 
   return (
-    <div className="select-none min-h-full pb-20 relative bg-[#121212] overflow-hidden">
-      {/* Dual-buffer Crossfade Gradient Layer A (base) */}
+    <div
+      className="select-none min-h-full pb-20 relative bg-[#121212]"
+      style={{
+        background: `linear-gradient(180deg, ${activeBg}CC 0%, rgba(18, 18, 18, 0.7) 240px, #121212 400px)`,
+        transition: 'background 0.8s cubic-bezier(0.2, 0, 0, 1)',
+      }}
+    >
+      {/* GPU Ambient Soft Bloom Layer */}
       <div
-        className="absolute top-0 left-0 right-0 h-[500px] pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
+        className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.3,0,0.4,1)]"
         style={{
-          background: `linear-gradient(180deg, ${colorA}B3 0%, rgba(18, 18, 18, 0.7) 260px, #121212 480px)`,
-          opacity: isLayerB ? 0 : 1,
+          background: `linear-gradient(180deg, ${activeBg}80 0%, ${activeBg}25 180px, transparent 380px)`,
         }}
-      />
-
-      {/* Dual-buffer Crossfade Gradient Layer B (active crossfader) */}
-      <div
-        className="absolute top-0 left-0 right-0 h-[500px] pointer-events-none transition-opacity duration-1000 ease-in-out z-0"
-        style={{
-          background: `linear-gradient(180deg, ${colorB}B3 0%, rgba(18, 18, 18, 0.7) 260px, #121212 480px)`,
-          opacity: isLayerB ? 1 : 0,
-        }}
-      />
-
-      {/* Atmospheric Soft Aura with native 1.2s color transition */}
-      <div
-        className="absolute -top-32 -left-32 w-[650px] h-[650px] rounded-full pointer-events-none blur-[120px] opacity-40 transition-colors duration-1000 ease-out z-0"
-        style={{ backgroundColor: ambientColor }}
       />
 
       {/* Top Filter Pills (Matching Spotify 1:1 Pixel & Animation Fidelity) */}
@@ -386,7 +373,56 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
       {/* Main Home Content with Smooth Transition */}
       <div key={activeTab} className="px-6 space-y-8 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        {/* Dynamic Section Shelves for Current Active Tab - Authentic Spotify Feed */}
+        {/* Quick Access Shortcuts Grid */}
+        {currentShortcuts && currentShortcuts.length > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+            {currentShortcuts.map((item) => {
+              const isPlayingThis =
+                isPlaying &&
+                ((currentTrack as any)?.playlistId === item.id || currentTrack?.id === item.id);
+
+              return (
+                <div
+                  key={item.id}
+                  onClick={() => onSelectPlaylistById(item.id)}
+                  onMouseEnter={() => setActiveBg(item.color)}
+                  className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
+                >
+                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">
+                    <img
+                      src={item.image}
+                      alt={item.name}
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <span className="text-[14px] font-bold text-white px-3 truncate flex-1 font-['SpotifyMixUI']">
+                    {item.name}
+                  </span>
+
+                  <button
+                    onClick={(e) => handleQuickPlay(e, item)}
+                    className={`w-9 h-9 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-104 active:scale-95 shadow-lg flex items-center justify-center transition-all duration-200 ${
+                      isPlayingThis
+                        ? 'opacity-100 scale-100'
+                        : 'opacity-0 group-hover:opacity-100 group-hover:scale-100 scale-90'
+                    }`}
+                    title={`Reproducir ${item.name}`}
+                  >
+                    {isPlayingThis ? (
+                      <PauseNativeIcon size={16} className="text-black" />
+                    ) : (
+                      <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Dynamic Section Shelves for Current Active Tab */}
         {currentShelves.map((shelf) => (
           <DesktopShelfCarousel
             key={shelf.id}
@@ -397,9 +433,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             onShowAll={shelf.hasSeeAll ? () => setExpandedShelf(shelf) : undefined}
             onCardClick={(card) => {
               onSelectPlaylistById(card.id);
-            }}
-            onCardHover={(card) => {
-              handleCardHover(undefined, card.title, card.id);
             }}
             onPlayClick={(card) => {
               handleQuickPlay(undefined, {

@@ -21,7 +21,6 @@ interface DesktopShelfCarouselProps {
   onShowAll?: () => void;
   onCardClick?: (item: FeedCard) => void;
   onPlayClick?: (item: FeedCard) => void;
-  onCardHover?: (item: FeedCard) => void;
 }
 
 const CarouselCard: React.FC<{
@@ -29,8 +28,7 @@ const CarouselCard: React.FC<{
   isPlaying?: boolean;
   onClick?: () => void;
   onPlay?: () => void;
-  onHover?: () => void;
-}> = ({ card, isPlaying = false, onClick, onPlay, onHover }) => {
+}> = ({ card, isPlaying = false, onClick, onPlay }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -48,7 +46,6 @@ const CarouselCard: React.FC<{
   return (
     <div
       onClick={onClick}
-      onMouseEnter={onHover}
       className="w-[180px] shrink-0 bg-[#181818] hover:bg-[#282828] p-3 rounded-md transition-all duration-300 cursor-pointer flex flex-col relative group select-none shadow-sm hover:shadow-xl"
     >
       {/* Artwork Container with skeleton loader */}
@@ -145,7 +142,6 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
   onShowAll,
   onCardClick,
   onPlayClick,
-  onCardHover,
 }) => {
   if (!items || items.length === 0) {
     return null;
@@ -259,7 +255,6 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
                 isPlaying={isPlayingThisCard}
                 onClick={() => onCardClick && onCardClick(card)}
                 onPlay={() => onPlayClick && onPlayClick(card)}
-                onHover={() => onCardHover && onCardHover(card)}
               />
             );
           })}

@@ -14,7 +14,6 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
-import { getColorFromTitle, isInvalidGrey } from '../utils/colorExtractor';
 
 export interface DynamicShelfCard {
   id: string;
@@ -329,6 +328,7 @@ interface SpotifyDataState {
 
   playlistDetailsCache: Record<string, Playlist>;
   cachePlaylistDetails: (playlist: Playlist) => void;
+  addCustomPlaylist: (playlist: Playlist) => void;
   createPlaylist: (name?: string) => Playlist;
   initialize: () => Promise<void>;
   login: () => void;
@@ -337,8 +337,6 @@ interface SpotifyDataState {
   setDynamicShelves: (shelves: DynamicShelf[]) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
-  toggleSavePlaylistToLibrary: (playlist: Playlist) => void;
-  isPlaylistSavedInLibrary: (playlistId: string) => boolean;
 }
 
 let isInitializing = false;
@@ -372,6 +370,21 @@ const store = create<SpotifyDataState>((set, get) => ({
         [playlist.id]: playlist,
       },
     }));
+  },
+
+  addCustomPlaylist: (playlist: Playlist) => {
+    set((s) => {
+      if (s.playlists.some((p) => p.id === playlist.id)) {
+        return s;
+      }
+      return {
+        playlists: [playlist, ...s.playlists],
+        playlistDetailsCache: {
+          ...s.playlistDetailsCache,
+          [playlist.id]: playlist,
+        },
+      };
+    });
   },
 
   createPlaylist: (name?: string) => {
@@ -446,27 +459,6 @@ const store = create<SpotifyDataState>((set, get) => ({
     });
   },
 
-  toggleSavePlaylistToLibrary: (playlist: Playlist) => {
-    const s = get();
-    const isSaved = s.playlists.some((p) => p.id === playlist.id);
-    let updated: Playlist[];
-    if (isSaved) {
-      updated = s.playlists.filter((p) => p.id !== playlist.id);
-    } else {
-      updated = [playlist, ...s.playlists];
-    }
-    set({ playlists: updated });
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem('spotifree_user_library_playlists', JSON.stringify(updated));
-      } catch {}
-    }
-  },
-
-  isPlaylistSavedInLibrary: (playlistId: string) => {
-    return get().playlists.some((p) => p.id === playlistId);
-  },
-
   setDynamicShelves: (shelves: DynamicShelf[]) => {
     set({ dynamicShelves: shelves });
   },
@@ -508,20 +500,10 @@ const store = create<SpotifyDataState>((set, get) => ({
       // 2b. Check for validated cookie session
       const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
       const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
-      const rawUserLibrary = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_user_library_playlists') : null;
-
       let importedPlaylists: Playlist[] = [];
       if (rawImported) {
         try {
           importedPlaylists = JSON.parse(rawImported);
-        } catch {}
-      }
-      if (rawUserLibrary) {
-        try {
-          const parsedLibrary = JSON.parse(rawUserLibrary);
-          if (Array.isArray(parsedLibrary)) {
-            importedPlaylists = [...importedPlaylists, ...parsedLibrary];
-          }
         } catch {}
       }
 
@@ -533,7 +515,7 @@ const store = create<SpotifyDataState>((set, get) => ({
             session = JSON.parse(savedSessionRaw);
           } catch {}
         }
-        if ((!session || !session.user) && userCookie.startsWith('AQ')) {
+        if (!session || !session.user || !session.playlists || session.playlists.length === 0) {
           try {
             session = await extractSpotifySessionFromCookie(userCookie);
             if (typeof window !== 'undefined') {
@@ -551,30 +533,18 @@ const store = create<SpotifyDataState>((set, get) => ({
           }
         }
 
-        if (session && session.user) {
-          const effectivePlaylists = session.playlists && session.playlists.length > 0
-            ? session.playlists
-            : DEFAULT_PUBLIC_PLAYLISTS;
-          const combinedPlaylists = [...effectivePlaylists, ...importedPlaylists];
+        if (session && session.user && session.playlists) {
+          const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
           );
-
-          const shelves = session.shelves && session.shelves.length > 0
-            ? session.shelves
-            : buildDynamicShelves(session.user, uniquePlaylists, 'Hecho para ti');
-
-          const sanitizedQuickAccess = (session.quickAccess || []).map((q: any) => ({
-            ...q,
-            color: isInvalidGrey(q.color) ? getColorFromTitle(q.name, q.id) : q.color,
-          }));
 
           set({
             isAuthenticated: true,
             user: session.user,
             playlists: uniquePlaylists,
-            dynamicShelves: shelves,
-            quickAccessCards: sanitizedQuickAccess.length > 0 ? sanitizedQuickAccess : get().quickAccessCards,
+            dynamicShelves: session.shelves || [],
+            quickAccessCards: session.quickAccess || [],
             isLoading: false,
           });
           return;

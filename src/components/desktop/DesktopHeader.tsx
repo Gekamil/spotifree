@@ -68,10 +68,6 @@ export const DesktopHeader: React.FC<DesktopHeaderProps> = ({
 
       {/* User & Actions */}
       <div className="flex items-center gap-3 shrink-0">
-        <button className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-sm hover:scale-104 active:scale-98 transition-transform">
-          Explorar Premium
-        </button>
-
         <button className="px-3.5 py-1.5 rounded-full bg-black/60 hover:bg-black/90 text-white font-bold text-sm flex items-center gap-2 hover:scale-104 transition-all">
           <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
             <path d="M4.995 8.745a.75.75 0 0 1 1.06 0L7.25 9.939V1.75a.75.75 0 0 1 1.5 0v8.189l1.195-1.194a.75.75 0 1 1 1.06 1.06L8 12.811l-3.005-3.006a.75.75 0 0 1 0-1.06zM1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-2.25a.75.75 0 0 0-1.5 0v2.25a.25.25 0 0 1-.25.25h-11a.25.25 0 0 1-.25-.25v-2.25a.75.75 0 0 0-1.5 0v2.25z" />

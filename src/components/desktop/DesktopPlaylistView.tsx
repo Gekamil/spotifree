@@ -10,6 +10,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
+import { resolveVibrantColor } from '../../utils/spotifyColor';
 
 function getSavedCustomTracks(playlistId: string, isLiked: boolean): Track[] {
   if (typeof window === 'undefined') return [];
@@ -36,12 +37,6 @@ function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, track: T
     }
   } catch {}
 }
-
-import {
-  extractDominantColor,
-  getColorFromTitle,
-  isInvalidGrey,
-} from '../../utils/colorExtractor';
 
 const TRACK_COVER_CACHE = new Map<string, string>();
 
@@ -155,6 +150,40 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
+
+  // Library Saved status (+ / ✓)
+  const [isSavedInLibrary, setIsSavedInLibrary] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
+      if (saved) {
+        const list: string[] = JSON.parse(saved);
+        if (list.includes(playlist.id)) return true;
+      }
+      const currentLists = useSpotifyDataStore.getState().playlists;
+      return currentLists.some((p) => p.id === playlist.id);
+    } catch {}
+    return false;
+  });
+
+  const handleToggleLibrary = () => {
+    const next = !isSavedInLibrary;
+    setIsSavedInLibrary(next);
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
+        let list: string[] = raw ? JSON.parse(raw) : [];
+        if (next) {
+          if (!list.includes(dynamicPlaylist.id)) list.push(dynamicPlaylist.id);
+          useSpotifyDataStore.getState().addCustomPlaylist(dynamicPlaylist);
+        } else {
+          list = list.filter((id) => id !== dynamicPlaylist.id);
+          useSpotifyDataStore.getState().deletePlaylist(dynamicPlaylist.id);
+        }
+        window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+      } catch {}
+    }
+  };
 
   // States for Spotify "Busquemos algo para tu lista" inline track searcher
   const [addSearchQuery, setAddSearchQuery] = useState('');
@@ -338,95 +367,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           }
         } catch (err) {
           console.error('Error loading artist tracks:', err);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-        return;
-      }
-
-      const isAlbum =
-        playlist.type === 'album' ||
-        playlist.id.startsWith('alb-') ||
-        playlist.id.startsWith('album-');
-
-      if (isAlbum) {
-        setLoading(true);
-        try {
-          const rawId = playlist.id.replace(/^(alb-|album-)/i, '').trim();
-          let albumTracks: Track[] = [];
-          let albumInfo: any = null;
-
-          if (/^\d+$/.test(rawId)) {
-            const lookupRes = await fetch(`https://itunes.apple.com/lookup?id=${rawId}&entity=song`);
-            if (lookupRes.ok) {
-              const data = await lookupRes.json();
-              const items = data.results || [];
-              albumInfo = items.find((r: any) => r.wrapperType === 'collection');
-              albumTracks = items
-                .filter((r: any) => r.wrapperType === 'track')
-                .map((t: any, idx: number) => ({
-                  id: `album-track-${t.trackId || idx}`,
-                  name: t.trackName || 'Canción',
-                  duration_ms: t.trackTimeMillis || 210000,
-                  preview_url: t.previewUrl || null,
-                  artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || albumInfo?.artistName || 'Artista' }],
-                  album: {
-                    id: `alb-${t.collectionId || rawId}`,
-                    name: t.collectionName || albumInfo?.collectionName || playlist.name,
-                    images: [{ url: (t.artworkUrl100 || albumInfo?.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-                  },
-                }));
-            }
-          }
-
-          if (albumTracks.length === 0) {
-            const cleanAlbumName = playlist.name.replace(/^(alb-|album-)/i, '').trim();
-            const searchRes = await fetch(
-              `https://itunes.apple.com/search?term=${encodeURIComponent(cleanAlbumName)}&media=music&entity=song&limit=25`
-            );
-            if (searchRes.ok) {
-              const data = await searchRes.json();
-              albumTracks = (data.results || []).map((t: any, idx: number) => ({
-                id: `album-track-${t.trackId || idx}`,
-                name: t.trackName || 'Canción',
-                duration_ms: t.trackTimeMillis || 210000,
-                preview_url: t.previewUrl || null,
-                artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-                album: {
-                  id: `alb-${t.collectionId || idx}`,
-                  name: t.collectionName || playlist.name,
-                  images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-                },
-              }));
-            }
-          }
-
-          if (!cancelled && albumTracks.length > 0) {
-            const coverUrl =
-              albumTracks[0]?.album?.images?.[0]?.url ||
-              playlist.images?.[0]?.url ||
-              '';
-            const artistName = albumInfo?.artistName || albumTracks[0]?.artists?.[0]?.name || 'Artista';
-            const albumName = albumInfo?.collectionName || playlist.name;
-            const releaseYear = albumInfo?.releaseDate ? new Date(albumInfo.releaseDate).getFullYear() : 'Álbum';
-
-            const updatedAlbumPlaylist: Playlist = {
-              ...playlist,
-              name: albumName,
-              description: `Álbum • ${artistName} • ${releaseYear}`,
-              images: [{ url: coverUrl }],
-              tracks: {
-                total: albumTracks.length,
-                items: albumTracks,
-              },
-            };
-            setDynamicTracks(albumTracks);
-            setDynamicPlaylist(updatedAlbumPlaylist);
-            setLoading(false);
-            return;
-          }
-        } catch (err) {
-          console.error('Error loading album tracks:', err);
         } finally {
           if (!cancelled) setLoading(false);
         }
@@ -661,56 +601,25 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       ? `${totalHours} h ${remainingMinutes} min`
       : `${totalMinutes} min`;
 
-  const [extractedThemeColor, setExtractedThemeColor] = useState<string>(() => {
-    return getColorFromTitle(dynamicPlaylist.name, dynamicPlaylist.id);
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    const initialCol = getColorFromTitle(dynamicPlaylist.name, dynamicPlaylist.id);
-    if (initialCol && !isInvalidGrey(initialCol)) {
-      setExtractedThemeColor(initialCol);
-    }
-    const coverUrl = dynamicPlaylist.images?.[0]?.url;
-    extractDominantColor(coverUrl, dynamicPlaylist.name, dynamicPlaylist.id).then((col) => {
-      if (!cancelled && col && !isInvalidGrey(col)) {
-        setExtractedThemeColor(col);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [dynamicPlaylist.id, dynamicPlaylist.name, dynamicPlaylist.images?.[0]?.url]);
-
-  const isSavedInLibrary = useSpotifyDataStore((s) => s.isPlaylistSavedInLibrary(dynamicPlaylist.id));
-  const toggleSavePlaylistToLibrary = useSpotifyDataStore((s) => s.toggleSavePlaylistToLibrary);
-
-  // Determine dominant theme color with always-on vibrant atmospheric glow
-  const themeColor =
-    dynamicPlaylist.color && !isInvalidGrey(dynamicPlaylist.color)
-      ? dynamicPlaylist.color
-      : (isLikedPlaylist ? '#5018F0' : extractedThemeColor);
+  // Determine dominant theme color with always-on vibrant atmospheric glow (never dull grey)
+  const themeColor = resolveVibrantColor(
+    dynamicPlaylist.id,
+    dynamicPlaylist.name,
+    dynamicPlaylist.color
+  );
 
   return (
     <div className="select-none min-h-full pb-20 relative bg-[#121212]">
-      {/* Dynamic Reactive Hero Header with smooth gradual gradient and atmospheric aura */}
+      {/* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */}
       <div
-        className="px-8 pt-8 pb-6 flex items-end gap-6 relative overflow-hidden transition-colors duration-1000"
+        className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-500 overflow-hidden"
         style={{
-          backgroundColor: themeColor,
+          background: `linear-gradient(180deg, ${themeColor} 0%, ${themeColor}cc 65%, #121212 100%)`,
         }}
       >
-        {/* Soft bottom overlay gradient */}
+        {/* Ambient atmospheric aura */}
         <div
-          className="absolute inset-0 pointer-events-none z-0"
-          style={{
-            background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(18,18,18,0.5) 60%, #121212 100%)',
-          }}
-        />
-
-        {/* Ambient atmospheric aura with smooth 1000ms transition */}
-        <div
-          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[110px] opacity-60 z-0 transition-colors duration-1000 ease-out"
+          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[110px] opacity-60 z-0"
           style={{ backgroundColor: themeColor }}
         />
         {/* Cover Art 232x232 */}
@@ -851,25 +760,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             <ShuffleNativeIcon size={20} />
           </button>
 
-          {/* Add to library / Saved in library toggle button */}
-          {!isLikedPlaylist && !isUserCreatedPlaylist && !isFolder && (
+          {/* Add to Library / Checkmark toggle button (+ / ✓) */}
+          {!isLikedPlaylist && !isFolder && (
             <button
-              onClick={() => toggleSavePlaylistToLibrary(dynamicPlaylist)}
-              className="w-8 h-8 rounded-full flex items-center justify-center transition-all hover:scale-106 active:scale-95 cursor-pointer"
-              title={isSavedInLibrary ? "Eliminar de Tu biblioteca" : "Guardar en Tu biblioteca"}
+              onClick={handleToggleLibrary}
+              className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-106 active:scale-95 transition-all cursor-pointer ${
+                isSavedInLibrary ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title={isSavedInLibrary ? "Guardada en Tu biblioteca (clic para eliminar)" : "Añadir a Tu biblioteca"}
             >
               {isSavedInLibrary ? (
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-[#1ed760]" title="Guardada en Tu biblioteca">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12m16.398-2.38a1 1 0 0 0-1.414-1.413l-6.011 6.01-1.894-1.893a1 1 0 0 0-1.414 1.414l3.308 3.308z" />
-                  </svg>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12m16.398-2.38a1 1 0 0 0-1.414-1.413l-6.011 6.01-1.894-1.893a1 1 0 0 0-1.414 1.414l3.308 3.308z" />
+                </svg>
               ) : (
-                <div className="w-8 h-8 rounded-full border-2 border-[#b3b3b3] hover:border-white text-[#b3b3b3] hover:text-white flex items-center justify-center transition-colors" title="Añadir a Tu biblioteca">
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M8 1.5a.75.75 0 0 1 .75.75v5h5a.75.75 0 0 1 0 1.5h-5v5a.75.75 0 0 1-1.5 0v-5h-5a.75.75 0 0 1 0-1.5h5v-5A.75.75 0 0 1 8 1.5z" />
-                  </svg>
-                </div>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 8v8m-4-4h8" />
+                </svg>
               )}
             </button>
           )}
@@ -963,15 +871,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 <p className="text-sm text-[#b3b3b3] max-w-md mx-auto">
                   Guarda canciones haciendo clic en el icono del corazón mientras escuchas música en Spotifree o búscalas abajo para añadirlas.
                 </p>
-                <div className="p-4 bg-[#181818] border border-white/5 rounded-xl text-xs text-[#a7a7a7] text-left space-y-1.5 shadow max-w-md mx-auto">
+                <div className="p-3.5 bg-[#181818] border border-white/10 rounded-xl text-xs text-[#a7a7a7] text-left space-y-1.5 shadow">
                   <div className="flex items-center gap-2 font-bold text-white">
                     <svg width="14" height="14" viewBox="0 0 16 16" fill="#1ed760">
                       <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0m.75 4.5v5h-1.5v-5zm0 6.5v1.5h-1.5V11z"/>
                     </svg>
-                    <span>Colección privada de Spotify</span>
+                    <span>Información de Spotify sobre tu biblioteca</span>
                   </div>
                   <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-                    «Canciones que te gustan» es una colección personal privada y protegida en Spotify. Solo se sincronizan las playlists públicas de tu biblioteca. Puedes añadir y escuchar tus temas preferidos aquí abajo con el buscador.
+                    Tu lista de <em>«Canciones que te gustan»</em> es una colección personal privada y protegida en Spotify. En la versión web únicamente se sincronizan y muestran tus listas públicas y colaborativas. Utiliza el buscador interactivo de abajo para añadir tus canciones y crear tu lista personalizada.
                   </p>
                 </div>
               </div>

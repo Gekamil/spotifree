@@ -5,6 +5,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import type { Playlist, Track } from '../../types/spotify';
 import { PlayNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
+import { resolveVibrantColor } from '../../utils/spotifyColor';
 
 interface DesktopProfileViewProps {
   onSelectPlaylist?: (playlist: Playlist) => void;
@@ -69,6 +70,7 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
   const avatarUrl = user?.images?.[0]?.url;
   const displayName = user?.display_name || 'Usuario de Spotify';
   const followersCount = user?.followers?.total || 0;
+  const profileColor = resolveVibrantColor(user?.id || 'profile', displayName);
 
   const handleTrackClick = (trk: any) => {
     const trackObj: Track = {
@@ -91,11 +93,14 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
       <div
         className="px-8 pt-16 pb-8 flex items-end gap-6 relative overflow-hidden"
         style={{
-          background: 'linear-gradient(180deg, #5018f0 0%, #281850 60%, #121212 100%)',
+          background: `linear-gradient(180deg, ${profileColor}CC 0%, ${profileColor}44 60%, #121212 100%)`,
         }}
       >
         {/* Glow */}
-        <div className="absolute -top-32 -left-32 w-96 h-96 rounded-full bg-[#5018f0] opacity-35 blur-3xl pointer-events-none" />
+        <div
+          className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-35 blur-3xl pointer-events-none"
+          style={{ backgroundColor: profileColor }}
+        />
 
         {/* User Big Circular Avatar */}
         <div className="w-52 h-52 rounded-full overflow-hidden shrink-0 shadow-2xl bg-[#282828] border-4 border-black/30 flex items-center justify-center relative z-10">
