@@ -113,7 +113,7 @@ export const DesktopGuideView: React.FC = () => {
         </div>
 
         {/* Numbered Steps */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="bg-[#1f1f1f] p-4 rounded-lg flex items-start gap-3 border border-white/5">
             <span className="w-6 h-6 rounded-full bg-white text-black font-bold flex items-center justify-center text-xs shrink-0 mt-0.5">
               1
