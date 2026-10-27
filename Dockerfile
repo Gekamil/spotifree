@@ -15,10 +15,13 @@ WORKDIR /app
 
 # Copy dependency manifests
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install
 
 # Copy application files
 COPY . .
+
+# Build frontend production SPA bundle
+RUN npm run build
 
 ENV PORT=10000
 ENV PYTHON_BIN=python3

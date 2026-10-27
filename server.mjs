@@ -92,7 +92,7 @@ const server = http.createServer(async (req, res) => {
   const pathname = reqUrl.pathname;
 
   // 1. Health check
-  if (pathname === '/' || pathname === '/health') {
+  if (pathname === '/health') {
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.3', cookiesLoaded: !!process.env.YOUTUBE_COOKIES }));
@@ -431,6 +431,39 @@ const server = http.createServer(async (req, res) => {
 
     res.statusCode = 200;
     return res.end(JSON.stringify(responseData));
+  }
+
+  // 10. Serve Frontend SPA (dist/) directly from cloud server
+  const distDir = path.resolve('dist');
+  let requestedFile = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
+  let fullPath = path.join(distDir, requestedFile);
+
+  if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
+    const ext = path.extname(fullPath).toLowerCase();
+    const mimeTypes = {
+      '.html': 'text/html; charset=utf-8',
+      '.js': 'application/javascript; charset=utf-8',
+      '.css': 'text/css; charset=utf-8',
+      '.json': 'application/json',
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.svg': 'image/svg+xml',
+      '.ico': 'image/x-icon',
+      '.woff2': 'font/woff2',
+      '.woff': 'font/woff',
+    };
+    res.setHeader('Content-Type', mimeTypes[ext] || 'application/octet-stream');
+    res.statusCode = 200;
+    return fs.createReadStream(fullPath).pipe(res);
+  }
+
+  // SPA fallback for all frontend routes (/callback, /search, /playlist, etc.)
+  const indexPath = path.join(distDir, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.statusCode = 200;
+    return fs.createReadStream(indexPath).pipe(res);
   }
 
   // 404 fallback

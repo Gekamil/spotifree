@@ -4,16 +4,8 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/audio/resolve",
-      "destination": "/api/audio/resolve"
-    },
-    {
-      "source": "/api/(.*)",
-      "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
-    },
-    {
       "source": "/(.*)",
-      "destination": "/index.html"
+      "destination": "https://spotifree-backend-o4a7.onrender.com/$1"
     }
   ]
 }
