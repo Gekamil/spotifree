@@ -4,8 +4,12 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/api/(.*)",
+      "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
+    },
+    {
       "source": "/(.*)",
-      "destination": "https://spotifree-backend-o4a7.onrender.com/$1"
+      "destination": "/index.html"
     }
   ]
 }
