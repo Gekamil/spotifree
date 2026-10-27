@@ -36,6 +36,92 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
+export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = [
+  {
+    id: 'shelf-editorial',
+    type: 'featured',
+    title: 'Novedades populares',
+    subtitle: 'Novedades y lanzamientos seleccionados',
+    cards: [
+      { id: '37i9dQZF1DWZdsS73T1ogG', title: 'el nuevo urbano', subtitle: 'Lo más nuevo de la música urbana.', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426' },
+      { id: '37i9dQZF1DX2EiUAL7Wdfc', title: 'míticas', subtitle: 'Canciones que nunca pasarán de moda.', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6' },
+      { id: '37i9dQZF1DXcBWIGoYBM5M', title: 'Éxitos España', subtitle: 'Los éxitos más escuchados ahora mismo.', image: 'https://i.scdn.co/image/ab67706f00000002b8813359d57a98eb3e312f46' },
+      { id: '4f0YTBqSbvM1iJpuY9r3yQ', title: 'ZIZI', subtitle: 'Música pop y urbana destacada.', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' },
+      { id: '37i9dQZEVXbNFJfN1Vw8d9', title: 'Top 50: España', subtitle: 'Tu actualización diaria de los temas más reproducidos.', image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_large.jpg' },
+      { id: '7b3MrCWtettvBKlfBSdorn', title: 'J+L(2026)', subtitle: 'Selección de éxitos contemporáneos.', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' },
+    ],
+    hasSeeAll: true,
+  },
+  {
+    id: 'shelf-popular-mixes',
+    type: 'mixes',
+    title: 'Mixes y listas recomendadas',
+    subtitle: 'Música organizada por tus géneros favoritos',
+    cards: [
+      { id: '37i9dQZF1EQncLwOalG3K7', title: 'Pop con Ñ', subtitle: 'El pop en español más fresco y actual.', image: 'https://i.scdn.co/image/ab67706f000000020ad613a778fc3ef5c91f54cf' },
+      { id: '37i9dQZF1DX10zKzsJ2jva', title: 'Viva Latino', subtitle: 'El corazón de la música latina.', image: 'https://i.scdn.co/image/ab67706f00000002f232ffabeb0f993f45f20f06' },
+      { id: '37i9dQZF1DX0XUsuxWHRQd', title: 'RapCaviar', subtitle: 'Nuevos lanzamientos urbanos.', image: 'https://i.scdn.co/image/ab67706f0000000259dc23c89658db41e7f353eb' },
+      { id: '37i9dQZF1DX4JAvHpjipBk', title: 'New Music Friday', subtitle: 'Los mejores estrenos de la semana.', image: 'https://i.scdn.co/image/ab67706f000000020fe6127163cb15bf8bfd7df3' },
+      { id: '37i9dQZF1DX4sWSpwq3LiO', title: 'Peaceful Piano', subtitle: 'Piano instrumental relajante.', image: 'https://i.scdn.co/image/ab67706f00000002d073e6f3e5cbd79eed7439e2' },
+      { id: '37i9dQZF1DWXRqgorJj26U', title: 'Rock Classics', subtitle: 'Grandes leyendas y clásicos del rock.', image: 'https://i.scdn.co/image/ab67706f00000002b0e6e76cf0d4948a3952f481' },
+    ],
+    hasSeeAll: true,
+  },
+];
+
+export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
+  {
+    id: '37i9dQZF1DWZdsS73T1ogG',
+    name: 'el nuevo urbano',
+    description: 'Lo más nuevo de la música urbana.',
+    images: [{ url: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426' }],
+    owner: { display_name: 'Spotify', id: 'spotify' },
+    tracks: { total: 50, items: [] },
+    color: '#704838',
+    is_pinned: true,
+  } as any,
+  {
+    id: '37i9dQZF1DX2EiUAL7Wdfc',
+    name: 'míticas',
+    description: 'Canciones que nunca pasarán de moda.',
+    images: [{ url: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6' }],
+    owner: { display_name: 'Spotify', id: 'spotify' },
+    tracks: { total: 50, items: [] },
+    color: '#8b3a1a',
+    is_pinned: false,
+  } as any,
+  {
+    id: '37i9dQZF1DXcBWIGoYBM5M',
+    name: 'Éxitos España',
+    description: 'Los éxitos más escuchados en España.',
+    images: [{ url: 'https://i.scdn.co/image/ab67706f00000002b8813359d57a98eb3e312f46' }],
+    owner: { display_name: 'Spotify', id: 'spotify' },
+    tracks: { total: 50, items: [] },
+    color: '#1a4b4c',
+    is_pinned: false,
+  } as any,
+  {
+    id: '4f0YTBqSbvM1iJpuY9r3yQ',
+    name: 'ZIZI',
+    description: 'Música pop y urbana destacada.',
+    images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' }],
+    owner: { display_name: 'Spotify', id: 'spotify' },
+    tracks: { total: 40, items: [] },
+    color: '#2e4a52',
+    is_pinned: false,
+  } as any,
+  {
+    id: '7b3MrCWtettvBKlfBSdorn',
+    name: 'J+L(2026)',
+    description: 'Selección de éxitos contemporáneos.',
+    images: [{ url: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' }],
+    owner: { display_name: 'Spotify', id: 'spotify' },
+    tracks: { total: 35, items: [] },
+    color: '#5a483a',
+    is_pinned: false,
+  } as any,
+];
+
 export function buildDynamicShelves(
   user: UserProfile | null,
   playlists: Playlist[],
@@ -45,7 +131,7 @@ export function buildDynamicShelves(
   topArtists: any[] = [],
   recentlyPlayed: any[] = []
 ): DynamicShelf[] {
-  if (!user && playlists.length === 0) return [];
+  if (!user && playlists.length === 0) return DEFAULT_PUBLIC_SHELVES;
 
   const displayName = user?.display_name || 'ti';
   const editorialTitle =
@@ -227,16 +313,21 @@ const store = create<SpotifyDataState>((set, get) => ({
   isAuthenticated: false,
   isLoading: false,
   user: null,
-  playlists: [],
+  playlists: DEFAULT_PUBLIC_PLAYLISTS,
   categories: [],
   featuredPlaylists: [],
-  featuredMessage: null,
+  featuredMessage: 'Novedades populares',
   newReleases: [],
   topTracks: [],
   topArtists: [],
   recentlyPlayed: [],
-  dynamicShelves: [],
-  quickAccessCards: [],
+  dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+  quickAccessCards: DEFAULT_PUBLIC_PLAYLISTS.slice(0, 4).map((p) => ({
+    id: p.id,
+    name: p.name,
+    image: p.images[0].url,
+    color: (p as any).color || '#303030',
+  })),
   playlistDetailsCache: {},
 
   cachePlaylistDetails: (playlist: Playlist) => {
