@@ -50,6 +50,9 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
   const handleHomeClick = () => {
     setSearchQuery('');
     setActiveMainTab('home');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('spotifree_navigate_home'));
+    }
     onNavigateHome();
   };
 
@@ -144,7 +147,7 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
       {/* Right: Descubrir Premium / Conectar, Instalar app, Bell, Friends, Avatar J */}
       <div className="flex items-center justify-end gap-2 shrink-0 relative">
         {/* Estado no autenticado: opciones limpias estilo Spotify */}
-        {!isAuthenticated ? (
+        {!isAuthenticated && (
           <div className="flex items-center gap-2">
             <button
               onClick={() => setActiveMainTab('guide')}
@@ -160,12 +163,6 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
               <span>Conectar cuenta</span>
             </button>
           </div>
-        ) : (
-          <button
-            className="bg-white hover:scale-104 active:scale-98 text-black text-xs font-bold px-3.5 py-1.5 rounded-full transition-transform shrink-0 shadow-sm"
-          >
-            Descubrir Premium
-          </button>
         )}
 
         {/* Instalar app */}

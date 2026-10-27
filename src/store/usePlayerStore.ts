@@ -27,24 +27,22 @@ interface PlayerState {
   toggleMute: () => void;
   toggleShuffle: () => void;
   toggleRepeat: () => void;
-  toggleLike: (trackId: string) => void;
+  toggleLike: (trackId: string, trackObj?: Track) => void;
   addToQueue: (tracks: Track | Track[]) => void;
 }
 
-const DEFAULT_LIKED_TRACK_IDS = [
-  '1EljzqiV1RDtXj1QUbx3db', '7gwG5KyFAaLDV73ND47Q0w', '2eQFYGegTZaObk2kuBz83Z',
-  '2lTm559tuIvatlT1u0JYG2', '6bI00brFpeprqCDqKouEJS', '1WbXIpiGBJkCiv3hn40iPB',
-  '7tXHU3EeMfHioXLSCRdDO9', '5BopknbHSxEm9Ohcs4IbGu', '7fBv7CLKzipRk6EC6TWHOB',
-  '0WtDGnWL2KrMCk0mI1Gpwz', '5bi0gh89wRuH2OgjdAKFsb', '16flcJEZHzqoSRv7Ku5gjJ',
-  '0RD94y2DlYTzEePb4WuVbU', '62k8iliO7KTiYp7LWGPa5p', '1zsPaEkglFvxjAhrM8yhpr',
-  '69bgIOHgaRFz9xyvs3Sj2I', '32xmmzPgQEygeYZyv4eWY8', '4GNMcZiHw1D65tLATm09rK',
-  '2gam98EZKrF9XuOkU13ApN', '5VfvCrEYlOASsqhBvceeba', '5BHmWjQP5u8zOTT2qsdkJr',
-  '4f5Bw7pvjyCW5mEeyyoKve', '6PyRfJN2K5Sm1vfOuF4Z9z',
-  'liked-1', 'liked-2', 'liked-3', 'liked-4', 'liked-5', 'liked-6', 'liked-7',
-  'liked-8', 'liked-9', 'liked-10', 'liked-11', 'liked-12', 'liked-13', 'liked-14',
-  'liked-15', 'liked-16', 'liked-17', 'liked-18', 'liked-19', 'liked-20', 'liked-21',
-  'liked-22', 'liked-23'
-];
+const getInitialLikedTrackIds = (): string[] => {
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem('spotifree_liked_tracks');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {}
+  }
+  return [];
+};
 
 const store = create<PlayerState>((set, get) => ({
   currentTrack: null,
@@ -58,7 +56,7 @@ const store = create<PlayerState>((set, get) => ({
   repeatMode: 'off',
   queue: [],
   history: [],
-  likedTrackIds: DEFAULT_LIKED_TRACK_IDS,
+  likedTrackIds: getInitialLikedTrackIds(),
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
@@ -194,14 +192,32 @@ const store = create<PlayerState>((set, get) => ({
     });
   },
 
-  toggleLike: (trackId: string) => {
+  toggleLike: (trackId: string, trackObj?: Track) => {
     set((state) => {
       const exists = state.likedTrackIds.includes(trackId);
-      return {
-        likedTrackIds: exists
-          ? state.likedTrackIds.filter((id) => id !== trackId)
-          : [...state.likedTrackIds, trackId],
-      };
+      const updated = exists
+        ? state.likedTrackIds.filter((id) => id !== trackId)
+        : [...state.likedTrackIds, trackId];
+
+      if (typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(updated));
+
+          // Also manage custom saved liked tracks for dynamic Liked Songs display
+          const savedFull = window.localStorage.getItem('spotifree_custom_liked_songs');
+          let list: Track[] = savedFull ? JSON.parse(savedFull) : [];
+          if (exists) {
+            list = list.filter((t) => t.id !== trackId);
+          } else if (trackObj) {
+            if (!list.some((t) => t.id === trackId)) {
+              list.unshift(trackObj);
+            }
+          }
+          window.localStorage.setItem('spotifree_custom_liked_songs', JSON.stringify(list));
+        } catch {}
+      }
+
+      return { likedTrackIds: updated };
     });
   },
 }));

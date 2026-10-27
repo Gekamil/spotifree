@@ -160,18 +160,17 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       }
     }
 
-    const fallbackSongs = getFallbackLikedSongs();
     return {
       id: 'collection-tracks',
       name: 'Canciones que te gustan',
-      description: `${fallbackSongs.length || 23} canciones guardadas`,
+      description: 'Tus canciones favoritas guardadas',
       type: 'playlist',
       images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
       owner: { display_name: 'Tú', id: 'me' },
       color: '#5018F0',
       tracks: {
-        total: fallbackSongs.length || 23,
-        items: fallbackSongs,
+        total: 0,
+        items: [],
       },
     };
   }

@@ -10,7 +10,32 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
-import realLikedSongsData from '../../data/realLikedSongs.json';
+
+function getSavedCustomTracks(playlistId: string, isLiked: boolean): Track[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const key = isLiked ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlistId}`;
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, track: Track) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = isLiked ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlistId}`;
+    const raw = window.localStorage.getItem(key);
+    let list: Track[] = raw ? JSON.parse(raw) : [];
+    if (!list.some((t) => t.id === track.id || (t.name === track.name && t.artists[0]?.name === track.artists[0]?.name))) {
+      list.push(track);
+      window.localStorage.setItem(key, JSON.stringify(list));
+    }
+  } catch {}
+}
 
 const SPOTIFY_VIBRANT_PALETTE = [
   '#5018F0', // Spotify Purple
@@ -128,7 +153,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     playlist.id.includes('collection:tracks') ||
     playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
 
-  const initialTracks = (playlist.tracks?.items || []).map((t) => {
+  const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially);
+  const baseTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
+    ? playlist.tracks.items
+    : customSaved;
+
+  const initialTracks = baseTracks.map((t) => {
     if (TRACK_COVER_CACHE.has(t.id)) {
       return {
         ...t,
@@ -143,14 +173,122 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return t;
   });
 
-  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(
-    initialTracks.length > 0 ? initialTracks : (isLikedInitially ? (realLikedSongsData as Track[]) : [])
-  );
+  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
+
+  // States for Spotify "Busquemos algo para tu lista" inline track searcher
+  const [addSearchQuery, setAddSearchQuery] = useState('');
+  const [addSearchResults, setAddSearchResults] = useState<Track[]>([]);
+  const [isSearchingAdd, setIsSearchingAdd] = useState(false);
+  const [popularSuggestions, setPopularSuggestions] = useState<Track[]>([]);
+
+  // Load popular suggestion hits for empty state
+  useEffect(() => {
+    let cancelled = false;
+    async function loadSuggestions() {
+      try {
+        const res = await fetch('https://itunes.apple.com/search?term=bad+bunny+feid+quevedo&media=music&entity=song&limit=6');
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.results) {
+            const mapped: Track[] = data.results.map((t: any, idx: number) => ({
+              id: `rec-song-${t.trackId || idx}`,
+              name: t.trackName || 'Canción',
+              duration_ms: t.trackTimeMillis || 210000,
+              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
+              album: {
+                id: `alb-${t.collectionId || idx}`,
+                name: t.collectionName || t.trackName,
+                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+              },
+            }));
+            setPopularSuggestions(mapped);
+          }
+        }
+      } catch {}
+    }
+    loadSuggestions();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Debounced search for adding tracks to playlist
+  useEffect(() => {
+    const q = addSearchQuery.trim();
+    if (!q) {
+      setAddSearchResults([]);
+      setIsSearchingAdd(false);
+      return;
+    }
+
+    let cancelled = false;
+    setIsSearchingAdd(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=8`);
+        if (res.ok) {
+          const data = await res.json();
+          if (!cancelled && data.results) {
+            const mapped: Track[] = data.results.map((t: any, idx: number) => ({
+              id: `search-add-${t.trackId || idx}`,
+              name: t.trackName || 'Canción',
+              duration_ms: t.trackTimeMillis || 210000,
+              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
+              album: {
+                id: `alb-${t.collectionId || idx}`,
+                name: t.collectionName || t.trackName,
+                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+              },
+            }));
+            setAddSearchResults(mapped);
+          }
+        }
+      } catch {} finally {
+        if (!cancelled) setIsSearchingAdd(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [addSearchQuery]);
+
+  const handleAddTrack = (track: Track) => {
+    if (dynamicTracks.some((t) => t.id === track.id || (t.name === track.name && t.artists[0]?.name === track.artists[0]?.name))) {
+      return;
+    }
+
+    const newTrack: Track = {
+      ...track,
+      added_at: 'Hoy',
+    };
+
+    const updated = [...dynamicTracks, newTrack];
+    setDynamicTracks(updated);
+    setDynamicPlaylist((prev) => ({
+      ...prev,
+      tracks: {
+        total: updated.length,
+        items: updated,
+      },
+    }));
+
+    if (isLikedInitially) {
+      toggleLike(track.id, newTrack);
+    }
+    saveCustomTrackToStorage(dynamicPlaylist.id, isLikedInitially, newTrack);
+  };
 
   useEffect(() => {
     let cancelled = false;
-    let mapped = (playlist.tracks?.items || []).map((t) => {
+    const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially);
+    const sourceTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
+      ? playlist.tracks.items
+      : currentCustom;
+
+    let mapped = sourceTracks.map((t) => {
       if (TRACK_COVER_CACHE.has(t.id)) {
         return {
           ...t,
@@ -164,10 +302,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       }
       return t;
     });
-
-    if (mapped.length === 0 && isLikedInitially) {
-      mapped = realLikedSongsData as Track[];
-    }
 
     setDynamicTracks(mapped);
     setDynamicPlaylist(playlist);
@@ -670,16 +804,18 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
       {/* Track List Table */}
       <div className="px-8">
-        {/* Table Header */}
-        <div className="grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2">
-          <span>#</span>
-          <span>Título</span>
-          <span>Álbum</span>
-          <span>Fecha en la que se añadió</span>
-          <div className="flex justify-end pr-8">
-            <ClockIcon size={16} />
+        {/* Table Header - Only rendered when tracks exist */}
+        {tracks.length > 0 && (
+          <div className="grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2">
+            <span>#</span>
+            <span>Título</span>
+            <span>Álbum</span>
+            <span>Fecha en la que se añadió</span>
+            <div className="flex justify-end pr-8">
+              <ClockIcon size={16} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Skeleton Loader while loading */}
         {loading && tracks.length === 0 && (
@@ -699,140 +835,274 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           </div>
         )}
 
-        {/* Track Rows */}
-        <div className="space-y-0.5">
-          {tracks.map((track, index) => {
-            const isThisTrackPlaying = isPlaying && currentTrack?.id === track.id;
-            const isThisTrackSelected = currentTrack?.id === track.id;
-            const isLiked = likedTrackIds.includes(track.id);
-            const isHovered = hoveredTrackId === track.id;
+        {/* Empty State when tracks.length === 0 and not loading */}
+        {!loading && tracks.length === 0 && (
+          <div className="py-8 flex flex-col items-center justify-center text-center max-w-xl mx-auto">
+            {isLikedPlaylist ? (
+              <div className="space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#282828] flex items-center justify-center text-white/50 mx-auto shadow-inner">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+                  Las canciones que te gusten aparecerán aquí
+                </h2>
+                <p className="text-sm text-[#b3b3b3] max-w-md mx-auto">
+                  Guarda canciones haciendo clic en el icono del corazón mientras escuchas música en Spotifree o búscalas abajo para añadirlas.
+                </p>
+                <div className="p-3.5 bg-[#181818] border border-white/10 rounded-xl text-xs text-[#a7a7a7] text-left space-y-1.5 shadow">
+                  <div className="flex items-center gap-2 font-bold text-white">
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#1ed760">
+                      <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0m.75 4.5v5h-1.5v-5zm0 6.5v1.5h-1.5V11z"/>
+                    </svg>
+                    <span>¿Tienes canciones en Spotify pero no aparecen?</span>
+                  </div>
+                  <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
+                    Spotify mantiene las <em>Canciones que te gustan</em> como privadas. Para sincronizarlas automáticamente desde tu cuenta de Spotify, añade tu cookie <code>sp_dc</code> en <strong>Configuración ➔ Cuenta</strong> o haz públicas tus listas.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="w-16 h-16 rounded-full bg-[#282828] flex items-center justify-center text-white/50 mx-auto shadow-inner">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+                  Esta lista está vacía
+                </h2>
+                <p className="text-sm text-[#b3b3b3] max-w-md mx-auto">
+                  Busquemos algo para tu lista para que puedas empezar a escuchar música.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
-            return (
-              <div
-                key={`${track.id}-${index}`}
-                data-testid="track-row"
-                onMouseEnter={() => setHoveredTrackId(track.id)}
-                onMouseLeave={() => setHoveredTrackId(null)}
-                onClick={() => handleTrackClick(track)}
-                onContextMenu={(e) => {
-                  e.preventDefault();
-                  openContextMenu(e.clientX, e.clientY, track.id);
-                }}
-                className={`grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
-                  isThisTrackSelected ? 'bg-white/10' : ''
-                }`}
-              >
-                {/* Index / Play / Pause / Equalizer */}
-                <div className="flex items-center justify-center text-sm font-normal text-[#b3b3b3] w-5">
-                  {isHovered ? (
+        {/* Track Rows */}
+        {tracks.length > 0 && (
+          <div className="space-y-0.5">
+            {tracks.map((track, index) => {
+              const isThisTrackPlaying = isPlaying && currentTrack?.id === track.id;
+              const isThisTrackSelected = currentTrack?.id === track.id;
+              const isLiked = likedTrackIds.includes(track.id);
+              const isHovered = hoveredTrackId === track.id;
+
+              return (
+                <div
+                  key={`${track.id}-${index}`}
+                  data-testid="track-row"
+                  onMouseEnter={() => setHoveredTrackId(track.id)}
+                  onMouseLeave={() => setHoveredTrackId(null)}
+                  onClick={() => handleTrackClick(track)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    openContextMenu(e.clientX, e.clientY, track.id);
+                  }}
+                  className={`grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
+                    isThisTrackSelected ? 'bg-white/10' : ''
+                  }`}
+                >
+                  {/* Index / Play / Pause / Equalizer */}
+                  <div className="flex items-center justify-center text-sm font-normal text-[#b3b3b3] w-5">
+                    {isHovered ? (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTrackClick(track);
+                        }}
+                        className="text-white hover:scale-110 transition-transform"
+                      >
+                        {isThisTrackPlaying ? (
+                          <PauseNativeIcon size={14} className="text-white" />
+                        ) : (
+                          <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                        )}
+                      </button>
+                    ) : isThisTrackPlaying ? (
+                      <div className="w-4 h-4 flex items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
+                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                      </div>
+                    ) : (
+                      <span className="font-['SpotifyMixUI'] tabular-nums text-xs">
+                        {index + 1}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Track Title + Artists */}
+                  <div className="flex items-center gap-3 min-w-0 pr-2">
+                    <TrackArtwork
+                      src={
+                        track.album?.images?.[0]?.url ||
+                        (dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs')
+                          ? dynamicPlaylist.images[0].url
+                          : isLikedPlaylist
+                          ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+                          : '')
+                      }
+                      alt={track.name}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p
+                        className={`text-sm font-semibold truncate ${
+                          isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
+                        }`}
+                      >
+                        {track.name}
+                      </p>
+                      <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
+                        {track.artists.map((a, aIdx) => (
+                          <span
+                            key={`${track.id}-art-${aIdx}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onSelectPlaylistById) {
+                                onSelectPlaylistById(
+                                  `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
+                                  a.name
+                                );
+                              }
+                            }}
+                            className="hover:underline hover:text-white cursor-pointer"
+                          >
+                            {a.name}
+                            {aIdx < track.artists.length - 1 ? ', ' : ''}
+                          </span>
+                        ))}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Album Name */}
+                  <div className="text-xs text-[#b3b3b3] truncate group-hover:text-white transition-colors">
+                    {track.album?.name || dynamicPlaylist.name}
+                  </div>
+
+                  {/* Date Added */}
+                  <div className="text-xs text-[#b3b3b3]">
+                    {track.added_at || 'Reciente'}
+                  </div>
+
+                  {/* Duration + Like Heart */}
+                  <div className="flex items-center justify-end gap-3 text-xs text-[#b3b3b3] pr-4">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleTrackClick(track);
+                        toggleLike(track.id, track);
                       }}
-                      className="text-white hover:scale-110 transition-transform"
-                    >
-                      {isThisTrackPlaying ? (
-                        <PauseNativeIcon size={14} className="text-white" />
-                      ) : (
-                        <PlayNativeIcon size={14} className="text-white ml-0.5" />
-                      )}
-                    </button>
-                  ) : isThisTrackPlaying ? (
-                    <div className="w-4 h-4 flex items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
-                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
-                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
-                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
-                    </div>
-                  ) : (
-                    <span className="font-['SpotifyMixUI'] tabular-nums text-xs">
-                      {index + 1}
-                    </span>
-                  )}
-                </div>
-
-                {/* Track Title + Artists */}
-                <div className="flex items-center gap-3 min-w-0 pr-2">
-                  <TrackArtwork
-                    src={
-                      track.album?.images?.[0]?.url ||
-                      (dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs')
-                        ? dynamicPlaylist.images[0].url
-                        : isLikedPlaylist
-                        ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-                        : '')
-                    }
-                    alt={track.name}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p
-                      className={`text-sm font-semibold truncate ${
-                        isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
+                      className={`transition-colors ${
+                        isLiked
+                          ? 'text-[#1ed760] opacity-100'
+                          : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
                       }`}
+                      title={isLiked ? "Eliminar de Tus me gusta" : "Guardar en Tus me gusta"}
                     >
-                      {track.name}
-                    </p>
-                    <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
-                      {track.artists.map((a, aIdx) => (
-                        <span
-                          key={`${track.id}-art-${aIdx}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onSelectPlaylistById) {
-                              onSelectPlaylistById(
-                                `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
-                                a.name
-                              );
-                            }
-                          }}
-                          className="hover:underline hover:text-white cursor-pointer"
-                        >
-                          {a.name}
-                          {aIdx < track.artists.length - 1 ? ', ' : ''}
-                        </span>
-                      ))}
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill={isLiked ? "currentColor" : "none"}
+                        stroke="currentColor"
+                        strokeWidth={isLiked ? "0" : "1.5"}
+                      >
+                        <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
+                      </svg>
+                    </button>
+                    <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
+                      {formatDuration(track.duration_ms)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Spotify "Busquemos algo para tu lista" Section (1:1 Spotify Fidelity) */}
+      <div className="px-8 pt-8 pb-16 mt-4 border-t border-white/10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
+          <div>
+            <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
+              Busquemos algo para tu lista
+            </h3>
+            <p className="text-xs text-[#b3b3b3] mt-0.5">
+              Busca una canción o añade las recomendaciones populares
+            </p>
+          </div>
+          {/* Capsule search input */}
+          <div className="relative w-full sm:w-80">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#b3b3b3] pointer-events-none">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M7 1.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5zM.25 7a6.75 6.75 0 1 1 12.096 4.12l3.184 3.185a.75.75 0 1 1-1.06 1.06L11.286 12.18A6.75 6.75 0 0 1 .25 7z" />
+              </svg>
+            </div>
+            <input
+              type="text"
+              value={addSearchQuery}
+              onChange={(e) => setAddSearchQuery(e.target.value)}
+              placeholder="Buscar canciones o artistas..."
+              className="w-full h-10 pl-10 pr-9 rounded-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#2a2a2a] text-white text-xs border border-transparent focus:border-white/20 outline-none transition-all placeholder:text-[#727272]"
+            />
+            {addSearchQuery && (
+              <button
+                onClick={() => setAddSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#b3b3b3] hover:text-white text-xs p-1 cursor-pointer"
+                title="Borrar búsqueda"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Results / Suggestions Rows */}
+        <div className="space-y-1">
+          {isSearchingAdd ? (
+            <div className="py-8 text-center text-xs text-[#b3b3b3] flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+              <span>Buscando canciones...</span>
+            </div>
+          ) : (addSearchQuery ? addSearchResults : popularSuggestions).map((tr) => {
+            const alreadyInList = dynamicTracks.some(
+              (t) => t.id === tr.id || (t.name === tr.name && t.artists[0]?.name === tr.artists[0]?.name)
+            );
+
+            return (
+              <div
+                key={tr.id}
+                className="flex items-center justify-between px-3.5 py-2 rounded-md hover:bg-white/10 transition-colors group"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
+                  <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{tr.name}</p>
+                    <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                      {tr.artists.map((a) => a.name).join(', ')}
                     </p>
                   </div>
                 </div>
 
-                {/* Album Name */}
-                <div className="text-xs text-[#b3b3b3] truncate group-hover:text-white transition-colors">
-                  {track.album?.name || dynamicPlaylist.name}
-                </div>
-
-                {/* Date Added */}
-                <div className="text-xs text-[#b3b3b3]">
-                  {track.added_at || 'Reciente'}
-                </div>
-
-                {/* Duration + Like Heart */}
-                <div className="flex items-center justify-end gap-3 text-xs text-[#b3b3b3] pr-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleLike(track.id);
-                    }}
-                    className={`transition-colors ${
-                      isLiked
-                        ? 'text-[#1ed760] opacity-100'
-                        : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
-                    }`}
-                    title={isLiked ? "Eliminar de Tus me gusta" : "Guardar en Tus me gusta"}
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill={isLiked ? "currentColor" : "none"}
-                      stroke="currentColor"
-                      strokeWidth={isLiked ? "0" : "1.5"}
-                    >
-                      <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
-                    </svg>
-                  </button>
-                  <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
-                    {formatDuration(track.duration_ms)}
+                <div className="flex items-center gap-4 shrink-0">
+                  <span className="text-xs text-[#b3b3b3] hidden md:block max-w-[180px] truncate">
+                    {tr.album?.name}
                   </span>
+                  <button
+                    disabled={alreadyInList}
+                    onClick={() => handleAddTrack(tr)}
+                    className={`h-8 px-4 rounded-full border text-xs font-bold transition-all cursor-pointer ${
+                      alreadyInList
+                        ? 'border-white/10 text-white/40 cursor-default'
+                        : 'border-white/30 text-white hover:border-white hover:scale-104 active:scale-96 hover:bg-white hover:text-black'
+                    }`}
+                  >
+                    {alreadyInList ? 'Añadida' : 'Añadir'}
+                  </button>
                 </div>
               </div>
             );

@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     }
     body = body || {};
 
-    const { email, password, cookie } = body;
+    const { email, password, cookie, twoFactorCode } = body;
 
     if (cookie) {
       const session = await extractSpotifySession(cookie);
@@ -29,17 +29,23 @@ export default async function handler(req, res) {
 
     if (email && password) {
       try {
+        const params = new URLSearchParams({
+          username: email,
+          password: password,
+          remember: 'true',
+        });
+        if (twoFactorCode) {
+          params.append('two_factor_code', twoFactorCode);
+          params.append('challenge_type', '2fa');
+        }
+
         const loginRes = await fetch('https://accounts.spotify.com/api/login', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
           },
-          body: new URLSearchParams({
-            username: email,
-            password: password,
-            remember: 'true',
-          }),
+          body: params,
         });
 
         const rawCookies = loginRes.headers.get('set-cookie') || '';
@@ -62,7 +68,8 @@ export default async function handler(req, res) {
       }
 
       return res.status(400).json({
-        error: 'Spotify requiere verificación captcha o doble factor. Conéctate con tu cookie sp_dc en la pestaña de al lado para un acceso inmediato.',
+        error: 'Tu cuenta de Spotify requiere verificación en dos pasos (2FA) o captcha. Para entrar al instante sin bloqueos de seguridad, copia tu cookie sp_dc en la pestaña de al lado.',
+        needs2FA: true,
         needsCookie: true,
       });
     }

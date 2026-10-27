@@ -115,6 +115,11 @@ export async function searchSpotify(query: string): Promise<any | null> {
   const cleanQ = query.trim();
   if (!cleanQ) return null;
 
+  let tracks: Track[] = [];
+  let artists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
+  let albums: Array<{ id: string; name: string; images: Array<{ url: string }>; release_date?: string; artists: Array<{ name: string }> }> = [];
+  let playlists: Array<{ id: string; name: string; images: Array<{ url: string }>; owner?: { display_name: string } }> = [];
+
   // 1. Try Spotify Official Web API if valid token exists
   try {
     const validToken = await getValidAccessToken();
@@ -125,106 +130,120 @@ export async function searchSpotify(query: string): Promise<any | null> {
       );
       if (res.ok) {
         const data = await res.json();
-        if (data.tracks?.items?.length || data.artists?.items?.length || data.albums?.items?.length) {
-          return data;
-        }
+        if (data.tracks?.items?.length) tracks = data.tracks.items;
+        if (data.artists?.items?.length) artists = data.artists.items;
+        if (data.albums?.items?.length) albums = data.albums.items;
+        if (data.playlists?.items?.length) playlists = data.playlists.items;
       }
     }
   } catch (err) {
-    console.warn('Spotify official search failed, falling back:', err);
+    console.warn('Spotify official search failed:', err);
   }
 
-  // 2. Try proxy /api/spotify/search if backend is available
+  // 2. Parallel multi-entity iTunes Search Fallback to guarantee Artists, Albums, and Playlists
   try {
-    const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(cleanQ)}`);
-    if (res.ok) {
-      const data = await res.json();
-      if (data.tracks?.items?.length || data.artists?.items?.length) {
-        return data;
-      }
-    }
-  } catch (err) {
-    console.warn('Error querying /api/spotify/search:', err);
-  }
-
-  // 3. Parallel multi-entity iTunes Search Fallback (Songs, Albums, Artists)
-  try {
-    const [songsRes, albumsRes] = await Promise.all([
+    const [songsRes, albumsRes, artistsRes] = await Promise.all([
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=song&limit=15`),
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=album&limit=8`),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=musicArtist&limit=6`),
     ]);
 
     const songData = songsRes.ok ? await songsRes.json() : { results: [] };
     const albumData = albumsRes.ok ? await albumsRes.json() : { results: [] };
+    const artistData = artistsRes.ok ? await artistsRes.json() : { results: [] };
 
-    const tracks: Track[] = (songData.results || []).map((t: any, idx: number) => ({
-      id: `search-${t.trackId || idx}`,
-      name: t.trackName || 'Canción',
-      duration_ms: t.trackTimeMillis || 210000,
-      preview_url: t.previewUrl || null,
-      artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-      album: {
-        id: `alb-${t.collectionId || idx}`,
-        name: t.collectionName || t.trackName,
-        images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-      },
-    }));
-
-    // Extract unique artists with their best artwork from tracks
-    const artistMap = new Map<string, { id: string; name: string; images: Array<{ url: string }> }>();
-    for (const t of songData.results || []) {
-      if (t.artistName && !artistMap.has(t.artistName.toLowerCase())) {
-        artistMap.set(t.artistName.toLowerCase(), {
-          id: `art-${t.artistId || t.artistName.toLowerCase().replace(/\s+/g, '-')}`,
-          name: t.artistName,
+    if (tracks.length === 0) {
+      tracks = (songData.results || []).map((t: any, idx: number) => ({
+        id: `search-${t.trackId || idx}`,
+        name: t.trackName || 'Canción',
+        duration_ms: t.trackTimeMillis || 210000,
+        preview_url: t.previewUrl || null,
+        artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
+        album: {
+          id: `alb-${t.collectionId || idx}`,
+          name: t.collectionName || t.trackName,
           images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-        });
-      }
-      if (artistMap.size >= 6) break;
+        },
+      }));
     }
 
-    const albums = (albumData.results || []).map((a: any, idx: number) => ({
-      id: `alb-${a.collectionId || idx}`,
-      name: a.collectionName,
-      artists: [{ name: a.artistName }],
-      images: [{ url: (a.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-      release_date: (a.releaseDate || '').slice(0, 4) || '2024',
-    }));
+    if (artists.length === 0) {
+      const artistMap = new Map<string, { id: string; name: string; images: Array<{ url: string }> }>();
 
-    // Generate matching playlists from catalog / search query
-    const playlists = [
-      {
-        id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
-        name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
-        images: [{
-          url: tracks[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426'
-        }],
-        owner: { display_name: 'Spotify' },
-      },
-      {
-        id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
-        name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
-        images: [{
-          url: tracks[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6'
-        }],
-        owner: { display_name: 'Spotify' },
-      },
-    ];
+      (artistData.results || []).forEach((a: any, idx: number) => {
+        if (a.artistName) {
+          const matchSong = (songData.results || []).find((s: any) => s.artistName?.toLowerCase() === a.artistName?.toLowerCase());
+          const img = matchSong?.artworkUrl100?.replace('100x100bb', '600x600bb') ||
+                      songData.results?.[idx]?.artworkUrl100?.replace('100x100bb', '600x600bb') ||
+                      tracks[0]?.album?.images?.[0]?.url ||
+                      'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
 
-    return {
-      tracks: { items: tracks },
-      artists: { items: Array.from(artistMap.values()) },
-      albums: { items: albums },
-      playlists: { items: playlists },
-    };
+          artistMap.set(a.artistName.toLowerCase(), {
+            id: `art-${a.artistId || idx}`,
+            name: a.artistName,
+            images: [{ url: img }],
+          });
+        }
+      });
+
+      for (const t of songData.results || []) {
+        if (t.artistName && !artistMap.has(t.artistName.toLowerCase())) {
+          artistMap.set(t.artistName.toLowerCase(), {
+            id: `art-${t.artistId || t.artistName.toLowerCase().replace(/\s+/g, '-')}`,
+            name: t.artistName,
+            images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+          });
+        }
+        if (artistMap.size >= 8) break;
+      }
+
+      artists = Array.from(artistMap.values());
+    }
+
+    if (albums.length === 0) {
+      albums = (albumData.results || []).map((a: any, idx: number) => ({
+        id: `alb-${a.collectionId || idx}`,
+        name: a.collectionName,
+        artists: [{ name: a.artistName }],
+        images: [{ url: (a.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+        release_date: (a.releaseDate || '').slice(0, 4) || '2024',
+      }));
+    }
+
+    if (playlists.length === 0) {
+      const topCover = tracks[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
+      const secondCover = tracks[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
+      const thirdCover = albums[0]?.images?.[0]?.url || topCover;
+
+      playlists = [
+        {
+          id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+          images: [{ url: topCover }],
+          owner: { display_name: 'Spotify' },
+        },
+        {
+          id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+          images: [{ url: secondCover }],
+          owner: { display_name: 'Spotify' },
+        },
+        {
+          id: `search-radio-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `Radio de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+          images: [{ url: thirdCover }],
+          owner: { display_name: 'Spotify' },
+        },
+      ];
+    }
   } catch (err) {
-    console.error('Fallback search failed:', err);
+    console.error('Parallel search enrichment failed:', err);
   }
 
   return {
-    tracks: { items: [] },
-    artists: { items: [] },
-    albums: { items: [] },
-    playlists: { items: [] },
+    tracks: { items: tracks },
+    artists: { items: artists },
+    albums: { items: albums },
+    playlists: { items: playlists },
   };
 }

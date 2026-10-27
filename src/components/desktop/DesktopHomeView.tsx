@@ -1,10 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { DesktopShimmerFeed } from './DesktopShimmerFeed';
 
+const SPOTIFY_PALETTE = [
+  '#5018F0', // Spotify Purple
+  '#1DB954', // Spotify Green
+  '#E91429', // Crimson Red
+  '#2D46B9', // Sapphire Blue
+  '#B02897', // Magenta
+  '#E13300', // Sunset Orange
+  '#148A08', // Emerald Forest
+  '#E8115B', // Hot Pink
+  '#BA5D07', // Warm Amber
+  '#1E3264', // Deep Navy
+  '#8D67AB', // Lavender
+  '#7358FF', // Electric Violet
+];
+
+function getDeterministicColor(id: string = '', name: string = ''): string {
+  const str = `${id}:${name}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % SPOTIFY_PALETTE.length;
+  return SPOTIFY_PALETTE[idx];
+}
 
 interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
@@ -20,6 +45,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     subtitle?: string;
     cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
   } | null>(null);
+
+  // Reset expanded shelf on global navigate home event
+  useEffect(() => {
+    const handleHomeNav = () => setExpandedShelf(null);
+    window.addEventListener('spotifree_navigate_home', handleHomeNav);
+    return () => window.removeEventListener('spotifree_navigate_home', handleHomeNav);
+  }, []);
 
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
   const {
@@ -114,7 +146,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
-  const activeBg = hoveredColor || currentShortcuts[0]?.color || '#5038a0';
+  const profileColor = useMemo(() => {
+    return getDeterministicColor(user?.id || 'profile', user?.display_name || 'Spotify');
+  }, [user]);
+
+  const activeBg = hoveredColor || (currentShortcuts[0]?.color && currentShortcuts[0].color !== '#121212' ? currentShortcuts[0].color : profileColor);
 
   if (!isAuthenticated) {
     return <DesktopShimmerFeed />;
@@ -186,36 +222,39 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   };
 
   if (expandedShelf) {
+    const shelfAmbientColor = getDeterministicColor(expandedShelf.id, expandedShelf.title);
     return (
-      <div className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200">
-        {/* Back navigation button */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => setExpandedShelf(null)}
-            className="w-10 h-10 rounded-full bg-black/60 hover:bg-black text-[#b3b3b3] hover:text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow"
-            title="Volver a Inicio"
-          >
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
-            </svg>
-          </button>
-          <div>
-            {expandedShelf.prefix && (
-              <span className="text-xs uppercase font-bold text-[#b3b3b3] tracking-wider block">
-                {expandedShelf.prefix}
-              </span>
-            )}
-            <h1 className="text-3xl lg:text-4xl font-black text-white font-['SpotifyMixUITitle']">
-              {expandedShelf.title}
-            </h1>
-            {expandedShelf.subtitle && (
-              <p className="text-sm text-[#b3b3b3] mt-1">{expandedShelf.subtitle}</p>
-            )}
-          </div>
+      <div
+        className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200"
+        style={{
+          background: `linear-gradient(180deg, ${shelfAmbientColor}B3 0%, rgba(18, 18, 18, 0.7) 240px, #121212 420px)`,
+        }}
+      >
+        {/* Soft Bloom Ambient Glow */}
+        <div
+          className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none"
+          style={{
+            background: `linear-gradient(180deg, ${shelfAmbientColor}66 0%, transparent 100%)`,
+          }}
+        />
+
+        {/* Shelf Header - Authentic Spotify layout without redundant in-page back button */}
+        <div className="pt-2 pb-2 relative z-10">
+          {expandedShelf.prefix && (
+            <span className="text-xs uppercase font-bold text-[#b3b3b3] tracking-wider block mb-1">
+              {expandedShelf.prefix}
+            </span>
+          )}
+          <h1 className="text-3xl lg:text-4xl font-black text-white font-['SpotifyMixUITitle']">
+            {expandedShelf.title}
+          </h1>
+          {expandedShelf.subtitle && (
+            <p className="text-sm text-[#b3b3b3] mt-1">{expandedShelf.subtitle}</p>
+          )}
         </div>
 
         {/* Full Responsive Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pt-2 relative z-10">
           {expandedShelf.cards.map((card) => {
             const isPlayingThis = isPlaying && currentTrack?.id === card.id;
             return (
@@ -279,16 +318,15 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     <div
       className="select-none min-h-full pb-20 relative bg-[#121212]"
       style={{
-        '--ambient-color': activeBg,
-        background: `linear-gradient(180deg, var(--ambient-color) 0%, rgba(18, 18, 18, 0.5) 200px, #121212 380px)`,
-        transition: '--ambient-color 0.8s cubic-bezier(0.3, 0, 0.4, 1)',
-      } as React.CSSProperties}
+        background: `linear-gradient(180deg, ${activeBg}B3 0%, rgba(18, 18, 18, 0.65) 240px, #121212 400px)`,
+        transition: 'background 0.5s ease',
+      }}
     >
       {/* GPU Ambient Soft Bloom Layer */}
       <div
         className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.3,0,0.4,1)]"
         style={{
-          background: `linear-gradient(180deg, ${activeBg}99 0%, ${activeBg}33 160px, transparent 380px)`,
+          background: `linear-gradient(180deg, ${activeBg}80 0%, ${activeBg}25 180px, transparent 380px)`,
         }}
       />
 

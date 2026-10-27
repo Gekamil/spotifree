@@ -9,7 +9,6 @@ import { DesktopPlaylistView } from '../desktop/DesktopPlaylistView';
 import { DesktopSearchView } from '../desktop/DesktopSearchView';
 import { DesktopProfileView } from '../desktop/DesktopProfileView';
 import { LoginModal } from '../desktop/LoginModal';
-import { WrappedModal } from '../desktop/WrappedModal';
 import type { Playlist } from '../../types/spotify';
 
 export const MobileLayout: React.FC = () => {
@@ -276,7 +275,6 @@ export const MobileLayout: React.FC = () => {
 
       {/* Modals */}
       <LoginModal />
-      <WrappedModal />
     </div>
   );
 };
