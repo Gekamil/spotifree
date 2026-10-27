@@ -126,6 +126,10 @@ export const DesktopLayout: React.FC = () => {
     } else if (cleanId === '43GWp9FbN9nHihudedyVQM' || cleanId === 'romeo-prince' || cleanId === 'romeo---prince') {
       title = title || 'Romeo & Prince';
       ownerName = 'Jorgeperezvk';
+    } else if (cleanId === '4Jf0fa5p0ajOnSriA9cYGS' || cleanId === 'my-top-tracks-playlist') {
+      title = title || 'My top tracks playlist';
+      ownerName = 'Jorgeperezvk';
+      image = image || 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59';
     } else if (cleanId === '7HsL4sBaR3dJMa0UJ5e4zG' || cleanId === 'nuestro-amor' || cleanId === '--nuestro-amor----2024-25-') {
       title = title || '♡ nuestro amor ♡ (2024-25)';
       ownerName = 'Lucía :)';

@@ -10,6 +10,10 @@ import {
   fetchUserPlaylists,
   fetchTopTracks,
 } from '../services/spotifyApi';
+import {
+  validateSpotifyCookie,
+  extractSpotifySessionFromCookie,
+} from '../services/spotifyCookieService';
 
 export interface DynamicShelfCard {
   id: string;
@@ -41,7 +45,7 @@ export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = [
     cards: [
       { id: '37i9dQZF1DWZdsS73T1ogG', title: 'el nuevo urbano', subtitle: 'Lo más nuevo de la música urbana.', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426' },
       { id: '37i9dQZF1DX2EiUAL7Wdfc', title: 'míticas', subtitle: 'Canciones que nunca pasarán de moda.', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6' },
-      { id: '37i9dQZF1DXcBWIGoYBM5M', title: 'Éxitos España', subtitle: 'Los éxitos más escuchados ahora mismo.', image: 'https://i.scdn.co/image/ab67706f00000002b8813359d57a98eb3e312f46' },
+      { id: '37i9dQZF1DXcBWIGoYBM5M', title: 'Éxitos España', subtitle: 'Los éxitos más escuchados ahora mismo.', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b' },
       { id: '4f0YTBqSbvM1iJpuY9r3yQ', title: 'ZIZI', subtitle: 'Música pop y urbana destacada.', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' },
       { id: '37i9dQZEVXbNFJfN1Vw8d9', title: 'Top 50: España', subtitle: 'Tu actualización diaria de los temas más reproducidos.', image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_large.jpg' },
       { id: '7b3MrCWtettvBKlfBSdorn', title: 'J+L(2026)', subtitle: 'Selección de éxitos contemporáneos.', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' },
@@ -90,7 +94,7 @@ export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
     id: '37i9dQZF1DXcBWIGoYBM5M',
     name: 'Éxitos España',
     description: 'Los éxitos más escuchados en España.',
-    images: [{ url: 'https://i.scdn.co/image/ab67706f00000002b8813359d57a98eb3e312f46' }],
+    images: [{ url: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b' }],
     owner: { display_name: 'Spotify', id: 'spotify' },
     tracks: { total: 50, items: [] },
     color: '#1a4b4c',
@@ -450,7 +454,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      // 2b. Check for cookie session or imported playlists in this browser
+      // 2b. Check for validated cookie session
       const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
       const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
       let importedPlaylists: Playlist[] = [];
@@ -460,29 +464,65 @@ const store = create<SpotifyDataState>((set, get) => ({
         } catch {}
       }
 
-      if (userCookie || (importedPlaylists && importedPlaylists.length > 0)) {
-        const effectivePlaylists = importedPlaylists.length > 0 ? importedPlaylists : DEFAULT_PUBLIC_PLAYLISTS;
-        const cookieUser: UserProfile = {
+      if (userCookie && validateSpotifyCookie(userCookie).valid) {
+        let session = null;
+        const savedSessionRaw = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_extracted_session') : null;
+        if (savedSessionRaw) {
+          try {
+            session = JSON.parse(savedSessionRaw);
+          } catch {}
+        }
+        if (!session || !session.user || !session.playlists || session.playlists.length === 0) {
+          try {
+            session = await extractSpotifySessionFromCookie(userCookie);
+            if (typeof window !== 'undefined') {
+              window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+            }
+          } catch (e) {
+            console.error('Failed to extract session from cookie:', e);
+          }
+        }
+
+        if (session && session.user && session.playlists) {
+          const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
+          const uniquePlaylists = combinedPlaylists.filter(
+            (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
+          );
+
+          set({
+            isAuthenticated: true,
+            user: session.user,
+            playlists: uniquePlaylists,
+            dynamicShelves: session.shelves || [],
+            quickAccessCards: session.quickAccess || [],
+            isLoading: false,
+          });
+          return;
+        }
+      }
+
+      if (importedPlaylists && importedPlaylists.length > 0) {
+        const guestUser: UserProfile = {
           id: 'spotify-user',
-          display_name: 'Cuenta de Spotify',
+          display_name: 'Invitado',
           images: [],
           email: '',
         } as any;
 
         const shelves = buildDynamicShelves(
-          cookieUser,
-          effectivePlaylists,
-          'Tus listas y mixes',
+          guestUser,
+          importedPlaylists,
+          'Tus listas importadas',
           [],
           []
         );
 
         set({
           isAuthenticated: true,
-          user: cookieUser,
-          playlists: effectivePlaylists,
+          user: guestUser,
+          playlists: importedPlaylists,
           dynamicShelves: shelves,
-          quickAccessCards: effectivePlaylists.slice(0, 4).map((p) => ({
+          quickAccessCards: importedPlaylists.slice(0, 4).map((p) => ({
             id: p.id,
             name: p.name,
             image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
@@ -522,6 +562,7 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotify_session_synced');
       window.localStorage.removeItem('user_spotify_cookie');
       window.localStorage.removeItem('user_imported_playlists');
+      window.localStorage.removeItem('spotify_extracted_session');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }

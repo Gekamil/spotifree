@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import {
+  validateSpotifyCookie,
+  extractSpotifySessionFromCookie,
+} from '../../services/spotifyCookieService';
 
 export const DesktopGuideView: React.FC = () => {
   const { setActiveMainTab } = useUIStore();
@@ -12,19 +16,44 @@ export const DesktopGuideView: React.FC = () => {
   });
   const [playlistUrlInput, setPlaylistUrlInput] = useState('');
   const [cookieSaved, setCookieSaved] = useState(false);
+  const [cookieError, setCookieError] = useState<string | null>(null);
+  const [isExtractingCookie, setIsExtractingCookie] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const handleSaveCookie = async () => {
+    setCookieError(null);
     const val = cookieInput.trim();
-    if (!val) return;
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('user_spotify_cookie', val);
-      setCookieSaved(true);
-      setTimeout(() => setCookieSaved(false), 4000);
+    const validation = validateSpotifyCookie(val);
+    if (!validation.valid) {
+      setCookieError(validation.error || 'Cookie no válida.');
+      return;
     }
-    // Initialize session with saved cookie
-    await useSpotifyDataStore.getState().initialize();
+
+    setIsExtractingCookie(true);
+    try {
+      const session = await extractSpotifySessionFromCookie(val);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('user_spotify_cookie', val);
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+      }
+      useSpotifyDataStore.setState({
+        isAuthenticated: true,
+        user: session.user,
+        playlists: session.playlists,
+        dynamicShelves: session.shelves,
+        quickAccessCards: session.quickAccess,
+      });
+      setCookieSaved(true);
+      setTimeout(() => {
+        setCookieSaved(false);
+        setActiveMainTab('home');
+      }, 1200);
+    } catch (err: any) {
+      setCookieError(err.message || 'Error al procesar la cookie.');
+    } finally {
+      setIsExtractingCookie(false);
+    }
   };
 
   const handleImportPlaylist = async () => {
@@ -172,20 +201,29 @@ export const DesktopGuideView: React.FC = () => {
             <input
               type="text"
               value={cookieInput}
-              onChange={(e) => setCookieInput(e.target.value)}
-              placeholder="AQD..."
-              className="flex-1 bg-[#121212] border border-white/10 rounded-md px-3.5 py-2 text-xs text-white placeholder:text-[#666] outline-none focus:border-white transition-colors"
+              onChange={(e) => {
+                setCookieInput(e.target.value);
+                if (cookieError) setCookieError(null);
+              }}
+              placeholder="Pega aquí tu cookie sp_dc (AQD...)"
+              className="flex-1 bg-[#121212] border border-white/10 rounded-md px-3.5 py-2 text-xs text-white placeholder:text-[#666] outline-none focus:border-white transition-colors font-mono"
             />
             <button
               onClick={handleSaveCookie}
-              className="bg-white hover:bg-[#f0f0f0] active:scale-98 text-black text-xs font-bold px-5 py-2 rounded-full transition-transform shrink-0 cursor-pointer shadow"
+              disabled={isExtractingCookie}
+              className="bg-white hover:bg-[#f0f0f0] active:scale-98 text-black text-xs font-bold px-5 py-2 rounded-full transition-transform shrink-0 cursor-pointer shadow disabled:opacity-50"
             >
-              Conectar y guardar
+              {isExtractingCookie ? 'Extrayendo datos...' : 'Conectar y guardar'}
             </button>
           </div>
+          {cookieError && (
+            <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
+              {cookieError}
+            </p>
+          )}
           {cookieSaved && (
             <p className="text-xs font-semibold text-[#1ed760] animate-in fade-in">
-              Cookie guardada correctamente en este dispositivo.
+              ¡Sesión sincronizada con éxito! Cargando tu cuenta de Spotify...
             </p>
           )}
         </div>

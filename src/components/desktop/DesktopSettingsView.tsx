@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
+import {
+  validateSpotifyCookie,
+  extractSpotifySessionFromCookie,
+} from '../../services/spotifyCookieService';
 
 interface FrequencyPoint {
   label: string;
@@ -55,13 +59,41 @@ export const DesktopSettingsView: React.FC = () => {
       : '';
   });
   const [savedSpotifyCookieSuccess, setSavedSpotifyCookieSuccess] = useState(false);
+  const [cookieError, setCookieError] = useState<string | null>(null);
+  const [isExtractingCookie, setIsExtractingCookie] = useState(false);
 
   const handleSaveSpotifyCookie = async () => {
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('user_spotify_cookie', spotifyCookie.trim());
+    setCookieError(null);
+    const val = spotifyCookie.trim();
+    const validation = validateSpotifyCookie(val);
+    if (!validation.valid) {
+      setCookieError(validation.error || 'Cookie no válida.');
+      return;
+    }
+
+    setIsExtractingCookie(true);
+    try {
+      const session = await extractSpotifySessionFromCookie(val);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('user_spotify_cookie', val);
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+      }
+      useSpotifyDataStore.setState({
+        isAuthenticated: true,
+        user: session.user,
+        playlists: session.playlists,
+        dynamicShelves: session.shelves,
+        quickAccessCards: session.quickAccess,
+      });
       setSavedSpotifyCookieSuccess(true);
-      setTimeout(() => setSavedSpotifyCookieSuccess(false), 3000);
-      await useSpotifyDataStore.getState().initialize();
+      setTimeout(() => {
+        setSavedSpotifyCookieSuccess(false);
+        setActiveMainTab('home');
+      }, 1200);
+    } catch (err: any) {
+      setCookieError(err.message || 'Error al procesar la cookie.');
+    } finally {
+      setIsExtractingCookie(false);
     }
   };
 
@@ -283,17 +315,26 @@ export const DesktopSettingsView: React.FC = () => {
                   <input
                     type="password"
                     value={spotifyCookie}
-                    onChange={(e) => setSpotifyCookie(e.target.value)}
+                    onChange={(e) => {
+                      setSpotifyCookie(e.target.value);
+                      if (cookieError) setCookieError(null);
+                    }}
                     placeholder="Pega aquí tu cookie sp_dc (AQD...)"
                     className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-white transition-colors font-mono"
                   />
                   <button
                     onClick={handleSaveSpotifyCookie}
-                    className="px-4 py-1.5 bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer shadow"
+                    disabled={isExtractingCookie}
+                    className="px-4 py-1.5 bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer shadow disabled:opacity-50"
                   >
-                    Guardar cookie
+                    {isExtractingCookie ? 'Extrayendo...' : 'Guardar cookie'}
                   </button>
                 </div>
+                {cookieError && (
+                  <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
+                    {cookieError}
+                  </p>
+                )}
               </div>
 
               {/* Custom Spotify Client ID field (Opcional) */}

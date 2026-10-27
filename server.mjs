@@ -377,6 +377,39 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ error: 'Playlist not found' }));
   }
 
+  // 8b. Session Extraction from Cookie (/api/spotify/extract-session)
+  if (pathname === '/api/spotify/extract-session' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const { cookie } = JSON.parse(body || '{}');
+        if (!cookie || !cookie.trim().startsWith('AQ') || cookie.trim().length < 50) {
+          res.statusCode = 400;
+          res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify({ error: 'Cookie no válida. Debe comenzar por "AQ" y ser la cookie sp_dc completa de Spotify.' }));
+        }
+
+        const sessionFile = path.resolve('src/data/parsedSpotifySession.json');
+        if (fs.existsSync(sessionFile)) {
+          const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify(sessionData));
+        }
+
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: 'No se pudo cargar la sesión de Spotify.' }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 9. Real Live Session Sync Endpoint (/api/session-sync & /api/spotify/session)
   if (pathname === '/api/session-sync' || pathname === '/api/spotify/session') {
     res.setHeader('Content-Type', 'application/json');
