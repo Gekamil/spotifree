@@ -35,7 +35,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     isShuffle,
     repeatMode,
     likedTrackIds,
-    togglePlay,
     nextTrack,
     previousTrack,
     setProgress,
@@ -79,7 +78,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
   // 2. Play / Pause Control
   const handleTogglePlay = () => {
     audioEngine.togglePlay();
-    togglePlay();
   };
 
   const handlePreviousTrack = () => {

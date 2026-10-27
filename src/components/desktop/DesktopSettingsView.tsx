@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { audioEngine } from '../../services/audioEngine';
 
 interface FrequencyPoint {
   label: string;
@@ -43,6 +45,43 @@ const SpotifyToggle: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
+  const { user, isAuthenticated, login, logout } = useSpotifyDataStore();
+
+  const [engineMode, setEngineMode] = useState<string>(() => {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('spotifree_audio_engine') || 'hybrid'
+      : 'hybrid';
+  });
+  const [youtubeCookies, setYoutubeCookies] = useState<string>(() => {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('user_youtube_cookies') || ''
+      : '';
+  });
+  const [savedCookiesSuccess, setSavedCookiesSuccess] = useState(false);
+  const [testingAudio, setTestingAudio] = useState(false);
+  const [testResult, setTestResult] = useState<string | null>(null);
+
+  const handleSaveCookies = () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('user_youtube_cookies', youtubeCookies.trim());
+      window.localStorage.setItem('spotifree_audio_engine', engineMode);
+      setSavedCookiesSuccess(true);
+      setTimeout(() => setSavedCookiesSuccess(false), 3000);
+    }
+  };
+
+  const handleTestAudio = async () => {
+    setTestingAudio(true);
+    setTestResult(null);
+    try {
+      await audioEngine.playTrack('test-coldplay-yellow', 'Coldplay Yellow', 0);
+      setTestResult('¡Reproducción iniciada con éxito! Comprueba la barra inferior.');
+    } catch (e: any) {
+      setTestResult('Error: ' + e.message);
+    } finally {
+      setTestingAudio(false);
+    }
+  };
 
   // Settings State
   const [language, setLanguage] = useState('es-ES');
@@ -122,12 +161,7 @@ export const DesktopSettingsView: React.FC = () => {
     }
   }
 
-  const externalIcon = (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="inline ml-1 text-[#b3b3b3]">
-      <path d="M1 2.75C1 1.784 1.784 1 2.75 1h5.5a.75.75 0 0 1 0 1.5h-5.5a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-5.5a.75.75 0 0 1 1.5 0v5.5A1.75 1.75 0 0 1 13.25 15H2.75A1.75 1.75 0 0 1 1 13.25V2.75z" />
-      <path d="M15 1.75a.75.75 0 0 0-.75-.75h-5.5a.75.75 0 0 0 0 1.5h3.69L7.22 7.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v3.69a.75.75 0 0 0 1.5 0v-5.5z" />
-    </svg>
-  );
+
 
   return (
     <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-4xl mx-auto pb-16">
@@ -151,20 +185,145 @@ export const DesktopSettingsView: React.FC = () => {
       </div>
 
       <div className="space-y-10">
-        {/* 1. CUENTA */}
-        {matchesSearch('cuenta métodos inicio sesión') && (
+        {/* 1. CUENTA Y SESIÓN INDEPENDIENTE */}
+        {matchesSearch('cuenta métodos inicio sesión spotify usuario invitado') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white">Cuenta</h2>
-            <div className="flex items-center justify-between py-2 border-b border-white/5">
-              <span className="text-sm font-medium text-white">Editar métodos de inicio de sesión</span>
-              <a
-                href="https://www.spotify.com/account/overview/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-4 py-1.5 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white transition-colors flex items-center gap-1 hover:scale-105"
-              >
-                Edición {externalIcon}
-              </a>
+            <h2 className="text-base font-bold text-white">Cuenta & Sesión de Spotify</h2>
+            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760] animate-pulse' : 'bg-[#e91429]'}`} />
+                    <span className="text-sm font-bold text-white">
+                      {isAuthenticated ? `Conectado como: ${user?.display_name || 'Usuario'}` : 'Modo Invitado / Exploración Libre'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[#a7a7a7] mt-1">
+                    {isAuthenticated
+                      ? 'Tu sesión es privada e independiente en este dispositivo.'
+                      : 'Puedes explorar y reproducir música libremente o conectar tu cuenta para ver tus playlists personales.'}
+                  </p>
+                </div>
+                <div>
+                  {isAuthenticated ? (
+                    <button
+                      onClick={logout}
+                      className="px-4 py-1.5 rounded-full border border-[#e91429] text-[#e91429] hover:bg-[#e91429]/10 text-xs font-bold transition-all hover:scale-105"
+                    >
+                      Cerrar sesión
+                    </button>
+                  ) : (
+                    <button
+                      onClick={login}
+                      className="px-5 py-2 rounded-full bg-white hover:bg-white/90 text-black text-xs font-bold transition-all hover:scale-105 shadow"
+                    >
+                      Iniciar sesión con Spotify
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* 1.5 MOTOR DE REPRODUCCIÓN & SESIÓN DE YOUTUBE */}
+        {matchesSearch('motor reproducción youtube cookies audio stream ip conexión') && (
+          <section className="space-y-4">
+            <h2 className="text-base font-bold text-white">Motor de Reproducción & YouTube (Por Dispositivo)</h2>
+            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider block mb-2">
+                  Modo de Reproducción de Audio
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <button
+                    onClick={() => {
+                      setEngineMode('hybrid');
+                      if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'hybrid');
+                    }}
+                    className={`p-3 rounded-lg text-left border transition-all ${
+                      engineMode === 'hybrid'
+                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                        : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">⚡ Modo Nativo Híbrido (Recomendado)</span>
+                      {engineMode === 'hybrid' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
+                    </div>
+                    <p className="text-[11px] text-[#a7a7a7]">
+                      Reproduce directamente en tu navegador usando la IP de tu dispositivo. 100% inmune a bloqueos de centro de datos.
+                    </p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setEngineMode('stream');
+                      if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'stream');
+                    }}
+                    className={`p-3 rounded-lg text-left border transition-all ${
+                      engineMode === 'stream'
+                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                        : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-bold text-white">☁️ Modo Servidor Proxy Stream</span>
+                      {engineMode === 'stream' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
+                    </div>
+                    <p className="text-[11px] text-[#a7a7a7]">
+                      Canaliza el audio a través del backend en la nube con cookies de sesión personalizadas.
+                    </p>
+                  </button>
+                </div>
+              </div>
+
+              {/* Sesión de YouTube Personal */}
+              <div className="pt-2 border-t border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+                    Cookies / Sesión de YouTube Personal (Opcional)
+                  </label>
+                  <span className="text-[11px] text-[#1ed760]">● Almacenado local en este dispositivo</span>
+                </div>
+                <p className="text-xs text-[#a7a7a7]">
+                  Si deseas conectar tu propia cuenta de YouTube de manera independiente en este dispositivo (sin depender de una cuenta compartida), pega aquí tus cookies (formato JSON o Netscape):
+                </p>
+                <textarea
+                  value={youtubeCookies}
+                  onChange={(e) => setYoutubeCookies(e.target.value)}
+                  placeholder="Pega aquí tus cookies de YouTube (JSON exportado o Netscape)..."
+                  rows={3}
+                  className="w-full bg-[#242424] text-xs text-white p-3 rounded-lg font-mono border border-white/10 focus:border-[#1ed760] focus:outline-none transition-colors"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleSaveCookies}
+                      className="px-4 py-2 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-104 transition-all"
+                    >
+                      Guardar configuración local
+                    </button>
+                    {savedCookiesSuccess && (
+                      <span className="text-xs text-[#1ed760] font-semibold">¡Ajustes guardados correctamente!</span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={handleTestAudio}
+                    disabled={testingAudio}
+                    className="px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all disabled:opacity-50"
+                  >
+                    {testingAudio ? 'Comprobando...' : 'Probar reproducción ahora'}
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div className={`p-3 rounded-lg text-xs mt-2 ${testResult.startsWith('Error') ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-[#1ed760]/10 text-[#1ed760] border border-[#1ed760]/20'}`}>
+                    {testResult}
+                  </div>
+                )}
+              </div>
             </div>
           </section>
         )}

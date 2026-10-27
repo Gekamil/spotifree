@@ -1,32 +1,25 @@
 import { useEffect } from 'react';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
-import { startLiveSessionPolling, stopLiveSessionPolling } from './services/sessionSync';
 
 function App() {
   const initializeSpotify = useSpotifyDataStore((s) => s.initialize);
 
   useEffect(() => {
     initializeSpotify();
-    startLiveSessionPolling(15000);
 
     const handleFocus = () => {
-      initializeSpotify();
-    };
-
-    const handleVisibility = () => {
-      if (!document.hidden) {
+      // Re-validate OAuth token on window focus if logged in
+      const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+      if (token && token !== 'session-bridge-active') {
         initializeSpotify();
       }
     };
 
     window.addEventListener('focus', handleFocus);
-    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      stopLiveSessionPolling();
       window.removeEventListener('focus', handleFocus);
-      document.removeEventListener('visibilitychange', handleVisibility);
     };
   }, [initializeSpotify]);
 

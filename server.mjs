@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
+import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl } from './scripts/audioService.mjs';
 
 const PORT = process.env.PORT || 10000;
 let currentPlayingTrackId = null;
@@ -140,10 +140,31 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
+      // 1. Fast direct resolution via YouTube Music Innertube search (<500ms, no datacenter block)
+      const videoId = await resolveYouTubeVideoId(q);
+      if (videoId) {
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({
+          success: true,
+          videoId,
+          title: title || q,
+          artist,
+          streamUrl: `/api/audio/stream?id=${encodeURIComponent(videoId)}`,
+        }));
+      }
+
+      // 2. Fallback to deep extractor
       const info = await resolveAudio(q);
       res.statusCode = 200;
       res.setHeader('Content-Type', 'application/json');
-      return res.end(JSON.stringify({ videoId: info.id, title: info.title, duration: info.duration }));
+      return res.end(JSON.stringify({
+        success: true,
+        videoId: info.id,
+        title: info.title,
+        duration: info.duration,
+        streamUrl: `/api/audio/stream?id=${encodeURIComponent(info.id)}`,
+      }));
     } catch (err) {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
@@ -313,6 +334,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === '/api/session-sync' || pathname === '/api/spotify/session') {
     res.setHeader('Content-Type', 'application/json');
 
+    const isDevBridge = reqUrl.searchParams.get('dev_bridge') === 'true';
     const cacheFile = path.resolve('src/data/liveExtractedFeed.json');
     const sessionFile = path.resolve('src/data/liveExtractedSession.json');
 
@@ -330,8 +352,8 @@ const server = http.createServer(async (req, res) => {
       try {
         const fallbackSession = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
         feed = {
-          userName: fallbackSession.user?.display_name || 'Jorgeperezvk',
-          userId: fallbackSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
+          userName: fallbackSession.user?.display_name || 'Spotifree',
+          userId: fallbackSession.user?.id || 'spotifree-public',
           userPlaylists: fallbackSession.playlists || [],
           quickAccess: fallbackSession.quickAccess || [],
           shelves: fallbackSession.shelves || [],
@@ -339,31 +361,20 @@ const server = http.createServer(async (req, res) => {
       } catch {}
     }
 
-    const connectedUserName = feed?.userName || 'Jorgeperezvk';
+    const connectedUserName = isDevBridge ? (feed?.userName || 'Jorgeperezvk') : null;
 
     const realPlaylists = (feed?.userPlaylists && feed.userPlaylists.length > 0)
       ? feed.userPlaylists.map((p) => ({
           id: p.id,
           name: p.name,
-          description: p.description || `De ${connectedUserName}`,
+          description: p.description || 'De Spotify',
           images: [{ url: toHDImage(p.images?.[0]?.url) }],
-          owner: { display_name: p.owner?.display_name || connectedUserName, id: 'user' },
+          owner: { display_name: p.owner?.display_name || 'Spotify', id: 'spotify' },
           tracks: { total: p.tracks?.total || 0 },
           color: p.id === 'liked-songs' ? '#5018F0' : '#303030',
           is_pinned: p.is_pinned ?? false,
         }))
-      : [
-          {
-            id: 'liked-songs',
-            name: 'Canciones que te gustan',
-            description: '23 canciones',
-            images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-            owner: { display_name: connectedUserName, id: 'user' },
-            tracks: { total: 23 },
-            color: '#5018F0',
-            is_pinned: true,
-          },
-        ];
+      : [];
 
     const quickAccessCards = (feed?.quickAccess && feed.quickAccess.length > 0)
       ? feed.quickAccess.map((q) => ({
@@ -398,21 +409,22 @@ const server = http.createServer(async (req, res) => {
       : [];
 
     const responseData = {
-      connected: true,
-      user: {
+      connected: isDevBridge,
+      user: isDevBridge ? {
         id: feed?.userId || 'e6yr34zzwnf1yybcw49po6nrw',
         display_name: connectedUserName,
-        avatarLetter: connectedUserName.charAt(0).toUpperCase(),
-      },
-      accessToken: 'session-bridge-active',
-      playlists: realPlaylists,
+        avatarLetter: connectedUserName ? connectedUserName.charAt(0).toUpperCase() : 'U',
+      } : null,
+      accessToken: isDevBridge ? 'session-bridge-active' : null,
+      playlists: isDevBridge ? realPlaylists : [],
+      publicPlaylists: realPlaylists,
       quickAccess: quickAccessCards,
       shelves: realShelves,
       recentlyPlayed: [],
-      featuredMessage: `Hecho para ${connectedUserName}`,
+      featuredMessage: isDevBridge ? `Hecho para ${connectedUserName}` : 'Novedades populares',
       playback: {
-        isPlaying: feed?.isPlaying || false,
-        item: feed?.nowPlaying || null,
+        isPlaying: false,
+        item: null,
       },
       queue: [],
     };

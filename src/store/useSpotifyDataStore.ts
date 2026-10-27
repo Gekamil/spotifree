@@ -345,112 +345,88 @@ const store = create<SpotifyDataState>((set, get) => ({
       return;
     }
 
-    // 2. Try Chrome session sync if available (skip if user explicitly logged out)
-    if (typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true') {
-      set({
-        isAuthenticated: false,
-        user: null,
-        playlists: [],
-        categories: [],
-        featuredPlaylists: [],
-        featuredMessage: null,
-        newReleases: [],
-        topTracks: [],
-        topArtists: [],
-        recentlyPlayed: [],
-        dynamicShelves: [],
-        quickAccessCards: [],
-        playlistDetailsCache: {},
-        isLoading: false,
-      });
-      return;
-    }
+    // 3. Local developer environment bridge (only on localhost/127.0.0.1)
+    const isLocal = typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
 
-    try {
-      const session = await fetchChromeSession();
-      if (session && session.connected && session.user) {
-        const userProfile: UserProfile = {
-          id: session.user.id || 'e6yr34zzwnf1yybcw49po6nrw',
-          display_name: session.user.display_name || 'Jorgeperezvk',
-          images: (session.user.images || []).map((img) => ({
-            url: img.url,
-            ...(img.height != null ? { height: img.height } : {}),
-            ...(img.width != null ? { width: img.width } : {}),
-          })),
-          email: 'jorgeperezvk@spotify.com',
-          followers: { total: 0 },
-        };
+    if (isLocal && window.localStorage.getItem('spotify_logged_out') !== 'true') {
+      try {
+        const session = await fetchChromeSession();
+        if (session && session.connected && session.user) {
+          const userProfile: UserProfile = {
+            id: session.user.id || 'dev-user',
+            display_name: session.user.display_name || 'Desarrollador',
+            images: (session.user.images || []).map((img) => ({
+              url: img.url,
+              ...(img.height != null ? { height: img.height } : {}),
+              ...(img.width != null ? { width: img.width } : {}),
+            })),
+            email: 'dev@spotify.com',
+            followers: { total: 0 },
+          };
 
-        const livePlaylists = session.playlists || [];
-        const msg =
-          session.featuredMessage ||
-          (new Date().getDay() === 5 ? '¡Hoy es viernes de novedades!' : 'Novedades populares');
-        const liveShelves = (session.shelves && session.shelves.length > 0)
-          ? session.shelves
-          : buildDynamicShelves(
-              userProfile,
-              livePlaylists,
-              msg,
-              (session as any).featuredPlaylists || [],
-              (session as any).topTracks || [],
-              (session as any).topArtists || [],
-              session.recentlyPlayed || []
-            );
+          const livePlaylists = session.playlists || [];
+          const msg = session.featuredMessage || 'Novedades populares';
+          const liveShelves = (session.shelves && session.shelves.length > 0)
+            ? session.shelves
+            : buildDynamicShelves(userProfile, livePlaylists, msg);
 
-        const liveQuick = (session.quickAccess && session.quickAccess.length > 0)
-          ? session.quickAccess.map((q: any) => ({
+          set({
+            isAuthenticated: true,
+            user: userProfile,
+            playlists: livePlaylists,
+            quickAccessCards: (session.quickAccess || []).map((q: any) => ({
               id: q.id,
               name: q.name,
               image: q.image,
               color: q.color || '#303030',
-            }))
-          : [
-              { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
-              { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#5a483a' },
-              { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2e4a52' },
-              { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
-            ];
+            })),
+            featuredMessage: msg,
+            dynamicShelves: liveShelves,
+            isLoading: false,
+          });
+          return;
+        }
+      } catch {}
+    }
+
+    // 4. Default Guest Experience (Multi-user independent per device)
+    try {
+      const res = await fetch('/api/spotify/session');
+      if (res.ok) {
+        const publicData = await res.json();
+        const publicPlaylists = publicData.publicPlaylists || publicData.playlists || [];
+        const publicShelves = (publicData.shelves && publicData.shelves.length > 0)
+          ? publicData.shelves
+          : buildDynamicShelves(null, publicPlaylists, 'Novedades populares');
 
         set({
-          isAuthenticated: true,
-          user: userProfile,
-          playlists: livePlaylists,
-          quickAccessCards: liveQuick,
-          featuredMessage: msg,
-          dynamicShelves: liveShelves,
-          topTracks: (session as any).topTracks || [],
-          topArtists: (session as any).topArtists || [],
-          recentlyPlayed: session.recentlyPlayed || [],
+          isAuthenticated: false,
+          user: null,
+          playlists: publicPlaylists,
+          quickAccessCards: (publicData.quickAccess || []).map((q: any) => ({
+            id: q.id,
+            name: q.name,
+            image: q.image,
+            color: q.color || '#303030',
+          })),
+          dynamicShelves: publicShelves,
+          featuredMessage: 'Novedades populares',
           isLoading: false,
         });
         return;
       }
-    } catch {
-      // Chrome session unavailable
+    } catch (e) {
+      console.warn('[DataStore] Failed to load public catalog:', e);
     }
 
-    // 3. Check for existing OAuth token
-    const token = window.localStorage.getItem('spotify_access_token');
-    if (token) {
-      await get().refreshData();
-    } else {
-      // Unauthenticated clean state
-      set({
-        isAuthenticated: false,
-        user: null,
-        playlists: [],
-        categories: [],
-        featuredPlaylists: [],
-        featuredMessage: null,
-        newReleases: [],
-        topTracks: [],
-        topArtists: [],
-        recentlyPlayed: [],
-        dynamicShelves: [],
-        playlistDetailsCache: {},
-        isLoading: false,
-      });
-    }
+    set({
+      isAuthenticated: false,
+      user: null,
+      playlists: [],
+      dynamicShelves: [],
+      isLoading: false,
+    });
   },
 
   login: () => {
@@ -463,25 +439,12 @@ const store = create<SpotifyDataState>((set, get) => ({
   logout: () => {
     logoutSpotify();
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('spotify_logged_out', 'true');
+      window.localStorage.removeItem('spotify_access_token');
+      window.localStorage.removeItem('spotify_refresh_token');
+      window.localStorage.removeItem('spotify_expires_at');
       window.localStorage.removeItem('spotify_session_synced');
     }
-    set({
-      isAuthenticated: false,
-      user: null,
-      playlists: [],
-      categories: [],
-      featuredPlaylists: [],
-      featuredMessage: null,
-      newReleases: [],
-      topTracks: [],
-      topArtists: [],
-      recentlyPlayed: [],
-      dynamicShelves: [],
-      quickAccessCards: [],
-      playlistDetailsCache: {},
-      isLoading: false,
-    });
+    get().initialize();
   },
 
   refreshData: async () => {

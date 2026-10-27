@@ -26,4 +26,7 @@ dist-ssr
 .vercel
 *.png
 .agents
+cookies.txt
+yt_cookies.txt
+*.cookie
 

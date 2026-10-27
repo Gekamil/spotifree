@@ -32,10 +32,12 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
   const { isAuthenticated, user, login } = useSpotifyDataStore();
 
   useEffect(() => {
-    // Attempt live session synchronization from Chrome on port 9222
-    syncChromeSession().catch((err) => {
-      console.warn('[DesktopTopNav] Auto session sync notice:', err);
-    });
+    // Attempt local Chrome dev session synchronization only when developing locally
+    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+      syncChromeSession().catch((err) => {
+        console.warn('[DesktopTopNav] Auto session sync notice:', err);
+      });
+    }
   }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
