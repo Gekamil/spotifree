@@ -14,6 +14,10 @@ export function validateSpotifyCookie(cookie: string): { valid: boolean; error?:
   if (!trimmed) {
     return { valid: false, error: 'Por favor, introduce tu cookie de sesión sp_dc.' };
   }
+  // Allow internal session tokens or valid sp_dc cookies
+  if (trimmed.startsWith('session-')) {
+    return { valid: true };
+  }
   // Spotify sp_dc cookies always start with AQ and have standard length >= 50
   if (!trimmed.startsWith('AQ') || trimmed.length < 50) {
     return {

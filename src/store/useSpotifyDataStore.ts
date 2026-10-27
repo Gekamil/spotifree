@@ -533,7 +533,7 @@ const store = create<SpotifyDataState>((set, get) => ({
             session = JSON.parse(savedSessionRaw);
           } catch {}
         }
-        if (!session || !session.user || !session.playlists || session.playlists.length === 0) {
+        if ((!session || !session.user) && userCookie.startsWith('AQ')) {
           try {
             session = await extractSpotifySessionFromCookie(userCookie);
             if (typeof window !== 'undefined') {
@@ -551,11 +551,18 @@ const store = create<SpotifyDataState>((set, get) => ({
           }
         }
 
-        if (session && session.user && session.playlists) {
-          const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
+        if (session && session.user) {
+          const effectivePlaylists = session.playlists && session.playlists.length > 0
+            ? session.playlists
+            : DEFAULT_PUBLIC_PLAYLISTS;
+          const combinedPlaylists = [...effectivePlaylists, ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
           );
+
+          const shelves = session.shelves && session.shelves.length > 0
+            ? session.shelves
+            : buildDynamicShelves(session.user, uniquePlaylists, 'Hecho para ti');
 
           const sanitizedQuickAccess = (session.quickAccess || []).map((q: any) => ({
             ...q,
@@ -566,7 +573,7 @@ const store = create<SpotifyDataState>((set, get) => ({
             isAuthenticated: true,
             user: session.user,
             playlists: uniquePlaylists,
-            dynamicShelves: session.shelves || [],
+            dynamicShelves: shelves,
             quickAccessCards: sanitizedQuickAccess.length > 0 ? sanitizedQuickAccess : get().quickAccessCards,
             isLoading: false,
           });

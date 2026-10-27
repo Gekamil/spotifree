@@ -73,7 +73,7 @@ export const LoginModal: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [verificationCode, setVerificationCode] = useState('');
   const [cookieInput, setCookieInput] = useState('');
-  const [verificationTab, setVerificationTab] = useState<'cookie' | 'code'>('cookie');
+  const [verificationTab, setVerificationTab] = useState<'cookie' | 'code'>('code');
   const [rememberMe, setRememberMe] = useState(true);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -139,20 +139,18 @@ export const LoginModal: React.FC = () => {
       }
 
       if (data.needs2FA || data.needsCookie || !res.ok) {
-        // Spotify asks for 2FA verification or sp_dc session cookie
+        // Spotify asks for 2FA verification code
         setStep('verification');
-        setVerificationTab('cookie');
-        setErrorMessage(
-          data.error ||
-            'Spotify requiere verificación de seguridad o tu cookie sp_dc para conectar sin bloqueos.'
-        );
+        setVerificationTab('code');
+        setErrorMessage(null);
         return;
       }
 
       throw new Error(data.error || 'No se pudo iniciar sesión con Spotify.');
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Error al conectar con Spotify.');
+    } catch (_err: any) {
+      setErrorMessage(null);
       setStep('verification');
+      setVerificationTab('code');
     } finally {
       setIsLoading(false);
     }
@@ -239,6 +237,15 @@ export const LoginModal: React.FC = () => {
       if (data.accessToken) {
         window.localStorage.setItem('spotify_access_token', data.accessToken);
       }
+      if (data.session || data.user) {
+        const fullSession = data.session || {
+          user: data.user,
+          playlists: data.playlists || [],
+          shelves: data.shelves || [],
+          accessToken: data.accessToken || '',
+        };
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify(fullSession));
+      }
     }
 
     if (rememberMe) {
@@ -254,12 +261,25 @@ export const LoginModal: React.FC = () => {
     }
 
     setSuccessMessage(`¡Conectado como ${data.user?.display_name || 'Usuario'} con éxito!`);
-    await initialize();
+
+    if (data.user) {
+      useSpotifyDataStore.setState({
+        isAuthenticated: true,
+        user: data.user,
+        ...(data.playlists && data.playlists.length > 0 ? { playlists: data.playlists } : {}),
+        ...(data.shelves && data.shelves.length > 0 ? { dynamicShelves: data.shelves } : {}),
+      });
+    }
+
+    try {
+      await initialize();
+    } catch {}
+
     setSavedAccounts(getSavedAccounts());
 
     setTimeout(() => {
       closeLoginModal();
-    }, 900);
+    }, 700);
   };
 
   const handleSwitchAccount = async (acc: SavedAccount) => {
@@ -295,7 +315,7 @@ export const LoginModal: React.FC = () => {
           <h1 className="text-3xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
             {step === 'identifier' && '¡Hola de nuevo!'}
             {step === 'password' && 'Introduce tu contraseña'}
-            {step === 'verification' && 'Verificación de sesión'}
+            {step === 'verification' && (verificationTab === 'code' ? 'Comprueba tu correo' : 'Conecta con cookie sp_dc')}
           </h1>
 
           {step === 'password' && (
@@ -309,6 +329,12 @@ export const LoginModal: React.FC = () => {
                 Cambiar
               </button>
             </div>
+          )}
+
+          {step === 'verification' && verificationTab === 'code' && (
+            <p className="text-xs text-[#b3b3b3] mt-2 max-w-sm">
+              Hemos enviado un código de 6 cifras a <strong className="text-white">{emailInput || 'tu correo'}</strong>. Introdúcelo a continuación para entrar.
+            </p>
           )}
         </div>
 
@@ -547,17 +573,6 @@ export const LoginModal: React.FC = () => {
             <div className="flex rounded-lg bg-white/5 p-1 mb-3">
               <button
                 type="button"
-                onClick={() => setVerificationTab('cookie')}
-                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer text-center ${
-                  verificationTab === 'cookie'
-                    ? 'bg-[#1ed760] text-black shadow'
-                    : 'text-[#b3b3b3] hover:text-white'
-                }`}
-              >
-                Cookie sp_dc (Directo)
-              </button>
-              <button
-                type="button"
                 onClick={() => setVerificationTab('code')}
                 className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer text-center ${
                   verificationTab === 'code'
@@ -567,7 +582,60 @@ export const LoginModal: React.FC = () => {
               >
                 Código por correo (6 cifras)
               </button>
+              <button
+                type="button"
+                onClick={() => setVerificationTab('cookie')}
+                className={`flex-1 py-1.5 text-xs font-bold rounded-md transition-all cursor-pointer text-center ${
+                  verificationTab === 'cookie'
+                    ? 'bg-[#1ed760] text-black shadow'
+                    : 'text-[#b3b3b3] hover:text-white'
+                }`}
+              >
+                Cookie sp_dc
+              </button>
             </div>
+
+            {/* TAB: Código de 6 cifras */}
+            {verificationTab === 'code' && (
+              <form onSubmit={handleVerify2FACode} className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-white block">
+                    Código de 6 cifras
+                  </label>
+                  <input
+                    type="text"
+                    maxLength={8}
+                    autoFocus
+                    value={verificationCode}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\s+/g, '');
+                      setVerificationCode(val);
+                    }}
+                    placeholder="123456"
+                    className="w-full h-12 px-4 rounded-[4px] bg-[#121212] border border-[#727272] focus:border-[#1ed760] text-white text-center font-mono text-xl tracking-[0.3em] outline-none transition-colors placeholder-[#727272]"
+                  />
+                </div>
+
+                <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
+                  Revisa la bandeja de entrada o spam del correo asociado a tu cuenta de Spotify.
+                </p>
+
+                <button
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-[1.02] active:scale-[0.98] text-black font-bold text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer mt-2"
+                >
+                  {isLoading ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Verificando...</span>
+                    </>
+                  ) : (
+                    <span>Verificar código y entrar</span>
+                  )}
+                </button>
+              </form>
+            )}
 
             {/* TAB: Cookie sp_dc */}
             {verificationTab === 'cookie' && (
@@ -611,45 +679,6 @@ export const LoginModal: React.FC = () => {
                   )}
                 </button>
               </div>
-            )}
-
-            {/* TAB: Código de 6 cifras */}
-            {verificationTab === 'code' && (
-              <form onSubmit={handleVerify2FACode} className="space-y-3">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-white block">
-                    Código de 6 cifras enviado por correo
-                  </label>
-                  <input
-                    type="text"
-                    maxLength={8}
-                    autoFocus
-                    value={verificationCode}
-                    onChange={(e) => setVerificationCode(e.target.value)}
-                    placeholder="123456"
-                    className="w-full h-12 px-4 rounded-[4px] bg-[#121212] border border-[#727272] focus:border-[#1ed760] text-white text-center font-mono text-xl tracking-[0.3em] outline-none transition-colors placeholder-[#727272]"
-                  />
-                </div>
-
-                <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-                  Revisa la bandeja de entrada o spam del correo asociado a tu cuenta de Spotify.
-                </p>
-
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="w-full h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-[1.02] active:scale-[0.98] text-black font-bold text-sm tracking-wide transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer mt-2"
-                >
-                  {isLoading ? (
-                    <>
-                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                      <span>Verificando...</span>
-                    </>
-                  ) : (
-                    <span>Verificar código y entrar</span>
-                  )}
-                </button>
-              </form>
             )}
 
             {/* Back button */}

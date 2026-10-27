@@ -68,19 +68,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     user,
     playlists,
     dynamicShelves,
-    quickAccessCards: storeQuickAccess,
     featuredMessage,
-    authWarning,
   } = useSpotifyDataStore();
-
-  const currentShortcuts = storeQuickAccess && storeQuickAccess.length > 0
-    ? storeQuickAccess
-    : [
-        { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#1a4b4c' },
-        { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#8a654e' },
-        { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#9c3426' },
-        { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2d4b68' },
-      ];
 
   const currentShelves = useMemo(() => {
     if (activeTab === 'siguiendo') {
@@ -397,73 +386,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
       {/* Main Home Content with Smooth Transition */}
       <div key={activeTab} className="px-6 space-y-8 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        {/* Informative notice for Spotify Developer Premium restriction */}
-        {authWarning && (
-          <div className="bg-[#181818] border border-[#f59e0b]/40 rounded-lg p-4 flex items-start gap-3 shadow-lg">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" className="text-[#f59e0b] shrink-0 mt-0.5">
-              <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
-              <path d="M7.25 4.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z" />
-            </svg>
-            <div className="text-sm space-y-1">
-              <p className="font-bold text-white font-['SpotifyMixUITitle']">Sesión de Spotify conectada</p>
-              <p className="text-[#b3b3b3] text-xs leading-relaxed">
-                Spotify Web API requiere una suscripción Premium en la cuenta de desarrollador para descargar listas privadas (Spotify Cloud: <em>"Active premium subscription required for the owner of the app"</em>).
-                Puedes buscar y reproducir cualquier canción gratis con el reproductor, o vincular tu propio Client ID de Spotify en <strong>Configuración</strong>.
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Quick Access Shortcuts Grid */}
-        {currentShortcuts && currentShortcuts.length > 0 && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
-            {currentShortcuts.map((item) => {
-              const isPlayingThis =
-                isPlaying &&
-                ((currentTrack as any)?.playlistId === item.id || currentTrack?.id === item.id);
-
-              return (
-                <div
-                  key={item.id}
-                  onClick={() => onSelectPlaylistById(item.id)}
-                  onMouseEnter={() => handleCardHover(item.color, item.name, item.id)}
-                  className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
-                >
-                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-
-                  <span className="text-[14px] font-bold text-white px-3 truncate flex-1 font-['SpotifyMixUI']">
-                    {item.name}
-                  </span>
-
-                  <button
-                    onClick={(e) => handleQuickPlay(e, item)}
-                    className={`w-9 h-9 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-104 active:scale-95 shadow-lg flex items-center justify-center transition-all duration-200 ${
-                      isPlayingThis
-                        ? 'opacity-100 scale-100'
-                        : 'opacity-0 group-hover:opacity-100 group-hover:scale-100 scale-90'
-                    }`}
-                    title={`Reproducir ${item.name}`}
-                  >
-                    {isPlayingThis ? (
-                      <PauseNativeIcon size={16} className="text-black" />
-                    ) : (
-                      <PlayNativeIcon size={16} className="text-black ml-0.5" />
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Dynamic Section Shelves for Current Active Tab */}
+        {/* Dynamic Section Shelves for Current Active Tab - Authentic Spotify Feed */}
         {currentShelves.map((shelf) => (
           <DesktopShelfCarousel
             key={shelf.id}
@@ -474,6 +397,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             onShowAll={shelf.hasSeeAll ? () => setExpandedShelf(shelf) : undefined}
             onCardClick={(card) => {
               onSelectPlaylistById(card.id);
+            }}
+            onCardHover={(card) => {
+              handleCardHover(undefined, card.title, card.id);
             }}
             onPlayClick={(card) => {
               handleQuickPlay(undefined, {
