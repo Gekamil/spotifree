@@ -8,12 +8,8 @@ import {
 import {
   fetchCurrentUser,
   fetchUserPlaylists,
-  fetchBrowseCategories,
-  fetchFeaturedPlaylists,
-  fetchNewReleases,
   fetchTopTracks,
 } from '../services/spotifyApi';
-import { fetchChromeSession } from '../services/sessionSync';
 
 export interface DynamicShelfCard {
   id: string;
@@ -429,6 +425,8 @@ const store = create<SpotifyDataState>((set, get) => ({
         window.history.replaceState({}, document.title, '/');
         await get().refreshData();
         return;
+      } else {
+        window.history.replaceState({}, document.title, '/');
       }
     }
 
@@ -439,86 +437,12 @@ const store = create<SpotifyDataState>((set, get) => ({
       return;
     }
 
-    // 3. Local developer environment bridge (only on localhost/127.0.0.1)
-    const isLocal = typeof window !== 'undefined' &&
-      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
-
-    if (isLocal && window.localStorage.getItem('spotify_logged_out') !== 'true') {
-      try {
-        const session = await fetchChromeSession();
-        if (session && session.connected && session.user) {
-          const userProfile: UserProfile = {
-            id: session.user.id || 'dev-user',
-            display_name: session.user.display_name || 'Desarrollador',
-            images: (session.user.images || []).map((img) => ({
-              url: img.url,
-              ...(img.height != null ? { height: img.height } : {}),
-              ...(img.width != null ? { width: img.width } : {}),
-            })),
-            email: 'dev@spotify.com',
-            followers: { total: 0 },
-          };
-
-          const livePlaylists = session.playlists || [];
-          const msg = session.featuredMessage || 'Novedades populares';
-          const liveShelves = (session.shelves && session.shelves.length > 0)
-            ? session.shelves
-            : buildDynamicShelves(userProfile, livePlaylists, msg);
-
-          set({
-            isAuthenticated: true,
-            user: userProfile,
-            playlists: livePlaylists,
-            quickAccessCards: (session.quickAccess || []).map((q: any) => ({
-              id: q.id,
-              name: q.name,
-              image: q.image,
-              color: q.color || '#303030',
-            })),
-            featuredMessage: msg,
-            dynamicShelves: liveShelves,
-            isLoading: false,
-          });
-          return;
-        }
-      } catch {}
-    }
-
-    // 4. Default Guest Experience (Multi-user independent per device)
-    try {
-      const res = await fetch('/api/spotify/session');
-      if (res.ok) {
-        const publicData = await res.json();
-        const publicPlaylists = publicData.publicPlaylists || publicData.playlists || [];
-        const publicShelves = (publicData.shelves && publicData.shelves.length > 0)
-          ? publicData.shelves
-          : buildDynamicShelves(null, publicPlaylists, 'Novedades populares');
-
-        set({
-          isAuthenticated: false,
-          user: null,
-          playlists: publicPlaylists,
-          quickAccessCards: (publicData.quickAccess || []).map((q: any) => ({
-            id: q.id,
-            name: q.name,
-            image: q.image,
-            color: q.color || '#303030',
-          })),
-          dynamicShelves: publicShelves,
-          featuredMessage: 'Novedades populares',
-          isLoading: false,
-        });
-        return;
-      }
-    } catch (e) {
-      console.warn('[DataStore] Failed to load public catalog:', e);
-    }
-
+    // 3. Unauthenticated guest: Show gray shimmer view
     set({
       isAuthenticated: false,
       user: null,
-      playlists: DEFAULT_PUBLIC_PLAYLISTS,
-      dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+      playlists: [],
+      dynamicShelves: [],
       isLoading: false,
     });
   },
@@ -537,8 +461,15 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotify_refresh_token');
       window.localStorage.removeItem('spotify_expires_at');
       window.localStorage.removeItem('spotify_session_synced');
+      window.localStorage.setItem('spotify_logged_out', 'true');
     }
-    get().initialize();
+    set({
+      isAuthenticated: false,
+      user: null,
+      playlists: [],
+      dynamicShelves: [],
+      isLoading: false,
+    });
   },
 
   refreshData: async () => {
@@ -547,8 +478,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       set({
         isAuthenticated: false,
         user: null,
-        playlists: DEFAULT_PUBLIC_PLAYLISTS,
-        dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+        playlists: [],
+        dynamicShelves: [],
         isLoading: false,
       });
       return;
@@ -556,43 +487,53 @@ const store = create<SpotifyDataState>((set, get) => ({
 
     set({ isLoading: true });
     try {
-      const [user, playlists, categories, featured, releases, top] = await Promise.all([
+      const [user, playlists, top] = await Promise.all([
         fetchCurrentUser(),
         fetchUserPlaylists(),
-        fetchBrowseCategories(),
-        fetchFeaturedPlaylists(),
-        fetchNewReleases(),
         fetchTopTracks(),
       ]);
 
-      const defaultMsg =
-        new Date().getDay() === 5 ? '¡Hoy es viernes de novedades!' : 'Novedades populares';
-      const livePlaylists = playlists && playlists.length > 0 ? playlists : DEFAULT_PUBLIC_PLAYLISTS;
-      const shelves = buildDynamicShelves(user, livePlaylists, defaultMsg, featured || [], top || []);
+      if (!user) {
+        console.warn('Spotify session token is invalid or expired');
+        logoutSpotify();
+        set({
+          isAuthenticated: false,
+          user: null,
+          playlists: [],
+          dynamicShelves: [],
+          isLoading: false,
+        });
+        return;
+      }
 
-      const userProfile: UserProfile = user || {
-        id: 'spotify-user',
-        display_name: 'Usuario Spotify',
-        images: [],
-        email: '',
-        followers: { total: 0 },
-      };
+      const userPlaylists = playlists || [];
+      const shelves = buildDynamicShelves(
+        user,
+        userPlaylists,
+        `Hecho para ${user.display_name}`,
+        [],
+        top || []
+      );
 
       set({
         isAuthenticated: true,
-        user: userProfile,
-        playlists: livePlaylists,
-        categories: categories || [],
-        featuredPlaylists: featured || [],
-        featuredMessage: defaultMsg,
-        newReleases: releases || [],
+        user,
+        playlists: userPlaylists,
         topTracks: top || [],
-        dynamicShelves: shelves && shelves.length > 0 ? shelves : DEFAULT_PUBLIC_SHELVES,
+        dynamicShelves: shelves,
+        featuredMessage: `Hecho para ${user.display_name}`,
         isLoading: false,
       });
     } catch (err) {
       console.error('Error refreshing Spotify data:', err);
-      set({ isLoading: false });
+      logoutSpotify();
+      set({
+        isAuthenticated: false,
+        user: null,
+        playlists: [],
+        dynamicShelves: [],
+        isLoading: false,
+      });
     }
   },
 }));

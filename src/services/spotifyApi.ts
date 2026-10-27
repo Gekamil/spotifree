@@ -3,12 +3,21 @@ import { getValidAccessToken } from './spotifyAuth';
 
 export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
   try {
-    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`);
-    if (!res.ok) {
-      console.warn(`Failed to fetch playlist ${id}: HTTP ${res.status}`);
-      return null;
+    const validToken = await getValidAccessToken();
+    if (validToken) {
+      const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`, {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+      if (res.ok) {
+        return await res.json();
+      }
     }
-    return await res.json();
+
+    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`);
+    if (res.ok) {
+      return await res.json();
+    }
+    return null;
   } catch (err) {
     console.error(`Error fetching playlist details for ${id}:`, err);
     return null;
@@ -17,55 +26,45 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
 
 export async function fetchCurrentUser(): Promise<UserProfile | null> {
   const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
-  if (token && token !== 'session-bridge-active') {
-    try {
-      const validToken = await getValidAccessToken();
-      const res = await fetch('https://api.spotify.com/v1/me', {
-        headers: { Authorization: `Bearer ${validToken}` },
-      });
-      if (res.ok) {
-        return await res.json();
-      }
-    } catch (err) {
-      console.warn('Error fetching /v1/me from Spotify API, falling back to session:', err);
-    }
-  }
+  if (!token) return null;
 
   try {
-    const res = await fetch('/api/spotify/session');
-    if (!res.ok) return null;
-    const data = await res.json();
-    return data.user || null;
+    const validToken = await getValidAccessToken();
+    if (!validToken) return null;
+
+    const res = await fetch('https://api.spotify.com/v1/me', {
+      headers: { Authorization: `Bearer ${validToken}` },
+    });
+    if (res.ok) {
+      return await res.json();
+    }
+    console.warn(`Spotify /v1/me returned ${res.status}`);
+    return null;
   } catch (err) {
-    console.error('Error fetching current user:', err);
+    console.error('Error fetching /v1/me from Spotify API:', err);
     return null;
   }
 }
 
 export async function fetchUserPlaylists(): Promise<Playlist[]> {
   const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
-  if (token && token !== 'session-bridge-active') {
-    try {
-      const validToken = await getValidAccessToken();
-      const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-        headers: { Authorization: `Bearer ${validToken}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return data.items || [];
-      }
-    } catch (err) {
-      console.warn('Error fetching /v1/me/playlists from Spotify API, falling back:', err);
-    }
-  }
+  if (!token) return [];
 
   try {
-    const res = await fetch('/api/spotify/session');
-    if (!res.ok) return [];
-    const data = await res.json();
-    return data.playlists || [];
+    const validToken = await getValidAccessToken();
+    if (!validToken) return [];
+
+    const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
+      headers: { Authorization: `Bearer ${validToken}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return (data.items || []).filter(Boolean);
+    }
+    console.warn(`Spotify /v1/me/playlists returned ${res.status}`);
+    return [];
   } catch (err) {
-    console.error('Error fetching user playlists:', err);
+    console.error('Error fetching user playlists from Spotify API:', err);
     return [];
   }
 }
