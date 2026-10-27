@@ -54,7 +54,7 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            host.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-1;overflow:hidden;';
+            host.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:320px;height:240px;opacity:1;pointer-events:none;z-index:-1;';
             document.body.appendChild(host);
           }
 
@@ -71,8 +71,8 @@ class AudioEngine {
           }
 
           this.ytPlayer = new (window as any).YT.Player('spotifree-yt-player', {
-            height: '100',
-            width: '100',
+            height: '240',
+            width: '320',
             playerVars: {
               autoplay: 1,
               controls: 0,
@@ -81,7 +81,9 @@ class AudioEngine {
               modestbranding: 1,
               rel: 0,
               playsinline: 1,
-              origin: window.location.origin,
+              enablejsapi: 1,
+              origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+              widget_referrer: typeof window !== 'undefined' ? window.location.origin : undefined,
             },
             events: {
               onReady: () => {
@@ -97,8 +99,10 @@ class AudioEngine {
               },
               onError: (event: any) => {
                 console.warn('[AudioEngine] YouTube player error:', event.data);
-                // On error 101 or 150 (not embeddable), fallback to HTML5 stream or alternate search
-                if (this.currentTrackQuery) {
+                // On error 101 or 150 (not embeddable), try alternate query (e.g. + audio)
+                if (this.currentTrackQuery && (event.data === 101 || event.data === 150)) {
+                  this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentTrackId);
+                } else if (this.currentTrackQuery) {
                   this.fallbackToStream(this.currentTrackQuery);
                 }
               },
@@ -320,6 +324,27 @@ class AudioEngine {
 
     // Fallback to HTML5 audio stream
     return this.fallbackToStream(query, startSeconds);
+  }
+
+  private async resolveAndPlayAlternate(originalQuery: string, _trackId: string | null) {
+    try {
+      const altQuery = `${originalQuery} audio`;
+      const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(altQuery)}`;
+      const res = await fetch(resolveUrl);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+          this.activeEngine = 'youtube';
+          this.ytPlayer.loadVideoById({ videoId: data.videoId, startSeconds: 0 });
+          this.ytPlayer.playVideo();
+          usePlayerStore.setState({ isPlaying: true });
+          this.startProgressTicker();
+          return;
+        }
+      }
+    } catch {}
+
+    this.fallbackToStream(originalQuery, 0);
   }
 
   private fallbackToStream(query: string, startSeconds = 0) {

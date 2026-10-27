@@ -133,6 +133,7 @@ export function buildDynamicShelves(
 ): DynamicShelf[] {
   if (!user && playlists.length === 0) return DEFAULT_PUBLIC_SHELVES;
 
+  const effectivePlaylists = playlists && playlists.length > 0 ? playlists : DEFAULT_PUBLIC_PLAYLISTS;
   const displayName = user?.display_name || 'ti';
   const editorialTitle =
     featuredMessage ||
@@ -142,7 +143,7 @@ export function buildDynamicShelves(
   const editorialPool =
     featuredPlaylists.length > 0
       ? featuredPlaylists
-      : playlists.filter(
+      : effectivePlaylists.filter(
           (p) =>
             p.id.includes('novedades') ||
             p.id.includes('radar') ||
@@ -151,7 +152,7 @@ export function buildDynamicShelves(
         );
 
   const editorialCards: DynamicShelfCard[] = (
-    editorialPool.length > 0 ? editorialPool : playlists.slice(0, 6)
+    editorialPool.length > 0 ? editorialPool : effectivePlaylists.slice(0, 6)
   ).map((item, idx) => ({
     id: item.id || `feat-${idx}`,
     title: item.name,
@@ -162,16 +163,16 @@ export function buildDynamicShelves(
   }));
 
   // Shelf 2: Made for user (Priority 2) - Derived dynamically from live playlists
-  const dailyMixes = playlists.filter((p) =>
+  const dailyMixes = effectivePlaylists.filter((p) =>
     /mix diario|daily mix|discover|radar/i.test(p.name)
   );
-  const userPlaylists = playlists.filter(
+  const userPlaylists = effectivePlaylists.filter(
     (p) =>
       p.owner?.display_name === displayName ||
       p.owner?.id === user?.id ||
       /mix|favorit|canciones/i.test(p.name)
   );
-  const madeForPool = dailyMixes.length >= 2 ? dailyMixes : userPlaylists.length > 0 ? userPlaylists : playlists;
+  const madeForPool = dailyMixes.length >= 2 ? dailyMixes : userPlaylists.length > 0 ? userPlaylists : effectivePlaylists;
 
   const badgeColors = ['#00F0FF', '#FFA42B', '#FF6437', '#1ED760', '#B02897', '#509BF5'];
   const madeForCards: DynamicShelfCard[] = madeForPool.slice(0, 6).map((p, idx) => {
@@ -188,7 +189,7 @@ export function buildDynamicShelves(
 
   // Shelf 3: Recientes (Priority 3) - Derived from recentlyPlayed or playlists order
   const recentCards: DynamicShelfCard[] = (
-    recentlyPlayed.length > 0 ? recentlyPlayed : playlists
+    recentlyPlayed.length > 0 ? recentlyPlayed : effectivePlaylists
   ).slice(0, 8).map((p, idx) => ({
     id: p.id || `recent-${idx}`,
     title: p.name,
@@ -199,7 +200,7 @@ export function buildDynamicShelves(
   // Shelf 4: Más como {topArtist} (Priority 4) - Dynamically derived artist affinity
   const artistFromTop = topArtists[0]?.name;
   const artistFromTracks = topTracks[0]?.artists?.[0]?.name;
-  const artistFromPlaylists = playlists
+  const artistFromPlaylists = effectivePlaylists
     .find((p) => /mix de|radio de|radio/i.test(p.name) || p.name.includes('&'))
     ?.name.replace(/^(mix de|radio de|radio)\s+/i, '')
     .split('&')[0]
@@ -207,7 +208,7 @@ export function buildDynamicShelves(
 
   const topArtistName = artistFromTop || artistFromTracks || artistFromPlaylists || 'Romeo Santos';
 
-  const artistPool = playlists.filter(
+  const artistPool = effectivePlaylists.filter(
     (p) =>
       p.name.toLowerCase().includes(topArtistName.toLowerCase()) ||
       p.description?.toLowerCase().includes(topArtistName.toLowerCase()) ||
@@ -215,7 +216,7 @@ export function buildDynamicShelves(
   );
 
   const artistCards: DynamicShelfCard[] = (
-    artistPool.length >= 2 ? artistPool : playlists.slice(2, 6)
+    artistPool.length >= 2 ? artistPool : effectivePlaylists.slice(2, 6)
   ).map((p, idx) => ({
     id: p.id || `artist-${idx}`,
     title: p.name,
@@ -224,10 +225,10 @@ export function buildDynamicShelves(
   }));
 
   // Shelf 5: Mixes (Priority 5) - Dynamically derived genre mixes
-  const genreMixPool = playlists.filter((p) =>
+  const genreMixPool = effectivePlaylists.filter((p) =>
     /mix|urbano|pop|latino|bachata|flamenco|reggaeton|rock|relajante/i.test(p.name)
   );
-  const mixesPool = genreMixPool.length >= 3 ? genreMixPool : playlists.slice(4, 10);
+  const mixesPool = genreMixPool.length >= 3 ? genreMixPool : effectivePlaylists.slice(4, 10);
 
   const mixesCards: DynamicShelfCard[] = mixesPool.map((p, idx) => ({
     id: p.id || `mix-${idx}`,

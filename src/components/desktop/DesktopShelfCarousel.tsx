@@ -119,6 +119,10 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
   onCardClick,
   onPlayClick,
 }) => {
+  if (!items || items.length === 0) {
+    return null;
+  }
+
   const { currentTrack, isPlaying } = usePlayerStore();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
