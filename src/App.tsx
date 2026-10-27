@@ -1,9 +1,12 @@
 import { useEffect } from 'react';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
+import { MobileLayout } from './components/mobile/MobileLayout';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
+import { useIsMobile } from './utils/useIsMobile';
 
 function App() {
   const initializeSpotify = useSpotifyDataStore((s) => s.initialize);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     initializeSpotify();
@@ -24,7 +27,7 @@ function App() {
     };
   }, [initializeSpotify]);
 
-  return <DesktopLayout />;
+  return isMobile ? <MobileLayout /> : <DesktopLayout />;
 }
 
 export default App;

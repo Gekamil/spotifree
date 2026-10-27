@@ -10,6 +10,33 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
+import realLikedSongsData from '../../data/realLikedSongs.json';
+
+const SPOTIFY_VIBRANT_PALETTE = [
+  '#5018F0', // Spotify Purple
+  '#1DB954', // Spotify Green
+  '#E91429', // Crimson Red
+  '#2D46B9', // Sapphire Blue
+  '#B02897', // Magenta
+  '#E13300', // Sunset Orange
+  '#148A08', // Emerald Forest
+  '#E8115B', // Hot Pink
+  '#BA5D07', // Warm Amber
+  '#1E3264', // Deep Navy
+  '#8D67AB', // Lavender
+  '#7358FF', // Electric Violet
+];
+
+function getDeterministicColor(id: string = '', name: string = ''): string {
+  const str = `${id}:${name}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const idx = Math.abs(hash) % SPOTIFY_VIBRANT_PALETTE.length;
+  return SPOTIFY_VIBRANT_PALETTE[idx];
+}
 
 const TRACK_COVER_CACHE = new Map<string, string>();
 
@@ -95,6 +122,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const isLikedInitially =
+    playlist.id === 'liked-songs' ||
+    playlist.id === 'tracks' ||
+    playlist.id.includes('collection:tracks') ||
+    playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+
   const initialTracks = (playlist.tracks?.items || []).map((t) => {
     if (TRACK_COVER_CACHE.has(t.id)) {
       return {
@@ -109,12 +142,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
     return t;
   });
-  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
+
+  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(
+    initialTracks.length > 0 ? initialTracks : (isLikedInitially ? (realLikedSongsData as Track[]) : [])
+  );
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
 
   useEffect(() => {
     let cancelled = false;
-    const mapped = (playlist.tracks?.items || []).map((t) => {
+    let mapped = (playlist.tracks?.items || []).map((t) => {
       if (TRACK_COVER_CACHE.has(t.id)) {
         return {
           ...t,
@@ -128,6 +164,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       }
       return t;
     });
+
+    if (mapped.length === 0 && isLikedInitially) {
+      mapped = realLikedSongsData as Track[];
+    }
+
     setDynamicTracks(mapped);
     setDynamicPlaylist(playlist);
 
@@ -417,20 +458,26 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       ? `${totalHours} h ${remainingMinutes} min`
       : `${totalMinutes} min`;
 
-  // Determine dominant theme color
+  // Determine dominant theme color with always-on vibrant atmospheric glow
   const themeColor =
-    dynamicPlaylist.color ||
-    (isLikedPlaylist ? '#5018F0' : '#282828');
+    dynamicPlaylist.color && dynamicPlaylist.color !== '#282828' && dynamicPlaylist.color !== '#121212'
+      ? dynamicPlaylist.color
+      : (isLikedPlaylist ? '#5018F0' : getDeterministicColor(dynamicPlaylist.id, dynamicPlaylist.name));
 
   return (
     <div className="select-none min-h-full pb-20 relative bg-[#121212]">
-      {/* Dynamic Reactive Hero Header with smooth gradient */}
+      {/* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */}
       <div
-        className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-500"
+        className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-500 overflow-hidden"
         style={{
           background: `linear-gradient(180deg, ${themeColor} 0%, ${themeColor}cc 65%, #121212 100%)`,
         }}
       >
+        {/* Ambient atmospheric aura */}
+        <div
+          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[110px] opacity-60 z-0"
+          style={{ backgroundColor: themeColor }}
+        />
         {/* Cover Art 232x232 */}
         <div
           onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}

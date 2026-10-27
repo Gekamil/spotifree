@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
+import { useStatsStore } from './useStatsStore';
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -67,6 +68,9 @@ const store = create<PlayerState>((set, get) => ({
   playTrack: (track: Track, newQueue?: Track[]) => {
     const state = get();
     const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
+    try {
+      useStatsStore.getState().recordTrackPlayed(track);
+    } catch {}
     set({
       currentTrack: track,
       isPlaying: true,
@@ -152,6 +156,13 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   setProgress: (ms: number) => {
+    const prev = get().progressMs;
+    const current = get().currentTrack;
+    if (current && Math.abs(ms - prev) >= 800 && Math.abs(ms - prev) <= 1500 && get().isPlaying) {
+      try {
+        useStatsStore.getState().recordPlaybackSecond(current);
+      } catch {}
+    }
     set({ progressMs: ms });
   },
 

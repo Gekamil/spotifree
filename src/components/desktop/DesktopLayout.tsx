@@ -8,6 +8,8 @@ import { DesktopPlaylistView } from './DesktopPlaylistView';
 import { DesktopRightSidebar } from './DesktopRightSidebar';
 import { ContextMenu } from './ContextMenu';
 import { EditPlaylistModal } from './EditPlaylistModal';
+import { WrappedModal } from './WrappedModal';
+import { LoginModal } from './LoginModal';
 import { DesktopSettingsView } from './DesktopSettingsView';
 import { DesktopGuideView } from './DesktopGuideView';
 import { DesktopProfileView } from './DesktopProfileView';
@@ -250,6 +252,12 @@ export const DesktopLayout: React.FC = () => {
 
       {/* Edit Playlist Modal (1:1 Spotify Fidelity) */}
       <EditPlaylistModal />
+
+      {/* Spotify Wrapped 2026 Interactive Stories Modal */}
+      <WrappedModal />
+
+      {/* Spotify Multi-Account Login & Cookie Extractor Modal */}
+      <LoginModal />
     </div>
   );
 };

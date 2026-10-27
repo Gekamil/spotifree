@@ -1,4 +1,21 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { toHDImage, getAccessTokenFromCookie } from './extract-session.js';
+
+let cachedLikedSongs = null;
+function getFallbackLikedSongs() {
+  if (cachedLikedSongs && cachedLikedSongs.length > 0) return cachedLikedSongs;
+  try {
+    const filePath = path.join(process.cwd(), 'src', 'data', 'realLikedSongs.json');
+    if (fs.existsSync(filePath)) {
+      cachedLikedSongs = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      return cachedLikedSongs;
+    }
+  } catch (e) {
+    console.warn('[Playlist API] Could not read realLikedSongs.json:', e.message);
+  }
+  return [];
+}
 
 function parseEmbedHtml(html, cleanId) {
   const scriptMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
@@ -137,15 +154,19 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       }
     }
 
+    const fallbackSongs = getFallbackLikedSongs();
     return {
       id: 'collection-tracks',
       name: 'Canciones que te gustan',
-      description: 'Tus canciones favoritas guardadas',
+      description: `${fallbackSongs.length || 23} canciones guardadas`,
       type: 'playlist',
       images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
       owner: { display_name: 'Tú', id: 'me' },
       color: '#5018F0',
-      tracks: { total: 0, items: [] },
+      tracks: {
+        total: fallbackSongs.length || 23,
+        items: fallbackSongs,
+      },
     };
   }
 

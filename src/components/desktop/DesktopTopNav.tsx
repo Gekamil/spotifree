@@ -27,6 +27,7 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
     searchQuery,
     setSearchQuery,
     setActiveMainTab,
+    openLoginModal,
   } = useUIStore();
 
   const { isAuthenticated, user } = useSpotifyDataStore();
@@ -152,9 +153,9 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
               Ayuda
             </button>
             <button
-              onClick={() => setActiveMainTab('settings')}
+              onClick={() => openLoginModal()}
               className="bg-white hover:scale-104 active:scale-98 text-black text-xs font-bold px-4 py-2 rounded-full transition-transform shrink-0 shadow-sm flex items-center justify-center cursor-pointer"
-              title="Configuración de cuenta"
+              title="Conectar con Spotify"
             >
               <span>Conectar cuenta</span>
             </button>

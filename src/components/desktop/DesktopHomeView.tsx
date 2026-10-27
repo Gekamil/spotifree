@@ -13,6 +13,13 @@ interface DesktopHomeViewProps {
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
   const [hoveredColor, setHoveredColor] = useState<string | null>(null);
+  const [expandedShelf, setExpandedShelf] = useState<{
+    id: string;
+    prefix?: string;
+    title: string;
+    subtitle?: string;
+    cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
+  } | null>(null);
 
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
   const {
@@ -178,6 +185,96 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     } as any);
   };
 
+  if (expandedShelf) {
+    return (
+      <div className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200">
+        {/* Back navigation button */}
+        <div className="flex items-center gap-4">
+          <button
+            onClick={() => setExpandedShelf(null)}
+            className="w-10 h-10 rounded-full bg-black/60 hover:bg-black text-[#b3b3b3] hover:text-white flex items-center justify-center transition-all hover:scale-105 active:scale-95 cursor-pointer shadow"
+            title="Volver a Inicio"
+          >
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
+            </svg>
+          </button>
+          <div>
+            {expandedShelf.prefix && (
+              <span className="text-xs uppercase font-bold text-[#b3b3b3] tracking-wider block">
+                {expandedShelf.prefix}
+              </span>
+            )}
+            <h1 className="text-3xl lg:text-4xl font-black text-white font-['SpotifyMixUITitle']">
+              {expandedShelf.title}
+            </h1>
+            {expandedShelf.subtitle && (
+              <p className="text-sm text-[#b3b3b3] mt-1">{expandedShelf.subtitle}</p>
+            )}
+          </div>
+        </div>
+
+        {/* Full Responsive Grid */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pt-2">
+          {expandedShelf.cards.map((card) => {
+            const isPlayingThis = isPlaying && currentTrack?.id === card.id;
+            return (
+              <div
+                key={card.id}
+                onClick={() => onSelectPlaylistById(card.id)}
+                className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-2xl relative"
+              >
+                <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
+                  {card.image ? (
+                    <img
+                      src={card.image}
+                      alt={card.title}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-[#535353]">
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                      </svg>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleQuickPlay(undefined, {
+                        id: card.id,
+                        name: card.title,
+                        image: card.image,
+                      });
+                    }}
+                    className={`absolute bottom-2 right-2 w-11 h-11 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 active:scale-95 shadow-xl flex items-center justify-center transition-all duration-200 ${
+                      isPlayingThis ? 'opacity-100 scale-100' : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
+                    }`}
+                    title={isPlayingThis ? 'Pausar' : `Reproducir ${card.title}`}
+                  >
+                    {isPlayingThis ? (
+                      <PauseNativeIcon size={18} className="text-black" />
+                    ) : (
+                      <PlayNativeIcon size={18} className="text-black ml-0.5" />
+                    )}
+                  </button>
+                </div>
+
+                <span className="font-bold text-white text-sm truncate font-['SpotifyMixUI']">
+                  {card.title}
+                </span>
+                <span className="text-xs text-[#b3b3b3] line-clamp-2 mt-1 leading-snug">
+                  {card.subtitle}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="select-none min-h-full pb-20 relative bg-[#121212]"
@@ -324,7 +421,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             title={shelf.title}
             subtitle={shelf.subtitle}
             items={shelf.cards}
-            onShowAll={shelf.hasSeeAll ? () => {} : undefined}
+            onShowAll={shelf.hasSeeAll ? () => setExpandedShelf(shelf) : undefined}
             onCardClick={(card) => {
               onSelectPlaylistById(card.id);
             }}

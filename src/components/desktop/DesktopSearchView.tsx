@@ -314,6 +314,13 @@ const officialCategories = [
   },
 ];
 
+interface FullSearchResults {
+  tracks: any[];
+  artists: any[];
+  albums: any[];
+  playlists: any[];
+}
+
 interface DesktopSearchViewProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
 }
@@ -322,7 +329,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   const { searchQuery } = useUIStore();
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
   const [selectedCategory, setSelectedCategory] = useState<typeof officialCategories[0] | null>(null);
-  const [liveResults, setLiveResults] = useState<any[]>([]);
+  const [searchResults, setSearchResults] = useState<FullSearchResults>({
+    tracks: [],
+    artists: [],
+    albums: [],
+    playlists: [],
+  });
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -334,7 +346,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
 
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setLiveResults([]);
+      setSearchResults({ tracks: [], artists: [], albums: [], playlists: [] });
       setIsSearching(false);
       setHasSearched(false);
       return;
@@ -346,12 +358,17 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       try {
         const data = await searchSpotify(searchQuery);
         if (active) {
-          setLiveResults(data?.tracks?.items || []);
+          setSearchResults({
+            tracks: data?.tracks?.items || [],
+            artists: data?.artists?.items || [],
+            albums: data?.albums?.items || [],
+            playlists: data?.playlists?.items || [],
+          });
           setHasSearched(true);
         }
       } catch {
         if (active) {
-          setLiveResults([]);
+          setSearchResults({ tracks: [], artists: [], albums: [], playlists: [] });
           setHasSearched(true);
         }
       } finally {
@@ -369,7 +386,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      playTrack(track, liveResults);
+      playTrack(track, searchResults.tracks);
     }
   };
 
@@ -448,92 +465,252 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
           </>
         )
       ) : (
-        <div className="space-y-6">
-          <h2 className="text-2xl font-bold text-white">Resultados para "{searchQuery}"</h2>
+        <div className="space-y-10">
+          <h2 className="text-2xl font-bold text-white font-['SpotifyMixUITitle']">
+            Resultados para «{searchQuery}»
+          </h2>
 
-          {liveResults.length > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Top Result */}
-              <div
-                onClick={() => handleTrackClick(liveResults[0])}
-                className="lg:col-span-5 bg-[#181818] hover:bg-[#282828] p-5 rounded-lg cursor-pointer transition-colors group relative flex flex-col justify-between"
-              >
-                <div>
-                  <img
-                    src={liveResults[0].album?.images[0]?.url}
-                    alt={liveResults[0].name}
-                    className="w-24 h-24 rounded-lg object-cover shadow-xl mb-4"
-                  />
-                  <h3 className={`text-3xl font-black leading-tight font-['SpotifyMixUITitle'] ${
-                    currentTrack?.id === liveResults[0].id ? 'text-[#1ed760]' : 'text-white'
-                  }`}>
-                    {liveResults[0].name}
-                  </h3>
-                  <p className="text-sm text-[#b3b3b3] mt-1">
-                    Canción • {liveResults[0].artists?.map((a: any) => a.name).join(', ')}
-                  </p>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleTrackClick(liveResults[0]);
-                  }}
-                  className={`absolute bottom-5 right-5 w-12 h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-lg flex items-center justify-center transition-all ${
-                    isPlaying && currentTrack?.id === liveResults[0].id
-                      ? 'opacity-100 scale-100'
-                      : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
-                  }`}
-                  title={isPlaying && currentTrack?.id === liveResults[0].id ? "Pausar" : "Reproducir"}
+          {searchResults.tracks.length > 0 ? (
+            <div className="space-y-10">
+              {/* Top Result + Canciones */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                {/* Top Result */}
+                <div
+                  onClick={() => handleTrackClick(searchResults.tracks[0])}
+                  className="lg:col-span-5 bg-[#181818] hover:bg-[#282828] p-5 rounded-lg cursor-pointer transition-colors group relative flex flex-col justify-between"
                 >
-                  {isPlaying && currentTrack?.id === liveResults[0].id ? (
-                    <PauseNativeIcon size={20} className="text-black" />
-                  ) : (
-                    <PlayNativeIcon size={20} className="text-black ml-0.5" />
-                  )}
-                </button>
+                  <div>
+                    <img
+                      src={searchResults.tracks[0].album?.images[0]?.url}
+                      alt={searchResults.tracks[0].name}
+                      className="w-24 h-24 rounded-lg object-cover shadow-xl mb-4"
+                    />
+                    <h3 className={`text-3xl font-black leading-tight font-['SpotifyMixUITitle'] ${
+                      currentTrack?.id === searchResults.tracks[0].id ? 'text-[#1ed760]' : 'text-white'
+                    }`}>
+                      {searchResults.tracks[0].name}
+                    </h3>
+                    <p className="text-sm text-[#b3b3b3] mt-1">
+                      Canción • {searchResults.tracks[0].artists?.map((a: any) => a.name).join(', ')}
+                    </p>
+                  </div>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTrackClick(searchResults.tracks[0]);
+                    }}
+                    className={`absolute bottom-5 right-5 w-12 h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-lg flex items-center justify-center transition-all ${
+                      isPlaying && currentTrack?.id === searchResults.tracks[0].id
+                        ? 'opacity-100 scale-100'
+                        : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
+                    }`}
+                    title={isPlaying && currentTrack?.id === searchResults.tracks[0].id ? "Pausar" : "Reproducir"}
+                  >
+                    {isPlaying && currentTrack?.id === searchResults.tracks[0].id ? (
+                      <PauseNativeIcon size={20} className="text-black" />
+                    ) : (
+                      <PlayNativeIcon size={20} className="text-black ml-0.5" />
+                    )}
+                  </button>
+                </div>
+
+                {/* Matching Songs List */}
+                <div className="lg:col-span-7 space-y-1">
+                  <h3 className="text-lg font-bold text-white mb-2 font-['SpotifyMixUITitle']">
+                    Canciones
+                  </h3>
+                  {searchResults.tracks.slice(0, 5).map((track: any) => {
+                    const isThisPlaying = isPlaying && currentTrack?.id === track.id;
+                    const isThisSelected = currentTrack?.id === track.id;
+
+                    return (
+                      <div
+                        key={track.id}
+                        onClick={() => handleTrackClick(track)}
+                        className={`group flex items-center justify-between p-2 rounded hover:bg-white/10 cursor-pointer transition-colors ${
+                          isThisSelected ? 'bg-white/10' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <img
+                            src={track.album?.images[0]?.url}
+                            alt={track.name}
+                            className="w-10 h-10 rounded object-cover shadow"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span className={`font-medium truncate ${
+                              isThisPlaying ? 'text-[#1ed760]' : 'text-white group-hover:text-white'
+                            }`}>
+                              {track.name}
+                            </span>
+                            <span className="text-xs text-[#b3b3b3] truncate">
+                              {track.artists?.map((a: any) => a.name).join(', ')}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="text-xs text-[#b3b3b3] font-mono pr-4">
+                          {formatDuration(track.duration_ms)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
-              {/* Matching Songs List */}
-              <div className="lg:col-span-7 space-y-1">
-                <h3 className="text-lg font-bold text-white mb-2 font-['SpotifyMixUITitle']">
-                  Canciones
-                </h3>
-                {liveResults.slice(0, 5).map((track: any) => {
-                  const isThisPlaying = isPlaying && currentTrack?.id === track.id;
-                  const isThisSelected = currentTrack?.id === track.id;
-
-                  return (
-                    <div
-                      key={track.id}
-                      onClick={() => handleTrackClick(track)}
-                      className={`group flex items-center justify-between p-2 rounded hover:bg-white/10 cursor-pointer transition-colors ${
-                        isThisSelected ? 'bg-white/10' : ''
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <img
-                          src={track.album?.images[0]?.url}
-                          alt={track.name}
-                          className="w-10 h-10 rounded object-cover shadow"
-                        />
-                        <div className="flex flex-col min-w-0">
-                          <span className={`font-medium truncate ${
-                            isThisPlaying ? 'text-[#1ed760]' : 'text-white group-hover:text-white'
-                          }`}>
-                            {track.name}
+              {/* 2. Artistas Row (Circular avatars) */}
+              {searchResults.artists.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-4 font-['SpotifyMixUITitle']">
+                    Artistas
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {searchResults.artists.slice(0, 6).map((artist: any) => {
+                      const avatar = artist.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
+                      return (
+                        <div
+                          key={artist.id}
+                          onClick={() => {
+                            if (onSelectPlaylistById) {
+                              onSelectPlaylistById(artist.id, artist.name, avatar);
+                            }
+                          }}
+                          className="p-4 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col items-center text-center shadow-md hover:shadow-xl relative"
+                        >
+                          <div className="w-28 h-28 rounded-full overflow-hidden mb-3 relative shadow-lg bg-[#242424]">
+                            <img
+                              src={avatar}
+                              alt={artist.name}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onSelectPlaylistById) {
+                                  onSelectPlaylistById(artist.id, artist.name, avatar);
+                                }
+                              }}
+                              className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                              title={`Ver ${artist.name}`}
+                            >
+                              <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                            </button>
+                          </div>
+                          <span className="font-bold text-white text-sm truncate w-full">
+                            {artist.name}
                           </span>
-                          <span className="text-xs text-[#b3b3b3] truncate">
-                            {track.artists?.map((a: any) => a.name).join(', ')}
+                          <span className="text-xs text-[#b3b3b3] mt-1">Artista</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 3. Álbumes Row */}
+              {searchResults.albums.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-4 font-['SpotifyMixUITitle']">
+                    Álbumes
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {searchResults.albums.slice(0, 6).map((album: any) => {
+                      const cover = album.images?.[0]?.url;
+                      return (
+                        <div
+                          key={album.id}
+                          onClick={() => {
+                            if (onSelectPlaylistById) {
+                              onSelectPlaylistById(album.id, album.name, cover);
+                            }
+                          }}
+                          className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-xl relative"
+                        >
+                          <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
+                            {cover && (
+                              <img
+                                src={cover}
+                                alt={album.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onSelectPlaylistById) {
+                                  onSelectPlaylistById(album.id, album.name, cover);
+                                }
+                              }}
+                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                              title={`Reproducir ${album.name}`}
+                            >
+                              <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                            </button>
+                          </div>
+                          <span className="font-bold text-white text-sm truncate">
+                            {album.name}
+                          </span>
+                          <span className="text-xs text-[#b3b3b3] truncate mt-1">
+                            {album.release_date || 'Álbum'} • {album.artists?.[0]?.name || 'Artista'}
                           </span>
                         </div>
-                      </div>
-                      <span className="text-xs text-[#b3b3b3] font-mono pr-4">
-                        {formatDuration(track.duration_ms)}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 4. Playlists Row */}
+              {searchResults.playlists.length > 0 && (
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-4 font-['SpotifyMixUITitle']">
+                    Playlists
+                  </h3>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                    {searchResults.playlists.slice(0, 6).map((pl: any) => {
+                      const cover = pl.images?.[0]?.url;
+                      return (
+                        <div
+                          key={pl.id}
+                          onClick={() => {
+                            if (onSelectPlaylistById) {
+                              onSelectPlaylistById(pl.id, pl.name, cover);
+                            }
+                          }}
+                          className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-xl relative"
+                        >
+                          <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
+                            {cover && (
+                              <img
+                                src={cover}
+                                alt={pl.name}
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onSelectPlaylistById) {
+                                  onSelectPlaylistById(pl.id, pl.name, cover);
+                                }
+                              }}
+                              className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                              title={`Reproducir ${pl.name}`}
+                            >
+                              <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                            </button>
+                          </div>
+                          <span className="font-bold text-white text-sm truncate">
+                            {pl.name}
+                          </span>
+                          <span className="text-xs text-[#b3b3b3] truncate mt-1">
+                            De {pl.owner?.display_name || 'Spotify'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : isSearching ? (
             <p className="text-[#b3b3b3] text-sm">Buscando en Spotify en tiempo real...</p>
