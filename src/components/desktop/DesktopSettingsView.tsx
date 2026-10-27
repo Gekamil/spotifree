@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
 
@@ -45,7 +46,24 @@ const SpotifyToggle: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { user, isAuthenticated, login, logout } = useSpotifyDataStore();
+  const { setActiveMainTab } = useUIStore();
+  const { user, isAuthenticated, logout } = useSpotifyDataStore();
+
+  const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('user_spotify_cookie') || ''
+      : '';
+  });
+  const [savedSpotifyCookieSuccess, setSavedSpotifyCookieSuccess] = useState(false);
+
+  const handleSaveSpotifyCookie = async () => {
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('user_spotify_cookie', spotifyCookie.trim());
+      setSavedSpotifyCookieSuccess(true);
+      setTimeout(() => setSavedSpotifyCookieSuccess(false), 3000);
+      await useSpotifyDataStore.getState().initialize();
+    }
+  };
 
   const [engineMode, setEngineMode] = useState<string>(() => {
     return typeof window !== 'undefined'
@@ -201,44 +219,84 @@ export const DesktopSettingsView: React.FC = () => {
 
       <div className="space-y-10">
         {/* 1. CUENTA Y SESIÓN INDEPENDIENTE */}
-        {matchesSearch('cuenta métodos inicio sesión spotify usuario invitado') && (
+        {matchesSearch('cuenta métodos inicio sesión spotify usuario invitado cookies sp_dc') && (
           <section className="space-y-3">
             <h2 className="text-base font-bold text-white">Cuenta & Sesión de Spotify</h2>
-            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-3">
+            <div className="bg-[#181818] p-4 rounded-xl border border-white/5 space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760] animate-pulse' : 'bg-[#e91429]'}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760] animate-pulse' : 'bg-[#a7a7a7]'}`} />
                     <span className="text-sm font-bold text-white">
-                      {isAuthenticated ? `Conectado como: ${user?.display_name || 'Usuario'}` : 'Modo Invitado / Exploración Libre'}
+                      {isAuthenticated ? `Conectado como: ${user?.display_name || 'Usuario'}` : 'Sesión local (No conectado)'}
                     </span>
                   </div>
                   <p className="text-xs text-[#a7a7a7] mt-1">
                     {isAuthenticated
                       ? 'Tu sesión es privada e independiente en este dispositivo.'
-                      : 'Puedes explorar y reproducir música libremente o conectar tu cuenta para ver tus playlists personales.'}
+                      : 'Introduce tu cookie de sesión para sincronizar tus listas de reproducción sin restricciones.'}
                   </p>
                 </div>
                 <div>
                   {isAuthenticated ? (
                     <button
                       onClick={logout}
-                      className="px-4 py-1.5 rounded-full border border-[#e91429] text-[#e91429] hover:bg-[#e91429]/10 text-xs font-bold transition-all hover:scale-105"
+                      className="px-4 py-1.5 rounded-full border border-white/20 text-[#b3b3b3] hover:text-white hover:border-white text-xs font-bold transition-all"
                     >
-                      Cerrar sesión
+                      Desconectar
                     </button>
                   ) : (
                     <button
-                      onClick={login}
-                      className="px-5 py-2 rounded-full bg-white hover:bg-white/90 text-black text-xs font-bold transition-all hover:scale-105 shadow"
+                      onClick={() => setActiveMainTab('guide')}
+                      className="px-4 py-1.5 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow cursor-pointer"
                     >
-                      Iniciar sesión con Spotify
+                      Guía paso a paso
                     </button>
                   )}
                 </div>
               </div>
 
-              {/* Custom Spotify Client ID field */}
+              {/* Cookie de sesión sp_dc */}
+              <div className="pt-3 border-t border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white">
+                    Cookie de sesión de Spotify (sp_dc)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {savedSpotifyCookieSuccess && (
+                      <span className="text-[11px] font-bold text-[#1ed760] animate-in fade-in">
+                        Guardada en este navegador
+                      </span>
+                    )}
+                    <button
+                      onClick={() => setActiveMainTab('guide')}
+                      className="text-[11px] text-[#b3b3b3] hover:text-white underline cursor-pointer"
+                    >
+                      ¿Cómo obtener tu cookie?
+                    </button>
+                  </div>
+                </div>
+                <p className="text-[11px] text-[#a7a7a7] leading-relaxed">
+                  Permite sincronizar tu biblioteca de Spotify de forma directa sin limitaciones de cuenta de desarrollador. Se almacena localmente en tu navegador.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="password"
+                    value={spotifyCookie}
+                    onChange={(e) => setSpotifyCookie(e.target.value)}
+                    placeholder="Pega aquí tu cookie sp_dc (AQD...)"
+                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-white transition-colors font-mono"
+                  />
+                  <button
+                    onClick={handleSaveSpotifyCookie}
+                    className="px-4 py-1.5 bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer shadow"
+                  >
+                    Guardar cookie
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom Spotify Client ID field (Opcional) */}
               <div className="pt-3 border-t border-white/5 space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-bold text-[#b3b3b3]">
@@ -246,12 +304,12 @@ export const DesktopSettingsView: React.FC = () => {
                   </label>
                   {savedClientIdSuccess && (
                     <span className="text-[11px] font-bold text-[#1ed760] animate-in fade-in">
-                      ¡Guardado correctamente!
+                      Guardado correctamente
                     </span>
                   )}
                 </div>
                 <p className="text-[11px] text-[#a7a7a7]">
-                  Si dispones de una cuenta de Spotify con Premium, puedes crear una App gratuita en <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noreferrer" className="text-white underline hover:text-[#1ed760]">developer.spotify.com</a> (añadiendo el redirect URI <code>https://spotifreeweb.vercel.app/callback</code>) y pegar tu Client ID aquí. Cada dispositivo guarda el suyo en su propio navegador.
+                  Si dispones de una cuenta de desarrollador de Spotify, puedes vincular tu propio Client ID.
                 </p>
                 <div className="flex gap-2">
                   <input
@@ -259,11 +317,11 @@ export const DesktopSettingsView: React.FC = () => {
                     value={customClientId}
                     onChange={(e) => setCustomClientId(e.target.value)}
                     placeholder="ea3003771e264c4690a2ac289afd22a4 (por defecto)"
-                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-[#1ed760]"
+                    className="flex-1 bg-[#121212] border border-white/10 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-white"
                   />
                   <button
                     onClick={handleSaveClientId}
-                    className="px-4 py-1.5 bg-white hover:bg-white/90 text-black text-xs font-bold rounded transition-all shrink-0 cursor-pointer"
+                    className="px-4 py-1.5 bg-[#282828] hover:bg-[#333] text-white text-xs font-bold rounded transition-all shrink-0 cursor-pointer"
                   >
                     Guardar
                   </button>
@@ -288,14 +346,14 @@ export const DesktopSettingsView: React.FC = () => {
                       setEngineMode('hybrid');
                       if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'hybrid');
                     }}
-                    className={`p-3 rounded-lg text-left border transition-all ${
+                    className={`p-3 rounded-lg text-left border transition-all cursor-pointer ${
                       engineMode === 'hybrid'
                         ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
                         : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">⚡ Modo Nativo Híbrido (Recomendado)</span>
+                      <span className="text-xs font-bold text-white">Modo Nativo Híbrido (Recomendado)</span>
                       {engineMode === 'hybrid' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
                     </div>
                     <p className="text-[11px] text-[#a7a7a7]">
@@ -308,14 +366,14 @@ export const DesktopSettingsView: React.FC = () => {
                       setEngineMode('stream');
                       if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_audio_engine', 'stream');
                     }}
-                    className={`p-3 rounded-lg text-left border transition-all ${
+                    className={`p-3 rounded-lg text-left border transition-all cursor-pointer ${
                       engineMode === 'stream'
                         ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
                         : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <span className="text-xs font-bold text-white">☁️ Modo Servidor Proxy Stream</span>
+                      <span className="text-xs font-bold text-white">Modo Servidor Proxy Stream</span>
                       {engineMode === 'stream' && <span className="w-2 h-2 rounded-full bg-[#1ed760]" />}
                     </div>
                     <p className="text-[11px] text-[#a7a7a7]">

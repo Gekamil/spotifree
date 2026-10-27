@@ -29,7 +29,7 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
     setActiveMainTab,
   } = useUIStore();
 
-  const { isAuthenticated, user, login } = useSpotifyDataStore();
+  const { isAuthenticated, user } = useSpotifyDataStore();
 
   useEffect(() => {
     // Attempt local Chrome dev session synchronization only when developing locally
@@ -142,15 +142,23 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
       {/* Right: Descubrir Premium / Conectar, Instalar app, Bell, Friends, Avatar J */}
       <div className="flex items-center justify-end gap-2 shrink-0 relative">
-        {/* Iniciar sesión con Spotify / Descubrir Premium */}
+        {/* Estado no autenticado: opciones limpias estilo Spotify */}
         {!isAuthenticated ? (
-          <button
-            onClick={login}
-            className="bg-white hover:scale-104 active:scale-98 text-black text-sm font-bold px-6 py-2.5 rounded-full transition-transform shrink-0 shadow-sm flex items-center justify-center cursor-pointer"
-            title="Iniciar sesión con Spotify"
-          >
-            <span>Iniciar sesión con Spotify</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setActiveMainTab('guide')}
+              className="text-[#b3b3b3] hover:text-white text-sm font-bold px-3 py-1.5 transition-colors cursor-pointer"
+            >
+              Ayuda
+            </button>
+            <button
+              onClick={() => setActiveMainTab('settings')}
+              className="bg-white hover:scale-104 active:scale-98 text-black text-xs font-bold px-4 py-2 rounded-full transition-transform shrink-0 shadow-sm flex items-center justify-center cursor-pointer"
+              title="Configuración de cuenta"
+            >
+              <span>Conectar cuenta</span>
+            </button>
+          </div>
         ) : (
           <button
             className="bg-white hover:scale-104 active:scale-98 text-black text-xs font-bold px-3.5 py-1.5 rounded-full transition-transform shrink-0 shadow-sm"

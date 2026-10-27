@@ -9,6 +9,7 @@ import { DesktopRightSidebar } from './DesktopRightSidebar';
 import { ContextMenu } from './ContextMenu';
 import { EditPlaylistModal } from './EditPlaylistModal';
 import { DesktopSettingsView } from './DesktopSettingsView';
+import { DesktopGuideView } from './DesktopGuideView';
 import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -197,6 +198,8 @@ export const DesktopLayout: React.FC = () => {
             )}
 
             {activeMainTab === 'settings' && <DesktopSettingsView />}
+
+            {activeMainTab === 'guide' && <DesktopGuideView />}
           </div>
 
           {/* Expand Right Sidebar Toggle Handle ("<") matching image 4 */}

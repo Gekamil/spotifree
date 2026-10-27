@@ -163,7 +163,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     dynamicShelves,
     quickAccessCards: storeQuickAccess,
     featuredMessage,
-    login,
     authWarning,
   } = useSpotifyDataStore();
 
@@ -214,7 +213,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   const activeBg = hoveredColor || currentShortcuts[0]?.color || '#5038a0';
 
   if (!isAuthenticated) {
-    return <DesktopShimmerFeed onLogin={login} />;
+    return <DesktopShimmerFeed />;
   }
 
   const handleQuickPlay = async (
@@ -370,7 +369,10 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         {/* Informative notice for Spotify Developer Premium restriction */}
         {authWarning && (
           <div className="bg-[#181818] border border-[#f59e0b]/40 rounded-lg p-4 flex items-start gap-3 shadow-lg">
-            <span className="text-[#f59e0b] text-xl shrink-0">ℹ️</span>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" className="text-[#f59e0b] shrink-0 mt-0.5">
+              <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
+              <path d="M7.25 4.75a.75.75 0 1 1 1.5 0 .75.75 0 0 1-1.5 0zM7.25 7h1.5v4.5h-1.5V7z" />
+            </svg>
             <div className="text-sm space-y-1">
               <p className="font-bold text-white font-['SpotifyMixUITitle']">Sesión de Spotify conectada</p>
               <p className="text-[#b3b3b3] text-xs leading-relaxed">

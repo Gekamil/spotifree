@@ -1,31 +1,36 @@
 import React from 'react';
+import { useUIStore } from '../../store/useUIStore';
 
-interface DesktopShimmerFeedProps {
-  onLogin?: () => void;
-}
+export const DesktopShimmerFeed: React.FC = () => {
+  const { setActiveMainTab } = useUIStore();
 
-export const DesktopShimmerFeed: React.FC<DesktopShimmerFeedProps> = ({ onLogin }) => {
   return (
-    <div className="select-none min-h-full pb-20 relative bg-[#121212] px-6 pt-4 space-y-8">
-      {/* Prominent Call-to-Action to connect Spotify */}
-      <div className="bg-gradient-to-r from-[#242424] to-[#181818] p-6 rounded-lg border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xl">
+    <div className="select-none min-h-full pb-20 relative bg-[#121212] px-6 pt-4 space-y-8 font-['SpotifyMixUI',-apple-system,BlinkMacSystemFont,system-ui,sans-serif]">
+      {/* Prominent Call-to-Action with Spotify native styling */}
+      <div className="bg-gradient-to-r from-[#242424] to-[#181818] p-6 rounded-lg border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-xl">
         <div className="space-y-1">
           <h2 className="text-xl font-bold text-white tracking-tight font-['SpotifyMixUITitle']">
-            Conecta tu cuenta de Spotify
+            Conecta tu biblioteca de Spotify
           </h2>
-          <p className="text-sm text-[#b3b3b3] opacity-80">
-            Accede a tus listas, artistas y recomendaciones personalizadas
+          <p className="text-sm text-[#b3b3b3]">
+            Introduce tu cookie de sesión en opciones para sincronizar tus listas de reproducción personales.
           </p>
         </div>
-        {onLogin && (
+
+        <div className="flex items-center gap-3 shrink-0 flex-wrap">
           <button
-            onClick={onLogin}
-            className="bg-white hover:bg-[#f0f0f0] active:scale-98 text-black text-sm font-bold px-6 py-2.5 rounded-full transition-all shrink-0 cursor-pointer shadow hover:scale-104"
-            title="Iniciar sesión con Spotify"
+            onClick={() => setActiveMainTab('guide')}
+            className="text-xs font-bold text-[#b3b3b3] hover:text-white transition-colors px-3 py-2"
           >
-            Iniciar sesión con Spotify
+            ¿Cómo obtener tu cookie?
           </button>
-        )}
+          <button
+            onClick={() => setActiveMainTab('settings')}
+            className="bg-white hover:bg-[#f0f0f0] active:scale-98 text-black text-xs font-bold px-5 py-2.5 rounded-full transition-transform shrink-0 cursor-pointer shadow hover:scale-104"
+          >
+            Ir a Configuración
+          </button>
+        </div>
       </div>
 
       {/* Quick Access Top 8 Grid Skeleton */}

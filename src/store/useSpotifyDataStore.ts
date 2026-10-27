@@ -450,6 +450,49 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
+      // 2b. Check for cookie session or imported playlists in this browser
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
+      const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
+      let importedPlaylists: Playlist[] = [];
+      if (rawImported) {
+        try {
+          importedPlaylists = JSON.parse(rawImported);
+        } catch {}
+      }
+
+      if (userCookie || (importedPlaylists && importedPlaylists.length > 0)) {
+        const effectivePlaylists = importedPlaylists.length > 0 ? importedPlaylists : DEFAULT_PUBLIC_PLAYLISTS;
+        const cookieUser: UserProfile = {
+          id: 'spotify-user',
+          display_name: 'Cuenta de Spotify',
+          images: [],
+          email: '',
+        } as any;
+
+        const shelves = buildDynamicShelves(
+          cookieUser,
+          effectivePlaylists,
+          'Tus listas y mixes',
+          [],
+          []
+        );
+
+        set({
+          isAuthenticated: true,
+          user: cookieUser,
+          playlists: effectivePlaylists,
+          dynamicShelves: shelves,
+          quickAccessCards: effectivePlaylists.slice(0, 4).map((p) => ({
+            id: p.id,
+            name: p.name,
+            image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+            color: (p as any).color || '#303030',
+          })),
+          isLoading: false,
+        });
+        return;
+      }
+
       // 3. Unauthenticated guest: Show gray shimmer view
       set({
         isAuthenticated: false,
@@ -477,6 +520,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotify_refresh_token');
       window.localStorage.removeItem('spotify_expires_at');
       window.localStorage.removeItem('spotify_session_synced');
+      window.localStorage.removeItem('user_spotify_cookie');
+      window.localStorage.removeItem('user_imported_playlists');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }

@@ -4,7 +4,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 
 export const ProfileDropdown: React.FC = () => {
   const { isProfileOpen, closeProfile, setActiveMainTab } = useUIStore();
-  const { isAuthenticated, login, logout } = useSpotifyDataStore();
+  const { isAuthenticated, logout } = useSpotifyDataStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,12 +37,12 @@ export const ProfileDropdown: React.FC = () => {
         <>
           <button
             onClick={() => {
-              login();
+              setActiveMainTab('guide');
               closeProfile();
             }}
             className="w-full flex items-center justify-between px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-[#1ed760]"
           >
-            <span>Iniciar sesión con Spotify</span>
+            <span>Conectar con cookie (sp_dc)</span>
           </button>
 
           <button
@@ -52,7 +52,7 @@ export const ProfileDropdown: React.FC = () => {
             }}
             className="w-full px-3 py-2.5 rounded hover:bg-white/10 transition-colors text-left text-xs font-semibold text-white"
           >
-            Configuración & Motor de Audio
+            Configuración
           </button>
         </>
       ) : (

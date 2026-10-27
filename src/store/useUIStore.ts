@@ -21,7 +21,7 @@ interface UIState {
   sortOrder: 'recientes' | 'anadidos' | 'alfabetico' | 'creador';
   viewMode: 'compacta' | 'lista' | 'cuadricula-compacta' | 'cuadricula';
   searchQuery: string;
-  activeMainTab: 'home' | 'search' | 'playlist' | 'settings';
+  activeMainTab: 'home' | 'search' | 'playlist' | 'settings' | 'guide';
 
   // Actions
   toggleProfile: () => void;
@@ -41,7 +41,7 @@ interface UIState {
   setSortOrder: (order: 'recientes' | 'anadidos' | 'alfabetico' | 'creador') => void;
   setViewMode: (mode: 'compacta' | 'lista' | 'cuadricula-compacta' | 'cuadricula') => void;
   setSearchQuery: (query: string) => void;
-  setActiveMainTab: (tab: 'home' | 'search' | 'playlist' | 'settings') => void;
+  setActiveMainTab: (tab: 'home' | 'search' | 'playlist' | 'settings' | 'guide') => void;
   closeAllModals: () => void;
 }
 
