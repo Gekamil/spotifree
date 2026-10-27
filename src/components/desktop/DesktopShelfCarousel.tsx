@@ -3,6 +3,16 @@ import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import type { FeedCard } from '../../data/liveUserFeed';
 
+function cleanSubtitle(text?: string): string {
+  if (!text) return '';
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
 interface DesktopShelfCarouselProps {
   title: string;
   prefix?: string;
@@ -118,7 +128,7 @@ const CarouselCard: React.FC<{
         {card.title}
       </h3>
       <p className="text-[#b3b3b3] text-xs line-clamp-2 leading-relaxed">
-        {card.subtitle}
+        {cleanSubtitle(card.subtitle)}
       </p>
     </div>
   );

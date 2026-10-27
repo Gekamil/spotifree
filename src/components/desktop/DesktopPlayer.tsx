@@ -75,17 +75,19 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
 
     audioEngine.playTrack(currentTrack.id, query, 0);
 
-    // Preload next track in background for instantaneous zero-delay switching
+    // Preload next tracks in background for instantaneous zero-delay switching
     if (queue && queue.length > 0) {
       const currIdx = queue.findIndex((t) => t.id === currentTrack.id);
-      const nextIdx = currIdx >= 0 && currIdx + 1 < queue.length ? currIdx + 1 : 0;
-      const upcoming = queue[nextIdx];
-      if (upcoming && upcoming.id !== currentTrack.id) {
-        const nextQuery = `${upcoming.name} ${upcoming.artists?.[0]?.name || ''}`;
-        setTimeout(() => {
-          audioEngine.preloadTrack(upcoming.id, nextQuery);
-        }, 1000);
-      }
+      setTimeout(() => {
+        for (let offset = 1; offset <= 2; offset++) {
+          const nextIdx = (currIdx + offset) % queue.length;
+          const upcoming = queue[nextIdx];
+          if (upcoming && upcoming.id !== currentTrack.id) {
+            const nextQuery = `${upcoming.name} ${upcoming.artists?.[0]?.name || ''}`;
+            audioEngine.preloadTrack(upcoming.id, nextQuery);
+          }
+        }
+      }, 150);
     }
   }, [currentTrack?.id]);
 

@@ -171,6 +171,9 @@ export const DesktopSettingsView: React.FC = () => {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', val);
         window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+        if (session.accessToken) {
+          window.localStorage.setItem('spotify_access_token', session.accessToken);
+        }
       }
       useSpotifyDataStore.setState({
         isAuthenticated: true,
@@ -206,14 +209,28 @@ export const DesktopSettingsView: React.FC = () => {
 
   // Equalizer 6-band State (-12 to +12 dB)
   const [activePreset, setActivePreset] = useState<string>('flat');
-  const [eqBands, setEqBands] = useState<FrequencyPoint[]>([
-    { label: '60Hz', value: 0 },
-    { label: '150Hz', value: 0 },
-    { label: '400Hz', value: 0 },
-    { label: '1kHz', value: 0 },
-    { label: '2.4kHz', value: 0 },
-    { label: '15kHz', value: 0 },
-  ]);
+  const [draggingBandIndex, setDraggingBandIndex] = useState<number | null>(null);
+  const eqCanvasRef = useRef<HTMLDivElement>(null);
+  const [eqBands, setEqBands] = useState<FrequencyPoint[]>(() => {
+    const defaultBands: FrequencyPoint[] = [
+      { label: '60Hz', value: 0 },
+      { label: '150Hz', value: 0 },
+      { label: '400Hz', value: 0 },
+      { label: '1kHz', value: 0 },
+      { label: '2.4kHz', value: 0 },
+      { label: '15kHz', value: 0 },
+    ];
+    if (typeof window !== 'undefined') {
+      try {
+        const raw = window.localStorage.getItem('spotifree_eq_bands');
+        if (raw) {
+          const values: number[] = JSON.parse(raw);
+          return defaultBands.map((b, idx) => ({ ...b, value: values[idx] ?? 0 }));
+        }
+      } catch {}
+    }
+    return defaultBands;
+  });
 
   const syncEqWithEngine = (bands: FrequencyPoint[]) => {
     try {
@@ -230,6 +247,39 @@ export const DesktopSettingsView: React.FC = () => {
       return copy;
     });
   };
+
+  useEffect(() => {
+    if (draggingBandIndex === null) return;
+
+    const onPointerMove = (e: MouseEvent | TouchEvent) => {
+      if (!eqCanvasRef.current) return;
+      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
+      const rect = eqCanvasRef.current.getBoundingClientRect();
+      const padding = 16;
+      const availableHeight = rect.height - padding * 2;
+      const relY = Math.max(0, Math.min(availableHeight, clientY - (rect.top + padding)));
+      // relY = 0 is +12dB, relY = availableHeight is -12dB
+      const norm = 1 - relY / availableHeight; // 0 to 1
+      const db = Math.round(((norm * 24) - 12) * 2) / 2; // -12 to +12 in 0.5 steps
+      handleBandChange(draggingBandIndex, Math.max(-12, Math.min(12, db)));
+    };
+
+    const onPointerUp = () => {
+      setDraggingBandIndex(null);
+    };
+
+    window.addEventListener('mousemove', onPointerMove);
+    window.addEventListener('mouseup', onPointerUp);
+    window.addEventListener('touchmove', onPointerMove);
+    window.addEventListener('touchend', onPointerUp);
+
+    return () => {
+      window.removeEventListener('mousemove', onPointerMove);
+      window.removeEventListener('mouseup', onPointerUp);
+      window.removeEventListener('touchmove', onPointerMove);
+      window.removeEventListener('touchend', onPointerUp);
+    };
+  }, [draggingBandIndex]);
 
   const handlePresetSelect = (presetKey: string) => {
     setActivePreset(presetKey);
@@ -453,7 +503,7 @@ export const DesktopSettingsView: React.FC = () => {
                 <div>
                   <div className="text-sm font-medium text-white">Normalizar el volumen</div>
                   <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    Establece el mismo nivel de volumen para todas las canciones y pódcasts.
+                    Establece el mismo nivel de volumen para todas las canciones.
                   </div>
                 </div>
                 <SpotifyToggle
@@ -564,87 +614,153 @@ export const DesktopSettingsView: React.FC = () => {
             </div>
 
             {/* Equalizer Container Card */}
-            <div className="bg-[#181818] rounded-xl p-6 border border-white/5 shadow-2xl relative overflow-hidden">
+            <div className="bg-[#181818] rounded-xl p-6 border border-white/5 shadow-2xl relative select-none">
               <div className="flex justify-between items-center mb-4">
-                <span className="text-xs font-bold text-[#b3b3b3]">+12 dB</span>
-                <span className="text-[11px] font-bold text-[#1ed760] tracking-wider uppercase flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-                  Ecualizador Activo
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-bold text-white font-['SpotifyMixUITitle']">
+                    Curva de respuesta en frecuencia
+                  </span>
+                  <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                    Web Audio DSP
+                  </span>
+                </div>
+                <button
+                  onClick={() => handlePresetSelect('flat')}
+                  className="text-xs text-[#b3b3b3] hover:text-white hover:underline transition-colors cursor-pointer"
+                >
+                  Restablecer a plano (0 dB)
+                </button>
               </div>
 
-              {/* Interactive Curve SVG & Sliders */}
-              <div className="relative w-full h-[160px] flex items-center justify-center">
-                {/* SVG Curve Background */}
-                <svg
-                  viewBox={`0 0 ${eqWidth} ${eqHeight}`}
-                  preserveAspectRatio="none"
-                  className="absolute inset-0 w-full h-full pointer-events-none"
+              {/* Flex container: dB Axis Scale + Canvas */}
+              <div className="flex gap-2 items-center">
+                {/* dB Scale Axis */}
+                <div className="h-[180px] flex flex-col justify-between text-[10px] font-mono text-[#727272] select-none text-right shrink-0 w-11 pb-6 pt-1">
+                  <span>+12 dB</span>
+                  <span>+6 dB</span>
+                  <span className="text-[#a7a7a7] font-bold">0 dB</span>
+                  <span>-6 dB</span>
+                  <span>-12 dB</span>
+                </div>
+
+                {/* Interactive Curve Canvas & Draggable Nodes */}
+                <div
+                  ref={eqCanvasRef}
+                  className="relative flex-1 h-[180px] bg-[#121212] rounded-lg p-4 border border-white/10 overflow-hidden shadow-inner"
                 >
-                  {/* Grid Lines */}
-                  <line x1="40" y1={zeroY} x2={eqWidth - 40} y2={zeroY} stroke="#333333" strokeWidth="1" strokeDasharray="3 3" />
+                  {/* Horizontal dB Grid Lines */}
+                  <div className="absolute inset-x-4 top-4 bottom-4 flex flex-col justify-between pointer-events-none">
+                    <div className="border-b border-dashed border-white/10 w-full" />
+                    <div className="border-b border-dashed border-white/10 w-full" />
+                    <div className="border-b border-white/25 w-full" />
+                    <div className="border-b border-dashed border-white/10 w-full" />
+                    <div className="border-b border-dashed border-white/10 w-full" />
+                  </div>
 
-                  {/* Gradient area under curve */}
-                  <defs>
-                    <linearGradient id="eqGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#1ed760" stopOpacity="0.25" />
-                      <stop offset="100%" stopColor="#1ed760" stopOpacity="0.0" />
-                    </linearGradient>
-                  </defs>
+                  {/* SVG Curve Background */}
+                  <svg
+                    viewBox={`0 0 ${eqWidth} ${eqHeight}`}
+                    preserveAspectRatio="none"
+                    className="absolute inset-x-4 inset-y-4 w-[calc(100%-32px)] h-[calc(100%-32px)] pointer-events-none"
+                  >
+                    <defs>
+                      <linearGradient id="eqGradient2" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#1ed760" stopOpacity="0.3" />
+                        <stop offset="100%" stopColor="#1ed760" stopOpacity="0.0" />
+                      </linearGradient>
+                    </defs>
 
-                  {/* Area fill */}
-                  <path
-                    d={`${curvePath} L ${points[points.length - 1].x} ${zeroY} L ${points[0].x} ${zeroY} Z`}
-                    fill="url(#eqGradient)"
-                  />
+                    {/* Area fill */}
+                    <path
+                      d={`${curvePath} L ${points[points.length - 1].x} ${zeroY} L ${points[0].x} ${zeroY} Z`}
+                      fill="url(#eqGradient2)"
+                    />
 
-                  {/* Frequency Curve */}
-                  <path
-                    d={curvePath}
-                    fill="none"
-                    stroke="#1ed760"
-                    strokeWidth="3"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
+                    {/* Frequency Curve */}
+                    <path
+                      d={curvePath}
+                      fill="none"
+                      stroke="#1ed760"
+                      strokeWidth="3.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
 
-                {/* Vertical slider tracks */}
-                <div className="relative z-10 w-full h-full flex justify-between px-6 sm:px-12 items-end pb-4">
-                  {eqBands.map((band, idx) => (
-                    <div key={idx} className="flex flex-col items-center group relative">
-                      <span className={`text-[11px] font-mono mb-2 transition-colors ${band.value !== 0 ? 'text-[#1ed760] font-bold' : 'text-[#a7a7a7] group-hover:text-white'}`}>
-                        {band.value > 0 ? `+${band.value.toFixed(1)}` : band.value.toFixed(1)} dB
-                      </span>
+                  {/* Vertical frequency guide tracks + Draggable Circular Handles */}
+                  <div className="absolute inset-x-4 inset-y-4 flex justify-between pointer-events-none">
+                    {eqBands.map((band, idx) => {
+                      const norm = (band.value + 12) / 24; // 0 to 1
+                      const topPercent = (1 - norm) * 100;
+                      const isDraggingThis = draggingBandIndex === idx;
 
-                      {/* Custom clean vertical range input */}
-                      <input
-                        type="range"
-                        min="-12"
-                        max="12"
-                        step="0.5"
-                        value={band.value}
-                        onChange={(e) => handleBandChange(idx, parseFloat(e.target.value))}
-                        aria-label={`cambiar decibelios a ${band.label}`}
-                        className="h-24 w-1.5 appearance-none bg-[#333] group-hover:bg-[#444] rounded-full cursor-pointer accent-[#1ed760] [writing-mode:vertical-lr] [direction:rtl] transition-colors"
-                      />
+                      return (
+                        <div
+                          key={idx}
+                          className="relative h-full flex flex-col items-center pointer-events-auto"
+                          style={{ width: `${100 / eqBands.length}%` }}
+                        >
+                          {/* Vertical line track */}
+                          <div
+                            onClick={(e) => {
+                              if (!eqCanvasRef.current) return;
+                              const rect = eqCanvasRef.current.getBoundingClientRect();
+                              const padding = 16;
+                              const availH = rect.height - padding * 2;
+                              const relY = Math.max(0, Math.min(availH, e.clientY - (rect.top + padding)));
+                              const n = 1 - relY / availH;
+                              const db = Math.round(((n * 24) - 12) * 2) / 2;
+                              handleBandChange(idx, Math.max(-12, Math.min(12, db)));
+                            }}
+                            className="absolute inset-y-0 w-1 bg-white/[0.06] hover:bg-white/20 transition-colors cursor-pointer rounded-full"
+                          />
 
-                      <label className="text-xs font-semibold text-[#b3b3b3] group-hover:text-white mt-2 font-mono transition-colors">
-                        {band.label}
-                      </label>
-                    </div>
-                  ))}
+                          {/* Draggable Circle Handle */}
+                          <div
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              setDraggingBandIndex(idx);
+                            }}
+                            onTouchStart={() => setDraggingBandIndex(idx)}
+                            style={{ top: `${topPercent}%` }}
+                            className="absolute -translate-y-1/2 cursor-grab active:cursor-grabbing z-30 group"
+                          >
+                            {/* Floating dB Badge */}
+                            <div
+                              className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/95 text-[#1ed760] border border-[#1ed760]/40 font-mono font-black text-[10px] whitespace-nowrap shadow-2xl pointer-events-none transition-all ${
+                                isDraggingThis ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100 scale-95'
+                              }`}
+                            >
+                              {band.value > 0 ? `+${band.value.toFixed(1)}` : band.value.toFixed(1)} dB
+                            </div>
+
+                            {/* Control Node */}
+                            <div
+                              className={`w-5 h-5 rounded-full border-[3px] transition-all duration-150 ${
+                                isDraggingThis
+                                  ? 'scale-125 bg-[#1ed760] border-white shadow-[0_0_14px_#1ed760]'
+                                  : 'bg-white border-[#1ed760] group-hover:scale-125 shadow-md'
+                              }`}
+                            />
+                          </div>
+
+                          {/* Frequency label at bottom */}
+                          <span className="absolute -bottom-6 text-[11px] font-mono text-[#b3b3b3] pointer-events-none font-medium">
+                            {band.label}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
-              <div className="flex justify-between items-center mt-2 pt-2 border-t border-white/5">
-                <span className="text-xs font-bold text-[#b3b3b3]">-12 dB</span>
-                <button
-                  onClick={() => handlePresetSelect('flat')}
-                  className="text-xs text-[#a7a7a7] hover:text-white hover:underline transition-colors cursor-pointer"
-                >
-                  Restablecer a plano
-                </button>
+              <div className="flex justify-between items-center mt-7 pt-3 border-t border-white/5 text-xs text-[#a7a7a7]">
+                <span>Haz clic o arrastra los puntos directamente en la curva para ecualizar.</span>
+                <span className="font-mono text-[11px] text-[#1ed760]">
+                  6 bandas paramétricas activas
+                </span>
               </div>
             </div>
           </section>

@@ -45,6 +45,33 @@ function toHDImage(url: string): string {
   return url;
 }
 
+const TrackArtwork: React.FC<{
+  src?: string;
+  alt: string;
+}> = ({ src, alt }) => {
+  const [error, setError] = useState(false);
+
+  if (!src || error) {
+    return (
+      <div className="w-10 h-10 rounded shrink-0 bg-[#282828] flex items-center justify-center text-[#727272] shadow">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+        </svg>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      onError={() => setError(true)}
+      referrerPolicy="no-referrer"
+      className="w-10 h-10 rounded shrink-0 object-cover shadow"
+    />
+  );
+};
+
 interface DesktopPlaylistViewProps {
   playlist: Playlist;
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -165,7 +192,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       if (playlist.tracks?.items && playlist.tracks.items.length > 0) return;
       setLoading(true);
       try {
-        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(playlist.id)}`);
+        const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+        const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+
+        const headers: Record<string, string> = {};
+        if (userCookie) headers['x-spotify-cookie'] = userCookie;
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(playlist.id)}`, {
+          headers,
+        });
         if (res.ok) {
           const data = await res.json();
           if (!cancelled && data.tracks?.items) {
@@ -298,6 +334,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [dynamicPlaylist.id, dynamicTracks.length]);
 
+  const [heroCoverError, setHeroCoverError] = useState(false);
+
+  useEffect(() => {
+    setHeroCoverError(false);
+  }, [dynamicPlaylist.id]);
+
   const tracks = dynamicTracks;
   const isLikedPlaylist =
     dynamicPlaylist.id === 'liked-songs' ||
@@ -403,10 +445,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               alt="Canciones que te gustan"
               className="w-full h-full object-cover shadow-2xl"
             />
-          ) : dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
+          ) : !heroCoverError && dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
             <img
               src={dynamicPlaylist.images[0].url}
               alt={dynamicPlaylist.name}
+              onError={() => setHeroCoverError(true)}
               className="w-full h-full object-cover shadow-2xl"
             />
           ) : isArtist ? (
@@ -663,7 +706,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
                 {/* Track Title + Artists */}
                 <div className="flex items-center gap-3 min-w-0 pr-2">
-                  <img
+                  <TrackArtwork
                     src={
                       track.album?.images?.[0]?.url ||
                       (dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs')
@@ -673,7 +716,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                         : '')
                     }
                     alt={track.name}
-                    className="w-10 h-10 rounded shrink-0 object-cover shadow bg-[#282828]"
                   />
                   <div className="min-w-0 flex-1">
                     <p

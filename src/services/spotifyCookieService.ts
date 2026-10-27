@@ -6,6 +6,7 @@ export interface ExtractedSession {
   playlists: Playlist[];
   shelves: DynamicShelf[];
   quickAccess: Array<{ id: string; name: string; image: string; color: string }>;
+  accessToken?: string;
 }
 
 export function validateSpotifyCookie(cookie: string): { valid: boolean; error?: string } {
@@ -70,6 +71,15 @@ export async function extractSpotifySessionFromCookie(cookie: string): Promise<E
   const data = await res.json();
   if (!data || !data.user || !data.playlists) {
     throw new Error('La respuesta de Spotify no contiene datos de usuario válidos. Comprueba que tu sesión siga activa.');
+  }
+
+  if (typeof window !== 'undefined') {
+    try {
+      window.localStorage.setItem('user_spotify_cookie', trimmedCookie);
+      if (data.accessToken) {
+        window.localStorage.setItem('spotify_access_token', data.accessToken);
+      }
+    } catch {}
   }
 
   return data as ExtractedSession;

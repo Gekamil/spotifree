@@ -24,6 +24,14 @@
       "destination": "/api/lyrics"
     },
     {
+      "source": "/api/spotify/playlist/(.*)",
+      "destination": "/api/playlist?id=$1"
+    },
+    {
+      "source": "/api/playlist",
+      "destination": "/api/playlist"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },

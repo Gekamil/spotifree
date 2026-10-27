@@ -6,6 +6,8 @@ import path from 'node:path';
 
 // @ts-ignore
 import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
+// @ts-ignore
+import { resolveSpotifyPlaylist } from './api/playlist.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -158,7 +160,7 @@ function parseEmbedHtml(html: string, cleanId: string) {
     type: entity.type || (cleanId === '4f0YTBqSbvM1iJpuY9r3yQ' ? 'album' : isArtistEntity ? 'artist' : 'playlist'),
     images: [{ url: coverUrl }],
     owner: {
-      display_name: isArtistEntity ? 'Spotify' : (entity.owner?.name || (cleanId === '7b3MrCWtettvBKlfBSdorn' ? 'Jorgeperezvk' : 'Spotify')),
+      display_name: isArtistEntity ? 'Spotify' : (entity.type === 'album' && entity.subtitle ? entity.subtitle : (entity.owner?.name || (cleanId === '7b3MrCWtettvBKlfBSdorn' ? 'Jorgeperezvk' : 'Spotify'))),
       id: isArtistEntity ? 'spotify' : (cleanId === '7b3MrCWtettvBKlfBSdorn' ? 'user' : (entity.owner?.id || 'spotify')),
     },
     color: '#303030',
@@ -609,11 +611,26 @@ function dynamicSpotifyPlugin(): Plugin {
         }
 
         try {
-          const playlist = await scrapeSpotifyEmbed(rawId);
+          const cookie = (req.headers['x-spotify-cookie'] as string) || '';
+          const authHeader = (req.headers['authorization'] as string) || '';
+          const token = authHeader.replace(/^Bearer\s+/i, '');
+
+          let playlist = null;
+          try {
+            playlist = await resolveSpotifyPlaylist(rawId, { cookie, token });
+          } catch {}
+
+          if (!playlist || !playlist.tracks || playlist.tracks.total === 0) {
+            const fallback = await scrapeSpotifyEmbed(rawId);
+            if (fallback && fallback.tracks && fallback.tracks.total > 0) {
+              playlist = fallback;
+            }
+          }
+
           res.statusCode = 200;
-          return res.end(JSON.stringify(playlist));
+          return res.end(JSON.stringify(playlist || { id: rawId, tracks: { total: 0, items: [] } }));
         } catch (err: any) {
-          console.error(`Error scraping playlist ${rawId}:`, err.message);
+          console.error(`Error resolving playlist ${rawId}:`, err.message);
           res.statusCode = 500;
           return res.end(JSON.stringify({ error: err.message }));
         }

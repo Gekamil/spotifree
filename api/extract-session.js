@@ -119,7 +119,7 @@ export function extractEntityImage(it) {
 }
 
 // Spotify TOTP generator matching active Web Player version
-function generateSpotifyTotp(timestamp = Date.now()) {
+export function generateSpotifyTotp(timestamp = Date.now()) {
   const secretObj = { secret: ',7/*F("rLJ2oxaKL^f+E1xvP@N', version: 61 };
   const t = secretObj.secret;
   const r = t.split('').map((c, i) => c.charCodeAt(0) ^ ((i % 33) + 9));
@@ -143,6 +143,29 @@ function generateSpotifyTotp(timestamp = Date.now()) {
     totp: code.toString().padStart(6, '0'),
     version: secretObj.version,
   };
+}
+
+export async function getAccessTokenFromCookie(spDcCookie) {
+  const cookie = (spDcCookie || '').trim();
+  if (!cookie || !cookie.startsWith('AQ') || cookie.length < 50) return null;
+  try {
+    const { totp, version } = generateSpotifyTotp(Date.now());
+    const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpServer=${totp}&totpVer=${version}`;
+    const tokenRes = await fetch(tokenUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+        'Cookie': `sp_dc=${cookie}`,
+        'Accept': 'application/json',
+        'Referer': 'https://open.spotify.com/',
+        'Origin': 'https://open.spotify.com',
+      },
+    });
+    if (!tokenRes.ok) return null;
+    const data = await tokenRes.json();
+    return data.accessToken || null;
+  } catch (e) {
+    return null;
+  }
 }
 
 export async function extractSpotifySession(spDcCookie) {
@@ -304,6 +327,22 @@ export async function extractSpotifySession(spDcCookie) {
     followers: { total: 0 },
   };
 
+  // Real Liked Songs count from Spotify Web API
+  let likedCount = 0;
+  try {
+    const meTracksRes = await fetch('https://api.spotify.com/v1/me/tracks?limit=1', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+      },
+    });
+    if (meTracksRes.ok) {
+      const meData = await meTracksRes.json();
+      likedCount = typeof meData.total === 'number' ? meData.total : 0;
+    }
+  } catch (e) {
+    console.warn('[Extractor] Could not fetch liked songs count:', e.message);
+  }
+
   // Parse Library Playlists
   const rawLibraryItems = libraryResult.status === 'fulfilled' ? libraryResult.value?.data?.me?.libraryV3?.items || [] : [];
   const playlists = [];
@@ -313,6 +352,18 @@ export async function extractSpotifySession(spDcCookie) {
     if (!it) continue;
     const uri = it.uri || '';
     const cleanId = uri.split(':').pop();
+
+    // Exclude podcast shows, episodes, and audiobooks completely
+    if (
+      it.__typename === 'Show' ||
+      it.__typename === 'Episode' ||
+      it.__typename === 'Audiobook' ||
+      uri.includes(':show:') ||
+      uri.includes(':episode:') ||
+      uri.includes(':audiobook:')
+    ) {
+      continue;
+    }
 
     // 1. Liked Songs (Strict check so other collections or playlists never get mistaken for Liked Songs)
     const isLikedCollection =
@@ -324,11 +375,11 @@ export async function extractSpotifySession(spDcCookie) {
       playlists.push({
         id: 'collection-tracks',
         name: 'Canciones que te gustan',
-        description: 'Tus canciones favoritas guardadas',
+        description: likedCount > 0 ? `${likedCount} canciones guardadas` : 'Tus canciones favoritas guardadas',
         type: 'playlist',
         images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
         owner: { display_name: displayName, id: userId },
-        tracks: { total: 0 },
+        tracks: { total: likedCount },
         is_pinned: true,
         color: '#5038a0',
       });
@@ -370,12 +421,21 @@ export async function extractSpotifySession(spDcCookie) {
       continue;
     }
 
-    // 4. Regular Playlist / Album / Podcast
+    // 4. Regular Playlist / Album
     const playlistCover = extractEntityImage(it);
-    const ownerName = it.ownerV2?.data?.name || displayName;
-    const ownerId = it.ownerV2?.data?.id || userId;
     const isAlbum = it.__typename === 'Album';
+    const albumArtist = it.artists?.items?.map(a => a.profile?.name || a.name).filter(Boolean).join(', ') || it.artist?.name;
+    const ownerName = isAlbum ? (albumArtist || 'Spotify') : (it.ownerV2?.data?.name || displayName);
+    const ownerId = isAlbum ? 'spotify' : (it.ownerV2?.data?.id || userId);
     const desc = it.description || (isAlbum ? 'Álbum' : 'Playlist');
+
+    const trackTotal =
+      it.tracks?.totalCount ??
+      it.content?.totalCount ??
+      it.trackCount ??
+      it.tracks?.total ??
+      it.totalCount ??
+      0;
 
     playlists.push({
       id: cleanId,
@@ -384,7 +444,7 @@ export async function extractSpotifySession(spDcCookie) {
       type: isAlbum ? 'album' : 'playlist',
       images: playlistCover ? [{ url: playlistCover }] : [],
       owner: { display_name: ownerName, id: ownerId },
-      tracks: { total: 0 },
+      tracks: { total: trackTotal },
       is_pinned: !!item.pinned,
       color: '#303030',
     });
@@ -398,11 +458,11 @@ export async function extractSpotifySession(spDcCookie) {
     playlists.unshift({
       id: 'collection-tracks',
       name: 'Canciones que te gustan',
-      description: 'Tus canciones favoritas guardadas',
+      description: likedCount > 0 ? `${likedCount} canciones guardadas` : 'Tus canciones favoritas guardadas',
       type: 'playlist',
       images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
       owner: { display_name: displayName, id: userId },
-      tracks: { total: 0 },
+      tracks: { total: likedCount },
       is_pinned: true,
       color: '#5038a0',
     });
@@ -418,12 +478,34 @@ export async function extractSpotifySession(spDcCookie) {
     const secItems = sec.sectionItems?.items || [];
     if (!secTitle || secItems.length === 0) continue;
 
+    const lower = secTitle.toLowerCase();
+    if (
+      lower.includes('pódcast') ||
+      lower.includes('podcast') ||
+      lower.includes('audiolibro') ||
+      lower.includes('audiobook')
+    ) {
+      continue;
+    }
+
     const cards = [];
     for (const cardItem of secItems) {
       const content = cardItem.content?.data;
       if (!content) continue;
 
       const uri = content.uri || '';
+      // Skip podcast & audiobook cards
+      if (
+        content.__typename === 'Show' ||
+        content.__typename === 'Episode' ||
+        content.__typename === 'Audiobook' ||
+        uri.includes(':show:') ||
+        uri.includes(':episode:') ||
+        uri.includes(':audiobook:')
+      ) {
+        continue;
+      }
+
       const cardId = uri.split(':').pop() || `shelf-card-${cards.length}`;
       const cardTitle = content.name || content.title || content.profile?.name || '';
       if (!cardTitle) continue;
@@ -444,7 +526,6 @@ export async function extractSpotifySession(spDcCookie) {
 
     if (cards.length > 0) {
       let shelfType = 'mixes';
-      const lower = secTitle.toLowerCase();
       if (lower.includes('hecho para') || lower.includes('made for')) shelfType = 'made_for';
       else if (lower.includes('reciente')) shelfType = 'recent';
       else if (lower.includes('fans de') || lower.includes('más como')) shelfType = 'artist';
@@ -477,6 +558,7 @@ export async function extractSpotifySession(spDcCookie) {
     playlists,
     shelves,
     quickAccess,
+    accessToken,
   };
 }
 

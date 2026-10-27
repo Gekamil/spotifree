@@ -4,6 +4,234 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
+import { DesktopShelfCarousel } from './DesktopShelfCarousel';
+
+const CATEGORY_HUBS: Record<
+  string,
+  {
+    shelves: Array<{
+      title: string;
+      cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
+    }>;
+  }
+> = {
+  'cat-musica': {
+    shelves: [
+      {
+        title: 'Descubrir música nueva',
+        cards: [
+          {
+            id: '37i9dQZF1DWY1Pf31eEcxL',
+            title: 'Novedades Viernes España',
+            subtitle: 'Lo más nuevo de Quevedo, Saiko, Myke Towers y más.',
+            image: 'https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e',
+          },
+          {
+            id: '37i9dQZEVXcQ9NknPpJyRU',
+            title: 'Descubrimiento semanal',
+            subtitle: 'Joyas ocultas y canciones seleccionadas para ti.',
+            image: 'https://newjams-images.scdn.co/image/ab676477000033ad/dt/v3/discover-weekly/aAbca41100000000/es',
+          },
+          {
+            id: '37i9dQZEVXbxJjY5x43H57',
+            title: 'Radar de Novedades',
+            subtitle: 'Las novedades de los artistas que sigues.',
+            image: 'https://i.scdn.co/image/ab67706f00000002a973a9cc67d246b7865e3e43',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Éxitos España',
+            subtitle: 'Los temas más escuchados ahora en España.',
+            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+          },
+          {
+            id: '37i9dQZEVXbNFJfN1Vw8d9',
+            title: 'Top 50: España',
+            subtitle: 'Tu actualización diaria de los temas más reproducidos.',
+            image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_large.jpg',
+          },
+          {
+            id: '37i9dQZF1DWZdsS73T1ogG',
+            title: 'el nuevo urbano',
+            subtitle: 'Lo más nuevo de la música urbana.',
+            image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426',
+          },
+        ],
+      },
+      {
+        title: 'Listas populares y éxitos',
+        cards: [
+          {
+            id: '37i9dQZF1DX2EiUAL7Wdfc',
+            title: 'míticas',
+            subtitle: 'Canciones que nunca pasarán de moda.',
+            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+          },
+          {
+            id: '37i9dQZF1EQncLwOalG3K7',
+            title: 'Pop con Ñ',
+            subtitle: 'El mejor pop en español fresco y actual.',
+            image: 'https://i.scdn.co/image/ab67706f000000020ad613a778fc3ef5c91f54cf',
+          },
+          {
+            id: '37i9dQZF1DX10zKzsJ2jva',
+            title: 'Viva Latino',
+            subtitle: 'El corazón y la energía de la música latina.',
+            image: 'https://i.scdn.co/image/ab67706f00000002f232ffabeb0f993f45f20f06',
+          },
+          {
+            id: '37i9dQZF1DWXRqgorJj26U',
+            title: 'Rock Classics',
+            subtitle: 'Grandes leyendas y clásicos del rock.',
+            image: 'https://i.scdn.co/image/ab67706f00000002b0e6e76cf0d4948a3952f481',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-pop': {
+    shelves: [
+      {
+        title: 'Lo mejor del Pop',
+        cards: [
+          {
+            id: '37i9dQZF1EQncLwOalG3K7',
+            title: 'Pop con Ñ',
+            subtitle: 'Pop actual en español.',
+            image: 'https://i.scdn.co/image/ab67706f000000020ad613a778fc3ef5c91f54cf',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Éxitos España',
+            subtitle: 'Las canciones pop más escuchadas.',
+            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+          },
+          {
+            id: '37i9dQZF1DX4JAvHpjipBk',
+            title: 'New Music Friday',
+            subtitle: 'Estrenos pop de la semana.',
+            image: 'https://i.scdn.co/image/ab67706f000000020fe6127163cb15bf8bfd7df3',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-latina': {
+    shelves: [
+      {
+        title: 'Éxitos de la música latina',
+        cards: [
+          {
+            id: '37i9dQZF1DX10zKzsJ2jva',
+            title: 'Viva Latino',
+            subtitle: 'Hoy suena lo mejor de Bad Bunny, Feid, Karol G y Rauw Alejandro.',
+            image: 'https://i.scdn.co/image/ab67706f00000002f232ffabeb0f993f45f20f06',
+          },
+          {
+            id: '37i9dQZF1DWZdsS73T1ogG',
+            title: 'el nuevo urbano',
+            subtitle: 'El sonido urbano que rompe esquemas.',
+            image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426',
+          },
+          {
+            id: '37i9dQZF1DXcBWIGoYBM5M',
+            title: 'Éxitos España',
+            subtitle: 'Los ritmos latinos más sonados en la península.',
+            image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+          },
+          {
+            id: '37i9dQZF1DX2EiUAL7Wdfc',
+            title: 'míticas',
+            subtitle: 'Los clásicos latinos que nunca pasarán de moda.',
+            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-rock': {
+    shelves: [
+      {
+        title: 'Leyendas y Clásicos del Rock',
+        cards: [
+          {
+            id: '37i9dQZF1DWXRqgorJj26U',
+            title: 'Rock Classics',
+            subtitle: 'Queen, AC/DC, Led Zeppelin, Guns N Roses y más.',
+            image: 'https://i.scdn.co/image/ab67706f00000002b0e6e76cf0d4948a3952f481',
+          },
+          {
+            id: '37i9dQZF1DX3oM43CtKnRV',
+            title: 'Rock Español',
+            subtitle: 'Fito & Fitipaldis, Extremoduro, Héroes del Silencio.',
+            image: 'https://i.scdn.co/image/ab67706f00000002da4c849095796a9e5d2c4ddb',
+          },
+          {
+            id: '37i9dQZF1DX1rVvRgjX59F',
+            title: '90s Rock Anthems',
+            subtitle: 'Nirvana, Pearl Jam, Red Hot Chili Peppers.',
+            image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+          },
+        ],
+      },
+    ],
+  },
+  'cat-dance': {
+    shelves: [
+      {
+        title: 'Dance y Electrónica',
+        cards: [
+          {
+            id: '37i9dQZF1DX4dyzvuaRJ0n',
+            title: 'electronic circus',
+            subtitle: 'Los mejores beats para tus sesiones.',
+            image: 'https://i.scdn.co/image/ab67706f000000023f350ef9446d3eb81cfc67a4',
+          },
+          {
+            id: '37i9dQZF1DXa8NOEUWPn9W',
+            title: 'Housewerk',
+            subtitle: 'Deep house y grooves irresistibles.',
+            image: 'https://i.scdn.co/image/ab67706f00000002474a477debc822a3a45c5acb',
+          },
+        ],
+      },
+    ],
+  },
+};
+
+const CategoryCardItem: React.FC<{
+  cat: typeof officialCategories[0];
+  onClick: () => void;
+}> = ({ cat, onClick }) => {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  return (
+    <div
+      onClick={onClick}
+      style={{ backgroundColor: cat.bgColor }}
+      className="relative h-[180px] rounded-lg p-4 overflow-hidden cursor-pointer select-none shadow-md group hover:brightness-105 active:scale-98 transition-all"
+    >
+      <h3 className="text-2xl font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle'] tracking-tight">
+        {cat.title}
+      </h3>
+      {!imgFailed && cat.imgSrc ? (
+        <img
+          src={cat.imgSrc}
+          alt={cat.title}
+          referrerPolicy="no-referrer"
+          onError={() => setImgFailed(true)}
+          className="absolute -bottom-2 -right-4 w-[100px] h-[100px] rounded-[4px] shadow-[-2px_4px_12px_rgba(0,0,0,0.4)] transform rotate-[25deg] translate-x-2 translate-y-1 group-hover:scale-105 group-hover:rotate-[28deg] transition-transform duration-200 object-cover"
+        />
+      ) : (
+        <div className="absolute -bottom-2 -right-4 w-[96px] h-[96px] rounded-full bg-white/10 flex items-center justify-center transform rotate-[20deg] translate-x-1 translate-y-1">
+          <svg width="44" height="44" viewBox="0 0 24 24" fill="rgba(255,255,255,0.4)">
+            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+          </svg>
+        </div>
+      )}
+    </div>
+  );
+};
 
 const officialCategories = [
   {
@@ -11,18 +239,6 @@ const officialCategories = [
     title: 'Música',
     bgColor: 'rgb(220, 20, 140)',
     imgSrc: 'https://i.scdn.co/image/ab67fb8200005caf474a477debc822a3a45c5acb',
-  },
-  {
-    id: 'cat-podcasts',
-    title: 'Pódcasts',
-    bgColor: 'rgb(0, 100, 80)',
-    imgSrc: 'https://i.scdn.co/image/ab6765630000ba8a81f07e1ead0317ee3c285bfa',
-  },
-  {
-    id: 'cat-audiolibros',
-    title: 'Audiolibros',
-    bgColor: 'rgb(40, 62, 163)',
-    imgSrc: 'https://i.scdn.co/image/ab67fb8200005cafd7d76fc8a9096042a317ddb7',
   },
   {
     id: 'cat-eventos',
@@ -73,12 +289,6 @@ const officialCategories = [
     imgSrc: 'https://i.scdn.co/image/ab67fb8200005cafa207f2a24ec282057d23d838',
   },
   {
-    id: 'cat-exitos-podcasts',
-    title: 'Éxitos en pódcasts',
-    bgColor: 'rgb(40, 62, 163)',
-    imgSrc: 'https://i.scdn.co/image/ab6765630000ba8a81f07e1ead0317ee3c285bfa',
-  },
-  {
     id: 'cat-urbano',
     title: 'Urbano latino',
     bgColor: 'rgb(188, 89, 0)',
@@ -109,11 +319,18 @@ interface DesktopSearchViewProps {
 }
 
 export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPlaylistById }) => {
-  const { searchQuery, setSearchQuery } = useUIStore();
+  const { searchQuery } = useUIStore();
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
+  const [selectedCategory, setSelectedCategory] = useState<typeof officialCategories[0] | null>(null);
   const [liveResults, setLiveResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+
+  useEffect(() => {
+    if (searchQuery.trim() && selectedCategory) {
+      setSelectedCategory(null);
+    }
+  }, [searchQuery]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -159,42 +376,77 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   return (
     <div className="p-6 pb-16 space-y-6 select-none bg-[#121212] min-h-full">
       {!searchQuery.trim() ? (
-        <>
-          <h2 className="text-2xl font-black text-white tracking-tight font-['SpotifyMixUITitle']">
-            Explorar todo
-          </h2>
-
-          {/* Real 4-column responsive grid with rotated 25deg cards matching Spotify exactly */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6">
-            {officialCategories.map((cat) => (
-              <div
-                key={cat.id}
-                onClick={() => {
-                  setSearchQuery(cat.title);
-                  if (onSelectPlaylistById && cat.id.startsWith('cat-artist')) {
-                    onSelectPlaylistById(cat.id, cat.title, cat.imgSrc);
-                  }
-                }}
-                style={{ backgroundColor: cat.bgColor }}
-                className="relative h-[180px] rounded-lg p-4 overflow-hidden cursor-pointer select-none shadow-md group hover:brightness-105 active:scale-98 transition-all"
+        selectedCategory ? (
+          <div className="space-y-8 animate-in fade-in duration-200">
+            {/* Category Hero Banner Matching Spotify Screenshot 2 */}
+            <div
+              style={{ backgroundColor: selectedCategory.bgColor }}
+              className="relative rounded-2xl p-8 lg:p-12 overflow-hidden shadow-2xl transition-all"
+            >
+              <button
+                onClick={() => setSelectedCategory(null)}
+                className="inline-flex items-center gap-2 text-white/90 hover:text-white font-bold text-xs uppercase tracking-wider bg-black/30 hover:bg-black/50 px-3.5 py-1.5 rounded-full transition-all duration-200 cursor-pointer mb-4"
               >
-                <h3 className="text-2xl font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle'] tracking-tight">
-                  {cat.title}
-                </h3>
-                {/* Image rotated 25 degrees into bottom-right corner with shadow */}
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 0-1.06l6.75-6.75a.75.75 0 0 1 1.06 0z" />
+                </svg>
+                <span>Explorar todo</span>
+              </button>
+
+              <h1 className="text-5xl lg:text-7xl font-black text-white tracking-tight font-['SpotifyMixUITitle'] drop-shadow-md">
+                {selectedCategory.title}
+              </h1>
+
+              {selectedCategory.imgSrc && (
                 <img
-                  src={cat.imgSrc}
-                  alt={cat.title}
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    (e.target as HTMLElement).style.display = 'none';
-                  }}
-                  className="absolute -bottom-2 -right-4 w-[100px] h-[100px] rounded-[4px] shadow-[-2px_4px_12px_rgba(0,0,0,0.4)] transform rotate-[25deg] translate-x-2 translate-y-1 group-hover:scale-105 group-hover:rotate-[28deg] transition-transform duration-200 object-cover"
+                  src={selectedCategory.imgSrc}
+                  alt={selectedCategory.title}
+                  className="absolute right-6 -bottom-6 w-44 h-44 lg:w-56 lg:h-56 rounded-xl shadow-[-6px_8px_24px_rgba(0,0,0,0.6)] transform rotate-[18deg] object-cover opacity-90 pointer-events-none"
                 />
-              </div>
-            ))}
+              )}
+            </div>
+
+            {/* Hub Shelves */}
+            <div className="space-y-8">
+              {(CATEGORY_HUBS[selectedCategory.id]?.shelves || CATEGORY_HUBS['cat-musica'].shelves).map(
+                (shelf, idx) => (
+                  <DesktopShelfCarousel
+                    key={`${selectedCategory.id}-shelf-${idx}`}
+                    title={shelf.title}
+                    items={shelf.cards}
+                    onCardClick={(card) => {
+                      if (onSelectPlaylistById) {
+                        onSelectPlaylistById(card.id, card.title, card.image);
+                      }
+                    }}
+                    onPlayClick={(card) => {
+                      if (onSelectPlaylistById) {
+                        onSelectPlaylistById(card.id, card.title, card.image);
+                      }
+                    }}
+                  />
+                )
+              )}
+            </div>
           </div>
-        </>
+        ) : (
+          <>
+            <h2 className="text-2xl font-black text-white tracking-tight font-['SpotifyMixUITitle']">
+              Explorar todo
+            </h2>
+
+            {/* Real 4-column responsive grid with rotated 25deg cards matching Spotify exactly */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6">
+              {officialCategories.map((cat) => (
+                <CategoryCardItem
+                  key={cat.id}
+                  cat={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                />
+              ))}
+            </div>
+          </>
+        )
       ) : (
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-white">Resultados para "{searchQuery}"</h2>

@@ -89,13 +89,17 @@ function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
     // Interpolate word-level timings when standard LRC is provided
     if (words.length === 0) {
       const tokens = item.text.split(/(\s+)/).filter(Boolean);
-      const totalChars = tokens.reduce((acc, t) => acc + t.length, 0);
-      const lineDuration = Math.max(1200, Math.min(endTimeMs - item.timeMs, 6000));
+      const totalChars = tokens.reduce((acc, t) => acc + (t.trim().length > 0 ? t.length : 0), 0);
+      const rawGap = Math.max(800, endTimeMs - item.timeMs);
+      // Real vocals finish around 78% of the line interval before the pause/breath
+      const lineDuration = Math.max(600, Math.min(rawGap * 0.78, 4800));
       let elapsedMs = 0;
 
       for (let j = 0; j < tokens.length; j++) {
         const token = tokens[j];
-        const fraction = totalChars > 0 ? token.length / totalChars : 1 / tokens.length;
+        const isSpace = token.trim().length === 0;
+        const charWeight = isSpace ? 0.2 : token.length;
+        const fraction = totalChars > 0 ? charWeight / (totalChars + 0.2 * tokens.length) : 1 / tokens.length;
         const wTimeMs = item.timeMs + Math.round(elapsedMs);
         words.push({ timeMs: wTimeMs, text: token });
         elapsedMs += fraction * lineDuration;
@@ -501,18 +505,25 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                           }`}
                         >
                           {isCurrent && line.words.length > 0 ? (
-                            line.words.map((w, wIdx) => (
-                              <span
-                                key={`pw-${displayStart + idx}-${wIdx}`}
-                                className={`transition-colors duration-150 ${
-                                  progressMs >= w.timeMs
-                                    ? 'text-white font-black drop-shadow-[0_2px_8px_rgba(255,255,255,0.7)]'
-                                    : 'text-white/50'
-                                }`}
-                              >
-                                {w.text}
-                              </span>
-                            ))
+                            line.words.map((w, wIdx) => {
+                              const vocalMs = progressMs + 220;
+                              const isSung = vocalMs >= w.timeMs;
+                              const isCurrentWord = isSung && (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
+                              return (
+                                <span
+                                  key={`pw-${displayStart + idx}-${wIdx}`}
+                                  className={`transition-all duration-150 ${
+                                    isCurrentWord
+                                      ? 'text-white font-black drop-shadow-[0_2px_10px_rgba(255,255,255,0.9)] scale-105 inline-block'
+                                      : isSung
+                                      ? 'text-white/95 font-bold'
+                                      : 'text-white/40 font-bold'
+                                  }`}
+                                >
+                                  {w.text}
+                                </span>
+                              );
+                            })
                           ) : (
                             line.text
                           )}
@@ -824,13 +835,17 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       >
                         {isCurrent && line.words.length > 0
                           ? line.words.map((w, wIdx) => {
-                              const isWordSung = progressMs >= w.timeMs;
+                              const vocalMs = progressMs + 220;
+                              const isWordSung = vocalMs >= w.timeMs;
+                              const isCurrentWord = isWordSung && (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
                               return (
                                 <span
                                   key={`w-${idx}-${wIdx}`}
-                                  className={`transition-colors duration-150 inline-block ${
-                                    isWordSung
-                                      ? 'text-white font-black drop-shadow-[0_2px_10px_rgba(255,255,255,0.7)]'
+                                  className={`transition-all duration-150 inline-block ${
+                                    isCurrentWord
+                                      ? 'text-white font-black drop-shadow-[0_2px_14px_rgba(255,255,255,1)] scale-105'
+                                      : isWordSung
+                                      ? 'text-white/95 font-bold'
                                       : 'text-white/40 font-bold'
                                   }`}
                                 >

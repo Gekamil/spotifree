@@ -151,6 +151,11 @@ export function buildDynamicShelves(
             p.name.toLowerCase().includes('radar')
         );
 
+  const cleanDesc = (text?: string, fallback: string = ''): string => {
+    if (!text) return fallback;
+    return text.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim() || fallback;
+  };
+
   const getFallbackImage = (item: Playlist) => {
     if (item.id === 'liked-songs' || item.id === 'collection-tracks' || item.name?.toLowerCase().trim() === 'canciones que te gustan') {
       return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
@@ -158,14 +163,27 @@ export function buildDynamicShelves(
     return item.images?.[0]?.url || '';
   };
 
-  const editorialCards: DynamicShelfCard[] = (
-    editorialPool.length > 0 ? editorialPool : effectivePlaylists.slice(0, 6)
-  ).map((item, idx) => ({
-    id: item.id || `feat-${idx}`,
-    title: item.name,
-    subtitle: item.description || 'De Spotify',
-    image: getFallbackImage(item),
-  }));
+  const ensureMinCards = (cards: DynamicShelfCard[], min: number = 6): DynamicShelfCard[] => {
+    if (cards.length >= min) return cards;
+    const seen = new Set(cards.map((c) => c.id));
+    const pool = DEFAULT_PUBLIC_PLAYLISTS.map((p, idx) => ({
+      id: p.id || `pub-fill-${idx}`,
+      title: p.name,
+      subtitle: cleanDesc(p.description, 'De Spotify'),
+      image: p.images?.[0]?.url || '',
+    }));
+    const needed = pool.filter((c) => !seen.has(c.id));
+    return [...cards, ...needed].slice(0, Math.max(cards.length, min));
+  };
+
+  const editorialCards: DynamicShelfCard[] = ensureMinCards(
+    (editorialPool.length > 0 ? editorialPool : effectivePlaylists.slice(0, 6)).map((item, idx) => ({
+      id: item.id || `feat-${idx}`,
+      title: item.name,
+      subtitle: cleanDesc(item.description, 'De Spotify'),
+      image: getFallbackImage(item),
+    }))
+  );
 
   // Shelf 2: Made for user (Priority 2) - Derived dynamically from live playlists
   const dailyMixes = effectivePlaylists.filter((p) =>
@@ -180,27 +198,29 @@ export function buildDynamicShelves(
   const madeForPool = dailyMixes.length >= 2 ? dailyMixes : userPlaylists.length > 0 ? userPlaylists : effectivePlaylists;
 
   const badgeColors = ['#00F0FF', '#FFA42B', '#FF6437', '#1ED760', '#B02897', '#509BF5'];
-  const madeForCards: DynamicShelfCard[] = madeForPool.slice(0, 6).map((p, idx) => {
-    const matchDaily = p.name.match(/Mix diario \d/i);
-    return {
-      id: p.id || `made-for-${idx}`,
-      title: p.name,
-      subtitle: p.description || `Mix personalizado para ${displayName}`,
-      image: getFallbackImage(p),
-      badge: matchDaily ? matchDaily[0] : undefined,
-      badgeColor: matchDaily ? badgeColors[idx % badgeColors.length] : undefined,
-    };
-  });
+  const madeForCards: DynamicShelfCard[] = ensureMinCards(
+    madeForPool.slice(0, 8).map((p, idx) => {
+      const matchDaily = p.name.match(/Mix diario \d/i);
+      return {
+        id: p.id || `made-for-${idx}`,
+        title: p.name,
+        subtitle: cleanDesc(p.description, `Mix personalizado para ${displayName}`),
+        image: getFallbackImage(p),
+        badge: matchDaily ? matchDaily[0] : undefined,
+        badgeColor: matchDaily ? badgeColors[idx % badgeColors.length] : undefined,
+      };
+    })
+  );
 
   // Shelf 3: Recientes (Priority 3) - Derived from recentlyPlayed or playlists order
-  const recentCards: DynamicShelfCard[] = (
-    recentlyPlayed.length > 0 ? recentlyPlayed : effectivePlaylists
-  ).slice(0, 8).map((p, idx) => ({
-    id: p.id || `recent-${idx}`,
-    title: p.name,
-    subtitle: p.description || 'De tu biblioteca',
-    image: getFallbackImage(p),
-  }));
+  const recentCards: DynamicShelfCard[] = ensureMinCards(
+    (recentlyPlayed.length > 0 ? recentlyPlayed : effectivePlaylists).slice(0, 8).map((p, idx) => ({
+      id: p.id || `recent-${idx}`,
+      title: p.name,
+      subtitle: cleanDesc(p.description, 'De tu biblioteca'),
+      image: getFallbackImage(p),
+    }))
+  );
 
   // Shelf 4: Más como {topArtist} (Priority 4) - Dynamically derived artist affinity
   const artistFromTop = topArtists[0]?.name;
@@ -220,14 +240,14 @@ export function buildDynamicShelves(
       /radio|artista/i.test(p.name)
   );
 
-  const artistCards: DynamicShelfCard[] = (
-    artistPool.length >= 2 ? artistPool : effectivePlaylists.slice(2, 6)
-  ).map((p, idx) => ({
-    id: p.id || `artist-${idx}`,
-    title: p.name,
-    subtitle: p.description || `Con ${topArtistName} y artistas similares`,
-    image: getFallbackImage(p),
-  }));
+  const artistCards: DynamicShelfCard[] = ensureMinCards(
+    (artistPool.length >= 2 ? artistPool : effectivePlaylists.slice(2, 6)).map((p, idx) => ({
+      id: p.id || `artist-${idx}`,
+      title: p.name,
+      subtitle: cleanDesc(p.description, `Con ${topArtistName} y artistas similares`),
+      image: getFallbackImage(p),
+    }))
+  );
 
   // Shelf 5: Mixes (Priority 5) - Dynamically derived genre mixes
   const genreMixPool = effectivePlaylists.filter((p) =>
@@ -235,12 +255,14 @@ export function buildDynamicShelves(
   );
   const mixesPool = genreMixPool.length >= 3 ? genreMixPool : effectivePlaylists.slice(4, 10);
 
-  const mixesCards: DynamicShelfCard[] = mixesPool.map((p, idx) => ({
-    id: p.id || `mix-${idx}`,
-    title: p.name,
-    subtitle: p.description || 'Música organizada por tus géneros favoritos',
-    image: getFallbackImage(p),
-  }));
+  const mixesCards: DynamicShelfCard[] = ensureMinCards(
+    mixesPool.map((p, idx) => ({
+      id: p.id || `mix-${idx}`,
+      title: p.name,
+      subtitle: cleanDesc(p.description, 'Música organizada por tus géneros favoritos'),
+      image: getFallbackImage(p),
+    }))
+  );
 
   return [
     {
@@ -482,9 +504,16 @@ const store = create<SpotifyDataState>((set, get) => ({
             session = await extractSpotifySessionFromCookie(userCookie);
             if (typeof window !== 'undefined') {
               window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+              if (session.accessToken) {
+                window.localStorage.setItem('spotify_access_token', session.accessToken);
+              }
             }
           } catch (e) {
             console.error('Failed to extract session from cookie:', e);
+          }
+        } else if (session && session.accessToken && typeof window !== 'undefined') {
+          if (!window.localStorage.getItem('spotify_access_token')) {
+            window.localStorage.setItem('spotify_access_token', session.accessToken);
           }
         }
 

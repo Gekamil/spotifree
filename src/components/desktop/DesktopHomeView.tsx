@@ -10,113 +10,8 @@ interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
 }
 
-const PODCAST_SHELVES = [
-  {
-    id: 'shelf-podcasts-top',
-    prefix: '',
-    title: 'Tus programas favoritos',
-    subtitle: 'Episodios y novedades de tus suscripciones',
-    hasSeeAll: true,
-    cards: [
-      {
-        id: 'pod-wild-project',
-        title: 'The Wild Project',
-        subtitle: 'Jordi Wild • Actualidad, charlas y misterio',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a7e0eb1f1a5666f7f6f59dfad',
-      },
-      {
-        id: 'pod-nadie-sabe-nada',
-        title: 'Nadie Sabe Nada',
-        subtitle: 'Cadena SER • Buenafuente y Berto Romero',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a74e50337c63b7ceea7536a28',
-      },
-      {
-        id: 'pod-la-ruina',
-        title: 'La Ruina',
-        subtitle: 'Ignasi Taltavull y Tomàs Fuentes',
-        image: 'https://i.scdn.co/image/ab6765630000ba8abcf41103c27e85288bf246b7',
-      },
-      {
-        id: 'pod-birra',
-        title: 'El Sentido De La Birra',
-        subtitle: 'Ricardo Moya • Entrevistas en profundidad',
-        image: 'https://i.scdn.co/image/ab6765630000ba8aeef55d9d9bb73a30ad8a4253',
-      },
-      {
-        id: 'pod-chicle',
-        title: 'Estirando el chicle',
-        subtitle: 'Carolina Iglesias y Victoria Martín',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a38ec3ff7900b3e7ff0b0e350',
-      },
-    ],
-  },
-  {
-    id: 'shelf-podcasts-episodes',
-    prefix: '',
-    title: 'Episodios más escuchados hoy',
-    subtitle: 'Historias, humor y actualidad',
-    hasSeeAll: false,
-    cards: [
-      {
-        id: 'pod-ep-1',
-        title: '#314 - Charla con especialistas',
-        subtitle: 'The Wild Project • 3 h 12 min',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a7e0eb1f1a5666f7f6f59dfad',
-      },
-      {
-        id: 'pod-ep-2',
-        title: 'Samuráis de la improvisación',
-        subtitle: 'Nadie Sabe Nada • 54 min',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a74e50337c63b7ceea7536a28',
-      },
-      {
-        id: 'pod-ep-3',
-        title: 'Anécdotas que salieron regular',
-        subtitle: 'La Ruina • 1 h 02 min',
-        image: 'https://i.scdn.co/image/ab6765630000ba8abcf41103c27e85288bf246b7',
-      },
-    ],
-  },
-];
-
-const AUDIOLIBROS_SHELVES = [
-  {
-    id: 'shelf-audiolibros-popular',
-    prefix: '',
-    title: 'Audiolibros populares en España',
-    subtitle: 'Grandes historias para escuchar en cualquier lugar',
-    hasSeeAll: true,
-    cards: [
-      {
-        id: 'book-habitos-atomicos',
-        title: 'Hábitos Atómicos',
-        subtitle: 'James Clear • Narrado por Jordi Varela',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a383416c11d51c35626a54f05',
-      },
-      {
-        id: 'book-sapiens',
-        title: 'Sapiens: De animales a dioses',
-        subtitle: 'Yuval Noah Harari • Historia humana',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a24559b3989c93361400d3b64',
-      },
-      {
-        id: 'book-psicologia-dinero',
-        title: 'La psicología del dinero',
-        subtitle: 'Morgan Housel • Finanzas y comportamiento',
-        image: 'https://i.scdn.co/image/ab6765630000ba8ad4914c449c258d4a64e1eb30',
-      },
-      {
-        id: 'book-principito',
-        title: 'El Principito',
-        subtitle: 'Antoine de Saint-Exupéry • Clásico universal',
-        image: 'https://i.scdn.co/image/ab6765630000ba8a221f7e340c2626e2a220fc5c',
-      },
-    ],
-  },
-];
-
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
-  const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo' | 'podcasts' | 'audiolibros'>('todo');
+  const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
   const [hoveredColor, setHoveredColor] = useState<string | null>(null);
 
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
@@ -130,7 +25,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     authWarning,
   } = useSpotifyDataStore();
 
-  const defaultMusicShortcuts = storeQuickAccess && storeQuickAccess.length > 0
+  const currentShortcuts = storeQuickAccess && storeQuickAccess.length > 0
     ? storeQuickAccess
     : [
         { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#1a4b4c' },
@@ -139,29 +34,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2d4b68' },
       ];
 
-  const podcastShortcuts = [
-    { id: 'pod-wild-project', name: 'The Wild Project', image: 'https://i.scdn.co/image/ab6765630000ba8a7e0eb1f1a5666f7f6f59dfad', color: '#1e3240' },
-    { id: 'pod-nadie-sabe-nada', name: 'Nadie Sabe Nada', image: 'https://i.scdn.co/image/ab6765630000ba8a74e50337c63b7ceea7536a28', color: '#382218' },
-    { id: 'pod-la-ruina', name: 'La Ruina', image: 'https://i.scdn.co/image/ab6765630000ba8abcf41103c27e85288bf246b7', color: '#283820' },
-    { id: 'pod-birra', name: 'El Sentido De La Birra', image: 'https://i.scdn.co/image/ab6765630000ba8aeef55d9d9bb73a30ad8a4253', color: '#44222a' },
-  ];
-
-  const audiobookShortcuts = [
-    { id: 'book-habitos-atomicos', name: 'Hábitos Atómicos', image: 'https://i.scdn.co/image/ab6765630000ba8a383416c11d51c35626a54f05', color: '#403010' },
-    { id: 'book-sapiens', name: 'Sapiens', image: 'https://i.scdn.co/image/ab6765630000ba8a24559b3989c93361400d3b64', color: '#153020' },
-    { id: 'book-psicologia-dinero', name: 'La psicología del dinero', image: 'https://i.scdn.co/image/ab6765630000ba8ad4914c449c258d4a64e1eb30', color: '#252030' },
-    { id: 'book-principito', name: 'El Principito', image: 'https://i.scdn.co/image/ab6765630000ba8a221f7e340c2626e2a220fc5c', color: '#102535' },
-  ];
-
-  const currentShortcuts = activeTab === 'podcasts'
-    ? podcastShortcuts
-    : activeTab === 'audiolibros'
-    ? audiobookShortcuts
-    : defaultMusicShortcuts;
-
   const currentShelves = useMemo(() => {
-    if (activeTab === 'podcasts') return PODCAST_SHELVES;
-    if (activeTab === 'audiolibros') return AUDIOLIBROS_SHELVES;
     if (activeTab === 'siguiendo') {
       const userArtists: Array<{ id: string; title: string; subtitle: string; image: string }> = [];
       const seen = new Set<string>();
@@ -228,15 +101,10 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         },
       ];
     }
-    if (activeTab === 'musica') {
-      const base = dynamicShelves && dynamicShelves.length > 0
-        ? dynamicShelves
-        : buildDynamicShelves(user, playlists, featuredMessage);
-      return base.filter((s) => !s.title.toLowerCase().includes('pódcast'));
-    }
-    return dynamicShelves && dynamicShelves.length > 0
+    const base = dynamicShelves && dynamicShelves.length > 0
       ? dynamicShelves
       : buildDynamicShelves(user, playlists, featuredMessage);
+    return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
   const activeBg = hoveredColor || currentShortcuts[0]?.color || '#5038a0';
@@ -347,20 +215,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 cursor-pointer bg-white/10 text-white hover:bg-white/20"
             >
               Música
-            </button>
-
-            <button
-              onClick={() => setActiveTab('podcasts')}
-              className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 cursor-pointer bg-white/10 text-white hover:bg-white/20"
-            >
-              Pódcasts
-            </button>
-
-            <button
-              onClick={() => setActiveTab('audiolibros')}
-              className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 cursor-pointer bg-white/10 text-white hover:bg-white/20"
-            >
-              Audiolibros
             </button>
           </>
         ) : (

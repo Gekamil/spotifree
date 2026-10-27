@@ -63,10 +63,10 @@ class AudioEngine {
     this.setupHtml5Listeners();
 
     if (typeof window !== 'undefined') {
-      // Pre-warm YouTube IFrame API in background
+      // Pre-warm YouTube IFrame API immediately in background
       setTimeout(() => {
         this.ensureYouTubeReady().catch(() => {});
-      }, 500);
+      }, 50);
     }
   }
 
@@ -200,7 +200,7 @@ class AudioEngine {
           }
         } catch {}
       }
-    }, 250);
+    }, 80);
   }
 
   private stopProgressTicker() {
@@ -268,6 +268,12 @@ class AudioEngine {
 
       this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
 
+      let savedBands: number[] = [0, 0, 0, 0, 0, 0];
+      try {
+        const raw = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_eq_bands') : null;
+        if (raw) savedBands = JSON.parse(raw);
+      } catch {}
+
       let lastNode: AudioNode = this.sourceNode;
       this.filterNodes = this.eqFrequencies.map((freq, idx) => {
         const filter = this.audioContext!.createBiquadFilter();
@@ -280,7 +286,7 @@ class AudioEngine {
           filter.Q.value = 1.0;
         }
         filter.frequency.value = freq;
-        filter.gain.value = 0;
+        filter.gain.value = savedBands[idx] ?? 0;
 
         lastNode.connect(filter);
         lastNode = filter;
@@ -499,6 +505,14 @@ class AudioEngine {
 
   public setAllEqualizerBands(bands: { label: string; value: number }[]) {
     this.initAudioContext();
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('spotifree_eq_bands', JSON.stringify(bands.map((b) => b.value)));
+      }
+    } catch {}
     bands.forEach((b, idx) => {
       if (this.filterNodes[idx]) {
         this.filterNodes[idx].gain.value = b.value;
