@@ -22,6 +22,9 @@ const CarouselCard: React.FC<{
   const [imageLoaded, setImageLoaded] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
+  const isArtist = card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || (card as any).isArtist;
+  const hasValidImage = !!card.image && card.image.trim().length > 0;
+
   useEffect(() => {
     if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
       setImageLoaded(true);
@@ -34,11 +37,11 @@ const CarouselCard: React.FC<{
       className="w-[180px] shrink-0 bg-[#181818] hover:bg-[#282828] p-3 rounded-md transition-all duration-300 cursor-pointer flex flex-col relative group select-none shadow-sm hover:shadow-xl"
     >
       {/* Artwork Container with skeleton loader */}
-      <div className="relative aspect-square w-full rounded-[4px] overflow-hidden mb-3 shadow-md bg-[#242424]">
-        {/* Skeleton placeholder with pulse effect */}
-        {!imageLoaded && (
-          <div className="absolute inset-0 bg-[#282828] animate-pulse flex items-center justify-center">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="#383838">
+      <div className={`relative aspect-square w-full ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden mb-3 shadow-md bg-[#242424]`}>
+        {/* Placeholder if no image or loading */}
+        {(!imageLoaded || !hasValidImage) && (
+          <div className="absolute inset-0 bg-[#282828] flex items-center justify-center">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#535353">
               <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
             </svg>
           </div>
@@ -53,7 +56,7 @@ const CarouselCard: React.FC<{
             playsInline
             className="w-full h-full object-cover"
           />
-        ) : (
+        ) : hasValidImage ? (
           <img
             ref={imgRef}
             src={card.image}
@@ -65,7 +68,7 @@ const CarouselCard: React.FC<{
               imageLoaded ? 'opacity-100' : 'opacity-0'
             }`}
           />
-        )}
+        ) : null}
 
         {/* Radio Pill Badge (as seen in official Spotify radio cards) */}
         {card.isRadio && (

@@ -34,6 +34,8 @@ export interface Playlist {
   name: string;
   description: string;
   images: SpotifyImage[];
+  type?: 'playlist' | 'album' | 'artist' | 'folder' | string;
+  is_folder?: boolean;
   owner: {
     display_name: string;
     id: string;

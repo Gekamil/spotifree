@@ -1,5 +1,56 @@
 import crypto from 'node:crypto';
 
+export function toHDImage(url) {
+  if (!url) return '';
+  return url
+    .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
+    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
+    .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
+    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
+    .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
+    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/');
+}
+
+export function extractEntityImage(it) {
+  if (!it) return null;
+
+  // 1. Artist visuals avatar
+  const avatarSources = it.visuals?.avatarImage?.sources || it.avatar?.sources;
+  if (avatarSources && avatarSources.length > 0) {
+    const best = avatarSources.find(s => (s.height || 0) >= 300) || avatarSources[0];
+    if (best?.url) return toHDImage(best.url);
+  }
+
+  // 2. Playlist / Album images.items
+  const itemsSources = it.images?.items?.[0]?.sources;
+  if (itemsSources && itemsSources.length > 0) {
+    const best = itemsSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || itemsSources[0];
+    if (best?.url) return toHDImage(best.url);
+  }
+
+  // 3. CoverArt sources (albums, podcasts, singles)
+  const coverSources = it.coverArt?.sources;
+  if (coverSources && coverSources.length > 0) {
+    const best = coverSources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || coverSources[0];
+    if (best?.url) return toHDImage(best.url);
+  }
+
+  // 4. visualIdentity (embeds)
+  const visualImages = it.visualIdentity?.image;
+  if (visualImages && visualImages.length > 0) {
+    const best = visualImages.find(s => (s.maxHeight || 0) >= 300) || visualImages[visualImages.length - 1];
+    if (best?.url) return toHDImage(best.url);
+  }
+
+  // 5. Direct images array
+  if (Array.isArray(it.images) && it.images.length > 0) {
+    const img = it.images[0]?.url || it.images[0];
+    if (typeof img === 'string') return toHDImage(img);
+  }
+
+  return null;
+}
+
 // Spotify TOTP generator matching active Web Player version
 function generateSpotifyTotp(timestamp = Date.now()) {
   const secretObj = { secret: ',7/*F("rLJ2oxaKL^f+E1xvP@N', version: 61 };
@@ -176,7 +227,7 @@ export async function extractSpotifySession(spDcCookie) {
   const rawProfile = profileResult.status === 'fulfilled' ? profileResult.value?.data?.me?.profile : null;
   const displayName = rawProfile?.name || rawProfile?.username || 'Usuario de Spotify';
   const userId = rawProfile?.username || rawProfile?.accountId || 'spotify-user';
-  const userImages = rawProfile?.avatar?.sources?.map(s => ({ url: s.url })) || [];
+  const userImages = rawProfile?.avatar?.sources?.map(s => ({ url: toHDImage(s.url) })) || [];
 
   const user = {
     id: userId,
@@ -196,11 +247,13 @@ export async function extractSpotifySession(spDcCookie) {
     const uri = it.uri || '';
     const cleanId = uri.split(':').pop();
 
+    // 1. Liked Songs
     if (uri === 'spotify:collection:tracks' || it.__typename === 'Collection') {
       playlists.push({
         id: 'collection-tracks',
         name: 'Canciones que te gustan',
         description: 'Tus canciones favoritas guardadas',
+        type: 'playlist',
         images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
         owner: { display_name: displayName, id: userId },
         tracks: { total: 0 },
@@ -210,15 +263,54 @@ export async function extractSpotifySession(spDcCookie) {
       continue;
     }
 
-    const cover = it.images?.items?.[0]?.sources?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+    // 2. Folder
+    if (it.__typename === 'Folder') {
+      playlists.push({
+        id: cleanId,
+        name: it.name || 'Carpeta',
+        description: `${it.playlistCount || 0} listas`,
+        type: 'folder',
+        is_folder: true,
+        images: [],
+        owner: { display_name: displayName, id: userId },
+        tracks: { total: it.playlistCount || 0 },
+        is_pinned: !!item.pinned,
+        color: '#282828',
+      });
+      continue;
+    }
+
+    // 3. Artist
+    if (it.__typename === 'Artist') {
+      const artistName = it.profile?.name || it.name || 'Artista';
+      const artistCover = extractEntityImage(it) || '';
+      playlists.push({
+        id: cleanId,
+        name: artistName,
+        description: 'Artista',
+        type: 'artist',
+        images: artistCover ? [{ url: artistCover }] : [],
+        owner: { display_name: 'Spotify', id: 'spotify' },
+        tracks: { total: 0 },
+        is_pinned: !!item.pinned,
+        color: '#303030',
+      });
+      continue;
+    }
+
+    // 4. Regular Playlist / Album / Podcast
+    const playlistCover = extractEntityImage(it);
     const ownerName = it.ownerV2?.data?.name || displayName;
     const ownerId = it.ownerV2?.data?.id || userId;
+    const isAlbum = it.__typename === 'Album';
+    const desc = it.description || (isAlbum ? 'Álbum' : 'Playlist');
 
     playlists.push({
       id: cleanId,
       name: it.name || 'Lista sin título',
-      description: it.description || (it.__typename === 'Artist' ? 'Artista' : 'Playlist'),
-      images: [{ url: cover }],
+      description: desc,
+      type: isAlbum ? 'album' : 'playlist',
+      images: playlistCover ? [{ url: playlistCover }] : [],
       owner: { display_name: ownerName, id: ownerId },
       tracks: { total: 0 },
       is_pinned: !!item.pinned,
@@ -243,14 +335,13 @@ export async function extractSpotifySession(spDcCookie) {
 
       const uri = content.uri || '';
       const cardId = uri.split(':').pop() || `shelf-card-${cards.length}`;
-      const cardTitle = content.name || content.title || '';
+      const cardTitle = content.name || content.title || content.profile?.name || '';
       if (!cardTitle) continue;
 
+      const isArtist = content.__typename === 'Artist';
       const artistSubtitle = content.artists?.items?.map(a => a.profile?.name).filter(Boolean).join(', ');
-      const cardSubtitle = content.description || artistSubtitle || (content.__typename === 'Artist' ? 'Artista' : 'Playlist');
-      const cardCover = content.images?.items?.[0]?.sources?.[0]?.url ||
-        content.coverArt?.sources?.[0]?.url ||
-        'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+      const cardSubtitle = content.description || artistSubtitle || (isArtist ? 'Artista' : 'Playlist');
+      const cardCover = extractEntityImage(content) || '';
 
       cards.push({
         id: cardId,
@@ -279,14 +370,14 @@ export async function extractSpotifySession(spDcCookie) {
     }
   }
 
-  // Quick access cards (top 6-8 items from library or first shelf)
+  // Quick access cards (top 8 valid items from library)
   const quickAccess = [];
-  const sourceItems = playlists.slice(0, 8);
-  for (const pl of sourceItems) {
+  const validItems = playlists.filter(p => p.type !== 'folder');
+  for (const pl of validItems.slice(0, 8)) {
     quickAccess.push({
       id: pl.id,
       name: pl.name,
-      image: pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+      image: pl.images?.[0]?.url || '',
       color: pl.color || '#303030',
     });
   }

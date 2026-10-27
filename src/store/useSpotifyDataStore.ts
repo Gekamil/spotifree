@@ -151,15 +151,20 @@ export function buildDynamicShelves(
             p.name.toLowerCase().includes('radar')
         );
 
+  const getFallbackImage = (item: Playlist) => {
+    if (item.id === 'liked-songs' || item.id === 'collection-tracks' || item.name?.toLowerCase().trim() === 'canciones que te gustan') {
+      return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+    }
+    return item.images?.[0]?.url || '';
+  };
+
   const editorialCards: DynamicShelfCard[] = (
     editorialPool.length > 0 ? editorialPool : effectivePlaylists.slice(0, 6)
   ).map((item, idx) => ({
     id: item.id || `feat-${idx}`,
     title: item.name,
     subtitle: item.description || 'De Spotify',
-    image:
-      item.images?.[0]?.url ||
-      'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+    image: getFallbackImage(item),
   }));
 
   // Shelf 2: Made for user (Priority 2) - Derived dynamically from live playlists
@@ -181,7 +186,7 @@ export function buildDynamicShelves(
       id: p.id || `made-for-${idx}`,
       title: p.name,
       subtitle: p.description || `Mix personalizado para ${displayName}`,
-      image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+      image: getFallbackImage(p),
       badge: matchDaily ? matchDaily[0] : undefined,
       badgeColor: matchDaily ? badgeColors[idx % badgeColors.length] : undefined,
     };
@@ -194,7 +199,7 @@ export function buildDynamicShelves(
     id: p.id || `recent-${idx}`,
     title: p.name,
     subtitle: p.description || 'De tu biblioteca',
-    image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+    image: getFallbackImage(p),
   }));
 
   // Shelf 4: Más como {topArtist} (Priority 4) - Dynamically derived artist affinity
@@ -221,7 +226,7 @@ export function buildDynamicShelves(
     id: p.id || `artist-${idx}`,
     title: p.name,
     subtitle: p.description || `Con ${topArtistName} y artistas similares`,
-    image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+    image: getFallbackImage(p),
   }));
 
   // Shelf 5: Mixes (Priority 5) - Dynamically derived genre mixes
@@ -234,7 +239,7 @@ export function buildDynamicShelves(
     id: p.id || `mix-${idx}`,
     title: p.name,
     subtitle: p.description || 'Música organizada por tus géneros favoritos',
-    image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+    image: getFallbackImage(p),
   }));
 
   return [

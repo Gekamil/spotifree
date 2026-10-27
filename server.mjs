@@ -16,16 +16,14 @@ function setCorsHeaders(res) {
 }
 
 function toHDImage(url) {
-  if (!url) return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  if (!url) return '';
   return url
     .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
     .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
     .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
     .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
     .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
-    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
-    .replace('liked-songs-64.png', 'liked-songs-640.jpg')
-    .replace('liked-songs-300.png', 'liked-songs-640.jpg');
+    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/');
 }
 
 function parseEmbedHtml(html, cleanId) {
@@ -36,9 +34,23 @@ function parseEmbedHtml(html, cleanId) {
   const entity = data.props?.pageProps?.state?.data?.entity;
   if (!entity) throw new Error('Entity missing from Spotify Embed');
 
-  const coverUrl = entity.visualIdentity?.image?.[0]?.url ||
-    entity.coverArt?.sources?.[0]?.url ||
-    'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  // Find best resolution cover image
+  let coverUrl = '';
+  const visualImages = entity.visualIdentity?.image;
+  if (visualImages && visualImages.length > 0) {
+    const best = visualImages.find(s => (s.maxHeight || 0) >= 300) || visualImages[visualImages.length - 1];
+    if (best?.url) coverUrl = toHDImage(best.url);
+  }
+  if (!coverUrl && entity.coverArt?.sources && entity.coverArt.sources.length > 0) {
+    const best = entity.coverArt.sources.find(s => (s.height || 0) >= 300 || (s.width || 0) >= 300) || entity.coverArt.sources[0];
+    if (best?.url) coverUrl = toHDImage(best.url);
+  }
+  if (!coverUrl && Array.isArray(entity.images) && entity.images.length > 0) {
+    coverUrl = toHDImage(entity.images[0]?.url || entity.images[0]);
+  }
+  if (!coverUrl && (cleanId === 'collection-tracks' || cleanId === 'liked-songs')) {
+    coverUrl = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  }
 
   const tracks = (entity.trackList || []).map((t, idx) => {
     const rawUri = t.uri || '';
@@ -55,7 +67,7 @@ function parseEmbedHtml(html, cleanId) {
       album: {
         id: `album-${cleanId}`,
         name: entity.name,
-        images: [{ url: coverUrl }],
+        images: coverUrl ? [{ url: coverUrl }] : [],
       },
       duration_ms: t.duration || 180000,
       preview_url: t.audioPreview?.url || null,
@@ -68,7 +80,7 @@ function parseEmbedHtml(html, cleanId) {
     name: entity.name,
     description: entity.description || '',
     type: entity.type || 'playlist',
-    images: [{ url: coverUrl }],
+    images: coverUrl ? [{ url: coverUrl }] : [],
     owner: {
       display_name: entity.owner?.name || 'Spotify',
       id: entity.owner?.id || 'spotify',

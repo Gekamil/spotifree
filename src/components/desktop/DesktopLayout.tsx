@@ -119,10 +119,10 @@ export const DesktopLayout: React.FC = () => {
       image = image || 'https://dailymix-images.scdn.co/v2/img/ab6761610000e5ebc8be3c6e5a824360d1bffc03/1/es/default';
       desc = desc || 'Romeo Santos, Prince Royce, Aventura y más';
       ownerName = 'Hecha para Jorgeperezvk';
-    } else if (cleanId === 'liked-songs' || cleanId === 'tracks') {
+    } else if (cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection-tracks') {
       title = 'Canciones que te gustan';
       image = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
-      ownerName = 'Jorgeperezvk';
+      ownerName = useSpotifyDataStore.getState().user?.display_name || 'Spotify';
     } else if (cleanId === '43GWp9FbN9nHihudedyVQM' || cleanId === 'romeo-prince' || cleanId === 'romeo---prince') {
       title = title || 'Romeo & Prince';
       ownerName = 'Jorgeperezvk';

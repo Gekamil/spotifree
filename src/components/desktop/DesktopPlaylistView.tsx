@@ -50,12 +50,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           const data = await res.json();
           if (!cancelled && data.tracks?.items) {
             const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
+            const hasValidScrapedImage = data.images?.length > 0 && data.images[0].url && !data.images[0].url.includes('liked-songs');
             const updated: Playlist = {
               ...playlist,
               ...data,
               name: (data.name && data.name !== 'Tu biblioteca' && data.name !== 'Playlist' && !isSlugName) ? data.name : playlist.name,
               description: data.description || playlist.description,
-              images: data.images?.length > 0 ? data.images : playlist.images,
+              images: hasValidScrapedImage ? data.images : playlist.images,
               color: data.color || playlist.color,
               owner: data.owner || playlist.owner,
               tracks: data.tracks,
@@ -66,7 +67,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               useSpotifyDataStore.getState().cachePlaylistDetails(updated);
               useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
                 tracks: data.tracks,
-                ...(data.images?.length > 0 ? { images: data.images } : {}),
+                ...(hasValidScrapedImage ? { images: data.images } : {}),
                 ...(data.color ? { color: data.color } : {}),
                 ...(data.owner ? { owner: data.owner } : {}),
               });

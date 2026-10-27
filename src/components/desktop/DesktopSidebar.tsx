@@ -236,7 +236,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           >
             {processedPlaylists.map((playlist) => {
               const isSelected = selectedPlaylistId === playlist.id;
-              const isLikedSongs = playlist.id === 'liked-songs';
+              const isLikedSongs =
+                playlist.id === 'liked-songs' ||
+                playlist.id === 'collection-tracks' ||
+                playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+              const isFolder =
+                playlist.type === 'folder' ||
+                (playlist as any).is_folder ||
+                playlist.name?.toLowerCase().includes('carpeta') ||
+                playlist.id?.startsWith('folder:') ||
+                playlist.id === 'nueva-carpeta';
+              const isArtist =
+                playlist.type === 'artist' ||
+                playlist.description?.toLowerCase() === 'artista';
+              const coverUrl = playlist.images?.[0]?.url;
+
               const isPlayingThis =
                 isPlaying &&
                 ((currentTrack as any)?.playlistId
@@ -256,30 +270,43 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                     isSelected ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a] active:bg-[#121212]'
                   }`}
                 >
-                  <div className="relative aspect-square w-full rounded overflow-hidden shadow mb-1.5 bg-[#282828]">
+                  <div className={`relative aspect-square w-full rounded overflow-hidden shadow mb-1.5 bg-[#282828] ${isArtist ? 'rounded-full' : ''}`}>
                     {isLikedSongs ? (
                       <img
                         src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
                         alt="Canciones que te gustan"
                         className="w-full h-full object-cover"
                       />
-                    ) : playlist.id === 'nueva-carpeta' ? (
+                    ) : isFolder ? (
                       <div className="w-full h-full flex items-center justify-center text-[#b3b3b3]">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                         </svg>
                       </div>
-                    ) : (
+                    ) : isArtist ? (
                       <img
-                        src={playlist.images[0]?.url}
+                        src={coverUrl || 'https://i.scdn.co/image/ab6761610000e5ebc8be3c6e5a824360d1bffc03'}
+                        alt={playlist.name}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover rounded-full"
+                      />
+                    ) : coverUrl && !coverUrl.includes('liked-songs') ? (
+                      <img
+                        src={coverUrl}
                         alt={playlist.name}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-[#b3b3b3]">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                        </svg>
+                      </div>
                     )}
 
                     {/* Centered play/pause on hover */}
-                    {playlist.id !== 'nueva-carpeta' && (
+                    {!isFolder && (
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         {isPlayingThis ? (
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
@@ -311,7 +338,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   </div>
                   {viewMode === 'cuadricula' && (
                     <p className="text-[12px] text-[#b3b3b3] truncate mt-0.5 font-['SpotifyMixUI',sans-serif]">
-                      {isLikedSongs ? 'Lista • 23 canciones' : playlist.description}
+                      {isLikedSongs ? 'Lista • Canciones guardadas' : playlist.description}
                     </p>
                   )}
                 </div>
@@ -323,7 +350,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           <div className="space-y-0.5">
             {processedPlaylists.map((playlist) => {
               const isSelected = selectedPlaylistId === playlist.id;
-              const isLikedSongs = playlist.id === 'liked-songs';
+              const isLikedSongs =
+                playlist.id === 'liked-songs' ||
+                playlist.id === 'collection-tracks' ||
+                playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+              const isFolder =
+                playlist.type === 'folder' ||
+                (playlist as any).is_folder ||
+                playlist.name?.toLowerCase().includes('carpeta') ||
+                playlist.id?.startsWith('folder:') ||
+                playlist.id === 'nueva-carpeta';
+              const isArtist =
+                playlist.type === 'artist' ||
+                playlist.description?.toLowerCase() === 'artista';
+              const coverUrl = playlist.images?.[0]?.url;
+
               const isPlayingThis =
                 isPlaying &&
                 ((currentTrack as any)?.playlistId
@@ -347,7 +388,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 >
                   {/* Thumbnail 48x48 (hidden in compact view mode) */}
                   {viewMode !== 'compacta' && (
-                    <div className="relative w-12 h-12 rounded shrink-0 overflow-hidden shadow">
+                    <div className={`relative w-12 h-12 rounded shrink-0 overflow-hidden shadow bg-[#282828] ${isArtist ? 'rounded-full' : ''}`}>
                       {isLikedSongs ? (
                         <img
                           src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
@@ -355,23 +396,36 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                         />
-                      ) : playlist.id === 'nueva-carpeta' ? (
+                      ) : isFolder ? (
                         <div className="w-full h-full bg-[#282828] flex items-center justify-center text-[#b3b3b3]">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                             <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                           </svg>
                         </div>
-                      ) : (
+                      ) : isArtist ? (
                         <img
-                          src={playlist.images[0]?.url}
+                          src={coverUrl || 'https://i.scdn.co/image/ab6761610000e5ebc8be3c6e5a824360d1bffc03'}
+                          alt={playlist.name}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full object-cover rounded-full"
+                        />
+                      ) : coverUrl && !coverUrl.includes('liked-songs') ? (
+                        <img
+                          src={coverUrl}
                           alt={playlist.name}
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                         />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-[#b3b3b3]">
+                          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                          </svg>
+                        </div>
                       )}
 
                       {/* Hover Play/Pause Button directly centered on thumbnail */}
-                      {playlist.id !== 'nueva-carpeta' && (
+                      {!isFolder && (
                         <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                           {isPlayingThis ? (
                             <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
