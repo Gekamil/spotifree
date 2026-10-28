@@ -28,6 +28,7 @@ export default {
       },
       fontFamily: {
         sans: [
+          'SpotifyMixUI',
           'CircularSp',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -35,6 +36,14 @@ export default {
           'Roboto',
           'Helvetica',
           'Arial',
+          'sans-serif'
+        ],
+        title: [
+          'SpotifyMixUITitle',
+          'CircularSpTitle',
+          'SpotifyMixUI',
+          'CircularSp',
+          '-apple-system',
           'sans-serif'
         ]
       },

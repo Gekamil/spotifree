@@ -14,6 +14,8 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
+import { saveAccount } from '../utils/userAccounts';
+import { useUIStore } from './useUIStore';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -439,6 +441,17 @@ const store = create<SpotifyDataState>((set, get) => ({
           if (typeof window !== 'undefined' && session.user.id) {
             window.localStorage.setItem('spotifree_active_user_id', session.user.id);
           }
+
+          saveAccount({
+            id: session.user.id || `user-${Date.now()}`,
+            displayName: session.user.display_name || 'Usuario Spotify',
+            email: session.user.email,
+            avatarUrl: session.user.images?.[0]?.url,
+            cookie: userCookie,
+            accessToken: session.accessToken,
+            lastUsed: Date.now(),
+          });
+
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
@@ -570,51 +583,39 @@ const store = create<SpotifyDataState>((set, get) => ({
       ]);
 
       if (!user) {
-        // If Spotify token was issued but Spotify API returned 403 (Developer Premium requirement)
+        // If Spotify token was issued but Spotify API returned 403 (Developer mode restriction)
         const premiumBlocked = typeof window !== 'undefined' && window.sessionStorage.getItem('spotify_403_premium');
-        if (premiumBlocked) {
-          console.warn('Spotify 403 notice detected. Preserving authenticated session for user.');
-          const fallbackUser: UserProfile = {
-            id: 'spotify-user',
-            display_name: 'Cuenta de Spotify',
-            images: [],
-            email: '',
-          } as any;
-
-          const fallbackShelves = buildDynamicShelves(
-            fallbackUser,
-            DEFAULT_PUBLIC_PLAYLISTS,
-            'Hecho para ti',
-            [],
-            []
-          );
-
-          set({
-            isAuthenticated: true,
-            user: fallbackUser,
-            playlists: DEFAULT_PUBLIC_PLAYLISTS,
-            topTracks: [],
-            dynamicShelves: fallbackShelves,
-            authWarning: 'Active premium subscription required for the owner of the app',
-            isLoading: false,
-          });
-          return;
-        }
-
-        console.warn('Spotify session token is invalid or expired');
+        console.warn('Spotify session token is invalid or blocked by Spotify Developer API (403)');
         logoutSpotify();
         set({
           isAuthenticated: false,
           user: null,
           playlists: [],
           dynamicShelves: [],
-          authWarning: null,
+          authWarning: premiumBlocked
+            ? 'Tu cuenta de Spotify no está autorizada en la API de desarrollo (Error 403). Conéctate usando tu clave sp_dc.'
+            : 'Sesión oficial de Spotify caducada o no válida.',
           isLoading: false,
         });
+        useUIStore.getState().openLoginModal();
         return;
       }
 
       const userPlaylists = playlists || [];
+
+      if (typeof window !== 'undefined' && user.id) {
+        window.localStorage.setItem('spotifree_active_user_id', user.id);
+      }
+
+      saveAccount({
+        id: user.id || `user-${Date.now()}`,
+        displayName: user.display_name || 'Usuario Spotify',
+        email: user.email,
+        avatarUrl: user.images?.[0]?.url,
+        cookie: (typeof window !== 'undefined' && window.localStorage.getItem('user_spotify_cookie')) || '',
+        accessToken: userToken,
+        lastUsed: Date.now(),
+      });
       const shelves = buildDynamicShelves(
         user,
         userPlaylists,

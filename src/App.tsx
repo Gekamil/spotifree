@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { MobileLayout } from './components/mobile/MobileLayout';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
+import { useUIStore } from './store/useUIStore';
 import { useIsMobile } from './utils/useIsMobile';
 
 function App() {
@@ -10,6 +11,9 @@ function App() {
 
   useEffect(() => {
     initializeSpotify();
+
+    const handleOpenModal = () => useUIStore.getState().openLoginModal();
+    window.addEventListener('spotifree_open_login_modal', handleOpenModal);
 
     const handleFocus = () => {
       if (typeof window !== 'undefined' && window.location.search.includes('code=')) return;
@@ -24,6 +28,7 @@ function App() {
 
     return () => {
       window.removeEventListener('focus', handleFocus);
+      window.removeEventListener('spotifree_open_login_modal', handleOpenModal);
     };
   }, [initializeSpotify]);
 
