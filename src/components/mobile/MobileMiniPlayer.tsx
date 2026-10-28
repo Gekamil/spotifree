@@ -18,7 +18,12 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
   return (
     <div
       onClick={onOpenFullPlayer}
-      className="fixed bottom-[60px] left-2 right-2 h-14 bg-[#282828] hover:bg-[#303030] rounded-lg shadow-2xl z-30 flex items-center justify-between px-2.5 overflow-hidden border border-white/5 cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI']"
+      className="fixed bottom-[74px] left-2 right-2 h-14 rounded-lg shadow-2xl z-40 flex items-center justify-between px-2.5 overflow-hidden border border-white/10 cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] pointer-events-auto"
+      style={{
+        backgroundColor: 'rgba(34, 34, 34, 0.94)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+      }}
     >
       {/* 2px bottom progress bar */}
       <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white/10">

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import React, { useState, useMemo } from 'react';
+import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
@@ -11,22 +11,85 @@ import { DesktopProfileView } from '../desktop/DesktopProfileView';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 
+const DEFAULT_MOBILE_SHORTCUTS = [
+  { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
+  { id: '43GWp9FbN9nHihudedyVQM', name: 'Romeo Santos & Prince Royce', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000da84566f06a12b9d3161476b79c3', color: '#C45028' },
+  { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://seeded-session-images.scdn.co/v2/img/540/r/artist/3qvxsgvg4egzfuad38wocm/es', color: '#EAB308' },
+  { id: 'spidey', name: 'Spidey y su superequipo', image: 'https://i.scdn.co/image/ab67616d00001e028b18861dfeb1c944111306bc', color: '#D11B24' },
+  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#5A483A' },
+  { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
+  { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2E4A52' },
+  { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8B3A1A' },
+];
+
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
 
-  const { playlists, dynamicShelves, quickAccessCards } = useSpotifyDataStore();
+  const { user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
 
-  const shortcuts = quickAccessCards?.length > 0 ? quickAccessCards.slice(0, 6) : [
-    { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' },
-    { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' },
-    { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426' },
-    { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' },
-    { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6' },
-  ];
+  // 8 Quick Access Shortcuts matching user's active session
+  const shortcuts = useMemo(() => {
+    if (quickAccessCards && quickAccessCards.length >= 6) {
+      return quickAccessCards.slice(0, 8);
+    }
+    return DEFAULT_MOBILE_SHORTCUTS;
+  }, [quickAccessCards]);
+
+  // Comprehensive shelves: user's playlists from current session + recommended feeds
+  const shelves = useMemo(() => {
+    const list: Array<{
+      id: string;
+      title: string;
+      cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
+    }> = [];
+
+    // 1. User's Playlists from current session ("nuestra sesión")
+    const userLists = playlists.filter(
+      (p) => !p.id.includes('collection:tracks') && p.type !== 'folder'
+    );
+    if (userLists.length > 0) {
+      list.push({
+        id: 'shelf-tus-playlists',
+        title: 'Tus playlists',
+        cards: userLists.map((p) => ({
+          id: p.id,
+          title: p.name,
+          subtitle: p.description || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
+          image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+        })),
+      });
+    }
+
+    // 2. Base dynamic shelves (Hecho para ti, Escuchado recientemente, etc.)
+    const base = dynamicShelves && dynamicShelves.length > 0
+      ? dynamicShelves
+      : buildDynamicShelves(user, playlists, featuredMessage);
+
+    base
+      .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
+      .forEach((s) => {
+        list.push({
+          id: s.id,
+          title: s.title,
+          cards: s.cards.map((c) => ({
+            id: c.id,
+            title: c.title,
+            subtitle: c.subtitle,
+            image: c.image,
+          })),
+        });
+      });
+
+    if (homeFilter === 'musica') {
+      return list.filter((s) => !s.title.toLowerCase().includes('noticias'));
+    }
+
+    return list;
+  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
@@ -61,31 +124,38 @@ export const MobileLayout: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-black text-white overflow-hidden font-['SpotifyMixUI'] select-none relative">
       {/* Scrollable Center Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-32">
-        {/* TAB: HOME */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-36">
+        {/* TAB 1: HOME */}
         {mobileTab === 'home' && (
-          <div className="space-y-6">
+          <div
+            className="space-y-6 min-h-full"
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(80, 24, 240, 0.45) 0%, rgba(18, 18, 18, 0.95) 280px, #000000 450px)',
+            }}
+          >
             <MobileHeader
               activeTab={homeFilter}
               onTabChange={setHomeFilter}
               onOpenProfile={() => setMobileTab('profile')}
             />
 
-            {/* Quick Access 2-Column Grid (Spotify Mobile screenshot 1) */}
+            {/* Quick Access 2-Column Grid matching Spotify Mobile 01_mobile_home.png */}
             <div className="px-4">
               <div className="grid grid-cols-2 gap-2">
                 {shortcuts.map((card) => (
                   <div
                     key={card.id}
                     onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
-                    className="h-14 bg-[#282828] hover:bg-[#323232] rounded-md overflow-hidden flex items-center gap-2.5 cursor-pointer shadow-md active:scale-98 transition-all"
+                    className="h-14 bg-white/[0.08] hover:bg-white/[0.15] active:bg-white/[0.22] rounded-[4px] overflow-hidden flex items-center gap-2.5 cursor-pointer shadow-md active:scale-98 transition-all"
                   >
                     <img
                       src={card.image}
                       alt={card.name}
+                      referrerPolicy="no-referrer"
                       className="w-14 h-14 object-cover shrink-0"
                     />
-                    <span className="font-bold text-white text-xs leading-tight line-clamp-2 pr-2">
+                    <span className="font-bold text-white text-xs leading-snug line-clamp-2 pr-2.5">
                       {card.name}
                     </span>
                   </div>
@@ -94,23 +164,24 @@ export const MobileLayout: React.FC = () => {
             </div>
 
             {/* Shelves Horizontal Carousels */}
-            <div className="space-y-6 px-4">
-              {dynamicShelves.map((shelf) => (
+            <div className="space-y-7 px-4">
+              {shelves.map((shelf) => (
                 <div key={shelf.id} className="space-y-3">
-                  <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
+                  <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
                     {shelf.title}
                   </h3>
-                  <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
+                  <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
                     {shelf.cards.map((card) => (
                       <div
                         key={card.id}
                         onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
-                        className="w-36 shrink-0 flex flex-col space-y-2 cursor-pointer active:scale-98 transition-transform"
+                        className="w-36 shrink-0 flex flex-col space-y-2 cursor-pointer active:scale-96 transition-transform"
                       >
-                        <div className="w-36 h-36 rounded-lg overflow-hidden bg-[#242424] shadow-md relative">
+                        <div className="w-36 h-36 rounded-md overflow-hidden bg-[#242424] shadow-lg relative">
                           <img
                             src={card.image}
                             alt={card.title}
+                            referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                           />
                         </div>
@@ -129,14 +200,14 @@ export const MobileLayout: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: SEARCH */}
+        {/* TAB 2: SEARCH */}
         {mobileTab === 'search' && (
           <div className="p-4 space-y-4">
             <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
           </div>
         )}
 
-        {/* TAB: LIBRARY */}
+        {/* TAB 3: LIBRARY */}
         {mobileTab === 'library' && (
           <div className="p-4 space-y-4">
             <div className="flex items-center justify-between pt-2">
@@ -172,7 +243,7 @@ export const MobileLayout: React.FC = () => {
                 </div>
               </div>
 
-              {/* All playlists */}
+              {/* All user playlists from current session */}
               {playlists
                 .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
                 .map((pl) => (
@@ -194,7 +265,7 @@ export const MobileLayout: React.FC = () => {
                         {pl.name}
                       </span>
                       <span className="text-xs text-[#b3b3b3] mt-0.5">
-                        Playlist • {pl.owner?.display_name || 'Spotify'}
+                        Playlist • {pl.owner?.display_name || user?.display_name || 'Spotify'}
                       </span>
                     </div>
                   </div>
@@ -203,7 +274,7 @@ export const MobileLayout: React.FC = () => {
           </div>
         )}
 
-        {/* TAB: PLAYLIST / ALBUM VIEW */}
+        {/* TAB 4: PLAYLIST / ALBUM VIEW */}
         {mobileTab === 'playlist' && selectedPlaylist && (
           <MobilePlaylistView
             playlist={selectedPlaylist}
@@ -212,7 +283,7 @@ export const MobileLayout: React.FC = () => {
           />
         )}
 
-        {/* TAB: PROFILE */}
+        {/* TAB 5: PROFILE */}
         {mobileTab === 'profile' && (
           <div className="relative">
             <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-md px-4 py-3 flex items-center gap-3">
@@ -222,7 +293,7 @@ export const MobileLayout: React.FC = () => {
                 title="Atrás"
               >
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M11.03.47a.75.75 0 0 1 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
+                  <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 0-1.06l6.75-6.75a.75.75 0 0 1 1.06 0z" />
                 </svg>
               </button>
               <span className="font-bold text-sm text-white">Perfil</span>
@@ -237,10 +308,10 @@ export const MobileLayout: React.FC = () => {
         )}
       </div>
 
-      {/* Floating Mini Player Docked Above Nav */}
+      {/* Floating Translucent Mini Player Docked Above Nav */}
       <MobileMiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
 
-      {/* Bottom Navigation */}
+      {/* Translucent Glass Bottom Navigation Bar */}
       <MobileBottomNav
         activeTab={
           mobileTab === 'home' || mobileTab === 'playlist' || mobileTab === 'profile'
