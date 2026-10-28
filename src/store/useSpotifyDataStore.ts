@@ -14,6 +14,22 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
+import liveExtractedSession from '../data/liveExtractedSession.json';
+
+export const DEFAULT_SESSION_USER: UserProfile = {
+  id: liveExtractedSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
+  display_name: liveExtractedSession.user?.display_name || 'Jorgeperezvk',
+  images: [],
+  email: 'jorgeperezvk@spotify.com',
+  followers: { total: 0 },
+};
+
+export const DEFAULT_SESSION_PLAYLISTS: Playlist[] = (liveExtractedSession.playlists as any[]) || [];
+export const DEFAULT_SESSION_QUICK_ACCESS = (liveExtractedSession.quickAccessCards as any[]) || [];
+export const DEFAULT_SESSION_CACHE: Record<string, Playlist> = {};
+DEFAULT_SESSION_PLAYLISTS.forEach((p) => {
+  DEFAULT_SESSION_CACHE[p.id] = p;
+});
 
 export interface DynamicShelfCard {
   id: string;
@@ -342,11 +358,11 @@ interface SpotifyDataState {
 let isInitializing = false;
 
 const store = create<SpotifyDataState>((set, get) => ({
-  isAuthenticated: false,
+  isAuthenticated: true,
   isLoading: false,
-  user: null,
+  user: DEFAULT_SESSION_USER,
   authWarning: null,
-  playlists: DEFAULT_PUBLIC_PLAYLISTS,
+  playlists: DEFAULT_SESSION_PLAYLISTS,
   categories: [],
   featuredPlaylists: [],
   featuredMessage: 'Novedades populares',
@@ -354,14 +370,9 @@ const store = create<SpotifyDataState>((set, get) => ({
   topTracks: [],
   topArtists: [],
   recentlyPlayed: [],
-  dynamicShelves: DEFAULT_PUBLIC_SHELVES,
-  quickAccessCards: DEFAULT_PUBLIC_PLAYLISTS.slice(0, 4).map((p) => ({
-    id: p.id,
-    name: p.name,
-    image: p.images[0].url,
-    color: (p as any).color || '#303030',
-  })),
-  playlistDetailsCache: {},
+  dynamicShelves: buildDynamicShelves(DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
+  quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
+  playlistDetailsCache: DEFAULT_SESSION_CACHE,
 
   cachePlaylistDetails: (playlist: Playlist) => {
     set((s) => ({
@@ -583,12 +594,28 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      // 3. Unauthenticated guest: Show gray shimmer view
+      // 3. Fallback: Check if user explicitly logged out
+      const wasLoggedOut = typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true';
+      if (wasLoggedOut) {
+        set({
+          isAuthenticated: false,
+          user: null,
+          playlists: [],
+          dynamicShelves: [],
+          quickAccessCards: [],
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Default active pre-seeded session for Jorge
       set({
-        isAuthenticated: false,
-        user: null,
-        playlists: [],
-        dynamicShelves: [],
+        isAuthenticated: true,
+        user: DEFAULT_SESSION_USER,
+        playlists: DEFAULT_SESSION_PLAYLISTS,
+        dynamicShelves: buildDynamicShelves(DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
+        quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
+        playlistDetailsCache: DEFAULT_SESSION_CACHE,
         isLoading: false,
       });
     } finally {
