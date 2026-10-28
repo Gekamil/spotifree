@@ -8,8 +8,8 @@ import { MobileHeader } from './MobileHeader';
 import { MobilePlaylistView } from './MobilePlaylistView';
 import { MobileSearchView } from './MobileSearchView';
 import { MobileCreateSheet } from './MobileCreateSheet';
-import { DesktopProfileView } from '../desktop/DesktopProfileView';
-import { DesktopSettingsView } from '../desktop/DesktopSettingsView';
+import { MobileProfileView } from './MobileProfileView';
+import { MobileSettingsView } from './MobileSettingsView';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
@@ -418,30 +418,24 @@ export const MobileLayout: React.FC = () => {
           />
         )}
 
-        {/* TAB 5: PROFILE VIEW */}
+        {/* TAB 5: DEDICATED SPOTIFY MOBILE PROFILE VIEW */}
         {mobileTab === 'profile' && (
-          <div className="p-4">
-            <button
-              onClick={() => setMobileTab('home')}
-              className="mb-4 text-xs font-bold text-white bg-white/10 px-3 py-1.5 rounded-full flex items-center gap-1.5"
-            >
-              ← Volver
-            </button>
-            <DesktopProfileView />
-          </div>
+          <MobileProfileView
+            onBack={() => setMobileTab('home')}
+            onOpenSettings={() => setMobileTab('settings')}
+            onSelectPlaylist={(pl) => {
+              setSelectedPlaylist(pl);
+              setMobileTab('playlist');
+            }}
+          />
         )}
 
-        {/* TAB 6: SETTINGS VIEW */}
+        {/* TAB 6: DEDICATED SPOTIFY MOBILE SETTINGS VIEW */}
         {mobileTab === 'settings' && (
-          <div className="p-4">
-            <button
-              onClick={() => setMobileTab('home')}
-              className="mb-4 text-xs font-bold text-white bg-white/10 px-3 py-1.5 rounded-full flex items-center gap-1.5 cursor-pointer active:scale-95"
-            >
-              ← Volver al inicio
-            </button>
-            <DesktopSettingsView />
-          </div>
+          <MobileSettingsView
+            onBack={() => setMobileTab('home')}
+            onOpenProfile={() => setMobileTab('profile')}
+          />
         )}
       </div>
 
