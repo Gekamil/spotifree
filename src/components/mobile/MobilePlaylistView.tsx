@@ -12,16 +12,15 @@ import {
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
+import realLikedSongs from '../../data/realLikedSongs.json';
 
-function cleanQueryForSearch(name: string, id: string): string {
-  const n = (name || '').toLowerCase();
-  if (id === '43GWp9FbN9nHihudedyVQM' || /romeo.*prince/i.test(n)) return 'Romeo Santos Prince Royce';
-  if (id === 'radio-prince-royce' || /prince\s*royce/i.test(n)) return 'Prince Royce';
-  if (n.includes('spidey')) return 'Spidey and His Amazing Friends Patrick Stump';
-  if (n.includes('j+l') || n.includes('nuestro amor')) return 'Bad Bunny Feid Quevedo Rauw';
-  if (n.includes('míticas') || n.includes('miticas')) return 'Estopa Melendi El Canto del Loco';
-  if (n.includes('el nuevo urbano')) return 'Saiko Quevedo Morad Beny Jr';
-  return name.replace(/[\(\)\[\]♡★✨🔥&]/g, ' ').replace(/\b20\d\d\b/g, '').trim();
+function getCustomLikedSongs(): Track[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem('spotifree_custom_liked_songs');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
 }
 
 interface MobilePlaylistViewProps {
@@ -37,7 +36,31 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
   const { user } = useSpotifyDataStore();
 
-  const [tracks, setTracks] = useState<Track[]>(playlist.tracks?.items || []);
+  const isLikedPlaylist =
+    playlist.id === 'liked-songs' ||
+    playlist.id === 'tracks' ||
+    playlist.id.includes('collection:tracks') ||
+    playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+
+  const [tracks, setTracks] = useState<Track[]>(() => {
+    if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
+      return playlist.tracks.items;
+    }
+    const cleanId = (playlist.id || '').replace(/^spotify:(playlist|album):/, '').split('?')[0];
+    const cached =
+      useSpotifyDataStore.getState().playlistDetailsCache[cleanId] ||
+      useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
+    if (cached?.tracks?.items && cached.tracks.items.length > 0) {
+      return cached.tracks.items;
+    }
+    if (isLikedPlaylist) {
+      const custom = getCustomLikedSongs();
+      if (custom.length > 0) return custom;
+      if (realLikedSongs && realLikedSongs.length > 0) return realLikedSongs as Track[];
+    }
+    return [];
+  });
+
   const [loading, setLoading] = useState(false);
   const [isSavedInLibrary, setIsSavedInLibrary] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -57,11 +80,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isSearchingAdd, setIsSearchingAdd] = useState(false);
 
   const themeColor = resolveVibrantColor(playlist.id, playlist.name, (playlist as any).color);
-  const isLikedPlaylist = playlist.id === 'liked-songs' || playlist.id.includes('collection:tracks');
 
-  // Load tracks if playlist only has stub
+  // Load tracks accurately if playlist only had stub
   useEffect(() => {
     let cancelled = false;
+    const cleanId = (playlist.id || '')
+      .replace(/^spotify:(playlist|album):/, '')
+      .split('?')[0];
 
     // 1. Direct items
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
@@ -69,16 +94,38 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       return;
     }
 
-    // 2. Check store for pre-seeded tracks
-    const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
+    // 2. Check playlistDetailsCache
+    const cached =
+      useSpotifyDataStore.getState().playlistDetailsCache[cleanId] ||
+      useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
+    if (cached?.tracks?.items && cached.tracks.items.length > 0) {
+      setTracks(cached.tracks.items);
+      return;
+    }
+
+    // 3. Check Liked Songs specifically
+    if (isLikedPlaylist) {
+      const customLiked = getCustomLikedSongs();
+      if (customLiked.length > 0) {
+        setTracks(customLiked);
+        return;
+      }
+      if (realLikedSongs && realLikedSongs.length > 0) {
+        setTracks(realLikedSongs as Track[]);
+        return;
+      }
+    }
+
+    // 4. Check store user playlists
+    const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === cleanId || p.id === playlist.id);
     if (storePl?.tracks?.items && storePl.tracks.items.length > 0) {
       setTracks(storePl.tracks.items);
       return;
     }
 
-    // 3. Check custom saved tracks in localStorage
+    // 5. Check custom saved tracks in localStorage
     try {
-      const savedKey = isLikedPlaylist ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlist.id}`;
+      const savedKey = `spotifree_playlist_tracks_${cleanId}`;
       const savedRaw = window.localStorage.getItem(savedKey);
       if (savedRaw) {
         const parsed = JSON.parse(savedRaw);
@@ -89,31 +136,73 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       }
     } catch {}
 
+    // 6. Fetch from backend endpoint with Spotify session / cookies
     async function fetchTracks() {
       setLoading(true);
       try {
-        const query = cleanQueryForSearch(playlist.name, playlist.id);
-        const res = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30`
-        );
+        const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+        const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+        const headers: Record<string, string> = {};
+        if (userCookie) headers['x-spotify-cookie'] = userCookie;
+        if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(cleanId)}`, { headers });
         if (res.ok) {
           const data = await res.json();
-          const mapped: Track[] = (data.results || []).map((t: any, idx: number) => ({
-            id: `track-${t.trackId || idx}`,
-            name: t.trackName || 'Canción',
-            duration_ms: t.trackTimeMillis || 210000,
-            artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-            album: {
-              id: `alb-${t.collectionId || idx}`,
-              name: t.collectionName || t.trackName,
-              images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-            },
-          }));
-          if (!cancelled && mapped.length > 0) {
-            setTracks(mapped);
+          if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
+            setTracks(data.tracks.items);
+            useSpotifyDataStore.getState().cachePlaylistDetails({
+              ...playlist,
+              ...data,
+              tracks: data.tracks,
+            });
+            setLoading(false);
+            return;
           }
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Backend playlist fetch notice:', err);
+      }
+
+      // 7. If it's an artist, resolve artist songs
+      const isArtist =
+        playlist.type === 'artist' ||
+        playlist.description === 'Artista' ||
+        cleanId.startsWith('art-') ||
+        cleanId.startsWith('artist-');
+
+      if (isArtist) {
+        try {
+          const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
+          const itunesRes = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
+          );
+          if (itunesRes.ok) {
+            const data = await itunesRes.json();
+            const artistTracks: Track[] = (data.results || []).map((t: any, idx: number) => ({
+              id: `artist-song-${t.trackId || idx}`,
+              name: t.trackName || 'Canción',
+              duration_ms: t.trackTimeMillis || 210000,
+              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
+              album: {
+                id: `alb-${t.collectionId || idx}`,
+                name: t.collectionName || t.trackName,
+                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+              },
+            }));
+            if (!cancelled && artistTracks.length > 0) {
+              setTracks(artistTracks);
+              useSpotifyDataStore.getState().cachePlaylistDetails({
+                ...playlist,
+                tracks: { total: artistTracks.length, items: artistTracks },
+              });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch {}
+      }
+
       if (!cancelled) setLoading(false);
     }
 
@@ -327,9 +416,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </div>
         ) : tracks.length === 0 ? (
           <div className="p-6 text-center space-y-4">
-            <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs mx-auto">
-              Tu lista de <em>«Canciones que te gustan»</em> es una colección personal protegida en Spotify. Añade canciones con el buscador para crear tu lista.
-            </p>
+            {isLikedPlaylist ? (
+              <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs mx-auto">
+                Tu lista de <em>«Canciones que te gustan»</em> es una colección personal protegida en Spotify. Añade canciones con el buscador para crear tu lista.
+              </p>
+            ) : (
+              <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs mx-auto">
+                Esta lista no tiene canciones guardadas aún. Usa el buscador a continuación para añadir canciones a tu lista.
+              </p>
+            )}
             {/* Inline search for songs */}
             <div className="max-w-md mx-auto space-y-3">
               <input
