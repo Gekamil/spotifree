@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { searchSpotify } from '../../services/spotifyApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { formatDuration } from '../../utils/formatters';
+import { handleImageError } from '../../utils/imageFallback';
 
 interface MobileSearchViewProps {
   onSelectPlaylistById: (id: string, name?: string, image?: string) => void;
@@ -216,6 +217,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           <img
                             src={cover}
                             alt={trk.name}
+                            onError={handleImageError}
                             className="w-full h-full object-cover"
                           />
                         )}
@@ -259,6 +261,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                       <img
                         src={art.images[0].url}
                         alt={art.name}
+                        onError={handleImageError}
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -293,6 +296,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                       <img
                         src={pl.images[0].url}
                         alt={pl.name}
+                        onError={handleImageError}
                         className="w-full h-full object-cover"
                       />
                     )}
@@ -331,6 +335,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                 <img
                   src={cat.imgSrc}
                   alt={cat.title}
+                  onError={handleImageError}
                   className="absolute -bottom-2 -right-3 w-16 h-16 rounded shadow-lg transform rotate-[25deg] object-cover pointer-events-none"
                 />
               </div>

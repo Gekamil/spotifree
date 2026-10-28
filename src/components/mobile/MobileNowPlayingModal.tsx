@@ -11,6 +11,8 @@ import {
   CheckTrackNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
+import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { handleImageError } from '../../utils/imageFallback';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -43,6 +45,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const isLiked = likedTrackIds.includes(currentTrack.id);
   const coverUrl = currentTrack.album?.images?.[0]?.url;
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
+  const themeColor = resolveVibrantColor(currentTrack.id, currentTrack.name);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
@@ -54,7 +57,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-gradient-to-b from-[#383838] via-[#1a1a1a] to-[#121212] flex flex-col justify-between px-6 pt-4 pb-8 select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300">
+    <div
+      className="fixed inset-0 z-50 flex flex-col justify-between px-6 pt-4 pb-8 select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
+      style={{
+        background: `linear-gradient(180deg, ${themeColor} 0%, rgba(18, 18, 18, 0.96) 420px, #121212 100%)`,
+      }}
+    >
       {/* Top Header */}
       <div className="flex items-center justify-between text-white py-2">
         <button
@@ -93,6 +101,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <img
               src={coverUrl}
               alt={currentTrack.name}
+              onError={handleImageError}
               className="w-full h-full object-cover"
             />
           ) : (

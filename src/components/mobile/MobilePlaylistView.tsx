@@ -11,6 +11,18 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
+import { handleImageError } from '../../utils/imageFallback';
+
+function cleanQueryForSearch(name: string, id: string): string {
+  const n = (name || '').toLowerCase();
+  if (id === '43GWp9FbN9nHihudedyVQM' || /romeo.*prince/i.test(n)) return 'Romeo Santos Prince Royce';
+  if (id === 'radio-prince-royce' || /prince\s*royce/i.test(n)) return 'Prince Royce';
+  if (n.includes('spidey')) return 'Spidey and His Amazing Friends Patrick Stump';
+  if (n.includes('j+l') || n.includes('nuestro amor')) return 'Bad Bunny Feid Quevedo Rauw';
+  if (n.includes('míticas') || n.includes('miticas')) return 'Estopa Melendi El Canto del Loco';
+  if (n.includes('el nuevo urbano')) return 'Saiko Quevedo Morad Beny Jr';
+  return name.replace(/[\(\)\[\]♡★✨🔥&]/g, ' ').replace(/\b20\d\d\b/g, '').trim();
+}
 
 interface MobilePlaylistViewProps {
   playlist: Playlist;
@@ -50,15 +62,37 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   // Load tracks if playlist only has stub
   useEffect(() => {
     let cancelled = false;
+
+    // 1. Direct items
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
       setTracks(playlist.tracks.items);
       return;
     }
 
+    // 2. Check store for pre-seeded tracks
+    const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
+    if (storePl?.tracks?.items && storePl.tracks.items.length > 0) {
+      setTracks(storePl.tracks.items);
+      return;
+    }
+
+    // 3. Check custom saved tracks in localStorage
+    try {
+      const savedKey = isLikedPlaylist ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlist.id}`;
+      const savedRaw = window.localStorage.getItem(savedKey);
+      if (savedRaw) {
+        const parsed = JSON.parse(savedRaw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setTracks(parsed);
+          return;
+        }
+      }
+    } catch {}
+
     async function fetchTracks() {
       setLoading(true);
       try {
-        const query = playlist.name.replace(/^(art-|artist-)/i, '').trim();
+        const query = cleanQueryForSearch(playlist.name, playlist.id);
         const res = await fetch(
           `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=30`
         );
@@ -87,7 +121,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [playlist.id, playlist.name]);
+  }, [playlist.id, playlist.name, isLikedPlaylist]);
 
   const handleToggleLibrary = () => {
     const next = !isSavedInLibrary;
@@ -198,6 +232,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             <img
               src={coverUrl}
               alt={playlist.name}
+              onError={handleImageError}
               className="w-full h-full object-cover"
             />
           ) : (
@@ -347,6 +382,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       <img
                         src={trackCover}
                         alt={track.name}
+                        onError={handleImageError}
                         className="w-full h-full object-cover"
                       />
                     ) : (

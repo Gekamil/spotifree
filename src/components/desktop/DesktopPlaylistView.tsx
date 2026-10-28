@@ -99,6 +99,8 @@ const TrackArtwork: React.FC<{
   );
 };
 
+import { handleImageError } from '../../utils/imageFallback';
+
 interface DesktopPlaylistViewProps {
   playlist: Playlist;
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -129,8 +131,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
 
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially);
+  const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
   const baseTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
+    : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
+    ? storePl.tracks.items
     : customSaved;
 
   const initialTracks = baseTracks.map((t) => {
@@ -636,6 +641,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             <img
               src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
               alt="Canciones que te gustan"
+              onError={handleImageError}
               className="w-full h-full object-cover shadow-2xl"
             />
           ) : !heroCoverError && dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (

@@ -43,7 +43,109 @@
         "display_name": "Jorgeperezvk"
       },
       "tracks": {
-        "total": 30
+        "total": 5,
+        "items": [
+          {
+            "id": "track-mt-1",
+            "name": "Propuesta Indecente",
+            "duration_ms": 235000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-mt-1",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-mt-2",
+            "name": "Darte un Beso",
+            "duration_ms": 206000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-mt-2",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-mt-3",
+            "name": "Eres Mía",
+            "duration_ms": 250000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-mt-3",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-mt-4",
+            "name": "Incondicional",
+            "duration_ms": 207000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-mt-4",
+              "name": "Phase II",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-mt-5",
+            "name": "Sobredosis",
+            "duration_ms": 198000,
+            "artists": [
+              {
+                "id": "art-romeo-santos-ft.-ozuna",
+                "name": "Romeo Santos ft. Ozuna"
+              }
+            ],
+            "album": {
+              "id": "alb-mt-5",
+              "name": "Golden",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -61,7 +163,169 @@
         "id": "user"
       },
       "tracks": {
-        "total": 30
+        "total": 8,
+        "items": [
+          {
+            "id": "track-jl-1",
+            "name": "MONACO",
+            "duration_ms": 267000,
+            "artists": [
+              {
+                "id": "art-bad-bunny",
+                "name": "Bad Bunny"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-1",
+              "name": "nadie sabe lo que va a pasar mañana",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-2",
+            "name": "LUNA",
+            "duration_ms": 196000,
+            "artists": [
+              {
+                "id": "art-feid,-atl-jacob",
+                "name": "Feid, ATL Jacob"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-2",
+              "name": "FERXXOCALIPSIS",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-3",
+            "name": "Columbia",
+            "duration_ms": 186000,
+            "artists": [
+              {
+                "id": "art-quevedo",
+                "name": "Quevedo"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-3",
+              "name": "Columbia",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-4",
+            "name": "DILUVIO",
+            "duration_ms": 198000,
+            "artists": [
+              {
+                "id": "art-rauw-alejandro",
+                "name": "Rauw Alejandro"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-4",
+              "name": "SATURNO",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-5",
+            "name": "REINA",
+            "duration_ms": 218000,
+            "artists": [
+              {
+                "id": "art-mora,-saiko",
+                "name": "Mora, Saiko"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-5",
+              "name": "ESTRELLA",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-6",
+            "name": "Classy 101",
+            "duration_ms": 195000,
+            "artists": [
+              {
+                "id": "art-feid,-young-miko",
+                "name": "Feid, Young Miko"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-6",
+              "name": "Classy 101",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-7",
+            "name": "POLARIS - Remix",
+            "duration_ms": 260000,
+            "artists": [
+              {
+                "id": "art-saiko,-quevedo,-feid",
+                "name": "Saiko, Quevedo, Feid"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-7",
+              "name": "POLARIS",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-jl-8",
+            "name": "QLONA",
+            "duration_ms": 172000,
+            "artists": [
+              {
+                "id": "art-karol-g,-peso-pluma",
+                "name": "Karol G, Peso Pluma"
+              }
+            ],
+            "album": {
+              "id": "alb-jl-8",
+              "name": "MAÑANA SERÁ BONITO",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -78,7 +342,309 @@
         "display_name": "Jorgeperezvk"
       },
       "tracks": {
-        "total": 30
+        "total": 15,
+        "items": [
+          {
+            "id": "track-rp-1",
+            "name": "Propuesta Indecente",
+            "duration_ms": 235000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-1",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-2",
+            "name": "Darte un Beso",
+            "duration_ms": 206000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-2",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-3",
+            "name": "Eres Mía",
+            "duration_ms": 250000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-3",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-4",
+            "name": "Incondicional",
+            "duration_ms": 207000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-4",
+              "name": "Phase II",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-5",
+            "name": "Sobredosis",
+            "duration_ms": 198000,
+            "artists": [
+              {
+                "id": "art-romeo-santos-ft.-ozuna",
+                "name": "Romeo Santos ft. Ozuna"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-5",
+              "name": "Golden",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-6",
+            "name": "Corazón Sin Cara",
+            "duration_ms": 215000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-6",
+              "name": "Prince Royce",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-7",
+            "name": "Cancioncitas de Amor",
+            "duration_ms": 237000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-7",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-8",
+            "name": "Deja Vu",
+            "duration_ms": 196000,
+            "artists": [
+              {
+                "id": "art-prince-royce-&-shakira",
+                "name": "Prince Royce & Shakira"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-8",
+              "name": "FIVE",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-9",
+            "name": "Imitadora",
+            "duration_ms": 234000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-9",
+              "name": "Golden",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-10",
+            "name": "El Clavo",
+            "duration_ms": 173000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-10",
+              "name": "El Clavo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-11",
+            "name": "Hilito",
+            "duration_ms": 234000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-11",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-12",
+            "name": "Stand by Me",
+            "duration_ms": 205000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-12",
+              "name": "Prince Royce",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-13",
+            "name": "Héroe Favorito",
+            "duration_ms": 239000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-13",
+              "name": "Golden",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-14",
+            "name": "Te Robaré",
+            "duration_ms": 219000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-14",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-rp-15",
+            "name": "La Diabla",
+            "duration_ms": 239000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-rp-15",
+              "name": "Fórmula, Vol. 1",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -95,7 +661,209 @@
         "display_name": "Hecha para Jorgeperezvk"
       },
       "tracks": {
-        "total": 30
+        "total": 10,
+        "items": [
+          {
+            "id": "track-pr-1",
+            "name": "Darte un Beso",
+            "duration_ms": 206000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-1",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-2",
+            "name": "Incondicional",
+            "duration_ms": 207000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-2",
+              "name": "Phase II",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-3",
+            "name": "Corazón Sin Cara",
+            "duration_ms": 215000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-3",
+              "name": "Prince Royce",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-4",
+            "name": "Deja Vu",
+            "duration_ms": 196000,
+            "artists": [
+              {
+                "id": "art-prince-royce-&-shakira",
+                "name": "Prince Royce & Shakira"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-4",
+              "name": "FIVE",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-5",
+            "name": "El Clavo",
+            "duration_ms": 173000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-5",
+              "name": "El Clavo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-6",
+            "name": "Stand by Me",
+            "duration_ms": 205000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-6",
+              "name": "Prince Royce",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-7",
+            "name": "Te Robaré",
+            "duration_ms": 219000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-7",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-8",
+            "name": "Me Enamoré De Ti",
+            "duration_ms": 221000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-8",
+              "name": "Alter Ego",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-9",
+            "name": "Culpa Al Corazón",
+            "duration_ms": 222000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-9",
+              "name": "FIVE",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-pr-10",
+            "name": "La Carretera",
+            "duration_ms": 238000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-pr-10",
+              "name": "FIVE",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -112,7 +880,149 @@
         "display_name": "Hecha para Jorgeperezvk"
       },
       "tracks": {
-        "total": 30
+        "total": 7,
+        "items": [
+          {
+            "id": "track-tw-1",
+            "name": "Propuesta Indecente",
+            "duration_ms": 235000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-1",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-2",
+            "name": "Darte un Beso",
+            "duration_ms": 206000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-2",
+              "name": "Soy el Mismo",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-3",
+            "name": "Columbia",
+            "duration_ms": 186000,
+            "artists": [
+              {
+                "id": "art-quevedo",
+                "name": "Quevedo"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-3",
+              "name": "Columbia",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-4",
+            "name": "LUNA",
+            "duration_ms": 196000,
+            "artists": [
+              {
+                "id": "art-feid",
+                "name": "Feid"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-4",
+              "name": "FERXXOCALIPSIS",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-5",
+            "name": "Eres Mía",
+            "duration_ms": 250000,
+            "artists": [
+              {
+                "id": "art-romeo-santos",
+                "name": "Romeo Santos"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-5",
+              "name": "Fórmula, Vol. 2",
+              "images": [
+                {
+                  "url": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-6",
+            "name": "Incondicional",
+            "duration_ms": 207000,
+            "artists": [
+              {
+                "id": "art-prince-royce",
+                "name": "Prince Royce"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-6",
+              "name": "Phase II",
+              "images": [
+                {
+                  "url": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-tw-7",
+            "name": "MONACO",
+            "duration_ms": 267000,
+            "artists": [
+              {
+                "id": "art-bad-bunny",
+                "name": "Bad Bunny"
+              }
+            ],
+            "album": {
+              "id": "alb-tw-7",
+              "name": "nadie sabe lo que va a pasar mañana",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -146,7 +1056,109 @@
         "display_name": "Jorgeperezvk"
       },
       "tracks": {
-        "total": 30
+        "total": 5,
+        "items": [
+          {
+            "id": "track-sp-1",
+            "name": "Marvel's Spidey and His Amazing Friends Theme",
+            "duration_ms": 80000,
+            "artists": [
+              {
+                "id": "art-patrick-stump",
+                "name": "Patrick Stump"
+              }
+            ],
+            "album": {
+              "id": "alb-sp-1",
+              "name": "Spidey Theme",
+              "images": [
+                {
+                  "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-sp-2",
+            "name": "Super Hero",
+            "duration_ms": 110000,
+            "artists": [
+              {
+                "id": "art-patrick-stump",
+                "name": "Patrick Stump"
+              }
+            ],
+            "album": {
+              "id": "alb-sp-2",
+              "name": "Spidey and His Amazing Friends",
+              "images": [
+                {
+                  "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-sp-3",
+            "name": "Spin, Spin, Spin",
+            "duration_ms": 95000,
+            "artists": [
+              {
+                "id": "art-patrick-stump",
+                "name": "Patrick Stump"
+              }
+            ],
+            "album": {
+              "id": "alb-sp-3",
+              "name": "Spidey and His Amazing Friends",
+              "images": [
+                {
+                  "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-sp-4",
+            "name": "Web-Out",
+            "duration_ms": 102000,
+            "artists": [
+              {
+                "id": "art-patrick-stump",
+                "name": "Patrick Stump"
+              }
+            ],
+            "album": {
+              "id": "alb-sp-4",
+              "name": "Spidey and His Amazing Friends",
+              "images": [
+                {
+                  "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-sp-5",
+            "name": "Let's Go, Spidey Team!",
+            "duration_ms": 105000,
+            "artists": [
+              {
+                "id": "art-patrick-stump",
+                "name": "Patrick Stump"
+              }
+            ],
+            "album": {
+              "id": "alb-sp-5",
+              "name": "Spidey and His Amazing Friends",
+              "images": [
+                {
+                  "url": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -164,7 +1176,129 @@
         "id": "user"
       },
       "tracks": {
-        "total": 30
+        "total": 6,
+        "items": [
+          {
+            "id": "track-na-1",
+            "name": "Vida de Rico",
+            "duration_ms": 191000,
+            "artists": [
+              {
+                "id": "art-camilo",
+                "name": "Camilo"
+              }
+            ],
+            "album": {
+              "id": "alb-na-1",
+              "name": "Mis Manos",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-na-2",
+            "name": "Tacones Rojos",
+            "duration_ms": 189000,
+            "artists": [
+              {
+                "id": "art-sebastián-yatra",
+                "name": "Sebastián Yatra"
+              }
+            ],
+            "album": {
+              "id": "alb-na-2",
+              "name": "Dharma",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-na-3",
+            "name": "Cómo Te Atreves",
+            "duration_ms": 233000,
+            "artists": [
+              {
+                "id": "art-morat",
+                "name": "Morat"
+              }
+            ],
+            "album": {
+              "id": "alb-na-3",
+              "name": "Sobre El Amor Y Sus Efectos Secundarios",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-na-4",
+            "name": "La Bachata",
+            "duration_ms": 162000,
+            "artists": [
+              {
+                "id": "art-manuel-turizo",
+                "name": "Manuel Turizo"
+              }
+            ],
+            "album": {
+              "id": "alb-na-4",
+              "name": "2000",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-na-5",
+            "name": "Tutu",
+            "duration_ms": 164000,
+            "artists": [
+              {
+                "id": "art-camilo,-pedro-capó",
+                "name": "Camilo, Pedro Capó"
+              }
+            ],
+            "album": {
+              "id": "alb-na-5",
+              "name": "Por Primera Vez",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          },
+          {
+            "id": "track-na-6",
+            "name": "Besos en Guerra",
+            "duration_ms": 231000,
+            "artists": [
+              {
+                "id": "art-morat,-juanes",
+                "name": "Morat, Juanes"
+              }
+            ],
+            "album": {
+              "id": "alb-na-6",
+              "name": "Balas Perdidas",
+              "images": [
+                {
+                  "url": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8"
+                }
+              ]
+            }
+          }
+        ]
       }
     },
     {
@@ -984,6 +2118,56 @@
           "isRadio": false
         }
       ]
+    }
+  ],
+  "quickAccessCards": [
+    {
+      "id": "liked-songs",
+      "name": "Canciones que te gustan",
+      "image": "https://misc.scdn.co/liked-songs/liked-songs-640.jpg",
+      "color": "#5018F0"
+    },
+    {
+      "id": "43GWp9FbN9nHihudedyVQM",
+      "name": "Romeo Santos & Prince Royce",
+      "image": "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7",
+      "color": "#C45028"
+    },
+    {
+      "id": "radio-prince-royce",
+      "name": "Prince Royce Radio",
+      "image": "https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es",
+      "color": "#EAB308"
+    },
+    {
+      "id": "spidey",
+      "name": "Spidey y su superequipo",
+      "image": "https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f",
+      "color": "#D11B24"
+    },
+    {
+      "id": "7b3MrCWtettvBKlfBSdorn",
+      "name": "J+L(2026)",
+      "image": "https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc",
+      "color": "#5A483A"
+    },
+    {
+      "id": "37i9dQZF1DWZdsS73T1ogG",
+      "name": "el nuevo urbano",
+      "image": "https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426",
+      "color": "#704838"
+    },
+    {
+      "id": "4f0YTBqSbvM1iJpuY9r3yQ",
+      "name": "ZIZI",
+      "image": "https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31",
+      "color": "#2E4A52"
+    },
+    {
+      "id": "37i9dQZF1DX2EiUAL7Wdfc",
+      "name": "míticas",
+      "image": "https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6",
+      "color": "#8B3A1A"
     }
   ]
 }

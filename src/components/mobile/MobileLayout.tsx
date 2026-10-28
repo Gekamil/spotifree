@@ -11,13 +11,14 @@ import { DesktopProfileView } from '../desktop/DesktopProfileView';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { handleImageError } from '../../utils/imageFallback';
 
 const DEFAULT_MOBILE_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
-  { id: '43GWp9FbN9nHihudedyVQM', name: 'Romeo Santos & Prince Royce', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000da84566f06a12b9d3161476b79c3', color: '#C45028' },
-  { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://seeded-session-images.scdn.co/v2/img/540/r/artist/3qvxsgvg4egzfuad38wocm/es', color: '#EAB308' },
-  { id: 'spidey', name: 'Spidey y su superequipo', image: 'https://i.scdn.co/image/ab67616d00001e028b18861dfeb1c944111306bc', color: '#D11B24' },
-  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#5A483A' },
+  { id: '43GWp9FbN9nHihudedyVQM', name: 'Romeo Santos & Prince Royce', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7', color: '#C45028' },
+  { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es', color: '#EAB308' },
+  { id: 'spidey', name: 'Spidey y su superequipo', image: 'https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f', color: '#D11B24' },
+  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc', color: '#5A483A' },
   { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
   { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2E4A52' },
   { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8B3A1A' },
@@ -169,6 +170,7 @@ export const MobileLayout: React.FC = () => {
                     <img
                       src={card.image}
                       alt={card.name}
+                      onError={handleImageError}
                       referrerPolicy="no-referrer"
                       className="w-14 h-14 object-cover shrink-0"
                     />
@@ -198,6 +200,7 @@ export const MobileLayout: React.FC = () => {
                           <img
                             src={card.image}
                             alt={card.title}
+                            onError={handleImageError}
                             referrerPolicy="no-referrer"
                             className="w-full h-full object-cover"
                           />
@@ -280,6 +283,7 @@ export const MobileLayout: React.FC = () => {
                 <img
                   src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
                   alt="Canciones que te gustan"
+                  onError={handleImageError}
                   className="w-16 h-16 rounded-[4px] object-cover shadow shrink-0"
                 />
                 <div className="flex flex-col min-w-0">
@@ -306,6 +310,7 @@ export const MobileLayout: React.FC = () => {
                     <img
                       src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                       alt={pl.name}
+                      onError={handleImageError}
                       className="w-16 h-16 rounded-[4px] object-cover bg-[#242424] shadow shrink-0"
                     />
                     <div className="flex flex-col min-w-0">

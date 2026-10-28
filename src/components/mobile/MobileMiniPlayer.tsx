@@ -1,6 +1,7 @@
 import React from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { PlayNativeIcon, PauseNativeIcon, AddTrackNativeIcon, CheckTrackNativeIcon } from '../icons/SpotifyNativeIcons';
+import { handleImageError } from '../../utils/imageFallback';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -40,6 +41,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
             <img
               src={coverUrl}
               alt={currentTrack.name}
+              onError={handleImageError}
               className="w-full h-full object-cover"
             />
           ) : (

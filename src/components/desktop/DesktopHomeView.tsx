@@ -5,6 +5,7 @@ import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotify
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { DesktopShimmerFeed } from './DesktopShimmerFeed';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { handleImageError } from '../../utils/imageFallback';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -252,6 +253,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                     <img
                       src={card.image}
                       alt={card.title}
+                      onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   ) : (
@@ -380,6 +382,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                     <img
                       src={item.image}
                       alt={item.name}
+                      onError={handleImageError}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover"
                     />
