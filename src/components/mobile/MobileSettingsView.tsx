@@ -65,12 +65,26 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         throw new Error('No se obtuvieron datos de la cuenta.');
       }
 
+      const cacheToSave: Record<string, any> = {};
+      if (data.playlists && Array.isArray(data.playlists)) {
+        data.playlists.forEach((p: any) => {
+          if (p && p.id) {
+            cacheToSave[p.id] = p;
+          }
+        });
+      }
+      if (data.cachedPlaylistDetails) {
+        Object.assign(cacheToSave, data.cachedPlaylistDetails);
+      }
+
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', cleanKey);
         window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: cleanKey }));
         if (data.user?.id) {
           window.localStorage.setItem('spotifree_active_user_id', data.user.id);
+          window.localStorage.setItem(`spotifree_playlist_cache_${data.user.id}`, JSON.stringify(cacheToSave));
         }
+        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
         window.localStorage.removeItem('spotify_logged_out');
       }
 
@@ -90,6 +104,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         playlists: data.playlists || [],
         dynamicShelves: data.shelves || [],
         quickAccessCards: data.quickAccess || [],
+        playlistDetailsCache: cacheToSave,
         isLoading: false,
       });
 
@@ -106,10 +121,16 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const handleSwitchAccount = async (acc: SavedAccount) => {
     if (acc.id === user?.id) return;
     saveAccount({ ...acc, lastUsed: Date.now() });
+
+    let existingCachedPlaylists: Record<string, any> = {};
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('user_spotify_cookie', acc.cookie);
       window.localStorage.setItem('spotifree_active_user_id', acc.id);
       window.localStorage.removeItem('spotify_logged_out');
+      try {
+        const raw = window.localStorage.getItem(`spotifree_playlist_cache_${acc.id}`);
+        if (raw) existingCachedPlaylists = JSON.parse(raw);
+      } catch {}
     }
 
     try {
@@ -121,12 +142,31 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
 
       if (res.ok) {
         const data = await res.json();
+        const cacheToSave: Record<string, any> = { ...existingCachedPlaylists };
+        if (data.playlists && Array.isArray(data.playlists)) {
+          data.playlists.forEach((p: any) => {
+            if (p && p.id) {
+              cacheToSave[p.id] = p;
+            }
+          });
+        }
+        if (data.cachedPlaylistDetails) {
+          Object.assign(cacheToSave, data.cachedPlaylistDetails);
+        }
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: acc.cookie }));
+          window.localStorage.setItem(`spotifree_playlist_cache_${acc.id}`, JSON.stringify(cacheToSave));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
+        }
+
         useSpotifyDataStore.setState({
           isAuthenticated: true,
           user: data.user,
           playlists: data.playlists || [],
           dynamicShelves: data.shelves || [],
           quickAccessCards: data.quickAccess || [],
+          playlistDetailsCache: cacheToSave,
           isLoading: false,
         });
       } else {
@@ -138,6 +178,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             images: acc.avatarUrl ? [{ url: acc.avatarUrl }] : [],
             email: acc.email,
           } as any,
+          playlistDetailsCache: existingCachedPlaylists,
         });
       }
       setSavedAccounts(getSavedAccounts());

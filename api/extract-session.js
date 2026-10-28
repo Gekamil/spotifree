@@ -266,20 +266,20 @@ export async function getWebPlayerAuth(spDcCookie = '') {
 export function cleanSpDcString(raw) {
   if (!raw) return '';
   let str = String(raw).trim();
-  str = str.replace(/^["']|["']$/g, '').trim();
+  str = str.replace(/^[\s"'“”‘’]+|[\s"'“”‘’;]+$/g, '').trim();
   const match = str.match(/sp_dc=([^;]+)/i);
   if (match) str = match[1].trim();
   str = str.replace(/^sp_dc=/i, '').trim();
-  str = str.replace(/^["']|["']$/g, '').trim();
+  str = str.replace(/^[\s"'“”‘’]+|[\s"'“”‘’;]+$/g, '').trim();
   try {
     str = decodeURIComponent(str);
   } catch {}
-  return str.trim();
+  return str.replace(/^[\s"'“”‘’]+|[\s"'“”‘’;]+$/g, '').trim();
 }
 
 export async function extractSpotifySession(spDcCookie) {
   const cookie = cleanSpDcString(spDcCookie);
-  if (!cookie || !cookie.startsWith('AQ') || cookie.length < 50) {
+  if (!cookie || !cookie.startsWith('AQ') || cookie.length < 30) {
     throw new Error('Cookie no válida. La cookie sp_dc debe comenzar por "AQ" y contener el valor completo de open.spotify.com.');
   }
 

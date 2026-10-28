@@ -443,6 +443,23 @@ const store = create<SpotifyDataState>((set, get) => ({
 
         // If session was already cached, restore immediately so reload is instantaneous
         if (session && session.user) {
+          if (session.playlists && Array.isArray(session.playlists)) {
+            session.playlists.forEach((p: Playlist) => {
+              if (p?.id && !cachedPlaylists[p.id]) {
+                cachedPlaylists[p.id] = p;
+              }
+            });
+          }
+          if (session.cachedPlaylistDetails) {
+            Object.assign(cachedPlaylists, session.cachedPlaylistDetails);
+          }
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cachedPlaylists));
+              window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cachedPlaylists));
+            } catch {}
+          }
+
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
@@ -493,8 +510,24 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
 
         if (session && session.user) {
+          const freshUserId = session.user.id || 'active';
           if (typeof window !== 'undefined' && session.user.id) {
             window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+          }
+
+          if (session.playlists && Array.isArray(session.playlists)) {
+            session.playlists.forEach((p: Playlist) => {
+              if (p?.id) cachedPlaylists[p.id] = p;
+            });
+          }
+          if (session.cachedPlaylistDetails) {
+            Object.assign(cachedPlaylists, session.cachedPlaylistDetails);
+          }
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(`spotifree_playlist_cache_${freshUserId}`, JSON.stringify(cachedPlaylists));
+              window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cachedPlaylists));
+            } catch {}
           }
 
           saveAccount({

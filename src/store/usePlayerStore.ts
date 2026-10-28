@@ -79,10 +79,12 @@ const store = create<PlayerState>((set, get) => ({
       history: updatedHistory,
     });
 
-    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+    if (engine) {
+      engine.unlockAudio?.();
       const artistName = track.artists?.[0]?.name || '';
-      const query = `${track.name} ${artistName}`;
-      (window as any).__audioEngine.playTrack(track.id, query, 0);
+      const query = `${track.name} ${artistName}`.trim();
+      engine.playTrack(track.id, query, 0);
     }
 
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -102,11 +104,13 @@ const store = create<PlayerState>((set, get) => ({
   togglePlay: () => {
     const nextState = !get().isPlaying;
     set({ isPlaying: nextState });
-    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+    if (engine) {
       if (nextState) {
-        (window as any).__audioEngine.resume();
+        engine.unlockAudio?.();
+        engine.resume();
       } else {
-        (window as any).__audioEngine.pause();
+        engine.pause();
       }
     }
   },

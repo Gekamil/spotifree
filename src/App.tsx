@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { MobileLayout } from './components/mobile/MobileLayout';
+import { AudioController } from './components/common/AudioController';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { useIsMobile } from './utils/useIsMobile';
@@ -32,7 +33,12 @@ function App() {
     };
   }, [initializeSpotify]);
 
-  return isMobile ? <MobileLayout /> : <DesktopLayout />;
+  return (
+    <>
+      <AudioController />
+      {isMobile ? <MobileLayout /> : <DesktopLayout />}
+    </>
+  );
 }
 
 export default App;

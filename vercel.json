@@ -40,6 +40,10 @@
       "destination": "/api/playlist"
     },
     {
+      "source": "/api/audio/(.*)",
+      "destination": "/api/audio/$1"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },

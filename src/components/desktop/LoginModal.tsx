@@ -73,7 +73,7 @@ export const LoginModal: React.FC = () => {
       return;
     }
 
-    if (!cookie.startsWith('AQ') || cookie.length < 50) {
+    if (!cookie.startsWith('AQ') || cookie.length < 30) {
       setErrorMessage('La clave sp_dc debe comenzar por "AQ" y contener el valor completo copiado de Spotify.');
       return;
     }
@@ -99,12 +99,26 @@ export const LoginModal: React.FC = () => {
         throw new Error('No se pudieron obtener los datos de la cuenta de Spotify.');
       }
 
+      const cacheToSave: Record<string, any> = {};
+      if (data.playlists && Array.isArray(data.playlists)) {
+        data.playlists.forEach((p: any) => {
+          if (p && p.id) {
+            cacheToSave[p.id] = p;
+          }
+        });
+      }
+      if (data.cachedPlaylistDetails) {
+        Object.assign(cacheToSave, data.cachedPlaylistDetails);
+      }
+
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', cookie);
         window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: cookie }));
         if (data.user?.id) {
           window.localStorage.setItem('spotifree_active_user_id', data.user.id);
+          window.localStorage.setItem(`spotifree_playlist_cache_${data.user.id}`, JSON.stringify(cacheToSave));
         }
+        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
         window.localStorage.removeItem('spotify_logged_out');
       }
 
@@ -124,6 +138,7 @@ export const LoginModal: React.FC = () => {
         playlists: data.playlists || [],
         dynamicShelves: data.shelves || [],
         quickAccessCards: data.quickAccess || [],
+        playlistDetailsCache: cacheToSave,
         isLoading: false,
       });
 
