@@ -14,7 +14,7 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
-import { saveAccount } from '../utils/userAccounts';
+import { saveAccount, cleanSpDc } from '../utils/userAccounts';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -363,8 +363,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       // 1b. Check for direct 1-click cookie transfer in URL (?sp_dc=AQ... or ?cookie=AQ...)
       const rawUrlCookie = urlParams.get('sp_dc') || urlParams.get('cookie');
       if (rawUrlCookie) {
-        const cleanCookie = rawUrlCookie.trim().replace(/^sp_dc=/i, '');
-        if (cleanCookie.startsWith('AQ') && cleanCookie.length >= 50) {
+        const cleanCookie = cleanSpDc(rawUrlCookie);
+        if (cleanCookie.startsWith('AQ') && cleanCookie.length >= 30) {
           window.localStorage.setItem('user_spotify_cookie', cleanCookie);
           window.localStorage.removeItem('spotify_extracted_session');
           window.history.replaceState({}, document.title, window.location.pathname);

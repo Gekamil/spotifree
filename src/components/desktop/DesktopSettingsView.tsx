@@ -156,6 +156,8 @@ export const DesktopSettingsView: React.FC = () => {
   const [cookieError, setCookieError] = useState<string | null>(null);
   const [isExtractingCookie, setIsExtractingCookie] = useState(false);
   const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
+  const [showMobileQr, setShowMobileQr] = useState(false);
+  const [copiedMobileLink, setCopiedMobileLink] = useState(false);
 
   const handleSaveSpotifyCookie = async () => {
     setCookieError(null);
@@ -472,6 +474,63 @@ export const DesktopSettingsView: React.FC = () => {
               <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
                 {cookieError}
               </p>
+            )}
+
+            {/* Row 3: Vincular con el móvil mediante QR o enlace */}
+            {spotifyCookie && (
+              <div className="py-3 border-b border-white/5 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-sm font-semibold text-white flex items-center gap-2">
+                      <span>📱 Vincular sesión con el móvil</span>
+                    </span>
+                    <p className="text-xs text-[#a7a7a7] mt-0.5">
+                      Escanea este código con la cámara de tu móvil para iniciar sesión al instante sin tener que buscar o pegar claves en el teléfono.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setShowMobileQr(!showMobileQr)}
+                    className="self-start sm:self-auto px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer shadow active:scale-95"
+                  >
+                    {showMobileQr ? 'Ocultar código QR' : 'Mostrar código QR'}
+                  </button>
+                </div>
+
+                {showMobileQr && (
+                  <div className="p-4 rounded-xl bg-[#181818] border border-white/10 flex flex-col sm:flex-row items-center gap-5 animate-in fade-in">
+                    <div className="bg-white p-2.5 rounded-lg shrink-0 shadow-lg">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                          `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`
+                        )}`}
+                        alt="Código QR para móvil"
+                        className="w-[150px] h-[150px]"
+                      />
+                    </div>
+                    <div className="space-y-2 text-center sm:text-left">
+                      <p className="text-xs font-bold text-white">Pasos para conectar tu móvil:</p>
+                      <ol className="text-xs text-[#b3b3b3] list-decimal list-inside space-y-1">
+                        <li>Abre la cámara de tu teléfono móvil.</li>
+                        <li>Apunta a este código y pulsa en la notificación para abrir el enlace.</li>
+                        <li>¡Listo! Tu móvil iniciará sesión automáticamente con tus mismas playlists y biblioteca.</li>
+                      </ol>
+                      <div className="pt-1">
+                        <button
+                          onClick={() => {
+                            const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`;
+                            navigator.clipboard.writeText(link);
+                            setCopiedMobileLink(true);
+                            setTimeout(() => setCopiedMobileLink(false), 2500);
+                          }}
+                          className="text-xs bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold px-4 py-2 rounded-full cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-1.5 shadow"
+                        >
+                          {copiedMobileLink ? '✓ Enlace copiado al portapapeles' : '📋 Copiar enlace directo para móvil'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </section>
         )}
