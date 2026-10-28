@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
+import { saveCustomLikedSong, removeCustomLikedSong } from '../utils/userStorage';
 
 interface PlayerState {
   currentTrack: Track | null;
@@ -203,17 +204,12 @@ const store = create<PlayerState>((set, get) => ({
         try {
           window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(updated));
 
-          // Also manage custom saved liked tracks for dynamic Liked Songs display
-          const savedFull = window.localStorage.getItem('spotifree_custom_liked_songs');
-          let list: Track[] = savedFull ? JSON.parse(savedFull) : [];
+          // Manage per-user saved liked tracks collection
           if (exists) {
-            list = list.filter((t) => t.id !== trackId);
+            removeCustomLikedSong(trackId);
           } else if (trackObj) {
-            if (!list.some((t) => t.id === trackId)) {
-              list.unshift(trackObj);
-            }
+            saveCustomLikedSong(trackObj);
           }
-          window.localStorage.setItem('spotifree_custom_liked_songs', JSON.stringify(list));
         } catch {}
       }
 

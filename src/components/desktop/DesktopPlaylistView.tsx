@@ -11,32 +11,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
-
-function getSavedCustomTracks(playlistId: string, isLiked: boolean): Track[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const key = isLiked ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlistId}`;
-    const raw = window.localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {}
-  return [];
-}
-
-function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, track: Track) {
-  if (typeof window === 'undefined') return;
-  try {
-    const key = isLiked ? 'spotifree_custom_liked_songs' : `spotifree_playlist_tracks_${playlistId}`;
-    const raw = window.localStorage.getItem(key);
-    let list: Track[] = raw ? JSON.parse(raw) : [];
-    if (!list.some((t) => t.id === track.id || (t.name === track.name && t.artists[0]?.name === track.artists[0]?.name))) {
-      list.push(track);
-      window.localStorage.setItem(key, JSON.stringify(list));
-    }
-  } catch {}
-}
+import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
 
 const TRACK_COVER_CACHE = new Map<string, string>();
 
@@ -130,7 +105,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     playlist.id.includes('collection:tracks') ||
     playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
 
-  const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially);
+  const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
   const baseTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
@@ -292,12 +267,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isLikedInitially) {
       toggleLike(track.id, newTrack);
     }
-    saveCustomTrackToStorage(dynamicPlaylist.id, isLikedInitially, newTrack);
+    saveCustomTrackToStorage(dynamicPlaylist.id, isLikedInitially, newTrack, user?.id);
   };
 
   useEffect(() => {
     let cancelled = false;
-    const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially);
+    const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
     const sourceTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
       ? playlist.tracks.items
       : currentCustom;
@@ -885,13 +860,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 </p>
                 <div className="p-3.5 bg-[#181818] border border-white/10 rounded-xl text-xs text-[#a7a7a7] text-left space-y-1.5 shadow">
                   <div className="flex items-center gap-2 font-bold text-white">
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="#1ed760">
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="#1ed760">
                       <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0m.75 4.5v5h-1.5v-5zm0 6.5v1.5h-1.5V11z"/>
                     </svg>
-                    <span>Información de Spotify sobre tu biblioteca</span>
+                    <span>Colección privada en Spotify</span>
                   </div>
-                  <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-                    Tu lista de <em>«Canciones que te gustan»</em> es una colección personal privada y protegida en Spotify. En la versión web únicamente se sincronizan y muestran tus listas públicas y colaborativas. Utiliza el buscador interactivo de abajo para añadir tus canciones y crear tu lista personalizada.
+                  <p className="text-[12px] text-[#b3b3b3] leading-relaxed">
+                    Tu lista de <em>«Canciones que te gustan»</em> es una colección personal privada y protegida en Spotify, por lo que no es accesible a través de listas públicas. Utiliza el buscador interactivo de abajo para añadir tus canciones y crear tu lista personalizada en Spotifree.
                   </p>
                 </div>
               </div>

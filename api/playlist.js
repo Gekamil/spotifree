@@ -1,27 +1,4 @@
-import fs from 'node:fs';
-import path from 'node:path';
 import { toHDImage, getAccessTokenFromCookie } from './extract-session.js';
-
-let cachedLikedSongs = null;
-function getFallbackLikedSongs() {
-  if (cachedLikedSongs && cachedLikedSongs.length > 0) return cachedLikedSongs;
-  try {
-    const fileUrl = new URL('./realLikedSongs.json', import.meta.url);
-    cachedLikedSongs = JSON.parse(fs.readFileSync(fileUrl, 'utf-8'));
-    return cachedLikedSongs;
-  } catch (e) {
-    try {
-      const filePath = path.join(process.cwd(), 'src', 'data', 'realLikedSongs.json');
-      if (fs.existsSync(filePath)) {
-        cachedLikedSongs = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        return cachedLikedSongs;
-      }
-    } catch (err2) {
-      console.warn('[Playlist API] Could not read realLikedSongs.json:', err2.message);
-    }
-  }
-  return [];
-}
 
 function parseEmbedHtml(html, cleanId) {
   const scriptMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
@@ -163,7 +140,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     return {
       id: 'collection-tracks',
       name: 'Canciones que te gustan',
-      description: 'Tus canciones favoritas guardadas',
+      description: 'Tu lista de «Canciones que te gustan» es privada en Spotify.',
       type: 'playlist',
       images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
       owner: { display_name: 'Tú', id: 'me' },

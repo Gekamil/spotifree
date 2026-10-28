@@ -242,26 +242,18 @@ async function scrapeSpotifyEmbed(playlistId: string) {
     return folderData;
   }
 
-  // 1. Liked songs special case
+  // 1. Liked songs special case (private collection)
   if (cleanId === 'liked-songs' || cleanId === 'tracks') {
-    const likedFile = path.resolve('src/data/realLikedSongs.json');
-    let likedTracks: any[] = [];
-    if (fs.existsSync(likedFile)) {
-      try {
-        likedTracks = JSON.parse(fs.readFileSync(likedFile, 'utf8'));
-      } catch {}
-    }
-
     const likedPlaylist = {
       id: 'liked-songs',
       name: 'Canciones que te gustan',
-      description: `${likedTracks.length} canciones guardadas`,
+      description: 'Tu lista de «Canciones que te gustan» es privada en Spotify.',
       images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-      owner: { display_name: 'Jorgeperezvk', id: 'user' },
+      owner: { display_name: 'Tú', id: 'me' },
       color: '#5018F0',
       tracks: {
-        total: likedTracks.length,
-        items: likedTracks,
+        total: 0,
+        items: [],
       },
     };
     PLAYLIST_CACHE.set('liked-songs', likedPlaylist);

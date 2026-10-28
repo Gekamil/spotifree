@@ -76,6 +76,9 @@ export async function extractSpotifySessionFromCookie(cookie: string): Promise<E
   if (typeof window !== 'undefined') {
     try {
       window.localStorage.setItem('user_spotify_cookie', trimmedCookie);
+      if (data.user?.id) {
+        window.localStorage.setItem('spotifree_active_user_id', data.user.id);
+      }
       if (data.accessToken) {
         window.localStorage.setItem('spotify_access_token', data.accessToken);
       }

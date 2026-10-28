@@ -398,13 +398,19 @@ const store = create<SpotifyDataState>((set, get) => ({
         if (savedSessionRaw) {
           try {
             session = JSON.parse(savedSessionRaw);
+            if (session._cookie && session._cookie !== userCookie) {
+              session = null;
+            }
           } catch {}
         }
         if (!session || !session.user || !session.playlists || session.playlists.length === 0) {
           try {
             session = await extractSpotifySessionFromCookie(userCookie);
             if (typeof window !== 'undefined') {
-              window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
+              window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: userCookie }));
+              if (session.user?.id) {
+                window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+              }
               if (session.accessToken) {
                 window.localStorage.setItem('spotify_access_token', session.accessToken);
               }
@@ -419,6 +425,9 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
 
         if (session && session.user && session.playlists) {
+          if (typeof window !== 'undefined' && session.user.id) {
+            window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+          }
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
@@ -514,6 +523,7 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('user_spotify_cookie');
       window.localStorage.removeItem('user_imported_playlists');
       window.localStorage.removeItem('spotify_extracted_session');
+      window.localStorage.removeItem('spotifree_active_user_id');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }

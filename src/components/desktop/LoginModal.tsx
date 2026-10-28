@@ -173,9 +173,13 @@ export const LoginModal: React.FC = () => {
       if (data.cookie) {
         if (typeof window !== 'undefined') {
           window.localStorage.setItem('user_spotify_cookie', data.cookie);
+          if (data.user?.id) {
+            window.localStorage.setItem('spotifree_active_user_id', data.user.id);
+          }
           if (data.accessToken) {
             window.localStorage.setItem('spotify_access_token', data.accessToken);
           }
+          window.localStorage.removeItem('spotify_extracted_session');
         }
 
         saveAccount({
@@ -233,6 +237,10 @@ export const LoginModal: React.FC = () => {
       const data = await res.json();
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', cookie);
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: cookie }));
+        if (data.user?.id) {
+          window.localStorage.setItem('spotifree_active_user_id', data.user.id);
+        }
         if (data.accessToken) {
           window.localStorage.setItem('spotify_access_token', data.accessToken);
         }
@@ -270,9 +278,13 @@ export const LoginModal: React.FC = () => {
     try {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', account.cookie);
+        if (account.id) {
+          window.localStorage.setItem('spotifree_active_user_id', account.id);
+        }
         if (account.accessToken) {
           window.localStorage.setItem('spotify_access_token', account.accessToken);
         }
+        window.localStorage.removeItem('spotify_extracted_session');
       }
 
       account.lastUsed = Date.now();
