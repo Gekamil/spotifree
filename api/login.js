@@ -134,41 +134,15 @@ export default async function handler(req, res) {
           const session = await extractSpotifySession(extractedCookie);
           return res.status(200).json({ success: true, ...session, cookie: extractedCookie });
         }
-
-        const data = await loginRes.json().catch(() => ({}));
-
-        if (data.error === 'errorInvalidCredentials') {
-          return res.status(400).json({
-            error: 'Usuario o contraseña incorrectos en Spotify. Por favor, revísalos.',
-            needs2FA: false,
-          });
-        }
-
-        // Check if 2FA or code challenge is required
-        const is2FA =
-          data.error === 'errorTwoFactorRequired' ||
-          data.challenge ||
-          data.challenge_type ||
-          (data.error && /challenge|twofactor|verification|otp/i.test(data.error));
-
-        if (is2FA || !twoFactorCode) {
-          return res.status(200).json({
-            success: false,
-            needs2FA: true,
-            challenge: data.challenge || data.challenge_type || '2fa',
-            message:
-              'Spotify ha solicitado el código de verificación en dos pasos de tu cuenta. Introduce el código de 6 dígitos para acceder.',
-          });
-        }
       } catch (err) {
         console.warn('Direct login attempt exception:', err.message);
       }
 
-      // If Spotify blocks with cloudflare captcha or code was rejected
+      // Spotify blocks automated credential submissions with reCAPTCHA & Cloudflare
       return res.status(400).json({
         error:
-          'Spotify ha solicitado comprobación adicional de seguridad. Para acceder de inmediato sin salir de la pestaña, pega tu cookie sp_dc en la pestaña de al lado.',
-        needs2FA: true,
+          'Spotify protege sus inicios de sesión con comprobación reCaptcha / Cloudflare y no envía correos de verificación a solicitudes automatizadas. Para entrar de inmediato sin esperas, introduce tu clave de sesión sp_dc.',
+        needs2FA: false,
         needsCookie: true,
       });
     }

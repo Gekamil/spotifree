@@ -77,11 +77,9 @@ export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, closeLoginModal } = useUIStore();
   const { initialize, user } = useSpotifyDataStore();
 
-  const [activeTab, setActiveTab] = useState<'login' | 'cookie' | 'saved'>('login');
+  const [activeTab, setActiveTab] = useState<'cookie' | 'login' | 'saved'>('cookie');
   const [emailInput, setEmailInput] = useState('');
   const [passwordInput, setPasswordInput] = useState('');
-  const [twoFactorCode, setTwoFactorCode] = useState('');
-  const [needs2FA, setNeeds2FA] = useState(false);
 
   const [cookieInput, setCookieInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -89,6 +87,7 @@ export const LoginModal: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>([]);
   const [showHelpGuide, setShowHelpGuide] = useState(false);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   useEffect(() => {
     if (isLoginModalOpen) {
@@ -96,12 +95,10 @@ export const LoginModal: React.FC = () => {
       setSavedAccounts(accounts);
       setErrorMessage(null);
       setSuccessMessage(null);
-      setNeeds2FA(false);
-      setTwoFactorCode('');
       if (accounts.length > 0 && !emailInput && !cookieInput) {
         setActiveTab('saved');
       } else {
-        setActiveTab('login');
+        setActiveTab('cookie');
       }
     }
   }, [isLoginModalOpen]);
@@ -115,9 +112,26 @@ export const LoginModal: React.FC = () => {
         if (text) {
           const cleaned = cleanSpDc(text);
           setCookieInput(cleaned);
+          if (cleaned.startsWith('AQ') && cleaned.length >= 50) {
+            setSuccessMessage('Clave detectada en el portapapeles. Conectando...');
+            handleConnectWithCookie(cleaned);
+            return;
+          }
         }
       }
-    } catch {}
+      setErrorMessage('No se detectó una clave sp_dc válida en el portapapeles. Pégala directamente en el recuadro.');
+    } catch {
+      setErrorMessage('No se pudo acceder al portapapeles del navegador. Pega la clave manualmente en el recuadro.');
+    }
+  };
+
+  const handleCopySnippet = () => {
+    const code = "copy(document.cookie.match(/sp_dc=([^;]+)/)?.[1])";
+    if (navigator?.clipboard?.writeText) {
+      navigator.clipboard.writeText(code);
+      setCopiedSnippet(true);
+      setTimeout(() => setCopiedSnippet(false), 2500);
+    }
   };
 
   const handleEmailLogin = async (e?: React.FormEvent) => {
@@ -127,11 +141,6 @@ export const LoginModal: React.FC = () => {
 
     if (!email || !password) {
       setErrorMessage('Por favor, introduce tu correo y contraseña de Spotify.');
-      return;
-    }
-
-    if (needs2FA && !twoFactorCode.trim()) {
-      setErrorMessage('Por favor, introduce el código de verificación de 6 cifras recibido.');
       return;
     }
 
@@ -146,26 +155,16 @@ export const LoginModal: React.FC = () => {
         body: JSON.stringify({
           email,
           password,
-          twoFactorCode: needs2FA ? twoFactorCode.trim() : undefined,
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
-      if (!res.ok) {
-        if (data.needs2FA) {
-          setNeeds2FA(true);
-          setErrorMessage(data.error || 'Se requiere el código de verificación.');
-        } else {
-          setErrorMessage(data.error || 'Error al iniciar sesión en Spotify.');
-        }
-        setIsLoading(false);
-        return;
-      }
-
-      if (data.needs2FA) {
-        setNeeds2FA(true);
-        setSuccessMessage(data.message || 'Código de seguridad solicitado. Introduce los 6 números abajo.');
+      if (!res.ok || !data.success) {
+        setErrorMessage(
+          data.error ||
+            'Spotify requiere comprobación de seguridad en el navegador (reCAPTCHA) y no enviará correos de verificación a conexiones automatizadas. Usa tu Clave sp_dc para acceder al instante.'
+        );
         setIsLoading(false);
         return;
       }
@@ -214,7 +213,7 @@ export const LoginModal: React.FC = () => {
     const cookie = cleanSpDc(raw);
 
     if (!cookie) {
-      setErrorMessage('Por favor, introduce o pega la clave de sesión.');
+      setErrorMessage('Por favor, introduce o pega la clave de sesión sp_dc.');
       return;
     }
 
@@ -304,7 +303,7 @@ export const LoginModal: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200">
-      <div className="bg-[#121212] w-full max-w-[440px] rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col font-['SpotifyMixUI'] relative max-h-[92vh] overflow-y-auto">
+      <div className="bg-[#121212] w-full max-w-[450px] rounded-2xl border border-white/10 shadow-2xl overflow-hidden flex flex-col font-['SpotifyMixUI'] relative max-h-[92vh] overflow-y-auto">
         {/* Close Button top-right */}
         <button
           onClick={closeLoginModal}
@@ -330,6 +329,20 @@ export const LoginModal: React.FC = () => {
           <div className="flex gap-1.5 mt-4 bg-white/5 p-1 rounded-full border border-white/10 w-full text-xs">
             <button
               onClick={() => {
+                setActiveTab('cookie');
+                setErrorMessage(null);
+              }}
+              className={`flex-1 py-1.5 rounded-full font-bold transition-all flex items-center justify-center gap-1 ${
+                activeTab === 'cookie'
+                  ? 'bg-white text-black shadow'
+                  : 'text-[#b3b3b3] hover:text-white'
+              }`}
+            >
+              <span>Clave sp_dc</span>
+              <span className="text-[10px] bg-[#1ed760] text-black font-black px-1.5 rounded-full">✓</span>
+            </button>
+            <button
+              onClick={() => {
                 setActiveTab('login');
                 setErrorMessage(null);
               }}
@@ -340,19 +353,6 @@ export const LoginModal: React.FC = () => {
               }`}
             >
               Cuenta
-            </button>
-            <button
-              onClick={() => {
-                setActiveTab('cookie');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-1.5 rounded-full font-bold transition-all ${
-                activeTab === 'cookie'
-                  ? 'bg-white text-black shadow'
-                  : 'text-[#b3b3b3] hover:text-white'
-              }`}
-            >
-              Clave sp_dc
             </button>
             <button
               onClick={() => {
@@ -379,20 +379,184 @@ export const LoginModal: React.FC = () => {
         <div className="p-6 space-y-4">
           {/* Alerts */}
           {errorMessage && (
-            <div className="p-3 bg-red-500/15 border border-red-500/30 rounded-xl text-red-200 text-xs leading-relaxed">
-              {errorMessage}
+            <div className="p-3.5 bg-red-500/15 border border-red-500/30 rounded-xl text-red-200 text-xs leading-relaxed space-y-2">
+              <p>{errorMessage}</p>
+              {activeTab === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActiveTab('cookie');
+                    setErrorMessage(null);
+                  }}
+                  className="px-3 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:bg-[#1ed760] transition-colors"
+                >
+                  👉 Usar Clave sp_dc (Acceso directo en 3s)
+                </button>
+              )}
             </div>
           )}
 
           {successMessage && (
-            <div className="p-3 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-200 text-xs font-semibold leading-relaxed">
+            <div className="p-3.5 bg-emerald-500/15 border border-emerald-500/30 rounded-xl text-emerald-200 text-xs font-semibold leading-relaxed">
               {successMessage}
             </div>
           )}
 
-          {/* TAB 1: EMAIL & PASSWORD LOGIN (+ 2FA Verification) */}
+          {/* TAB 1: SP_DC COOKIE KEY (FASTEST & 100% RELIABLE) */}
+          {activeTab === 'cookie' && (
+            <div className="space-y-4">
+              <div className="bg-[#181818] rounded-xl p-3.5 border border-white/5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-[#1ed760] flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#1ed760]" />
+                    Método Rápido 100% Funcional
+                  </span>
+                  <span className="text-[10px] bg-white/10 text-white px-2 py-0.5 rounded-full font-bold">
+                    Sin códigos ni captchas
+                  </span>
+                </div>
+                <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
+                  Pega tu clave <strong>sp_dc</strong> para transferir tu sesión completa de Spotify en 1 segundo con tu perfil, listas y canciones reales.
+                </p>
+              </div>
+
+              {/* 1-Click Paste & Connect */}
+              <button
+                type="button"
+                onClick={handlePasteClipboard}
+                className="w-full py-3 px-4 rounded-xl bg-white/10 hover:bg-white/15 border border-white/20 text-white font-bold text-xs flex items-center justify-center gap-2 transition-all hover:scale-101 active:scale-98 cursor-pointer"
+              >
+                <span className="text-base">📋</span>
+                <span>Pegar clave desde portapapeles y entrar</span>
+              </button>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-white block">
+                    O introduce la clave manualmente (sp_dc)
+                  </label>
+                  {cookieInput && (
+                    <button
+                      type="button"
+                      onClick={() => setCookieInput('')}
+                      className="text-[10px] text-[#b3b3b3] hover:text-white"
+                    >
+                      Limpiar
+                    </button>
+                  )}
+                </div>
+
+                <input
+                  type="password"
+                  value={cookieInput}
+                  onChange={(e) => setCookieInput(e.target.value)}
+                  placeholder="AQD... (o la línea sp_dc copiada)"
+                  className="w-full h-11 px-3.5 rounded-lg bg-[#242424] text-white text-xs border border-white/10 focus:border-[#1ed760] outline-none font-mono placeholder:text-[#535353]"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => handleConnectWithCookie()}
+                disabled={isLoading || !cookieInput.trim()}
+                className="w-full h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-102 active:scale-98 text-black font-bold text-sm transition-all disabled:opacity-40 cursor-pointer shadow-lg flex items-center justify-center gap-2"
+              >
+                {isLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    <span>Sincronizando cuenta con Spotify...</span>
+                  </>
+                ) : (
+                  <span>Conectar sesión</span>
+                )}
+              </button>
+
+              {/* Step-by-step Quick Help */}
+              <div className="pt-2 border-t border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-white">¿Cómo obtener tu clave en 5 segundos?</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowHelpGuide(!showHelpGuide)}
+                    className="text-xs text-[#1ed760] hover:underline"
+                  >
+                    {showHelpGuide ? 'Ocultar guía' : 'Ver opciones'}
+                  </button>
+                </div>
+
+                {showHelpGuide && (
+                  <div className="p-3.5 rounded-xl bg-[#181818] border border-white/5 space-y-3 text-xs text-[#b3b3b3] leading-relaxed">
+                    {/* Option 1: Direct Web Link */}
+                    <div className="space-y-1">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <span>Opción 1:</span> Abrir Spotify Web
+                      </span>
+                      <p className="text-[11px]">
+                        Abre Spotify en tu navegador donde ya tienes tu sesión iniciada:
+                      </p>
+                      <a
+                        href="https://open.spotify.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 text-xs text-[#1ed760] font-bold hover:underline mt-1"
+                      >
+                        <span>Abrir open.spotify.com</span>
+                        <span>↗</span>
+                      </a>
+                    </div>
+
+                    {/* Option 2: 1-Line Console Script */}
+                    <div className="space-y-1 pt-2 border-t border-white/5">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <span>Opción 2:</span> Comando automático de 1 clic (F12)
+                      </span>
+                      <p className="text-[11px]">
+                        En la pestaña de Spotify, pulsa <strong>F12</strong>, ve a <strong>Consola</strong>, pega este comando y pulsa Enter (tu clave se copiará sola):
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <code className="bg-black/60 p-2 rounded-lg font-mono text-[10px] text-white flex-1 truncate">
+                          copy(document.cookie.match(/sp_dc=([^;]+)/)?.[1])
+                        </code>
+                        <button
+                          type="button"
+                          onClick={handleCopySnippet}
+                          className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-bold shrink-0"
+                        >
+                          {copiedSnippet ? '✓ Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Option 3: Manual F12 inspection */}
+                    <div className="space-y-1 pt-2 border-t border-white/5">
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        <span>Opción 3:</span> Manual desde Cookies
+                      </span>
+                      <p className="text-[11px]">
+                        F12 → Pestaña <strong>Aplicación</strong> (Application) → <strong>Cookies</strong> → <code>https://open.spotify.com</code> → Copia el valor de <strong>sp_dc</strong>.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: EMAIL & PASSWORD LOGIN */}
           {activeTab === 'login' && (
             <form onSubmit={handleEmailLogin} className="space-y-3.5">
+              <div className="p-3 bg-white/5 border border-white/10 rounded-xl text-[11px] text-[#b3b3b3] space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-white">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="#1ed760">
+                    <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0m.75 4.5v5h-1.5v-5zm0 6.5v1.5h-1.5V11z"/>
+                  </svg>
+                  <span>Aviso sobre acceso por contraseña</span>
+                </div>
+                <p>
+                  Spotify bloquea los correos de verificación automáticos mediante reCAPTCHA. Para entrar en 3 segundos sin esperas ni códigos que nunca llegan, recomendamos usar la pestaña <strong>«Clave sp_dc»</strong>.
+                </p>
+              </div>
+
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-white block">
                   Correo o usuario de Spotify
@@ -421,33 +585,9 @@ export const LoginModal: React.FC = () => {
                 />
               </div>
 
-              {/* 2FA Input (Dynamically shown if Spotify requires 2-step verification) */}
-              {needs2FA && (
-                <div className="p-3.5 rounded-xl bg-white/5 border border-[#1ed760]/30 space-y-2 animate-in fade-in duration-300">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-ping" />
-                    <label className="text-xs font-bold text-[#1ed760] block">
-                      Código de verificación (6 cifras)
-                    </label>
-                  </div>
-                  <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-                    Introduce el código de 6 números que te acaba de enviar Spotify para autorizar tu inicio de sesión:
-                  </p>
-                  <input
-                    type="text"
-                    maxLength={6}
-                    value={twoFactorCode}
-                    onChange={(e) => setTwoFactorCode(e.target.value.replace(/\D/g, ''))}
-                    placeholder="123456"
-                    autoFocus
-                    className="w-full h-12 px-3.5 rounded-lg bg-[#181818] text-white text-center text-lg font-mono tracking-[0.35em] border border-[#1ed760] outline-none font-bold placeholder:text-[#535353]"
-                  />
-                </div>
-              )}
-
               <button
                 type="submit"
-                disabled={isLoading || !emailInput.trim() || !passwordInput.trim() || (needs2FA && twoFactorCode.trim().length !== 6)}
+                disabled={isLoading || !emailInput.trim() || !passwordInput.trim()}
                 className="w-full h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-102 active:scale-98 text-black font-bold text-sm transition-all disabled:opacity-40 cursor-pointer shadow-lg flex items-center justify-center gap-2 mt-4"
               >
                 {isLoading ? (
@@ -455,8 +595,6 @@ export const LoginModal: React.FC = () => {
                     <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
                     <span>Conectando con Spotify...</span>
                   </>
-                ) : needs2FA ? (
-                  <span>Verificar código y entrar</span>
                 ) : (
                   <span>Iniciar sesión en Spotifree</span>
                 )}
@@ -474,79 +612,6 @@ export const LoginModal: React.FC = () => {
             </form>
           )}
 
-          {/* TAB 2: SP_DC COOKIE KEY */}
-          {activeTab === 'cookie' && (
-            <div className="space-y-4">
-              <div className="bg-[#181818] rounded-xl p-3.5 border border-white/5 space-y-2">
-                <span className="text-xs font-bold text-white block">
-                  Conexión directa con cookie de sesión
-                </span>
-                <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-                  Pega el valor de tu cookie <strong>sp_dc</strong> para transferir tu sesión completa de forma inmediata.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-white block">
-                    Clave de sesión (sp_dc)
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handlePasteClipboard}
-                    className="text-[11px] text-[#1ed760] hover:underline font-bold cursor-pointer"
-                  >
-                    Pegar del portapapeles
-                  </button>
-                </div>
-
-                <input
-                  type="password"
-                  value={cookieInput}
-                  onChange={(e) => setCookieInput(e.target.value)}
-                  placeholder="AQD... (o la línea sp_dc copiada)"
-                  className="w-full h-11 px-3.5 rounded-lg bg-[#242424] text-white text-xs border border-white/10 focus:border-[#1ed760] outline-none font-mono placeholder:text-[#535353]"
-                />
-              </div>
-
-              <button
-                type="button"
-                onClick={() => handleConnectWithCookie()}
-                disabled={isLoading || !cookieInput.trim()}
-                className="w-full h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-102 active:scale-98 text-black font-bold text-sm transition-all disabled:opacity-40 cursor-pointer shadow-lg flex items-center justify-center gap-2"
-              >
-                {isLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    <span>Sincronizando cuenta...</span>
-                  </>
-                ) : (
-                  <span>Vincular cuenta</span>
-                )}
-              </button>
-
-              {/* Help guide */}
-              <div className="pt-2 border-t border-white/5">
-                <button
-                  type="button"
-                  onClick={() => setShowHelpGuide(!showHelpGuide)}
-                  className="text-xs text-[#a7a7a7] hover:text-white transition-colors cursor-pointer flex items-center justify-between w-full"
-                >
-                  <span>¿Dónde encontrar la clave sp_dc?</span>
-                  <span>{showHelpGuide ? '▲' : '▼'}</span>
-                </button>
-
-                {showHelpGuide && (
-                  <div className="mt-2.5 p-3 rounded-lg bg-[#181818] text-[11px] text-[#b3b3b3] space-y-1.5 leading-relaxed">
-                    <p>1. En tu navegador donde tengas abierto Spotify, pulsa <strong>F12</strong> (Inspeccionar elemento).</p>
-                    <p>2. En la pestaña <strong>Aplicación</strong> / <strong>Almacenamiento</strong> → <strong>Cookies</strong> → <strong>https://open.spotify.com</strong>.</p>
-                    <p>3. Busca el nombre <strong>sp_dc</strong>, copia su valor y pégalo arriba.</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* TAB 3: SAVED ACCOUNTS */}
           {activeTab === 'saved' && (
             <div className="space-y-3">
@@ -554,10 +619,10 @@ export const LoginModal: React.FC = () => {
                 <div className="py-8 text-center text-[#b3b3b3] space-y-2">
                   <p className="text-xs">No hay cuentas guardadas en este dispositivo.</p>
                   <button
-                    onClick={() => setActiveTab('login')}
+                    onClick={() => setActiveTab('cookie')}
                     className="text-xs text-[#1ed760] font-bold hover:underline"
                   >
-                    Iniciar sesión con una cuenta
+                    Vincular una cuenta con sp_dc
                   </button>
                 </div>
               ) : (
@@ -626,7 +691,7 @@ export const LoginModal: React.FC = () => {
 
               <div className="pt-2 border-t border-white/5 flex items-center justify-between">
                 <button
-                  onClick={() => setActiveTab('login')}
+                  onClick={() => setActiveTab('cookie')}
                   className="text-xs text-[#1ed760] font-bold hover:underline flex items-center gap-1"
                 >
                   <span>+</span>

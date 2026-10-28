@@ -359,6 +359,17 @@ const store = create<SpotifyDataState>((set, get) => ({
       const code = urlParams.get('code');
       const error = urlParams.get('error');
 
+      // 1b. Check for direct 1-click cookie transfer in URL (?sp_dc=AQ... or ?cookie=AQ...)
+      const rawUrlCookie = urlParams.get('sp_dc') || urlParams.get('cookie');
+      if (rawUrlCookie) {
+        const cleanCookie = rawUrlCookie.trim().replace(/^sp_dc=/i, '');
+        if (cleanCookie.startsWith('AQ') && cleanCookie.length >= 50) {
+          window.localStorage.setItem('user_spotify_cookie', cleanCookie);
+          window.localStorage.removeItem('spotify_extracted_session');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      }
+
       if (error) {
         console.error('Spotify OAuth error in callback:', error);
         window.history.replaceState({}, document.title, '/');
