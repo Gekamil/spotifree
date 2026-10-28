@@ -15,7 +15,7 @@ async function runVerification() {
   await desktopPage.setViewport({ width: 1440, height: 900 });
 
   // Pre-seed a clean new account session in localStorage
-  await desktopPage.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await desktopPage.goto('https://spotifreeweb.vercel.app/', { waitUntil: 'domcontentloaded' }).catch(() => {});
   
   await desktopPage.evaluate(() => {
     window.localStorage.clear();
@@ -50,8 +50,8 @@ async function runVerification() {
   });
 
   // Reload with the new account
-  await desktopPage.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
-  await new Promise((r) => setTimeout(r, 1500));
+  await desktopPage.goto('https://spotifreeweb.vercel.app/', { waitUntil: 'networkidle2' });
+  await new Promise((r) => setTimeout(r, 2000));
 
   // Click on "Canciones que te gustan" in the sidebar
   console.log('Navigating to Liked Songs in Desktop...');
@@ -131,7 +131,7 @@ async function runVerification() {
   const mobilePage = await browser.newPage();
   await mobilePage.setViewport({ width: 390, height: 844, isMobile: true, hasTouch: true });
 
-  await mobilePage.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded' }).catch(() => {});
+  await mobilePage.goto('https://spotifreeweb.vercel.app/', { waitUntil: 'domcontentloaded' }).catch(() => {});
   
   await mobilePage.evaluate(() => {
     window.localStorage.clear();
@@ -165,8 +165,8 @@ async function runVerification() {
   });
 
   // Reload on mobile
-  await mobilePage.goto('http://localhost:5173/', { waitUntil: 'networkidle2' });
-  await new Promise((r) => setTimeout(r, 1500));
+  await mobilePage.goto('https://spotifreeweb.vercel.app/', { waitUntil: 'networkidle2' });
+  await new Promise((r) => setTimeout(r, 2000));
 
   // Go to Library in Mobile
   console.log('Navigating to Library on Mobile...');
