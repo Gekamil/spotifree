@@ -5,8 +5,8 @@ import { MobileBottomNav } from './MobileBottomNav';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
-import { DesktopPlaylistView } from '../desktop/DesktopPlaylistView';
-import { DesktopSearchView } from '../desktop/DesktopSearchView';
+import { MobilePlaylistView } from './MobilePlaylistView';
+import { MobileSearchView } from './MobileSearchView';
 import { DesktopProfileView } from '../desktop/DesktopProfileView';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
@@ -132,7 +132,7 @@ export const MobileLayout: React.FC = () => {
         {/* TAB: SEARCH */}
         {mobileTab === 'search' && (
           <div className="p-4 space-y-4">
-            <DesktopSearchView onSelectPlaylistById={handleSelectPlaylistById} />
+            <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
           </div>
         )}
 
@@ -205,28 +205,11 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB: PLAYLIST / ALBUM VIEW */}
         {mobileTab === 'playlist' && selectedPlaylist && (
-          <div className="relative">
-            {/* Back button */}
-            <div className="sticky top-0 z-40 bg-black/60 backdrop-blur-md px-4 py-3 flex items-center gap-3">
-              <button
-                onClick={() => setMobileTab('home')}
-                className="w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
-                title="Atrás"
-              >
-                <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
-                </svg>
-              </button>
-              <span className="font-bold text-sm text-white truncate">
-                {selectedPlaylist.name}
-              </span>
-            </div>
-
-            <DesktopPlaylistView
-              playlist={selectedPlaylist}
-              onSelectPlaylistById={handleSelectPlaylistById}
-            />
-          </div>
+          <MobilePlaylistView
+            playlist={selectedPlaylist}
+            onBack={() => setMobileTab('home')}
+            onSelectPlaylistById={handleSelectPlaylistById}
+          />
         )}
 
         {/* TAB: PROFILE */}

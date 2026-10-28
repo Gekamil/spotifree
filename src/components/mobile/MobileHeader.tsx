@@ -47,9 +47,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       <div className="flex items-center gap-2 flex-1">
         <button
           onClick={() => onTabChange('todo')}
-          className={`h-8 px-3.5 rounded-full text-xs font-bold transition-all ${
+          className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
             activeTab === 'todo'
-              ? 'bg-[#1ed760] text-black shadow'
+              ? 'bg-white text-black shadow'
               : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >
@@ -57,9 +57,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         </button>
         <button
           onClick={() => onTabChange('musica')}
-          className={`h-8 px-3.5 rounded-full text-xs font-bold transition-all ${
+          className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
             activeTab === 'musica'
-              ? 'bg-[#1ed760] text-black shadow'
+              ? 'bg-white text-black shadow'
               : 'bg-white/10 text-white hover:bg-white/20'
           }`}
         >

@@ -216,16 +216,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       <div
         className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200"
         style={{
-          background: `linear-gradient(180deg, ${shelfAmbientColor}B3 0%, rgba(18, 18, 18, 0.7) 240px, #121212 420px)`,
+          backgroundColor: shelfAmbientColor,
+          backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.52) 0%, rgba(18, 18, 18, 0.88) 240px, #121212 380px)',
+          transition: 'background-color 1.2s cubic-bezier(0.2, 0, 0, 1)',
         }}
       >
-        {/* Soft Bloom Ambient Glow */}
-        <div
-          className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none"
-          style={{
-            background: `linear-gradient(180deg, ${shelfAmbientColor}66 0%, transparent 100%)`,
-          }}
-        />
 
         {/* Shelf Header - Authentic Spotify layout without redundant in-page back button */}
         <div className="pt-2 pb-2 relative z-10">
@@ -307,18 +302,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     <div
       className="select-none min-h-full pb-20 relative bg-[#121212]"
       style={{
-        background: `linear-gradient(180deg, ${activeBg}CC 0%, rgba(18, 18, 18, 0.7) 240px, #121212 400px)`,
-        transition: 'background 0.8s cubic-bezier(0.2, 0, 0, 1)',
+        backgroundColor: activeBg,
+        backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.52) 0%, rgba(18, 18, 18, 0.88) 240px, #121212 380px)',
+        transition: 'background-color 1.2s cubic-bezier(0.2, 0, 0, 1)',
       }}
     >
-      {/* GPU Ambient Soft Bloom Layer */}
-      <div
-        className="absolute top-0 left-0 right-0 h-[380px] pointer-events-none transition-all duration-700 ease-[cubic-bezier(0.3,0,0.4,1)]"
-        style={{
-          background: `linear-gradient(180deg, ${activeBg}80 0%, ${activeBg}25 180px, transparent 380px)`,
-        }}
-      />
-
       {/* Top Filter Pills (Matching Spotify 1:1 Pixel & Animation Fidelity) */}
       <div className="sticky top-0 z-30 px-6 pt-4 pb-3 flex items-center gap-2 backdrop-blur-md bg-[#121212]/75">
         {activeTab !== 'musica' && activeTab !== 'siguiendo' ? (
