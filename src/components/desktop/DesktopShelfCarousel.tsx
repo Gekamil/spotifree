@@ -190,7 +190,12 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
               {prefix}
             </span>
           )}
-          <h2 className="text-2xl font-black text-white tracking-tight hover:underline cursor-pointer font-['SpotifyMixUITitle']">
+          <h2
+            onClick={onShowAll}
+            className={`text-2xl font-black text-white tracking-tight font-['SpotifyMixUITitle'] ${
+              onShowAll ? 'hover:underline cursor-pointer' : ''
+            }`}
+          >
             {title}
           </h2>
           {subtitle && (
@@ -202,7 +207,7 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
         {onShowAll && (
           <button
             onClick={onShowAll}
-            className="text-xs font-bold text-[#b3b3b3] hover:underline cursor-pointer hover:text-white"
+            className="text-xs font-bold text-[#b3b3b3] hover:underline cursor-pointer hover:text-white transition-colors"
           >
             Mostrar todos
           </button>

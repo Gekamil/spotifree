@@ -32,11 +32,17 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
   } | null>(null);
 
-  // Reset expanded shelf on global navigate home event
+  // Reset expanded shelf on global navigate home or back events
   useEffect(() => {
     const handleHomeNav = () => setExpandedShelf(null);
     window.addEventListener('spotifree_navigate_home', handleHomeNav);
-    return () => window.removeEventListener('spotifree_navigate_home', handleHomeNav);
+    window.addEventListener('spotifree_navigate_back', handleHomeNav);
+    window.addEventListener('popstate', handleHomeNav);
+    return () => {
+      window.removeEventListener('spotifree_navigate_home', handleHomeNav);
+      window.removeEventListener('spotifree_navigate_back', handleHomeNav);
+      window.removeEventListener('popstate', handleHomeNav);
+    };
   }, []);
 
   const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();

@@ -620,13 +620,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-700 overflow-hidden"
         style={{
           backgroundColor: themeColor,
-          backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(18, 18, 18, 0.85) 75%, #121212 100%)',
+          backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(18, 18, 18, 0.82) 70%, #121212 100%)',
           transition: 'background-color 1s cubic-bezier(0.2, 0, 0, 1)',
         }}
       >
-        {/* Ambient atmospheric aura */}
+        {/* Ambient atmospheric aura & luminous radial glow */}
         <div
-          className="absolute -top-32 -left-32 w-[550px] h-[550px] rounded-full pointer-events-none blur-[120px] opacity-30 z-0"
+          className="absolute -top-24 -left-24 w-[600px] h-[600px] rounded-full pointer-events-none blur-[110px] opacity-45 z-0"
+          style={{ backgroundColor: themeColor }}
+        />
+        <div
+          className="absolute top-0 right-1/4 w-[400px] h-[300px] rounded-full pointer-events-none blur-[130px] opacity-30 z-0"
           style={{ backgroundColor: themeColor }}
         />
         {/* Cover Art 232x232 */}

@@ -190,12 +190,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   return (
     <div
-      className="select-none min-h-screen text-white font-['SpotifyMixUI'] pb-36"
+      className="select-none min-h-screen text-white font-['SpotifyMixUI'] pb-36 relative overflow-hidden"
       style={{
         backgroundColor: themeColor,
-        backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.4) 0%, #121212 400px)',
+        backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(18,18,18,0.85) 280px, #121212 420px)',
       }}
     >
+      {/* Ambient atmospheric aura & glow shine at the top */}
+      <div
+        className="absolute -top-20 left-1/2 -translate-x-1/2 w-[340px] h-[340px] rounded-full pointer-events-none blur-[90px] opacity-50 z-0"
+        style={{ backgroundColor: themeColor }}
+      />
       {/* Sticky Top Header */}
       <div className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between backdrop-blur-md bg-black/40 border-b border-white/5">
         <button

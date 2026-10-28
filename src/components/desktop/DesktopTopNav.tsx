@@ -58,14 +58,45 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
   return (
     <header className="h-16 w-full bg-black px-4 flex items-center justify-between select-none shrink-0 z-50 relative">
-      {/* Left: Spotify Circle Logo */}
-      <div className="flex items-center shrink-0 pl-1">
+      {/* Left: Spotify Circle Logo + Back/Forward Navigation (< >) */}
+      <div className="flex items-center gap-2 shrink-0 pl-1">
         <button
           onClick={handleHomeClick}
-          className="text-white hover:scale-104 active:scale-96 transition-transform p-1"
+          className="text-white hover:scale-104 active:scale-96 transition-transform p-1 mr-1"
           title="Spotify"
         >
           <SpotifyLogoNativeIcon size={32} className="text-white" />
+        </button>
+
+        {/* Back navigation button */}
+        <button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('spotifree_navigate_back'));
+              window.history.back();
+            }
+          }}
+          className="w-8 h-8 rounded-full bg-[#121212] hover:bg-[#282828] text-white flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
+          title="Volver"
+        >
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
+          </svg>
+        </button>
+
+        {/* Forward navigation button */}
+        <button
+          onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.history.forward();
+            }
+          }}
+          className="w-8 h-8 rounded-full bg-[#121212] hover:bg-[#282828] text-white flex items-center justify-center transition-all cursor-pointer active:scale-95 shadow-sm"
+          title="Avanzar"
+        >
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M4.97.47a.75.75 0 0 0 0 1.06L11.19 7.75l-6.22 6.22a.75.75 0 1 0 1.06 1.06l6.75-6.75a.75.75 0 0 0 0-1.06L5.03.47a.75.75 0 0 0-1.06 0z" />
+          </svg>
         </button>
       </div>
 

@@ -53,21 +53,56 @@ export const KNOWN_PLAYLIST_COLORS: Record<string, string> = {
   // Random
   'random': '#2D6852',
 
-  // Editorial Playlists
+  // Editorial Playlists & Live Feed Shelves
   '37i9dQZF1DWZdsS73T1ogG': '#1A4B4C', // el nuevo urbano
   'el-nuevo-urbano': '#1A4B4C',
   '37i9dQZF1DX2EiUAL7Wdfc': '#9C3426', // míticas
   'miticas': '#9C3426',
   '37i9dQZF1DXcBWIGoYBM5M': '#1A4B4C', // Éxitos España
+  '37i9dQZF1DXaxEKcoCdWHD': '#1A4B4C', // Éxitos España
   '4f0YTBqSbvM1iJpuY9r3yQ': '#2D4B68', // ZIZI
   'zizi': '#2D4B68',
   '37i9dQZF1E35QYVMBRlDph': '#B85228', // Mix diario 1
+  '37i9dQZF1E39G7BcNRMw7W': '#2D46B9', // Mix diario 2
+  '37i9dQZF1E38mn8YFuPgE2': '#C45028', // Mix diario 3
+  '37i9dQZF1E37WRLP4fZmP6': '#7358FF', // Mix diario 4
+  '37i9dQZF1E37UsvZHnETCz': '#E13300', // Mix diario 5
+  '37i9dQZF1E39YlnoZk8GqV': '#148A08', // Mix diario 6
+  '37i9dQZEVXcHqU92M8nGCZ': '#5018F0', // Descubrimiento semanal
+  '37i9dQZEVXbcvA1FAYKESf': '#2D46B9', // Radar de Novedades
+  '37i9dQZF1E4uMVXUeT9lW3': '#C45028', // Radio Romeo Santos
+  '37i9dQZF1E4FpP3OTY6OyV': '#EAB308', // Radio Rels B
+  '37i9dQZF1E4l5POm4tdfTL': '#7358FF', // Radio 3AM
+  '37i9dQZF1E4CWDuYF7GiUo': '#BA5D07', // Radio Bad Bunny
+  '37i9dQZF1EVHGWrwldPRtj': '#2D46B9', // Mix relajante
+  '37i9dQZF1EIXyrqgTb1UJk': '#B02897', // Mix de Aventura
+  '37i9dQZF1EQmK1rjZuPGDt': '#E13300', // Mix latino
+  '37i9dQZF1EQm2eC3Aj5U5P': '#C45028', // Mix de bachata
+  '37i9dQZF1EQncLwOalG3K7': '#1DB954', // Mix de pop
+  '37i9dQZF1E4k8iFIrwwqkW': '#E8115B', // Radio KAROL G
+  '37i9dQZF1E4vTHVDH1FT3Y': '#BA5D07', // Radio Bruno Mars
+  '37i9dQZF1E4FhRRLh0mmxG': '#1E3264', // Radio Coldplay
+  '37i9dQZF1DX9gKTxAbfFfX': '#EAB308', // Verano 2026
+  '37i9dQZF1DX1HCSfq0nSal': '#DC148C', // PEGAO
+  '37i9dQZF1DWVJv1UsWItkB': '#148A08', // Viral España 2026
+  '37i9dQZF1DX8jrCoV9Ccve': '#BA5D07', // temardos
+  '37i9dQZF1DX10zKzsJ2jva': '#E13300', // Viva Latino
+  '37i9dQZF1DWZjqjZMudx9T': '#C45028', // MANSIÓN REGGAETÓN
+  '37i9dQZF1DX43c0ftmnMBx': '#C45028', // Bachatéame
+  '57tmzh0hsnWU8znnvEWJbe': '#B02897', // The Last (Aventura)
 };
 
 export function isDullGrey(color?: string | null): boolean {
   if (!color) return true;
   const c = color.trim().toLowerCase();
-  return (
+  if (
+    c === '#000000' ||
+    c === '#000' ||
+    c === '#111' ||
+    c === '#111111' ||
+    c === '#1a1a1a' ||
+    c === '#222222' ||
+    c === '#202020' ||
     c === '#303030' ||
     c === '#282828' ||
     c === '#121212' ||
@@ -76,10 +111,41 @@ export function isDullGrey(color?: string | null): boolean {
     c === '#333333' ||
     c === '#404040' ||
     c === '#535353' ||
-    c === 'rgb(48, 48, 48)' ||
-    c === 'rgb(40, 40, 40)' ||
-    c === 'rgb(18, 18, 18)'
-  );
+    c === '#727272' ||
+    c === '#b3b3b3' ||
+    c === '#ffffff' ||
+    c === '#fff' ||
+    c.startsWith('rgba(0,') ||
+    c.startsWith('rgb(0,') ||
+    c.startsWith('rgb(18,') ||
+    c.startsWith('rgb(24,') ||
+    c.startsWith('rgb(40,') ||
+    c.startsWith('rgb(48,')
+  ) {
+    return true;
+  }
+
+  // Parse 3 or 6 hex digits and inspect luminance & saturation
+  if (c.startsWith('#')) {
+    let hex = c.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split('').map((x) => x + x).join('');
+    }
+    if (hex.length === 6) {
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        if (lum < 40 || lum > 240) return true; // Reject pitch black / dark mud or pure white
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        if (max - min < 25) return true; // Reject washed-out grey
+      }
+    }
+  }
+
+  return false;
 }
 
 export function resolveVibrantColor(

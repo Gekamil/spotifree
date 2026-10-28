@@ -1,0 +1,280 @@
+{
+  "navInfo": {
+    "outerHTML": "<nav class=\"footer\" data-testid=\"footer-div\"><div class=\"footer-content-container\"><div class=\"top-section\"><div class=\"top-links\"><div class=\"links-group\"><h4 class=\"e-101040-text encore-text-body-medium-bold encore-internal-color-text-base encore-internal-padding-block-end-tighter-2\" data-encore-id=\"text\">Empresa</h4><ul class=\"e-101040-type-list e-101040-type-list--condensed-all\" role=\"list\" data-encore-id=\"typeList\"><li class=\"e-101040-text encore-internal-padding-block-end-tighter-2 e-10104",
+    "className": "footer",
+    "bg": "rgb(18, 18, 18)",
+    "bgImage": "none",
+    "backdropFilter": "none",
+    "height": "1209px",
+    "borderTop": "0px none rgb(255, 255, 255)",
+    "buttons": [
+      {
+        "text": "Acerca de",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Empleo",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "For the Record",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Para artistas",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Para creadores",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Para autores",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Desarrolladores",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Publicidad",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Inversores",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Proveedores",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Asistencia",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "App gratis para móvil",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Popular por país",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Top letras",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Importar tu música",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Premium Individual",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Premium Duo",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Premium Familiar",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Premium para Estudiantes",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Spotify Free",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "",
+        "svgHtml": "<svg data-encore-id=\"icon\" role=\"img\" aria-hidden=\"true\" class=\"e-101040-icon\" viewBox=\"0 0 16 16\" style=\"--encore-icon-height: var(--encore-graphic-size-decorative-smaller); --encore-icon-width: var(--encore-graphic-size-decorative-smaller);\"><path d=\"M8 1.44c2.136 0 2.389.009 3.233.047.78.036 1.203.166 1.485.276.348.128.663.332.921.598.266.258.47.573.599.921.11.282.24.706.275 1.485.039.844.047 1.097.047 3.233s-.008 2.389-.047 3.232c-.035.78-.166 1.204-.275 1.486a2.65 2.65 0 0 1-1.518 1.518c-.282.11-.706.24-1.486.275-.843.039-1.097.047-3.233.047s-2.39-.008-3.232-.047c-.78-.035-1.204-.165-1.486-.275a2.5 2.5 0 0 1-.921-.599 2.5 2.5 0 0 1-.599-.92c-.11-.282-.24-.706-.275-1.486-.038-.844-.047-1.096-.047-3.232s.009-2.39.047-3.233c.036-.78.166-1.203.275-1.485.129-.348.333-.663.599-.921a2.5 2.5 0 0 1 .92-.599c.283-.11.707-.24 1.487-.275.843-.038 1.096-.047 3.232-.047L8 1.441zm.001-1.442c-2.172 0-2.445.01-3.298.048-.854.04-1.435.176-1.943.373a3.9 3.9 0 0 0-1.417.923c-.407.4-.722.883-.923 1.417-.198.508-.333 1.09-.372 1.942S0 5.826 0 8c0 2.172.01 2.445.048 3.298.04.853.174 1.433.372 1.941.2.534.516 1.017.923 1.417.4.407.883.722 1.417.923.508.198 1.09.333 1.942.372s1.126.048 3.299.048 2.445-.01 3.298-.048c.853-.04 1.433-.174 1.94-.372a4.1 4.1 0 0 0 2.34-2.34c.199-.508.334-1.09.373-1.942S16 10.172 16 7.999s-.01-2.445-.048-3.298c-.04-.853-.174-1.433-.372-1.94a3.9 3.9 0 0 0-.923-1.418A3.9 3.9 0 0 0 13.24.42c-.508-.197-1.09-.333-1.942-.371-.851-.041-1.125-.05-3.298-.05z\"></path><path d=\"M8 3.892a4.108 4.108 0 1 0 0 8.216 4.108 4.108 0 0 0 0-8.216m0 6.775a2.668 2.668 0 1 1 0-5.335 2.668 2.668 0 0 1 0 5.335m4.27-5.978a.96.96 0 1 0 0-1.92.96.96 0 0 0 0 1.92\"></path></svg>",
+        "svgViewBox": "0 0 16 16",
+        "svgPaths": [
+          "M8 1.44c2.136 0 2.389.009 3.233.047.78.036 1.203.166 1.485.276.348.128.663.332.921.598.266.258.47.573.599.921.11.282.24.706.275 1.485.039.844.047 1.097.047 3.233s-.008 2.389-.047 3.232c-.035.78-.166 1.204-.275 1.486a2.65 2.65 0 0 1-1.518 1.518c-.282.11-.706.24-1.486.275-.843.039-1.097.047-3.233.047s-2.39-.008-3.232-.047c-.78-.035-1.204-.165-1.486-.275a2.5 2.5 0 0 1-.921-.599 2.5 2.5 0 0 1-.599-.92c-.11-.282-.24-.706-.275-1.486-.038-.844-.047-1.096-.047-3.232s.009-2.39.047-3.233c.036-.78.166-1.203.275-1.485.129-.348.333-.663.599-.921a2.5 2.5 0 0 1 .92-.599c.283-.11.707-.24 1.487-.275.843-.038 1.096-.047 3.232-.047L8 1.441zm.001-1.442c-2.172 0-2.445.01-3.298.048-.854.04-1.435.176-1.943.373a3.9 3.9 0 0 0-1.417.923c-.407.4-.722.883-.923 1.417-.198.508-.333 1.09-.372 1.942S0 5.826 0 8c0 2.172.01 2.445.048 3.298.04.853.174 1.433.372 1.941.2.534.516 1.017.923 1.417.4.407.883.722 1.417.923.508.198 1.09.333 1.942.372s1.126.048 3.299.048 2.445-.01 3.298-.048c.853-.04 1.433-.174 1.94-.372a4.1 4.1 0 0 0 2.34-2.34c.199-.508.334-1.09.373-1.942S16 10.172 16 7.999s-.01-2.445-.048-3.298c-.04-.853-.174-1.433-.372-1.94a3.9 3.9 0 0 0-.923-1.418A3.9 3.9 0 0 0 13.24.42c-.508-.197-1.09-.333-1.942-.371-.851-.041-1.125-.05-3.298-.05z",
+          "M8 3.892a4.108 4.108 0 1 0 0 8.216 4.108 4.108 0 0 0 0-8.216m0 6.775a2.668 2.668 0 1 1 0-5.335 2.668 2.668 0 0 1 0 5.335m4.27-5.978a.96.96 0 1 0 0-1.92.96.96 0 0 0 0 1.92"
+        ]
+      },
+      {
+        "text": "",
+        "svgHtml": "<svg data-encore-id=\"icon\" role=\"img\" aria-hidden=\"true\" class=\"e-101040-icon\" viewBox=\"0 0 16 16\" style=\"--encore-icon-height: var(--encore-graphic-size-decorative-smaller); --encore-icon-width: var(--encore-graphic-size-decorative-smaller);\"><path d=\"M9.303 6.928 14.403 1h-1.208L8.766 6.147 5.23 1H1.15L6.5 8.784 1.15 15h1.208l4.676-5.436L10.77 15h4.08zM7.648 8.852l-.542-.775L2.795 1.91H4.65l3.48 4.977.541.775 4.523 6.47H11.34l-3.691-5.28Z\"></path></svg>",
+        "svgViewBox": "0 0 16 16",
+        "svgPaths": [
+          "M9.303 6.928 14.403 1h-1.208L8.766 6.147 5.23 1H1.15L6.5 8.784 1.15 15h1.208l4.676-5.436L10.77 15h4.08zM7.648 8.852l-.542-.775L2.795 1.91H4.65l3.48 4.977.541.775 4.523 6.47H11.34l-3.691-5.28Z"
+        ]
+      },
+      {
+        "text": "",
+        "svgHtml": "<svg data-encore-id=\"icon\" role=\"img\" aria-hidden=\"true\" class=\"e-101040-icon\" viewBox=\"0 0 16 16\" style=\"--encore-icon-height: var(--encore-graphic-size-decorative-smaller); --encore-icon-width: var(--encore-graphic-size-decorative-smaller);\"><path d=\"M16 8a8 8 0 1 0-9.25 7.903v-5.59H4.719V8H6.75V6.237c0-2.005 1.194-3.112 3.022-3.112.875 0 1.79.156 1.79.156V5.25h-1.008c-.994 0-1.304.617-1.304 1.25V8h2.219l-.355 2.313H9.25v5.59A8 8 0 0 0 16 8\"></path></svg>",
+        "svgViewBox": "0 0 16 16",
+        "svgPaths": [
+          "M16 8a8 8 0 1 0-9.25 7.903v-5.59H4.719V8H6.75V6.237c0-2.005 1.194-3.112 3.022-3.112.875 0 1.79.156 1.79.156V5.25h-1.008c-.994 0-1.304.617-1.304 1.25V8h2.219l-.355 2.313H9.25v5.59A8 8 0 0 0 16 8"
+        ]
+      },
+      {
+        "text": "Legal",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Centro de seguridad y privacidad",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Política de Privacidad",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Configuración de cookies",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Información sobre los anuncios",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Accesibilidad",
+        "svgHtml": null,
+        "svgViewBox": null,
+        "svgPaths": []
+      },
+      {
+        "text": "Español de España",
+        "svgHtml": "<svg data-encore-id=\"icon\" role=\"img\" aria-hidden=\"true\" class=\"e-101040-icon\" viewBox=\"0 0 16 16\" style=\"--encore-icon-height: var(--encore-graphic-size-decorative-smaller); --encore-icon-width: var(--encore-graphic-size-decorative-smaller);\"><path d=\"M8.152 16H8a8 8 0 1 1 .152 0m-.41-14.202c-.226.273-.463.713-.677 1.323-.369 1.055-.626 2.496-.687 4.129h3.547c-.06-1.633-.318-3.074-.687-4.129-.213-.61-.45-1.05-.676-1.323-.194-.235-.326-.285-.385-.296h-.044c-.055.007-.19.052-.391.296M4.877 7.25c.062-1.771.34-3.386.773-4.624q.148-.427.329-.806a6.51 6.51 0 0 0-4.436 5.43zm-3.334 1.5a6.51 6.51 0 0 0 4.436 5.43 8 8 0 0 1-.33-.806c-.433-1.238-.71-2.853-.772-4.624zm4.835 0c.061 1.633.318 3.074.687 4.129.214.61.451 1.05.677 1.323.202.244.336.29.391.297l.044-.001c.06-.01.19-.061.385-.296.226-.273.463-.713.676-1.323.37-1.055.626-2.496.687-4.129zm5.048 0c-.061 1.771-.339 3.386-.772 4.624q-.123.353-.268.674a6.5 6.5 0 0 0 4.071-5.298zm3.031-1.5a6.51 6.51 0 0 0-4.071-5.298q.145.322.268.674c.433 1.238.711 2.853.772 4.624z\"></path></svg>",
+        "svgViewBox": "0 0 16 16",
+        "svgPaths": [
+          "M8.152 16H8a8 8 0 1 1 .152 0m-.41-14.202c-.226.273-.463.713-.677 1.323-.369 1.055-.626 2.496-.687 4.129h3.547c-.06-1.633-.318-3.074-.687-4.129-.213-.61-.45-1.05-.676-1.323-.194-.235-.326-.285-.385-.296h-.044c-.055.007-.19.052-.391.296M4.877 7.25c.062-1.771.34-3.386.773-4.624q.148-.427.329-.806a6.51 6.51 0 0 0-4.436 5.43zm-3.334 1.5a6.51 6.51 0 0 0 4.436 5.43 8 8 0 0 1-.33-.806c-.433-1.238-.71-2.853-.772-4.624zm4.835 0c.061 1.633.318 3.074.687 4.129.214.61.451 1.05.677 1.323.202.244.336.29.391.297l.044-.001c.06-.01.19-.061.385-.296.226-.273.463-.713.676-1.323.37-1.055.626-2.496.687-4.129zm5.048 0c-.061 1.771-.339 3.386-.772 4.624q-.123.353-.268.674a6.5 6.5 0 0 0 4.071-5.298zm3.031-1.5a6.51 6.51 0 0 0-4.071-5.298q.145.322.268.674c.433 1.238.711 2.853.772 4.624z"
+        ]
+      }
+    ]
+  },
+  "headerInfo": null,
+  "shortcutItems": [
+    {
+      "text": "DeBÍ TiRAR MáS FOToS",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "44px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "LO MISMO DE SIEMPRE",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "44px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "CUARTO AZUL",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "BUENAS NOCHES",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "BORONDO",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "Un Verano Sin Ti",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "NACER DE NUEVO",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    },
+    {
+      "text": "LA CIUDAD",
+      "bg": "rgba(0, 0, 0, 0)",
+      "height": "22px",
+      "borderRadius": "0px"
+    }
+  ],
+  "sectionHeaders": [
+    {
+      "text": "Canciones en tendencia",
+      "fontSize": "20px",
+      "fontWeight": "700"
+    },
+    {
+      "text": "Artistas populares",
+      "fontSize": "20px",
+      "fontWeight": "700"
+    },
+    {
+      "text": "Álbumes y sencillos populares",
+      "fontSize": "20px",
+      "fontWeight": "700"
+    },
+    {
+      "text": "Emisoras populares",
+      "fontSize": "20px",
+      "fontWeight": "700"
+    },
+    {
+      "text": "Listas seleccionadas",
+      "fontSize": "20px",
+      "fontWeight": "700"
+    }
+  ]
+}

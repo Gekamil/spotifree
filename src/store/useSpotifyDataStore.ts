@@ -15,6 +15,7 @@ import {
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
 import liveExtractedSession from '../data/liveExtractedSession.json';
+import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
 export const DEFAULT_SESSION_USER: UserProfile = {
   id: liveExtractedSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
@@ -30,6 +31,9 @@ export const DEFAULT_SESSION_CACHE: Record<string, Playlist> = {};
 DEFAULT_SESSION_PLAYLISTS.forEach((p) => {
   DEFAULT_SESSION_CACHE[p.id] = p;
 });
+if ((liveExtractedSession as any).cachedPlaylistDetails) {
+  Object.assign(DEFAULT_SESSION_CACHE, (liveExtractedSession as any).cachedPlaylistDetails);
+}
 
 export interface DynamicShelfCard {
   id: string;
@@ -52,38 +56,59 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
-export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = [
-  {
-    id: 'shelf-editorial',
-    type: 'featured',
-    title: 'Novedades populares',
-    subtitle: 'Novedades y lanzamientos seleccionados',
-    cards: [
-      { id: '37i9dQZF1DWZdsS73T1ogG', title: 'el nuevo urbano', subtitle: 'Lo más nuevo de la música urbana.', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426' },
-      { id: '37i9dQZF1DX2EiUAL7Wdfc', title: 'míticas', subtitle: 'Canciones que nunca pasarán de moda.', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6' },
-      { id: '37i9dQZF1DXcBWIGoYBM5M', title: 'Éxitos España', subtitle: 'Los éxitos más escuchados ahora mismo.', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b' },
-      { id: '4f0YTBqSbvM1iJpuY9r3yQ', title: 'ZIZI', subtitle: 'Música pop y urbana destacada.', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' },
-      { id: '37i9dQZEVXbNFJfN1Vw8d9', title: 'Top 50: España', subtitle: 'Tu actualización diaria de los temas más reproducidos.', image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_large.jpg' },
-      { id: '7b3MrCWtettvBKlfBSdorn', title: 'J+L(2026)', subtitle: 'Selección de éxitos contemporáneos.', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' },
-    ],
-    hasSeeAll: true,
-  },
-  {
-    id: 'shelf-popular-mixes',
-    type: 'mixes',
-    title: 'Mixes y listas recomendadas',
-    subtitle: 'Música organizada por tus géneros favoritos',
-    cards: [
-      { id: '37i9dQZF1EQncLwOalG3K7', title: 'Pop con Ñ', subtitle: 'El pop en español más fresco y actual.', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/pop/2YZyLoL8N0Wb9xBt1NhZWg/es' },
-      { id: '37i9dQZF1DX10zKzsJ2jva', title: 'Viva Latino', subtitle: 'El corazón de la música latina.', image: 'https://i.scdn.co/image/ab67706f00000002ecb9880a04014f6aa0a0c651' },
-      { id: '37i9dQZF1DX0XUsuxWHRQd', title: 'RapCaviar', subtitle: 'Nuevos lanzamientos urbanos.', image: 'https://i.scdn.co/image/ab67706f00000002326607e99b599379d061bd48' },
-      { id: '37i9dQZF1DX4JAvHpjipBk', title: 'New Music Friday', subtitle: 'Los mejores estrenos de la semana.', image: 'https://i.scdn.co/image/ab67706f00000002b9f570391068a503b8d03b8f' },
-      { id: '37i9dQZF1DX4sWSpwq3LiO', title: 'Peaceful Piano', subtitle: 'Piano instrumental relajante.', image: 'https://i.scdn.co/image/ab67706f0000000270e1fb7db7b45809d6a80377' },
-      { id: '37i9dQZF1DWXRqgorJj26U', title: 'Rock Classics', subtitle: 'Grandes leyendas y clásicos del rock.', image: 'https://i.scdn.co/image/ab67706f00000002694bf33281695f3b7542a09a' },
-    ],
-    hasSeeAll: true,
-  },
-];
+export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
+  const result: DynamicShelf[] = [];
+  const feed = liveExtractedFeed as any[];
+
+  feed.forEach((shelf, idx) => {
+    // Exclude podcast / episodes per user request
+    if (shelf.title.toLowerCase().includes('episodio') || shelf.title.toLowerCase().includes('podcast')) {
+      return;
+    }
+    // Shelf 0 is the raw concatenated list, Shelf 1 is the 8-card "Mixes diarios" for user
+    if (idx === 0) return;
+
+    let title = shelf.title;
+    let prefix: string | undefined = undefined;
+    let type: DynamicShelf['type'] = 'mixes';
+
+    if (title === 'Jorgeperezvk' || title.toLowerCase().includes('jorge')) {
+      title = userName;
+      prefix = 'Hecho para';
+      type = 'made_for';
+    } else if (title.toLowerCase().includes('romeo')) {
+      prefix = 'Más como';
+      type = 'artist';
+    } else if (title.toLowerCase().includes('reciente') || title.toLowerCase().includes('sumérgete')) {
+      type = 'recent';
+    } else if (title.toLowerCase().includes('emisora') || title.toLowerCase().includes('petando') || title.toLowerCase().includes('urbano')) {
+      type = 'featured';
+    }
+
+    const cards: DynamicShelfCard[] = shelf.cards.map((c: any) => ({
+      id: c.id,
+      title: c.title,
+      subtitle: c.subtitle || '',
+      image: c.image || '',
+      isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
+    }));
+
+    if (cards.length > 0) {
+      result.push({
+        id: `extracted-shelf-${idx}`,
+        title,
+        prefix,
+        type,
+        cards,
+        hasSeeAll: true,
+      });
+    }
+  });
+
+  return result;
+}
+
+export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = buildExtractedShelves();
 
 export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
   {
@@ -141,189 +166,38 @@ export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
 export function buildDynamicShelves(
   user: UserProfile | null,
   playlists: Playlist[],
-  featuredMessage: string | null,
-  featuredPlaylists: any[] = [],
-  topTracks: Track[] = [],
-  topArtists: any[] = [],
-  recentlyPlayed: any[] = []
+  _featuredMessage: string | null = null,
+  _featuredPlaylists: any[] = [],
+  _topTracks: Track[] = [],
+  _topArtists: any[] = [],
+  _recentlyPlayed: any[] = []
 ): DynamicShelf[] {
-  if (!user && playlists.length === 0) return DEFAULT_PUBLIC_SHELVES;
+  const displayName = user?.display_name || 'Jorgeperezvk';
+  const extracted = buildExtractedShelves(displayName);
 
-  const effectivePlaylists = playlists && playlists.length > 0 ? playlists : DEFAULT_PUBLIC_PLAYLISTS;
-  const displayName = user?.display_name || 'ti';
-  const editorialTitle =
-    featuredMessage ||
-    (new Date().getDay() === 5 ? '¡Hoy es viernes de novedades!' : 'Novedades populares');
-
-  // Shelf 1: Editorial Featured (Priority 1)
-  const editorialPool =
-    featuredPlaylists.length > 0
-      ? featuredPlaylists
-      : effectivePlaylists.filter(
-          (p) =>
-            p.id.includes('novedades') ||
-            p.id.includes('radar') ||
-            p.name.toLowerCase().includes('novedades') ||
-            p.name.toLowerCase().includes('radar')
-        );
-
-  const cleanDesc = (text?: string, fallback: string = ''): string => {
-    if (!text) return fallback;
-    return text.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&quot;/g, '"').trim() || fallback;
-  };
-
-  const getFallbackImage = (item: Playlist) => {
-    if (item.id === 'liked-songs' || item.id === 'collection-tracks' || item.name?.toLowerCase().trim() === 'canciones que te gustan') {
-      return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
-    }
-    return item.images?.[0]?.url || '';
-  };
-
-  const ensureMinCards = (cards: DynamicShelfCard[], min: number = 6): DynamicShelfCard[] => {
-    if (cards.length >= min) return cards;
-    const seen = new Set(cards.map((c) => c.id));
-    const pool = DEFAULT_PUBLIC_PLAYLISTS.map((p, idx) => ({
-      id: p.id || `pub-fill-${idx}`,
-      title: p.name,
-      subtitle: cleanDesc(p.description, 'De Spotify'),
-      image: p.images?.[0]?.url || '',
-    }));
-    const needed = pool.filter((c) => !seen.has(c.id));
-    return [...cards, ...needed].slice(0, Math.max(cards.length, min));
-  };
-
-  const editorialCards: DynamicShelfCard[] = ensureMinCards(
-    (editorialPool.length > 0 ? editorialPool : effectivePlaylists.slice(0, 6)).map((item, idx) => ({
-      id: item.id || `feat-${idx}`,
-      title: item.name,
-      subtitle: cleanDesc(item.description, 'De Spotify'),
-      image: getFallbackImage(item),
-    }))
+  // If user has custom playlists, include them at the top
+  const userLists = playlists.filter(
+    (p) => !p.id.includes('collection:tracks') && p.type !== 'folder' && (p as any).is_custom
   );
 
-  // Shelf 2: Made for user (Priority 2) - Derived dynamically from live playlists
-  const dailyMixes = effectivePlaylists.filter((p) =>
-    /mix diario|daily mix|discover|radar/i.test(p.name)
-  );
-  const userPlaylists = effectivePlaylists.filter(
-    (p) =>
-      p.owner?.display_name === displayName ||
-      p.owner?.id === user?.id ||
-      /mix|favorit|canciones/i.test(p.name)
-  );
-  const madeForPool = dailyMixes.length >= 2 ? dailyMixes : userPlaylists.length > 0 ? userPlaylists : effectivePlaylists;
-
-  const badgeColors = ['#00F0FF', '#FFA42B', '#FF6437', '#1ED760', '#B02897', '#509BF5'];
-  const madeForCards: DynamicShelfCard[] = ensureMinCards(
-    madeForPool.slice(0, 8).map((p, idx) => {
-      const matchDaily = p.name.match(/Mix diario \d/i);
-      return {
-        id: p.id || `made-for-${idx}`,
-        title: p.name,
-        subtitle: cleanDesc(p.description, `Mix personalizado para ${displayName}`),
-        image: getFallbackImage(p),
-        badge: matchDaily ? matchDaily[0] : undefined,
-        badgeColor: matchDaily ? badgeColors[idx % badgeColors.length] : undefined,
-      };
-    })
-  );
-
-  // Shelf 3: Recientes (Priority 3) - Derived from recentlyPlayed or playlists order
-  const recentCards: DynamicShelfCard[] = ensureMinCards(
-    (recentlyPlayed.length > 0 ? recentlyPlayed : effectivePlaylists).slice(0, 8).map((p, idx) => ({
-      id: p.id || `recent-${idx}`,
-      title: p.name,
-      subtitle: cleanDesc(p.description, 'De tu biblioteca'),
-      image: getFallbackImage(p),
-    }))
-  );
-
-  // Shelf 4: Más como {topArtist} (Priority 4) - Dynamically derived artist affinity
-  const artistFromTop = topArtists[0]?.name;
-  const artistFromTracks = topTracks[0]?.artists?.[0]?.name;
-  const artistFromPlaylists = effectivePlaylists
-    .find((p) => /mix de|radio de|radio/i.test(p.name) || p.name.includes('&'))
-    ?.name.replace(/^(mix de|radio de|radio)\s+/i, '')
-    .split('&')[0]
-    ?.trim();
-
-  const topArtistName = artistFromTop || artistFromTracks || artistFromPlaylists || 'Romeo Santos';
-
-  const artistPool = effectivePlaylists.filter(
-    (p) =>
-      p.name.toLowerCase().includes(topArtistName.toLowerCase()) ||
-      p.description?.toLowerCase().includes(topArtistName.toLowerCase()) ||
-      /radio|artista/i.test(p.name)
-  );
-
-  const artistCards: DynamicShelfCard[] = ensureMinCards(
-    (artistPool.length >= 2 ? artistPool : effectivePlaylists.slice(2, 6)).map((p, idx) => ({
-      id: p.id || `artist-${idx}`,
-      title: p.name,
-      subtitle: cleanDesc(p.description, `Con ${topArtistName} y artistas similares`),
-      image: getFallbackImage(p),
-    }))
-  );
-
-  // Shelf 5: Mixes (Priority 5) - Dynamically derived genre mixes
-  const genreMixPool = effectivePlaylists.filter((p) =>
-    /mix|urbano|pop|latino|bachata|flamenco|reggaeton|rock|relajante/i.test(p.name)
-  );
-  const mixesPool = genreMixPool.length >= 3 ? genreMixPool : effectivePlaylists.slice(4, 10);
-
-  const mixesCards: DynamicShelfCard[] = ensureMinCards(
-    mixesPool.map((p, idx) => ({
-      id: p.id || `mix-${idx}`,
-      title: p.name,
-      subtitle: cleanDesc(p.description, 'Música organizada por tus géneros favoritos'),
-      image: getFallbackImage(p),
-    }))
-  );
-
-  return [
-    {
-      id: 'shelf-editorial',
-      type: 'featured',
-      title: editorialTitle,
-      subtitle: 'Novedades y lanzamientos seleccionados',
-      cards: editorialCards,
-      hasSeeAll: true,
-    },
-    {
-      id: 'shelf-made-for-you',
+  if (userLists.length > 0) {
+    const userShelf: DynamicShelf = {
+      id: 'shelf-user-created',
+      title: 'Tus listas creadas',
+      subtitle: `Listas y creaciones de ${displayName}`,
       type: 'made_for',
-      prefix: 'Hecho para',
-      title: displayName,
-      subtitle: 'Tus listas y mixes personalizados',
-      cards: madeForCards,
       hasSeeAll: true,
-    },
-    {
-      id: 'shelf-recent',
-      type: 'recent',
-      title: 'Recientes',
-      subtitle: 'Basado en tu actividad reciente',
-      cards: recentCards,
-      hasSeeAll: true,
-    },
-    {
-      id: 'shelf-more-like',
-      type: 'artist',
-      prefix: 'Más como',
-      title: topArtistName,
-      subtitle: 'Recomendaciones basadas en tus artistas favoritos',
-      cards: artistCards,
-      hasSeeAll: true,
-    },
-    {
-      id: 'shelf-mixes',
-      type: 'mixes',
-      title: 'Tus mixes más escuchados',
-      subtitle: 'Música que te encanta organizada por géneros y estados de ánimo',
-      cards: mixesCards,
-      hasSeeAll: true,
-    },
-  ];
+      cards: userLists.map((p) => ({
+        id: p.id,
+        title: p.name,
+        subtitle: p.description || `De ${displayName}`,
+        image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+      })),
+    };
+    return [userShelf, ...extracted];
+  }
+
+  return extracted;
 }
 
 interface SpotifyDataState {

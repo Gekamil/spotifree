@@ -55,6 +55,7 @@ export const MobileLayout: React.FC = () => {
     const list: Array<{
       id: string;
       title: string;
+      prefix?: string;
       cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
     }> = [];
 
@@ -86,6 +87,7 @@ export const MobileLayout: React.FC = () => {
         list.push({
           id: s.id,
           title: s.title,
+          prefix: s.prefix,
           cards: s.cards.map((c) => ({
             id: c.id,
             title: c.title,
@@ -186,9 +188,16 @@ export const MobileLayout: React.FC = () => {
             <div className="space-y-7 px-4">
               {shelves.map((shelf) => (
                 <div key={shelf.id} className="space-y-3">
-                  <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
-                    {shelf.title}
-                  </h3>
+                  <div>
+                    {shelf.prefix && (
+                      <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block mb-0.5">
+                        {shelf.prefix}
+                      </span>
+                    )}
+                    <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+                      {shelf.title}
+                    </h3>
+                  </div>
                   <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
                     {shelf.cards.map((card) => (
                       <div
