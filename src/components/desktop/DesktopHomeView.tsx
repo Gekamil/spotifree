@@ -2,8 +2,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
+import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
-import { DesktopShimmerFeed } from './DesktopShimmerFeed';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 
@@ -148,10 +148,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
-  if (!isAuthenticated) {
-    return <DesktopShimmerFeed />;
-  }
-
   const handleQuickPlay = async (
     e: React.MouseEvent | undefined,
     card: { id: string; name: string; image: string }
@@ -216,6 +212,34 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       playlistId: card.id,
     } as any);
   };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="relative min-h-full pb-32 flex flex-col items-center justify-center text-center px-8 pt-20 animate-in fade-in duration-300">
+        <div className="max-w-md space-y-5">
+          <div className="w-16 h-16 rounded-full bg-[#1ed760] text-black flex items-center justify-center mx-auto mb-6 shadow-2xl">
+            <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 2C6.477 2 2 6.477 2 12c0 5.524 4.477 10 10 10s10-4.476 10-10c0-5.523-4.477-10-10-10zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.793-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.722 1.115.294.18.386.563.207.855zm1.226-2.72c-.226.367-.706.482-1.072.257-2.687-1.652-6.785-2.131-9.965-1.166-.413.127-.848-.106-.973-.518-.125-.413.108-.848.52-.973 3.632-1.102 8.147-.568 11.233 1.328.366.226.481.707.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.073 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.28.327z" />
+            </svg>
+          </div>
+          <h1 className="text-3xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+            Escucha sin límites
+          </h1>
+          <p className="text-sm text-[#b3b3b3] leading-relaxed">
+            Inicia sesión con tu cuenta de Spotify para acceder a tu biblioteca, playlists y recomendaciones personalizadas.
+          </p>
+          <div className="pt-2">
+            <button
+              onClick={() => useUIStore.getState().openLoginModal()}
+              className="px-8 py-3.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-105 active:scale-95 text-black font-bold text-sm tracking-tight transition-all cursor-pointer shadow-xl inline-flex items-center gap-2"
+            >
+              <span>Conectar cuenta de Spotify</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (expandedShelf) {
     const shelfAmbientColor = resolveVibrantColor(expandedShelf.id, expandedShelf.title);

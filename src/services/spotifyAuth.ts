@@ -300,22 +300,28 @@ export async function refreshAccessToken(): Promise<string | null> {
 }
 
 export async function getValidAccessToken(): Promise<string | null> {
-  const token = window.localStorage.getItem('spotify_access_token');
-  const expiresAt = parseInt(window.localStorage.getItem('spotify_expires_at') || '0', 10);
+  const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+  const expiresAt = parseInt((typeof window !== 'undefined' && window.localStorage.getItem('spotify_expires_at')) || '0', 10);
 
-  if (token && Date.now() < expiresAt - 60000) {
+  // If token exists and hasn't expired (or expiresAt not specified, assume active)
+  if (token && (expiresAt === 0 || Date.now() < expiresAt - 60000)) {
     return token;
   }
 
   // Attempt auto-refresh using stored refresh token
-  if (window.localStorage.getItem('spotify_refresh_token')) {
+  if (typeof window !== 'undefined' && window.localStorage.getItem('spotify_refresh_token')) {
     const refreshed = await refreshAccessToken();
     if (refreshed) {
       return refreshed;
     }
   }
 
-  // If user token is missing or expired, fallback to app-level Client Credentials token!
+  // If user token exists, preserve it rather than replacing with an app token
+  if (token) {
+    return token;
+  }
+
+  // Fallback to app-level Client Credentials token for anonymous browsing
   return await getClientCredentialsToken();
 }
 

@@ -6,6 +6,7 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../../services/spotifyCookieService';
+import { saveAccount, cleanSpDc } from '../../utils/userAccounts';
 
 interface FrequencyPoint {
   label: string;
@@ -158,7 +159,7 @@ export const DesktopSettingsView: React.FC = () => {
 
   const handleSaveSpotifyCookie = async () => {
     setCookieError(null);
-    const val = spotifyCookie.trim();
+    const val = cleanSpDc(spotifyCookie);
     const validation = validateSpotifyCookie(val);
     if (!validation.valid) {
       setCookieError(validation.error || 'Cookie no válida.');
@@ -170,17 +171,30 @@ export const DesktopSettingsView: React.FC = () => {
       const session = await extractSpotifySessionFromCookie(val);
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', val);
-        window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
-        if (session.accessToken) {
-          window.localStorage.setItem('spotify_access_token', session.accessToken);
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: val }));
+        if (session.user?.id) {
+          window.localStorage.setItem('spotifree_active_user_id', session.user.id);
         }
+        window.localStorage.removeItem('spotify_logged_out');
       }
+
+      saveAccount({
+        id: session.user.id || `user-${Date.now()}`,
+        displayName: session.user.display_name || 'Usuario Spotify',
+        email: session.user.email,
+        avatarUrl: session.user.images?.[0]?.url,
+        cookie: val,
+        accessToken: session.accessToken,
+        lastUsed: Date.now(),
+      });
+
       useSpotifyDataStore.setState({
         isAuthenticated: true,
         user: session.user,
         playlists: session.playlists,
         dynamicShelves: session.shelves,
         quickAccessCards: session.quickAccess,
+        isLoading: false,
       });
       setSavedSpotifyCookieSuccess(true);
       setTimeout(() => {

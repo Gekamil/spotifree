@@ -168,34 +168,72 @@ export async function getAccessTokenFromCookie(spDcCookie) {
   }
 }
 
+export function cleanSpDcString(raw) {
+  if (!raw) return '';
+  let str = String(raw).trim();
+  str = str.replace(/^["']|["']$/g, '').trim();
+  const match = str.match(/sp_dc=([^;]+)/i);
+  if (match) str = match[1].trim();
+  str = str.replace(/^sp_dc=/i, '').trim();
+  str = str.replace(/^["']|["']$/g, '').trim();
+  try {
+    str = decodeURIComponent(str);
+  } catch {}
+  return str.trim();
+}
+
 export async function extractSpotifySession(spDcCookie) {
-  const cookie = (spDcCookie || '').trim();
+  const cookie = cleanSpDcString(spDcCookie);
   if (!cookie || !cookie.startsWith('AQ') || cookie.length < 50) {
     throw new Error('Cookie no válida. La cookie sp_dc debe comenzar por "AQ" y contener el valor completo de open.spotify.com.');
   }
 
   // 1. Generate TOTP and request Web Player access token
+  let tokenData = null;
   const now = Date.now();
-  const { totp, version } = generateSpotifyTotp(now);
-  const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpServer=${totp}&totpVer=${version}`;
 
-  const tokenRes = await fetch(tokenUrl, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
-      'Cookie': `sp_dc=${cookie}`,
-      'Accept': 'application/json',
-      'Referer': 'https://open.spotify.com/',
-      'Origin': 'https://open.spotify.com',
-    },
-  });
+  try {
+    const { totp, version } = generateSpotifyTotp(now);
+    const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpServer=${totp}&totpVer=${version}`;
 
-  if (!tokenRes.ok) {
-    throw new Error(`Spotify rechazó la solicitud de autenticación (HTTP ${tokenRes.status}). Comprueba que tu cookie sp_dc esté activa.`);
+    const tokenRes = await fetch(tokenUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+        'Cookie': `sp_dc=${cookie}`,
+        'Accept': 'application/json',
+        'Referer': 'https://open.spotify.com/',
+        'Origin': 'https://open.spotify.com',
+      },
+    });
+
+    if (tokenRes.ok) {
+      tokenData = await tokenRes.json();
+    }
+  } catch (e) {
+    console.warn('[Extractor] TOTP token error:', e.message);
   }
 
-  const tokenData = await tokenRes.json();
-  if (tokenData.isAnonymous || !tokenData.accessToken) {
-    throw new Error('Cookie de Spotify no válida o sesión expirada. Inicia sesión en open.spotify.com y copia tu nueva cookie sp_dc.');
+  // Fallback: If TOTP failed or returned anonymous/null, try get_access_token endpoint
+  if (!tokenData || !tokenData.accessToken || tokenData.isAnonymous) {
+    try {
+      const fallbackRes = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Cookie': `sp_dc=${cookie}`,
+          'Accept': 'application/json',
+          'Referer': 'https://open.spotify.com/',
+        },
+      });
+      if (fallbackRes.ok) {
+        tokenData = await fallbackRes.json();
+      }
+    } catch (e) {
+      console.warn('[Extractor] get_access_token fallback error:', e.message);
+    }
+  }
+
+  if (!tokenData || !tokenData.accessToken || tokenData.isAnonymous) {
+    throw new Error('Cookie de Spotify no válida o sesión expirada. Comprueba que hayas copiado la cookie completa.');
   }
 
   const accessToken = tokenData.accessToken;

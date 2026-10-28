@@ -41,7 +41,14 @@ export function removeSavedAccount(accountId: string) {
 export function cleanSpDc(raw: string): string {
   if (!raw) return '';
   let str = raw.trim();
-  const match = str.match(/sp_dc=([^;]+)/);
-  if (match) return match[1].trim();
-  return str.replace(/^sp_dc=/i, '').trim();
+  // Strip enclosing quotes if present (e.g., from mobile copy-paste "AQ...")
+  str = str.replace(/^["']|["']$/g, '').trim();
+  const match = str.match(/sp_dc=([^;]+)/i);
+  if (match) str = match[1].trim();
+  str = str.replace(/^sp_dc=/i, '').trim();
+  str = str.replace(/^["']|["']$/g, '').trim();
+  try {
+    str = decodeURIComponent(str);
+  } catch {}
+  return str.trim();
 }

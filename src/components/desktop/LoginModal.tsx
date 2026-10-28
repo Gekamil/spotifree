@@ -105,9 +105,6 @@ export const LoginModal: React.FC = () => {
         if (data.user?.id) {
           window.localStorage.setItem('spotifree_active_user_id', data.user.id);
         }
-        if (data.accessToken) {
-          window.localStorage.setItem('spotify_access_token', data.accessToken);
-        }
         window.localStorage.removeItem('spotify_logged_out');
       }
 
@@ -121,8 +118,16 @@ export const LoginModal: React.FC = () => {
         lastUsed: Date.now(),
       });
 
+      useSpotifyDataStore.setState({
+        isAuthenticated: true,
+        user: data.user,
+        playlists: data.playlists || [],
+        dynamicShelves: data.shelves || [],
+        quickAccessCards: data.quickAccess || [],
+        isLoading: false,
+      });
+
       setSuccessMessage(`Sesión iniciada como ${data.user.display_name || 'Usuario'}.`);
-      await initialize();
       setSavedAccounts(getSavedAccounts());
 
       setTimeout(() => {

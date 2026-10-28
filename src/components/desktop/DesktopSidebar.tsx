@@ -209,19 +209,17 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       {/* Playlists Container */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">
         {!isAuthenticated ? (
-          <div className="space-y-2 p-1">
-            {Array.from({ length: 7 }).map((_, i) => (
-              <div
-                key={`sidebar-shimmer-${i}`}
-                className="flex items-center gap-3 p-2 rounded-md animate-pulse"
-              >
-                <div className="w-12 h-12 rounded bg-[#1f1f1f] shrink-0 aspect-square" />
-                <div className="flex-1 space-y-2 min-w-0">
-                  <div className="h-4 w-3/4 bg-[#1f1f1f] rounded opacity-70" />
-                  <div className="h-3 w-1/2 bg-[#1f1f1f] rounded opacity-50" />
-                </div>
-              </div>
-            ))}
+          <div className="p-4 mx-2 my-2 rounded-lg bg-[#242424] space-y-3">
+            <p className="text-sm font-bold text-white">Disfruta de tu biblioteca</p>
+            <p className="text-xs text-[#b3b3b3] leading-relaxed">
+              Inicia sesión para ver y crear playlists, álbumes y artistas seguidos.
+            </p>
+            <button
+              onClick={() => useUIStore.getState().openLoginModal()}
+              className="px-4 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black font-bold text-xs cursor-pointer shadow hover:scale-104 active:scale-95 transition-all"
+            >
+              Iniciar sesión
+            </button>
           </div>
         ) : processedPlaylists.length === 0 ? (
           <div className="p-4 text-center text-[#b3b3b3] space-y-2">

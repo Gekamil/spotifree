@@ -15,7 +15,6 @@ import {
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
 import { saveAccount } from '../utils/userAccounts';
-import { useUIStore } from './useUIStore';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -388,14 +387,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
       }
 
-      // 2. Prioritize active user OAuth session if logged in
-      const oauthToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
-      if (oauthToken && oauthToken !== 'session-bridge-active') {
-        await get().refreshData();
-        return;
-      }
-
-      // 2b. Check for validated cookie session
+      // 2. Prioritize active validated cookie session if present
       const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
       const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
       let importedPlaylists: Playlist[] = [];
@@ -424,20 +416,13 @@ const store = create<SpotifyDataState>((set, get) => ({
               if (session.user?.id) {
                 window.localStorage.setItem('spotifree_active_user_id', session.user.id);
               }
-              if (session.accessToken) {
-                window.localStorage.setItem('spotify_access_token', session.accessToken);
-              }
             }
           } catch (e) {
             console.error('Failed to extract session from cookie:', e);
           }
-        } else if (session && session.accessToken && typeof window !== 'undefined') {
-          if (!window.localStorage.getItem('spotify_access_token')) {
-            window.localStorage.setItem('spotify_access_token', session.accessToken);
-          }
         }
 
-        if (session && session.user && session.playlists) {
+        if (session && session.user) {
           if (typeof window !== 'undefined' && session.user.id) {
             window.localStorage.setItem('spotifree_active_user_id', session.user.id);
           }
@@ -467,6 +452,13 @@ const store = create<SpotifyDataState>((set, get) => ({
           });
           return;
         }
+      }
+
+      // 3. If NO cookie session, check for OAuth token
+      const oauthToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
+      if (oauthToken && oauthToken !== 'session-bridge-active') {
+        await get().refreshData();
+        return;
       }
 
       if (importedPlaylists && importedPlaylists.length > 0) {
@@ -501,28 +493,14 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      // 3. Fallback: Check if user explicitly logged out
-      const wasLoggedOut = typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true';
-      if (wasLoggedOut) {
-        set({
-          isAuthenticated: false,
-          user: null,
-          playlists: [],
-          dynamicShelves: [],
-          quickAccessCards: [],
-          isLoading: false,
-        });
-        return;
-      }
-
-      // Default active pre-seeded session for Jorge
+      // 4. Default: User has no active session -> Unauthenticated clean state
       set({
-        isAuthenticated: true,
-        user: DEFAULT_SESSION_USER,
-        playlists: DEFAULT_SESSION_PLAYLISTS,
-        dynamicShelves: buildDynamicShelves(DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
-        quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
-        playlistDetailsCache: DEFAULT_SESSION_CACHE,
+        isAuthenticated: false,
+        user: null,
+        playlists: [],
+        dynamicShelves: [],
+        quickAccessCards: [],
+        playlistDetailsCache: {},
         isLoading: false,
       });
     } finally {
@@ -583,21 +561,43 @@ const store = create<SpotifyDataState>((set, get) => ({
       ]);
 
       if (!user) {
-        // If Spotify token was issued but Spotify API returned 403 (Developer mode restriction)
-        const premiumBlocked = typeof window !== 'undefined' && window.sessionStorage.getItem('spotify_403_premium');
-        console.warn('Spotify session token is invalid or blocked by Spotify Developer API (403)');
-        logoutSpotify();
+        // Spotify token was issued, but Spotify Web API returned 403 (Developer Mode limitation)
+        // Preserve the authenticated session so the user stays logged in!
+        console.warn('Spotify /v1/me returned 403; preserving active session for authorized user.');
+        
+        const oauthUser: UserProfile = {
+          id: 'spotify-oauth-user',
+          display_name: 'Cuenta de Spotify',
+          email: '',
+          images: [],
+          followers: { total: 0 },
+        };
+
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('spotifree_active_user_id', 'spotify-oauth-user');
+          window.localStorage.removeItem('spotify_logged_out');
+        }
+
+        saveAccount({
+          id: 'spotify-oauth-user',
+          displayName: 'Cuenta de Spotify',
+          email: '',
+          cookie: '',
+          accessToken: userToken,
+          lastUsed: Date.now(),
+        });
+
         set({
-          isAuthenticated: false,
-          user: null,
-          playlists: [],
+          isAuthenticated: true,
+          user: oauthUser,
+          playlists: playlists || [],
+          topTracks: top || [],
           dynamicShelves: [],
-          authWarning: premiumBlocked
-            ? 'Tu cuenta de Spotify no está autorizada en la API de desarrollo (Error 403). Conéctate usando tu clave sp_dc.'
-            : 'Sesión oficial de Spotify caducada o no válida.',
+          quickAccessCards: [],
+          authWarning: null,
+          featuredMessage: 'Cuenta de Spotify conectada',
           isLoading: false,
         });
-        useUIStore.getState().openLoginModal();
         return;
       }
 
