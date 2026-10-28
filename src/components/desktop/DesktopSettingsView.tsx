@@ -6,7 +6,13 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../../services/spotifyCookieService';
-import { saveAccount, cleanSpDc } from '../../utils/userAccounts';
+import {
+  saveAccount,
+  cleanSpDc,
+  getSavedAccounts,
+  removeSavedAccount,
+  type SavedAccount,
+} from '../../utils/userAccounts';
 
 interface FrequencyPoint {
   label: string;
@@ -144,7 +150,7 @@ const SpotifyCustomSelect: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab, viewMode, setViewMode } = useUIStore();
+  const { setActiveMainTab, viewMode, setViewMode, openLoginModal } = useUIStore();
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
@@ -205,6 +211,50 @@ export const DesktopSettingsView: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       setCookieError(err.message || 'Error al procesar la cookie.');
+    } finally {
+      setIsExtractingCookie(false);
+    }
+  };
+
+  const [savedAccountsList, setSavedAccountsList] = useState<SavedAccount[]>(() => getSavedAccounts());
+
+  const handleSwitchAccount = async (account: SavedAccount) => {
+    if (!account.cookie) return;
+    setCookieError(null);
+    setSpotifyCookie(account.cookie);
+    setIsExtractingCookie(true);
+    try {
+      const session = await extractSpotifySessionFromCookie(account.cookie);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('user_spotify_cookie', account.cookie);
+        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: account.cookie }));
+        if (session.user?.id) {
+          window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+        }
+        window.localStorage.removeItem('spotify_logged_out');
+      }
+      useSpotifyDataStore.setState({
+        isAuthenticated: true,
+        user: session.user,
+        playlists: session.playlists,
+        dynamicShelves: session.shelves,
+        quickAccessCards: session.quickAccess,
+        isLoading: false,
+      });
+      saveAccount({
+        id: session.user?.id || account.id,
+        displayName: session.user?.display_name || account.displayName,
+        email: session.user?.email || account.email,
+        avatarUrl: session.user?.images?.[0]?.url || account.avatarUrl,
+        cookie: account.cookie,
+        accessToken: session.accessToken || account.accessToken,
+        lastUsed: Date.now(),
+      });
+      setSavedAccountsList(getSavedAccounts());
+      setSavedSpotifyCookieSuccess(true);
+      setTimeout(() => setSavedSpotifyCookieSuccess(false), 2500);
+    } catch (err: any) {
+      setCookieError(err.message || 'Error al cambiar de cuenta.');
     } finally {
       setIsExtractingCookie(false);
     }
@@ -427,6 +477,76 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Row 1b: Cuentas guardadas (Spotify Multi-Account Selector) */}
+            {savedAccountsList.length > 0 && (
+              <div className="py-3 border-b border-white/5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#a7a7a7]">
+                    Cuentas guardadas en este dispositivo
+                  </span>
+                  <button
+                    onClick={openLoginModal}
+                    className="text-xs font-bold text-[#1ed760] hover:underline cursor-pointer"
+                  >
+                    + Añadir cuenta
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {savedAccountsList.map((acc) => {
+                    const isActive = acc.cookie === spotifyCookie || (acc.id === user?.id && isAuthenticated);
+                    return (
+                      <div
+                        key={acc.id}
+                        onClick={() => handleSwitchAccount(acc)}
+                        className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all border ${
+                          isActive
+                            ? 'bg-white/10 border-[#1ed760]/60 shadow-sm'
+                            : 'bg-[#181818] border-white/5 hover:bg-white/[0.08]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-9 h-9 rounded-full bg-[#242424] flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
+                            {acc.avatarUrl ? (
+                              <img src={acc.avatarUrl} alt={acc.displayName} className="w-full h-full object-cover" />
+                            ) : (
+                              (acc.displayName || 'U').charAt(0).toUpperCase()
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-white truncate">{acc.displayName}</p>
+                            <p className="text-[11px] text-[#a7a7a7] truncate">
+                              {isActive ? (
+                                <span className="text-[#1ed760] font-semibold">Cuenta activa</span>
+                              ) : (
+                                'Toca para cambiar'
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                        {isActive ? (
+                          <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shrink-0 mr-1 shadow-[0_0_8px_#1ed760]" />
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeSavedAccount(acc.id);
+                              setSavedAccountsList(getSavedAccounts());
+                            }}
+                            className="text-[#727272] hover:text-white text-xs p-1 rounded transition-colors"
+                            title="Eliminar de cuentas recordadas"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Row 2: Sincronización mediante cookie sp_dc */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">
               <div className="space-y-1 max-w-md">
@@ -482,10 +602,13 @@ export const DesktopSettingsView: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
                     <span className="text-sm font-semibold text-white flex items-center gap-2">
-                      <span>📱 Vincular sesión con el móvil</span>
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
+                        <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+                      </svg>
+                      <span>Vincular con la app móvil</span>
                     </span>
                     <p className="text-xs text-[#a7a7a7] mt-0.5">
-                      Escanea este código con la cámara de tu móvil para iniciar sesión al instante sin tener que buscar o pegar claves en el teléfono.
+                      Escanea este código con la cámara de tu teléfono móvil para iniciar sesión al instante sin tener que buscar o pegar claves en el teléfono.
                     </p>
                   </div>
                   <button
@@ -512,7 +635,7 @@ export const DesktopSettingsView: React.FC = () => {
                       <ol className="text-xs text-[#b3b3b3] list-decimal list-inside space-y-1">
                         <li>Abre la cámara de tu teléfono móvil.</li>
                         <li>Apunta a este código y pulsa en la notificación para abrir el enlace.</li>
-                        <li>¡Listo! Tu móvil iniciará sesión automáticamente con tus mismas playlists y biblioteca.</li>
+                        <li>Tu móvil iniciará sesión automáticamente con tus mismas playlists y biblioteca.</li>
                       </ol>
                       <div className="pt-1">
                         <button
@@ -522,9 +645,12 @@ export const DesktopSettingsView: React.FC = () => {
                             setCopiedMobileLink(true);
                             setTimeout(() => setCopiedMobileLink(false), 2500);
                           }}
-                          className="text-xs bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold px-4 py-2 rounded-full cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-1.5 shadow"
+                          className="text-xs bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold px-4 py-2 rounded-full cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-2 shadow"
                         >
-                          {copiedMobileLink ? '✓ Enlace copiado al portapapeles' : '📋 Copiar enlace directo para móvil'}
+                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v8A1.5 1.5 0 0 0 4 12.5h6A1.5 1.5 0 0 0 11.5 11V3A1.5 1.5 0 0 0 10 1.5H4zm0 1h6a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5zm8 3a.5.5 0 0 1 .5.5v7.5a1 1 0 0 1-1 1H5a.5.5 0 0 1 0-1h6.5a.5.5 0 0 0 .5-.5V6a.5.5 0 0 1 .5-.5z" />
+                          </svg>
+                          <span>{copiedMobileLink ? 'Enlace copiado al portapapeles' : 'Copiar enlace directo para móvil'}</span>
                         </button>
                       </div>
                     </div>

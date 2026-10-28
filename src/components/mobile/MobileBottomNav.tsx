@@ -1,13 +1,15 @@
 import React from 'react';
 
 interface MobileBottomNavProps {
-  activeTab: 'home' | 'search' | 'library';
+  activeTab: 'home' | 'search' | 'library' | 'create';
   onTabChange: (tab: 'home' | 'search' | 'library') => void;
+  onOpenCreate?: () => void;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   onTabChange,
+  onOpenCreate,
 }) => {
   return (
     <nav
@@ -102,6 +104,25 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           }`}
         >
           Tu biblioteca
+        </span>
+      </button>
+
+      {/* 4. Crear (Exact Spotify Mobile SVG) */}
+      <button
+        onClick={() => {
+          if (onOpenCreate) {
+            onOpenCreate();
+          }
+        }}
+        className="flex-1 flex flex-col items-center justify-center gap-1 transition-colors cursor-pointer group active:scale-95 text-[#b3b3b3] hover:text-white"
+      >
+        <div className="w-6 h-6 flex items-center justify-center">
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
+          </svg>
+        </div>
+        <span className="text-[11px] tracking-tight font-medium text-[#b3b3b3] group-hover:text-white">
+          Crear
         </span>
       </button>
     </nav>

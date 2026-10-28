@@ -58,9 +58,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex flex-col justify-between px-6 pt-4 pb-8 select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
+      className="fixed inset-0 z-[100] bg-[#121212] flex flex-col justify-between px-6 pt-4 pb-8 select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
       style={{
-        background: `linear-gradient(180deg, ${themeColor} 0%, rgba(18, 18, 18, 0.96) 420px, #121212 100%)`,
+        background: `linear-gradient(180deg, ${themeColor} 0%, rgba(18, 18, 18, 1) 440px, #121212 100%)`,
       }}
     >
       {/* Top Header */}
@@ -198,6 +198,29 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           >
             <RepeatNativeIcon size={22} />
           </button>
+        </div>
+
+        {/* Spotify Connect Device Bar (Bottom Footer) */}
+        <div className="flex items-center justify-between pt-3 pb-1 border-t border-white/5">
+          <button className="flex items-center gap-2 text-xs font-bold text-[#1ed760] tracking-wide cursor-pointer hover:underline">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+            </svg>
+            <span className="uppercase tracking-wider text-[11px] font-black">Este teléfono</span>
+          </button>
+
+          <div className="flex items-center gap-4 text-[#b3b3b3]">
+            <button className="hover:text-white transition-colors" title="Compartir">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11 2.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm-2.5 4a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 13.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13-2.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM5.5 4.5l-3 7 1 .5 3-7-1-.5zm5 0l3 7-1 .5-3-7 1-.5z" />
+              </svg>
+            </button>
+            <button className="hover:text-white transition-colors" title="Cola de reproducción">
+              <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M15 15H1v-1.5h14V15zm0-4.5H1V9h14v1.5zm0-4.5H1V4.5h14V6zm0-4.5H1V0h14v1.5z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
     </div>

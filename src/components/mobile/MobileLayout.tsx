@@ -7,6 +7,7 @@ import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
 import { MobilePlaylistView } from './MobilePlaylistView';
 import { MobileSearchView } from './MobileSearchView';
+import { MobileCreateSheet } from './MobileCreateSheet';
 import { DesktopProfileView } from '../desktop/DesktopProfileView';
 import { DesktopSettingsView } from '../desktop/DesktopSettingsView';
 import { LoginModal } from '../desktop/LoginModal';
@@ -19,10 +20,38 @@ export const MobileLayout: React.FC = () => {
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
 
   const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
+
+  const handleCreatePlaylist = (name: string) => {
+    const newId = `user-playlist-${Date.now()}`;
+    const newPlaylist: Playlist = {
+      id: newId,
+      name,
+      description: `Creada por ${user?.display_name || 'ti'}`,
+      type: 'playlist',
+      images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      owner: { display_name: user?.display_name || 'Tú', id: user?.id || 'me' },
+      tracks: { total: 0, items: [] },
+    } as any;
+
+    const currentLists = useSpotifyDataStore.getState().playlists;
+    const updated = [newPlaylist, ...currentLists];
+    useSpotifyDataStore.setState({ playlists: updated });
+    useSpotifyDataStore.getState().cachePlaylistDetails(newPlaylist);
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('user_imported_playlists', JSON.stringify(updated));
+      } catch {}
+    }
+
+    setSelectedPlaylist(newPlaylist);
+    setMobileTab('playlist');
+  };
 
   // Dynamic greeting based on current hour
   const greeting = useMemo(() => {
@@ -427,7 +456,7 @@ export const MobileLayout: React.FC = () => {
         />
       )}
 
-      {/* Exact Spotify Mobile 3-Tab Bottom Navigation Bar */}
+      {/* Exact Spotify Mobile 4-Tab Bottom Navigation Bar */}
       <MobileBottomNav
         activeTab={
           mobileTab === 'search'
@@ -440,6 +469,15 @@ export const MobileLayout: React.FC = () => {
           setSelectedPlaylist(null);
           setMobileTab(tab);
         }}
+        onOpenCreate={() => setIsCreateOpen(true)}
+      />
+
+      {/* Spotify Mobile Creation Bottom Sheet */}
+      <MobileCreateSheet
+        isOpen={isCreateOpen}
+        onClose={() => setIsCreateOpen(false)}
+        onCreatePlaylist={handleCreatePlaylist}
+        defaultPlaylistNumber={playlists.length + 1}
       />
 
       {/* Global Login / Cookie modal */}

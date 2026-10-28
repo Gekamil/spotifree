@@ -57,17 +57,37 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
           <span className="font-bold text-white text-xs truncate">
             {currentTrack.name}
           </span>
-          <span className="text-[11px] text-[#b3b3b3] truncate mt-0.5">
-            {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
-          </span>
+          <div className="flex items-center gap-1.5 min-w-0 mt-0.5">
+            <span className="text-[11px] text-[#b3b3b3] truncate">
+              {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
+            </span>
+            {isPlaying && (
+              <span className="text-[10px] font-bold text-[#1ed760] shrink-0 flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor">
+                  <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+                </svg>
+                <span>Este teléfono</span>
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Right Controls: Device + Heart + Play/Pause */}
-      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <button
+          className="w-8 h-8 flex items-center justify-center text-[#1ed760]"
+          title="Escuchando en este teléfono"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+          </svg>
+        </button>
+
         <button
           onClick={() => toggleLike(currentTrack.id)}
-          className="w-9 h-9 flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors"
+          className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors"
           title={isLiked ? 'Quitar de tus favoritos' : 'Guardar en tus favoritos'}
         >
           {isLiked ? (
