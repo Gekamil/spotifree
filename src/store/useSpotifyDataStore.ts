@@ -14,7 +14,7 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
-import { saveAccount, cleanSpDc } from '../utils/userAccounts';
+import { saveAccount, getSavedAccounts, cleanSpDc } from '../utils/userAccounts';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -250,12 +250,22 @@ const store = create<SpotifyDataState>((set, get) => ({
   playlistDetailsCache: DEFAULT_SESSION_CACHE,
 
   cachePlaylistDetails: (playlist: Playlist) => {
-    set((s) => ({
-      playlistDetailsCache: {
+    set((s) => {
+      const nextCache = {
         ...s.playlistDetailsCache,
         [playlist.id]: playlist,
-      },
-    }));
+      };
+      if (typeof window !== 'undefined') {
+        try {
+          const userId = s.user?.id || 'active';
+          window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(nextCache));
+        } catch {}
+      }
+      return {
+        playlistDetailsCache: nextCache,
+        playlists: s.playlists.map((p) => (p.id === playlist.id ? { ...p, tracks: playlist.tracks } : p)),
+      };
+    });
   },
 
   addCustomPlaylist: (playlist: Playlist) => {
@@ -388,7 +398,17 @@ const store = create<SpotifyDataState>((set, get) => ({
       }
 
       // 2. Prioritize active validated cookie session if present
-      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
+      let userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
+      if (!userCookie) {
+        const savedAccounts = getSavedAccounts();
+        if (savedAccounts.length > 0 && savedAccounts[0].cookie) {
+          userCookie = savedAccounts[0].cookie;
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('user_spotify_cookie', userCookie);
+          }
+        }
+      }
+
       const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
       let importedPlaylists: Playlist[] = [];
       if (rawImported) {
@@ -398,28 +418,78 @@ const store = create<SpotifyDataState>((set, get) => ({
       }
 
       if (userCookie && validateSpotifyCookie(userCookie).valid) {
+        const cleanCookie = cleanSpDc(userCookie);
         let session = null;
         const savedSessionRaw = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_extracted_session') : null;
         if (savedSessionRaw) {
           try {
             session = JSON.parse(savedSessionRaw);
-            if (session._cookie && session._cookie !== userCookie) {
+            if (session._cookie && cleanSpDc(session._cookie) !== cleanCookie) {
               session = null;
             }
           } catch {}
         }
-        if (!session || !session.user || !session.playlists || session.playlists.length === 0) {
+
+        // Load cached playlist tracks
+        let cachedPlaylists: Record<string, Playlist> = {};
+        const userId = session?.user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : 'active') || 'active';
+        if (typeof window !== 'undefined') {
           try {
-            session = await extractSpotifySessionFromCookie(userCookie);
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: userCookie }));
-              if (session.user?.id) {
-                window.localStorage.setItem('spotifree_active_user_id', session.user.id);
-              }
+            const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`) ||
+                             window.localStorage.getItem('spotifree_playlist_cache_active');
+            if (rawCache) cachedPlaylists = JSON.parse(rawCache);
+          } catch {}
+        }
+
+        // If session was already cached, restore immediately so reload is instantaneous
+        if (session && session.user) {
+          const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
+          const uniquePlaylists = combinedPlaylists.filter(
+            (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
+          ).map((p: Playlist) => {
+            if (cachedPlaylists[p.id]?.tracks?.items?.length) {
+              return { ...p, tracks: cachedPlaylists[p.id].tracks };
             }
-          } catch (e) {
-            console.error('Failed to extract session from cookie:', e);
+            return p;
+          });
+
+          set({
+            isAuthenticated: true,
+            user: session.user,
+            playlists: uniquePlaylists,
+            dynamicShelves: session.shelves || [],
+            quickAccessCards: session.quickAccess || [],
+            playlistDetailsCache: cachedPlaylists,
+            isLoading: false,
+          });
+
+          // In background, refresh session data if playlists were empty
+          if (!session.playlists || session.playlists.length === 0) {
+            extractSpotifySessionFromCookie(userCookie).then((fresh) => {
+              if (fresh && fresh.user) {
+                window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...fresh, _cookie: userCookie }));
+                set({
+                  playlists: fresh.playlists || [],
+                  dynamicShelves: fresh.shelves || [],
+                  quickAccessCards: fresh.quickAccess || [],
+                });
+              }
+            }).catch(() => {});
           }
+          return;
+        }
+
+        // If no cached session, extract from cookie
+        try {
+          session = await extractSpotifySessionFromCookie(userCookie);
+          if (typeof window !== 'undefined' && session) {
+            window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: userCookie }));
+            if (session.user?.id) {
+              window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to extract session from cookie:', e);
         }
 
         if (session && session.user) {
@@ -448,6 +518,7 @@ const store = create<SpotifyDataState>((set, get) => ({
             playlists: uniquePlaylists,
             dynamicShelves: session.shelves || [],
             quickAccessCards: session.quickAccess || [],
+            playlistDetailsCache: cachedPlaylists,
             isLoading: false,
           });
           return;

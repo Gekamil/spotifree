@@ -78,6 +78,25 @@ const store = create<PlayerState>((set, get) => ({
       queue: newQueue ?? state.queue,
       history: updatedHistory,
     });
+
+    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+      const artistName = track.artists?.[0]?.name || '';
+      const query = `${track.name} ${artistName}`;
+      (window as any).__audioEngine.playTrack(track.id, query, 0);
+    }
+
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.name,
+          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotify',
+          album: track.album?.name || '',
+          artwork: [
+            { src: track.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', sizes: '512x512', type: 'image/jpeg' },
+          ],
+        });
+      } catch {}
+    }
   },
 
   togglePlay: () => {
@@ -93,7 +112,7 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { queue, currentTrack, history, isShuffle, repeatMode } = get();
+    const { queue, currentTrack, isShuffle, repeatMode } = get();
     if (queue.length === 0) return;
 
     if (repeatMode === 'one' && currentTrack) {
@@ -124,13 +143,7 @@ const store = create<PlayerState>((set, get) => ({
 
     const next = queue[nextIndex];
     if (next) {
-      set({
-        currentTrack: next,
-        isPlaying: true,
-        progressMs: 0,
-        durationMs: next.duration_ms,
-        history: currentTrack ? [currentTrack, ...history] : history,
-      });
+      get().playTrack(next);
     }
   },
 
@@ -138,6 +151,9 @@ const store = create<PlayerState>((set, get) => ({
     const { queue, currentTrack, progressMs } = get();
     if (progressMs > 3000) {
       set({ progressMs: 0 });
+      if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+        (window as any).__audioEngine.seek(0);
+      }
       return;
     }
     if (queue.length === 0) return;
@@ -145,12 +161,7 @@ const store = create<PlayerState>((set, get) => ({
     const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
     const prev = queue[prevIndex];
     if (prev) {
-      set({
-        currentTrack: prev,
-        isPlaying: true,
-        progressMs: 0,
-        durationMs: prev.duration_ms,
-      });
+      get().playTrack(prev);
     }
   },
 

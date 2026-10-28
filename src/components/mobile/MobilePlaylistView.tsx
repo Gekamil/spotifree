@@ -164,9 +164,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     // 3. Check Liked Songs specifically (isolated per user)
     if (isLikedPlaylist) {
       const customLiked = getCustomLikedSongs(user?.id);
-      setTracks(customLiked);
-      setLoading(false);
-      return;
+      if (customLiked.length > 0) {
+        setTracks(customLiked);
+      }
     }
 
     // 4. Check store user playlists

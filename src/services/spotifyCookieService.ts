@@ -1,5 +1,6 @@
 import type { UserProfile, Playlist } from '../types/spotify';
 import type { DynamicShelf } from '../store/useSpotifyDataStore';
+import { cleanSpDc } from '../utils/userAccounts';
 
 export interface ExtractedSession {
   user: UserProfile;
@@ -10,12 +11,12 @@ export interface ExtractedSession {
 }
 
 export function validateSpotifyCookie(cookie: string): { valid: boolean; error?: string } {
-  const trimmed = (cookie || '').trim();
-  if (!trimmed) {
+  const cleaned = cleanSpDc(cookie);
+  if (!cleaned) {
     return { valid: false, error: 'Por favor, introduce tu cookie de sesión sp_dc.' };
   }
-  // Spotify sp_dc cookies always start with AQ and have standard length >= 50
-  if (!trimmed.startsWith('AQ') || trimmed.length < 50) {
+  // Spotify sp_dc cookies always start with AQ and have standard length >= 30
+  if (!cleaned.startsWith('AQ') || cleaned.length < 30) {
     return {
       valid: false,
       error: 'Cookie no válida. La cookie de sesión sp_dc de Spotify debe comenzar por "AQ" y contener el valor completo copiado de open.spotify.com.',
@@ -29,12 +30,13 @@ export function validateSpotifyCookie(cookie: string): { valid: boolean; error?:
  * Calls the backend extractor which authenticates directly with Spotify's Web Player API.
  */
 export async function extractSpotifySessionFromCookie(cookie: string): Promise<ExtractedSession> {
-  const validation = validateSpotifyCookie(cookie);
+  const cleaned = cleanSpDc(cookie);
+  const validation = validateSpotifyCookie(cleaned);
   if (!validation.valid) {
     throw new Error(validation.error);
   }
 
-  const trimmedCookie = cookie.trim();
+  const trimmedCookie = cleaned;
 
   // Try extraction endpoint
   let res: Response;

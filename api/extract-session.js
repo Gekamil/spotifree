@@ -146,26 +146,121 @@ export function generateSpotifyTotp(timestamp = Date.now()) {
 }
 
 export async function getAccessTokenFromCookie(spDcCookie) {
-  const cookie = (spDcCookie || '').trim();
-  if (!cookie || !cookie.startsWith('AQ') || cookie.length < 50) return null;
+  const cookie = cleanSpDcString(spDcCookie);
   try {
     const { totp, version } = generateSpotifyTotp(Date.now());
     const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpServer=${totp}&totpVer=${version}`;
-    const tokenRes = await fetch(tokenUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
-        'Cookie': `sp_dc=${cookie}`,
+    const tokenHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Referer': 'https://open.spotify.com/',
+      'Origin': 'https://open.spotify.com',
+    };
+    if (cookie) {
+      tokenHeaders['Cookie'] = `sp_dc=${cookie}`;
+    }
+    const tokenRes = await fetch(tokenUrl, { headers: tokenHeaders });
+    if (tokenRes.ok) {
+      const data = await tokenRes.json();
+      if (data.accessToken) return data.accessToken;
+    }
+  } catch (e) {}
+
+  // Fallback transport endpoint
+  try {
+    const fallbackHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Referer': 'https://open.spotify.com/',
+    };
+    if (cookie) fallbackHeaders['Cookie'] = `sp_dc=${cookie}`;
+    const fallbackRes = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+      headers: fallbackHeaders,
+    });
+    if (fallbackRes.ok) {
+      const data = await fallbackRes.json();
+      return data.accessToken || null;
+    }
+  } catch (e) {}
+
+  return null;
+}
+
+export async function getWebPlayerAuth(spDcCookie = '') {
+  const cookie = cleanSpDcString(spDcCookie);
+  let tokenData = null;
+
+  try {
+    const { totp, version } = generateSpotifyTotp(Date.now());
+    const tokenUrl = `https://open.spotify.com/api/token?reason=init&productType=web-player&totp=${totp}&totpServer=${totp}&totpVer=${version}`;
+    const tokenHeaders = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+      'Accept': 'application/json',
+      'Referer': 'https://open.spotify.com/',
+      'Origin': 'https://open.spotify.com',
+    };
+    if (cookie) tokenHeaders['Cookie'] = `sp_dc=${cookie}`;
+    const tokenRes = await fetch(tokenUrl, { headers: tokenHeaders });
+    if (tokenRes.ok) {
+      tokenData = await tokenRes.json();
+    }
+  } catch (e) {}
+
+  if (!tokenData || !tokenData.accessToken) {
+    try {
+      const fallbackHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
         'Accept': 'application/json',
         'Referer': 'https://open.spotify.com/',
-        'Origin': 'https://open.spotify.com',
-      },
-    });
-    if (!tokenRes.ok) return null;
-    const data = await tokenRes.json();
-    return data.accessToken || null;
-  } catch (e) {
-    return null;
+      };
+      if (cookie) fallbackHeaders['Cookie'] = `sp_dc=${cookie}`;
+      const fallbackRes = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+        headers: fallbackHeaders,
+      });
+      if (fallbackRes.ok) {
+        tokenData = await fallbackRes.json();
+      }
+    } catch (e) {}
   }
+
+  const accessToken = tokenData?.accessToken || '';
+  const clientId = tokenData?.clientId || 'd8a5ed958d274c2e8ee717e6a4b0971d';
+
+  let clientToken = '';
+  if (clientId) {
+    try {
+      const clientTokenRes = await fetch('https://clienttoken.spotify.com/v1/clienttoken', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36',
+          'Origin': 'https://open.spotify.com',
+          'Referer': 'https://open.spotify.com/',
+        },
+        body: JSON.stringify({
+          client_data: {
+            client_version: '1.3.8.509.g26b6eac7300d',
+            client_id: clientId,
+            js_sdk_data: {
+              device_brand: 'unknown',
+              device_model: 'unknown',
+              os: 'windows',
+              os_version: 'NT 10.0',
+              device_id: '5db861f9-bb72-47f7-8b37-898a5d83024b',
+              device_type: 'computer',
+            },
+          },
+        }),
+      });
+      if (clientTokenRes.ok) {
+        const ctData = await clientTokenRes.json();
+        clientToken = ctData.granted_token?.token || '';
+      }
+    } catch (e) {}
+  }
+
+  return { accessToken, clientToken, clientId, isAnonymous: !!tokenData?.isAnonymous };
 }
 
 export function cleanSpDcString(raw) {

@@ -8,6 +8,8 @@ import path from 'node:path';
 import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
 // @ts-ignore
 import { resolveSpotifyPlaylist } from './api/playlist.js';
+// @ts-ignore
+import { extractSpotifySession } from './api/extract-session.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -584,6 +586,43 @@ function dynamicSpotifyPlugin(): Plugin {
   return {
     name: 'dynamic-spotify-plugin',
     configureServer(server) {
+      // 0. Spotify Session Extraction Endpoint (/api/extract-session & /api/spotify/extract-session)
+      const handleExtractSession = async (req: any, res: any) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+        res.setHeader('Content-Type', 'application/json');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          return res.end();
+        }
+
+        let body = '';
+        req.on('data', (chunk: any) => { body += chunk; });
+        req.on('end', async () => {
+          try {
+            let parsed = {};
+            try { parsed = JSON.parse(body); } catch {}
+            const cookie = (parsed as any).cookie || '';
+            if (!cookie) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'Falta la cookie de Spotify.' }));
+            }
+            const session = await extractSpotifySession(cookie);
+            res.statusCode = 200;
+            return res.end(JSON.stringify(session));
+          } catch (err: any) {
+            console.error('[vite dev] extract-session error:', err.message);
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ error: err.message || 'Error al procesar la sesión de Spotify.' }));
+          }
+        });
+      };
+
+      server.middlewares.use('/api/spotify/extract-session', handleExtractSession);
+      server.middlewares.use('/api/extract-session', handleExtractSession);
+
       // 1. Dynamic Playlist Details Endpoint (/api/spotify/playlist/:id)
       server.middlewares.use('/api/spotify/playlist', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -610,13 +649,17 @@ function dynamicSpotifyPlugin(): Plugin {
           let playlist = null;
           try {
             playlist = await resolveSpotifyPlaylist(rawId, { cookie, token });
-          } catch {}
+          } catch (err: any) {
+            console.warn('[vite dev] resolveSpotifyPlaylist notice:', err.message);
+          }
 
           if (!playlist || !playlist.tracks || playlist.tracks.total === 0) {
-            const fallback = await scrapeSpotifyEmbed(rawId);
-            if (fallback && fallback.tracks && fallback.tracks.total > 0) {
-              playlist = fallback;
-            }
+            try {
+              const fallback = await scrapeSpotifyEmbed(rawId);
+              if (fallback && fallback.tracks && fallback.tracks.total > 0) {
+                playlist = fallback;
+              }
+            } catch {}
           }
 
           res.statusCode = 200;

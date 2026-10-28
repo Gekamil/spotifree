@@ -73,7 +73,9 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     const artistName = currentTrack.artists?.[0]?.name || '';
     const query = `${currentTrack.name} ${artistName}`;
 
-    audioEngine.playTrack(currentTrack.id, query, 0);
+    if (audioEngine.getCurrentTrackId() !== currentTrack.id) {
+      audioEngine.playTrack(currentTrack.id, query, 0);
+    }
 
     // Preload next tracks in background for instantaneous zero-delay switching
     if (queue && queue.length > 0) {

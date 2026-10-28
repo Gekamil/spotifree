@@ -63,6 +63,22 @@ class AudioEngine {
     this.setupHtml5Listeners();
 
     if (typeof window !== 'undefined') {
+      // Unlock audio on mobile on first user gesture
+      const unlockUserMedia = () => {
+        try {
+          if (this.audioContext && this.audioContext.state === 'suspended') {
+            this.audioContext.resume().catch(() => {});
+          }
+          if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+            // Player exists
+          }
+        } catch {}
+        window.removeEventListener('click', unlockUserMedia);
+        window.removeEventListener('touchstart', unlockUserMedia);
+      };
+      window.addEventListener('click', unlockUserMedia, { once: true, passive: true });
+      window.addEventListener('touchstart', unlockUserMedia, { once: true, passive: true });
+
       // Pre-warm YouTube IFrame API immediately in background
       setTimeout(() => {
         this.ensureYouTubeReady().catch(() => {});
@@ -82,7 +98,9 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            host.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:320px;height:240px;opacity:1;pointer-events:none;z-index:-1;';
+            // Position inside viewport (bottom:0, right:0, 1x1px) so mobile browsers (iOS WebKit / Android Chrome)
+            // treat the iframe as active and do not suspend or freeze media playback
+            host.style.cssText = 'position:fixed;bottom:0;right:0;width:1px;height:1px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden;';
             document.body.appendChild(host);
           }
 

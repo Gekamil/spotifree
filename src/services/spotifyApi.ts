@@ -3,17 +3,29 @@ import { getValidAccessToken } from './spotifyAuth';
 
 export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
   try {
-    const validToken = await getValidAccessToken();
-    if (validToken) {
-      const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`, {
-        headers: { Authorization: `Bearer ${validToken}` },
-      });
-      if (res.ok) {
-        return await res.json();
-      }
+    const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+    const storedToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+    const validToken = await getValidAccessToken().catch(() => null);
+    const activeToken = validToken || storedToken;
+
+    if (activeToken && activeToken !== 'session-bridge-active') {
+      try {
+        const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`, {
+          headers: { Authorization: `Bearer ${activeToken}` },
+        });
+        if (res.ok) {
+          return await res.json();
+        }
+      } catch {}
     }
 
-    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`);
+    const headers: Record<string, string> = {};
+    if (userCookie) headers['x-spotify-cookie'] = userCookie;
+    if (activeToken && activeToken !== 'session-bridge-active') {
+      headers['Authorization'] = `Bearer ${activeToken}`;
+    }
+
+    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`, { headers });
     if (res.ok) {
       return await res.json();
     }
