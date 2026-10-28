@@ -19,11 +19,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const avatarUrl = user?.images?.[0]?.url;
 
   return (
-    <header className="sticky top-0 z-30 bg-[#121212]/90 backdrop-blur-md px-4 pt-3 pb-2.5 flex items-center justify-between gap-3 select-none font-['SpotifyMixUI'] border-b border-white/5">
-      {/* Left: Avatar */}
+    <header className="sticky top-0 z-30 px-4 pt-3 pb-3 flex items-center justify-between gap-3 select-none font-['SpotifyMixUI']">
+      {/* Left: Avatar / Profile */}
       <button
         onClick={isAuthenticated ? onOpenProfile : openLoginModal}
-        className="w-9 h-9 rounded-full bg-[#242424] overflow-hidden shrink-0 shadow flex items-center justify-center border border-white/10 cursor-pointer active:scale-95 transition-transform"
+        className="w-8 h-8 rounded-full bg-[#242424] overflow-hidden shrink-0 shadow flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
         title={isAuthenticated ? user?.display_name : 'Iniciar sesión'}
       >
         {avatarUrl ? (
@@ -34,7 +34,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           />
         ) : (
           <span className="text-xs font-bold text-white">
-            {isAuthenticated ? (user?.display_name || 'U').charAt(0).toUpperCase() : (
+            {isAuthenticated ? (user?.display_name || 'J').charAt(0).toUpperCase() : (
               <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
                 <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
               </svg>
@@ -49,8 +49,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           onClick={() => onTabChange('todo')}
           className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
             activeTab === 'todo'
-              ? 'bg-white text-black shadow'
-              : 'bg-white/10 text-white hover:bg-white/20'
+              ? 'bg-[#1ed760] text-black shadow'
+              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
           }`}
         >
           Todo
@@ -59,8 +59,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           onClick={() => onTabChange('musica')}
           className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
             activeTab === 'musica'
-              ? 'bg-white text-black shadow'
-              : 'bg-white/10 text-white hover:bg-white/20'
+              ? 'bg-[#1ed760] text-black shadow'
+              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
           }`}
         >
           Música
@@ -71,7 +71,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       {!isAuthenticated ? (
         <button
           onClick={openLoginModal}
-          className="px-3 py-1.5 rounded-full bg-white text-black font-black text-xs uppercase tracking-wider shrink-0 shadow"
+          className="px-3 py-1.5 rounded-full bg-white text-black font-black text-xs uppercase tracking-wider shrink-0 shadow active:scale-95"
         >
           Conectar
         </button>
