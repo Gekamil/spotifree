@@ -130,6 +130,7 @@ const store = create<PlayerState>((set, get) => ({
 
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try {
+        registerMediaSessionHandlers();
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.name,
           artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
@@ -332,58 +333,58 @@ export const usePlayerStore =
     ? ((window as any).__usePlayerStore as typeof store)
     : store;
 
-if (typeof window !== 'undefined') {
-  (window as any).__usePlayerStore = usePlayerStore;
-
-  // Register W3C MediaSession API action handlers for native lockscreen player controls
-  if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-    try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        usePlayerStore.getState().togglePlay();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        usePlayerStore.getState().togglePlay();
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        usePlayerStore.getState().previousTrack();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        usePlayerStore.getState().nextTrack();
-      });
-      navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime != null) {
-          const ms = details.seekTime * 1000;
-          usePlayerStore.getState().setProgress(ms);
-          if ((window as any).__audioEngine) {
-            (window as any).__audioEngine.seek(details.seekTime);
-          }
-        }
-      });
-      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-        const skip = details.seekOffset || 10;
-        const currentSec = usePlayerStore.getState().progressMs / 1000;
-        const targetSec = Math.max(0, currentSec - skip);
-        usePlayerStore.getState().setProgress(targetSec * 1000);
+export function registerMediaSessionHandlers() {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.setActionHandler('play', () => {
+      usePlayerStore.getState().togglePlay();
+    });
+    navigator.mediaSession.setActionHandler('pause', () => {
+      usePlayerStore.getState().togglePlay();
+    });
+    navigator.mediaSession.setActionHandler('previoustrack', () => {
+      usePlayerStore.getState().previousTrack();
+    });
+    navigator.mediaSession.setActionHandler('nexttrack', () => {
+      usePlayerStore.getState().nextTrack();
+    });
+    navigator.mediaSession.setActionHandler('seekto', (details) => {
+      if (details.seekTime != null) {
+        const ms = details.seekTime * 1000;
+        usePlayerStore.getState().setProgress(ms);
         if ((window as any).__audioEngine) {
-          (window as any).__audioEngine.seek(targetSec);
+          (window as any).__audioEngine.seek(details.seekTime);
         }
-      });
-      navigator.mediaSession.setActionHandler('seekforward', (details) => {
-        const skip = details.seekOffset || 10;
-        const currentSec = usePlayerStore.getState().progressMs / 1000;
-        const durSec = usePlayerStore.getState().durationMs / 1000;
-        const targetSec = Math.min(durSec > 0 ? durSec : currentSec + skip, currentSec + skip);
-        usePlayerStore.getState().setProgress(targetSec * 1000);
-        if ((window as any).__audioEngine) {
-          (window as any).__audioEngine.seek(targetSec);
-        }
-      });
-      navigator.mediaSession.setActionHandler('stop', () => {
-        if (usePlayerStore.getState().isPlaying) {
-          usePlayerStore.getState().togglePlay();
-        }
-      });
-    } catch {}
-  }
+      }
+    });
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      const skip = details.seekOffset || 10;
+      const currentSec = usePlayerStore.getState().progressMs / 1000;
+      const targetSec = Math.max(0, currentSec - skip);
+      usePlayerStore.getState().setProgress(targetSec * 1000);
+      if ((window as any).__audioEngine) {
+        (window as any).__audioEngine.seek(targetSec);
+      }
+    });
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      const skip = details.seekOffset || 10;
+      const currentSec = usePlayerStore.getState().progressMs / 1000;
+      const durSec = usePlayerStore.getState().durationMs / 1000;
+      const targetSec = Math.min(durSec > 0 ? durSec : currentSec + skip, currentSec + skip);
+      usePlayerStore.getState().setProgress(targetSec * 1000);
+      if ((window as any).__audioEngine) {
+        (window as any).__audioEngine.seek(targetSec);
+      }
+    });
+    navigator.mediaSession.setActionHandler('stop', () => {
+      if (usePlayerStore.getState().isPlaying) {
+        usePlayerStore.getState().togglePlay();
+      }
+    });
+  } catch {}
 }
 
+if (typeof window !== 'undefined') {
+  (window as any).__usePlayerStore = usePlayerStore;
+  registerMediaSessionHandlers();
+}
