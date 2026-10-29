@@ -281,7 +281,12 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
       // Fetch Spotify Canvas
       setCanvasUrl(currentTrack.canvasUrl || null);
       fetchTrackCanvas(currentTrack.id).then((cUrl) => {
-        if (!cancelled && cUrl) setCanvasUrl(cUrl);
+        if (!cancelled && cUrl) {
+          setCanvasUrl(cUrl);
+          if (!hdCover || hdCover.includes('liked-songs')) {
+            setIsCanvasMode(true);
+          }
+        }
       });
 
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
@@ -463,10 +468,13 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
           {/* Scrollable Content Body */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 font-['SpotifyMixUI']">
-            {/* 1. Large High-Definition Album Artwork or Spotify Canvas */}
+            {/* 1. Large High-Definition Album Artwork or Spotify Canvas with smooth crossfade */}
             <div className="w-full aspect-square rounded-[8px] overflow-hidden shadow-2xl bg-[#1e1e1e] relative group">
-              {isCanvasMode && canvasUrl ? (
-                <div className="w-full h-full relative overflow-hidden pointer-events-none select-none">
+              {/* Canvas video with smooth fade */}
+              <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+                isCanvasMode && canvasUrl ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
+              }`}>
+                {canvasUrl && (
                   <video
                     key={canvasUrl}
                     src={canvasUrl}
@@ -476,15 +484,18 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                     playsInline
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10 pointer-events-none" />
-                </div>
-              ) : (
-                <img
-                  src={hdCover}
-                  alt={currentTrack?.name || 'Portada'}
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
-                />
-              )}
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10 pointer-events-none" />
+              </div>
+
+              {/* Cover Image with smooth fade */}
+              <img
+                src={hdCover}
+                alt={currentTrack?.name || 'Portada'}
+                className={`w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-102 ${
+                  isCanvasMode && canvasUrl ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+                }`}
+              />
             </div>
 
             {/* Canvas / Cover Switch Pill Button */}

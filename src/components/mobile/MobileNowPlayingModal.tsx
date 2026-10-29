@@ -219,9 +219,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           extractDominantColorFromImage(hd).then((hex) => {
             if (hex) setExtractedModalColor(hex);
           });
+          return;
         }
       }
     } catch {}
+    // If cover artwork cannot be resolved and canvas exists, switch to canvas mode
+    setDisplayCover(null);
+    setIsCanvasMode(true);
   };
 
   useEffect(() => {
@@ -252,6 +256,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       fetchTrackCanvas(currentTrack.id).then((cUrl) => {
         if (!cancelled && cUrl) {
           setCanvasUrl(cUrl);
+          if (!initial || initial.includes('liked-songs')) {
+            setIsCanvasMode(true);
+          }
         }
       });
 
@@ -364,9 +371,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           : `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
       }}
     >
-      {/* Canvas Full-Screen Looping Video in Background (Identical to Spotify Mobile) */}
-      {isCanvasMode && canvasUrl && (
-        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+      {/* Canvas Full-Screen Looping Video in Background with smooth crossfade */}
+      <div className={`absolute inset-0 pointer-events-none z-0 overflow-hidden transition-opacity duration-700 ease-in-out ${
+        isCanvasMode && canvasUrl ? 'opacity-100' : 'opacity-0'
+      }`}>
+        {canvasUrl && (
           <video
             key={canvasUrl}
             src={canvasUrl}
@@ -376,10 +385,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             playsInline
             className="absolute inset-0 w-full h-full object-cover"
           />
-          {/* Authentic Spotify gradient overlay for pristine legibility of text and controls */}
-          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/85 pointer-events-none" />
-        </div>
-      )}
+        )}
+        {/* Authentic Spotify gradient overlay for pristine legibility of text and controls */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/85 pointer-events-none" />
+      </div>
 
       {/* Top Header */}
       <div className="sticky top-0 z-20 flex items-center justify-between text-white px-4 py-2 bg-black/20 backdrop-blur-sm">
@@ -414,28 +423,29 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
       {/* Scrollable Player Body */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4 relative z-10">
-        {/* Large Artwork or Spotify Canvas Spacer */}
-        <div className="flex items-center justify-center pt-2 pb-1">
-          {isCanvasMode && canvasUrl ? (
-            <div className="w-full max-w-[340px] aspect-square max-h-[340px] flex items-center justify-center pointer-events-none" />
-          ) : (
-            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#181818] relative transition-all duration-300">
-              {displayCover ? (
-                <img
-                  src={displayCover}
-                  alt={currentTrack.name}
-                  onError={handleCoverError}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40">
-                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          )}
+        {/* Large Artwork or Spotify Canvas Spacer with smooth crossfade */}
+        <div className="flex items-center justify-center pt-2 pb-1 relative min-h-[340px]">
+          <div className={`w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
+            isCanvasMode && canvasUrl
+              ? 'opacity-0 scale-95 pointer-events-none'
+              : 'opacity-100 scale-100'
+          }`}>
+            {displayCover ? (
+              <img
+                src={displayCover}
+                alt={currentTrack.name}
+                onError={handleCoverError}
+                className="w-full h-full object-cover transition-opacity duration-500"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-white/40 gap-3">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+                {canvasUrl && <span className="text-xs text-white/50">Cambiando a Canvas...</span>}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Cambiar a Canvas / Cambiar a carátula pill - VISIBLE WHEN SONG HAS CANVAS */}
@@ -463,14 +473,19 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         {/* Title & Artist & Like */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1 mr-4 flex items-center gap-3">
-              {isCanvasMode && canvasUrl && displayCover && (
-                <img
-                  src={displayCover}
-                  alt={currentTrack.name}
-                  className="w-12 h-12 rounded-lg object-cover shadow-lg shrink-0 border border-white/10"
-                />
-              )}
+            <div className="min-w-0 flex-1 mr-4 flex items-center">
+              {/* Mini cover thumbnail with smooth width & opacity transition */}
+              <div className={`overflow-hidden transition-all duration-500 ease-in-out shrink-0 ${
+                isCanvasMode && canvasUrl && displayCover ? 'w-12 h-12 opacity-100 mr-3' : 'w-0 h-12 opacity-0 mr-0'
+              }`}>
+                {displayCover && (
+                  <img
+                    src={displayCover}
+                    alt={currentTrack.name}
+                    className="w-12 h-12 rounded-lg object-cover shadow-lg border border-white/10"
+                  />
+                )}
+              </div>
               <div className="min-w-0 flex-1">
                 <h1 className="text-2xl font-black text-white truncate font-['SpotifyMixUITitle']">
                   {currentTrack.name}
