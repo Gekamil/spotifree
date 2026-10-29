@@ -1,10 +1,9 @@
 import React, { useEffect, useRef } from 'react';
-import { usePlayerStore } from '../../store/usePlayerStore';
+import { usePlayerStore, registerMediaSessionHandlers } from '../../store/usePlayerStore';
 import { audioEngine } from '../../services/audioEngine';
 
 /**
  * Universal Headless Audio Coordinator
- * Ensures uninterrupted audio playback across Desktop and Mobile devices.
  * Coordinates play, pause, queue progression, next/prev tracks, volume, and mobile MediaSession.
  */
 export const AudioController: React.FC = () => {
@@ -54,39 +53,9 @@ export const AudioController: React.FC = () => {
     audioEngine.setMuted(isMuted);
   }, [volume, isMuted]);
 
-  // 4. Setup native Mobile MediaSession controls (lock screen & notification center)
+  // 4. Ensure MediaSession handlers are registered without destructive cleanup
   useEffect(() => {
-    if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-
-    try {
-      navigator.mediaSession.setActionHandler('play', () => {
-        usePlayerStore.getState().togglePlay();
-      });
-      navigator.mediaSession.setActionHandler('pause', () => {
-        usePlayerStore.getState().togglePlay();
-      });
-      navigator.mediaSession.setActionHandler('previoustrack', () => {
-        usePlayerStore.getState().previousTrack();
-      });
-      navigator.mediaSession.setActionHandler('nexttrack', () => {
-        usePlayerStore.getState().nextTrack();
-      });
-      navigator.mediaSession.setActionHandler('seekto', (details) => {
-        if (details.seekTime !== undefined && details.seekTime !== null) {
-          audioEngine.seek(details.seekTime);
-        }
-      });
-    } catch {}
-
-    return () => {
-      try {
-        navigator.mediaSession.setActionHandler('play', null);
-        navigator.mediaSession.setActionHandler('pause', null);
-        navigator.mediaSession.setActionHandler('previoustrack', null);
-        navigator.mediaSession.setActionHandler('nexttrack', null);
-        navigator.mediaSession.setActionHandler('seekto', null);
-      } catch {}
-    };
+    registerMediaSessionHandlers();
   }, []);
 
   return null;

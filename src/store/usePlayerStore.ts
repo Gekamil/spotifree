@@ -3,8 +3,35 @@ import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
 import { saveCustomLikedSong, removeCustomLikedSong } from '../utils/userStorage';
 
+function resolveTrackCover(track: any): string {
+  if (!track) return '';
+  if (track.album?.images && track.album.images.length > 0) {
+    for (const img of track.album.images) {
+      if (img && img.url) return img.url;
+    }
+  }
+  if (track.coverUrl) return track.coverUrl;
+  if (track.imageUrl) return track.imageUrl;
+  if (track.image) return track.image;
+  if (track.thumbnail) return track.thumbnail;
+  if (typeof window !== 'undefined' && track.id) {
+    try {
+      const cached = window.localStorage.getItem(`spotifree_track_cover_${track.id}`);
+      if (cached) return cached;
+    } catch {}
+  }
+  return '';
+}
+
 function getMediaSessionArtwork(imageUrl?: string) {
-  const base = imageUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  let base = imageUrl || '';
+  if (!base && typeof window !== 'undefined') {
+    base = `${window.location.origin}/icon-512.png`;
+  }
+  if (base.startsWith('/') && typeof window !== 'undefined') {
+    base = `${window.location.origin}${base}`;
+  }
+
   // Ensure HD 640x640 CDN image for crisp lockscreen artwork
   const hd = base
     .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
@@ -17,15 +44,14 @@ function getMediaSessionArtwork(imageUrl?: string) {
     .replace('liked-songs-300.png', 'liked-songs-640.jpg');
 
   return [
-    { src: hd, sizes: '96x96' },
-    { src: hd, sizes: '128x128' },
-    { src: hd, sizes: '192x192' },
-    { src: hd, sizes: '256x256' },
-    { src: hd, sizes: '384x384' },
-    { src: hd, sizes: '512x512' },
+    { src: hd, sizes: '96x96', type: 'image/jpeg' },
+    { src: hd, sizes: '128x128', type: 'image/jpeg' },
+    { src: hd, sizes: '192x192', type: 'image/jpeg' },
+    { src: hd, sizes: '256x256', type: 'image/jpeg' },
+    { src: hd, sizes: '384x384', type: 'image/jpeg' },
+    { src: hd, sizes: '512x512', type: 'image/jpeg' },
   ];
 }
-
 let lastMediaSessionPositionUpdate = 0;
 
 interface PlayerState {
@@ -135,7 +161,7 @@ const store = create<PlayerState>((set, get) => ({
           title: track.name,
           artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
           album: track.album?.name || 'Spotifree',
-          artwork: getMediaSessionArtwork(track.album?.images?.[0]?.url),
+          artwork: getMediaSessionArtwork(resolveTrackCover(track)),
         });
         navigator.mediaSession.playbackState = 'playing';
         if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
@@ -367,6 +393,8 @@ export function registerMediaSessionHandlers() {
         engine.pause();
       }
       try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+      // Re-affirm handlers when paused so previous and next STAY active and visible!
+      registerMediaSessionHandlers();
     });
 
     navigator.mediaSession.setActionHandler('previoustrack', () => {

@@ -3,6 +3,9 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
+  AddTrackNativeIcon,
+  CheckTrackNativeIcon,
+  SpotifyConnectNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
@@ -34,8 +37,8 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
     durationMs,
     isShuffle,
     toggleShuffle,
-    repeatMode,
-    toggleRepeat,
+    likedTrackIds,
+    toggleLike,
   } = usePlayerStore();
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
@@ -58,6 +61,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
   if (!currentTrack) return null;
 
+  const isLiked = likedTrackIds.includes(currentTrack.id);
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
   const coverUrl = currentTrack.album?.images?.[0]?.url;
 
@@ -150,71 +154,55 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
         </div>
       </div>
 
-      {/* Right Controls */}
-      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {/* Shuffle */}
+      {/* Right Controls: Shuffle (a la izquierda) + Device Connect + Meter en playlist/Like + Play/Pause */}
+      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        {/* Shuffle / Al azar button */}
         <button
           onClick={toggleShuffle}
-          className={`w-8 h-8 flex items-center justify-center active:scale-90 transition-transform ${isShuffle ? 'text-[#1ed760]' : 'text-white/60'}`}
-          title="Aleatorio"
+          className={`w-8 h-8 flex items-center justify-center relative active:scale-90 transition-transform cursor-pointer ${
+            isShuffle ? 'text-[#1ed760]' : 'text-white/60 hover:text-white'
+          }`}
+          title={isShuffle ? 'Aleatorio activado' : 'Activar aleatorio'}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
             <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
           </svg>
+          {isShuffle && (
+            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
+          )}
         </button>
 
-        {/* Previous */}
+        {/* Device indicator button with genuine Spotify Connect icon */}
         <button
-          onClick={previousTrack}
-          className="w-8 h-8 flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-transform"
-          title="Anterior"
+          className="w-8 h-8 flex items-center justify-center text-[#1ed760] hover:scale-105 active:scale-95 transition-transform"
+          title="Escuchando en este dispositivo"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
-          </svg>
+          <SpotifyConnectNativeIcon size={16} />
         </button>
 
-        {/* Play/Pause */}
+        {/* Favorite / Meter en la playlist / Guardar button */}
+        <button
+          onClick={() => toggleLike(currentTrack.id)}
+          className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
+          title={isLiked ? 'Guardado en tus canciones favoritas' : 'Añadir a tus canciones favoritas'}
+        >
+          {isLiked ? (
+            <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+          ) : (
+            <AddTrackNativeIcon size={20} className="text-white/80" />
+          )}
+        </button>
+
+        {/* Play/Pause button */}
         <button
           onClick={togglePlay}
-          className="w-9 h-9 flex items-center justify-center text-white active:scale-90 transition-transform"
+          className="w-9 h-9 flex items-center justify-center text-white active:scale-90 transition-transform cursor-pointer"
           title={isPlaying ? 'Pausar' : 'Reproducir'}
         >
           {isPlaying ? (
             <PauseNativeIcon size={22} className="text-white" />
           ) : (
             <PlayNativeIcon size={22} className="text-white ml-0.5" />
-          )}
-        </button>
-
-        {/* Next */}
-        <button
-          onClick={nextTrack}
-          className="w-8 h-8 flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-transform"
-          title="Siguiente"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
-          </svg>
-        </button>
-
-        {/* Repeat */}
-        <button
-          onClick={toggleRepeat}
-          className={`w-8 h-8 flex items-center justify-center active:scale-90 transition-transform relative ${repeatMode !== 'off' ? 'text-[#1ed760]' : 'text-white/60'}`}
-          title="Repetir"
-        >
-          {repeatMode === 'one' ? (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4zm-4-2V9h-1l-2 1v1h1.5v4H13z"/>
-            </svg>
-          ) : (
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M7 7h10v3l4-4-4-4v3H5v6h2V7zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2v4z"/>
-            </svg>
-          )}
-          {repeatMode !== 'off' && (
-            <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1ed760]" />
           )}
         </button>
       </div>

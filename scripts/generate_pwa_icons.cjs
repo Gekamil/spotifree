@@ -37,8 +37,8 @@ async function generate() {
           }
           svg {
             /* 60% scale gives a sleek 20% black margin all around, matching official Spotify app icon */
-            width: ${Math.round(size * 0.60)}px;
-            height: ${Math.round(size * 0.60)}px;
+            width: ${Math.round(size * 0.42)}px;
+            height: ${Math.round(size * 0.42)}px;
           }
         </style>
       </head>
