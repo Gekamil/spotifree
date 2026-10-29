@@ -49,7 +49,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           return;
         }
         setCurrentAccount(res.account);
-        setMessage('¡Cuenta creada y sincronizada con éxito!');
+        setMessage('¡Cuenta creada! Todo listo para sincronizar.');
       } else {
         const res = await loginSpotifreeAccount(cleanEmail, cleanPass);
         if (!res.success || !res.account) {
@@ -58,9 +58,8 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           return;
         }
         setCurrentAccount(res.account);
-        setMessage(`¡Bienvenido de nuevo, ${res.account.displayName}!`);
+        setMessage(`Bienvenido de nuevo, ${res.account.displayName}.`);
 
-        // Apply account data to local stores
         const acc = res.account;
         if (acc.displayName) {
           useSpotifyDataStore.setState((s) => ({
@@ -117,8 +116,8 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
 
       if (updated) {
         setCurrentAccount(updated);
-        setMessage('✓ Todos tus datos se han sincronizado con la nube.');
-        setTimeout(() => setMessage(null), 3500);
+        setMessage('Datos sincronizados con la nube.');
+        setTimeout(() => setMessage(null), 3000);
       }
     } catch {
       setError('Error al sincronizar.');
@@ -130,63 +129,50 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
   const handleLogout = () => {
     saveCurrentSpotifreeAccount(null);
     setCurrentAccount(null);
-    setMessage('Sesión de Spotifree cerrada.');
-    setTimeout(() => setMessage(null), 2500);
+    setMessage(null);
+    setError(null);
   };
 
   if (currentAccount) {
     return (
-      <div className="p-4 rounded-2xl bg-gradient-to-br from-[#1ed760]/10 via-[#181818] to-[#121212] border border-[#1ed760]/30 space-y-3 font-['SpotifyMixUI']">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-bold text-[#1ed760] uppercase tracking-wider flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-            Cuenta Spotifree en la Nube
-          </span>
-          <span className="text-[11px] text-[#b3b3b3] font-mono">
-            {currentAccount.email}
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3 py-1">
-          <div className="w-12 h-12 rounded-full bg-[#242424] border border-[#1ed760]/40 overflow-hidden flex items-center justify-center font-bold text-white text-base shrink-0 shadow-md">
+      <div className="font-['SpotifyMixUI']">
+        {/* Logged-in state — Spotify-like profile row */}
+        <div className="flex items-center gap-3.5 py-3">
+          <div className="w-12 h-12 rounded-full bg-[#242424] border border-white/10 overflow-hidden flex items-center justify-center font-bold text-white text-base shrink-0">
             {currentAccount.avatarUrl ? (
               <img src={currentAccount.avatarUrl} alt={currentAccount.displayName} className="w-full h-full object-cover" />
             ) : (
-              (currentAccount.displayName || 'U').charAt(0).toUpperCase()
+              <span className="text-lg">{(currentAccount.displayName || 'U').charAt(0).toUpperCase()}</span>
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="text-sm font-bold text-white truncate font-['SpotifyMixUITitle']">
-              {currentAccount.displayName}
-            </h4>
-            <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-              Playlists, me gusta y perfil sincronizados
-            </p>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-white truncate">{currentAccount.displayName}</p>
+            <p className="text-xs text-[#b3b3b3] truncate">{currentAccount.email}</p>
           </div>
+          <span className="flex items-center gap-1 text-[10px] font-bold text-[#1ed760] uppercase">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+            Activa
+          </span>
         </div>
 
         {message && (
-          <p className="text-xs text-[#1ed760] font-bold bg-[#1ed760]/10 p-2 rounded-lg">
-            {message}
-          </p>
+          <p className="text-xs text-[#1ed760] mb-2">{message}</p>
         )}
         {error && (
-          <p className="text-xs text-red-400 font-bold bg-red-500/10 p-2 rounded-lg">
-            {error}
-          </p>
+          <p className="text-xs text-red-400 mb-2">{error}</p>
         )}
 
-        <div className="flex gap-2 pt-1 border-t border-white/5">
+        <div className="grid grid-cols-2 gap-2 mt-1">
           <button
             onClick={handleManualSync}
             disabled={isLoading}
-            className="flex-1 py-2 rounded-xl bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-xs transition-transform active:scale-95 disabled:opacity-50 cursor-pointer shadow"
+            className="py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
           >
-            {isLoading ? 'Sincronizando...' : 'Sincronizar ahora'}
+            {isLoading ? 'Sincronizando...' : 'Sincronizar'}
           </button>
           <button
             onClick={handleLogout}
-            className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors active:scale-95 cursor-pointer"
+            className="py-2.5 rounded-full border border-white/20 text-white font-bold text-xs hover:border-white/40 transition-colors active:scale-95 cursor-pointer"
           >
             Cerrar sesión
           </button>
@@ -196,102 +182,81 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
   }
 
   return (
-    <div className="p-4 rounded-2xl bg-[#181818] border border-white/10 space-y-3 font-['SpotifyMixUI']">
-      <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-        <div className="flex gap-3">
-          <button
-            type="button"
-            onClick={() => {
-              setMode('login');
-              setError(null);
-            }}
-            className={`text-xs font-bold pb-1 transition-colors cursor-pointer ${
-              mode === 'login' ? 'text-[#1ed760] border-b-2 border-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
-            }`}
-          >
-            Iniciar sesión
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode('register');
-              setError(null);
-            }}
-            className={`text-xs font-bold pb-1 transition-colors cursor-pointer ${
-              mode === 'register' ? 'text-[#1ed760] border-b-2 border-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
-            }`}
-          >
-            Crear cuenta
-          </button>
-        </div>
-        <span className="text-[10px] text-[#b3b3b3] font-mono">Spotifree Cloud</span>
+    <div className="font-['SpotifyMixUI']">
+      {/* Tab switcher — like Spotify login/signup */}
+      <div className="flex gap-1 mb-4 bg-[#121212] p-1 rounded-full">
+        <button
+          type="button"
+          onClick={() => { setMode('login'); setError(null); }}
+          className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            mode === 'login' ? 'bg-white text-black shadow' : 'text-[#b3b3b3] hover:text-white'
+          }`}
+        >
+          Iniciar sesión
+        </button>
+        <button
+          type="button"
+          onClick={() => { setMode('register'); setError(null); }}
+          className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+            mode === 'register' ? 'bg-white text-black shadow' : 'text-[#b3b3b3] hover:text-white'
+          }`}
+        >
+          Registrarse
+        </button>
       </div>
 
-      <p className="text-xs text-[#b3b3b3] leading-relaxed">
-        {mode === 'login'
-          ? 'Inicia sesión para sincronizar automáticamente tus playlists, me gusta y perfil en móvil y PC.'
-          : 'Regístrate para guardar tus listas, canciones escuchadas y foto en cualquier dispositivo.'}
-      </p>
-
-      <form onSubmit={handleAuth} className="space-y-2.5">
+      <form onSubmit={handleAuth} className="space-y-3">
         {mode === 'register' && (
           <div>
-            <label className="text-[11px] font-bold text-white/80 block mb-1">Nombre para mostrar</label>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Ej: Pepe, Juan..."
-              className="w-full bg-[#121212] border border-white/15 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
+              placeholder="Cómo te llamamos"
+              className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
             />
           </div>
         )}
 
         <div>
-          <label className="text-[11px] font-bold text-white/80 block mb-1">Correo o Usuario</label>
           <input
             type="text"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="pepe o pepe@gmail.com"
-            className="w-full bg-[#121212] border border-white/15 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
+            placeholder="Correo electrónico o usuario"
+            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
           />
         </div>
 
         <div>
-          <label className="text-[11px] font-bold text-white/80 block mb-1">Contraseña</label>
           <input
             type="password"
             required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Tu contraseña"
-            className="w-full bg-[#121212] border border-white/15 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
+            placeholder="Contraseña"
+            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
           />
         </div>
 
         {error && (
-          <p className="text-xs text-red-400 font-bold bg-red-500/10 p-2 rounded-lg">
-            {error}
-          </p>
+          <p className="text-xs text-red-400">{error}</p>
         )}
         {message && (
-          <p className="text-xs text-[#1ed760] font-bold bg-[#1ed760]/10 p-2 rounded-lg">
-            {message}
-          </p>
+          <p className="text-xs text-[#1ed760]">{message}</p>
         )}
 
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-2.5 rounded-xl bg-white hover:bg-white/90 text-black font-bold text-xs tracking-wide transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-md mt-1"
+          className="w-full py-3 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer mt-1"
         >
           {isLoading
-            ? 'Cargando...'
+            ? 'Un momento...'
             : mode === 'login'
-            ? 'Iniciar sesión en Spotifree'
-            : 'Registrarse en Spotifree'}
+            ? 'Iniciar sesión'
+            : 'Crear cuenta'}
         </button>
       </form>
     </div>

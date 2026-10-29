@@ -349,16 +349,26 @@ export const usePlayerStore =
 export function registerMediaSessionHandlers() {
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
   try {
+    // Use engine.pause()/resume() directly to avoid isPlaying race conditions in Brave notification.
+    // togglePlay() reads store state which may lag behind real audio element state, causing bounce.
+    const getEngine = () => typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+
     navigator.mediaSession.setActionHandler('play', () => {
-      const state = usePlayerStore.getState();
-      if (!state.isPlaying) {
-        state.togglePlay();
+      const engine = getEngine();
+      if (engine && typeof engine.resume === 'function') {
+        engine.resume();
+      } else {
+        const s = usePlayerStore.getState();
+        if (!s.isPlaying) s.togglePlay();
       }
     });
     navigator.mediaSession.setActionHandler('pause', () => {
-      const state = usePlayerStore.getState();
-      if (state.isPlaying) {
-        state.togglePlay();
+      const engine = getEngine();
+      if (engine && typeof engine.pause === 'function') {
+        engine.pause();
+      } else {
+        const s = usePlayerStore.getState();
+        if (s.isPlaying) s.togglePlay();
       }
     });
     navigator.mediaSession.setActionHandler('previoustrack', () => {
@@ -369,25 +379,20 @@ export function registerMediaSessionHandlers() {
     });
     navigator.mediaSession.setActionHandler('seekto', (details) => {
       if (details.seekTime != null) {
-        const ms = details.seekTime * 1000;
-        usePlayerStore.getState().setProgress(ms);
-        if ((window as any).__audioEngine) {
-          (window as any).__audioEngine.seek(details.seekTime);
-        }
+        usePlayerStore.getState().setProgress(details.seekTime * 1000);
+        const engine = getEngine();
+        if (engine && typeof engine.seek === 'function') engine.seek(details.seekTime);
       }
     });
-    // Remove seekbackward and seekforward handlers so Android Chrome & Brave
-    // dedicate action buttons to PREVIOUS TRACK (⏮) and NEXT TRACK (⏭) in the notification bar!
+    // Null out seekbackward/seekforward so Android Chrome & Brave allocate notification slots
+    // to PREVIOUS TRACK and NEXT TRACK instead.
     try {
       (navigator.mediaSession as any).setActionHandler('seekbackward', null);
       (navigator.mediaSession as any).setActionHandler('seekforward', null);
     } catch {}
-
     navigator.mediaSession.setActionHandler('stop', () => {
-      const state = usePlayerStore.getState();
-      if (state.isPlaying) {
-        state.togglePlay();
-      }
+      const engine = getEngine();
+      if (engine && typeof engine.pause === 'function') engine.pause();
     });
   } catch {}
 }

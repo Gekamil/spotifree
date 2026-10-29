@@ -4,15 +4,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
-import {
-  getSavedAccounts,
-  removeSavedAccount,
-  saveAccount,
-  cleanSpDc,
-  switchActiveAccount,
-  type SavedAccount,
-} from '../../utils/userAccounts';
-import { validateSpotifyCookie } from '../../services/spotifyCookieService';
+
 
 interface MobileSettingsViewProps {
   onBack: () => void;
@@ -57,10 +49,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
 
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => getSavedAccounts());
-  const [cookieInput, setCookieInput] = useState('');
-  const [cookieStatus, setCookieStatus] = useState<string | null>(null);
-  const [isVerifyingCookie, setIsVerifyingCookie] = useState(false);
 
   // Audio & Playback Settings (Desktop Parity)
   const [normalizeAudio, setNormalizeAudio] = useState(true);
@@ -114,114 +102,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   }
   const avatarUrl = customAvatar || user?.images?.[0]?.url;
   const displayName = user?.display_name || 'Usuario';
-
-  const handleApplyCookie = async () => {
-    if (!cookieInput.trim()) return;
-    setIsVerifyingCookie(true);
-    setCookieStatus('Comprobando clave de sesión...');
-
-    try {
-      const cleanKey = cleanSpDc(cookieInput.trim());
-      const validation = validateSpotifyCookie(cleanKey);
-      if (!validation.valid) {
-        setCookieStatus(`Error: ${validation.error || 'La clave introducida no es válida.'}`);
-        setIsVerifyingCookie(false);
-        return;
-      }
-
-      const res = await fetch('/api/extract-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: cleanKey }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error || 'La clave no es válida o ha caducado en Spotify.');
-      }
-
-      const data = await res.json();
-      if (!data || !data.user) {
-        throw new Error('No se obtuvieron datos de la cuenta.');
-      }
-
-      const cacheToSave: Record<string, any> = {};
-      if (data.playlists && Array.isArray(data.playlists)) {
-        data.playlists.forEach((p: any) => {
-          if (p && p.id) {
-            cacheToSave[p.id] = p;
-          }
-        });
-      }
-      if (data.cachedPlaylistDetails) {
-        Object.assign(cacheToSave, data.cachedPlaylistDetails);
-      }
-
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', cleanKey);
-        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: cleanKey }));
-        if (data.user?.id) {
-          window.localStorage.setItem('spotifree_active_user_id', data.user.id);
-          window.localStorage.setItem(`spotifree_playlist_cache_${data.user.id}`, JSON.stringify(cacheToSave));
-        }
-        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
-        window.localStorage.removeItem('spotify_logged_out');
-      }
-
-      saveAccount({
-        id: data.user.id || `user-${Date.now()}`,
-        displayName: data.user.display_name || 'Usuario Spotify',
-        email: data.user.email,
-        avatarUrl: data.user.images?.[0]?.url,
-        cookie: cleanKey,
-        accessToken: data.accessToken,
-        lastUsed: Date.now(),
-      });
-
-      setSavedAccounts(getSavedAccounts());
-
-      useSpotifyDataStore.setState({
-        isAuthenticated: true,
-        user: data.user,
-        playlists: data.playlists || [],
-        dynamicShelves: data.shelves || [],
-        quickAccessCards: data.quickAccess || [],
-        playlistDetailsCache: cacheToSave,
-        isLoading: false,
-      });
-
-      setCookieStatus('¡Sesión vinculada con éxito!');
-      setCookieInput('');
-      setTimeout(() => setCookieStatus(null), 3000);
-    } catch (err: any) {
-      setCookieStatus(`Error: ${err.message || 'Error de conexión'}`);
-    } finally {
-      setIsVerifyingCookie(false);
-    }
-  };
-
-  const handleSwitchAccount = async (acc: SavedAccount) => {
-    if (acc.id === user?.id) return;
-    try {
-      await switchActiveAccount(acc);
-      setSavedAccounts(getSavedAccounts());
-    } catch (err) {
-      console.error('Error switching account on mobile settings:', err);
-    }
-  };
-
-  const handleDeleteAccount = (acc: SavedAccount | string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (typeof acc === 'string') {
-      removeSavedAccount(acc);
-    } else {
-      removeSavedAccount(acc.id);
-      if (acc.displayName) removeSavedAccount(acc.displayName);
-      if (acc.email) removeSavedAccount(acc.email);
-      if (acc.cookie) removeSavedAccount(acc.cookie);
-    }
-    setSavedAccounts(getSavedAccounts());
-  };
 
   const handleClearCache = () => {
     if (typeof window !== 'undefined') {
@@ -419,135 +299,23 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </p>
         </div>
 
-        {/* Tu Cuenta Spotifree en la Nube (Sincronización Móvil y PC) */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Tu Cuenta Spotifree
-          </h3>
-          <SpotifreeAuthCard />
-        </div>
-
-        {/* Sesión y Conexión de Spotify */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Sesión y Conexión de Spotify
-          </h3>
-
-          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-[#b3b3b3]">Estado de la sesión</span>
-              <span className="px-2.5 py-1 rounded-full bg-[#1ed760]/20 text-[#1ed760] text-xs font-bold flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-                {isAuthenticated ? 'Conectado a Spotify' : 'Sin cuenta activa'}
-              </span>
+        {/* Tu Cuenta Spotifree */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">Cuenta Spotifree</span>
+            <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">SINCRONIZACIÓN ACTIVADA</span>
+          </div>
+          <div className="rounded-2xl overflow-hidden border border-white/[0.06] bg-[#181818]">
+            <div className="px-4 pt-4 pb-2">
+              <p className="text-xs text-[#b3b3b3] leading-relaxed">
+                Guarda tus playlists, canciones favoritas, historial y ajustes. Accede desde cualquier dispositivo con tu correo y contraseña.
+              </p>
             </div>
-
-            <div className="pt-2">
-              <label className="text-xs font-bold text-white block mb-1.5">
-                Actualizar clave de sesión (sp_dc)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  placeholder="Pega aquí tu cookie sp_dc..."
-                  value={cookieInput}
-                  onChange={(e) => setCookieInput(e.target.value)}
-                  className="flex-1 bg-[#121212] border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
-                />
-                <button
-                  onClick={handleApplyCookie}
-                  disabled={isVerifyingCookie || !cookieInput.trim()}
-                  className="px-4 py-2 rounded-lg bg-white text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer"
-                >
-                  {isVerifyingCookie ? '...' : 'Guardar'}
-                </button>
-              </div>
-              {cookieStatus && (
-                <p className={`text-[11px] mt-1.5 ${cookieStatus.includes('Error') ? 'text-red-400' : 'text-[#1ed760]'}`}>
-                  {cookieStatus}
-                </p>
-              )}
-            </div>
-
-            <div className="pt-2 border-t border-white/5 flex items-center justify-between">
-              <span className="text-xs text-white font-medium">Emparejar desde ordenador con QR</span>
-              <button
-                onClick={openLoginModal}
-                className="px-3 py-1.5 rounded-full border border-white/20 text-white font-bold text-xs hover:border-white active:scale-95"
-              >
-                Abrir QR
-              </button>
+            <div className="px-4 pb-4">
+              <SpotifreeAuthCard />
             </div>
           </div>
         </div>
-
-        {/* Cuentas guardadas */}
-        {savedAccounts.length > 0 && (
-          <div className="space-y-3">
-            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-              Cuentas guardadas ({savedAccounts.length})
-            </h3>
-
-            <div className="space-y-2">
-              {savedAccounts.map((acc) => {
-                const isCurrent = acc.id === user?.id;
-                return (
-                  <div
-                    key={acc.id}
-                    onClick={() => handleSwitchAccount(acc)}
-                    className={`flex items-center justify-between p-3 rounded-2xl transition-all cursor-pointer ${
-                      isCurrent
-                        ? 'bg-white/[0.08] border border-[#1ed760]/30'
-                        : 'bg-[#181818] hover:bg-[#222222]'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-9 h-9 rounded-full overflow-hidden bg-[#242424] shrink-0 border border-white/10 flex items-center justify-center">
-                        {acc.avatarUrl ? (
-                          <img
-                            src={acc.avatarUrl}
-                            alt={acc.displayName}
-                            onError={handleImageError}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="font-bold text-white text-xs">
-                            {acc.displayName.charAt(0).toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-white text-sm truncate">{acc.displayName}</span>
-                        <span className="text-[11px] text-[#b3b3b3] truncate">
-                          {isCurrent ? 'Sesión activa' : 'Guardada'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {!isCurrent && (
-                        <button
-                          onClick={(e) => handleDeleteAccount(acc.id, e)}
-                          className="w-7 h-7 rounded-full flex items-center justify-center text-white/40 hover:text-red-400 active:scale-90"
-                          title="Eliminar cuenta"
-                        >
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                          </svg>
-                        </button>
-                      )}
-                      {isCurrent ? (
-                        <span className="text-xs text-[#1ed760] font-bold">Activa</span>
-                      ) : (
-                        <span className="text-xs text-[#b3b3b3] font-medium">Usar</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
 
         {/* Motor de Audio (Paridad PC) */}
         <div className="space-y-3">
