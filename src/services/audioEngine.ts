@@ -48,6 +48,7 @@ class AudioEngine {
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
+  private compressorNode: DynamicsCompressorNode | null = null;
   private currentTrackId: string | null = null;
   private currentTrackQuery: string | null = null;
   private currentVideoId: string | null = null;
@@ -94,6 +95,9 @@ class AudioEngine {
     } catch {}
 
     const remaining = durSec - curSec;
+
+    const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
+    if (gaplessSaved === 'false') return;
 
     // 1. Preload upcoming song in the background before crossfade starts
     if (
@@ -199,20 +203,25 @@ class AudioEngine {
       } catch {}
     }
 
-    const crossfadeStartTime = Date.now();
     const durationMs = crossfadeSec * 1000;
+    let accumulatedCrossfadeMs = 0;
+    let lastTick = Date.now();
 
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
     }
 
     this.crossfadeInterval = window.setInterval(() => {
+      const now = Date.now();
+      const delta = now - lastTick;
+      lastTick = now;
+
       if (!usePlayerStore.getState().isPlaying) {
         return;
       }
 
-      const elapsed = Date.now() - crossfadeStartTime;
-      const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+      accumulatedCrossfadeMs += delta;
+      const progress = Math.min(1, Math.max(0, accumulatedCrossfadeMs / durationMs));
 
       // Calculate simultaneous fade curves:
       // Outgoing track (Song A) fades from 1.0 down to 0.0
@@ -236,7 +245,6 @@ class AudioEngine {
         if (curSecAudio) curSecAudio.volume = Math.max(0, Math.min(1, inVol));
       }
 
-      // Keep reporting current track progress for Song A while crossfading
       // When crossfade finishes:
       if (progress >= 1) {
         if (this.crossfadeInterval !== null) {
@@ -277,8 +285,22 @@ class AudioEngine {
         }
 
         // 3. Update UI: NOW that Song A has finished and Song B has reached 100% volume,
-        // switch album cover, title, artist and progress to Song B!
-        usePlayerStore.getState().completeCrossfadeTrack(nextTrack);
+        // switch album cover, title, artist and real elapsed progress to Song B!
+        let elapsedSeconds = crossfadeSec;
+        if (this.activeEngine === 'youtube') {
+          const newActive = this.ytPlayer;
+          if (newActive && typeof newActive.getCurrentTime === 'function') {
+            const ct = newActive.getCurrentTime();
+            if (isFinite(ct) && ct > 0) elapsedSeconds = ct;
+          }
+        } else {
+          const newActiveAudio = this.audio;
+          if (newActiveAudio && isFinite(newActiveAudio.currentTime) && newActiveAudio.currentTime > 0) {
+            elapsedSeconds = newActiveAudio.currentTime;
+          }
+        }
+
+        usePlayerStore.getState().completeCrossfadeTrack(nextTrack, Math.round(elapsedSeconds * 1000));
 
         this.isCrossfading = false;
         this.preloadedNext = null;
@@ -708,7 +730,13 @@ class AudioEngine {
         return filter;
       });
 
-      lastNode.connect(this.audioContext.destination);
+      this.compressorNode = this.audioContext.createDynamicsCompressor();
+      const normalizeSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_normalize_volume') : null;
+      const isNorm = normalizeSaved !== 'false';
+      this.compressorNode.threshold.value = isNorm ? -24 : 0;
+      this.compressorNode.ratio.value = isNorm ? 12 : 1;
+      lastNode.connect(this.compressorNode);
+      this.compressorNode.connect(this.audioContext.destination);
     } catch (e) {
       console.warn('[AudioEngine] Web Audio EQ not initialized:', e);
     }
@@ -804,6 +832,24 @@ class AudioEngine {
     }
 
     try {
+      // 0. Check offline storage ("musica-spotifree")
+      try {
+        const { getDownloadedTrackBlobUrl } = await import('../utils/offlineStorage');
+        const offlineBlobUrl = await getDownloadedTrackBlobUrl(trackId);
+        if (offlineBlobUrl || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+          if (offlineBlobUrl) {
+            this.activeEngine = 'html5';
+            this.audio.src = offlineBlobUrl;
+            this.audio.currentTime = startSeconds;
+            await this.audio.play();
+            this.startCarrier();
+            usePlayerStore.setState({ isPlaying: true });
+            this.isTransitioning = false;
+            return;
+          }
+        }
+      } catch {}
+
       // 1. Check instant in-memory & persistent cache
       let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
@@ -1010,11 +1056,17 @@ class AudioEngine {
   public resume() {
     this.isExplicitlyPaused = false;
     this.startCarrier();
+    const { volume, isMuted } = usePlayerStore.getState();
+    const targetVol = isMuted ? 0 : volume;
+
     if (this.activeEngine === 'youtube') {
       if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
         try {
           if (typeof this.ytPlayer.unMute === 'function') {
             this.ytPlayer.unMute();
+          }
+          if (!this.isCrossfading && typeof this.ytPlayer.setVolume === 'function') {
+            this.ytPlayer.setVolume(Math.round(targetVol * 100));
           }
           this.ytPlayer.playVideo();
           if (this.isCrossfading && this.secondaryYtPlayer && typeof this.secondaryYtPlayer.playVideo === 'function') {
@@ -1031,6 +1083,9 @@ class AudioEngine {
     }
 
     if (this.audio) {
+      if (!this.isCrossfading) {
+        this.audio.volume = targetVol;
+      }
       this.audio.play().catch(() => {});
       if (this.isCrossfading && this.secondaryAudio) {
         this.secondaryAudio.play().catch(() => {});
@@ -1115,6 +1170,27 @@ class AudioEngine {
   public setEqualizerBand(index: number, gainDb: number) {
     if (this.filterNodes[index]) {
       this.filterNodes[index].gain.value = gainDb;
+    }
+  }
+
+
+  public setVolumeNormalization(enabled: boolean) {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('spotifree_normalize_volume', String(enabled));
+      } catch {}
+    }
+    this.initAudioContext();
+    if (this.compressorNode && this.audioContext) {
+      try {
+        if (enabled) {
+          this.compressorNode.threshold.setValueAtTime(-24, this.audioContext.currentTime);
+          this.compressorNode.ratio.setValueAtTime(12, this.audioContext.currentTime);
+        } else {
+          this.compressorNode.threshold.setValueAtTime(0, this.audioContext.currentTime);
+          this.compressorNode.ratio.setValueAtTime(1, this.audioContext.currentTime);
+        }
+      } catch {}
     }
   }
 

@@ -18,6 +18,10 @@ function loadAccounts() {
 function saveAccounts(accounts) {
   try {
     const file = getAccountsFile();
+    const dir = path.dirname(file);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(file, JSON.stringify(accounts, null, 2), 'utf8');
   } catch (err) {
     console.error('Failed to save spotifreeAccounts.json:', err);
@@ -25,6 +29,21 @@ function saveAccounts(accounts) {
 }
 
 export default async function handler(req, res) {
+  // Polyfill Express-like helpers if running inside Connect/Vite dev middleware
+  if (!res.status) {
+    res.status = function(code) {
+      this.statusCode = code;
+      return this;
+    };
+  }
+  if (!res.json) {
+    res.json = function(data) {
+      this.setHeader('Content-Type', 'application/json');
+      this.end(JSON.stringify(data));
+      return this;
+    };
+  }
+
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -34,7 +53,7 @@ export default async function handler(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const pathname = url.pathname;
+  const pathname = url.pathname.toLowerCase();
 
   // Read Body if POST
   let body = {};
@@ -54,8 +73,13 @@ export default async function handler(req, res) {
 
   const accounts = loadAccounts();
 
+  // Determine intent (register, login, sync, or get)
+  const isRegister = pathname.endsWith('register') || body.action === 'register';
+  const isLogin = pathname.endsWith('login') || body.action === 'login';
+  const isSync = pathname.endsWith('sync') || body.action === 'sync';
+
   // 1. REGISTER
-  if (pathname.endsWith('/register') || body.action === 'register') {
+  if (isRegister) {
     const email = (body.email || '').trim().toLowerCase();
     const password = (body.password || '').trim();
     const displayName = (body.displayName || body.name || email.split('@')[0] || 'Usuario').trim();
@@ -79,6 +103,7 @@ export default async function handler(req, res) {
       likedTracks: Array.isArray(body.likedTracks) ? body.likedTracks : [],
       history: Array.isArray(body.history) ? body.history : [],
       stats: body.stats || {},
+      theme: body.theme || 'standard',
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
@@ -94,7 +119,7 @@ export default async function handler(req, res) {
   }
 
   // 2. LOGIN
-  if (pathname.endsWith('/login') || body.action === 'login') {
+  if (isLogin) {
     const email = (body.email || '').trim().toLowerCase();
     const password = (body.password || '').trim();
 
@@ -107,6 +132,33 @@ export default async function handler(req, res) {
       return res.status(401).json({ error: 'Correo o contraseña incorrectos.' });
     }
 
+    // Merge incoming cookie or playlists if user had local offline changes
+    let changed = false;
+    if (body.spotifyCookie && !account.spotifyCookie) {
+      account.spotifyCookie = body.spotifyCookie;
+      changed = true;
+    }
+    if (Array.isArray(body.playlists) && body.playlists.length > 0) {
+      const existingIds = new Set(account.playlists.map((p) => p.id));
+      for (const pl of body.playlists) {
+        if (!existingIds.has(pl.id)) {
+          account.playlists.unshift(pl);
+          existingIds.add(pl.id);
+          changed = true;
+        }
+      }
+    }
+    if (Array.isArray(body.likedTracks) && body.likedTracks.length > 0) {
+      account.likedTracks = Array.from(new Set([...account.likedTracks, ...body.likedTracks]));
+      changed = true;
+    }
+
+    if (changed) {
+      account.updatedAt = Date.now();
+      accounts[email] = account;
+      saveAccounts(accounts);
+    }
+
     return res.status(200).json({
       success: true,
       account: { ...account, password: '' },
@@ -114,7 +166,7 @@ export default async function handler(req, res) {
   }
 
   // 3. SYNC DATA (Push local playlists, liked songs, profile, cookie to Cloud)
-  if (pathname.endsWith('/sync') || body.action === 'sync') {
+  if (isSync) {
     const email = (body.email || '').trim().toLowerCase();
     const password = (body.password || '').trim();
 
@@ -136,6 +188,7 @@ export default async function handler(req, res) {
         likedTracks: [],
         history: [],
         stats: {},
+        theme: 'standard',
         createdAt: Date.now(),
       };
     } else if (password && account.password && account.password !== password) {
@@ -150,7 +203,6 @@ export default async function handler(req, res) {
           account.playlists.unshift(pl);
           existingIds.add(pl.id);
         } else {
-          // Update existing
           account.playlists = account.playlists.map((p) => (p.id === pl.id ? { ...p, ...pl } : p));
         }
       }
@@ -165,6 +217,7 @@ export default async function handler(req, res) {
     if (body.bannerUrl !== undefined) account.bannerUrl = body.bannerUrl;
     if (body.spotifyCookie) account.spotifyCookie = body.spotifyCookie;
     if (body.stats) account.stats = { ...(account.stats || {}), ...body.stats };
+    if (body.theme) account.theme = body.theme;
     account.updatedAt = Date.now();
 
     accounts[email] = account;

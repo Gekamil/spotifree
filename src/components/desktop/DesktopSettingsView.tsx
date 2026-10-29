@@ -1,6 +1,7 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
+import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
 import {
@@ -152,7 +153,7 @@ const SpotifyCustomSelect: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab, viewMode, setViewMode, openLoginModal } = useUIStore();
+  const { setActiveMainTab, viewMode, setViewMode, openLoginModal, theme, setTheme } = useUIStore();
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
@@ -163,7 +164,6 @@ export const DesktopSettingsView: React.FC = () => {
   const [savedSpotifyCookieSuccess, setSavedSpotifyCookieSuccess] = useState(false);
   const [cookieError, setCookieError] = useState<string | null>(null);
   const [isExtractingCookie, setIsExtractingCookie] = useState(false);
-  const [showAdvancedAudio, setShowAdvancedAudio] = useState(false);
   const [showMobileQr, setShowMobileQr] = useState(false);
   const [copiedMobileLink, setCopiedMobileLink] = useState(false);
 
@@ -235,18 +235,85 @@ export const DesktopSettingsView: React.FC = () => {
     }
   };
 
-  const [engineMode, setEngineMode] = useState<string>(() => {
-    return typeof window !== 'undefined'
-      ? window.localStorage.getItem('spotifree_audio_engine') || 'hybrid'
-      : 'hybrid';
-  });
 
-  // Settings State
   const [language, setLanguage] = useState('es-ES');
-  const [audioQuality, setAudioQuality] = useState('very_high');
   const [showNowPlayingOnClick, setShowNowPlayingOnClick] = useState(true);
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
+  // Playback & Audio settings
+  const [normalizeAudio, setNormalizeAudio] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_normalize_volume') !== 'false';
+    }
+    return true;
+  });
+
+  const [gaplessAudio, setGaplessAudio] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_gapless') !== 'false';
+    }
+    return true;
+  });
+
+  const [crossfadeSeconds, setCrossfadeSeconds] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const v = window.localStorage.getItem('spotifree_crossfade_sec');
+      return v ? parseInt(v, 10) : 0;
+    }
+    return 0;
+  });
+
+  const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_autoplay') !== 'false';
+    }
+    return true;
+  });
+
+  // Storage & Cache
+  const [cacheSize, setCacheSize] = useState('Calculando...');
+  const [cacheCleared, setCacheCleared] = useState(false);
+
+  useEffect(() => {
+    getStorageUsage().then(({ formatted }) => {
+      setCacheSize(formatted);
+    });
+  }, []);
+
+  const handleClearCache = async () => {
+    await clearOfflineCache();
+    const { formatted } = await getStorageUsage();
+    setCacheSize(formatted);
+    setCacheCleared(true);
+    setTimeout(() => setCacheCleared(false), 2500);
+  };
+
+  const handleToggleGapless = (val: boolean) => {
+    setGaplessAudio(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_gapless', String(val));
+      if (!val) {
+        setCrossfadeSeconds(0);
+        window.localStorage.setItem('spotifree_crossfade_sec', '0');
+      }
+    }
+  };
+
+  const handleToggleNormalize = (val: boolean) => {
+    setNormalizeAudio(val);
+    audioEngine.setVolumeNormalization?.(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_normalize_volume', String(val));
+    }
+  };
+
+  const handleToggleAutoplay = (val: boolean) => {
+    setAutoplaySimilar(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_autoplay', String(val));
+    }
+  };
+
 
   // Equalizer 6-band State (-12 to +12 dB)
   const [activePreset, setActivePreset] = useState<string>('flat');
@@ -375,14 +442,6 @@ export const DesktopSettingsView: React.FC = () => {
     { value: 'ja-JP', label: '日本語 (Japanese)' },
   ];
 
-  const QUALITY_OPTIONS = [
-    { value: 'auto', label: 'Automática' },
-    { value: 'low', label: 'Baja (96 kbps)' },
-    { value: 'normal', label: 'Normal (160 kbps)' },
-    { value: 'high', label: 'Alta (320 kbps)' },
-    { value: 'very_high', label: 'Muy alta (Sin pérdida)' },
-  ];
-
   const PRESET_OPTIONS = Object.keys(PRESET_LABELS).map((k) => ({
     value: k,
     label: PRESET_LABELS[k],
@@ -412,6 +471,67 @@ export const DesktopSettingsView: React.FC = () => {
       </div>
 
       <div className="space-y-8">
+        {/* TEMAS DE LA INTERFAZ (Estándar, OLED, Platinum) */}
+        {matchesSearch('tema temas oled platinum estándar liner apariencia interfaz color') && (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Tema de la interfaz</h2>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">Personaliza la estética visual de Spotifree en tu escritorio.</p>
+              </div>
+              <span className="text-xs font-bold text-[#1ed760] uppercase tracking-wider">
+                {theme === 'standard' ? 'Estándar' : theme === 'oled' ? 'OLED' : 'Platinum'}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {[
+                {
+                  id: 'standard',
+                  title: 'Estándar',
+                  desc: 'Dark clásico #121212 original de Spotify',
+                  color: '#121212',
+                  accent: '#1ed760',
+                },
+                {
+                  id: 'oled',
+                  title: 'OLED',
+                  desc: 'Negros puros #000000 para contraste absoluto',
+                  color: '#000000',
+                  accent: '#ffffff',
+                },
+                {
+                  id: 'platinum',
+                  title: 'Platinum',
+                  desc: 'Efecto cristal Liner translúcido con desenfoque',
+                  color: '#1e293b',
+                  accent: '#e2e8f0',
+                },
+              ].map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setTheme(t.id as any)}
+                  className={`p-4 rounded-xl border text-left transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden flex flex-col justify-between h-28 ${
+                    theme === t.id
+                      ? 'border-[#1ed760] shadow-[0_0_16px_rgba(30,215,96,0.3)] bg-white/10'
+                      : 'border-white/10 hover:border-white/20 bg-[#181818]'
+                  }`}
+                  style={{ backgroundColor: t.color }}
+                >
+                  <div className="flex items-center justify-between w-full">
+                    <span className="font-bold text-sm text-white">{t.title}</span>
+                    {theme === t.id && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760]" />
+                    )}
+                  </div>
+                  <p className="text-xs text-[#b3b3b3] leading-snug mt-1">{t.desc}</p>
+                  <div className="w-full h-1.5 rounded-full mt-2" style={{ backgroundColor: t.accent }} />
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* 1. CUENTA Y SESIÓN (Spotify 1:1 Clean Design) */}
         {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar') && (
           <section className="space-y-4">
@@ -675,37 +795,23 @@ export const DesktopSettingsView: React.FC = () => {
           </section>
         )}
 
-        {/* 3. CALIDAD DEL AUDIO (Custom Spotify Dropdown) */}
-        {matchesSearch('calidad audio streaming normalizar volumen') && (
+        {/* 3. ALMACENAMIENTO Y CACHÉ REAL */}
+        {matchesSearch('almacenamiento caché memoria espacio archivos offline musica-spotifree') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Calidad del audio</h2>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <span className="text-sm font-medium text-white">Calidad de streaming</span>
-                  <p className="text-xs text-[#a7a7a7] mt-0.5">Ajusta el ancho de banda y la tasa de muestreo.</p>
-                </div>
-                <SpotifyCustomSelect
-                  value={audioQuality}
-                  options={QUALITY_OPTIONS}
-                  onChange={setAudioQuality}
-                  minWidth="200px"
-                />
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Almacenamiento y Caché</h2>
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <p className="text-sm font-medium text-white">Caché de canciones y portadas</p>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {cacheSize} ocupados en almacenamiento seguro «musica-spotifree».
+                </p>
               </div>
-
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="text-sm font-medium text-white">Normalizar el volumen</div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    Establece el mismo nivel de volumen para todas las canciones.
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={true}
-                  onChange={() => {}}
-                  ariaLabel="Normalizar el volumen"
-                />
-              </div>
+              <button
+                onClick={handleClearCache}
+                className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer"
+              >
+                {cacheCleared ? '¡Caché borrada!' : 'Borrar caché'}
+              </button>
             </div>
           </section>
         )}
@@ -784,15 +890,160 @@ export const DesktopSettingsView: React.FC = () => {
           </section>
         )}
 
-        {/* 7. REPRODUCCIÓN (Ecualizador Spotify 1:1 con Web Audio API) */}
-        {matchesSearch('reproducción ecualizador decibelios hz frecuencia sonido') && (
+        {/* 7. REPRODUCCIÓN (Controles de Reproducción y Ecualizador) */}
+        {matchesSearch('reproducción ecualizador decibelios hz frecuencia sonido normalizar pausas fundido automática') && (
           <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Reproducción</h2>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  Ajusta las frecuencias de audio en tiempo real con el ecualizador activo.
-                </p>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Reproducción</h2>
+
+            <div className="space-y-3">
+              {/* Normalizar volumen */}
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Normalizar el volumen</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    Establece el mismo nivel de volumen para todas las canciones mediante compresión dinámica.
+                  </div>
+                </div>
+                <SpotifyToggle
+                  checked={normalizeAudio}
+                  onChange={handleToggleNormalize}
+                  ariaLabel="Normalizar el volumen"
+                />
+              </div>
+
+              {/* Reproducción sin pausas */}
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Reproducción sin pausas</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    Permite transiciones continuas sin silencios entre pistas.
+                  </div>
+                </div>
+                <SpotifyToggle
+                  checked={gaplessAudio}
+                  onChange={handleToggleGapless}
+                  ariaLabel="Reproducción sin pausas"
+                />
+              </div>
+
+              {/* Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
+              {gaplessAudio && (
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5 animate-in fade-in">
+                  <div>
+                    <div className="text-sm font-medium text-white">Fundido entre canciones</div>
+                    <div className="text-xs text-[#a7a7a7] mt-0.5">
+                      Transición gradual donde la canción actual baja mientras la siguiente comienza.
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 w-full sm:w-64">
+                    <input
+                      type="range"
+                      min="0"
+                      max="12"
+                      step="1"
+                      value={crossfadeSeconds}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        setCrossfadeSeconds(val);
+                        if (typeof window !== 'undefined') {
+                          window.localStorage.setItem('spotifree_crossfade_sec', String(val));
+                        }
+                      }}
+                      style={{
+                        background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                      }}
+                      className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
+                    />
+                    <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 w-12 text-right">
+                      {crossfadeSeconds === 0 ? '0 s' : `${crossfadeSeconds} s`}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Reproducción automática */}
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Reproducción automática</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    Sigue escuchando temas similares sin parar cuando termine tu lista de reproducción.
+                  </div>
+                </div>
+                <SpotifyToggle
+                  checked={autoplaySimilar}
+                  onChange={handleToggleAutoplay}
+                  ariaLabel="Reproducción automática"
+                />
+              </div>
+            </div>
+
+            {/* Ecualizador Gráfico */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-bold text-white">Ecualizador de audio</h3>
+                  <p className="text-xs text-[#a7a7a7] mt-0.5">
+                    Ajusta frecuencias y decibelios en tiempo real para todos los reproductores.
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-[#a7a7a7]">Preajuste:</span>
+                  <SpotifyCustomSelect
+                    value={activePreset}
+                    options={PRESET_OPTIONS}
+                    onChange={handlePresetSelect}
+                    minWidth="160px"
+                  />
+                </div>
+              </div>
+
+              {/* Modificadores Rápidos de Sonido */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+                <button
+                  onClick={() => handlePresetSelect('vocal')}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    activePreset === 'vocal'
+                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                  }`}
+                >
+                  <span className="block text-xs font-bold text-white">🎤 Realzar Voz</span>
+                  <span className="block text-[10px] text-[#a7a7a7]">Voces cristalinas</span>
+                </button>
+                <button
+                  onClick={() => handlePresetSelect('rock')}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    activePreset === 'rock'
+                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                  }`}
+                >
+                  <span className="block text-xs font-bold text-white">🎵 Realzar Música</span>
+                  <span className="block text-[10px] text-[#a7a7a7]">Brillo e instrumentos</span>
+                </button>
+                <button
+                  onClick={() => handlePresetSelect('bassBoost')}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    activePreset === 'bassBoost'
+                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                  }`}
+                >
+                  <span className="block text-xs font-bold text-white">🔊 Graves Profundos</span>
+                  <span className="block text-[10px] text-[#a7a7a7]">Subgraves potenciados</span>
+                </button>
+                <button
+                  onClick={() => handlePresetSelect('flat')}
+                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                    activePreset === 'flat'
+                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                  }`}
+                >
+                  <span className="block text-xs font-bold text-white">⚖️ Plano (0 dB)</span>
+                  <span className="block text-[10px] text-[#a7a7a7]">Fidelidad original</span>
+                </button>
               </div>
 
               {/* Presets Dropdown */}
@@ -948,60 +1199,6 @@ export const DesktopSettingsView: React.FC = () => {
                 <span>Haz clic o arrastra los puntos directamente en la curva para ajustar frecuencias.</span>
               </div>
             </div>
-          </section>
-        )}
-
-        {/* 8. AVANZADO: MOTOR DE AUDIO (Clean Collapsible) */}
-        {matchesSearch('avanzado motor audio youtube streaming proxy') && (
-          <section className="space-y-3 pt-2">
-            <button
-              type="button"
-              onClick={() => setShowAdvancedAudio(!showAdvancedAudio)}
-              className="flex items-center gap-2 text-sm font-semibold text-[#a7a7a7] hover:text-white transition-colors cursor-pointer"
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                className={`transition-transform duration-200 ${showAdvancedAudio ? 'rotate-90' : ''}`}
-              >
-                <path d="M4.97 15.53a.75.75 0 0 1 0-1.06L11.44 8 4.97 1.53a.75.75 0 0 1 1.06-1.06l7.5 7.5a.75.75 0 0 1 0 1.06l-7.5 7.5a.75.75 0 0 1-1.06 0" />
-              </svg>
-              <span>Configuración avanzada de audio</span>
-            </button>
-
-            {showAdvancedAudio && (
-              <div className="p-4 rounded-lg bg-[#181818] border border-white/5 space-y-3 animate-in fade-in duration-200">
-                <p className="text-xs text-[#a7a7a7] leading-relaxed">
-                  Spotifree resuelve el streaming de audio automáticamente a través de la red global de YouTube Music sin límites.
-                </p>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setEngineMode('hybrid');
-                      localStorage.setItem('spotifree_audio_engine', 'hybrid');
-                    }}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                      engineMode === 'hybrid' ? 'bg-[#1ed760] text-black' : 'bg-[#242424] text-white hover:bg-[#333]'
-                    }`}
-                  >
-                    Nativo Híbrido (Recomendado)
-                  </button>
-                  <button
-                    onClick={() => {
-                      setEngineMode('stream');
-                      localStorage.setItem('spotifree_audio_engine', 'stream');
-                    }}
-                    className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                      engineMode === 'stream' ? 'bg-[#1ed760] text-black' : 'bg-[#242424] text-white hover:bg-[#333]'
-                    }`}
-                  >
-                    Servidor Proxy Stream
-                  </button>
-                </div>
-              </div>
-            )}
           </section>
         )}
       </div>

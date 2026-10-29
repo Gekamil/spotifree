@@ -247,7 +247,7 @@ export const DesktopLayout: React.FC = () => {
       <DesktopPlayer onSelectPlaylistById={handleSelectPlaylistById} />
 
       {/* Global Context Menu */}
-      <ContextMenu />
+      <ContextMenu onSelectPlaylistById={handleSelectPlaylistById} />
 
       {/* Edit Playlist Modal (1:1 Spotify Fidelity) */}
       <EditPlaylistModal />

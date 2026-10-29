@@ -11,6 +11,7 @@ export interface SpotifreeAccount {
   likedTracks: string[];
   history?: Track[];
   stats?: any;
+  theme?: 'standard' | 'oled' | 'platinum';
   createdAt?: number;
   updatedAt?: number;
 }
@@ -37,16 +38,42 @@ export function saveCurrentSpotifreeAccount(account: SpotifreeAccount | null): v
   } catch {}
 }
 
+function getLocalDataToMerge() {
+  let cookie = '';
+  let playlists: any[] = [];
+  let likedTracks: string[] = [];
+
+  if (typeof window !== 'undefined') {
+    try {
+      cookie = window.localStorage.getItem('user_spotify_cookie') || '';
+      const rawPl = window.localStorage.getItem('user_imported_playlists');
+      if (rawPl) playlists = JSON.parse(rawPl);
+      const rawLikes = window.localStorage.getItem('spotifree_liked_tracks');
+      if (rawLikes) likedTracks = JSON.parse(rawLikes);
+    } catch {}
+  }
+
+  return { cookie, playlists, likedTracks };
+}
+
 export async function registerSpotifreeAccount(
   email: string,
   password: string,
   displayName?: string
 ): Promise<{ success: boolean; account?: SpotifreeAccount; error?: string }> {
   try {
+    const local = getLocalDataToMerge();
     const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password, displayName }),
+      body: JSON.stringify({
+        email,
+        password,
+        displayName,
+        spotifyCookie: local.cookie,
+        playlists: local.playlists,
+        likedTracks: local.likedTracks,
+      }),
     });
     const data = await res.json();
     if (res.ok && data.success) {
@@ -64,14 +91,25 @@ export async function loginSpotifreeAccount(
   password: string
 ): Promise<{ success: boolean; account?: SpotifreeAccount; error?: string }> {
   try {
+    const local = getLocalDataToMerge();
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+        spotifyCookie: local.cookie,
+        playlists: local.playlists,
+        likedTracks: local.likedTracks,
+      }),
     });
     const data = await res.json();
     if (res.ok && data.success) {
       saveCurrentSpotifreeAccount(data.account);
+      // If account had a cookie saved in cloud, preserve it locally
+      if (data.account.spotifyCookie && typeof window !== 'undefined') {
+        window.localStorage.setItem('user_spotify_cookie', data.account.spotifyCookie);
+      }
       return { success: true, account: data.account };
     }
     return { success: false, error: data.error || 'Correo o contraseña incorrectos.' };

@@ -1,9 +1,13 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 
-export const ContextMenu: React.FC = () => {
+interface ContextMenuProps {
+  onSelectPlaylistById?: (id: string, name?: string) => void;
+}
+
+export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }) => {
   const { contextMenu, closeContextMenu, openEditPlaylistModal, setActiveMainTab } = useUIStore();
   const { toggleLike, likedTrackIds } = usePlayerStore();
   const { playlists, deletePlaylist } = useSpotifyDataStore();
@@ -83,6 +87,71 @@ export const ContextMenu: React.FC = () => {
       tracks: { total: 0, items: [] },
     } as any;
   }, [contextMenu.isOpen, contextMenu.playlistId, playlists]);
+
+
+  const [showPlaylistSubmenu, setShowPlaylistSubmenu] = useState(false);
+
+  const targetTrack = React.useMemo(() => {
+    if (!contextMenu.trackId) return null;
+    const q = usePlayerStore.getState().queue;
+    let found = q.find((t) => t.id === contextMenu.trackId);
+    if (found) return found;
+    if (usePlayerStore.getState().currentTrack?.id === contextMenu.trackId) {
+      return usePlayerStore.getState().currentTrack;
+    }
+    for (const pl of playlists) {
+      const inPl = pl.tracks?.items?.find((t) => t.id === contextMenu.trackId);
+      if (inPl) return inPl;
+    }
+    return null;
+  }, [contextMenu.trackId, playlists]);
+
+  const userPlaylistsForAdd = React.useMemo(() => {
+    return playlists.filter(
+      (p) =>
+        p.id !== 'liked-songs' &&
+        p.id !== 'tracks' &&
+        !p.id.includes('collection:tracks') &&
+        !p.id.startsWith('art-') &&
+        p.id !== 'nueva-carpeta'
+    );
+  }, [playlists]);
+
+  const isCurrentPlaylistCustom = Boolean(
+    contextMenu.playlistId &&
+    contextMenu.playlistId !== 'liked-songs' &&
+    contextMenu.playlistId !== 'tracks' &&
+    !contextMenu.playlistId.includes('collection:tracks') &&
+    !contextMenu.playlistId.startsWith('art-')
+  );
+
+  const handleAddTrackToSpecificPlaylist = (targetPlId: string) => {
+    if (!targetTrack) return;
+    const pl = playlists.find((p) => p.id === targetPlId);
+    if (pl) {
+      const items = pl.tracks?.items || [];
+      if (!items.some((t) => t.id === targetTrack.id)) {
+        const updated = [...items, { ...targetTrack, added_at: 'Hoy' }];
+        useSpotifyDataStore.getState().updatePlaylist(pl.id, {
+          tracks: { total: updated.length, items: updated },
+        });
+      }
+    }
+    closeContextMenu();
+  };
+
+  const handleRemoveTrackFromCurrentPlaylist = () => {
+    if (contextMenu.playlistId && contextMenu.trackId) {
+      const pl = playlists.find((p) => p.id === contextMenu.playlistId);
+      if (pl && pl.tracks?.items) {
+        const updated = pl.tracks.items.filter((t) => t.id !== contextMenu.trackId);
+        useSpotifyDataStore.getState().updatePlaylist(pl.id, {
+          tracks: { total: updated.length, items: updated },
+        });
+      }
+    }
+    closeContextMenu();
+  };
 
   if (!contextMenu.isOpen) return null;
 
@@ -322,13 +391,15 @@ export const ContextMenu: React.FC = () => {
           </button>
         </div>
       ) : (
-        /* Track Context Menu */
+        /* Track Context Menu (Spotify 1:1 Parity) */
         <div className="space-y-0.5">
+          {/* Añadir a la cola */}
           <button
             onClick={() => {
-              if (contextMenu.trackId) {
-                const currentQueue = usePlayerStore.getState().queue;
-                const tr = currentQueue.find((t) => t.id === contextMenu.trackId);
+              if (targetTrack) {
+                usePlayerStore.getState().addToQueue(targetTrack);
+              } else if (contextMenu.trackId) {
+                const tr = usePlayerStore.getState().queue.find((t) => t.id === contextMenu.trackId);
                 if (tr) usePlayerStore.getState().addToQueue(tr);
               }
               closeContextMenu();
@@ -341,22 +412,10 @@ export const ContextMenu: React.FC = () => {
             <span>Añadir a la cola</span>
           </button>
 
+          {/* Guardar / Eliminar de tus canciones que te gustan */}
           <button
             onClick={() => {
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-              <path d="M8 15A7 7 0 1 0 8 1a7 7 0 0 0 0 14m0 1A8 8 0 1 1 8 0a8 8 0 0 1 0 16" />
-              <path d="M11.5 8a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0" />
-            </svg>
-            <span>Ir a la radio de la canción</span>
-          </button>
-
-          <button
-            onClick={() => {
-              if (contextMenu.trackId) toggleLike(contextMenu.trackId);
+              if (contextMenu.trackId) toggleLike(contextMenu.trackId, targetTrack || undefined);
               closeContextMenu();
             }}
             className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
@@ -367,28 +426,85 @@ export const ContextMenu: React.FC = () => {
             <span>{isLiked ? 'Eliminar de tus canciones que te gustan' : 'Guardar en tus canciones que te gustan'}</span>
           </button>
 
-          <button
-            onClick={() => {
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"
-          >
-            <div className="flex items-center gap-3">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                <path d="M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75" />
+          {/* Añadir a lista de reproducción (con selector interactivo) */}
+          <div className="relative">
+            <button
+              onClick={() => setShowPlaylistSubmenu(!showPlaylistSubmenu)}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"
+            >
+              <div className="flex items-center gap-3 truncate">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                  <path d="M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75" />
+                </svg>
+                <span>Añadir a lista de reproducción</span>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className={`text-[#a7a7a7] transition-transform ${showPlaylistSubmenu ? 'rotate-90' : ''}`}>
+                <path d="M6 3.5 10.5 8 6 12.5" />
               </svg>
-              <span>Añadir a lista de reproducción</span>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7]">
-              <path d="M6 3.5 10.5 8 6 12.5" />
-            </svg>
-          </button>
+            </button>
+
+            {showPlaylistSubmenu && (
+              <div className="mt-1 ml-4 border-l border-white/10 pl-2 space-y-1 max-h-40 overflow-y-auto">
+                {userPlaylistsForAdd.length > 0 ? (
+                  userPlaylistsForAdd.map((pl) => (
+                    <button
+                      key={pl.id}
+                      onClick={() => handleAddTrackToSpecificPlaylist(pl.id)}
+                      className="w-full px-2 py-1.5 rounded hover:bg-[#3e3e3e] text-left text-xs text-[#b3b3b3] hover:text-white truncate flex items-center gap-2"
+                    >
+                      <span>+</span>
+                      <span className="truncate">{pl.name}</span>
+                    </button>
+                  ))
+                ) : (
+                  <p className="text-[11px] text-[#727272] px-2 py-1">No hay listas creadas</p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Eliminar de esta lista (Solo si la lista es creada/modificable por el usuario) */}
+          {isCurrentPlaylistCustom && (
+            <button
+              onClick={handleRemoveTrackFromCurrentPlaylist}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-[#ff5c5c]"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
+              </svg>
+              <span className="font-bold">Eliminar de esta lista</span>
+            </button>
+          )}
+
+          {/* Ver artista */}
+          {targetTrack?.artists?.[0] && (
+            <button
+              onClick={() => {
+                const artistName = targetTrack.artists[0].name;
+                if (onSelectPlaylistById) {
+                  onSelectPlaylistById('art-' + artistName.toLowerCase().replace(/\s+/g, '-'), artistName);
+                } else {
+                  setActiveMainTab('search');
+                }
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M1.5 8a6.5 6.5 0 1 1 11.395 4.277 3.5 3.5 0 0 0-1.163-1.088l-1.523-.88a.285.285 0 0 1-.076-.428l.086-.104v-.001c.549-.654.962-1.449 1.02-2.422.03-.526-.055-1.074-.165-1.395a3.2 3.2 0 0 0-.671-1.154 3.26 3.26 0 0 0-4.806 0 3.2 3.2 0 0 0-.672 1.154c-.109.32-.195.87-.163 1.395.057.973.47 1.768 1.018 2.422l.087.105a.285.285 0 0 1-.076.428l-1.523.88a3.5 3.5 0 0 0-1.163 1.088A6.48 6.48 0 0 1 1.5 8" />
+              </svg>
+              <span>Ver artista ({targetTrack.artists[0].name})</span>
+            </button>
+          )}
 
           <div className="h-px bg-white/10 my-1 mx-1" />
 
+          {/* Compartir */}
           <button
             onClick={() => {
-              navigator.clipboard?.writeText(window.location.href).catch(() => {});
+              const text = targetTrack ? `${targetTrack.name} - ${targetTrack.artists[0]?.name || ''}` : window.location.href;
+              navigator.clipboard?.writeText(text).catch(() => {});
               closeContextMenu();
             }}
             className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"

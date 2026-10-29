@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
 import {
   PlayNativeIcon,
@@ -27,6 +28,7 @@ import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSelectPlaylistById?: (id: string, name?: string, img?: string) => void;
 }
 
 interface LyricWord {
@@ -117,6 +119,7 @@ function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
 export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   isOpen,
   onClose,
+  onSelectPlaylistById,
 }) => {
   const {
     currentTrack,
@@ -146,6 +149,54 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     resolveVibrantColor(currentTrack?.id, currentTrack?.name)
   );
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
+
+  const artistName = currentTrack?.artists?.[0]?.name || '';
+  const [isFollowingArtist, setIsFollowingArtist] = useState(() => {
+    if (typeof window !== 'undefined' && artistName) {
+      try {
+        const raw = window.localStorage.getItem('spotifree_followed_artists');
+        if (raw) return JSON.parse(raw).includes(artistName);
+      } catch {}
+    }
+    return false;
+  });
+
+  useEffect(() => {
+    if (!artistName) return;
+    try {
+      const raw = window.localStorage.getItem('spotifree_followed_artists');
+      if (raw) setIsFollowingArtist(JSON.parse(raw).includes(artistName));
+    } catch {}
+  }, [artistName]);
+
+  const handleToggleFollowArtist = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!artistName) return;
+    const next = !isFollowingArtist;
+    setIsFollowingArtist(next);
+    try {
+      let list: string[] = [];
+      const raw = window.localStorage.getItem('spotifree_followed_artists');
+      if (raw) list = JSON.parse(raw);
+      if (next) {
+        if (!list.includes(artistName)) list.push(artistName);
+        const artPl = {
+          id: `art-${encodeURIComponent(artistName)}`,
+          name: artistName,
+          description: 'Artista oficial',
+          images: artistPicture ? [{ url: artistPicture }] : displayCover ? [{ url: displayCover }] : [],
+          type: 'artist' as const,
+          owner: { display_name: 'Artista', id: 'artist' },
+          tracks: { total: 10, items: [] },
+          is_custom: true,
+        };
+        useSpotifyDataStore.getState().addCustomPlaylist(artPl as any);
+      } else {
+        list = list.filter((a) => a !== artistName);
+      }
+      window.localStorage.setItem('spotifree_followed_artists', JSON.stringify(list));
+    } catch {}
+  };
 
   const [displayCover, setDisplayCover] = useState<string | null>(() => {
     if (!currentTrack) return null;
@@ -271,7 +322,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     : -1;
 
   useEffect(() => {
-    if (isLyricsExpanded && lyricsScrollRef.current && activeLineIndex >= 0) {
+    if (lyricsScrollRef.current && activeLineIndex >= 0) {
       const activeEl = lyricsScrollRef.current.querySelector(`[data-line-index="${activeLineIndex}"]`);
       if (activeEl) {
         activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -288,7 +339,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
+      className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-slide-up-modal"
       style={{
         background: isVideoMode && videoId
           ? '#000'
@@ -547,7 +598,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <div
               ref={lyricsScrollRef}
               className={`space-y-4 font-bold select-none transition-all duration-300 ${
-                isLyricsExpanded ? 'max-h-[500px] overflow-y-auto scroll-smooth pr-2' : 'h-[230px] overflow-hidden'
+                isLyricsExpanded ? 'max-h-[500px] overflow-y-auto scroll-smooth pr-2' : 'max-h-[220px] overflow-y-auto scroll-smooth pr-1 scrollbar-none'
               }`}
             >
               {syncedLines.map((line, idx) => {
@@ -563,7 +614,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     }}
                     className={`transition-all duration-200 leading-snug cursor-pointer block origin-left text-xl font-bold ${
                       isCurrent
-                        ? 'text-white scale-[1.025] drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]'
+                        ? 'text-white scale-[1.03] drop-shadow-[0_2px_14px_rgba(255,255,255,0.65)]'
+                        : Math.abs(idx - activeLineIndex) === 1
+                        ? 'text-white/70 hover:text-white'
                         : 'text-black/50 hover:text-white/80'
                     }`}
                   >
@@ -577,7 +630,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                             className={`transition-colors duration-150 inline ${
                               isWordSung
                                 ? 'text-white'
-                                : 'text-black/45'
+                                : 'text-white/45'
                             }`}
                           >
                             {w.text}{wIdx < line.words.length - 1 ? ' ' : ''}
@@ -642,7 +695,19 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </span>
           </div>
 
-          <div className="flex items-center gap-3.5">
+          <div
+            onClick={() => {
+              if (artistName && onSelectPlaylistById) {
+                onClose();
+                onSelectPlaylistById(
+                  `art-${encodeURIComponent(artistName)}`,
+                  artistName,
+                  artistPicture || coverUrl
+                );
+              }
+            }}
+            className="flex items-center gap-3.5 cursor-pointer active:scale-[0.98] transition-transform"
+          >
             <div className="w-14 h-14 rounded-full overflow-hidden bg-[#242424] shrink-0 shadow">
               {(artistPicture || coverUrl) ? (
                 <img
@@ -665,8 +730,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 Oyentes mensuales verificados
               </span>
             </div>
-            <button className="px-4 py-1.5 rounded-full border border-white/30 text-white font-bold text-xs hover:border-white active:scale-95 transition-all">
-              Seguir
+            <button
+              onClick={handleToggleFollowArtist}
+              className={`px-4 py-1.5 rounded-full font-bold text-xs active:scale-95 transition-all cursor-pointer ${
+                isFollowingArtist
+                  ? 'border border-[#1ed760] text-[#1ed760] bg-[#1ed760]/10'
+                  : 'border border-white/30 text-white hover:border-white'
+              }`}
+            >
+              {isFollowingArtist ? 'Siguiendo' : 'Seguir'}
             </button>
           </div>
         </div>

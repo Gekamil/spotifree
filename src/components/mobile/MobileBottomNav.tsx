@@ -17,7 +17,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       data-testid="bottom-tab-navigation"
-      className="fixed bottom-0 left-0 right-0 h-[56px] flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-[#121212] border-t border-white/[0.08] pointer-events-auto"
+      className="fixed bottom-0 left-0 right-0 h-[56px] flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-black/40 backdrop-blur-xl border-t border-white/[0.08] pointer-events-auto shadow-[0_-4px_20px_rgba(0,0,0,0.5)]"
     >
       {/* 1. Inicio */}
       <button

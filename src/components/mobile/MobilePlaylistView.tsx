@@ -26,6 +26,7 @@ import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
+import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -480,14 +481,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }, [coverUrl]);
 
   // Offline download state
-  const [isDownloaded, setIsDownloaded] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return window.localStorage.getItem(`spotifree_downloaded_${cleanId}`) === 'true';
-    } catch {
-      return false;
-    }
-  });
+  const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(cleanId));
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
   // Automix / Decibel-aware transitions state
@@ -501,42 +495,28 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   });
 
-  const handleToggleDownload = () => {
+  const handleToggleDownload = async () => {
     if (isDownloading) return;
     if (isDownloaded) {
+      await deleteDownloadedPlaylist(cleanId, tracks.map((t) => t.id));
       setIsDownloaded(false);
-      try {
-        window.localStorage.removeItem(`spotifree_downloaded_${cleanId}`);
-        window.localStorage.removeItem(`spotifree_offline_playlist_${cleanId}`);
-        const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
-        if (rawDl) {
-          const list = JSON.parse(rawDl).filter((id: string) => id !== cleanId);
-          window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
-        }
-      } catch {}
       setToastMessage('Descargas eliminadas de este dispositivo');
       setTimeout(() => setToastMessage(null), 2500);
     } else {
       setIsDownloading(true);
       setToastMessage(`Descargando ${tracks.length} canciones para escuchar sin conexión...`);
-      setTimeout(() => {
-        setIsDownloading(false);
+      try {
+        await downloadPlaylist(activePlaylist, tracks, (completed, total) => {
+          setToastMessage(`Descargando canciones (${completed}/${total})...`);
+        });
         setIsDownloaded(true);
-        try {
-          window.localStorage.setItem(`spotifree_downloaded_${cleanId}`, 'true');
-          const offlineData = {
-            ...activePlaylist,
-            tracks: { total: tracks.length, items: tracks },
-          };
-          window.localStorage.setItem(`spotifree_offline_playlist_${cleanId}`, JSON.stringify(offlineData));
-          const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
-          const list = rawDl ? JSON.parse(rawDl) : [];
-          if (!list.includes(cleanId)) list.push(cleanId);
-          window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
-        } catch {}
-        setToastMessage(`¡${tracks.length} canciones descargadas para escuchar sin conexión!`);
-        setTimeout(() => setToastMessage(null), 3000);
-      }, 1000);
+        setToastMessage(`¡${tracks.length} canciones descargadas en «musica-spotifree»!`);
+      } catch {
+        setToastMessage('Error al descargar canciones');
+      } finally {
+        setIsDownloading(false);
+        setTimeout(() => setToastMessage(null), 3500);
+      }
     }
   };
 
@@ -1031,31 +1011,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Right: Like button + duration + options */}
-                  <div className="flex items-center gap-3 shrink-0 text-[#b3b3b3]">
+                  {/* Right: duration + options (matching Spotify Mobile) */}
+                  <div className="flex items-center gap-2.5 shrink-0 text-[#b3b3b3]">
+                    {isLiked && (
+                      <CheckTrackNativeIcon size={16} className="text-[#1ed760] shrink-0" />
+                    )}
+                    <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        toggleLike(track.id, track);
+                        setActiveTrackMenu(track);
                       }}
-                      className={`p-1 transition-colors ${isLiked ? 'text-[#1ed760]' : 'text-white/60 hover:text-white'}`}
-                      title={isLiked ? 'Eliminar de Tus me gusta' : 'Guardar en Tus me gusta'}
-                    >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill={isLiked ? 'currentColor' : 'none'}
-                        stroke="currentColor"
-                        strokeWidth={isLiked ? '0' : '1.5'}
-                      >
-                        <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
-                      </svg>
-                    </button>
-                    <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
-                    <button
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-1 hover:text-white"
+                      className="p-1 text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform"
+                      title="Opciones de la canción"
                     >
                       <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
                         <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />

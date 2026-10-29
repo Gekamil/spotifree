@@ -23,8 +23,10 @@ interface UIState {
   viewMode: 'compacta' | 'lista' | 'cuadricula-compacta' | 'cuadricula';
   searchQuery: string;
   activeMainTab: 'home' | 'search' | 'playlist' | 'settings' | 'guide' | 'profile';
+  theme: 'standard' | 'oled' | 'platinum';
 
   // Actions
+  setTheme: (theme: 'standard' | 'oled' | 'platinum') => void;
   toggleProfile: () => void;
   closeProfile: () => void;
   toggleCreateMenu: () => void;
@@ -62,6 +64,17 @@ const store = create<UIState>((set) => ({
   viewMode: 'lista',
   searchQuery: '',
   activeMainTab: 'home',
+  theme: (typeof window !== 'undefined' ? (window.localStorage.getItem('spotifree_theme') as any) : 'standard') || 'standard',
+
+  setTheme: (theme: 'standard' | 'oled' | 'platinum') => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('spotifree_theme', theme);
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch {}
+    }
+    set({ theme });
+  },
 
   toggleProfile: () => set((s) => ({ isProfileOpen: !s.isProfileOpen, isCreateMenuOpen: false, isSortMenuOpen: false })),
   closeProfile: () => set({ isProfileOpen: false }),
@@ -155,4 +168,8 @@ export const useUIStore =
 
 if (typeof window !== 'undefined') {
   (window as any).__useUIStore = useUIStore;
+  try {
+    const savedTheme = window.localStorage.getItem('spotifree_theme') || 'standard';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+  } catch {}
 }

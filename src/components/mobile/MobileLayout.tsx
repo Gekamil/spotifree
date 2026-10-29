@@ -16,6 +16,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
+import { isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { handleImageError } from '../../utils/imageFallback';
 
 export const MobileLayout: React.FC = () => {
@@ -465,6 +466,7 @@ export const MobileLayout: React.FC = () => {
                 { id: 'playlists', label: 'Playlists' },
                 { id: 'artists', label: 'Artistas' },
                 { id: 'albums', label: 'Álbumes' },
+                { id: 'downloaded', label: 'Descargado' },
               ].map((chip) => {
                 const isSelected = libraryFilter === chip.id;
                 return (
@@ -500,7 +502,7 @@ export const MobileLayout: React.FC = () => {
             ) : (
               <div className="space-y-1.5 pt-2">
                 {/* Liked songs item - only show if libraryFilter is 'all' or 'playlists' */}
-                {libraryFilter !== 'artists' && libraryFilter !== 'albums' && (
+                {libraryFilter !== 'artists' && libraryFilter !== 'albums' && libraryFilter !== 'downloaded' && (
                   <div
                     onClick={() =>
                       handleSelectPlaylistById(
@@ -538,6 +540,7 @@ export const MobileLayout: React.FC = () => {
                     const isArt = checkIsMobileArtist(p);
                     if (libraryFilter === 'artists') return isArt;
                     if (libraryFilter === 'playlists') return !isArt;
+                    if (libraryFilter === 'downloaded') return isPlaylistDownloaded(p.id);
                     return true;
                   })
                   .map((pl) => {
@@ -638,6 +641,7 @@ export const MobileLayout: React.FC = () => {
         <MobileNowPlayingModal
           isOpen={isFullPlayerOpen}
           onClose={() => setIsFullPlayerOpen(false)}
+          onSelectPlaylistById={handleSelectPlaylistById}
         />
       )}
 

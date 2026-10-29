@@ -346,4 +346,11 @@ export const PlusCircleNativeIcon: React.FC<IconProps> = ({ size = 24, className
   </svg>
 );
 
+export const SettingsNativeIcon: React.FC<IconProps> = ({ size = 22, className = 'text-[#b3b3b3]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <path d="M12 1a3 3 0 0 0-3 3v.258a8.98 8.98 0 0 0-2.582 1.503l-.22-.127a3 3 0 0 0-4.106 1.1 3 3 0 0 0 1.1 4.106l.222.128c-.14.86-.214 1.74-.214 2.632 0 .892.074 1.772.214 2.632l-.222.128a3 3 0 0 0-1.1 4.106 3 3 0 0 0 4.106 1.1l.22-.127A8.98 8.98 0 0 0 9 22.742V23a3 3 0 0 0 3 3 3 3 0 0 0 3-3v-.258a8.98 8.98 0 0 0 2.582-1.503l.22.127a3 3 0 0 0 4.106-1.1 3 3 0 0 0-1.1-4.106l-.222-.128c.14-.86.214-1.74.214-2.632 0-.892-.074-1.772-.214-2.632l.222-.128a3 3 0 0 0 1.1-4.106 3 3 0 0 0-4.106-1.1l-.22.127A8.98 8.98 0 0 0 15 4.258V4a3 3 0 0 0-3-3zm0 8a5 5 0 1 1 0 10 5 5 0 0 1 0-10z" />
+  </svg>
+);
+
+
 

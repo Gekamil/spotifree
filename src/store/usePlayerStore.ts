@@ -77,7 +77,8 @@ interface PlayerState {
   togglePlay: () => void;
   nextTrack: () => void;
   getNextTrack: () => Track | null;
-  completeCrossfadeTrack: (track: Track) => void;
+  completeCrossfadeTrack: (track: Track, initialProgressMs?: number) => void;
+  triggerAutoplaySimilar: (track: Track) => Promise<void>;
   previousTrack: () => void;
   setProgress: (ms: number) => void;
   setDuration: (ms: number) => void;
@@ -225,6 +226,11 @@ const store = create<PlayerState>((set, get) => ({
       } else {
         // All tracks in queue have been played once
         if (repeatMode === 'off') {
+          const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
+          if (isAutoplay && currentTrack) {
+            get().triggerAutoplaySimilar(currentTrack);
+            return;
+          }
           set({ isPlaying: false, progressMs: 0 });
           return;
         }
@@ -237,6 +243,11 @@ const store = create<PlayerState>((set, get) => ({
     } else {
       const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
       if (currentIndex === queue.length - 1 && repeatMode === 'off') {
+        const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
+        if (isAutoplay && currentTrack) {
+          get().triggerAutoplaySimilar(currentTrack);
+          return;
+        }
         set({ isPlaying: false, progressMs: 0 });
         return;
       }
@@ -247,6 +258,28 @@ const store = create<PlayerState>((set, get) => ({
     if (nextTrackCandidate) {
       get().playTrack(nextTrackCandidate);
     }
+  },
+
+  triggerAutoplaySimilar: async (track: Track) => {
+    try {
+      const { searchSpotify } = await import('../services/spotifyApi');
+      const query = track.artists?.[0]?.name || track.name;
+      const res = await searchSpotify(query);
+      const existingIds = new Set(get().queue.map((t) => t.id));
+      existingIds.add(track.id);
+      const candidateTracks: Track[] = (res?.tracks?.items || []).filter((t: Track) => !existingIds.has(t.id));
+      if (candidateTracks.length > 0) {
+        const toAdd = candidateTracks.slice(0, 10);
+        set((s) => ({
+          queue: [...s.queue, ...toAdd],
+        }));
+        get().playTrack(toAdd[0]);
+        return;
+      }
+    } catch (err) {
+      console.warn('[Autoplay] Failed to fetch similar tracks:', err);
+    }
+    set({ isPlaying: false, progressMs: 0 });
   },
 
   getNextTrack: (): Track | null => {
@@ -274,7 +307,7 @@ const store = create<PlayerState>((set, get) => ({
     }
   },
 
-  completeCrossfadeTrack: (track: Track) => {
+  completeCrossfadeTrack: (track: Track, initialProgressMs: number = 0) => {
     const state = get();
     const updatedHistory = [track, ...state.history.filter((t) => t.id !== track.id)].slice(0, 50);
     try {
@@ -289,7 +322,7 @@ const store = create<PlayerState>((set, get) => ({
       currentTrack: track,
       currentContextId: track.album?.id || state.currentContextId,
       isPlaying: true,
-      progressMs: 0,
+      progressMs: Math.max(0, initialProgressMs),
       durationMs: track.duration_ms,
       history: updatedHistory,
       playedInShuffle: updatedShuffle,

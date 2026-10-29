@@ -1,10 +1,10 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
-
+import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
 
 interface MobileSettingsViewProps {
   onBack: () => void;
@@ -47,20 +47,25 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   onOpenProfile,
 }) => {
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
-  const { openLoginModal } = useUIStore();
+  const { openLoginModal, theme, setTheme } = useUIStore();
 
-
-  // Audio & Playback Settings (Desktop Parity)
-  const [normalizeAudio, setNormalizeAudio] = useState(true);
-  const [normalizeLevel, setNormalizeLevel] = useState<'quiet' | 'normal' | 'loud'>('normal');
-  const [gaplessAudio, setGaplessAudio] = useState(true);
-  const [streamingQuality, setStreamingQuality] = useState<'baja' | 'normal' | 'alta' | 'muy_alta'>('muy_alta');
-  const [audioEnginePref, setAudioEnginePref] = useState<'hybrid' | 'stream' | 'direct'>(() => {
+  // Playback Settings
+  const [normalizeAudio, setNormalizeAudio] = useState(() => {
     if (typeof window !== 'undefined') {
-      return (window.localStorage.getItem('spotifree_audio_engine') as any) || 'hybrid';
+      return window.localStorage.getItem('spotifree_normalize_volume') !== 'false';
     }
-    return 'hybrid';
+    return true;
   });
+
+  const [normalizeLevel, setNormalizeLevel] = useState<'quiet' | 'normal' | 'loud'>('normal');
+
+  const [gaplessAudio, setGaplessAudio] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_gapless') !== 'false';
+    }
+    return true;
+  });
+
   const [crossfadeSeconds, setCrossfadeSeconds] = useState(() => {
     if (typeof window !== 'undefined') {
       const v = window.localStorage.getItem('spotifree_crossfade_sec');
@@ -68,8 +73,14 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     }
     return 0;
   });
-  const [autoplaySimilar, setAutoplaySimilar] = useState(true);
-  
+
+  const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_autoplay') !== 'false';
+    }
+    return true;
+  });
+
   // Equalizer
   const [eqEnabled, setEqEnabled] = useState(true);
   const [activePreset, setActivePreset] = useState('flat');
@@ -82,12 +93,15 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   });
   const [draggingBandIndex, setDraggingBandIndex] = useState<number | null>(null);
 
-
-
-  
-  // Storage
-  const [cacheSize, setCacheSize] = useState('146.8 MB');
+  // Storage & Cache
+  const [cacheSize, setCacheSize] = useState('Calculando...');
   const [cacheCleared, setCacheCleared] = useState(false);
+
+  useEffect(() => {
+    getStorageUsage().then(({ formatted }) => {
+      setCacheSize(formatted);
+    });
+  }, []);
 
   const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
   let customAvatar: string | undefined;
@@ -103,21 +117,41 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const avatarUrl = customAvatar || user?.images?.[0]?.url;
   const displayName = user?.display_name || 'Usuario';
 
-  const handleClearCache = () => {
-    if (typeof window !== 'undefined') {
-      try {
-        const keysToRemove = Object.keys(window.localStorage).filter(
-          (k) =>
-            k.startsWith('spotifree_vibrant_color_') ||
-            k.startsWith('spotifree_track_cover_') ||
-            k.startsWith('spotifree_yt_cache')
-        );
-        keysToRemove.forEach((k) => window.localStorage.removeItem(k));
-      } catch {}
-    }
-    setCacheSize('0.0 MB');
+  const handleClearCache = async () => {
+    await clearOfflineCache();
+    const { formatted } = await getStorageUsage();
+    setCacheSize(formatted);
     setCacheCleared(true);
     setTimeout(() => setCacheCleared(false), 2500);
+  };
+
+  const handleToggleGapless = () => {
+    const next = !gaplessAudio;
+    setGaplessAudio(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_gapless', String(next));
+      if (!next) {
+        setCrossfadeSeconds(0);
+        window.localStorage.setItem('spotifree_crossfade_sec', '0');
+      }
+    }
+  };
+
+  const handleToggleNormalize = () => {
+    const next = !normalizeAudio;
+    setNormalizeAudio(next);
+    audioEngine.setVolumeNormalization?.(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_normalize_volume', String(next));
+    }
+  };
+
+  const handleToggleAutoplay = () => {
+    const next = !autoplaySimilar;
+    setAutoplaySimilar(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_autoplay', String(next));
+    }
   };
 
   const handlePresetSelect = (presetKey: string) => {
@@ -272,7 +306,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           >
             <p className="font-bold text-white text-sm">Inicia sesión en Spotifree</p>
             <p className="text-xs text-[#b3b3b3]">
-              Vincula tu cuenta de Spotify para acceder a tu música, playlists y recomendaciones.
+              Accede a tus playlists sincronizadas, canciones que te gustan y ajustes guardados en la nube.
             </p>
             <button
               onClick={openLoginModal}
@@ -299,6 +333,64 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </p>
         </div>
 
+        {/* Temas de la Interfaz (Estándar, OLED, Platinum) */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between px-1">
+            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+              Tema de la interfaz
+            </h3>
+            <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
+              {theme === 'standard' ? 'Estándar' : theme === 'oled' ? 'OLED' : 'Platinum'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {[
+              {
+                id: 'standard',
+                title: 'Estándar',
+                desc: 'Dark clásico #121212',
+                color: '#121212',
+                accent: '#1ed760',
+              },
+              {
+                id: 'oled',
+                title: 'OLED',
+                desc: 'Negro puro #000000',
+                color: '#000000',
+                accent: '#ffffff',
+              },
+              {
+                id: 'platinum',
+                title: 'Platinum',
+                desc: 'Cristal Liner translúcido',
+                color: '#1e293b',
+                accent: '#e2e8f0',
+              },
+            ].map((t) => (
+              <button
+                key={t.id}
+                onClick={() => setTheme(t.id as any)}
+                className={`p-3 rounded-2xl border text-left transition-all active:scale-95 cursor-pointer relative overflow-hidden flex flex-col justify-between h-24 ${
+                  theme === t.id
+                    ? 'border-[#1ed760] shadow-[0_0_12px_rgba(30,215,96,0.3)]'
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+                style={{ backgroundColor: t.color }}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <span className="font-bold text-xs text-white">{t.title}</span>
+                  {theme === t.id && (
+                    <div className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
+                  )}
+                </div>
+                <p className="text-[10px] text-[#b3b3b3] leading-tight mt-1">{t.desc}</p>
+                <div className="w-full h-1 rounded-full mt-2" style={{ backgroundColor: t.accent }} />
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Tu Cuenta Spotifree */}
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1 mb-1">
@@ -317,47 +409,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Motor de Audio (Paridad PC) */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Motor de Audio
-          </h3>
-
-          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
-            {[
-              { id: 'hybrid', title: 'Híbrido Inteligente (Recomendado)', desc: 'Máxima resiliencia en redes móviles y Wi-Fi' },
-              { id: 'stream', title: 'WebAudio Hi-Fi', desc: 'Streaming directo HTML5 sin transcodificación' },
-              { id: 'direct', title: 'Reproducción Directa', desc: 'Buffer nativo de bajo consumo de batería' },
-            ].map((engine) => (
-              <div
-                key={engine.id}
-                onClick={() => {
-                  setAudioEnginePref(engine.id as any);
-                  if (typeof window !== 'undefined') {
-                    window.localStorage.setItem('spotifree_audio_engine', engine.id);
-                  }
-                }}
-                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
-                  audioEnginePref === engine.id
-                    ? 'border-[#1ed760] bg-[#1ed760]/10'
-                    : 'border-white/5 bg-[#121212] hover:border-white/20'
-                }`}
-              >
-                <div className="min-w-0 pr-2">
-                  <p className="text-xs font-bold text-white truncate">{engine.title}</p>
-                  <p className="text-[11px] text-[#b3b3b3] mt-0.5">{engine.desc}</p>
-                </div>
-                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${
-                  audioEnginePref === engine.id ? 'border-[#1ed760] bg-[#1ed760]' : 'border-white/40'
-                }`}>
-                  {audioEnginePref === engine.id && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reproducción (Paridad PC) */}
+        {/* Reproducción */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
             Reproducción
@@ -368,10 +420,10 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-white">Normalizar el volumen</p>
-                <p className="text-xs text-[#b3b3b3]">Establece el mismo nivel sonoro para todas las canciones</p>
+                <p className="text-xs text-[#b3b3b3]">Compresión dinámica de picos para nivel sonoro constante</p>
               </div>
               <button
-                onClick={() => setNormalizeAudio(!normalizeAudio)}
+                onClick={handleToggleNormalize}
                 className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
                   normalizeAudio ? 'bg-[#1ed760]' : 'bg-[#535353]'
                 }`}
@@ -411,7 +463,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                 <p className="text-xs text-[#b3b3b3]">Transición continua sin silencios entre pistas</p>
               </div>
               <button
-                onClick={() => setGaplessAudio(!gaplessAudio)}
+                onClick={handleToggleGapless}
                 className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
                   gaplessAudio ? 'bg-[#1ed760]' : 'bg-[#535353]'
                 }`}
@@ -424,33 +476,38 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
               </button>
             </div>
 
-            {/* Crossfade / Fundido entre canciones */}
-            <div className="pt-2 border-t border-white/5 space-y-2">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-bold text-white">Fundido entre canciones</p>
-                <span className="text-xs font-['SpotifyMixUI'] tabular-nums font-bold text-[#1ed760]">
-                  {crossfadeSeconds === 0 ? 'Desactivado' : `${crossfadeSeconds} s`}
-                </span>
+            {/* Crossfade / Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
+            {gaplessAudio && (
+              <div className="pt-2 border-t border-white/5 space-y-2 animate-in fade-in">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-bold text-white">Fundido entre canciones</p>
+                    <p className="text-xs text-[#b3b3b3]">Simultáneo entre pistas de audio</p>
+                  </div>
+                  <span className="text-xs font-['SpotifyMixUI'] tabular-nums font-bold text-[#1ed760]">
+                    {crossfadeSeconds === 0 ? 'Desactivado' : `${crossfadeSeconds} s`}
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="12"
+                  step="1"
+                  value={crossfadeSeconds}
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value, 10);
+                    setCrossfadeSeconds(val);
+                    if (typeof window !== 'undefined') {
+                      window.localStorage.setItem('spotifree_crossfade_sec', String(val));
+                    }
+                  }}
+                  style={{
+                    background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                  }}
+                  className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#1ed760] touch-none"
+                />
               </div>
-              <input
-                type="range"
-                min="0"
-                max="12"
-                step="1"
-                value={crossfadeSeconds}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value, 10);
-                  setCrossfadeSeconds(val);
-                  if (typeof window !== 'undefined') {
-                    window.localStorage.setItem('spotifree_crossfade_sec', String(val));
-                  }
-                }}
-                style={{
-                  background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
-                }}
-                className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#1ed760] touch-none"
-              />
-            </div>
+            )}
 
             {/* Autoplay similar */}
             <div className="flex items-center justify-between pt-2 border-t border-white/5">
@@ -459,7 +516,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                 <p className="text-xs text-[#b3b3b3]">Sigue escuchando temas similares cuando termine la lista</p>
               </div>
               <button
-                onClick={() => setAutoplaySimilar(!autoplaySimilar)}
+                onClick={handleToggleAutoplay}
                 className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
                   autoplaySimilar ? 'bg-[#1ed760]' : 'bg-[#535353]'
                 }`}
@@ -474,39 +531,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Calidad de Streaming (Paridad PC) */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Calidad de Sonido
-          </h3>
-
-          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
-            <p className="text-xs text-[#b3b3b3]">Selecciona la tasa de bits para la reproducción de música</p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { id: 'baja', label: 'Baja', kbps: '24 kbit/s' },
-                { id: 'normal', label: 'Normal', kbps: '96 kbit/s' },
-                { id: 'alta', label: 'Alta', kbps: '160 kbit/s' },
-                { id: 'muy_alta', label: 'Muy alta', kbps: '320 kbit/s' },
-              ].map((q) => (
-                <button
-                  key={q.id}
-                  onClick={() => setStreamingQuality(q.id as any)}
-                  className={`p-2.5 rounded-xl text-left border transition-all ${
-                    streamingQuality === q.id
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
-                      : 'border-white/5 bg-[#121212] text-[#b3b3b3] hover:border-white/20'
-                  }`}
-                >
-                  <span className="block text-xs font-bold">{q.label}</span>
-                  <span className="block text-[10px] text-white/50">{q.kbps}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Ecualizador Gráfico Rediseñado (Paridad PC y Spotify Mobile) */}
+        {/* Ecualizador Gráfico Rediseñado (Voz, Música y Frecuencias) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div>
@@ -535,7 +560,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-4 animate-in fade-in select-none">
               {/* Presets chips + Reset button */}
               <div className="flex items-center justify-between">
-                <p className="text-xs text-[#b3b3b3] font-medium">Preajustes</p>
+                <p className="text-xs text-[#b3b3b3] font-medium">Preajustes de respuesta</p>
                 <button
                   onClick={() => handlePresetSelect('flat')}
                   className="text-[11px] text-[#1ed760] font-bold hover:underline transition-colors cursor-pointer"
@@ -556,6 +581,35 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                     {PRESET_LABELS[k] || k}
                   </button>
                 ))}
+              </div>
+
+              {/* Modificadores Rápidos de Audio: Voz vs Música */}
+              <div className="pt-2 border-t border-white/5 space-y-2">
+                <span className="text-xs font-bold text-white">Modificador de sonido</span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => handlePresetSelect('vocal')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      activePreset === 'vocal'
+                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                        : 'border-white/10 bg-[#121212] text-[#b3b3b3] hover:border-white/20'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold text-white">🎤 Realzar Voz</span>
+                    <span className="block text-[10px] text-[#b3b3b3]">Voces claras y presentes</span>
+                  </button>
+                  <button
+                    onClick={() => handlePresetSelect('rock')}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      activePreset === 'rock'
+                        ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                        : 'border-white/10 bg-[#121212] text-[#b3b3b3] hover:border-white/20'
+                    }`}
+                  >
+                    <span className="block text-xs font-bold text-white">🎵 Realzar Música</span>
+                    <span className="block text-[10px] text-[#b3b3b3]">Instrumental y brillo</span>
+                  </button>
+                </div>
               </div>
 
               {/* Real-time SVG Frequency Curve Card */}
@@ -684,23 +738,23 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
               </div>
 
               <p className="text-[11px] text-[#727272] text-center pt-1 font-medium">
-                Desliza verticalmente sobre cualquier frecuencia para ajustar los decibelios (dB) con precisión.
+                Desliza verticalmente sobre cualquier frecuencia para modular el espectro sonoro en tiempo real.
               </p>
             </div>
           )}
         </div>
 
-        {/* Almacenamiento & Caché */}
+        {/* Almacenamiento & Caché Real */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Almacenamiento
+            Almacenamiento y Caché
           </h3>
 
           <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-bold text-white">Caché de canciones y portadas</p>
-                <p className="text-xs text-[#b3b3b3]">{cacheSize} utilizados localmente</p>
+                <p className="text-xs text-[#b3b3b3]">{cacheSize} ocupados en «musica-spotifree»</p>
               </div>
               <button
                 onClick={handleClearCache}

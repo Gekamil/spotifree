@@ -5,6 +5,7 @@ import {
   PauseNativeIcon,
   ShuffleNativeIcon,
   VerifiedArtistNativeIcon,
+  CheckCircleNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -14,6 +15,7 @@ import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
+import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -83,7 +85,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const { openContextMenu, openEditPlaylistModal } = useUIStore();
   const user = useSpotifyDataStore((s) => s.user);
-  const [isDownloaded, setIsDownloaded] = useState(false);
+  const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
+  const [isDownloading, setIsDownloading] = useState(false);
+  const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+
+
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
@@ -118,6 +124,23 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
+  useEffect(() => {
+    setIsDownloaded(isPlaylistDownloaded(dynamicPlaylist.id));
+  }, [dynamicPlaylist.id]);
+
+  const handleToggleDownload = async () => {
+    if (isDownloaded) {
+      await deleteDownloadedPlaylist(dynamicPlaylist.id);
+      setIsDownloaded(false);
+    } else {
+      setIsDownloading(true);
+      await downloadPlaylist(dynamicPlaylist, dynamicTracks, (cur, tot) => {
+        setDownloadProgress({ current: cur, total: tot });
+      });
+      setIsDownloading(false);
+      setIsDownloaded(true);
+    }
+  };
 
   // Library Saved status (+ / ✓)
   const [isSavedInLibrary, setIsSavedInLibrary] = useState<boolean>(() => {
@@ -755,13 +778,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             </button>
           )}
 
-          {/* Download button (↓) */}
+          {/* Download button (↓) Real Offline */}
           <button
-            onClick={() => setIsDownloaded(!isDownloaded)}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
-              isDownloaded ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+            onClick={handleToggleDownload}
+            disabled={isDownloading}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+              isDownloaded
+                ? 'text-[#1ed760]'
+                : isDownloading
+                ? 'text-[#1ed760] animate-pulse'
+                : 'text-[#b3b3b3] hover:text-white'
             }`}
-            title={isDownloaded ? "Descargada" : "Descargar"}
+            title={
+              isDownloading
+                ? `Descargando (${downloadProgress.current}/${downloadProgress.total})...`
+                : isDownloaded
+                ? "Descargada sin conexión en «musica-spotifree»"
+                : "Descargar playlist completa para escuchar sin conexión"
+            }
           >
             <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12" />
@@ -985,34 +1019,50 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     {track.added_at || 'Reciente'}
                   </div>
 
-                  {/* Duration + Like Heart */}
+                  {/* Duration, Spotify Checkmark/Plus, and 3-Dots Menu */}
                   <div className="flex items-center justify-end gap-3 text-xs text-[#b3b3b3] pr-4">
+                    {/* Like status: Spotify Green Checkmark if liked, + in circle on hover if not liked */}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         toggleLike(track.id, track);
                       }}
-                      className={`transition-colors ${
+                      className={`transition-all ${
                         isLiked
                           ? 'text-[#1ed760] opacity-100'
                           : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
                       }`}
-                      title={isLiked ? "Eliminar de Tus me gusta" : "Guardar en Tus me gusta"}
+                      title={isLiked ? "Eliminar de Canciones que te gustan" : "Añadir a Canciones que te gustan"}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill={isLiked ? "currentColor" : "none"}
-                        stroke="currentColor"
-                        strokeWidth={isLiked ? "0" : "1.5"}
-                      >
-                        <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
-                      </svg>
+                      {isLiked ? (
+                        <CheckCircleNativeIcon size={16} className="text-[#1ed760]" />
+                      ) : (
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                          <path d="M12 7.25H8.75V4h-1.5v3.25H4v1.5h3.25V12h1.5V8.75H12z" />
+                        </svg>
+                      )}
                     </button>
+
                     <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
                       {formatDuration(track.duration_ms)}
                     </span>
+
+                    {/* 3-dots button on hover */}
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
+                      }}
+                      className={`p-1 text-[#b3b3b3] hover:text-white transition-opacity ${
+                        isHovered ? 'opacity-100' : 'opacity-0'
+                      }`}
+                      title="Más opciones de la canción"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM16 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                      </svg>
+                    </button>
                   </div>
                 </div>
               );
