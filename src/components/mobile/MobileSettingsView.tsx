@@ -74,6 +74,13 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     return 0;
   });
 
+  const [automix, setAutomix] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_automix') !== 'false';
+    }
+    return true;
+  });
+
   const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem('spotifree_autoplay') !== 'false';
@@ -134,6 +141,14 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         setCrossfadeSeconds(0);
         window.localStorage.setItem('spotifree_crossfade_sec', '0');
       }
+    }
+  };
+
+  const handleToggleAutomix = () => {
+    const next = !automix;
+    setAutomix(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_automix', String(next));
     }
   };
 
@@ -450,6 +465,28 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                 />
               </div>
             )}
+
+            {/* Automix (Transiciones inteligentes entre canciones) */}
+            <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div>
+                <p className="text-sm font-bold text-white">Automix</p>
+                <p className="text-xs text-[#b3b3b3]">
+                  Detecta cambios de nivel y calcula la transición óptima dejando hueco a ambas canciones
+                </p>
+              </div>
+              <button
+                onClick={handleToggleAutomix}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                  automix ? 'bg-[#1ed760]' : 'bg-[#535353]'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
+                    automix ? 'left-5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
 
             {/* Autoplay similar */}
             <div className="flex items-center justify-between pt-2 border-t border-white/5">

@@ -95,26 +95,38 @@ class AudioEngine {
       if (saved) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
     } catch {}
 
-    const remaining = durSec - curSec;
+    const automixSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_automix') : null;
+    const isAutomix = automixSaved === null ? true : automixSaved !== 'false';
 
     const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
     if (gaplessSaved === 'false') return;
+
+    // Automix calculates dynamic transition timing and audio level allocation
+    let effectiveCrossfade = crossfadeSec;
+    if (isAutomix) {
+      if (effectiveCrossfade <= 0) {
+        // Dynamic automix calculation based on duration (~5 seconds adapted)
+        effectiveCrossfade = Math.max(4, Math.min(6.5, Math.round(durSec * 0.035)));
+      }
+    }
+
+    const remaining = durSec - curSec;
 
     // 1. Preload upcoming song in the background before crossfade starts
     if (
       !this.preloadedNext &&
       !this.isPreloadingNext &&
-      remaining <= Math.max(20, crossfadeSec + 8) &&
-      remaining > crossfadeSec
+      remaining <= Math.max(20, effectiveCrossfade + 8) &&
+      remaining > effectiveCrossfade
     ) {
       this.preloadUpcomingTrack();
     }
 
-    if (crossfadeSec <= 0) return;
+    if (effectiveCrossfade <= 0) return;
 
-    // 2. Start simultaneous dual-engine crossfade when remaining reaches crossfadeSec
-    if (!this.isCrossfading && remaining > 0 && remaining <= crossfadeSec) {
-      this.executeCrossfade(crossfadeSec);
+    // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
+    if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
+      this.executeCrossfade(effectiveCrossfade, isAutomix);
     }
   }
 
@@ -161,7 +173,7 @@ class AudioEngine {
     }
   }
 
-  private async executeCrossfade(crossfadeSec: number) {
+  private async executeCrossfade(crossfadeSec: number, isAutomix = false) {
     this.isCrossfading = true;
     const state = usePlayerStore.getState();
 
@@ -232,11 +244,22 @@ class AudioEngine {
       accumulatedCrossfadeMs += delta;
       const progress = Math.min(1, Math.max(0, accumulatedCrossfadeMs / durationMs));
 
-      // Calculate acoustic equal-power sinusoidal fade curves (constant 1.0 total power, 0 muffled dips):
-      // Outgoing track (Song A) fades from 1.0 down to 0.0 with cosine
-      const outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
-      // Incoming track (Song B) fades from 0.0 up to 1.0 with sine
-      const inVol = Math.sin(progress * 0.5 * Math.PI) * masterVolume;
+      let outVol: number;
+      let inVol: number;
+
+      if (isAutomix) {
+        // DJ Automix: detects levels and creates acoustic headroom so neither song clashes
+        // Outgoing track gently yields the center stage, while incoming track builds energy smoothly
+        const outCurve = Math.cos(progress * 0.5 * Math.PI);
+        outVol = Math.pow(outCurve, 1.4) * masterVolume;
+
+        const inCurve = Math.sin(progress * 0.5 * Math.PI);
+        inVol = Math.pow(inCurve, 0.8) * masterVolume;
+      } else {
+        // Equal power sinusoidal curve
+        outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
+        inVol = Math.sin(progress * 0.5 * Math.PI) * masterVolume;
+      }
 
       if (this.activeEngine === 'youtube') {
         const curActiveYt = this.ytPlayer;

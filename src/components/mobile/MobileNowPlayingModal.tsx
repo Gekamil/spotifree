@@ -17,6 +17,7 @@ import {
   VideoSwitchNativeIcon,
   AudioSwitchNativeIcon,
   ShareNativeIcon,
+  CarNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -142,6 +143,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isCarMode, setIsCarMode] = useState(false);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(true);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
@@ -412,7 +415,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         </div>
 
         <button
-          className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white active:scale-90"
+          onClick={() => setIsMenuOpen(true)}
+          className="w-10 h-10 flex items-center justify-center text-white/80 hover:text-white active:scale-90 cursor-pointer"
           title="Más opciones"
         >
           <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
@@ -859,6 +863,284 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Track More Options Menu / Bottom Sheet ("Más opciones") */}
+      {isMenuOpen && (
+        <div className="fixed inset-0 z-[120] flex flex-col justify-end">
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsMenuOpen(false)}
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm animate-fade-in"
+          />
+
+          {/* Bottom Sheet */}
+          <div className="relative z-10 bg-[#242424] rounded-t-[32px] p-6 space-y-5 animate-slide-up-modal max-h-[85vh] overflow-y-auto border-t border-white/10 shadow-2xl">
+            {/* Header info */}
+            <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
+              <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#181818] shrink-0 shadow">
+                {displayCover ? (
+                  <img src={displayCover} alt={currentTrack.name} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white/40">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-white text-base truncate font-['SpotifyMixUITitle']">
+                  {currentTrack.name}
+                </p>
+                <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                  {artistName}
+                </p>
+              </div>
+            </div>
+
+            {/* Actions list */}
+            <div className="space-y-1">
+              {/* Option 1: MODO COCHE */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setIsCarMode(true);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer group"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-[#1ed760] group-hover:bg-[#1ed760] group-hover:text-black transition-colors shrink-0">
+                  <CarNativeIcon size={22} className="currentColor" />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Modo coche</p>
+                  <p className="text-xs text-[#b3b3b3]">Vista simplificada para una conducción segura</p>
+                </div>
+              </button>
+
+              {/* Option 2: Añadir / Quitar Canciones que te gustan */}
+              <button
+                onClick={() => {
+                  toggleLike(currentTrack.id);
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  {isLiked ? (
+                    <CheckTrackNativeIcon size={24} className="text-[#1ed760]" />
+                  ) : (
+                    <AddTrackNativeIcon size={24} className="text-white" />
+                  )}
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">
+                    {isLiked ? 'Eliminar de Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Option 3: Ir al artista */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (artistName && onSelectPlaylistById) {
+                    onClose();
+                    onSelectPlaylistById(
+                      `art-${encodeURIComponent(artistName)}`,
+                      artistName,
+                      artistPicture || displayCover || undefined
+                    );
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Ir al artista</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">{artistName}</p>
+                </div>
+              </button>
+
+              {/* Option 4: Compartir */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (navigator.share) {
+                    navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(window.location.href).catch(() => {});
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <ShareNativeIcon size={20} className="text-white" />
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Compartir</p>
+                </div>
+              </button>
+            </div>
+
+            {/* Close button */}
+            <button
+              onClick={() => setIsMenuOpen(false)}
+              className="w-full py-3.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-sm transition-all cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* SECTION: Authentic Spotify Mobile Car View (Modo Coche) */}
+      {isCarMode && (
+        <div className="fixed inset-0 z-[115] bg-[#0d0d0d] flex flex-col justify-between p-6 select-none animate-fade-in font-['SpotifyMixUI']">
+          {/* Top Bar: Exit button & Car indicator */}
+          <div className="flex items-center justify-between text-white pt-2">
+            <button
+              onClick={() => setIsCarMode(false)}
+              className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold transition-all border border-white/10 shadow cursor-pointer"
+            >
+              <CarNativeIcon size={18} className="text-[#1ed760]" />
+              <span>Salir del modo coche</span>
+            </button>
+
+            <div className="flex flex-col items-center">
+              <span className="text-[10px] font-black uppercase text-[#1ed760] tracking-widest flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+                MODO COCHE
+              </span>
+              <span className="text-xs font-bold text-white/70 truncate max-w-[150px]">
+                {currentTrack.album?.name || 'Spotify'}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsCarMode(false)}
+              className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/80 active:scale-90 cursor-pointer"
+              title="Cerrar modo coche"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+
+          {/* Center: Big Artwork & Giant Title & Artist */}
+          <div className="flex flex-col items-center my-auto py-4 space-y-5">
+            <div className="w-52 h-52 sm:w-64 sm:h-64 rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] bg-[#181818] border border-white/10 shrink-0">
+              {displayCover ? (
+                <img
+                  src={displayCover}
+                  alt={currentTrack.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            <div className="text-center px-4 max-w-sm w-full">
+              <h1 className="text-3xl font-black text-white truncate font-['SpotifyMixUITitle'] leading-tight">
+                {currentTrack.name}
+              </h1>
+              <p className="text-lg text-[#b3b3b3] truncate mt-1 font-semibold">
+                {artistName}
+              </p>
+            </div>
+          </div>
+
+          {/* Bottom Area: Large Scrub bar & Massive Touch-Friendly Controls */}
+          <div className="space-y-6 pb-4">
+            {/* Scrub Bar */}
+            <div className="space-y-2 touch-none px-2">
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="0.1"
+                value={percent}
+                onChange={handleSeek}
+                style={{
+                  background: `linear-gradient(to right, #1ed760 ${percent}%, rgba(255, 255, 255, 0.2) ${percent}%)`,
+                }}
+                className="w-full h-2 rounded-lg appearance-none cursor-pointer accent-[#1ed760] transition-all"
+              />
+              <div className="flex justify-between font-['SpotifyMixUI'] tabular-nums text-xs font-bold text-[#b3b3b3]">
+                <span>{formatDuration(progressMs)}</span>
+                <span>{formatDuration(durationMs)}</span>
+              </div>
+            </div>
+
+            {/* Massive Touch Controls */}
+            <div className="flex items-center justify-between px-2">
+              {/* Shuffle button */}
+              <button
+                onClick={toggleShuffle}
+                className={`w-14 h-14 rounded-full flex flex-col items-center justify-center transition-colors active:scale-90 bg-white/5 cursor-pointer ${
+                  shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-white/70'
+                }`}
+              >
+                {shuffleMode === 'smart' ? (
+                  <SmartShuffleNativeIcon size={26} className="text-[#1ed760]" />
+                ) : (
+                  <ShuffleNativeIcon size={26} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'currentColor'} />
+                )}
+              </button>
+
+              {/* Prev button */}
+              <button
+                onClick={previousTrack}
+                className="w-18 h-18 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
+              >
+                <PrevNativeIcon size={36} />
+              </button>
+
+              {/* Huge Play/Pause button */}
+              <button
+                onClick={togglePlay}
+                className="w-24 h-24 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 shadow-[0_10px_35px_rgba(255,255,255,0.3)] transition-transform cursor-pointer"
+              >
+                {isPlaying ? (
+                  <PauseNativeIcon size={44} className="text-black" />
+                ) : (
+                  <PlayNativeIcon size={44} className="text-black ml-1.5" />
+                )}
+              </button>
+
+              {/* Next button */}
+              <button
+                onClick={nextTrack}
+                className="w-18 h-18 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white active:scale-95 transition-transform cursor-pointer"
+              >
+                <NextNativeIcon size={36} />
+              </button>
+
+              {/* Like button */}
+              <button
+                onClick={() => toggleLike(currentTrack.id)}
+                className="w-14 h-14 rounded-full flex items-center justify-center transition-transform active:scale-90 bg-white/5 cursor-pointer"
+              >
+                {isLiked ? (
+                  <CheckTrackNativeIcon size={32} className="text-[#1ed760]" />
+                ) : (
+                  <AddTrackNativeIcon size={32} className="text-white/80" />
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

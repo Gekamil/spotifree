@@ -263,6 +263,20 @@ export const DesktopSettingsView: React.FC = () => {
     return 0;
   });
 
+  const [automix, setAutomix] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_automix') !== 'false';
+    }
+    return true;
+  });
+
+  const handleToggleAutomix = (val: boolean) => {
+    setAutomix(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_automix', String(val));
+    }
+  };
+
   const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem('spotifree_autoplay') !== 'false';
@@ -899,6 +913,21 @@ export const DesktopSettingsView: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Automix */}
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Automix</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    Detecta cambios de nivel y calcula la transición óptima dejando hueco a ambas canciones.
+                  </div>
+                </div>
+                <SpotifyToggle
+                  checked={automix}
+                  onChange={handleToggleAutomix}
+                  ariaLabel="Automix"
+                />
+              </div>
 
               {/* Reproducción automática */}
               <div className="flex items-center justify-between py-3 border-b border-white/5">
