@@ -64,6 +64,40 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
+export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
+  let seenLiked = false;
+  const result: Playlist[] = [];
+  const seenIds = new Set<string>();
+
+  for (const pl of list) {
+    if (!pl || !pl.id) continue;
+    const isLiked =
+      pl.id === 'liked-songs' ||
+      pl.id.includes('collection:tracks') ||
+      pl.id.includes('collection-tracks') ||
+      pl.name?.toLowerCase().trim() === 'canciones que te gustan' ||
+      pl.name?.toLowerCase().trim() === 'liked songs';
+
+    if (isLiked) {
+      if (seenLiked) continue;
+      seenLiked = true;
+      result.push({
+        ...pl,
+        id: 'liked-songs',
+        name: 'Canciones que te gustan',
+        images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      });
+      seenIds.add('liked-songs');
+      continue;
+    }
+
+    if (seenIds.has(pl.id)) continue;
+    seenIds.add(pl.id);
+    result.push(pl);
+  }
+  return result;
+}
+
 export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
   const result: DynamicShelf[] = [];
   const feed = liveExtractedFeed as any[];
@@ -306,8 +340,22 @@ const store = create<SpotifyDataState>((set, get) => ({
       is_custom: true,
     } as any;
 
+    const updated = deduplicateUserPlaylists([newPlaylist, ...s.playlists]);
+
+    if (typeof window !== 'undefined') {
+      try {
+        const rawImported = window.localStorage.getItem('user_imported_playlists');
+        const list = rawImported ? JSON.parse(rawImported) : [];
+        window.localStorage.setItem('user_imported_playlists', JSON.stringify([newPlaylist, ...list]));
+
+        import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+          syncSpotifreeAccount({ playlists: updated }).catch(() => {});
+        });
+      } catch {}
+    }
+
     set((state) => ({
-      playlists: [newPlaylist, ...state.playlists],
+      playlists: updated,
       playlistDetailsCache: {
         ...state.playlistDetailsCache,
         [newPlaylist.id]: newPlaylist,
@@ -324,8 +372,33 @@ const store = create<SpotifyDataState>((set, get) => ({
         ? { ...existingInCache, ...updates }
         : undefined;
 
+      const updatedPlaylists = s.playlists.map((p) => (p.id === id ? { ...p, ...updates } : p));
+
+      if (typeof window !== 'undefined') {
+        try {
+          const rawImported = window.localStorage.getItem('user_imported_playlists');
+          if (rawImported) {
+            const list = JSON.parse(rawImported);
+            const nextList = list.map((p: any) => p.id === id ? { ...p, ...updates } : p);
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(nextList));
+          }
+          const userId = window.localStorage.getItem('spotifree_active_user_id') || 'active';
+          if (updatedCacheEntry) {
+            const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
+            const cacheObj = rawCache ? JSON.parse(rawCache) : {};
+            cacheObj[id] = updatedCacheEntry;
+            window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
+            window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+          }
+
+          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+            syncSpotifreeAccount({ playlists: updatedPlaylists }).catch(() => {});
+          });
+        } catch {}
+      }
+
       return {
-        playlists: s.playlists.map((p) => (p.id === id ? { ...p, ...updates } : p)),
+        playlists: updatedPlaylists,
         playlistDetailsCache: updatedCacheEntry
           ? { ...s.playlistDetailsCache, [id]: updatedCacheEntry }
           : s.playlistDetailsCache,
@@ -348,10 +421,65 @@ const store = create<SpotifyDataState>((set, get) => ({
 
   deletePlaylist: (id: string) => {
     set((s) => {
+      const remainingPlaylists = s.playlists.filter((p) => p.id !== id);
       const newCache = { ...s.playlistDetailsCache };
       delete newCache[id];
+
+      if (typeof window !== 'undefined') {
+        try {
+          // 1. Remove from user_imported_playlists
+          const rawImported = window.localStorage.getItem('user_imported_playlists');
+          if (rawImported) {
+            const list = JSON.parse(rawImported);
+            const updated = list.filter((p: any) => p.id !== id);
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(updated));
+          }
+          // 2. Remove from spotifree_saved_library_playlists
+          const rawSaved = window.localStorage.getItem('spotifree_saved_library_playlists');
+          if (rawSaved) {
+            const list = JSON.parse(rawSaved);
+            const updated = list.filter((pId: string) => pId !== id);
+            window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(updated));
+          }
+          // 3. Remove from user caches and sessions
+          const userId = window.localStorage.getItem('spotifree_active_user_id') || 'active';
+          window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(newCache));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(newCache));
+
+          const rawAccountSession = window.localStorage.getItem(`spotifree_account_session_${userId}`);
+          if (rawAccountSession) {
+            const parsed = JSON.parse(rawAccountSession);
+            parsed.playlists = remainingPlaylists;
+            window.localStorage.setItem(`spotifree_account_session_${userId}`, JSON.stringify(parsed));
+          }
+
+          const rawExtracted = window.localStorage.getItem('spotify_extracted_session');
+          if (rawExtracted) {
+            const parsed = JSON.parse(rawExtracted);
+            parsed.playlists = remainingPlaylists;
+            window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
+          }
+
+          // 4. Remove offline download files
+          window.localStorage.removeItem(`spotifree_downloaded_${id}`);
+          window.localStorage.removeItem(`spotifree_offline_playlist_${id}`);
+          const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
+          if (rawDl) {
+            const list = JSON.parse(rawDl).filter((x: string) => x !== id);
+            window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
+          }
+
+          // 5. Cloud sync to Spotifree account if logged in
+          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+            syncSpotifreeAccount({ playlists: remainingPlaylists }).catch(() => {});
+          });
+        } catch (e) {
+          console.error('Error deleting playlist from storage:', e);
+        }
+      }
+
       return {
-        playlists: s.playlists.filter((p) => p.id !== id),
+        playlists: remainingPlaylists,
         playlistDetailsCache: newCache,
         dynamicShelves: s.dynamicShelves.map((shelf) => ({
           ...shelf,

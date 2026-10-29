@@ -21,7 +21,7 @@ import { handleImageError } from '../../utils/imageFallback';
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);

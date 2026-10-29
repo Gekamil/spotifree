@@ -433,7 +433,12 @@ export function registerMediaSessionHandlers() {
       if (engine && typeof engine.seek === 'function') engine.seek(targetSec);
     });
 
-    // Register shuffle action if supported by the browser / platform
+    // Register shuffle action (W3C standard is 'toggleshuffle', also provide fallback)
+    try {
+      (navigator.mediaSession as any).setActionHandler('toggleshuffle', () => {
+        usePlayerStore.getState().toggleShuffle();
+      });
+    } catch {}
     try {
       (navigator.mediaSession as any).setActionHandler('shuffle', () => {
         usePlayerStore.getState().toggleShuffle();

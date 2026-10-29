@@ -17,6 +17,10 @@ import {
   DownloadCircleNativeIcon,
   DownloadActiveCircleNativeIcon,
   AutomixNativeIcon,
+  EditNativeIcon,
+  TrashNativeIcon,
+  PlusCircleNativeIcon,
+  QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -74,7 +78,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     shuffleMode,
     toggleShuffle,
   } = usePlayerStore();
-  const { user } = useSpotifyDataStore();
+  const isTrackLiked = (id: string) => Array.isArray(likedTrackIds) ? likedTrackIds.includes(id) : Boolean((likedTrackIds as any)?.has?.(id));
+  const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
+
+  const [activePlaylist, setActivePlaylist] = useState<Playlist>(playlist);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editName, setEditName] = useState(playlist.name || '');
+  const [editDesc, setEditDesc] = useState(playlist.description || '');
+  const [editCover, setEditCover] = useState(playlist.images?.[0]?.url || '');
+  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
+  const [activeTrackMenu, setActiveTrackMenu] = useState<Track | null>(null);
+  const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
 
   const isLikedPlaylist =
     playlist.id === 'liked-songs' ||
@@ -82,7 +96,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     playlist.id.includes('collection:tracks') ||
     playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
 
-  const cleanId = (playlist.id || '')
+  useEffect(() => {
+    setActivePlaylist(playlist);
+    setEditName(playlist.name || '');
+    setEditDesc(playlist.description || '');
+    setEditCover(playlist.images?.[0]?.url || '');
+  }, [playlist]);
+
+  const cleanId = (activePlaylist.id || playlist.id || '')
     .replace(/^spotify:(playlist|album):/, '')
     .split('?')[0];
 
@@ -486,6 +507,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       setIsDownloaded(false);
       try {
         window.localStorage.removeItem(`spotifree_downloaded_${cleanId}`);
+        window.localStorage.removeItem(`spotifree_offline_playlist_${cleanId}`);
+        const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
+        if (rawDl) {
+          const list = JSON.parse(rawDl).filter((id: string) => id !== cleanId);
+          window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
+        }
       } catch {}
       setToastMessage('Descargas eliminadas de este dispositivo');
       setTimeout(() => setToastMessage(null), 2500);
@@ -497,11 +524,55 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         setIsDownloaded(true);
         try {
           window.localStorage.setItem(`spotifree_downloaded_${cleanId}`, 'true');
+          const offlineData = {
+            ...activePlaylist,
+            tracks: { total: tracks.length, items: tracks },
+          };
+          window.localStorage.setItem(`spotifree_offline_playlist_${cleanId}`, JSON.stringify(offlineData));
+          const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
+          const list = rawDl ? JSON.parse(rawDl) : [];
+          if (!list.includes(cleanId)) list.push(cleanId);
+          window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
         } catch {}
         setToastMessage(`¡${tracks.length} canciones descargadas para escuchar sin conexión!`);
         setTimeout(() => setToastMessage(null), 3000);
-      }, 1500);
+      }, 1000);
     }
+  };
+
+  const handleSavePlaylistEdit = () => {
+    const trimmedName = editName.trim() || activePlaylist.name;
+    const trimmedDesc = editDesc.trim();
+    const updatedImages = editCover.trim() ? [{ url: editCover.trim() }] : activePlaylist.images;
+    
+    const updated: Partial<Playlist> = {
+      name: trimmedName,
+      description: trimmedDesc,
+      images: updatedImages,
+    };
+
+    updatePlaylist(activePlaylist.id, updated);
+    setActivePlaylist((prev) => ({ ...prev, ...updated }));
+    setIsEditModalOpen(false);
+    setToastMessage('Playlist actualizada con éxito');
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  const handleRemoveTrackFromPlaylist = (trackId: string) => {
+    const nextTracks = tracks.filter((t) => t.id !== trackId);
+    setTracks(nextTracks);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(nextTracks));
+        const updatedPlaylist: Playlist = {
+          ...activePlaylist,
+          tracks: { total: nextTracks.length, items: nextTracks },
+        };
+        updatePlaylist(activePlaylist.id, updatedPlaylist);
+      } catch {}
+    }
+    setToastMessage('Canción eliminada de la playlist');
+    setTimeout(() => setToastMessage(null), 2500);
   };
 
   const handleToggleAutomix = () => {
@@ -685,7 +756,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
       {/* Action Row matching Spotify Mobile */}
       <div className="px-6 py-2 flex items-center justify-between">
-        {/* Left side: 1) Add/Check library, 2) Download, 3) Share, 4) Automix decibel transitions */}
+        {/* Left side: 1) Add/Check library, 2) Download, 3) Share */}
         <div className="flex items-center gap-5">
           {/* 1. Add / Check to Library */}
           {isArtist ? (
@@ -734,12 +805,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           >
             <ShareNativeIcon size={22} className="text-white/80 hover:text-white" />
           </button>
+        </div>
 
-          {/* 4. Automix / decibel transition toggle */}
+        {/* Right side: 4) DJ Automix bars, 5) Shuffle button, 6) Large Green Play */}
+        <div className="flex items-center gap-3">
+          {/* 4. Automix / decibel transition toggle (DJ bars with circles) placed next to shuffle */}
           <button
             onClick={handleToggleAutomix}
-            className={`hover:scale-105 active:scale-90 transition-transform cursor-pointer ${
-              isAutomixActive ? 'text-[#1ed760]' : 'text-white/80 hover:text-white'
+            className={`p-1.5 hover:scale-105 active:scale-90 transition-transform cursor-pointer ${
+              isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
             }`}
             title={
               isAutomixActive
@@ -749,13 +823,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           >
             <AutomixNativeIcon
               size={22}
-              className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/80 hover:text-white'}
+              className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'}
             />
           </button>
-        </div>
 
-        {/* Right side: 5) Shuffle button, 6) Large Green Play */}
-        <div className="flex items-center gap-4">
           {/* 5. Shuffle button (dos flechitas) */}
           <button
             onClick={toggleShuffle}
@@ -1119,6 +1190,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 </span>
               </button>
 
+              {/* Option: Editar playlist */}
+              {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
+                <button
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    setIsEditModalOpen(true);
+                  }}
+                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
+                >
+                  <EditNativeIcon size={20} className="text-white" />
+                  <span className="font-bold text-white text-sm">Editar detalles de la playlist</span>
+                </button>
+              )}
+
               {/* Option: Copiar enlace */}
               <button
                 onClick={async () => {
@@ -1134,29 +1219,48 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 }}
                 className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
               >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white">
-                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
-                </svg>
+                <ShareNativeIcon size={20} className="text-white" />
                 <span className="font-bold text-white text-sm">Copiar enlace</span>
               </button>
 
-              {/* Option: Eliminar playlist (visible para playlists del usuario o añadidas) */}
+              {/* Option: Eliminar playlist (sin window.confirm modal) */}
               {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
-                <button
-                  onClick={() => {
-                    setIsOptionsOpen(false);
-                    if (window.confirm(`¿Seguro que deseas eliminar «${playlist.name}» de tu biblioteca?`)) {
-                      useSpotifyDataStore.getState().deletePlaylist(playlist.id);
-                      onBack();
-                    }
-                  }}
-                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors text-left cursor-pointer"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
-                  </svg>
-                  <span className="font-bold text-sm">Eliminar playlist</span>
-                </button>
+                <div>
+                  {!isConfirmDeleteOpen ? (
+                    <button
+                      onClick={() => setIsConfirmDeleteOpen(true)}
+                      className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors text-left cursor-pointer"
+                    >
+                      <TrashNativeIcon size={20} />
+                      <span className="font-bold text-sm">Eliminar playlist</span>
+                    </button>
+                  ) : (
+                    <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-2 mt-1">
+                      <p className="text-xs text-white/90 font-medium">
+                        ¿Seguro que deseas eliminar «{activePlaylist.name}» de tu biblioteca?
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setIsConfirmDeleteOpen(false);
+                            setIsOptionsOpen(false);
+                            deletePlaylist(activePlaylist.id);
+                            onBack();
+                          }}
+                          className="flex-1 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                        >
+                          Eliminar
+                        </button>
+                        <button
+                          onClick={() => setIsConfirmDeleteOpen(false)}
+                          className="flex-1 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -1166,6 +1270,248 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             >
               Cerrar
             </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Track 3-Dots Action Sheet */}
+      {activeTrackMenu && createPortal(
+        <div
+          className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex flex-col justify-end animate-fadeIn select-none"
+          onClick={() => setActiveTrackMenu(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#242424] rounded-t-3xl max-h-[85vh] overflow-y-auto p-5 pb-8 space-y-4 shadow-2xl border-t border-white/10"
+          >
+            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2" />
+
+            {/* Track Info Header */}
+            <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
+              <img
+                src={getTrackCoverUrl(activeTrackMenu)}
+                alt={activeTrackMenu.name}
+                onError={handleImageError}
+                className="w-12 h-12 rounded-[4px] object-cover shadow bg-[#181818] shrink-0"
+              />
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-white text-base truncate">{activeTrackMenu.name}</p>
+                <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                  {activeTrackMenu.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                </p>
+              </div>
+            </div>
+
+            {/* Track Actions */}
+            <div className="space-y-1">
+              <button
+                onClick={() => {
+                  toggleLike(activeTrackMenu.id, activeTrackMenu);
+                  setActiveTrackMenu(null);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
+              >
+                {isTrackLiked(activeTrackMenu.id) ? (
+                  <CheckTrackNativeIcon size={22} className="text-[#1ed760] shrink-0" />
+                ) : (
+                  <AddTrackNativeIcon size={22} className="text-white/80 shrink-0" />
+                )}
+                <span className="font-bold text-sm">
+                  {isTrackLiked(activeTrackMenu.id)
+                    ? 'Eliminar de Canciones que te gustan'
+                    : 'Añadir a Canciones que te gustan'}
+                </span>
+              </button>
+
+              <button
+                onClick={() => {
+                  usePlayerStore.getState().addToQueue(activeTrackMenu);
+                  setActiveTrackMenu(null);
+                  setToastMessage('Añadido a la cola');
+                  setTimeout(() => setToastMessage(null), 2500);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
+              >
+                <QueueNativeIcon size={22} className="text-white/80 shrink-0" />
+                <span className="font-bold text-sm">Añadir a la cola</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setIsAddToPlaylistModalOpen(true);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
+              >
+                <PlusCircleNativeIcon size={22} className="text-white/80 shrink-0" />
+                <span className="font-bold text-sm">Añadir a otra playlist</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTrackMenu(null);
+                  if (navigator.share) {
+                    navigator.share({
+                      title: activeTrackMenu.name,
+                      text: `Escucha ${activeTrackMenu.name} en Spotifree`,
+                      url: window.location.href,
+                    }).catch(() => {});
+                  } else {
+                    navigator.clipboard?.writeText(window.location.href);
+                    setToastMessage('Enlace copiado al portapapeles');
+                    setTimeout(() => setToastMessage(null), 2500);
+                  }
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
+              >
+                <ShareNativeIcon size={20} className="text-white/80 shrink-0" />
+                <span className="font-bold text-sm">Compartir canción</span>
+              </button>
+
+              {cleanId !== 'liked-songs' && (
+                <button
+                  onClick={() => {
+                    handleRemoveTrackFromPlaylist(activeTrackMenu.id);
+                    setActiveTrackMenu(null);
+                  }}
+                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-left text-red-400"
+                >
+                  <TrashNativeIcon size={20} className="shrink-0" />
+                  <span className="font-bold text-sm">Eliminar de esta playlist</span>
+                </button>
+              )}
+            </div>
+
+            <button
+              onClick={() => setActiveTrackMenu(null)}
+              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Add To Playlist Picker Modal */}
+      {isAddToPlaylistModalOpen && activeTrackMenu && createPortal(
+        <div
+          className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex flex-col justify-end select-none"
+          onClick={() => setIsAddToPlaylistModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#242424] rounded-t-3xl max-h-[75vh] overflow-y-auto p-5 pb-8 space-y-4 shadow-2xl border-t border-white/10"
+          >
+            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2" />
+            <h3 className="text-base font-bold text-white text-center">Añadir a una playlist</h3>
+            <div className="space-y-1">
+              {allUserPlaylists
+                .filter((p) => p.id !== activePlaylist.id && p.id !== 'liked-songs')
+                .map((targetPl) => (
+                  <button
+                    key={targetPl.id}
+                    onClick={() => {
+                      saveCustomTrackToStorage(targetPl.id, false, activeTrackMenu, user?.id);
+                      setIsAddToPlaylistModalOpen(false);
+                      setActiveTrackMenu(null);
+                      setToastMessage(`Añadido a «${targetPl.name}»`);
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                  >
+                    <img
+                      src={targetPl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                      alt={targetPl.name}
+                      onError={handleImageError}
+                      className="w-10 h-10 rounded-[4px] object-cover bg-[#181818] shrink-0"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-sm text-white truncate">{targetPl.name}</p>
+                      <p className="text-xs text-[#b3b3b3] truncate">Playlist</p>
+                    </div>
+                  </button>
+                ))}
+            </div>
+            <button
+              onClick={() => setIsAddToPlaylistModalOpen(false)}
+              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Edit Playlist Modal */}
+      {isEditModalOpen && createPortal(
+        <div
+          className="fixed inset-0 z-[125] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 select-none"
+          onClick={() => setIsEditModalOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-sm bg-[#282828] rounded-2xl p-6 shadow-2xl border border-white/10 space-y-4"
+          >
+            <h3 className="text-lg font-bold text-white text-center">Editar información</h3>
+
+            {/* Cover image preview & URL */}
+            <div className="flex flex-col items-center gap-2">
+              <img
+                src={editCover || activePlaylist.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                alt="Carátula"
+                onError={handleImageError}
+                className="w-28 h-28 rounded-lg object-cover shadow-lg border border-white/10 bg-[#181818]"
+              />
+              <input
+                type="text"
+                value={editCover}
+                onChange={(e) => setEditCover(e.target.value)}
+                placeholder="URL de imagen de portada..."
+                className="w-full text-xs bg-[#181818] border border-white/15 focus:border-[#1ed760] rounded-lg p-2.5 text-white placeholder:text-[#888] outline-none"
+              />
+            </div>
+
+            {/* Name */}
+            <div>
+              <label className="text-xs text-[#b3b3b3] font-semibold block mb-1">Nombre</label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Nombre de la playlist..."
+                className="w-full text-sm bg-[#181818] border border-white/15 focus:border-[#1ed760] rounded-lg p-2.5 text-white placeholder:text-[#888] outline-none font-bold"
+              />
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="text-xs text-[#b3b3b3] font-semibold block mb-1">Descripción</label>
+              <textarea
+                value={editDesc}
+                onChange={(e) => setEditDesc(e.target.value)}
+                rows={2}
+                placeholder="Añade una descripción opcional..."
+                className="w-full text-xs bg-[#181818] border border-white/15 focus:border-[#1ed760] rounded-lg p-2.5 text-white placeholder:text-[#888] outline-none resize-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                onClick={() => setIsEditModalOpen(false)}
+                className="flex-1 py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleSavePlaylistEdit}
+                className="flex-1 py-2.5 rounded-full bg-[#1ed760] hover:scale-103 active:scale-95 text-black font-bold text-xs uppercase tracking-wider shadow-lg"
+              >
+                Guardar
+              </button>
+            </div>
           </div>
         </div>,
         document.body

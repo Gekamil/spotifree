@@ -561,31 +561,26 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                         (window as any).__audioEngine.seek(line.timeMs / 1000);
                       }
                     }}
-                    className={`transition-all duration-200 leading-snug cursor-pointer flex flex-wrap items-baseline gap-x-1.5 ${
+                    className={`transition-all duration-200 leading-snug cursor-pointer block origin-left text-xl font-bold ${
                       isCurrent
-                        ? 'text-white text-xl scale-[1.02] font-black'
-                        : 'text-black/55 hover:text-white/80 text-lg'
+                        ? 'text-white scale-[1.025] drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]'
+                        : 'text-black/50 hover:text-white/80'
                     }`}
                   >
                     {isCurrent && line.words.length > 0 ? (
                       line.words.map((w, wIdx) => {
                         const vocalMs = progressMs + 220;
                         const isWordSung = vocalMs >= w.timeMs;
-                        const isCurrentWord =
-                          isWordSung &&
-                          (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
                         return (
                           <span
                             key={`mw-${idx}-${wIdx}`}
-                            className={`transition-all duration-150 inline-block ${
-                              isCurrentWord
-                                ? 'text-white font-black drop-shadow-[0_2px_14px_rgba(255,255,255,1)] scale-105'
-                                : isWordSung
-                                ? 'text-white/95 font-bold'
-                                : 'text-black/45 font-bold'
+                            className={`transition-colors duration-150 inline ${
+                              isWordSung
+                                ? 'text-white'
+                                : 'text-black/45'
                             }`}
                           >
-                            {w.text}
+                            {w.text}{wIdx < line.words.length - 1 ? ' ' : ''}
                           </span>
                         );
                       })
