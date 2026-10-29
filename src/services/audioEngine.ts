@@ -5,6 +5,7 @@
  */
 
 import { usePlayerStore } from '../store/usePlayerStore';
+import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
@@ -38,7 +39,8 @@ function persistVideoId(query: string, videoId: string) {
 }
 
 class AudioEngine {
-  private audio: HTMLAudioElement;
+  private audios: [HTMLAudioElement, HTMLAudioElement];
+  private activeAudioIndex: 0 | 1 = 0;
   private carrierAudio: HTMLAudioElement | null = null;
   private isExplicitlyPaused = false;
   private wakeLockSentinel: any = null;
@@ -54,65 +56,240 @@ class AudioEngine {
   private activeEngine: 'youtube' | 'html5' = 'youtube';
   private failedVideoIds: Set<string> = new Set();
 
-  private ytPlayer: any = null;
+  private ytPlayers: [any, any] = [null, null];
+  private activeYtIndex: 0 | 1 = 0;
   private isYtReady = false;
   private ytReadyPromise: Promise<void> | null = null;
   private progressInterval: number | null = null;
 
   private eqFrequencies = [60, 150, 400, 1000, 2400, 15000];
   private isCrossfading = false;
+  private preloadedNext: { track: Track; videoId?: string; query: string } | null = null;
+  private isPreloadingNext = false;
+  private crossfadeInterval: number | null = null;
+
+  public get ytPlayer(): any {
+    return this.ytPlayers[this.activeYtIndex];
+  }
+
+  public get secondaryYtPlayer(): any {
+    return this.ytPlayers[this.activeYtIndex === 0 ? 1 : 0];
+  }
+
+  public get audio(): HTMLAudioElement {
+    return this.audios[this.activeAudioIndex];
+  }
+
+  public get secondaryAudio(): HTMLAudioElement {
+    return this.audios[this.activeAudioIndex === 0 ? 1 : 0];
+  }
 
   private checkCrossfade(curSec: number, durSec: number) {
-    if (this.isCrossfading || !durSec || durSec < 15 || this.isSeeking) return;
+    if (this.isSeeking || !durSec || durSec < 15) return;
+
     let crossfadeSec = 0;
     try {
       const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
       if (saved) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
     } catch {}
-    if (crossfadeSec <= 0) return;
 
     const remaining = durSec - curSec;
-    if (remaining > 0 && remaining <= crossfadeSec) {
-      this.isCrossfading = true;
-      const state = usePlayerStore.getState();
-      const initialVol = state.volume;
-      const stepMs = 250;
-      const totalSteps = Math.max(1, Math.round((crossfadeSec * 1000) / stepMs));
-      let currentStep = 0;
 
-      const fadeInterval = window.setInterval(() => {
-        currentStep++;
-        const factor = Math.max(0, 1 - currentStep / totalSteps);
-        this.setVolume(initialVol * factor);
+    // 1. Preload upcoming song in the background before crossfade starts
+    if (
+      !this.preloadedNext &&
+      !this.isPreloadingNext &&
+      remaining <= Math.max(20, crossfadeSec + 8) &&
+      remaining > crossfadeSec
+    ) {
+      this.preloadUpcomingTrack();
+    }
 
-        if (currentStep >= totalSteps || !state.isPlaying) {
-          clearInterval(fadeInterval);
-          this.setVolume(initialVol);
-          this.isCrossfading = false;
-        }
-      }, stepMs);
+    if (crossfadeSec <= 0) return;
 
-      // Trigger next track so it begins with fade-in
-      setTimeout(() => {
-        state.nextTrack();
-        let inStep = 0;
-        this.setVolume(0);
-        const inInterval = window.setInterval(() => {
-          inStep++;
-          const inFactor = Math.min(1, inStep / totalSteps);
-          this.setVolume(initialVol * inFactor);
-          if (inStep >= totalSteps || !state.isPlaying) {
-            clearInterval(inInterval);
-            this.setVolume(initialVol);
-          }
-        }, stepMs);
-      }, 400);
+    // 2. Start simultaneous dual-engine crossfade when remaining reaches crossfadeSec
+    if (!this.isCrossfading && remaining > 0 && remaining <= crossfadeSec) {
+      this.executeCrossfade(crossfadeSec);
     }
   }
 
+  private async preloadUpcomingTrack() {
+    this.isPreloadingNext = true;
+    try {
+      const state = usePlayerStore.getState();
+      const nextTrack = state.getNextTrack?.();
+      if (!nextTrack || nextTrack.id === this.currentTrackId) {
+        this.isPreloadingNext = false;
+        return;
+      }
+
+      const artistName = nextTrack.artists?.[0]?.name || '';
+      const query = `${nextTrack.name} ${artistName}`.trim();
+
+      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
+      if (!videoId) {
+        videoId = await this.resolveVideoIdClient(query);
+        if (videoId) persistVideoId(query, videoId);
+      }
+
+      this.preloadedNext = {
+        track: nextTrack,
+        videoId: videoId || undefined,
+        query,
+      };
+
+      // In YouTube mode, cue on secondary player so it's pre-buffered
+      const secPlayer = this.secondaryYtPlayer;
+      if (videoId && secPlayer && typeof secPlayer.cueVideoById === 'function') {
+        try {
+          secPlayer.cueVideoById({ videoId, startSeconds: 0 });
+        } catch {}
+      }
+    } catch (e) {
+      console.warn('[AudioEngine] Preload upcoming track error:', e);
+    } finally {
+      this.isPreloadingNext = false;
+    }
+  }
+
+  private async executeCrossfade(crossfadeSec: number) {
+    this.isCrossfading = true;
+    const state = usePlayerStore.getState();
+
+    if (!this.preloadedNext) {
+      const nextTrack = state.getNextTrack?.();
+      if (!nextTrack || nextTrack.id === this.currentTrackId) {
+        this.isCrossfading = false;
+        return;
+      }
+      const artistName = nextTrack.artists?.[0]?.name || '';
+      const query = `${nextTrack.name} ${artistName}`.trim();
+      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
+      if (!videoId) {
+        videoId = await this.resolveVideoIdClient(query);
+        if (videoId) persistVideoId(query, videoId);
+      }
+      this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
+    }
+
+    const nextTrack = this.preloadedNext?.track;
+    const nextVideoId = this.preloadedNext?.videoId;
+    if (!nextTrack) {
+      this.isCrossfading = false;
+      return;
+    }
+
+    const masterVolume = state.isMuted ? 0 : state.volume;
+    const secYt = this.secondaryYtPlayer;
+
+    // Start secondary player at volume 0
+    if (this.activeEngine === 'youtube' && secYt && nextVideoId) {
+      try {
+        if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
+        if (typeof secYt.unMute === 'function') secYt.unMute();
+        secYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+        secYt.playVideo();
+      } catch {}
+    } else if (this.activeEngine === 'html5') {
+      try {
+        const secAudio = this.secondaryAudio;
+        secAudio.volume = 0;
+        secAudio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(this.preloadedNext.query)}`;
+        secAudio.play().catch(() => {});
+      } catch {}
+    }
+
+    const crossfadeStartTime = Date.now();
+    const durationMs = crossfadeSec * 1000;
+
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+    }
+
+    this.crossfadeInterval = window.setInterval(() => {
+      if (!usePlayerStore.getState().isPlaying) {
+        return;
+      }
+
+      const elapsed = Date.now() - crossfadeStartTime;
+      const progress = Math.min(1, Math.max(0, elapsed / durationMs));
+
+      // Calculate simultaneous fade curves:
+      // Outgoing track (Song A) fades from 1.0 down to 0.0
+      const outVol = Math.max(0, 1 - progress) * masterVolume;
+      // Incoming track (Song B) fades from 0.0 up to 1.0
+      const inVol = Math.min(1, progress) * masterVolume;
+
+      if (this.activeEngine === 'youtube') {
+        const curActiveYt = this.ytPlayer;
+        const curSecYt = this.secondaryYtPlayer;
+        if (curActiveYt && typeof curActiveYt.setVolume === 'function') {
+          curActiveYt.setVolume(Math.round(outVol * 100));
+        }
+        if (curSecYt && typeof curSecYt.setVolume === 'function') {
+          curSecYt.setVolume(Math.round(inVol * 100));
+        }
+      } else {
+        const curActiveAudio = this.audio;
+        const curSecAudio = this.secondaryAudio;
+        if (curActiveAudio) curActiveAudio.volume = Math.max(0, Math.min(1, outVol));
+        if (curSecAudio) curSecAudio.volume = Math.max(0, Math.min(1, inVol));
+      }
+
+      // Keep reporting current track progress for Song A while crossfading
+      // When crossfade finishes:
+      if (progress >= 1) {
+        if (this.crossfadeInterval !== null) {
+          clearInterval(this.crossfadeInterval);
+          this.crossfadeInterval = null;
+        }
+
+        // 1. Stop outgoing player
+        if (this.activeEngine === 'youtube') {
+          const oldActive = this.ytPlayer;
+          if (oldActive && typeof oldActive.stopVideo === 'function') {
+            oldActive.stopVideo();
+          }
+        } else {
+          const oldAudio = this.audio;
+          if (oldAudio) {
+            oldAudio.pause();
+            oldAudio.currentTime = 0;
+          }
+        }
+
+        // 2. Swap active player index so incoming player becomes active
+        this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
+        this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
+        this.currentTrackId = nextTrack.id;
+        this.currentTrackQuery = this.preloadedNext?.query || null;
+        this.currentVideoId = nextVideoId || null;
+
+        // Restore active volume to master volume
+        if (this.activeEngine === 'youtube') {
+          const newActive = this.ytPlayer;
+          if (newActive && typeof newActive.setVolume === 'function') {
+            newActive.setVolume(Math.round(masterVolume * 100));
+          }
+        } else {
+          const newActiveAudio = this.audio;
+          if (newActiveAudio) newActiveAudio.volume = Math.max(0, Math.min(1, masterVolume));
+        }
+
+        // 3. Update UI: NOW that Song A has finished and Song B has reached 100% volume,
+        // switch album cover, title, artist and progress to Song B!
+        usePlayerStore.getState().completeCrossfadeTrack(nextTrack);
+
+        this.isCrossfading = false;
+        this.preloadedNext = null;
+      }
+    }, 60);
+  }
+
   constructor() {
-    this.audio = new Audio();
-    this.audio.preload = 'auto';
+    this.audios = [new Audio(), new Audio()];
+    this.audios[0].preload = 'auto';
+    this.audios[1].preload = 'auto';
 
     this.setupHtml5Listeners();
 
@@ -201,7 +378,7 @@ class AudioEngine {
 
   private ensureYouTubeReady(): Promise<void> {
     if (typeof window === 'undefined') return Promise.resolve();
-    if (this.isYtReady && this.ytPlayer) return Promise.resolve();
+    if (this.isYtReady && this.ytPlayers[0] && this.ytPlayers[1]) return Promise.resolve();
     if (this.ytReadyPromise) return this.ytReadyPromise;
 
     this.ytReadyPromise = new Promise<void>((resolve) => {
@@ -211,18 +388,23 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            // Keep the YT iframe alive in the DOM but completely off-screen so it's invisible to the user.
-            // Using left:-300px (off-screen) instead of display:none because YouTube IFrame API suspends
-            // playback for display:none elements on mobile browsers.
-            host.style.cssText = 'position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
+            host.style.cssText =
+              'position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
             document.body.appendChild(host);
           }
 
-          let playerDiv = document.getElementById('spotifree-yt-player');
-          if (!playerDiv) {
-            playerDiv = document.createElement('div');
-            playerDiv.id = 'spotifree-yt-player';
-            host.appendChild(playerDiv);
+          let playerDiv0 = document.getElementById('spotifree-yt-player-0');
+          if (!playerDiv0) {
+            playerDiv0 = document.createElement('div');
+            playerDiv0.id = 'spotifree-yt-player-0';
+            host.appendChild(playerDiv0);
+          }
+
+          let playerDiv1 = document.getElementById('spotifree-yt-player-1');
+          if (!playerDiv1) {
+            playerDiv1 = document.createElement('div');
+            playerDiv1.id = 'spotifree-yt-player-1';
+            host.appendChild(playerDiv1);
           }
 
           if (!(window as any).YT || !(window as any).YT.Player) {
@@ -230,53 +412,54 @@ class AudioEngine {
             return;
           }
 
-          this.ytPlayer = new (window as any).YT.Player('spotifree-yt-player', {
-            height: '120',
-            width: '200',
-            host: 'https://www.youtube.com',
-            playerVars: {
-              autoplay: 1,
-              controls: 0,
-              disablekb: 1,
-              fs: 0,
-              modestbranding: 1,
-              rel: 0,
-              playsinline: 1,
-              enablejsapi: 1,
-              iv_load_policy: 3,
-              origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-              widget_referrer: typeof window !== 'undefined' ? window.location.origin : undefined,
-            },
-            events: {
-              onReady: () => {
-                this.isYtReady = true;
-                const { volume, isMuted } = usePlayerStore.getState();
-                if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
-                  this.ytPlayer.setVolume(isMuted ? 0 : Math.round(volume * 100));
-                }
-                const iframe = document.querySelector('#spotifree-yt-player-host iframe') as HTMLIFrameElement;
-                if (iframe) {
-                  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
-                }
-                resolve();
+          const createPlayerInstance = (divId: string, index: 0 | 1) => {
+            return new (window as any).YT.Player(divId, {
+              height: '120',
+              width: '200',
+              host: 'https://www.youtube.com',
+              playerVars: {
+                autoplay: 1,
+                controls: 0,
+                disablekb: 1,
+                fs: 0,
+                modestbranding: 1,
+                rel: 0,
+                playsinline: 1,
+                enablejsapi: 1,
+                iv_load_policy: 3,
+                origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+                widget_referrer: typeof window !== 'undefined' ? window.location.origin : undefined,
               },
-              onStateChange: (event: any) => {
-                this.handleYtStateChange(event);
+              events: {
+                onReady: () => {
+                  if (index === 0) {
+                    this.isYtReady = true;
+                    const { volume, isMuted } = usePlayerStore.getState();
+                    if (this.ytPlayers[0] && typeof this.ytPlayers[0].setVolume === 'function') {
+                      this.ytPlayers[0].setVolume(isMuted ? 0 : Math.round(volume * 100));
+                    }
+                    resolve();
+                  }
+                },
+                onStateChange: (event: any) => {
+                  this.handleYtStateChange(event, index);
+                },
+                onError: (_event: any) => {
+                  if (index === this.activeYtIndex) {
+                    if (this.currentVideoId) this.failedVideoIds.add(this.currentVideoId);
+                    if (this.currentTrackQuery) {
+                      this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
+                    }
+                  }
+                },
               },
-              onError: (event: any) => {
-                console.warn('[AudioEngine] YouTube player error:', event.data, 'Current videoId:', this.currentVideoId);
-                // On embed restriction or unavailable video error (150, 101, 100, 2), retry with alternate official video
-                if (this.currentVideoId) {
-                  this.failedVideoIds.add(this.currentVideoId);
-                }
-                if (this.currentTrackQuery) {
-                  this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
-                }
-              },
-            },
-          });
+            });
+          };
+
+          this.ytPlayers[0] = createPlayerInstance('spotifree-yt-player-0', 0);
+          this.ytPlayers[1] = createPlayerInstance('spotifree-yt-player-1', 1);
         } catch (err) {
-          console.warn('[AudioEngine] Failed to initialize YouTube player:', err);
+          console.warn('[AudioEngine] Failed to initialize YouTube players:', err);
           resolve();
         }
       };
@@ -322,9 +505,14 @@ class AudioEngine {
     } catch {}
   }
 
-  private handleYtStateChange(event: any) {
+  private handleYtStateChange(event: any, playerIndex: 0 | 1 = 0) {
     const code = event.data;
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
+    if (playerIndex !== this.activeYtIndex) {
+      // Secondary player state change during crossfade
+      return;
+    }
+
     if (code === 1) {
       this.isTransitioning = false;
       this.isExplicitlyPaused = false;
@@ -336,7 +524,6 @@ class AudioEngine {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
       }
     } else if (code === 2) {
-      // If the user or app explicitly paused, DO NOT auto-resume!
       if (this.isExplicitlyPaused || !usePlayerStore.getState().isPlaying) {
         this.stopCarrier();
         this.stopProgressTicker();
@@ -346,7 +533,6 @@ class AudioEngine {
         return;
       }
 
-      // If document is hidden and user DID NOT pause (involuntary browser pause), resume it
       if (typeof document !== 'undefined' && document.hidden && usePlayerStore.getState().isPlaying && !this.isExplicitlyPaused) {
         try {
           if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
@@ -359,8 +545,7 @@ class AudioEngine {
         return;
       }
 
-      // Ignore transient pause events fired during video loading/transitioning
-      if (!this.isTransitioning) {
+      if (!this.isTransitioning && !this.isCrossfading) {
         this.stopCarrier();
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
@@ -372,6 +557,29 @@ class AudioEngine {
       this.checkAndSkipAd();
     } else if (code === 0) {
       this.stopProgressTicker();
+      if (this.isCrossfading) {
+        // Complete crossfade immediately if primary track naturally reached end
+        const state = usePlayerStore.getState();
+        const next = this.preloadedNext?.track || state.getNextTrack?.();
+        if (next) {
+          if (this.crossfadeInterval !== null) {
+            clearInterval(this.crossfadeInterval);
+            this.crossfadeInterval = null;
+          }
+          this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
+          this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
+          this.currentTrackId = next.id;
+          const masterVolume = state.isMuted ? 0 : state.volume;
+          if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+            this.ytPlayer.setVolume(Math.round(masterVolume * 100));
+          }
+          state.completeCrossfadeTrack(next);
+          this.isCrossfading = false;
+          this.preloadedNext = null;
+          return;
+        }
+      }
+
       const state = usePlayerStore.getState();
       if (state.repeatMode === 'one') {
         this.seek(0);
@@ -562,6 +770,23 @@ class AudioEngine {
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    this.isCrossfading = false;
+    this.preloadedNext = null;
+
+    // Stop secondary player
+    const secYt = this.secondaryYtPlayer;
+    if (secYt && typeof secYt.stopVideo === 'function') {
+      try { secYt.stopVideo(); } catch {}
+    }
+    const secAudio = this.secondaryAudio;
+    if (secAudio) {
+      try { secAudio.pause(); secAudio.currentTime = 0; } catch {}
+    }
+
     this.currentTrackId = trackId;
     this.currentTrackQuery = query;
     this.failedVideoIds.clear();
@@ -761,12 +986,20 @@ class AudioEngine {
   public pause() {
     this.isExplicitlyPaused = true;
     this.stopCarrier();
-    if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-      try { this.ytPlayer.pauseVideo(); } catch {}
+    if (this.activeEngine === 'youtube') {
+      if (this.ytPlayers[0] && typeof this.ytPlayers[0].pauseVideo === 'function') {
+        try { this.ytPlayers[0].pauseVideo(); } catch {}
+      }
+      if (this.ytPlayers[1] && typeof this.ytPlayers[1].pauseVideo === 'function') {
+        try { this.ytPlayers[1].pauseVideo(); } catch {}
+      }
       this.stopProgressTicker();
     }
-    if (this.audio) {
-      try { this.audio.pause(); } catch {}
+    if (this.audios[0]) {
+      try { this.audios[0].pause(); } catch {}
+    }
+    if (this.audios[1]) {
+      try { this.audios[1].pause(); } catch {}
     }
     usePlayerStore.setState({ isPlaying: false });
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -777,25 +1010,31 @@ class AudioEngine {
   public resume() {
     this.isExplicitlyPaused = false;
     this.startCarrier();
-    if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-      try {
-        if (typeof this.ytPlayer.unMute === 'function') {
-          this.ytPlayer.unMute();
-          const { volume, isMuted } = usePlayerStore.getState();
-          if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+    if (this.activeEngine === 'youtube') {
+      if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+        try {
+          if (typeof this.ytPlayer.unMute === 'function') {
+            this.ytPlayer.unMute();
+          }
+          this.ytPlayer.playVideo();
+          if (this.isCrossfading && this.secondaryYtPlayer && typeof this.secondaryYtPlayer.playVideo === 'function') {
+            this.secondaryYtPlayer.playVideo();
+          }
+          this.startProgressTicker();
+        } catch {}
+        usePlayerStore.setState({ isPlaying: true });
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'playing'; } catch {}
         }
-        this.ytPlayer.playVideo();
-        this.startProgressTicker();
-      } catch {}
-      usePlayerStore.setState({ isPlaying: true });
-      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+        return;
       }
-      return;
     }
 
     if (this.audio) {
       this.audio.play().catch(() => {});
+      if (this.isCrossfading && this.secondaryAudio) {
+        this.secondaryAudio.play().catch(() => {});
+      }
     }
     usePlayerStore.setState({ isPlaying: true });
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -806,6 +1045,24 @@ class AudioEngine {
   public seek(seconds: number) {
     if (!isFinite(seconds)) return;
     this.isSeeking = true;
+
+    if (this.isCrossfading) {
+      if (this.crossfadeInterval !== null) {
+        clearInterval(this.crossfadeInterval);
+        this.crossfadeInterval = null;
+      }
+      this.isCrossfading = false;
+      const secYt = this.secondaryYtPlayer;
+      if (secYt && typeof secYt.stopVideo === 'function') {
+        try { secYt.stopVideo(); } catch {}
+      }
+      const secAudio = this.secondaryAudio;
+      if (secAudio) {
+        try { secAudio.pause(); secAudio.currentTime = 0; } catch {}
+      }
+      const { volume, isMuted } = usePlayerStore.getState();
+      this.setVolume(isMuted ? 0 : volume);
+    }
 
     if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
       try {

@@ -76,6 +76,8 @@ interface PlayerState {
   setContextId: (id: string | null) => void;
   togglePlay: () => void;
   nextTrack: () => void;
+  getNextTrack: () => Track | null;
+  completeCrossfadeTrack: (track: Track) => void;
   previousTrack: () => void;
   setProgress: (ms: number) => void;
   setDuration: (ms: number) => void;
@@ -244,6 +246,66 @@ const store = create<PlayerState>((set, get) => ({
 
     if (nextTrackCandidate) {
       get().playTrack(nextTrackCandidate);
+    }
+  },
+
+  getNextTrack: (): Track | null => {
+    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle } = get();
+    if (queue.length === 0) return null;
+
+    if (repeatMode === 'one' && currentTrack) {
+      return currentTrack;
+    }
+
+    if (isShuffle && queue.length > 1) {
+      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id));
+      if (unplayed.length > 0) {
+        return unplayed[0];
+      }
+      const candidates = queue.filter((t) => t.id !== currentTrack?.id);
+      return candidates[0] || queue[0];
+    } else {
+      const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+      if (currentIndex === queue.length - 1 && repeatMode === 'off') {
+        return null;
+      }
+      const nextIndex = (currentIndex + 1) % queue.length;
+      return queue[nextIndex] || null;
+    }
+  },
+
+  completeCrossfadeTrack: (track: Track) => {
+    const state = get();
+    const updatedHistory = [track, ...state.history.filter((t) => t.id !== track.id)].slice(0, 50);
+    try {
+      useStatsStore.getState().recordTrackPlayed(track);
+    } catch {}
+
+    const updatedShuffle = state.isShuffle
+      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
+      : [];
+
+    set({
+      currentTrack: track,
+      currentContextId: track.album?.id || state.currentContextId,
+      isPlaying: true,
+      progressMs: 0,
+      durationMs: track.duration_ms,
+      history: updatedHistory,
+      playedInShuffle: updatedShuffle,
+    });
+
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        registerMediaSessionHandlers();
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: track.name,
+          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+          album: track.album?.name || 'Spotifree',
+          artwork: getMediaSessionArtwork(resolveTrackCover(track)),
+        });
+        navigator.mediaSession.playbackState = 'playing';
+      } catch {}
     }
   },
 
