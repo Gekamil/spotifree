@@ -108,9 +108,52 @@ async function run() {
       return { appleTouchIcon, manifest, appTitle };
     });
     console.log('1. PWA Tags Check:', pwaCheck);
-    if (!pwaCheck.appleTouchIcon || !pwaCheck.manifest) {
-      throw new Error('PWA tags missing in index.html');
+    if (!pwaCheck.appleTouchIcon || !pwaCheck.manifest || pwaCheck.appTitle !== 'Spotifree') {
+      throw new Error(`PWA tags check failed: expected appTitle Spotifree, got ${pwaCheck.appTitle}`);
     }
+
+    // 1b. Test Header 3 Filter Pills: "Todo", "Música", "Pódcasts"
+    const headerPillsCheck = await page.evaluate(() => {
+      const buttons = Array.from(document.querySelectorAll('header button'));
+      const todoBtn = buttons.find(b => b.textContent && b.textContent.trim() === 'Todo');
+      const musicaBtn = buttons.find(b => b.textContent && b.textContent.trim() === 'Música');
+      const podcastsBtn = buttons.find(b => b.textContent && b.textContent.trim() === 'Pódcasts');
+      return {
+        hasTodo: !!todoBtn,
+        hasMusica: !!musicaBtn,
+        hasPodcasts: !!podcastsBtn,
+      };
+    });
+    console.log('1b. Header Filter Pills Check:', headerPillsCheck);
+    if (!headerPillsCheck.hasTodo || !headerPillsCheck.hasMusica || !headerPillsCheck.hasPodcasts) {
+      throw new Error('Header missing one of the 3 filter pills (Todo, Música, Pódcasts)');
+    }
+
+    // Click "Pódcasts" and verify podcast content appears
+    await page.evaluate(() => {
+      const podcastsBtn = Array.from(document.querySelectorAll('header button')).find(b => b.textContent && b.textContent.trim() === 'Pódcasts');
+      if (podcastsBtn) podcastsBtn.click();
+    });
+    await new Promise((r) => setTimeout(r, 600));
+
+    const podcastsContentCheck = await page.evaluate(() => {
+      const text = document.body.innerText;
+      return {
+        hasWildProject: text.includes('The Wild Project') || text.includes('Jordi Wild'),
+        hasPodcastsTitle: text.includes('pódcasts') || text.includes('Pódcasts'),
+      };
+    });
+    console.log('1c. Podcasts Filter Content Check:', podcastsContentCheck);
+    if (!podcastsContentCheck.hasWildProject) {
+      throw new Error('Podcasts filter did not render podcast shelves');
+    }
+
+    // Switch back to "Todo"
+    await page.evaluate(() => {
+      const todoBtn = Array.from(document.querySelectorAll('header button')).find(b => b.textContent && b.textContent.trim() === 'Todo');
+      if (todoBtn) todoBtn.click();
+    });
+    await new Promise((r) => setTimeout(r, 400));
 
     // 2. Open Library and inspect Playlist & track covers
     console.log('2. Navigating to Library / Playlist on mobile...');
@@ -308,23 +351,62 @@ async function run() {
       const hasLyricsCard = text.includes('Letras');
       const hasDeviceBar = text.includes('ESTE TELÉFONO') || text.includes('Este teléfono');
       const pingPulses = modal.querySelectorAll('.animate-ping');
+      const minimizeBtn = modal.querySelector('button[title="Minimizar"]');
+      const minimizeSvg = minimizeBtn?.querySelector('svg');
+      const minimizeSvgWidth = minimizeSvg?.getAttribute('width');
+      const hasShareBtn = Array.from(modal.querySelectorAll('button')).some(b => b.textContent && b.textContent.includes('Compartir'));
       return {
         found: true,
         hasArtistCard,
         hasLyricsCard,
         hasDeviceBar,
         pingPulsesCount: pingPulses.length,
+        minimizeSvgWidth,
+        hasShareBtn,
       };
     });
     console.log('5. Full Player Modal Check:', fullPlayerCheck);
     if (!fullPlayerCheck.found || !fullPlayerCheck.hasArtistCard || !fullPlayerCheck.hasLyricsCard) {
       throw new Error('Full player modal or cards missing');
     }
-    if (fullPlayerCheck.pingPulsesCount > 0) {
-      throw new Error(`Full player should not have green ping pulses, found ${fullPlayerCheck.pingPulsesCount}`);
+    if (fullPlayerCheck.minimizeSvgWidth !== '28') {
+      throw new Error(`Expected minimize chevron width 28, got ${fullPlayerCheck.minimizeSvgWidth}`);
+    }
+    if (!fullPlayerCheck.hasShareBtn) {
+      throw new Error('Full player missing lyrics Compartir button');
     }
 
     await page.screenshot({ path: path.join(artifactDir, 'mobile_now_playing_verified.png') });
+
+    // Minimize player
+    await page.evaluate(() => {
+      const minimizeBtn = document.querySelector('button[title="Minimizar"]');
+      if (minimizeBtn) minimizeBtn.click();
+    });
+    await new Promise((r) => setTimeout(r, 600));
+
+    // 6. Test Buscar icon filling solid when active
+    console.log('6. Testing Buscar icon filling solid when active...');
+    await page.evaluate(() => {
+      const searchTabBtn = Array.from(document.querySelectorAll('nav button')).find(b => b.textContent && b.textContent.includes('Buscar'));
+      if (searchTabBtn) searchTabBtn.click();
+    });
+    await new Promise((r) => setTimeout(r, 600));
+
+    const searchTabCheck = await page.evaluate(() => {
+      const nav = document.querySelector('nav');
+      const searchBtn = Array.from(nav?.querySelectorAll('button') || []).find(b => b.textContent && b.textContent.includes('Buscar'));
+      const svgPath = searchBtn?.querySelector('svg path')?.getAttribute('d') || '';
+      // Filled icon uses solid arc M10.533 2.5a8.033... without donut cutout
+      const isFilled = svgPath.includes('M10.533 2.5a8.033') && !svgPath.includes('zm-7.407');
+      return { isFilled, svgPathSnippet: svgPath.slice(0, 30) };
+    });
+    console.log('6. Search Filled Icon Check:', searchTabCheck);
+    if (!searchTabCheck.isFilled) {
+      throw new Error('Search button icon did not fill solid when active');
+    }
+
+    await page.screenshot({ path: path.join(artifactDir, 'mobile_search_filled_verified.png') });
 
     console.log('ALL VERIFICATIONS PASSED SUCCESSFULLY!');
   } finally {

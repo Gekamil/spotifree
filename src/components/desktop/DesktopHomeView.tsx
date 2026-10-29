@@ -418,9 +418,17 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                     />
                   </div>
 
-                  <span className="text-[14px] font-bold text-white px-3 truncate flex-1 font-['SpotifyMixUI']">
+                  <span className={`text-[14px] font-bold px-3 truncate flex-1 font-['SpotifyMixUI'] ${isPlayingThis ? 'text-[#1ed760]' : 'text-white'}`}>
                     {item.name}
                   </span>
+
+                  {isPlayingThis && (
+                    <div className="flex items-end gap-[2px] h-3.5 px-2 shrink-0 group-hover:hidden" title="Reproduciendo">
+                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                      <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                    </div>
+                  )}
 
                   <button
                     onClick={(e) => handleQuickPlay(e, item)}

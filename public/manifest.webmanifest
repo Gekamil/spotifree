@@ -1,6 +1,6 @@
 {
-  "name": "Spotify",
-  "short_name": "Spotify",
+  "name": "Spotifree",
+  "short_name": "Spotifree",
   "description": "Spotifree - Reproductor web: música para todos",
   "start_url": "/",
   "display": "standalone",

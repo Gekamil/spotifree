@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
+import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
@@ -18,13 +19,27 @@ import { handleImageError } from '../../utils/imageFallback';
 
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
-  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
+  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica' | 'podcasts'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums'>('all');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
+
+  const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
+
+  const isCardPlaying = (cardId: string, cardName: string) => {
+    if (!isPlaying) return false;
+    if (currentContextId && (currentContextId === cardId || currentContextId.includes(cardId) || cardId.includes(currentContextId))) return true;
+    if (cardId === 'liked-songs' && currentTrack && likedTrackIds.includes(currentTrack.id)) return true;
+    if (currentTrack) {
+      if (currentTrack.album?.id === cardId) return true;
+      if (currentTrack.album?.name && cardName && currentTrack.album.name.toLowerCase() === cardName.toLowerCase()) return true;
+      if ((currentTrack as any).playlistId === cardId) return true;
+    }
+    return false;
+  };
 
   const checkIsMobileArtist = (p: any): boolean => {
     if (p.id === 'liked-songs' || p.id.includes('collection:tracks') || p.type === 'playlist' || p.type === 'album') {
@@ -136,6 +151,29 @@ export const MobileLayout: React.FC = () => {
         });
       });
 
+    if (homeFilter === 'podcasts') {
+      return [
+        {
+          id: 'shelf-podcasts-populares',
+          title: 'Tus programas y pódcasts',
+          cards: [
+            { id: 'pod-1', title: 'The Wild Project', subtitle: 'Jordi Wild • Conversaciones y actualidad', image: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc' },
+            { id: 'pod-2', title: 'Nadie Sabe Nada', subtitle: 'Andreu Buenafuente y Berto Romero', image: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618' },
+            { id: 'pod-3', title: 'El Descampao', subtitle: 'Sergio Mengual • Cine y cultura pop', image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4' },
+            { id: 'pod-4', title: 'Días Extraños', subtitle: 'Santiago Camacho • Misterio y periodismo', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819' },
+          ],
+        },
+        {
+          id: 'shelf-podcasts-historias',
+          title: 'Historias y Crimen Real',
+          cards: [
+            { id: 'pod-5', title: 'Criminopatía', subtitle: 'Clara Tiscar • Casos reales e investigación', image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745' },
+            { id: 'pod-6', title: 'Terrores Nocturnos', subtitle: 'Emma Entrena • Leyendas y suspense', image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23' },
+          ],
+        },
+      ];
+    }
+
     if (homeFilter === 'musica') {
       return list.filter((s) => !s.title.toLowerCase().includes('noticias'));
     }
@@ -227,24 +265,41 @@ export const MobileLayout: React.FC = () => {
                 {shortcuts && shortcuts.length > 0 && (
                   <div className="px-4 mb-6">
                     <div className="grid grid-cols-2 gap-2">
-                      {shortcuts.map((card) => (
-                        <div
-                          key={card.id}
-                          onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
-                          className="h-14 bg-white/[0.08] hover:bg-white/[0.14] active:bg-white/[0.22] rounded-[4px] overflow-hidden flex items-center gap-2.5 cursor-pointer shadow-sm active:scale-98 transition-all"
-                        >
-                          <img
-                            src={card.image}
-                            alt={card.name}
-                            onError={handleImageError}
-                            referrerPolicy="no-referrer"
-                            className="w-14 h-14 object-cover shrink-0"
-                          />
-                          <span className="font-bold text-white text-xs leading-snug line-clamp-2 pr-2.5">
-                            {card.name}
-                          </span>
-                        </div>
-                      ))}
+                      {shortcuts.map((card) => {
+                        const isPlayingThis = isCardPlaying(card.id, card.name);
+                        return (
+                          <div
+                            key={card.id}
+                            onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
+                            className="h-14 bg-white/[0.08] hover:bg-white/[0.14] active:bg-white/[0.22] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-98 transition-all pr-2.5"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-1">
+                              <img
+                                src={card.image}
+                                alt={card.name}
+                                onError={handleImageError}
+                                referrerPolicy="no-referrer"
+                                className="w-14 h-14 object-cover shrink-0"
+                              />
+                              <span
+                                className={`font-bold text-xs leading-snug line-clamp-2 ${
+                                  isPlayingThis ? 'text-[#1ed760]' : 'text-white'
+                                }`}
+                              >
+                                {card.name}
+                              </span>
+                            </div>
+
+                            {isPlayingThis && (
+                              <div className="flex items-end gap-[2px] h-3.5 px-1 shrink-0" title="Reproduciendo">
+                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}

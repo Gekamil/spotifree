@@ -17,9 +17,11 @@ interface PlayerState {
   queue: Track[];
   history: Track[];
   likedTrackIds: string[];
+  currentContextId: string | null;
 
   // Actions
-  playTrack: (track: Track, newQueue?: Track[]) => void;
+  playTrack: (track: Track, newQueue?: Track[], contextId?: string) => void;
+  setContextId: (id: string | null) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   previousTrack: () => void;
@@ -60,13 +62,16 @@ const store = create<PlayerState>((set, get) => ({
   queue: [],
   history: [],
   likedTrackIds: getInitialLikedTrackIds(),
+  currentContextId: null,
+
+  setContextId: (id: string | null) => set({ currentContextId: id }),
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
     set((s) => ({ queue: [...s.queue, ...list] }));
   },
 
-  playTrack: (track: Track, newQueue?: Track[]) => {
+  playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
     const state = get();
     const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
     try {
@@ -74,6 +79,7 @@ const store = create<PlayerState>((set, get) => ({
     } catch {}
     set({
       currentTrack: track,
+      currentContextId: contextId !== undefined ? contextId : (track.album?.id || state.currentContextId),
       isPlaying: true,
       progressMs: 0,
       durationMs: track.duration_ms,

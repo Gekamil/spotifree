@@ -458,7 +458,43 @@ export async function extractSpotifySession(spDcCookie) {
     email: '',
     images: userImages,
     followers: { total: 0 },
+    following: { total: 0 },
   };
+
+  // Attempt real Spotify Web API /me profile & stats extraction
+  try {
+    const meRes = await fetch('https://api.spotify.com/v1/me', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (meRes.ok) {
+      const meData = await meRes.json();
+      if (meData.display_name) user.display_name = meData.display_name;
+      if (meData.id) user.id = meData.id;
+      if (meData.images && meData.images.length > 0) {
+        user.images = meData.images.map(img => ({ url: toHDImage(img.url) }));
+      }
+      if (meData.followers && typeof meData.followers.total === 'number') {
+        user.followers = { total: meData.followers.total };
+      }
+    }
+  } catch (e) {
+    console.warn('[Extractor] Could not fetch real profile stats:', e.message);
+  }
+
+  // Attempt real following count extraction
+  try {
+    const followRes = await fetch('https://api.spotify.com/v1/me/following?type=artist&limit=1', {
+      headers: { 'Authorization': `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(3500),
+    });
+    if (followRes.ok) {
+      const followData = await followRes.json();
+      if (typeof followData.artists?.total === 'number') {
+        user.following = { total: followData.artists.total };
+      }
+    }
+  } catch (e) {}
 
   // Real Liked Songs count from Spotify Web API
   let likedCount = 0;

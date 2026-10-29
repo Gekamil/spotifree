@@ -7,6 +7,8 @@ import {
   removeSavedAccount,
   saveAccount,
   cleanSpDc,
+  switchActiveAccount,
+  saveCookieToActiveAccount,
   type SavedAccount,
 } from '../../utils/userAccounts';
 import { validateSpotifyCookie } from '../../services/spotifyCookieService';
@@ -108,6 +110,8 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         isLoading: false,
       });
 
+      saveCookieToActiveAccount(cleanKey, data);
+
       setSavedAccounts(getSavedAccounts());
       setCookieStatus('¡Sesión actualizada con éxito!');
       setCookieInput('');
@@ -120,70 +124,11 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
 
   const handleSwitchAccount = async (acc: SavedAccount) => {
     if (acc.id === user?.id) return;
-    saveAccount({ ...acc, lastUsed: Date.now() });
-
-    let existingCachedPlaylists: Record<string, any> = {};
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('user_spotify_cookie', acc.cookie);
-      window.localStorage.setItem('spotifree_active_user_id', acc.id);
-      window.localStorage.removeItem('spotify_logged_out');
-      try {
-        const raw = window.localStorage.getItem(`spotifree_playlist_cache_${acc.id}`);
-        if (raw) existingCachedPlaylists = JSON.parse(raw);
-      } catch {}
-    }
-
     try {
-      const res = await fetch('/api/extract-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: acc.cookie }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const cacheToSave: Record<string, any> = { ...existingCachedPlaylists };
-        if (data.playlists && Array.isArray(data.playlists)) {
-          data.playlists.forEach((p: any) => {
-            if (p && p.id) {
-              cacheToSave[p.id] = p;
-            }
-          });
-        }
-        if (data.cachedPlaylistDetails) {
-          Object.assign(cacheToSave, data.cachedPlaylistDetails);
-        }
-
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: acc.cookie }));
-          window.localStorage.setItem(`spotifree_playlist_cache_${acc.id}`, JSON.stringify(cacheToSave));
-          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
-        }
-
-        useSpotifyDataStore.setState({
-          isAuthenticated: true,
-          user: data.user,
-          playlists: data.playlists || [],
-          dynamicShelves: data.shelves || [],
-          quickAccessCards: data.quickAccess || [],
-          playlistDetailsCache: cacheToSave,
-          isLoading: false,
-        });
-      } else {
-        useSpotifyDataStore.setState({
-          isAuthenticated: true,
-          user: {
-            id: acc.id,
-            display_name: acc.displayName,
-            images: acc.avatarUrl ? [{ url: acc.avatarUrl }] : [],
-            email: acc.email,
-          } as any,
-          playlistDetailsCache: existingCachedPlaylists,
-        });
-      }
+      await switchActiveAccount(acc);
       setSavedAccounts(getSavedAccounts());
     } catch (err) {
-      console.error(err);
+      console.error('Error switching account on mobile settings:', err);
     }
   };
 

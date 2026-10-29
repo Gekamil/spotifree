@@ -8,7 +8,7 @@ import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import {
   getSavedAccounts,
-  saveAccount,
+  switchActiveAccount,
   type SavedAccount,
 } from '../../utils/userAccounts';
 import { MobileEditProfileModal } from './MobileEditProfileModal';
@@ -56,6 +56,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const displayName = customProfile.displayName || user?.display_name || 'Usuario de Spotify';
   const bannerUrl = customProfile.bannerUrl;
   const followersCount = user?.followers?.total || 0;
+  const followingCount = (user as any)?.following?.total ?? ((user as any)?.followingCount ?? 0);
   const profileColor = resolveVibrantColor(user?.id || 'profile', displayName);
 
   const handleSaveProfile = (data: { displayName: string; avatarUrl?: string; bannerUrl?: string }) => {
@@ -94,40 +95,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const handleSwitchAccount = async (acc: SavedAccount) => {
     if (acc.id === user?.id) return;
     try {
-      saveAccount({ ...acc, lastUsed: Date.now() });
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', acc.cookie);
-        window.localStorage.setItem('spotifree_active_user_id', acc.id);
-        window.localStorage.removeItem('spotify_logged_out');
-      }
-
-      const res = await fetch('/api/extract-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: acc.cookie }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        useSpotifyDataStore.setState({
-          isAuthenticated: true,
-          user: data.user,
-          playlists: data.playlists || [],
-          dynamicShelves: data.shelves || [],
-          quickAccessCards: data.quickAccess || [],
-          isLoading: false,
-        });
-      } else {
-        useSpotifyDataStore.setState({
-          isAuthenticated: true,
-          user: {
-            id: acc.id,
-            display_name: acc.displayName,
-            images: acc.avatarUrl ? [{ url: acc.avatarUrl }] : [],
-            email: acc.email,
-          } as any,
-        });
-      }
+      await switchActiveAccount(acc);
       setSavedAccounts(getSavedAccounts());
     } catch (err) {
       console.error('Error switching account on mobile profile:', err);
@@ -203,8 +171,16 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         </h1>
 
         {/* Followers / Stats */}
-        <p className="text-xs text-[#b3b3b3] mt-1.5 font-medium z-10">
-          {followersCount} seguidores • 0 siguiendo
+        <p className="text-xs text-[#b3b3b3] mt-1.5 font-medium z-10 flex items-center justify-center gap-1.5">
+          <span>{followersCount} seguidores</span>
+          <span>•</span>
+          <span>{followingCount} siguiendo</span>
+          {userPlaylists.length > 0 && (
+            <>
+              <span>•</span>
+              <span>{userPlaylists.length} listas</span>
+            </>
+          )}
         </p>
 
         {/* Action Pills */}

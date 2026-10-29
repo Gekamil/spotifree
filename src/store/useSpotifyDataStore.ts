@@ -761,3 +761,97 @@ if (typeof window !== 'undefined') {
   (window as any).__useSpotifyDataStore = useSpotifyDataStore;
 }
 
+export async function switchActiveAccount(account: import('../utils/userAccounts').SavedAccount): Promise<void> {
+  if (typeof window === 'undefined') return;
+
+  const updatedAccount = { ...account, lastUsed: Date.now() };
+  saveAccount(updatedAccount);
+
+  window.localStorage.setItem('spotifree_active_user_id', account.id);
+  window.localStorage.setItem('user_spotify_cookie', account.cookie || '');
+  window.localStorage.removeItem('spotify_logged_out');
+
+  let cachedAccountSession: any = null;
+  try {
+    const raw = window.localStorage.getItem(`spotifree_account_session_${account.id}`);
+    if (raw) cachedAccountSession = JSON.parse(raw);
+  } catch {}
+
+  let cachedPlaylists: Record<string, any> = {};
+  try {
+    const rawPl = window.localStorage.getItem(`spotifree_playlist_cache_${account.id}`);
+    if (rawPl) cachedPlaylists = JSON.parse(rawPl);
+  } catch {}
+
+  const targetUser: UserProfile = cachedAccountSession?.user || {
+    id: account.id,
+    display_name: account.displayName || 'Usuario Spotify',
+    images: account.avatarUrl ? [{ url: account.avatarUrl }] : [],
+    email: account.email || '',
+    followers: { total: 0 },
+  };
+
+  const initialPlaylists = cachedAccountSession?.playlists || [];
+  const initialShelves = cachedAccountSession?.shelves || buildDynamicShelves(targetUser, initialPlaylists, 'Recomendado para ti');
+  const initialQuickAccess = cachedAccountSession?.quickAccess || [];
+
+  useSpotifyDataStore.setState({
+    isAuthenticated: true,
+    user: targetUser,
+    playlists: initialPlaylists,
+    dynamicShelves: initialShelves,
+    quickAccessCards: initialQuickAccess,
+    playlistDetailsCache: cachedPlaylists,
+    isLoading: false,
+  });
+
+  if (account.cookie && account.cookie.trim().startsWith('AQ')) {
+    try {
+      const res = await fetch('/api/extract-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cookie: account.cookie }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.user) {
+          const cacheToSave: Record<string, any> = { ...cachedPlaylists };
+          if (data.playlists && Array.isArray(data.playlists)) {
+            data.playlists.forEach((p: any) => {
+              if (p?.id) cacheToSave[p.id] = p;
+            });
+          }
+          if (data.cachedPlaylistDetails) {
+            Object.assign(cacheToSave, data.cachedPlaylistDetails);
+          }
+
+          window.localStorage.setItem(`spotifree_account_session_${account.id}`, JSON.stringify(data));
+          window.localStorage.setItem(`spotifree_playlist_cache_${account.id}`, JSON.stringify(cacheToSave));
+          window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: account.cookie }));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
+
+          saveAccount({
+            ...updatedAccount,
+            displayName: data.user.display_name || updatedAccount.displayName,
+            avatarUrl: data.user.images?.[0]?.url || updatedAccount.avatarUrl,
+            lastUsed: Date.now(),
+          });
+
+          useSpotifyDataStore.setState({
+            isAuthenticated: true,
+            user: data.user,
+            playlists: data.playlists || [],
+            dynamicShelves: data.shelves || [],
+            quickAccessCards: data.quickAccess || [],
+            playlistDetailsCache: cacheToSave,
+            isLoading: false,
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('[AccountSwitch] Error updating account from cookie in background:', e);
+    }
+  }
+}
+

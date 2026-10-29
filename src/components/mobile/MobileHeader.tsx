@@ -3,8 +3,8 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 
 interface MobileHeaderProps {
-  activeTab: 'todo' | 'musica';
-  onTabChange: (tab: 'todo' | 'musica') => void;
+  activeTab: 'todo' | 'musica' | 'podcasts';
+  onTabChange: (tab: 'todo' | 'musica' | 'podcasts') => void;
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
@@ -47,11 +47,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         )}
       </button>
 
-      {/* Center: Filter Pills */}
-      <div className="flex items-center gap-2 flex-1">
+      {/* Center: Filter Pills (Todo, Música, Pódcasts) */}
+      <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
         <button
           onClick={() => onTabChange('todo')}
-          className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
+          className={`h-8 px-4 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
             activeTab === 'todo'
               ? 'bg-[#1ed760] text-black shadow'
               : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
@@ -61,13 +61,23 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         </button>
         <button
           onClick={() => onTabChange('musica')}
-          className={`h-8 px-4 rounded-full text-xs font-bold transition-all ${
+          className={`h-8 px-4 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
             activeTab === 'musica'
               ? 'bg-[#1ed760] text-black shadow'
               : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
           }`}
         >
           Música
+        </button>
+        <button
+          onClick={() => onTabChange('podcasts')}
+          className={`h-8 px-4 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+            activeTab === 'podcasts'
+              ? 'bg-[#1ed760] text-black shadow'
+              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
+          }`}
+        >
+          Pódcasts
         </button>
       </div>
 

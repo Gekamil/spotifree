@@ -35,6 +35,8 @@ export function removeSavedAccount(accountId: string) {
   try {
     const list = getSavedAccounts().filter((a) => a.id !== accountId);
     window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(list));
+    window.localStorage.removeItem(`spotifree_account_session_${accountId}`);
+    window.localStorage.removeItem(`spotifree_playlist_cache_${accountId}`);
   } catch {}
 }
 
@@ -51,4 +53,34 @@ export function cleanSpDc(raw: string): string {
     str = decodeURIComponent(str);
   } catch {}
   return str.replace(/^[\s"'“”‘’]+|[\s"'“”‘’;]+$/g, '').trim();
+}
+
+export { switchActiveAccount } from '../store/useSpotifyDataStore';
+
+/**
+ * Saves a cookie to the currently active account (or creates an account entry for it)
+ */
+export function saveCookieToActiveAccount(cookie: string, sessionData?: any) {
+  if (typeof window === 'undefined' || !cookie) return;
+  const clean = cleanSpDc(cookie);
+  const activeId = window.localStorage.getItem('spotifree_active_user_id') || sessionData?.user?.id || 'active_user';
+
+  const accounts = getSavedAccounts();
+  const existing = accounts.find((a) => a.id === activeId);
+
+  const updated: SavedAccount = {
+    id: activeId,
+    displayName: sessionData?.user?.display_name || existing?.displayName || 'Usuario Spotify',
+    avatarUrl: sessionData?.user?.images?.[0]?.url || existing?.avatarUrl,
+    email: sessionData?.user?.email || existing?.email,
+    cookie: clean,
+    lastUsed: Date.now(),
+  };
+
+  saveAccount(updated);
+  if (sessionData) {
+    try {
+      window.localStorage.setItem(`spotifree_account_session_${activeId}`, JSON.stringify(sessionData));
+    } catch {}
+  }
 }

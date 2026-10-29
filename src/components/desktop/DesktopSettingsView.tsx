@@ -11,6 +11,7 @@ import {
   cleanSpDc,
   getSavedAccounts,
   removeSavedAccount,
+  switchActiveAccount,
   type SavedAccount,
 } from '../../utils/userAccounts';
 
@@ -219,37 +220,10 @@ export const DesktopSettingsView: React.FC = () => {
   const [savedAccountsList, setSavedAccountsList] = useState<SavedAccount[]>(() => getSavedAccounts());
 
   const handleSwitchAccount = async (account: SavedAccount) => {
-    if (!account.cookie) return;
     setCookieError(null);
-    setSpotifyCookie(account.cookie);
     setIsExtractingCookie(true);
     try {
-      const session = await extractSpotifySessionFromCookie(account.cookie);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', account.cookie);
-        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: account.cookie }));
-        if (session.user?.id) {
-          window.localStorage.setItem('spotifree_active_user_id', session.user.id);
-        }
-        window.localStorage.removeItem('spotify_logged_out');
-      }
-      useSpotifyDataStore.setState({
-        isAuthenticated: true,
-        user: session.user,
-        playlists: session.playlists,
-        dynamicShelves: session.shelves,
-        quickAccessCards: session.quickAccess,
-        isLoading: false,
-      });
-      saveAccount({
-        id: session.user?.id || account.id,
-        displayName: session.user?.display_name || account.displayName,
-        email: session.user?.email || account.email,
-        avatarUrl: session.user?.images?.[0]?.url || account.avatarUrl,
-        cookie: account.cookie,
-        accessToken: session.accessToken || account.accessToken,
-        lastUsed: Date.now(),
-      });
+      await switchActiveAccount(account);
       setSavedAccountsList(getSavedAccounts());
       setSavedSpotifyCookieSuccess(true);
       setTimeout(() => setSavedSpotifyCookieSuccess(false), 2500);

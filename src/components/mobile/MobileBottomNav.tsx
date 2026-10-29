@@ -54,9 +54,9 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       >
         <div className="w-6 h-6 flex items-center justify-center">
           {activeTab === 'search' ? (
-            /* Active Bold Search (Official Spotify Mobile SVG) */
+            /* Active Filled Solid Lens Search (Official Spotify Filled Search Icon) */
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-              <path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.279-9.407-9.279zm-7.407 9.279c0-4.006 3.302-7.279 7.407-7.279s7.407 3.273 7.407 7.279-3.302 7.279-7.407 7.279-7.407-3.273-7.407-7.279z" />
+              <path d="M10.533 2.5a8.033 8.033 0 1 0 5.093 14.253l4.82 4.82a1.25 1.25 0 0 0 1.768-1.768l-4.82-4.82A8.033 8.033 0 0 0 10.533 2.5z" />
             </svg>
           ) : (
             /* Inactive Outline Search (Official Spotify Mobile SVG) */

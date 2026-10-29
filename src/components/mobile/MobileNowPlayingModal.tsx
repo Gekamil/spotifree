@@ -227,14 +227,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       }}
     >
       {/* Top Header */}
-      <div className="sticky top-0 z-20 flex items-center justify-between text-white px-5 py-3 bg-black/20 backdrop-blur-sm">
+      <div className="sticky top-0 z-20 flex items-center justify-between text-white px-4 py-2 bg-black/20 backdrop-blur-sm">
         <button
           onClick={onClose}
-          className="w-10 h-10 flex items-center justify-center text-white/90 hover:text-white active:scale-90 transition-transform cursor-pointer"
+          className="w-12 h-12 flex items-center justify-center text-white hover:text-white/80 active:scale-90 transition-transform cursor-pointer"
           title="Minimizar"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M12 15.5l-6-6 1.41-1.41L12 12.67l4.59-4.58L18 9.5z" />
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 15.657l-6.364-6.364a1 1 0 0 1 1.414-1.414L12 12.828l4.95-4.95a1 1 0 1 1 1.414 1.414L12 15.657z" />
           </svg>
         </button>
 
@@ -403,36 +403,36 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
         {/* SECTION: Expandable Spotify Mobile Lyrics Card ("Letras") with Word-by-Word illumination */}
         <div
-          className="rounded-2xl p-5 transition-all relative overflow-hidden shadow-xl"
+          className="rounded-[28px] p-6 transition-all duration-300 relative overflow-hidden shadow-2xl border border-white/10 flex flex-col justify-between"
           style={{
-            backgroundColor: `${themeColor}cc`,
+            backgroundColor: `${themeColor}f0`,
           }}
         >
+          {/* Lyrics Card Header */}
           <div
             onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
-            className="flex items-center justify-between mb-3 text-white cursor-pointer"
+            className="flex items-center justify-between mb-4 text-white cursor-pointer select-none"
           >
-            <span className="font-bold text-sm tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
+            <span className="font-bold text-base tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
               Letras
               {syncedLines.length > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760]" />
+                <span className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760]" />
               )}
             </span>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
-                {isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}
-              </span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-white/80">
+            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 hover:bg-black/50 text-white/90 active:scale-95 transition-all text-xs font-bold">
+              <span>{isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}</span>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
               </svg>
             </div>
           </div>
 
+          {/* Lyrics Content */}
           {syncedLines.length > 0 ? (
             <div
               ref={lyricsScrollRef}
-              className={`space-y-3.5 font-bold text-base transition-all select-none ${
-                isLyricsExpanded ? 'max-h-96 overflow-y-auto scroll-smooth pr-1' : 'max-h-36 overflow-hidden'
+              className={`space-y-4 font-bold select-none transition-all duration-300 ${
+                isLyricsExpanded ? 'max-h-[500px] overflow-y-auto scroll-smooth pr-2' : 'h-[230px] overflow-hidden'
               }`}
             >
               {syncedLines.map((line, idx) => {
@@ -446,10 +446,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                         (window as any).__audioEngine.seek(line.timeMs / 1000);
                       }
                     }}
-                    className={`transition-all duration-200 leading-snug cursor-pointer flex flex-wrap items-baseline gap-x-1 ${
+                    className={`transition-all duration-200 leading-snug cursor-pointer flex flex-wrap items-baseline gap-x-1.5 ${
                       isCurrent
-                        ? 'text-white text-lg scale-102 font-black'
-                        : 'text-black/60 hover:text-white/80'
+                        ? 'text-white text-xl scale-[1.02] font-black'
+                        : 'text-black/55 hover:text-white/80 text-lg'
                     }`}
                   >
                     {isCurrent && line.words.length > 0 ? (
@@ -482,19 +482,46 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               })}
             </div>
           ) : lyrics ? (
-            <p className={`text-white font-bold leading-relaxed whitespace-pre-line text-sm ${isLyricsExpanded ? '' : 'line-clamp-4'}`}>
+            <div className={`text-white font-bold leading-relaxed whitespace-pre-line text-base ${isLyricsExpanded ? 'max-h-[500px] overflow-y-auto' : 'h-[220px] overflow-hidden'}`}>
               {lyrics}
-            </p>
+            </div>
           ) : (
-            <div className="py-2 text-white/90">
-              <p className="font-bold text-base leading-snug">
+            <div className="py-6 text-white/95 space-y-1.5">
+              <p className="font-bold text-lg leading-snug">
                 Disfruta de la mejor calidad de sonido en Spotifree.
               </p>
-              <p className="text-xs text-white/70 mt-1">
+              <p className="text-xs text-white/70">
                 Letras proporcionadas por la comunidad y sincronizadas en directo.
               </p>
             </div>
           )}
+
+          {/* Action Footer */}
+          <div className="flex items-center justify-between pt-4 mt-2 border-t border-white/10 text-white/90">
+            <button
+              onClick={() => {
+                if (navigator.share) {
+                  navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree` }).catch(() => {});
+                }
+              }}
+              className="px-4 py-1.5 rounded-full bg-black/25 hover:bg-black/40 text-xs font-bold uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-all"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M11 2.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm-2.5 4a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 13.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13-2.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM5.5 4.5l-3 7 1 .5 3-7-1-.5zm5 0l3 7-1 .5-3-7 1-.5z" />
+              </svg>
+              <span>Compartir</span>
+            </button>
+
+            <button
+              onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
+              className="w-8 h-8 rounded-full bg-black/25 hover:bg-black/40 flex items-center justify-center text-white active:scale-95 transition-transform"
+              title={isLyricsExpanded ? 'Minimizar' : 'Expandir letras'}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* SECTION: About the Artist Card */}
