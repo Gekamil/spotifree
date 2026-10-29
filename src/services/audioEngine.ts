@@ -39,6 +39,8 @@ function persistVideoId(query: string, videoId: string) {
 
 class AudioEngine {
   private audio: HTMLAudioElement;
+  private carrierAudio: HTMLAudioElement | null = null;
+  private isExplicitlyPaused = false;
   private wakeLockSentinel: any = null;
 
   private audioContext: AudioContext | null = null;
@@ -113,6 +115,15 @@ class AudioEngine {
     this.audio.preload = 'auto';
 
     this.setupHtml5Listeners();
+
+    if (typeof window !== 'undefined') {
+      try {
+        this.carrierAudio = new Audio('/silence.wav');
+        this.carrierAudio.loop = true;
+        this.carrierAudio.volume = 0.01;
+        this.carrierAudio.preload = 'auto';
+      } catch {}
+    }
 
     if (typeof window !== 'undefined') {
       // Unlock audio context on user gesture for mobile / PWA
@@ -316,6 +327,8 @@ class AudioEngine {
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (code === 1) {
       this.isTransitioning = false;
+      this.isExplicitlyPaused = false;
+      this.startCarrier();
       this.checkAndSkipAd();
       usePlayerStore.setState({ isPlaying: true });
       this.startProgressTicker();
@@ -323,9 +336,18 @@ class AudioEngine {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
       }
     } else if (code === 2) {
-      // If the app is in background or screen locked, Android Chrome sends an involuntary pause event to the iframe!
-      // If the user intended the audio to be playing (isPlaying === true), do NOT let Chrome kill it!
-      if (typeof document !== 'undefined' && document.hidden && usePlayerStore.getState().isPlaying) {
+      // If the user or app explicitly paused, DO NOT auto-resume!
+      if (this.isExplicitlyPaused || !usePlayerStore.getState().isPlaying) {
+        this.stopCarrier();
+        this.stopProgressTicker();
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+        }
+        return;
+      }
+
+      // If document is hidden and user DID NOT pause (involuntary browser pause), resume it
+      if (typeof document !== 'undefined' && document.hidden && usePlayerStore.getState().isPlaying && !this.isExplicitlyPaused) {
         try {
           if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
             this.ytPlayer.playVideo();
@@ -339,6 +361,7 @@ class AudioEngine {
 
       // Ignore transient pause events fired during video loading/transitioning
       if (!this.isTransitioning) {
+        this.stopCarrier();
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
         if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -544,28 +567,15 @@ class AudioEngine {
     this.failedVideoIds.clear();
     this.isSeeking = false;
     this.isTransitioning = true;
+    this.isExplicitlyPaused = false;
 
     usePlayerStore.getState().setProgress(startSeconds * 1000);
-    this.startBackgroundCarrier();
+    // Start silent carrier audio synchronously during the user gesture.
+    // This establishes top-level document MediaSession ownership in Brave / Android!
+    this.startCarrier();
 
-    // MOBILE: HTML5 <audio> + server stream => full MediaSession (lockscreen prev/next/seek)
-    if (this.isMobileOrPWA()) {
-      try {
-        const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-        this.activeEngine = 'html5';
-        this.currentVideoId = null;
-        this.audio.pause();
-        this.audio.src = streamUrl;
-        this.audio.currentTime = startSeconds;
-        const { volume, isMuted } = usePlayerStore.getState();
-        this.audio.volume = isMuted ? 0 : volume;
-        this.audio.muted = false;
-        await this.audio.play();
-        usePlayerStore.setState({ isPlaying: true });
-        this.isTransitioning = false;
-        if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch {} }
-        return;
-      } catch { /* fall through to YouTube */ }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     }
 
     try {
@@ -610,7 +620,7 @@ class AudioEngine {
 
           this.ytPlayer.loadVideoById({ videoId, startSeconds });
           this.ytPlayer.playVideo();
-          this.startBackgroundCarrier();
+          this.startCarrier();
           usePlayerStore.setState({ isPlaying: true });
           this.startProgressTicker();
 
@@ -683,6 +693,27 @@ class AudioEngine {
     }
   }
 
+    public startCarrier() {
+    if (typeof window === 'undefined') return;
+    if (this.carrierAudio) {
+      try {
+        if (this.carrierAudio.paused) {
+          this.carrierAudio.play().catch(() => {});
+        }
+      } catch {}
+    }
+    this.startBackgroundCarrier();
+  }
+
+  public stopCarrier() {
+    if (this.carrierAudio) {
+      try {
+        this.carrierAudio.pause();
+      } catch {}
+    }
+    this.stopBackgroundCarrier();
+  }
+
   public async startBackgroundCarrier() {
     // Acquire Screen Wake Lock on mobile devices so user can keep lyrics / player on without screen sleep
     if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock?.request) {
@@ -706,7 +737,7 @@ class AudioEngine {
 
   public unlockAudio() {
     try {
-      this.startBackgroundCarrier();
+      this.startCarrier();
       if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission().catch(() => {});
       }
@@ -719,57 +750,24 @@ class AudioEngine {
   }
 
   public togglePlay() {
-    if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getPlayerState === 'function') {
-      const state = this.ytPlayer.getPlayerState();
-      if (state === 1) { // Playing -> Pause
-        this.ytPlayer.pauseVideo();
-        this.stopBackgroundCarrier();
-        usePlayerStore.setState({ isPlaying: false });
-        this.stopProgressTicker();
-        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-          try { navigator.mediaSession.playbackState = 'paused'; } catch {}
-        }
-      } else { // Paused -> Play
-        if (typeof this.ytPlayer.unMute === 'function') {
-          this.ytPlayer.unMute();
-          const { volume, isMuted } = usePlayerStore.getState();
-          if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
-        }
-        this.ytPlayer.playVideo();
-        this.startBackgroundCarrier();
-        usePlayerStore.setState({ isPlaying: true });
-        this.startProgressTicker();
-        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-          try { navigator.mediaSession.playbackState = 'playing'; } catch {}
-        }
-      }
-      return;
-    }
-
-    if (this.audio.paused) {
-      this.audio.play().catch(() => {});
-      this.startBackgroundCarrier();
-      usePlayerStore.setState({ isPlaying: true });
-      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
-      }
+    const isPlaying = usePlayerStore.getState().isPlaying;
+    if (isPlaying) {
+      this.pause();
     } else {
-      this.audio.pause();
-      this.stopBackgroundCarrier();
-      usePlayerStore.setState({ isPlaying: false });
-      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-        try { navigator.mediaSession.playbackState = 'paused'; } catch {}
-      }
+      this.resume();
     }
   }
 
   public pause() {
+    this.isExplicitlyPaused = true;
+    this.stopCarrier();
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try { this.ytPlayer.pauseVideo(); } catch {}
       this.stopProgressTicker();
     }
-    this.audio.pause();
-    this.stopBackgroundCarrier();
+    if (this.audio) {
+      try { this.audio.pause(); } catch {}
+    }
     usePlayerStore.setState({ isPlaying: false });
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = 'paused'; } catch {}
@@ -777,7 +775,8 @@ class AudioEngine {
   }
 
   public resume() {
-    this.startBackgroundCarrier();
+    this.isExplicitlyPaused = false;
+    this.startCarrier();
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       try {
         if (typeof this.ytPlayer.unMute === 'function') {
@@ -795,7 +794,9 @@ class AudioEngine {
       return;
     }
 
-    this.audio.play().catch(() => {});
+    if (this.audio) {
+      this.audio.play().catch(() => {});
+    }
     usePlayerStore.setState({ isPlaying: true });
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = 'playing'; } catch {}
