@@ -3,11 +3,13 @@ import {
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
   ShuffleNativeIcon,
+  SmartShuffleNativeIcon,
   PrevNativeIcon,
   PlayNativeIcon,
   PauseNativeIcon,
   NextNativeIcon,
   RepeatNativeIcon,
+  RepeatOneNativeIcon,
   MiniplayerNativeIcon,
   LyricsNativeIcon,
   QueueNativeIcon,
@@ -32,7 +34,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     durationMs,
     volume,
     isMuted,
-    isShuffle,
+    shuffleMode,
     repeatMode,
     likedTrackIds,
     nextTrack,
@@ -277,12 +279,25 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
         <div className="flex items-center gap-4 mb-1.5">
           <button
             onClick={toggleShuffle}
-            title="Habilitar reproducción aleatoria"
-            className={`transition-colors p-1 ${
-              isShuffle ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'
+            title={
+              shuffleMode === 'smart'
+                ? 'Aleatorio inteligente activado'
+                : shuffleMode === 'all'
+                ? 'Aleatorio activado'
+                : 'Habilitar reproducción aleatoria'
+            }
+            className={`transition-colors p-1 relative flex flex-col items-center ${
+              shuffleMode !== 'off' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'
             }`}
           >
-            <ShuffleNativeIcon size={16} className={isShuffle ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
+            {shuffleMode === 'smart' ? (
+              <SmartShuffleNativeIcon size={16} className="text-spotify-green" />
+            ) : (
+              <ShuffleNativeIcon size={16} className={shuffleMode === 'all' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
+            )}
+            {shuffleMode !== 'off' && (
+              <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
+            )}
           </button>
 
           <button
@@ -315,12 +330,25 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
 
           <button
             onClick={toggleRepeat}
-            title="Activar repetir"
-            className={`transition-colors p-1 ${
+            title={
+              repeatMode === 'one'
+                ? 'Repetir una canción'
+                : repeatMode === 'all'
+                ? 'Repetir todo activado'
+                : 'Activar repetir'
+            }
+            className={`transition-colors p-1 relative flex flex-col items-center ${
               repeatMode !== 'off' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'
             }`}
           >
-            <RepeatNativeIcon size={16} className={repeatMode !== 'off' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
+            {repeatMode === 'one' ? (
+              <RepeatOneNativeIcon size={16} className="text-spotify-green" />
+            ) : (
+              <RepeatNativeIcon size={16} className={repeatMode === 'all' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
+            )}
+            {repeatMode !== 'off' && (
+              <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
+            )}
           </button>
         </div>
 

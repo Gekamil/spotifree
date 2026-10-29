@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { audioEngine } from '../../services/audioEngine';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
   NextNativeIcon,
   PrevNativeIcon,
   ShuffleNativeIcon,
+  SmartShuffleNativeIcon,
   RepeatNativeIcon,
+  RepeatOneNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
 } from '../icons/SpotifyNativeIcons';
@@ -17,6 +20,91 @@ import { handleImageError } from '../../utils/imageFallback';
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface LyricWord {
+  timeMs: number;
+  text: string;
+}
+
+interface SyncedLine {
+  timeMs: number;
+  endTimeMs: number;
+  text: string;
+  words: LyricWord[];
+}
+
+function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
+  const rawLines = lrcText.split('\n');
+  const tempLines: Array<{ timeMs: number; text: string; rawContent: string }> = [];
+
+  for (const raw of rawLines) {
+    const lineMatch = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
+    if (lineMatch) {
+      const min = parseInt(lineMatch[1], 10);
+      const sec = parseFloat(`${lineMatch[2]}.${lineMatch[3]}`);
+      const timeMs = Math.round((min * 60 + sec) * 1000);
+      const content = lineMatch[4].trim();
+      if (content) {
+        tempLines.push({
+          timeMs,
+          text: content.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').trim(),
+          rawContent: content,
+        });
+      }
+    }
+  }
+
+  tempLines.sort((a, b) => a.timeMs - b.timeMs);
+
+  const parsedLines: SyncedLine[] = [];
+  const wordTokenRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>([^<]*)/g;
+
+  for (let i = 0; i < tempLines.length; i++) {
+    const item = tempLines[i];
+    const nextItem = tempLines[i + 1];
+    const endTimeMs = nextItem ? nextItem.timeMs : item.timeMs + 4500;
+    const words: LyricWord[] = [];
+
+    wordTokenRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wordTokenRegex.exec(item.rawContent)) !== null) {
+      const wMin = parseInt(match[1], 10);
+      const wSec = parseFloat(`${match[2]}.${match[3]}`);
+      const wTimeMs = Math.round((wMin * 60 + wSec) * 1000);
+      const wText = match[4];
+      if (wText) {
+        words.push({ timeMs: wTimeMs, text: wText });
+      }
+    }
+
+    if (words.length === 0) {
+      const tokens = item.text.split(/(\s+)/).filter(Boolean);
+      const totalChars = tokens.reduce((acc, t) => acc + (t.trim().length > 0 ? t.length : 0), 0);
+      const rawGap = Math.max(800, endTimeMs - item.timeMs);
+      const lineDuration = Math.max(600, Math.min(rawGap * 0.78, 4800));
+      let elapsedMs = 0;
+
+      for (let j = 0; j < tokens.length; j++) {
+        const token = tokens[j];
+        const isSpace = token.trim().length === 0;
+        const charWeight = isSpace ? 0.2 : token.length;
+        const fraction = totalChars > 0 ? charWeight / (totalChars + 0.2 * tokens.length) : 1 / tokens.length;
+        const wTimeMs = item.timeMs + Math.round(elapsedMs);
+        words.push({ timeMs: wTimeMs, text: token });
+        elapsedMs += fraction * lineDuration;
+      }
+    }
+
+    parsedLines.push({
+      timeMs: item.timeMs,
+      endTimeMs,
+      text: item.text,
+      words,
+    });
+  }
+
+  return parsedLines;
 }
 
 export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
@@ -32,7 +120,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     progressMs,
     durationMs,
     setProgress,
-    isShuffle,
+    shuffleMode,
     toggleShuffle,
     repeatMode,
     toggleRepeat,
@@ -41,15 +129,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   } = usePlayerStore();
 
   const [lyrics, setLyrics] = useState<string | null>(null);
-  const [syncedLyrics, setSyncedLyrics] = useState<Array<{ time: number; text: string }> | null>(null);
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
+  const lyricsScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
     async function fetchLyrics() {
       if (!currentTrack) return;
       setLyrics(null);
-      setSyncedLyrics(null);
+      setSyncedLines([]);
       try {
         const artist = currentTrack.artists?.[0]?.name || '';
         const title = currentTrack.name;
@@ -60,22 +149,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           const data = await res.json();
           if (cancelled) return;
           if (data.syncedLyrics) {
-            const lines = data.syncedLyrics
-              .split('\n')
-              .map((l: string) => {
-                const match = l.match(/\[(\d+):(\d+\.\d+)\](.*)/);
-                if (match) {
-                  const time = parseInt(match[1]) * 60 + parseFloat(match[2]);
-                  return { time, text: match[3].trim() };
-                }
-                return null;
-              })
-              .filter(Boolean);
-            setSyncedLyrics(lines as any);
+            const parsed = parseEnhancedLyrics(data.syncedLyrics);
+            setSyncedLines(parsed);
             setLyrics(data.plainLyrics || null);
           } else if (data.plainLyrics) {
             setLyrics(data.plainLyrics);
-            setSyncedLyrics(null);
+            setSyncedLines([]);
           }
         }
       } catch {
@@ -94,15 +173,29 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const coverUrl = currentTrack.album?.images?.[0]?.url;
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
   const themeColor = resolveVibrantColor(currentTrack.id, currentTrack.name);
-  const currentSeconds = progressMs / 1000;
+  const vocalProgressMs = progressMs + 220;
+
+  const activeLineIndex = syncedLines.length > 0
+    ? syncedLines.findIndex((line, i) => {
+        const nextLine = syncedLines[i + 1];
+        return vocalProgressMs >= line.timeMs && (!nextLine || vocalProgressMs < nextLine.timeMs);
+      })
+    : -1;
+
+  useEffect(() => {
+    if (isLyricsExpanded && lyricsScrollRef.current && activeLineIndex >= 0) {
+      const activeEl = lyricsScrollRef.current.querySelector(`[data-line-index="${activeLineIndex}"]`);
+      if (activeEl) {
+        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [activeLineIndex, isLyricsExpanded]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
     const newMs = (val / 100) * durationMs;
     setProgress(newMs);
-    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-      (window as any).__audioEngine.seek(newMs / 1000);
-    }
+    audioEngine.seek(newMs / 1000);
   };
 
   return (
@@ -209,11 +302,18 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           <div className="flex items-center justify-between pt-1">
             <button
               onClick={toggleShuffle}
-              className={`w-10 h-10 flex items-center justify-center transition-colors active:scale-90 ${
-                isShuffle ? 'text-[#1ed760]' : 'text-[#b3b3b3]'
+              className={`w-10 h-10 flex flex-col items-center justify-center transition-colors active:scale-90 relative ${
+                shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'
               }`}
             >
-              <ShuffleNativeIcon size={22} />
+              {shuffleMode === 'smart' ? (
+                <SmartShuffleNativeIcon size={22} className="text-[#1ed760]" />
+              ) : (
+                <ShuffleNativeIcon size={22} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+              )}
+              {shuffleMode !== 'off' && (
+                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
+              )}
             </button>
 
             <button
@@ -243,11 +343,18 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             <button
               onClick={toggleRepeat}
-              className={`w-10 h-10 flex items-center justify-center transition-colors active:scale-90 ${
+              className={`w-10 h-10 flex flex-col items-center justify-center transition-colors active:scale-90 relative ${
                 repeatMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'
               }`}
             >
-              <RepeatNativeIcon size={22} />
+              {repeatMode === 'one' ? (
+                <RepeatOneNativeIcon size={22} className="text-[#1ed760]" />
+              ) : (
+                <RepeatNativeIcon size={22} className={repeatMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+              )}
+              {repeatMode !== 'off' && (
+                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
+              )}
             </button>
           </div>
 
@@ -275,16 +382,23 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           </div>
         </div>
 
-        {/* SECTION: Expandable Spotify Mobile Lyrics Card ("Letras") */}
+        {/* SECTION: Expandable Spotify Mobile Lyrics Card ("Letras") with Word-by-Word illumination */}
         <div
-          onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
-          className="rounded-2xl p-5 cursor-pointer transition-all relative overflow-hidden shadow-xl"
+          className="rounded-2xl p-5 transition-all relative overflow-hidden shadow-xl"
           style={{
             backgroundColor: `${themeColor}cc`,
           }}
         >
-          <div className="flex items-center justify-between mb-3 text-white">
-            <span className="font-bold text-sm tracking-tight font-['SpotifyMixUITitle']">Letras</span>
+          <div
+            onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
+            className="flex items-center justify-between mb-3 text-white cursor-pointer"
+          >
+            <span className="font-bold text-sm tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
+              Letras
+              {syncedLines.length > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+              )}
+            </span>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">
                 {isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}
@@ -295,20 +409,55 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </div>
           </div>
 
-          {syncedLyrics ? (
-            <div className={`space-y-3 font-bold text-base transition-all ${isLyricsExpanded ? 'max-h-96 overflow-y-auto' : 'line-clamp-4'}`}>
-              {syncedLyrics.map((line, idx) => {
-                const isActive =
-                  currentSeconds >= line.time &&
-                  (idx === syncedLyrics.length - 1 || currentSeconds < syncedLyrics[idx + 1].time);
+          {syncedLines.length > 0 ? (
+            <div
+              ref={lyricsScrollRef}
+              className={`space-y-3.5 font-bold text-base transition-all select-none ${
+                isLyricsExpanded ? 'max-h-96 overflow-y-auto scroll-smooth pr-1' : 'max-h-36 overflow-hidden'
+              }`}
+            >
+              {syncedLines.map((line, idx) => {
+                const isCurrent = idx === activeLineIndex;
                 return (
                   <p
-                    key={idx}
-                    className={`transition-all duration-200 leading-snug ${
-                      isActive ? 'text-white text-lg scale-102 font-black' : 'text-black/60'
+                    key={`m-lyric-${idx}-${line.timeMs}`}
+                    data-line-index={idx}
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+                        (window as any).__audioEngine.seek(line.timeMs / 1000);
+                      }
+                    }}
+                    className={`transition-all duration-200 leading-snug cursor-pointer flex flex-wrap items-baseline gap-x-1 ${
+                      isCurrent
+                        ? 'text-white text-lg scale-102 font-black'
+                        : 'text-black/60 hover:text-white/80'
                     }`}
                   >
-                    {line.text}
+                    {isCurrent && line.words.length > 0 ? (
+                      line.words.map((w, wIdx) => {
+                        const vocalMs = progressMs + 220;
+                        const isWordSung = vocalMs >= w.timeMs;
+                        const isCurrentWord =
+                          isWordSung &&
+                          (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
+                        return (
+                          <span
+                            key={`mw-${idx}-${wIdx}`}
+                            className={`transition-all duration-150 inline-block ${
+                              isCurrentWord
+                                ? 'text-white font-black drop-shadow-[0_2px_14px_rgba(255,255,255,1)] scale-105'
+                                : isWordSung
+                                ? 'text-white/95 font-bold'
+                                : 'text-black/45 font-bold'
+                            }`}
+                          >
+                            {w.text}
+                          </span>
+                        );
+                      })
+                    ) : (
+                      <span>{line.text}</span>
+                    )}
                   </p>
                 );
               })}

@@ -590,6 +590,21 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
             </div>
 
+            {/* Verified cookie status notification matching Point 17 */}
+            {spotifyCookie && !cookieError && (
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-white text-xs">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
+                  <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+                </svg>
+                <div className="min-w-0">
+                  <p className="font-bold text-[#1ed760]">Clave sp_dc verificada y activa</p>
+                  <p className="text-[#a7a7a7] text-[11px] truncate">
+                    Conectada con la cuenta de <strong>{user?.display_name || 'Spotify'}</strong>. Tus canciones, playlists y biblioteca están sincronizadas.
+                  </p>
+                </div>
+              </div>
+            )}
+
             {cookieError && (
               <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
                 {cookieError}
@@ -815,15 +830,9 @@ export const DesktopSettingsView: React.FC = () => {
             {/* Equalizer Container Card */}
             <div className="bg-[#181818] rounded-xl p-6 border border-white/5 shadow-2xl relative select-none">
               <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white font-['SpotifyMixUITitle']">
-                    Curva de respuesta en frecuencia
-                  </span>
-                  <span className="text-[10px] font-black tracking-wider uppercase px-2 py-0.5 rounded-full bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-                    Web Audio DSP
-                  </span>
-                </div>
+                <span className="text-sm font-bold text-white font-['SpotifyMixUITitle']">
+                  Curva de ecualización
+                </span>
                 <button
                   onClick={() => handlePresetSelect('flat')}
                   className="text-xs text-[#b3b3b3] hover:text-white hover:underline transition-colors cursor-pointer"
@@ -956,10 +965,7 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
 
               <div className="flex justify-between items-center mt-7 pt-3 border-t border-white/5 text-xs text-[#a7a7a7]">
-                <span>Haz clic o arrastra los puntos directamente en la curva para ecualizar.</span>
-                <span className="font-mono text-[11px] text-[#1ed760]">
-                  6 bandas paramétricas activas
-                </span>
+                <span>Haz clic o arrastra los puntos directamente en la curva para ajustar frecuencias.</span>
               </div>
             </div>
           </section>

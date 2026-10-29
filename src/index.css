@@ -146,3 +146,21 @@
 .animate-spotify-eq-3 {
   animation: spotifyBar3 0.65s ease-in-out infinite;
 }
+
+@keyframes spotifyMarquee {
+  0%, 20% {
+    transform: translateX(0%);
+  }
+  50%, 70% {
+    transform: translateX(calc(-100% + 160px));
+  }
+  90%, 100% {
+    transform: translateX(0%);
+  }
+}
+
+.animate-spotify-marquee {
+  display: inline-block;
+  white-space: nowrap;
+  animation: spotifyMarquee 8s ease-in-out infinite;
+}

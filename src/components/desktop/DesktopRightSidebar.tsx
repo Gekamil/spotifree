@@ -348,8 +348,6 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     }
   }, [activeLineIndex, activeRightSidebar]);
 
-  if (activeRightSidebar === 'none') return null;
-
   const isLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
   const currentTrackIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
   const upcomingQueue = currentTrackIndex >= 0 ? queue.slice(currentTrackIndex + 1) : queue;
@@ -369,11 +367,17 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     }
   };
 
+  const isVisible = activeRightSidebar !== 'none';
+
   return (
     <aside
       aria-label={activeRightSidebar === 'queue' ? 'Cola de reproducción' : 'Vista Sonando'}
       id="Desktop_PanelContainer_Id"
-      className="w-[340px] xl:w-[360px] h-full bg-[#121212] rounded-lg flex flex-col shrink-0 select-none overflow-hidden border border-white/5 mr-2 transition-all duration-300 animate-in slide-in-from-right-4"
+      className={`h-full bg-[#121212] rounded-lg flex flex-col shrink-0 select-none overflow-hidden transition-[width,margin,opacity,transform] duration-300 ease-[cubic-bezier(0.3,0,0,1)] ${
+        isVisible
+          ? 'w-[340px] xl:w-[360px] mr-2 border border-white/5 opacity-100 translate-x-0'
+          : 'w-0 mr-0 border-0 opacity-0 pointer-events-none translate-x-6'
+      }`}
     >
       {/* 1. NOW PLAYING VIEW (NPV) MODE */}
       {activeRightSidebar === 'now-playing' && (

@@ -188,16 +188,6 @@ export const ProfileDropdown: React.FC = () => {
 
           <button
             onClick={() => {
-              setActiveMainTab('profile');
-              closeProfile();
-            }}
-            className="w-full h-10 px-3 flex items-center text-sm font-normal text-white hover:bg-white/10 rounded-[2px] transition-colors cursor-pointer"
-          >
-            Perfil
-          </button>
-
-          <button
-            onClick={() => {
               setActiveMainTab('settings');
               closeProfile();
             }}

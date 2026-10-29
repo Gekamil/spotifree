@@ -199,29 +199,33 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
             </div>
           ) : (
             <div className="space-y-2">
-              {userPlaylists.slice(0, 6).map((pl) => (
-                <div
-                  key={pl.id}
-                  onClick={() => onSelectPlaylist && onSelectPlaylist(pl)}
-                  className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.03] active:bg-white/[0.1] cursor-pointer transition-colors"
-                >
-                  <img
-                    src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
-                    alt={pl.name}
-                    onError={handleImageError}
-                    className="w-12 h-12 rounded-[4px] object-cover bg-[#242424] shadow shrink-0"
-                  />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="font-bold text-white text-sm truncate">{pl.name}</span>
-                    <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                      Playlist • {pl.tracks?.total || 0} canciones
-                    </span>
+              {userPlaylists.slice(0, 8).map((pl) => {
+                const cached = useSpotifyDataStore.getState().playlistDetailsCache[pl.id];
+                const count = cached?.tracks?.total || cached?.tracks?.items?.length || pl.tracks?.total || pl.tracks?.items?.length || 0;
+                return (
+                  <div
+                    key={pl.id}
+                    onClick={() => onSelectPlaylist && onSelectPlaylist(pl)}
+                    className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.03] active:bg-white/[0.1] cursor-pointer transition-colors"
+                  >
+                    <img
+                      src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                      alt={pl.name}
+                      onError={handleImageError}
+                      className="w-12 h-12 rounded-[4px] object-cover bg-[#242424] shadow shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="font-bold text-white text-sm truncate">{pl.name}</span>
+                      <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                        Playlist {count > 0 ? `• ${count} canciones` : ''}
+                      </span>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-white/40">
+                      <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
+                    </svg>
                   </div>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-white/40">
-                    <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z" />
-                  </svg>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -12,6 +12,7 @@ interface PlayerState {
   previousVolume: number;
   isMuted: boolean;
   isShuffle: boolean;
+  shuffleMode: 'off' | 'all' | 'smart';
   repeatMode: 'off' | 'all' | 'one';
   queue: Track[];
   history: Track[];
@@ -54,6 +55,7 @@ const store = create<PlayerState>((set, get) => ({
   previousVolume: 0.7,
   isMuted: false,
   isShuffle: false,
+  shuffleMode: 'off',
   repeatMode: 'off',
   queue: [],
   history: [],
@@ -97,6 +99,7 @@ const store = create<PlayerState>((set, get) => ({
             { src: track.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', sizes: '512x512', type: 'image/jpeg' },
           ],
         });
+        navigator.mediaSession.playbackState = 'playing';
       } catch {}
     }
   },
@@ -112,6 +115,11 @@ const store = create<PlayerState>((set, get) => ({
       } else {
         engine.pause();
       }
+    }
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.playbackState = nextState ? 'playing' : 'paused';
+      } catch {}
     }
   },
 
@@ -178,6 +186,18 @@ const store = create<PlayerState>((set, get) => ({
       } catch {}
     }
     set({ progressMs: ms });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && (navigator.mediaSession as any).setPositionState) {
+      const { durationMs } = get();
+      if (durationMs > 0 && ms <= durationMs) {
+        try {
+          (navigator.mediaSession as any).setPositionState({
+            duration: Math.max(1, durationMs / 1000),
+            playbackRate: 1,
+            position: Math.max(0, ms / 1000),
+          });
+        } catch {}
+      }
+    }
   },
 
   setDuration: (ms: number) => {
@@ -198,7 +218,13 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   toggleShuffle: () => {
-    set((state) => ({ isShuffle: !state.isShuffle }));
+    set((state) => {
+      const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
+      return {
+        shuffleMode: nextShuffle,
+        isShuffle: nextShuffle !== 'off',
+      };
+    });
   },
 
   toggleRepeat: () => {
@@ -240,5 +266,32 @@ export const usePlayerStore =
 
 if (typeof window !== 'undefined') {
   (window as any).__usePlayerStore = usePlayerStore;
+
+  // Register W3C MediaSession API action handlers for native lockscreen player controls
+  if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler('play', () => {
+        usePlayerStore.getState().togglePlay();
+      });
+      navigator.mediaSession.setActionHandler('pause', () => {
+        usePlayerStore.getState().togglePlay();
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        usePlayerStore.getState().previousTrack();
+      });
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        usePlayerStore.getState().nextTrack();
+      });
+      navigator.mediaSession.setActionHandler('seekto', (details) => {
+        if (details.seekTime != null) {
+          const ms = details.seekTime * 1000;
+          usePlayerStore.getState().setProgress(ms);
+          if ((window as any).__audioEngine) {
+            (window as any).__audioEngine.seek(details.seekTime);
+          }
+        }
+      });
+    } catch {}
+  }
 }
 

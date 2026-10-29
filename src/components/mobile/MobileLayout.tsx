@@ -18,10 +18,26 @@ import { handleImageError } from '../../utils/imageFallback';
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums'>('all');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
+
+  const checkIsMobileArtist = (p: any): boolean => {
+    if (p.id === 'liked-songs' || p.id.includes('collection:tracks') || p.type === 'playlist' || p.type === 'album') {
+      return false;
+    }
+    return (
+      p.type === 'artist' ||
+      p.is_artist === true ||
+      p.description?.toLowerCase()?.trim() === 'artista' ||
+      p.id === '3x7gz85amxEplGx7LQxE7Z' ||
+      p.id === '5lwmRuXgjX8xIwlnauTZIP' ||
+      p.id.startsWith('art-') ||
+      p.id.startsWith('artist-')
+    );
+  };
 
   const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
@@ -320,18 +336,26 @@ export const MobileLayout: React.FC = () => {
 
             {/* Filter Chips */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-              {['Playlists', 'Artistas', 'Álbumes', 'Descargado'].map((chip, idx) => (
-                <button
-                  key={chip}
-                  className={`h-8 px-4 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                    idx === 0
-                      ? 'bg-white/20 text-white'
-                      : 'bg-white/10 text-white hover:bg-white/15'
-                  }`}
-                >
-                  {chip}
-                </button>
-              ))}
+              {[
+                { id: 'playlists', label: 'Playlists' },
+                { id: 'artists', label: 'Artistas' },
+                { id: 'albums', label: 'Álbumes' },
+              ].map((chip) => {
+                const isSelected = libraryFilter === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    onClick={() => setLibraryFilter(isSelected ? 'all' : (chip.id as any))}
+                    className={`h-8 px-4 rounded-full text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#1ed760] text-black font-black'
+                        : 'bg-white/10 text-white hover:bg-white/15'
+                    }`}
+                  >
+                    {chip.label}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Library Items List */}
@@ -350,60 +374,73 @@ export const MobileLayout: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-1.5 pt-2">
-                {/* Liked songs item */}
-                <div
-                  onClick={() =>
-                    handleSelectPlaylistById(
-                      'liked-songs',
-                      'Canciones que te gustan',
-                      'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-                    )
-                  }
-                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
-                >
-                  <img
-                    src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
-                    alt="Canciones que te gustan"
-                    onError={handleImageError}
-                    className="w-16 h-16 rounded-[4px] object-cover shadow shrink-0"
-                  />
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-white text-sm truncate">
-                      Canciones que te gustan
-                    </span>
-                    <span className="text-xs text-[#b3b3b3] mt-0.5">
-                      Playlist
-                    </span>
+                {/* Liked songs item - only show if libraryFilter is 'all' or 'playlists' */}
+                {libraryFilter !== 'artists' && libraryFilter !== 'albums' && (
+                  <div
+                    onClick={() =>
+                      handleSelectPlaylistById(
+                        'liked-songs',
+                        'Canciones que te gustan',
+                        'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+                      )
+                    }
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                  >
+                    <img
+                      src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+                      alt="Canciones que te gustan"
+                      onError={handleImageError}
+                      className="w-16 h-16 rounded-[4px] object-cover shadow shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-white text-sm truncate">
+                        Canciones que te gustan
+                      </span>
+                      <span className="text-xs text-[#b3b3b3] mt-0.5">
+                        Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || 0} canciones
+                      </span>
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* All user playlists from current session */}
+                {/* All user playlists and artists strictly filtered */}
                 {playlists
                   .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
-                  .map((pl) => (
-                    <div
-                      key={pl.id}
-                      onClick={() =>
-                        handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url)
-                      }
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
-                    >
-                      <img
-                        src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
-                        alt={pl.name}
-                        onError={handleImageError}
-                        className="w-16 h-16 rounded-[4px] object-cover bg-[#242424] shadow shrink-0"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-white text-sm truncate">
-                          {pl.name}
-                        </span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                          Playlist • {pl.owner?.display_name || user?.display_name || 'Spotify'}
-                        </span>
+                  .filter((p) => {
+                    const isArt = checkIsMobileArtist(p);
+                    if (libraryFilter === 'artists') return isArt;
+                    if (libraryFilter === 'playlists') return !isArt;
+                    return true;
+                  })
+                  .map((pl) => {
+                    const isArt = checkIsMobileArtist(pl);
+                    return (
+                      <div
+                        key={pl.id}
+                        onClick={() =>
+                          handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url)
+                        }
+                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                      >
+                        <img
+                          src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                          alt={pl.name}
+                          onError={handleImageError}
+                          className={`w-16 h-16 object-cover bg-[#242424] shadow shrink-0 ${
+                            isArt ? 'rounded-full' : 'rounded-[4px]'
+                          }`}
+                        />
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-white text-sm truncate">
+                            {pl.name}
+                          </span>
+                          <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                            {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
               </div>
             )}
           </div>

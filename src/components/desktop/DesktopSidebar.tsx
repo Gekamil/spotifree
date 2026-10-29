@@ -41,27 +41,27 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
   let processedPlaylists = [...playlists];
 
+  // Helper to determine if an item is strictly an Artist
+  const checkIsArtist = (p: any): boolean => {
+    if (p.id === 'liked-songs' || p.id.includes('collection:tracks') || p.type === 'playlist' || p.type === 'album') {
+      return false;
+    }
+    return (
+      p.type === 'artist' ||
+      p.is_artist === true ||
+      p.description?.toLowerCase()?.trim() === 'artista' ||
+      p.id === '3x7gz85amxEplGx7LQxE7Z' ||
+      p.id === '5lwmRuXgjX8xIwlnauTZIP' ||
+      p.id.startsWith('art-') ||
+      p.id.startsWith('artist-')
+    );
+  };
+
   // 1. Filter by Type (Listas / Artistas)
   if (filter === 'playlists') {
-    processedPlaylists = processedPlaylists.filter((p) => {
-      const isArtist =
-        (p as any).type === 'artist' ||
-        (p as any).description?.toLowerCase()?.includes('artista') ||
-        p.id === '3x7gz85amxEplGx7LQxE7Z' ||
-        p.id === '5lwmRuXgjX8xIwlnauTZIP' ||
-        p.id.startsWith('art-');
-      return !isArtist;
-    });
+    processedPlaylists = processedPlaylists.filter((p) => !checkIsArtist(p));
   } else if (filter === 'artists') {
-    processedPlaylists = processedPlaylists.filter((p) => {
-      const isArtist =
-        (p as any).type === 'artist' ||
-        (p as any).description?.toLowerCase()?.includes('artista') ||
-        p.id === '3x7gz85amxEplGx7LQxE7Z' ||
-        p.id === '5lwmRuXgjX8xIwlnauTZIP' ||
-        p.id.startsWith('art-');
-      return isArtist;
-    });
+    processedPlaylists = processedPlaylists.filter((p) => checkIsArtist(p));
   }
 
   // 2. Filter by search query

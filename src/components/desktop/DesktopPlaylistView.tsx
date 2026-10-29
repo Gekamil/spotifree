@@ -4,6 +4,7 @@ import {
   PlayNativeIcon,
   PauseNativeIcon,
   ShuffleNativeIcon,
+  VerifiedArtistNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -12,6 +13,24 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
+import { audioEngine } from '../../services/audioEngine';
+
+function getArtistMonthlyListeners(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('romeo santos')) return '24.819.340 oyentes mensuales';
+  if (n.includes('prince royce')) return '18.940.110 oyentes mensuales';
+  if (n.includes('trueno')) return '16.540.890 oyentes mensuales';
+  if (n.includes('bad bunny')) return '68.420.912 oyentes mensuales';
+  if (n.includes('ozuna')) return '32.140.780 oyentes mensuales';
+  if (n.includes('feid')) return '41.290.450 oyentes mensuales';
+  if (n.includes('quevedo')) return '22.380.120 oyentes mensuales';
+  if (n.includes('rosalía') || n.includes('rosalia')) return '28.450.600 oyentes mensuales';
+  if (n.includes('myke towers')) return '35.620.300 oyentes mensuales';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 80000000;
+  const count = Math.max(1200000, hash + 3500000);
+  return `${count.toLocaleString('es-ES')} oyentes mensuales`;
+}
 
 const TRACK_COVER_CACHE = new Map<string, string>();
 
@@ -342,6 +361,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               setDynamicTracks(artistTracks);
               setDynamicPlaylist(updatedArtistPlaylist);
               setLoading(false);
+              artistTracks.slice(0, 3).forEach((t) => {
+                const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
+                audioEngine.prefetchTrack(q, t.id);
+              });
               return;
             }
           }
@@ -611,7 +634,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         {/* Cover Art 232x232 */}
         <div
           onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
-          className={`w-56 h-56 shrink-0 shadow-2xl rounded-[4px] overflow-hidden bg-[#282828] relative ${
+          className={`w-56 h-56 shrink-0 shadow-2xl ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden bg-[#282828] relative ${
             isUserCreatedPlaylist ? 'group cursor-pointer' : ''
           }`}
           title={isUserCreatedPlaylist ? "Elegir foto" : undefined}
@@ -652,72 +675,85 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         </div>
 
         {/* Metadata */}
-        <div className="flex flex-col gap-1.5 min-w-0">
-          <span className="text-xs font-bold text-white capitalize">
-            {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas'
-              ? 'Playlist'
-              : isArtist
-              ? 'Artista'
-              : isAlbum
-              ? 'Álbum'
-              : isFolder
-              ? 'Carpeta'
-              : 'Lista'}
-          </span>
-          <h1
-            onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
-            className={`text-5xl lg:text-7xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate ${
-              isUserCreatedPlaylist ? 'cursor-pointer hover:underline' : ''
-            }`}
-          >
-            {dynamicPlaylist.name}
-          </h1>
-
-          {dynamicPlaylist.description && (
-            <p className="text-sm text-[#b3b3b3] font-normal mt-1 line-clamp-2">
-              {dynamicPlaylist.description}
+        {isArtist ? (
+          <div className="flex flex-col gap-2 min-w-0 justify-end z-10">
+            <div className="flex items-center gap-2 text-white font-bold text-sm">
+              <VerifiedArtistNativeIcon size={24} className="text-[#3d91f4]" />
+              <span>Artista verificado</span>
+            </div>
+            <h1 className="text-6xl lg:text-8xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate">
+              {dynamicPlaylist.name}
+            </h1>
+            <p className="text-base text-white/90 font-medium mt-2">
+              {getArtistMonthlyListeners(dynamicPlaylist.name)}
             </p>
-          )}
-
-          {/* Single unified metadata line matching Real Spotify */}
-          <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
-            {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
-              <>
-                <span className="font-bold text-white hover:underline cursor-pointer">Spotify</span>
-                <span>•</span>
-                <span className="text-white/90">guardada 625.055 veces</span>
-                <span>•</span>
-                <span className="text-white/90">
-                  {loading
-                    ? 'Cargando canciones...'
-                    : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                </span>
-              </>
-            ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
-              <>
-                <span className="font-bold text-white hover:underline cursor-pointer">Hecha para Jorgeperezvk</span>
-                <span>•</span>
-                <span className="text-white/90">
-                  {loading
-                    ? 'Cargando canciones...'
-                    : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="font-bold text-white hover:underline cursor-pointer">
-                  {dynamicPlaylist.owner?.display_name || 'Spotify'}
-                </span>
-                <span>•</span>
-                <span className="text-white/90">
-                  {loading
-                    ? 'Cargando canciones...'
-                    : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                </span>
-              </>
-            )}
           </div>
-        </div>
+        ) : (
+          <div className="flex flex-col gap-1.5 min-w-0">
+            <span className="text-xs font-bold text-white capitalize">
+              {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas'
+                ? 'Playlist'
+                : isAlbum
+                ? 'Álbum'
+                : isFolder
+                ? 'Carpeta'
+                : 'Lista'}
+            </span>
+            <h1
+              onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
+              className={`text-5xl lg:text-7xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate ${
+                isUserCreatedPlaylist ? 'cursor-pointer hover:underline' : ''
+              }`}
+            >
+              {dynamicPlaylist.name}
+            </h1>
+
+            {dynamicPlaylist.description && (
+              <p className="text-sm text-[#b3b3b3] font-normal mt-1 line-clamp-2">
+                {dynamicPlaylist.description}
+              </p>
+            )}
+
+            {/* Single unified metadata line matching Real Spotify */}
+            <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
+              {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
+                <>
+                  <span className="font-bold text-white hover:underline cursor-pointer">Spotify</span>
+                  <span>•</span>
+                  <span className="text-white/90">guardada 625.055 veces</span>
+                  <span>•</span>
+                  <span className="text-white/90">
+                    {loading
+                      ? 'Cargando canciones...'
+                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                  </span>
+                </>
+              ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
+                <>
+                  <span className="font-bold text-white hover:underline cursor-pointer">Hecha para Jorgeperezvk</span>
+                  <span>•</span>
+                  <span className="text-white/90">
+                    {loading
+                      ? 'Cargando canciones...'
+                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="font-bold text-white hover:underline cursor-pointer">
+                    {dynamicPlaylist.owner?.display_name || 'Spotify'}
+                  </span>
+                  <span>•</span>
+                  <span className="text-white/90">
+                    {loading
+                      ? 'Cargando canciones...'
+                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Action Bar */}
@@ -796,6 +832,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               <path d="M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
             </svg>
           </button>
+
+          {isArtist && (
+            <button className="px-6 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white hover:scale-105 active:scale-95 transition-all cursor-pointer">
+              Seguir
+            </button>
+          )}
         </div>
 
         {/* Right view switcher */}
@@ -811,6 +853,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
       {/* Track List Table */}
       <div className="px-8">
+        {isArtist && (
+          <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] mb-4">
+            Populares
+          </h2>
+        )}
         {/* Table Header - Only rendered when tracks exist */}
         {tracks.length > 0 && (
           <div className="grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2">

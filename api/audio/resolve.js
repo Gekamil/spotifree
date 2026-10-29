@@ -1,7 +1,10 @@
+const RESOLVE_CACHE = new Map();
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -10,6 +13,11 @@ export default async function handler(req, res) {
   const q = (req.query?.q || req.query?.query || '').trim();
   if (!q) {
     return res.status(400).json({ error: 'Missing query' });
+  }
+
+  const cacheKey = q.toLowerCase();
+  if (RESOLVE_CACHE.has(cacheKey)) {
+    return res.status(200).json({ success: true, videoId: RESOLVE_CACHE.get(cacheKey), cached: true });
   }
 
   try {
@@ -41,13 +49,16 @@ export default async function handler(req, res) {
         const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
         if (shelf) {
           if (shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId) {
-            return res.status(200).json({ success: true, videoId: shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId });
+            const vId = shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId;
+            RESOLVE_CACHE.set(cacheKey, vId);
+            return res.status(200).json({ success: true, videoId: vId });
           }
           for (const item of shelf.contents || []) {
             const itemRenderer = item.musicResponsiveListItemRenderer;
             const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
             const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
             if (videoId) {
+              RESOLVE_CACHE.set(cacheKey, videoId);
               return res.status(200).json({ success: true, videoId });
             }
           }
@@ -56,6 +67,7 @@ export default async function handler(req, res) {
       const text = JSON.stringify(data);
       const matches = Array.from(text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
       if (matches.length > 0) {
+        RESOLVE_CACHE.set(cacheKey, matches[0]);
         return res.status(200).json({ success: true, videoId: matches[0] });
       }
     }
@@ -70,6 +82,7 @@ export default async function handler(req, res) {
     const html = await ytRes.text();
     const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map((m) => m[1]);
     if (matches.length > 0) {
+      RESOLVE_CACHE.set(cacheKey, matches[0]);
       return res.status(200).json({ success: true, videoId: matches[0] });
     }
 

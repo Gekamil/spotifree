@@ -8,16 +8,37 @@ import {
   PauseNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
+  ShuffleNativeIcon,
+  SmartShuffleNativeIcon,
+  VerifiedArtistNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
+import { audioEngine } from '../../services/audioEngine';
 import {
   getCustomLikedSongs,
   saveCustomLikedSong,
   getSavedCustomTracks,
   saveCustomTrackToStorage,
 } from '../../utils/userStorage';
+
+function getArtistMonthlyListeners(name: string): string {
+  const n = name.toLowerCase();
+  if (n.includes('romeo santos')) return '24.819.340 oyentes mensuales';
+  if (n.includes('prince royce')) return '18.940.110 oyentes mensuales';
+  if (n.includes('trueno')) return '16.540.890 oyentes mensuales';
+  if (n.includes('bad bunny')) return '68.420.912 oyentes mensuales';
+  if (n.includes('ozuna')) return '32.140.780 oyentes mensuales';
+  if (n.includes('feid')) return '41.290.450 oyentes mensuales';
+  if (n.includes('quevedo')) return '22.380.120 oyentes mensuales';
+  if (n.includes('rosalía') || n.includes('rosalia')) return '28.450.600 oyentes mensuales';
+  if (n.includes('myke towers')) return '35.620.300 oyentes mensuales';
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) % 80000000;
+  const count = Math.max(1200000, hash + 3500000);
+  return `${count.toLocaleString('es-ES')} oyentes mensuales`;
+}
 
 interface MobilePlaylistViewProps {
   playlist: Playlist;
@@ -29,7 +50,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   playlist,
   onBack,
 }) => {
-  const { currentTrack, isPlaying, playTrack, togglePlay, toggleLike, likedTrackIds } = usePlayerStore();
+  const {
+    currentTrack,
+    isPlaying,
+    playTrack,
+    togglePlay,
+    toggleLike,
+    likedTrackIds,
+    shuffleMode,
+    toggleShuffle,
+  } = usePlayerStore();
   const { user } = useSpotifyDataStore();
 
   const isLikedPlaylist =
@@ -41,6 +71,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const cleanId = (playlist.id || '')
     .replace(/^spotify:(playlist|album):/, '')
     .split('?')[0];
+
+  const isArtist =
+    playlist.type === 'artist' ||
+    playlist.description === 'Artista' ||
+    cleanId.startsWith('art-') ||
+    cleanId.startsWith('artist-');
 
   const [tracks, setTracks] = useState<Track[]>(() => {
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
@@ -185,7 +221,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
     // 6. Fetch from backend endpoint with Spotify session / cookies
     async function fetchTracks() {
-      setLoading(true);
+      if (tracks.length === 0) {
+        setLoading(true);
+      }
       try {
         const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
         const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
@@ -244,6 +282,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 tracks: { total: artistTracks.length, items: artistTracks },
               });
               setLoading(false);
+              artistTracks.slice(0, 3).forEach((t) => {
+                const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
+                audioEngine.prefetchTrack(q, t.id);
+              });
               return;
             }
           }
@@ -339,122 +381,209 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         style={{ backgroundColor: themeColor }}
       />
 
-      {/* Sticky Top Header */}
-      <div className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between backdrop-blur-md bg-black/40 border-b border-white/5">
-        <button
-          onClick={onBack}
-          className="w-9 h-9 rounded-full bg-black/60 text-white flex items-center justify-center active:scale-95 transition-transform"
-          title="Atrás"
-        >
-          <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.81 7.75l6.22 6.22a.75.75 0 1 1-1.06 1.06l-6.75-6.75a.75.75 0 0 1 1.06 0z" />
-          </svg>
-        </button>
-
-        <span className="font-bold text-sm text-white truncate max-w-[200px]">
-          {playlist.name}
-        </span>
-
-        <button
-          onClick={handleToggleLibrary}
-          className="w-9 h-9 flex items-center justify-center text-white/80 hover:text-white"
-          title={isSavedInLibrary ? 'Guardada en tu biblioteca' : 'Guardar en biblioteca'}
-        >
-          {isSavedInLibrary ? (
-            <CheckTrackNativeIcon size={22} className="text-[#1ed760]" />
-          ) : (
-            <AddTrackNativeIcon size={22} />
-          )}
-        </button>
-      </div>
-
-      {/* Hero Header matching Spotify Mobile */}
-      <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
-        <div className="w-52 h-52 rounded-lg overflow-hidden shadow-2xl bg-[#242424] mb-4 border border-white/10">
-          {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={playlist.name}
-              onError={handleImageError}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-white/40">
-              <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-            </div>
-          )}
-        </div>
-
-        <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-1 max-w-[90%]">
-          {playlist.name}
-        </h1>
-
-        {playlist.description && (
-          <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
-            {playlist.description}
-          </p>
-        )}
-
-        <div className="flex items-center gap-2 text-xs text-[#b3b3b3] font-medium">
-          <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
-          <span>•</span>
-          <span>{tracks.length} canciones</span>
-        </div>
-      </div>
-
-      {/* Action Row matching Spotify Mobile: Library, Download, Dots, Large Play Button */}
-      <div className="px-6 py-2 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleToggleLibrary}
-            className="w-8 h-8 rounded-full border border-white/40 flex items-center justify-center text-white hover:border-white transition-all active:scale-95"
-            title={isSavedInLibrary ? 'Guardada' : 'Guardar en biblioteca'}
-          >
-            {isSavedInLibrary ? (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="#1ed760">
-                <path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z" />
-              </svg>
+      {/* Hero / Header matching Spotify Mobile */}
+      {isArtist ? (
+        <div className="relative w-full">
+          {/* Full panoramic artist hero banner */}
+          <div className="relative w-full h-80 overflow-hidden bg-[#242424]">
+            {coverUrl ? (
+              <img
+                src={coverUrl}
+                alt={playlist.name}
+                onError={handleImageError}
+                className="w-full h-full object-cover object-top"
+              />
             ) : (
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M8 1.5a.75.75 0 0 1 .75.75v5h5a.75.75 0 0 1 0 1.5h-5v5a.75.75 0 0 1-1.5 0v-5h-5a.75.75 0 0 1 0-1.5h5v-5A.75.75 0 0 1 8 1.5z" />
+              <div className="w-full h-full flex items-center justify-center text-white/40">
+                <svg width="72" height="72" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              </div>
+            )}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/35 to-black/30" />
+            
+            {/* Top Bar Floating Buttons */}
+            <div className="absolute top-0 left-0 right-0 z-20 px-4 py-3 flex items-center justify-between">
+              <button
+                onClick={onBack}
+                className="p-1.5 text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer"
+                title="Atrás"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.54 21.15L6.39 12l9.15-9.15.71.71L7.81 12l8.44 8.44-.71.71z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Bottom Artist Info */}
+            <div className="absolute bottom-5 left-5 right-5 space-y-1">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-white mb-1.5">
+                <VerifiedArtistNativeIcon size={20} className="text-[#3d91f4]" />
+                <span>Artista verificado</span>
+              </div>
+              <h1 className="text-4xl font-black text-white font-['SpotifyMixUITitle'] leading-none truncate">
+                {playlist.name}
+              </h1>
+              <p className="text-xs text-[#b3b3b3] font-medium pt-1">
+                {getArtistMonthlyListeners(playlist.name)}
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          {/* Sticky Top Header */}
+          <div className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between backdrop-blur-md bg-black/40 border-b border-white/5">
+            <button
+              onClick={onBack}
+              className="p-1.5 text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer"
+              title="Atrás"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.54 21.15L6.39 12l9.15-9.15.71.71L7.81 12l8.44 8.44-.71.71z" />
               </svg>
+            </button>
+
+            <span className="font-bold text-sm text-white truncate max-w-[200px]">
+              {playlist.name}
+            </span>
+
+            <button
+              onClick={handleToggleLibrary}
+              className="w-9 h-9 flex items-center justify-center text-white/80 hover:text-white"
+              title={isSavedInLibrary ? 'Guardada en tu biblioteca' : 'Guardar en biblioteca'}
+            >
+              {isSavedInLibrary ? (
+                <CheckTrackNativeIcon size={22} className="text-[#1ed760]" />
+              ) : (
+                <AddTrackNativeIcon size={22} />
+              )}
+            </button>
+          </div>
+
+          {/* Regular Playlist Hero */}
+          <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
+            <div className="w-52 h-52 rounded-lg overflow-hidden shadow-2xl bg-[#242424] mb-4 border border-white/10">
+              {coverUrl ? (
+                <img
+                  src={coverUrl}
+                  alt={playlist.name}
+                  onError={handleImageError}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+
+            <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-1 max-w-[90%]">
+              {playlist.name}
+            </h1>
+
+            {playlist.description && (
+              <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
+                {playlist.description}
+              </p>
+            )}
+
+            <div className="flex items-center gap-2 text-xs text-[#b3b3b3] font-medium">
+              <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
+              <span>•</span>
+              <span>{tracks.length} canciones</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Action Row matching Spotify Mobile */}
+      <div className="px-6 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-5">
+          {isArtist ? (
+            <button
+              onClick={handleToggleLibrary}
+              className="px-5 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white active:scale-95 transition-all cursor-pointer"
+            >
+              {isSavedInLibrary ? 'Siguiendo' : 'Seguir'}
+            </button>
+          ) : (
+            <button
+              onClick={handleToggleLibrary}
+              className="text-white hover:scale-105 active:scale-90 transition-transform cursor-pointer"
+              title={isSavedInLibrary ? 'Guardada en tu biblioteca' : 'Añadir a tu biblioteca'}
+            >
+              {isSavedInLibrary ? (
+                <CheckTrackNativeIcon size={26} className="text-[#1ed760]" />
+              ) : (
+                <AddTrackNativeIcon size={26} className="text-white/80 hover:text-white" />
+              )}
+            </button>
+          )}
+
+          {!isArtist && (
+            <button
+              className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
+              title="Descargar"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.59l3.3-3.3-1.42-1.41L13 13.76V6h-2v7.76l-1.88-1.88-1.42 1.41 3.3 3.3a1 1 0 0 0 1.41 0z" />
+              </svg>
+            </button>
+          )}
+
+          <button
+            className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
+            title="Más opciones"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-4">
+          {/* Shuffle button */}
+          <button
+            onClick={toggleShuffle}
+            className={`p-2 transition-colors relative flex flex-col items-center active:scale-90 ${
+              shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
+            }`}
+          >
+            {shuffleMode === 'smart' ? (
+              <SmartShuffleNativeIcon size={24} className="text-[#1ed760]" />
+            ) : (
+              <ShuffleNativeIcon size={24} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-white/70'} />
+            )}
+            {shuffleMode !== 'off' && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
             )}
           </button>
 
+          {/* Large Green Play Button */}
           <button
-            className="w-8 h-8 rounded-full border border-white/40 flex items-center justify-center text-white/70 hover:text-white transition-all"
-            title="Descargar"
+            onClick={handlePlayAll}
+            className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all"
+            title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M8 1.5a.75.75 0 0 1 .75.75v8.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 1.06-1.06l2.72 2.72V2.25A.75.75 0 0 1 8 1.5zM2 13.5a.75.75 0 0 1 .75-.75h10.5a.75.75 0 0 1 0 1.5H2.75a.75.75 0 0 1-.75-.75z" />
-            </svg>
-          </button>
-
-          <button
-            className="w-8 h-8 flex items-center justify-center text-white/70 hover:text-white"
-            title="Más opciones"
-          >
-            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-            </svg>
+            {isCurrentPlaylistPlaying ? (
+              <PauseNativeIcon size={24} className="text-black" />
+            ) : (
+              <PlayNativeIcon size={24} className="text-black ml-1" />
+            )}
           </button>
         </div>
-
-        {/* Large Green Play Button */}
-        <button
-          onClick={handlePlayAll}
-          className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all"
-          title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir lista'}
-        >
-          {isCurrentPlaylistPlaying ? (
-            <PauseNativeIcon size={24} className="text-black" />
-          ) : (
-            <PlayNativeIcon size={24} className="text-black ml-1" />
-          )}
-        </button>
       </div>
+
+      {isArtist && (
+        <div className="px-5 pt-3 pb-1">
+          <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
+            Populares
+          </h2>
+        </div>
+      )}
 
       {/* Track List */}
       <div className="px-4 pt-2 space-y-1">
@@ -570,9 +699,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           <>
             {tracks.map((track, idx) => {
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
-              const trackCover =
-                track.album?.images?.[0]?.url ||
-                tracks[0]?.album?.images?.[0]?.url;
+              const trackCover = track.album?.images?.[0]?.url;
               const isLiked = likedTrackIds.includes(track.id);
 
               return (
@@ -583,6 +710,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 >
                   {/* Left: Cover or Number + Info */}
                   <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+                    {isArtist && (
+                      <span className={`w-4 text-center text-xs font-bold shrink-0 ${isThisPlaying ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}`}>
+                        {idx + 1}
+                      </span>
+                    )}
+
                     <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
                       {trackCover ? (
                         <img
@@ -612,7 +745,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         {track.name}
                       </span>
                       <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                        {track.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                        {isArtist
+                          ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
+                          : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
                       </span>
                     </div>
                   </div>

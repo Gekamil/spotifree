@@ -112,10 +112,18 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
           )}
         </div>
 
-        <div className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1">
-          <span className="font-bold text-white text-[13px] truncate leading-tight">
-            {currentTrack.name}
-          </span>
+        <div className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1 overflow-hidden">
+          <div className="overflow-hidden whitespace-nowrap w-full">
+            <span
+              className={`font-bold text-white text-[13px] leading-tight ${
+                (currentTrack.name || '').length > 20 && isPlaying
+                  ? 'animate-spotify-marquee'
+                  : 'truncate block'
+              }`}
+            >
+              {currentTrack.name}
+            </span>
+          </div>
           <span className="text-[11.5px] text-white/70 truncate leading-tight mt-0.5">
             {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
           </span>

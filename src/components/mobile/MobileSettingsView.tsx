@@ -337,6 +337,17 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                   {cookieStatus}
                 </p>
               )}
+
+              {user && (
+                <div className="flex items-center gap-2 p-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/20 text-[#1ed760] text-xs mt-2">
+                  <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+                    <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+                  </svg>
+                  <span className="font-semibold text-[11px]">
+                    Clave sp_dc verificada y activa para <strong>{displayName}</strong>.
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="pt-2 border-t border-white/5 flex items-center justify-between">

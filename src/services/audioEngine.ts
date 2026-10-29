@@ -40,6 +40,7 @@ function persistVideoId(query: string, videoId: string) {
 
 class AudioEngine {
   private audio: HTMLAudioElement;
+  private silentCarrier: HTMLAudioElement | null = null;
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
@@ -63,6 +64,11 @@ class AudioEngine {
     this.setupHtml5Listeners();
 
     if (typeof window !== 'undefined') {
+      try {
+        this.silentCarrier = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+        this.silentCarrier.loop = true;
+        this.silentCarrier.volume = 0.001;
+      } catch {}
       // Unlock audio on mobile on first user gesture
       const unlockUserMedia = () => {
         try {
@@ -429,8 +435,21 @@ class AudioEngine {
       });
   }
 
+  public startBackgroundCarrier() {
+    if (this.silentCarrier && this.silentCarrier.paused) {
+      this.silentCarrier.play().catch(() => {});
+    }
+  }
+
+  public stopBackgroundCarrier() {
+    if (this.silentCarrier && !this.silentCarrier.paused) {
+      this.silentCarrier.pause();
+    }
+  }
+
   public unlockAudio() {
     try {
+      this.startBackgroundCarrier();
       if (this.audioContext && this.audioContext.state === 'suspended') {
         this.audioContext.resume().catch(() => {});
       }
@@ -445,10 +464,12 @@ class AudioEngine {
       const state = this.ytPlayer.getPlayerState();
       if (state === 1) { // Playing -> Pause
         this.ytPlayer.pauseVideo();
+        this.stopBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
       } else { // Paused -> Play
         this.ytPlayer.playVideo();
+        this.startBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: true });
         this.startProgressTicker();
       }
@@ -458,9 +479,11 @@ class AudioEngine {
     // HTML5 fallback
     if (this.audio.paused) {
       this.audio.play().catch(() => {});
+      this.startBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: true });
     } else {
       this.audio.pause();
+      this.stopBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: false });
     }
   }
@@ -471,10 +494,12 @@ class AudioEngine {
       this.stopProgressTicker();
     }
     this.audio.pause();
+    this.stopBackgroundCarrier();
     usePlayerStore.setState({ isPlaying: false });
   }
 
   public resume() {
+    this.startBackgroundCarrier();
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       try {
         this.ytPlayer.playVideo();
@@ -583,6 +608,10 @@ class AudioEngine {
         }
       }
     } catch {}
+  }
+
+  public async prefetchTrack(query: string, trackId?: string) {
+    return this.preloadTrack(trackId || 'temp', query);
   }
 }
 
