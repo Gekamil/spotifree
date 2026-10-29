@@ -169,7 +169,7 @@ export async function resolveAudio(target) {
   return promise;
 }
 
-export function streamAudioDirect(target, req, res) {
+export function streamAudioDirect(target, req, res, startSeconds = 0) {
   let cleanTarget = (target || '').trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(cleanTarget)) {
     cleanTarget = `https://www.youtube.com/watch?v=${cleanTarget}`;
@@ -186,14 +186,23 @@ export function streamAudioDirect(target, req, res) {
   });
 
   const pythonCmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
-  const child = spawn(pythonCmd, [
+  const args = [
     '-m', 'yt_dlp',
     '-f', 'ba[ext=webm]/ba/b',
     '-o', '-',
     '--no-warnings',
     '-q',
-    cleanTarget,
-  ]);
+  ];
+
+  // Support seeking: start download from a specific second offset
+  const startSec = Math.max(0, Math.floor(startSeconds || 0));
+  if (startSec > 0) {
+    args.push('--download-sections', `*${startSec}-inf`);
+  }
+
+  args.push(cleanTarget);
+
+  const child = spawn(pythonCmd, args);
 
   child.stdout.pipe(res);
 

@@ -122,7 +122,8 @@ const server = http.createServer(async (req, res) => {
 
     try {
       currentPlayingTrackId = target;
-      return streamAudioDirect(target, req, res);
+      const startSec = Math.max(0, parseInt(reqUrl.searchParams.get('start') || '0', 10)) || 0;
+      return streamAudioDirect(target, req, res, startSec);
     } catch (err) {
       console.error('[AudioStream error]:', err.message);
       if (!res.headersSent) {

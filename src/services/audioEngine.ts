@@ -80,27 +80,32 @@ class AudioEngine {
         if (!document.hidden) {
           // Tab/app became visible again — restore playback if it was supposed to be playing
           const { isPlaying } = usePlayerStore.getState();
-          if (isPlaying && this.ytPlayer) {
-            try {
-              // Unmute and restore volume first
-              if (typeof this.ytPlayer.unMute === 'function') {
-                this.ytPlayer.unMute();
-                const { volume, isMuted } = usePlayerStore.getState();
-                if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
-              }
-              // Check if player is paused/stopped and resume if needed
-              const ytState = typeof this.ytPlayer.getPlayerState === 'function'
-                ? this.ytPlayer.getPlayerState() : -1;
-              // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-              if (ytState === 2 || ytState === -1) {
-                // Was paused by the browser — resume it
-                this.ytPlayer.playVideo();
-              }
-              // Always re-signal mediaSession that we're playing
-              if ('mediaSession' in navigator) {
-                try { navigator.mediaSession.playbackState = 'playing'; } catch {}
-              }
-            } catch {}
+          if (isPlaying) {
+            if (this.activeEngine === 'html5' && this.audio.paused) {
+              // HTML5 audio was paused while in background — resume it
+              this.audio.play().catch(() => {});
+            } else if (this.activeEngine === 'youtube' && this.ytPlayer) {
+              try {
+                // Unmute and restore volume first
+                if (typeof this.ytPlayer.unMute === 'function') {
+                  this.ytPlayer.unMute();
+                  const { volume, isMuted } = usePlayerStore.getState();
+                  if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+                }
+                // Check if player is paused/stopped and resume if needed
+                const ytState = typeof this.ytPlayer.getPlayerState === 'function'
+                  ? this.ytPlayer.getPlayerState() : -1;
+                // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+                if (ytState === 2 || ytState === -1) {
+                  // Was paused by the browser — resume it
+                  this.ytPlayer.playVideo();
+                }
+              } catch {}
+            }
+            // Always re-signal mediaSession that we're playing
+            if ('mediaSession' in navigator) {
+              try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+            }
           }
         } else {
           // App going to background — make sure mediaSession is set to 'playing'
@@ -112,11 +117,39 @@ class AudioEngine {
         }
       });
 
-      // Pre-warm YouTube IFrame API immediately in background
-      setTimeout(() => {
-        this.ensureYouTubeReady().catch(() => {});
-      }, 50);
+      // Pre-warm YouTube IFrame API immediately in background (desktop only)
+      // Mobile uses HTML5 Audio + server stream, no need to initialize YT IFrame
+      if (!this.isMobileOrPWA()) {
+        setTimeout(() => {
+          this.ensureYouTubeReady().catch(() => {});
+        }, 50);
+      }
     }
+  }
+
+  /** Detect mobile devices or PWA standalone mode — these use HTML5 Audio + server stream */
+  private isMobileOrPWA(): boolean {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+      (window as any).navigator?.standalone === true
+    );
+  }
+
+  /** Reload the server stream from a specific second offset (used for seeking on mobile) */
+  private reloadStreamFromPosition(seconds: number) {
+    if (!this.currentVideoId) return;
+    const wasPlaying = !this.audio.paused;
+    const startSec = Math.max(0, Math.floor(seconds));
+    const streamUrl = `${API_BASE}/api/audio/stream?id=${encodeURIComponent(this.currentVideoId)}&start=${startSec}`;
+    this.audio.src = streamUrl;
+    this.audio.load();
+    if (wasPlaying) {
+      this.audio.play().catch(() => {});
+    }
+    // Optimistically set progress so UI doesn't jump back to 0
+    usePlayerStore.getState().setProgress(seconds * 1000);
   }
 
   private ensureYouTubeReady(): Promise<void> {
@@ -321,6 +354,12 @@ class AudioEngine {
     this.audio.addEventListener('durationchange', () => {
       if (this.activeEngine === 'html5' && this.audio.duration && isFinite(this.audio.duration) && this.audio.duration > 0) {
         usePlayerStore.getState().setDuration(this.audio.duration * 1000);
+      } else if (this.activeEngine === 'html5') {
+        // Streaming source returns Infinity — fall back to track metadata duration
+        const trackDur = usePlayerStore.getState().currentTrack?.duration_ms;
+        if (trackDur && trackDur > 0) {
+          usePlayerStore.getState().setDuration(trackDur);
+        }
       }
     });
 
@@ -483,6 +522,66 @@ class AudioEngine {
 
       if (videoId) {
         this.currentVideoId = videoId;
+
+        if (this.isMobileOrPWA()) {
+          // MOBILE / PWA PATH: Use HTML5 <audio> + server-side yt-dlp stream.
+          // This is the ONLY way to get true background audio on Android Chrome --
+          // the YT IFrame API relies on JS postMessage which gets suspended in background tabs.
+          this.activeEngine = 'html5';
+          this.isTransitioning = false;
+
+          // Silence any YT IFrame that may be running from a previous desktop session
+          if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+            try { this.ytPlayer.pauseVideo(); } catch (_) {}
+          }
+
+          const startSec = startSeconds > 0 ? `&start=${Math.floor(startSeconds)}` : '';
+          const streamUrl = `${API_BASE}/api/audio/stream?id=${encodeURIComponent(videoId)}${startSec}`;
+
+          this.audio.pause();
+          this.audio.src = streamUrl;
+          this.audio.crossOrigin = 'anonymous';
+          this.audio.preload = 'auto';
+          this.audio.load();
+
+          const { volume, isMuted } = usePlayerStore.getState();
+          this.audio.volume = isMuted ? 0 : volume;
+          this.audio.muted = false;
+
+          // Set duration from track metadata right away (streaming src has Infinity duration)
+          const trackDur = usePlayerStore.getState().currentTrack?.duration_ms;
+          if (trackDur && trackDur > 0) {
+            usePlayerStore.getState().setDuration(trackDur);
+          }
+
+          try {
+            await this.audio.play();
+          } catch (e) {
+            console.warn('[AudioEngine] HTML5 play failed, trying YT IFrame fallback:', e);
+            // Fall through to YT IFrame if HTML5 fails (e.g. CORS/autoplay policy)
+            this.activeEngine = 'youtube';
+            await this.ensureYouTubeReady();
+            if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+              const { volume: v, isMuted: m } = usePlayerStore.getState();
+              if (typeof this.ytPlayer.setVolume === 'function') {
+                this.ytPlayer.setVolume(m ? 0 : Math.round(v * 100));
+              }
+              this.ytPlayer.loadVideoById({ videoId, startSeconds });
+              this.ytPlayer.playVideo();
+              this.startProgressTicker();
+              setTimeout(() => { this.isTransitioning = false; }, 4000);
+            }
+          }
+
+          this.startBackgroundCarrier();
+          usePlayerStore.setState({ isPlaying: true });
+          if ('mediaSession' in navigator) {
+            try { navigator.mediaSession.playbackState = 'playing'; } catch (_) {}
+          }
+          return;
+        }
+
+        // DESKTOP PATH: Use YouTube IFrame API (better quality, video mode support)
         await this.ensureYouTubeReady();
 
         if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
@@ -544,15 +643,29 @@ class AudioEngine {
         videoId = await this.resolveVideoIdClient(altQuery, this.failedVideoIds);
       }
 
-      if (videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+      if (videoId) {
         this.currentVideoId = videoId;
         persistVideoId(originalQuery, videoId);
-        this.activeEngine = 'youtube';
-        this.ytPlayer.loadVideoById({ videoId, startSeconds: 0 });
-        this.ytPlayer.playVideo();
-        this.startBackgroundCarrier();
-        usePlayerStore.setState({ isPlaying: true });
-        this.startProgressTicker();
+
+        if (this.isMobileOrPWA()) {
+          // Mobile: reload via HTML5 stream
+          this.activeEngine = 'html5';
+          const streamUrl = `${API_BASE}/api/audio/stream?id=${encodeURIComponent(videoId)}`;
+          this.audio.pause();
+          this.audio.src = streamUrl;
+          this.audio.crossOrigin = 'anonymous';
+          this.audio.load();
+          this.audio.play().catch(() => {});
+          this.startBackgroundCarrier();
+          usePlayerStore.setState({ isPlaying: true });
+        } else if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+          this.activeEngine = 'youtube';
+          this.ytPlayer.loadVideoById({ videoId, startSeconds: 0 });
+          this.ytPlayer.playVideo();
+          this.startBackgroundCarrier();
+          usePlayerStore.setState({ isPlaying: true });
+          this.startProgressTicker();
+        }
       }
     } catch (e) {
       console.warn('[AudioEngine] Alternate resolve error:', e);
@@ -681,6 +794,24 @@ class AudioEngine {
   public seek(seconds: number) {
     if (!isFinite(seconds)) return;
     this.isSeeking = true;
+
+    if (this.activeEngine === 'html5') {
+      // For streaming sources (mobile), try direct currentTime seek first.
+      // If the stream is not seekable (chunked), reload from offset via server.
+      try {
+        if (isFinite(this.audio.duration) && this.audio.duration > 0 && seconds <= this.audio.duration) {
+          this.audio.currentTime = seconds;
+          usePlayerStore.getState().setProgress(seconds * 1000);
+        } else {
+          // Streaming source — re-request stream from the desired offset
+          this.reloadStreamFromPosition(seconds);
+        }
+      } catch {
+        this.reloadStreamFromPosition(seconds);
+      }
+      setTimeout(() => { this.isSeeking = false; }, 500);
+      return;
+    }
 
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
       try {
