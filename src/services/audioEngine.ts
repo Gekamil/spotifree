@@ -49,6 +49,7 @@ class AudioEngine {
   private isSeeking = false;
   private isTransitioning = false;
   private activeEngine: 'youtube' | 'html5' = 'youtube';
+  private failedVideoIds: Set<string> = new Set();
 
   private ytPlayer: any = null;
   private isYtReady = false;
@@ -151,10 +152,13 @@ class AudioEngine {
                 this.handleYtStateChange(event);
               },
               onError: (event: any) => {
-                console.warn('[AudioEngine] YouTube player error:', event.data);
-                // On error, retry with alternate query (+ audio)
+                console.warn('[AudioEngine] YouTube player error:', event.data, 'Current videoId:', this.currentVideoId);
+                // On embed restriction or unavailable video error (150, 101, 100, 2), retry with alternate official video
+                if (this.currentVideoId) {
+                  this.failedVideoIds.add(this.currentVideoId);
+                }
                 if (this.currentTrackQuery) {
-                  this.resolveAndPlayAlternate(this.currentTrackQuery);
+                  this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
                 }
               },
             },
@@ -340,7 +344,7 @@ class AudioEngine {
   }
 
   /** Direct client-side Innertube search fallback if backend resolve times out */
-  private async resolveVideoIdClient(query: string): Promise<string | null> {
+  private async resolveVideoIdClient(query: string, excludeIds?: Set<string>): Promise<string | null> {
     try {
       const res = await fetch('https://music.youtube.com/youtubei/v1/search', {
         method: 'POST',
@@ -367,15 +371,37 @@ class AudioEngine {
         const data = await res.json();
         const text = JSON.stringify(data);
         const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
-        if (matches.length > 0) return matches[0];
+        for (const vid of matches) {
+          if (!excludeIds || !excludeIds.has(vid)) {
+            return vid;
+          }
+        }
       }
     } catch {}
+
+    // Fallback: direct web search
+    try {
+      const searchRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
+        signal: AbortSignal.timeout?.(4000),
+      });
+      if (searchRes.ok) {
+        const html = await searchRes.text();
+        const matches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)].map((m) => m[1]);
+        for (const vid of matches) {
+          if (!excludeIds || !excludeIds.has(vid)) {
+            return vid;
+          }
+        }
+      }
+    } catch {}
+
     return null;
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
     this.currentTrackId = trackId;
     this.currentTrackQuery = query;
+    this.failedVideoIds.clear();
     this.isSeeking = false;
     this.isTransitioning = true;
 
@@ -443,10 +469,36 @@ class AudioEngine {
     this.isTransitioning = false;
   }
 
-  private async resolveAndPlayAlternate(originalQuery: string) {
+  private async resolveAndPlayAlternate(originalQuery: string, failedId?: string) {
+    if (failedId) {
+      this.failedVideoIds.add(failedId);
+    }
     try {
-      const altQuery = `${originalQuery} audio`;
-      const videoId = await this.resolveVideoIdClient(altQuery);
+      // 1. Try resolving official video
+      const officialQuery = `${originalQuery} official video`;
+      let videoId = await this.resolveVideoIdClient(officialQuery, this.failedVideoIds);
+
+      // 2. Try backend API with exclusion
+      if (!videoId) {
+        try {
+          const excludeList = Array.from(this.failedVideoIds).join(',');
+          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(officialQuery)}&exclude=${encodeURIComponent(excludeList)}`;
+          const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(5000) });
+          if (res.ok) {
+            const data = await res.json();
+            if (data.videoId && !this.failedVideoIds.has(data.videoId)) {
+              videoId = data.videoId;
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Fallback to simplified query + audio
+      if (!videoId) {
+        const altQuery = `${originalQuery} audio`;
+        videoId = await this.resolveVideoIdClient(altQuery, this.failedVideoIds);
+      }
+
       if (videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
         this.currentVideoId = videoId;
         persistVideoId(originalQuery, videoId);
@@ -457,7 +509,9 @@ class AudioEngine {
         usePlayerStore.setState({ isPlaying: true });
         this.startProgressTicker();
       }
-    } catch {}
+    } catch (e) {
+      console.warn('[AudioEngine] Alternate resolve error:', e);
+    }
   }
 
   public startBackgroundCarrier() {

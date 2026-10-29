@@ -10,6 +10,8 @@ import {
   getSavedAccounts,
   switchActiveAccount,
   saveAccount,
+  removeSavedAccount,
+  syncUserProfileToServer,
   type SavedAccount,
 } from '../../utils/userAccounts';
 import { MobileEditProfileModal } from './MobileEditProfileModal';
@@ -89,8 +91,19 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         window.localStorage.setItem('spotifree_custom_profile', JSON.stringify(data));
       } catch {}
     }
+
+    const currentCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+
+    syncUserProfileToServer({
+      userId: targetId,
+      displayName: data.displayName,
+      avatarUrl: data.avatarUrl,
+      bannerUrl: data.bannerUrl,
+      cookie: currentCookie,
+    });
+
     const accounts = getSavedAccounts();
-    const existing = accounts.find((a) => a.id === targetId);
+    const existing = accounts.find((a) => a.id === targetId || a.displayName === data.displayName);
     if (existing) {
       saveAccount({
         ...existing,
@@ -106,7 +119,8 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
           ...user,
           display_name: data.displayName,
           images: data.avatarUrl ? [{ url: data.avatarUrl }] : user.images,
-        },
+          bannerUrl: data.bannerUrl || (user as any).bannerUrl,
+        } as any,
       });
     }
   };
@@ -410,15 +424,31 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
                       Activa
                     </span>
                   ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSwitchAccount(acc);
-                      }}
-                      className="px-3 py-1 rounded-full border border-white/20 text-xs font-bold text-white hover:border-white active:scale-95"
-                    >
-                      Cambiar
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSwitchAccount(acc);
+                        }}
+                        className="px-3 py-1 rounded-full border border-white/20 text-xs font-bold text-white hover:border-white active:scale-95 cursor-pointer"
+                      >
+                        Cambiar
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeSavedAccount(acc.id);
+                          removeSavedAccount(acc.displayName);
+                          setSavedAccounts(getSavedAccounts());
+                        }}
+                        className="p-1.5 rounded-full text-[#b3b3b3] hover:text-red-400 hover:bg-white/10 active:scale-90 transition-colors cursor-pointer"
+                        title="Eliminar cuenta guardada"
+                      >
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+                        </svg>
+                      </button>
+                    </div>
                   )}
                 </div>
               );

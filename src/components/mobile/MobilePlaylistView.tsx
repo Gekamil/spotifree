@@ -69,6 +69,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     togglePlay,
     toggleLike,
     likedTrackIds,
+    isShuffle,
     shuffleMode,
     toggleShuffle,
   } = usePlayerStore();
@@ -402,7 +403,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (isPlaying && tracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
-      playTrack(tracks[0], tracks);
+      if (isShuffle || shuffleMode !== 'off') {
+        const randomIndex = Math.floor(Math.random() * tracks.length);
+        playTrack(tracks[randomIndex], tracks);
+      } else {
+        playTrack(tracks[0], tracks);
+      }
     }
   };
 

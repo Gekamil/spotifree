@@ -319,36 +319,34 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
       {/* Scrollable Player Body */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4">
-        {/* Large Artwork or Live Video */}
+        {/* Large Artwork or Live Video Canvas */}
         <div className="flex items-center justify-center pt-2 pb-1">
-          {isVideoMode && videoId ? (
-            <div className="w-full max-w-[340px] aspect-video rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] bg-black relative border border-white/10">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&modestbranding=1&rel=0`}
-                title={currentTrack.name}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          ) : (
-            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424]">
-              {displayCover ? (
-                <img
-                  src={displayCover}
-                  alt={currentTrack.name}
-                  onError={handleCoverError}
-                  className="w-full h-full object-cover"
+          <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424] relative">
+            {isVideoMode && videoId ? (
+              <div className="w-full h-full relative overflow-hidden pointer-events-none select-none">
+                <iframe
+                  src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${videoId}&playsinline=1&modestbranding=1&rel=0&start=${Math.max(0, Math.floor(progressMs / 1000))}`}
+                  title={currentTrack.name}
+                  className="w-[160%] h-[160%] -top-[30%] -left-[30%] absolute object-cover border-0 pointer-events-none scale-125"
+                  allow="autoplay; encrypted-media"
                 />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40">
-                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20 pointer-events-none" />
+              </div>
+            ) : displayCover ? (
+              <img
+                src={displayCover}
+                alt={currentTrack.name}
+                onError={handleCoverError}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-white/40">
+                <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Cambiar a vídeo / Cambiar a audio pill - POSITIONED DIRECTLY BELOW ARTWORK AND ABOVE SONG TITLE */}

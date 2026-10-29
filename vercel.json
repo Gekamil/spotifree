@@ -40,6 +40,10 @@
       "destination": "/api/playlist"
     },
     {
+      "source": "/api/user-profile",
+      "destination": "/api/user-profile"
+    },
+    {
       "source": "/api/audio/(.*)",
       "destination": "/api/audio/$1"
     },

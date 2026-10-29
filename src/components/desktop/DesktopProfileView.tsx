@@ -6,6 +6,8 @@ import type { Playlist, Track } from '../../types/spotify';
 import { PlayNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { EditProfileModal } from '../common/EditProfileModal';
+import { syncUserProfileToServer, getSavedAccounts, saveAccount } from '../../utils/userAccounts';
 
 interface DesktopProfileViewProps {
   onSelectPlaylist?: (playlist: Playlist) => void;
@@ -57,6 +59,8 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
   const { totalSeconds, totalTracksPlayed, getTopArtists, getTopTracks } = useStatsStore();
   const { playTrack } = usePlayerStore();
 
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+
   const userPlaylists = playlists.filter(
     (p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs' && p.type !== 'folder'
   );
@@ -68,9 +72,52 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
   const totalHours = (totalMinutes / 60).toFixed(1);
 
   const avatarUrl = user?.images?.[0]?.url;
+  const bannerUrl = (user as any)?.bannerUrl;
   const displayName = user?.display_name || 'Usuario de Spotify';
   const followersCount = user?.followers?.total || 0;
   const profileColor = resolveVibrantColor(user?.id || 'profile', displayName);
+
+  const handleSaveProfile = (data: { displayName: string; avatarUrl?: string; bannerUrl?: string }) => {
+    const targetId = user?.id || 'active_user';
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(`spotifree_custom_profile_${targetId}`, JSON.stringify(data));
+        window.localStorage.setItem('spotifree_custom_profile', JSON.stringify(data));
+      } catch {}
+    }
+
+    const currentCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+
+    syncUserProfileToServer({
+      userId: targetId,
+      displayName: data.displayName,
+      avatarUrl: data.avatarUrl,
+      bannerUrl: data.bannerUrl,
+      cookie: currentCookie,
+    });
+
+    const accounts = getSavedAccounts();
+    const existing = accounts.find((a) => a.id === targetId || a.displayName === data.displayName);
+    if (existing) {
+      saveAccount({
+        ...existing,
+        displayName: data.displayName || existing.displayName,
+        avatarUrl: data.avatarUrl || existing.avatarUrl,
+        bannerUrl: data.bannerUrl || existing.bannerUrl,
+      });
+    }
+
+    if (user) {
+      useSpotifyDataStore.setState({
+        user: {
+          ...user,
+          display_name: data.displayName,
+          images: data.avatarUrl ? [{ url: data.avatarUrl }] : user.images,
+          bannerUrl: data.bannerUrl || (user as any).bannerUrl,
+        } as any,
+      });
+    }
+  };
 
   const handleTrackClick = (trk: any) => {
     const trackObj: Track = {
@@ -96,6 +143,18 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
           background: `linear-gradient(180deg, ${profileColor}CC 0%, ${profileColor}44 60%, #121212 100%)`,
         }}
       >
+        {/* Banner image or gif if present */}
+        {bannerUrl && (
+          <div className="absolute inset-0 z-0 overflow-hidden">
+            <img
+              src={bannerUrl}
+              alt="Banner de perfil"
+              className="w-full h-full object-cover opacity-60"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent" />
+          </div>
+        )}
+
         {/* Glow */}
         <div
           className="absolute -top-32 -left-32 w-96 h-96 rounded-full opacity-35 blur-3xl pointer-events-none"
@@ -120,21 +179,34 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
         </div>
 
         {/* Profile Metadata */}
-        <div className="flex flex-col gap-2 min-w-0 pb-2 relative z-10">
+        <div className="flex flex-col gap-2 min-w-0 pb-2 relative z-10 flex-1">
           <span className="text-xs font-bold text-white uppercase tracking-wider">
             Perfil
           </span>
           <h1 className="text-5xl md:text-7xl font-black text-white tracking-tight truncate font-['SpotifyMixUITitle']">
             {displayName}
           </h1>
-          <div className="flex items-center gap-3 text-sm text-[#b3b3b3] mt-2 font-medium">
-            <span className="text-white font-semibold">{userPlaylists.length} listas públicas</span>
-            <span>•</span>
-            <span>{followersCount} seguidores</span>
-            <span>•</span>
-            <span className="text-[#1ed760] font-bold">
-              {Number(totalHours) > 0 ? `${totalHours} horas escuchadas` : `${totalMinutes} min escuchados`}
-            </span>
+          <div className="flex items-center justify-between flex-wrap gap-4 mt-2">
+            <div className="flex items-center gap-3 text-sm text-[#b3b3b3] font-medium">
+              <span className="text-white font-semibold">{userPlaylists.length} listas públicas</span>
+              <span>•</span>
+              <span>{followersCount} seguidores</span>
+              <span>•</span>
+              <span className="text-[#1ed760] font-bold">
+                {Number(totalHours) > 0 ? `${totalHours} horas escuchadas` : `${totalMinutes} min escuchados`}
+              </span>
+            </div>
+
+            <button
+              onClick={() => setIsEditingProfile(true)}
+              className="px-4 py-1.5 rounded-full border border-white/30 text-white font-bold text-xs uppercase tracking-wider hover:border-white hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-md flex items-center gap-2 bg-black/40 backdrop-blur-sm"
+              title="Editar perfil"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" />
+              </svg>
+              <span>Editar perfil</span>
+            </button>
           </div>
         </div>
       </div>
@@ -300,6 +372,15 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
           )}
         </div>
       </div>
+
+      <EditProfileModal
+        isOpen={isEditingProfile}
+        onClose={() => setIsEditingProfile(false)}
+        initialDisplayName={displayName}
+        initialAvatarUrl={avatarUrl}
+        initialBannerUrl={bannerUrl}
+        onSave={handleSaveProfile}
+      />
     </div>
   );
 };

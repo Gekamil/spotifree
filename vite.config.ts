@@ -29,9 +29,10 @@ function toHDImage(url: string | null | undefined): string {
     .replace('liked-songs-300.png', 'liked-songs-640.jpg');
 }
 
-async function resolveYouTubeVideoId(query: string): Promise<string | null> {
+async function resolveYouTubeVideoId(query: string, exclude?: string): Promise<string | null> {
   const cleanQ = query.trim().toLowerCase();
-  if (YT_CACHE.has(cleanQ)) {
+  const excludeList = exclude ? exclude.split(',').map((s) => s.trim()) : [];
+  if (excludeList.length === 0 && YT_CACHE.has(cleanQ)) {
     return YT_CACHE.get(cleanQ) || null;
   }
 
@@ -64,15 +65,17 @@ async function resolveYouTubeVideoId(query: string): Promise<string | null> {
         if (shelf) {
           if (shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId) {
             const vId = shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId;
-            YT_CACHE.set(cleanQ, vId);
-            return vId;
+            if (!excludeList.includes(vId)) {
+              if (excludeList.length === 0) YT_CACHE.set(cleanQ, vId);
+              return vId;
+            }
           }
           for (const item of shelf.contents || []) {
             const itemRenderer = item.musicResponsiveListItemRenderer;
             const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
             const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
-            if (videoId) {
-              YT_CACHE.set(cleanQ, videoId);
+            if (videoId && !excludeList.includes(videoId)) {
+              if (excludeList.length === 0) YT_CACHE.set(cleanQ, videoId);
               return videoId;
             }
           }
@@ -81,16 +84,17 @@ async function resolveYouTubeVideoId(query: string): Promise<string | null> {
       // General match in json text
       const text = JSON.stringify(data);
       const matches = Array.from(text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
-      if (matches.length > 0) {
-        const videoId = matches[0];
-        YT_CACHE.set(cleanQ, videoId);
-        return videoId;
+      for (const vid of matches) {
+        if (!excludeList.includes(vid)) {
+          if (excludeList.length === 0) YT_CACHE.set(cleanQ, vid);
+          return vid;
+        }
       }
     }
   } catch {}
 
   // 2. Fallback to YouTube web search
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' audio')}`;
+  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' official video')}`;
   try {
     const res = await fetch(searchUrl, {
       headers: {
@@ -100,15 +104,17 @@ async function resolveYouTubeVideoId(query: string): Promise<string | null> {
     });
     const html = await res.text();
     const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map((m) => m[1]);
-    const videoId = matches[0] || null;
-    if (videoId) {
-      YT_CACHE.set(cleanQ, videoId);
+    for (const vid of matches) {
+      if (!excludeList.includes(vid)) {
+        if (excludeList.length === 0) YT_CACHE.set(cleanQ, vid);
+        return vid;
+      }
     }
-    return videoId;
   } catch (err) {
     console.error('YT search error:', err);
     return null;
   }
+  return null;
 }
 
 function parseEmbedHtml(html: string, cleanId: string) {
@@ -684,6 +690,7 @@ function dynamicSpotifyPlugin(): Plugin {
         const url = new URL(req.url || '', 'http://localhost');
         const title = url.searchParams.get('title') || '';
         const artist = url.searchParams.get('artist') || '';
+        const exclude = url.searchParams.get('exclude') || '';
         const q = url.searchParams.get('q') || `${title} ${artist}`;
 
         if (!q.trim()) {
@@ -692,7 +699,7 @@ function dynamicSpotifyPlugin(): Plugin {
         }
 
         try {
-          const videoId = await resolveYouTubeVideoId(q);
+          const videoId = await resolveYouTubeVideoId(q, exclude);
           res.statusCode = 200;
           return res.end(JSON.stringify({ videoId }));
         } catch (err: any) {
@@ -869,6 +876,101 @@ function dynamicSpotifyPlugin(): Plugin {
 
         res.statusCode = 200;
         return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
+      });
+
+      // 2f. User Profile Sync (/api/user-profile)
+      server.middlewares.use('/api/user-profile', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Content-Type', 'application/json');
+
+        if (req.method === 'OPTIONS') {
+          res.statusCode = 204;
+          return res.end();
+        }
+
+        const profileFile = path.resolve('src/data/userCustomProfiles.json');
+        let profiles: Record<string, any> = {};
+        try {
+          if (fs.existsSync(profileFile)) {
+            profiles = JSON.parse(fs.readFileSync(profileFile, 'utf8'));
+          }
+        } catch {}
+
+        const url = new URL(req.url || '', 'http://localhost');
+        if (req.method === 'GET') {
+          const userId = (url.searchParams.get('userId') || url.searchParams.get('id') || url.searchParams.get('name') || '').toLowerCase().trim();
+          const cookie = (url.searchParams.get('cookie') || '').trim();
+          let profile = profiles[userId] || null;
+
+          if (!profile && cookie) {
+            const cleanCookie = cookie.replace(/^sp_dc=/i, '').slice(0, 30);
+            profile = profiles[`cookie:${cleanCookie}`] || null;
+            if (!profile) {
+              for (const p of Object.values(profiles)) {
+                if (p?.cookie && (p.cookie.includes(cleanCookie) || cleanCookie.includes(p.cookie.slice(0, 25)))) {
+                  profile = p;
+                  break;
+                }
+              }
+            }
+          }
+
+          res.statusCode = 200;
+          return res.end(JSON.stringify({ success: true, profile }));
+        }
+
+        if (req.method === 'POST') {
+          let body = '';
+          req.on('data', (chunk) => { body += chunk; });
+          req.on('end', () => {
+            try {
+              const data = JSON.parse(body || '{}');
+              const userId = (data.userId || data.id || data.displayName || '').toLowerCase().trim();
+              const cookie = (data.cookie || '').trim();
+              if (!userId && !cookie) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ error: 'Missing userId or cookie' }));
+              }
+
+              const key = userId || `user_${Date.now()}`;
+              const existing = profiles[key] || {};
+              const updated = {
+                ...existing,
+                userId: key,
+                displayName: data.displayName || existing.displayName,
+                avatarUrl: data.avatarUrl !== undefined ? data.avatarUrl : existing.avatarUrl,
+                bannerUrl: data.bannerUrl !== undefined ? data.bannerUrl : existing.bannerUrl,
+                cookie: data.cookie || existing.cookie,
+                email: data.email || existing.email,
+                updatedAt: Date.now(),
+              };
+
+              profiles[key] = updated;
+              if (data.displayName) {
+                profiles[data.displayName.toLowerCase().trim()] = updated;
+              }
+              if (data.cookie) {
+                const clean = data.cookie.replace(/^sp_dc=/i, '').slice(0, 30);
+                profiles[`cookie:${clean}`] = updated;
+              }
+
+              try {
+                fs.writeFileSync(profileFile, JSON.stringify(profiles, null, 2), 'utf8');
+              } catch {}
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ success: true, profile: updated }));
+            } catch (e: any) {
+              res.statusCode = 500;
+              return res.end(JSON.stringify({ error: e.message }));
+            }
+          });
+          return;
+        }
+
+        res.statusCode = 405;
+        return res.end(JSON.stringify({ error: 'Method not allowed' }));
       });
 
       // 3. Play Track on Remote Spotify Web (/api/spotify/play) - Decoupled silent stub

@@ -504,6 +504,8 @@ export const DesktopSettingsView: React.FC = () => {
                             onClick={(e) => {
                               e.stopPropagation();
                               removeSavedAccount(acc.id);
+                              if (acc.displayName) removeSavedAccount(acc.displayName);
+                              if (acc.email) removeSavedAccount(acc.email);
                               setSavedAccountsList(getSavedAccounts());
                             }}
                             className="text-[#727272] hover:text-white text-xs p-1 rounded transition-colors"

@@ -2,8 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
-import { PlayNativeIcon, AddTrackNativeIcon, CheckTrackNativeIcon } from '../icons/SpotifyNativeIcons';
+import {
+  PlayNativeIcon,
+  AddTrackNativeIcon,
+  CheckTrackNativeIcon,
+  VideoSwitchNativeIcon,
+  AudioSwitchNativeIcon,
+} from '../icons/SpotifyNativeIcons';
 import { toHDImage } from '../../utils/formatters';
+import { audioEngine } from '../../services/audioEngine';
 
 interface LyricWord {
   timeMs: number;
@@ -252,6 +259,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore();
   const playlists = useSpotifyDataStore((s) => s.playlists);
   const [isFollowing, setIsFollowing] = useState(true);
+  const [isVideoMode, setIsVideoMode] = useState(false);
+  const [videoId, setVideoId] = useState<string | null>(null);
 
   // Real synchronized lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLine[]>([]);
@@ -261,6 +270,25 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const primaryArtist = currentTrack?.artists?.[0]?.name || '';
   const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
   const artistInfo = getArtistInfo(primaryArtist, hdCover);
+
+  // Resolve videoId for video mode
+  useEffect(() => {
+    let cancelled = false;
+    if (currentTrack) {
+      const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
+      const cachedVid = audioEngine.getCurrentVideoId();
+      if (cachedVid) {
+        setVideoId(cachedVid);
+      } else {
+        audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
+          if (!cancelled && vid) setVideoId(vid);
+        });
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id, currentTrack?.name]);
 
   // Fetch real synced lyrics from /api/lyrics whenever current track changes
   useEffect(() => {
@@ -420,13 +448,45 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
           {/* Scrollable Content Body */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 font-['SpotifyMixUI']">
-            {/* 1. Large High-Definition Album Artwork */}
+            {/* 1. Large High-Definition Album Artwork or Video Mode Canvas */}
             <div className="w-full aspect-square rounded-[8px] overflow-hidden shadow-2xl bg-[#1e1e1e] relative group">
-              <img
-                src={hdCover}
-                alt={currentTrack?.name || 'Portada'}
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
-              />
+              {isVideoMode && videoId ? (
+                <div className="w-full h-full relative overflow-hidden pointer-events-none select-none">
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${videoId}&playsinline=1&modestbranding=1&rel=0&start=${Math.max(0, Math.floor(progressMs / 1000))}`}
+                    title={currentTrack?.name || 'Video'}
+                    className="w-[160%] h-[160%] -top-[30%] -left-[30%] absolute object-cover border-0 pointer-events-none scale-125"
+                    allow="autoplay; encrypted-media"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20 pointer-events-none" />
+                </div>
+              ) : (
+                <img
+                  src={hdCover}
+                  alt={currentTrack?.name || 'Portada'}
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-102"
+                />
+              )}
+            </div>
+
+            {/* Video / Audio Switch Pill Button */}
+            <div className="flex items-center justify-start pl-0.5 -mt-1 -mb-1">
+              <button
+                onClick={() => setIsVideoMode(!isVideoMode)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+              >
+                {isVideoMode ? (
+                  <>
+                    <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
+                    <span>Cambiar a audio</span>
+                  </>
+                ) : (
+                  <>
+                    <VideoSwitchNativeIcon size={14} className="text-white" />
+                    <span>Cambiar a vídeo</span>
+                  </>
+                )}
+              </button>
             </div>
 
             {/* 2. Track Title + Checked Icon + Artists (Clickable) */}

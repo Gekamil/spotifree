@@ -200,9 +200,16 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     }
   };
 
-  const handleDeleteAccount = (accountId: string, e: React.MouseEvent) => {
+  const handleDeleteAccount = (acc: SavedAccount | string, e: React.MouseEvent) => {
     e.stopPropagation();
-    removeSavedAccount(accountId);
+    if (typeof acc === 'string') {
+      removeSavedAccount(acc);
+    } else {
+      removeSavedAccount(acc.id);
+      if (acc.displayName) removeSavedAccount(acc.displayName);
+      if (acc.email) removeSavedAccount(acc.email);
+      if (acc.cookie) removeSavedAccount(acc.cookie);
+    }
     setSavedAccounts(getSavedAccounts());
   };
 

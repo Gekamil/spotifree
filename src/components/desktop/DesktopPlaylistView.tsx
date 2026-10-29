@@ -77,6 +77,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     togglePlay,
     toggleLike,
     isShuffle,
+    shuffleMode,
     toggleShuffle,
   } = usePlayerStore();
 
@@ -506,7 +507,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
-      playTrack({ ...tracks[0], playlistId: playlist.id }, tracksWithPlaylistId);
+      if (isShuffle || shuffleMode !== 'off') {
+        const randomIndex = Math.floor(Math.random() * tracks.length);
+        playTrack({ ...tracks[randomIndex], playlistId: playlist.id }, tracksWithPlaylistId);
+      } else {
+        playTrack({ ...tracks[0], playlistId: playlist.id }, tracksWithPlaylistId);
+      }
     }
   };
 

@@ -16,6 +16,7 @@ interface PlayerState {
   repeatMode: 'off' | 'all' | 'one';
   queue: Track[];
   history: Track[];
+  playedInShuffle: string[];
   likedTrackIds: string[];
   currentContextId: string | null;
 
@@ -61,6 +62,7 @@ const store = create<PlayerState>((set, get) => ({
   repeatMode: 'off',
   queue: [],
   history: [],
+  playedInShuffle: [],
   likedTrackIds: getInitialLikedTrackIds(),
   currentContextId: null,
 
@@ -77,6 +79,11 @@ const store = create<PlayerState>((set, get) => ({
     try {
       useStatsStore.getState().recordTrackPlayed(track);
     } catch {}
+
+    const updatedShuffle = state.isShuffle
+      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
+      : [];
+
     set({
       currentTrack: track,
       currentContextId: contextId !== undefined ? contextId : (track.album?.id || state.currentContextId),
@@ -85,6 +92,7 @@ const store = create<PlayerState>((set, get) => ({
       durationMs: track.duration_ms,
       queue: newQueue ?? state.queue,
       history: updatedHistory,
+      playedInShuffle: updatedShuffle,
     });
 
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
@@ -130,7 +138,7 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { queue, currentTrack, isShuffle, repeatMode } = get();
+    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle } = get();
     if (queue.length === 0) return;
 
     if (repeatMode === 'one' && currentTrack) {
@@ -144,24 +152,40 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
-    let nextIndex = 0;
+    let nextTrackCandidate: Track | null = null;
 
     if (isShuffle && queue.length > 1) {
-      do {
-        nextIndex = Math.floor(Math.random() * queue.length);
-      } while (nextIndex === currentIndex);
+      // Find tracks in queue that have not been played yet in this shuffle cycle
+      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id));
+
+      if (unplayed.length > 0) {
+        // Pick random track from unplayed without repeats
+        const randomIndex = Math.floor(Math.random() * unplayed.length);
+        nextTrackCandidate = unplayed[randomIndex];
+      } else {
+        // All tracks in queue have been played once
+        if (repeatMode === 'off') {
+          set({ isPlaying: false, progressMs: 0 });
+          return;
+        }
+        // Repeat mode is on ('all' or 'smart'): start fresh cycle
+        const candidates = queue.filter((t) => t.id !== currentTrack?.id);
+        const nextIndex = Math.floor(Math.random() * candidates.length);
+        nextTrackCandidate = candidates[nextIndex] || queue[0];
+        set({ playedInShuffle: [nextTrackCandidate.id] });
+      }
     } else {
+      const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
       if (currentIndex === queue.length - 1 && repeatMode === 'off') {
         set({ isPlaying: false, progressMs: 0 });
         return;
       }
-      nextIndex = (currentIndex + 1) % queue.length;
+      const nextIndex = (currentIndex + 1) % queue.length;
+      nextTrackCandidate = queue[nextIndex];
     }
 
-    const next = queue[nextIndex];
-    if (next) {
-      get().playTrack(next);
+    if (nextTrackCandidate) {
+      get().playTrack(nextTrackCandidate);
     }
   },
 
@@ -226,9 +250,11 @@ const store = create<PlayerState>((set, get) => ({
   toggleShuffle: () => {
     set((state) => {
       const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
+      const isShuffle = nextShuffle !== 'off';
       return {
         shuffleMode: nextShuffle,
-        isShuffle: nextShuffle !== 'off',
+        isShuffle,
+        playedInShuffle: state.currentTrack && isShuffle ? [state.currentTrack.id] : [],
       };
     });
   },

@@ -14,7 +14,13 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
-import { saveAccount, getSavedAccounts, cleanSpDc } from '../utils/userAccounts';
+import {
+  saveAccount,
+  getSavedAccounts,
+  removeSavedAccount,
+  cleanSpDc,
+  fetchUserProfileFromServer,
+} from '../utils/userAccounts';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -398,8 +404,9 @@ const store = create<SpotifyDataState>((set, get) => ({
       }
 
       // 2. Prioritize active validated cookie session if present
+      const isLoggedOut = typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true';
       let userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
-      if (!userCookie) {
+      if (!userCookie && !isLoggedOut) {
         const savedAccounts = getSavedAccounts();
         if (savedAccounts.length > 0 && savedAccounts[0].cookie) {
           userCookie = savedAccounts[0].cookie;
@@ -459,6 +466,30 @@ const store = create<SpotifyDataState>((set, get) => ({
               window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cachedPlaylists));
             } catch {}
           }
+
+          // Check cross-device synced custom profile
+          try {
+            const serverProfile = await fetchUserProfileFromServer({
+              userId: session.user.id,
+              displayName: session.user.display_name,
+              cookie: userCookie,
+            });
+            if (serverProfile) {
+              if (serverProfile.displayName) session.user.display_name = serverProfile.displayName;
+              if (serverProfile.avatarUrl) session.user.images = [{ url: serverProfile.avatarUrl }];
+              if (serverProfile.bannerUrl) (session.user as any).bannerUrl = serverProfile.bannerUrl;
+            } else {
+              const rawCp = window.localStorage.getItem(`spotifree_custom_profile_${session.user.id}`);
+              if (rawCp) {
+                const parsedCp = JSON.parse(rawCp);
+                if (parsedCp.bannerUrl) (session.user as any).bannerUrl = parsedCp.bannerUrl;
+                if (parsedCp.avatarUrl && (!session.user.images || session.user.images.length === 0)) {
+                  session.user.images = [{ url: parsedCp.avatarUrl }];
+                }
+                if (parsedCp.displayName) session.user.display_name = parsedCp.displayName;
+              }
+            }
+          } catch {}
 
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
@@ -530,11 +561,36 @@ const store = create<SpotifyDataState>((set, get) => ({
             } catch {}
           }
 
+          // Check cross-device synced custom profile
+          try {
+            const serverProfile = await fetchUserProfileFromServer({
+              userId: session.user.id,
+              displayName: session.user.display_name,
+              cookie: userCookie,
+            });
+            if (serverProfile) {
+              if (serverProfile.displayName) session.user.display_name = serverProfile.displayName;
+              if (serverProfile.avatarUrl) session.user.images = [{ url: serverProfile.avatarUrl }];
+              if (serverProfile.bannerUrl) (session.user as any).bannerUrl = serverProfile.bannerUrl;
+            } else {
+              const rawCp = window.localStorage.getItem(`spotifree_custom_profile_${session.user.id}`);
+              if (rawCp) {
+                const parsedCp = JSON.parse(rawCp);
+                if (parsedCp.bannerUrl) (session.user as any).bannerUrl = parsedCp.bannerUrl;
+                if (parsedCp.avatarUrl && (!session.user.images || session.user.images.length === 0)) {
+                  session.user.images = [{ url: parsedCp.avatarUrl }];
+                }
+                if (parsedCp.displayName) session.user.display_name = parsedCp.displayName;
+              }
+            }
+          } catch {}
+
           saveAccount({
             id: session.user.id || `user-${Date.now()}`,
             displayName: session.user.display_name || 'Usuario Spotify',
             email: session.user.email,
             avatarUrl: session.user.images?.[0]?.url,
+            bannerUrl: (session.user as any).bannerUrl,
             cookie: userCookie,
             accessToken: session.accessToken,
             lastUsed: Date.now(),
@@ -620,6 +676,16 @@ const store = create<SpotifyDataState>((set, get) => ({
   },
 
   logout: () => {
+    const currentUser = get().user;
+    if (currentUser) {
+      if (currentUser.id) removeSavedAccount(currentUser.id);
+      if (currentUser.display_name) removeSavedAccount(currentUser.display_name);
+      if (currentUser.email) removeSavedAccount(currentUser.email);
+    }
+    const currentCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
+    if (currentCookie) {
+      removeSavedAccount(currentCookie);
+    }
     logoutSpotify();
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('spotify_access_token');
@@ -781,6 +847,17 @@ export async function switchActiveAccount(account: import('../utils/userAccounts
   try {
     const rawCp = window.localStorage.getItem(`spotifree_custom_profile_${account.id}`);
     if (rawCp) customProfile = JSON.parse(rawCp);
+  } catch {}
+
+  try {
+    const serverProfile = await fetchUserProfileFromServer({
+      userId: account.id,
+      displayName: account.displayName,
+      cookie: account.cookie,
+    });
+    if (serverProfile) {
+      customProfile = { ...customProfile, ...serverProfile };
+    }
   } catch {}
 
   const activeAvatar = customProfile?.avatarUrl || account.avatarUrl;
