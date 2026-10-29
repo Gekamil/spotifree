@@ -281,11 +281,26 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] bg-[#121212] flex flex-col select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
+      className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
       style={{
-        background: `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
+        background: isVideoMode && videoId
+          ? '#000'
+          : `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
       }}
     >
+      {/* Video background (Spotify Canvas style) */}
+      {isVideoMode && videoId && (
+        <div className="absolute inset-0 z-0 overflow-hidden">
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=0&controls=0&disablekb=1&fs=0&loop=1&playlist=${videoId}&playsinline=1&modestbranding=1&rel=0`}
+            title={currentTrack.name}
+            className="absolute w-[150%] h-[150%] -top-[25%] -left-[25%] border-0 pointer-events-none"
+            allow="autoplay; encrypted-media"
+          />
+          {/* Dark gradient overlay so controls remain readable */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/80 pointer-events-none" />
+        </div>
+      )}
       {/* Top Header */}
       <div className="sticky top-0 z-20 flex items-center justify-between text-white px-4 py-2 bg-black/20 backdrop-blur-sm">
         <button
@@ -318,19 +333,23 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       </div>
 
       {/* Scrollable Player Body */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4 relative z-10">
         {/* Large Artwork or Live Video Canvas */}
         <div className="flex items-center justify-center pt-2 pb-1">
           <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424] relative">
             {isVideoMode && videoId ? (
-              <div className="w-full h-full relative overflow-hidden pointer-events-none select-none">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${videoId}&playsinline=1&modestbranding=1&rel=0&start=${Math.max(0, Math.floor(progressMs / 1000))}`}
-                  title={currentTrack.name}
-                  className="w-[160%] h-[160%] -top-[30%] -left-[30%] absolute object-cover border-0 pointer-events-none scale-125"
-                  allow="autoplay; encrypted-media"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20 pointer-events-none" />
+              /* In video mode the video is fullscreen behind — show gradient art */
+              <div
+                className="w-full h-full animate-pulse"
+                style={{
+                  background: `linear-gradient(135deg, ${extractedModalColor}cc 0%, #1ed76055 50%, ${extractedModalColor}88 100%)`,
+                }}
+              >
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <svg width="64" height="64" viewBox="0 0 24 24" fill="white" opacity="0.3">
+                    <path d="M8 5v14l11-7z"/>
+                  </svg>
+                </div>
               </div>
             ) : displayCover ? (
               <img
