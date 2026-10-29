@@ -323,9 +323,17 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   useEffect(() => {
     if (lyricsScrollRef.current && activeLineIndex >= 0) {
-      const activeEl = lyricsScrollRef.current.querySelector(`[data-line-index="${activeLineIndex}"]`);
+      const activeEl = lyricsScrollRef.current.querySelector(`[data-line-index="${activeLineIndex}"]`) as HTMLElement;
       if (activeEl) {
-        activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (isLyricsExpanded) {
+          // Full-screen mode: center the active lyric line in the screen
+          activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          // Compact mode: ONLY scroll the internal card container without moving the parent modal / screen
+          const container = lyricsScrollRef.current;
+          const targetTop = activeEl.offsetTop - container.offsetTop - 40;
+          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
+        }
       }
     }
   }, [activeLineIndex, isLyricsExpanded]);
@@ -677,11 +685,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             <button
               onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
-              className="w-8 h-8 rounded-full bg-black/25 hover:bg-black/40 flex items-center justify-center text-white active:scale-95 transition-transform"
-              title={isLyricsExpanded ? 'Minimizar' : 'Expandir letras'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white text-xs font-bold active:scale-95 transition-all"
+              title={isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
+              <span>{isLyricsExpanded ? 'Cerrar' : 'Ampliar'}</span>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <polyline points="9 21 3 21 3 15"></polyline>
+                <line x1="21" y1="3" x2="14" y2="10"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
               </svg>
             </button>
           </div>

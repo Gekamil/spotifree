@@ -76,27 +76,27 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
           <>
             {/* Header */}
             <div className="flex items-center justify-between pb-1">
-              <h3 className="text-lg font-black text-white font-['SpotifyMixUITitle']">
+              <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
                 Crear
               </h3>
               <button
                 onClick={onClose}
-                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white/70 hover:text-white transition-colors cursor-pointer active:scale-90"
               >
                 ✕
               </button>
             </div>
 
             {/* Creation Options matching Spotify Mobile */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {/* Option 1: Playlist */}
               <div
                 onClick={() => setViewMode('naming')}
-                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
+                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.99]"
               >
                 <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-white shrink-0 shadow-lg">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15 15H3v2h12v-2zm0-4H3v2h12v-2zm-2-4H3v2h10V7zm4 4v-4h2v4h4v2h-4v4h-2v-4h-4v-2h4z" />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2 18h10v2H2v-2zm0-7h20v2H2v-2zm0-7h20v2H2V4zm16 11.5v3h3v2h-3v3h-2v-3h-3v-2h3v-3h2z" />
                   </svg>
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -107,14 +107,35 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                 </div>
               </div>
 
-              {/* Option 2: Importar playlist (YouTube, SoundCloud, Spotify) */}
+              {/* Option 2: Fusión (Official Spotify Blend) */}
               <div
-                onClick={() => setViewMode('importing')}
-                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
+                onClick={() => {
+                  setPlaylistName('Fusión con amigos');
+                  setViewMode('naming');
+                }}
+                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.99]"
               >
                 <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-[#1ed760] shrink-0 shadow-lg">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8.5 3a5.5 5.5 0 0 0-4.87 8.04A5.5 5.5 0 1 0 11.04 15.5 5.51 5.51 0 0 0 8.5 3zm5 5.5a3.5 3.5 0 0 1-1.39 2.78 5.48 5.48 0 0 0-2.39-2.39A3.5 3.5 0 0 1 13.5 8.5z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-white text-base">Fusión</span>
+                  <span className="text-xs text-[#b3b3b3] mt-0.5">
+                    Combina gustos con amigos en una playlist compartida
+                  </span>
+                </div>
+              </div>
+
+              {/* Option 3: Importar playlist */}
+              <div
+                onClick={() => setViewMode('importing')}
+                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.99]"
+              >
+                <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-white shrink-0 shadow-lg">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 0 1 1.4-1.42l2.3 2.3V4a1 1 0 0 1 1-1zm-7 14a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1z" />
                   </svg>
                 </div>
                 <div className="flex flex-col min-w-0">
@@ -125,16 +146,16 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                 </div>
               </div>
 
-              {/* Option 3: Carpeta */}
+              {/* Option 4: Carpeta */}
               <div
                 onClick={() => {
                   onCreateFolder?.();
                   onClose();
                 }}
-                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
+                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.99]"
               >
                 <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-white shrink-0 shadow-lg">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                   </svg>
                 </div>
@@ -142,27 +163,6 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                   <span className="font-bold text-white text-base">Carpeta</span>
                   <span className="text-xs text-[#b3b3b3] mt-0.5">
                     Organiza tus listas de reproducción
-                  </span>
-                </div>
-              </div>
-
-              {/* Option 4: Fusión */}
-              <div
-                onClick={() => {
-                  setPlaylistName('Fusión con amigos');
-                  setViewMode('naming');
-                }}
-                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
-              >
-                <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-white shrink-0 shadow-lg">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
-                  </svg>
-                </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-white text-base">Fusión</span>
-                  <span className="text-xs text-[#b3b3b3] mt-0.5">
-                    Combina gustos con amigos en una playlist
                   </span>
                 </div>
               </div>

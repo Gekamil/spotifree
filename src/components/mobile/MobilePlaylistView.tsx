@@ -25,7 +25,6 @@ import {
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
-import { audioEngine } from '../../services/audioEngine';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import {
   getTrackCoverUrl,
@@ -227,13 +226,90 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [addSearchQuery]);
 
-  // Load tracks accurately if playlist only had stub
+  // Load tracks accurately if playlist only had stub or is an artist
   useEffect(() => {
     let cancelled = false;
 
+    // A. ARTIST PROFILE: Fetch real popular top songs for this artist immediately
+    const isArtist =
+      playlist.type === 'artist' ||
+      playlist.description === 'Artista' ||
+      cleanId.startsWith('art-') ||
+      cleanId.startsWith('artist-');
+
+    if (isArtist) {
+      setLoading(true);
+      const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
+
+      (async () => {
+        try {
+          let songs: Track[] = [];
+
+          // 1. Try Spotify search endpoint
+          try {
+            const sRes = await fetch(`/api/spotify/search?q=${encodeURIComponent(cleanArtistName)}`);
+            if (sRes.ok) {
+              const sData = await sRes.json();
+              if (Array.isArray(sData.tracks?.items) && sData.tracks.items.length > 0) {
+                songs = sData.tracks.items.filter((t: Track) =>
+                  t.artists.some((a) => a.name.toLowerCase().includes(cleanArtistName.toLowerCase()))
+                );
+                if (songs.length === 0) songs = sData.tracks.items.slice(0, 20);
+              }
+            }
+          } catch {}
+
+          // 2. iTunes search fallback for artist top tracks
+          if (songs.length === 0) {
+            try {
+              const itunesRes = await fetch(
+                `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
+              );
+              if (itunesRes.ok) {
+                const data = await itunesRes.json();
+                songs = (data.results || []).map((t: any, idx: number) => ({
+                  id: `artist-song-${t.trackId || idx}`,
+                  name: t.trackName || 'Canción',
+                  duration_ms: t.trackTimeMillis || 210000,
+                  artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
+                  album: {
+                    id: `alb-${t.collectionId || idx}`,
+                    name: t.collectionName || t.trackName,
+                    images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+                  },
+                }));
+              }
+            } catch {}
+          }
+
+          if (!cancelled && songs.length > 0) {
+            setTracks(songs);
+            useSpotifyDataStore.getState().cachePlaylistDetails({
+              ...playlist,
+              tracks: { total: songs.length, items: songs },
+            });
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // B. REGULAR PLAYLIST: Merge with any saved custom tracks
+    const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
+    const mergeWithCustom = (baseList: Track[]): Track[] => {
+      if (savedCustom.length === 0) return baseList;
+      const baseIds = new Set(baseList.map((t) => t.id));
+      const toAdd = savedCustom.filter((t) => !baseIds.has(t.id));
+      return [...toAdd, ...baseList];
+    };
+
     // 1. Direct items
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
-      setTracks(playlist.tracks.items);
+      setTracks(mergeWithCustom(playlist.tracks.items));
       return;
     }
 
@@ -242,7 +318,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       useSpotifyDataStore.getState().playlistDetailsCache[cleanId] ||
       useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
-      setTracks(cached.tracks.items);
+      setTracks(mergeWithCustom(cached.tracks.items));
       return;
     }
 
@@ -257,12 +333,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     // 4. Check store user playlists
     const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === cleanId || p.id === playlist.id);
     if (storePl?.tracks?.items && storePl.tracks.items.length > 0) {
-      setTracks(storePl.tracks.items);
+      setTracks(mergeWithCustom(storePl.tracks.items));
       return;
     }
 
     // 5. Check custom saved tracks in localStorage
-    const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
     if (savedCustom.length > 0) {
       setTracks(savedCustom);
       return;
@@ -271,7 +346,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     // 5b. Check shared collaborative playlist storage
     const sharedPl = getSharedPlaylistById(cleanId);
     if (sharedPl && sharedPl.tracks && sharedPl.tracks.length > 0) {
-      setTracks(sharedPl.tracks);
+      setTracks(mergeWithCustom(sharedPl.tracks));
       return;
     }
 
@@ -291,16 +366,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         if (res.ok) {
           const data = await res.json();
           if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
-            setTracks(data.tracks.items);
+            const merged = mergeWithCustom(data.tracks.items);
+            setTracks(merged);
             if (typeof window !== 'undefined') {
               try {
-                window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(data.tracks.items));
+                window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(merged));
               } catch {}
             }
             useSpotifyDataStore.getState().cachePlaylistDetails({
               ...playlist,
               ...data,
-              tracks: data.tracks,
+              tracks: { total: merged.length, items: merged },
             });
             setLoading(false);
             return;
@@ -308,49 +384,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         }
       } catch (err) {
         console.warn('Backend playlist fetch notice:', err);
-      }
-
-      // 7. If it's an artist, resolve artist songs
-      const isArtist =
-        playlist.type === 'artist' ||
-        playlist.description === 'Artista' ||
-        cleanId.startsWith('art-') ||
-        cleanId.startsWith('artist-');
-
-      if (isArtist) {
-        try {
-          const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
-          const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
-          );
-          if (itunesRes.ok) {
-            const data = await itunesRes.json();
-            const artistTracks: Track[] = (data.results || []).map((t: any, idx: number) => ({
-              id: `artist-song-${t.trackId || idx}`,
-              name: t.trackName || 'Canción',
-              duration_ms: t.trackTimeMillis || 210000,
-              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
-              album: {
-                id: `alb-${t.collectionId || idx}`,
-                name: t.collectionName || t.trackName,
-                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-              },
-            }));
-            if (!cancelled && artistTracks.length > 0) {
-              setTracks(artistTracks);
-              useSpotifyDataStore.getState().cachePlaylistDetails({
-                ...playlist,
-                tracks: { total: artistTracks.length, items: artistTracks },
-              });
-              setLoading(false);
-              artistTracks.slice(0, 3).forEach((t) => {
-                const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
-                audioEngine.prefetchTrack(q, t.id);
-              });
-              return;
-            }
-          }
-        } catch {}
       }
 
       if (!cancelled) setLoading(false);
@@ -449,12 +482,30 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       return [trackWithMeta, ...prev];
     });
 
-    toggleLike(track.id, trackWithMeta);
-
     if (isLikedPlaylist) {
       saveCustomLikedSong(trackWithMeta, user?.id);
+      toggleLike(track.id, trackWithMeta);
     } else {
       saveCustomTrackToStorage(cleanId, false, trackWithMeta, user?.id);
+    }
+
+    const store = useSpotifyDataStore.getState();
+    const currentPl = store.playlists.find((p) => p.id === cleanId || p.id === playlist.id);
+    if (currentPl) {
+      const existingItems = currentPl.tracks?.items || [];
+      const updatedItems = [trackWithMeta, ...existingItems.filter((t) => t.id !== track.id)];
+      const updatedPl = {
+        ...currentPl,
+        tracks: { total: updatedItems.length, items: updatedItems },
+      };
+      useSpotifyDataStore.setState((s) => ({
+        playlists: s.playlists.map((p) => (p.id === currentPl.id ? updatedPl : p)),
+        playlistDetailsCache: {
+          ...s.playlistDetailsCache,
+          [cleanId]: updatedPl,
+          [playlist.id]: updatedPl,
+        },
+      }));
     }
   };
 
@@ -506,16 +557,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       setIsDownloading(true);
       setToastMessage(`Descargando ${tracks.length} canciones para escuchar sin conexión...`);
       try {
-        await downloadPlaylist(activePlaylist, tracks, (completed, total) => {
+        const res = await downloadPlaylist(activePlaylist, tracks, (completed, total) => {
           setToastMessage(`Descargando canciones (${completed}/${total})...`);
         });
-        setIsDownloaded(true);
-        setToastMessage(`¡${tracks.length} canciones descargadas en «musica-spotifree»!`);
+        if (res && res.downloaded > 0) {
+          setIsDownloaded(true);
+          setToastMessage(`¡${res.downloaded} canciones guardadas en «musica-spotifree» para escuchar sin conexión!`);
+        } else {
+          setIsDownloaded(false);
+          setToastMessage('No se pudo descargar el audio. Comprueba tu conexión a internet.');
+        }
       } catch {
         setToastMessage('Error al descargar canciones');
       } finally {
         setIsDownloading(false);
-        setTimeout(() => setToastMessage(null), 3500);
+        setTimeout(() => setToastMessage(null), 4000);
       }
     }
   };
@@ -1381,6 +1437,28 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     key={targetPl.id}
                     onClick={() => {
                       saveCustomTrackToStorage(targetPl.id, false, activeTrackMenu, user?.id);
+
+                      // Update in-memory playlist tracks and cache immediately
+                      const store = useSpotifyDataStore.getState();
+                      const currentPl = store.playlists.find((p) => p.id === targetPl.id);
+                      if (currentPl) {
+                        const existingItems = currentPl.tracks?.items || [];
+                        if (!existingItems.some((t) => t.id === activeTrackMenu.id)) {
+                          const newItems = [activeTrackMenu, ...existingItems];
+                          const updatedPl = {
+                            ...currentPl,
+                            tracks: { total: newItems.length, items: newItems },
+                          };
+                          useSpotifyDataStore.setState((s) => ({
+                            playlists: s.playlists.map((p) => (p.id === targetPl.id ? updatedPl : p)),
+                            playlistDetailsCache: {
+                              ...s.playlistDetailsCache,
+                              [targetPl.id]: updatedPl,
+                            },
+                          }));
+                        }
+                      }
+
                       setIsAddToPlaylistModalOpen(false);
                       setActiveTrackMenu(null);
                       setToastMessage(`Añadido a «${targetPl.name}»`);
@@ -1487,7 +1565,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-white text-black font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[120] max-w-[90vw] text-center px-5 py-2.5 rounded-full bg-white text-black font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
           {toastMessage}
         </div>
       )}

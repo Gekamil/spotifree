@@ -16,7 +16,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { isPlaylistDownloaded } from '../../utils/offlineStorage';
+import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
 import { handleImageError } from '../../utils/imageFallback';
 
 export const MobileLayout: React.FC = () => {
@@ -501,8 +501,8 @@ export const MobileLayout: React.FC = () => {
               </div>
             ) : (
               <div className="space-y-1.5 pt-2">
-                {/* Liked songs item - only show if libraryFilter is 'all' or 'playlists' */}
-                {libraryFilter !== 'artists' && libraryFilter !== 'albums' && libraryFilter !== 'downloaded' && (
+                {/* Liked songs item */}
+                {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
                   <div
                     onClick={() =>
                       handleSelectPlaylistById(
@@ -531,18 +531,27 @@ export const MobileLayout: React.FC = () => {
                 )}
 
                 {/* All user playlists and artists strictly filtered */}
-                {playlists
-                  .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
-                  .filter((p) => {
-                    if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
-                      return false;
-                    }
-                    const isArt = checkIsMobileArtist(p);
-                    if (libraryFilter === 'artists') return isArt;
-                    if (libraryFilter === 'playlists') return !isArt;
-                    if (libraryFilter === 'downloaded') return isPlaylistDownloaded(p.id);
-                    return true;
-                  })
+                {(() => {
+                  let list = playlists;
+                  if (libraryFilter === 'downloaded') {
+                    const downloaded = getDownloadedPlaylists();
+                    const existingIds = new Set(list.map((p) => p.id));
+                    const extra = downloaded.filter((d) => !existingIds.has(d.id));
+                    list = [...list, ...extra];
+                  }
+                  return list
+                    .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
+                    .filter((p) => {
+                      if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
+                        return false;
+                      }
+                      const isArt = checkIsMobileArtist(p);
+                      if (libraryFilter === 'artists') return isArt;
+                      if (libraryFilter === 'playlists') return !isArt;
+                      if (libraryFilter === 'downloaded') return isPlaylistDownloaded(p.id);
+                      return true;
+                    });
+                })()
                   .map((pl) => {
                     const isArt = checkIsMobileArtist(pl);
                     return (
@@ -601,6 +610,7 @@ export const MobileLayout: React.FC = () => {
         {mobileTab === 'playlist' && selectedPlaylist && (
           <div className="animate-cascade-down min-h-full">
             <MobilePlaylistView
+              key={selectedPlaylist.id}
               playlist={selectedPlaylist}
               onBack={() => setMobileTab('home')}
               onSelectPlaylistById={handleSelectPlaylistById}

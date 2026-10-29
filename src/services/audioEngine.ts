@@ -7,6 +7,7 @@
 import { usePlayerStore } from '../store/usePlayerStore';
 import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
+import { getDownloadedTrackBlobUrl } from '../utils/offlineStorage';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
@@ -122,7 +123,7 @@ class AudioEngine {
     try {
       const state = usePlayerStore.getState();
       const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || nextTrack.id === this.currentTrackId) {
+      if (!nextTrack || (nextTrack.id === this.currentTrackId && state.repeatMode !== 'one')) {
         this.isPreloadingNext = false;
         return;
       }
@@ -130,7 +131,11 @@ class AudioEngine {
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
 
-      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
+      let videoId: string | null | undefined =
+        nextTrack.id === this.currentTrackId && this.currentVideoId
+          ? this.currentVideoId
+          : VIDEO_ID_CACHE.get(query);
+
       if (!videoId) {
         videoId = await this.resolveVideoIdClient(query);
         if (videoId) persistVideoId(query, videoId);
@@ -162,13 +167,17 @@ class AudioEngine {
 
     if (!this.preloadedNext) {
       const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || nextTrack.id === this.currentTrackId) {
+      if (!nextTrack || (nextTrack.id === this.currentTrackId && state.repeatMode !== 'one')) {
         this.isCrossfading = false;
         return;
       }
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
-      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
+      let videoId: string | null | undefined =
+        nextTrack.id === this.currentTrackId && this.currentVideoId
+          ? this.currentVideoId
+          : VIDEO_ID_CACHE.get(query);
+
       if (!videoId) {
         videoId = await this.resolveVideoIdClient(query);
         if (videoId) persistVideoId(query, videoId);
@@ -223,11 +232,11 @@ class AudioEngine {
       accumulatedCrossfadeMs += delta;
       const progress = Math.min(1, Math.max(0, accumulatedCrossfadeMs / durationMs));
 
-      // Calculate simultaneous fade curves:
-      // Outgoing track (Song A) fades from 1.0 down to 0.0
-      const outVol = Math.max(0, 1 - progress) * masterVolume;
-      // Incoming track (Song B) fades from 0.0 up to 1.0
-      const inVol = Math.min(1, progress) * masterVolume;
+      // Calculate acoustic equal-power sinusoidal fade curves (constant 1.0 total power, 0 muffled dips):
+      // Outgoing track (Song A) fades from 1.0 down to 0.0 with cosine
+      const outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
+      // Incoming track (Song B) fades from 0.0 up to 1.0 with sine
+      const inVol = Math.sin(progress * 0.5 * Math.PI) * masterVolume;
 
       if (this.activeEngine === 'youtube') {
         const curActiveYt = this.ytPlayer;
@@ -834,7 +843,6 @@ class AudioEngine {
     try {
       // 0. Check offline storage ("musica-spotifree")
       try {
-        const { getDownloadedTrackBlobUrl } = await import('../utils/offlineStorage');
         const offlineBlobUrl = await getDownloadedTrackBlobUrl(trackId);
         if (offlineBlobUrl || (typeof navigator !== 'undefined' && !navigator.onLine)) {
           if (offlineBlobUrl) {

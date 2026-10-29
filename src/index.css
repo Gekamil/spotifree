@@ -221,46 +221,4 @@
   animation: spotifySlideUpModal 0.32s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
 }
 
-/* SPOTIFREE THEMES: OLED & Platinum (Liner) */
-[data-theme="oled"], [data-theme="oled"] body {
-  background-color: #000000 !important;
-}
-
-[data-theme="oled"] .bg-\[\#121212\] {
-  background-color: #000000 !important;
-}
-
-[data-theme="oled"] .bg-\[\#181818\] {
-  background-color: #050505 !important;
-  border-color: rgba(255, 255, 255, 0.12) !important;
-}
-
-[data-theme="oled"] .bg-\[\#242424\] {
-  background-color: #0d0d0d !important;
-}
-
-/* Platinum (Liner Inspired: Frosted Glass & Ambient Translucency) */
-[data-theme="platinum"], [data-theme="platinum"] body {
-  background: radial-gradient(circle at 50% 0%, #1a2233 0%, #0d121c 50%, #06080e 100%) !important;
-}
-
-[data-theme="platinum"] .bg-\[\#121212\] {
-  background-color: rgba(13, 18, 28, 0.65) !important;
-  backdrop-filter: blur(24px) !important;
-  -webkit-backdrop-filter: blur(24px) !important;
-}
-
-[data-theme="platinum"] .bg-\[\#181818\] {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  backdrop-filter: blur(20px) !important;
-  -webkit-backdrop-filter: blur(20px) !important;
-  border-color: rgba(255, 255, 255, 0.15) !important;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-[data-theme="platinum"] .bg-\[\#242424\] {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  backdrop-filter: blur(16px) !important;
-}
-
 

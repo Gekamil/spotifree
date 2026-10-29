@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { saveCustomTrackToStorage } from '../../utils/userStorage';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -127,14 +128,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
   const handleAddTrackToSpecificPlaylist = (targetPlId: string) => {
     if (!targetTrack) return;
+    const user = useSpotifyDataStore.getState().user;
+    saveCustomTrackToStorage(targetPlId, false, targetTrack, user?.id);
+
     const pl = playlists.find((p) => p.id === targetPlId);
     if (pl) {
       const items = pl.tracks?.items || [];
       if (!items.some((t) => t.id === targetTrack.id)) {
         const updated = [...items, { ...targetTrack, added_at: 'Hoy' }];
+        const updatedPl = {
+          ...pl,
+          tracks: { total: updated.length, items: updated },
+        };
         useSpotifyDataStore.getState().updatePlaylist(pl.id, {
           tracks: { total: updated.length, items: updated },
         });
+        useSpotifyDataStore.setState((s) => ({
+          playlistDetailsCache: {
+            ...s.playlistDetailsCache,
+            [targetPlId]: updatedPl,
+          },
+        }));
       }
     }
     closeContextMenu();

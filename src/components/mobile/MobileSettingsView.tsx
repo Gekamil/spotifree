@@ -47,7 +47,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   onOpenProfile,
 }) => {
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
-  const { openLoginModal, theme, setTheme } = useUIStore();
+  const { openLoginModal } = useUIStore();
 
   // Playback Settings
   const [normalizeAudio, setNormalizeAudio] = useState(() => {
@@ -331,64 +331,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           <p className="text-xs text-[#b3b3b3] mt-1 leading-relaxed">
             Música sin anuncios, saltos de canciones ilimitados y reproducción de máxima fidelidad en segundo plano.
           </p>
-        </div>
-
-        {/* Temas de la Interfaz (Estándar, OLED, Platinum) */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-              Tema de la interfaz
-            </h3>
-            <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
-              {theme === 'standard' ? 'Estándar' : theme === 'oled' ? 'OLED' : 'Platinum'}
-            </span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-2">
-            {[
-              {
-                id: 'standard',
-                title: 'Estándar',
-                desc: 'Dark clásico #121212',
-                color: '#121212',
-                accent: '#1ed760',
-              },
-              {
-                id: 'oled',
-                title: 'OLED',
-                desc: 'Negro puro #000000',
-                color: '#000000',
-                accent: '#ffffff',
-              },
-              {
-                id: 'platinum',
-                title: 'Platinum',
-                desc: 'Cristal Liner translúcido',
-                color: '#1e293b',
-                accent: '#e2e8f0',
-              },
-            ].map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setTheme(t.id as any)}
-                className={`p-3 rounded-2xl border text-left transition-all active:scale-95 cursor-pointer relative overflow-hidden flex flex-col justify-between h-24 ${
-                  theme === t.id
-                    ? 'border-[#1ed760] shadow-[0_0_12px_rgba(30,215,96,0.3)]'
-                    : 'border-white/10 hover:border-white/20'
-                }`}
-                style={{ backgroundColor: t.color }}
-              >
-                <div className="flex items-center justify-between w-full">
-                  <span className="font-bold text-xs text-white">{t.title}</span>
-                  {theme === t.id && (
-                    <div className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
-                  )}
-                </div>
-                <p className="text-[10px] text-[#b3b3b3] leading-tight mt-1">{t.desc}</p>
-                <div className="w-full h-1 rounded-full mt-2" style={{ backgroundColor: t.accent }} />
-              </button>
-            ))}
-          </div>
         </div>
 
         {/* Tu Cuenta Spotifree */}

@@ -51,10 +51,22 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
   try {
     const artist = track.artists?.[0]?.name || '';
     const query = `${track.name} ${artist}`.trim();
-    const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
+    let res: Response | null = null;
 
-    const res = await fetch(streamUrl);
-    if (!res.ok) return false;
+    try {
+      const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
+      res = await fetch(streamUrl, { signal: AbortSignal.timeout?.(15000) });
+    } catch {}
+
+    if (!res || !res.ok) {
+      if (track.preview_url) {
+        try {
+          res = await fetch(track.preview_url);
+        } catch {}
+      }
+    }
+
+    if (!res || !res.ok) return false;
 
     const blob = await res.blob();
     if (!blob || blob.size < 1000) return false;
@@ -115,21 +127,25 @@ export async function downloadPlaylist(
   playlist: Playlist,
   tracks: Track[],
   onProgress?: (completed: number, total: number) => void
-): Promise<void> {
+): Promise<{ total: number; downloaded: number }> {
   const total = tracks.length;
   let completed = 0;
+  let successful = 0;
 
   for (const track of tracks) {
     const already = await isTrackDownloaded(track.id);
     if (!already) {
-      await downloadTrackAudio(track);
+      const ok = await downloadTrackAudio(track);
+      if (ok) successful++;
+    } else {
+      successful++;
     }
     completed++;
     onProgress?.(completed, total);
   }
 
-  // Save playlist metadata
-  if (typeof window !== 'undefined') {
+  // Save playlist metadata if at least some tracks were stored locally
+  if (typeof window !== 'undefined' && successful > 0) {
     try {
       const offlinePl = {
         ...playlist,
@@ -146,6 +162,8 @@ export async function downloadPlaylist(
       }
     } catch {}
   }
+
+  return { total, downloaded: successful };
 }
 
 /**

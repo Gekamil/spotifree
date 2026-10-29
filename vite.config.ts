@@ -589,9 +589,7 @@ async function extractLiveFeedFromSpotify() {
 }
 
 function dynamicSpotifyPlugin(): Plugin {
-  return {
-    name: 'dynamic-spotify-plugin',
-    configureServer(server) {
+  const registerAllMiddlewares = (server: import('vite').ViteDevServer) => {
       // 0. Spotify Session Extraction Endpoint (/api/extract-session & /api/spotify/extract-session)
       const handleExtractSession = async (req: any, res: any) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -879,7 +877,7 @@ function dynamicSpotifyPlugin(): Plugin {
       });
 
       // 2g. Spotifree Cloud Account Auth (/api/auth)
-      server.middlewares.use('/api/auth', async (req, res) => {
+      const handleAuth = async (req: any, res: any) => {
         try {
           // @ts-ignore
           const { default: authHandler } = await import('./api/auth.js');
@@ -888,7 +886,11 @@ function dynamicSpotifyPlugin(): Plugin {
           res.statusCode = 500;
           return res.end(JSON.stringify({ error: err?.message || 'Auth error' }));
         }
-      });
+      };
+      server.middlewares.use('/api/auth/register', handleAuth);
+      server.middlewares.use('/api/auth/login', handleAuth);
+      server.middlewares.use('/api/auth/sync', handleAuth);
+      server.middlewares.use('/api/auth', handleAuth);
 
       // 2f. User Profile Sync (/api/user-profile)
       server.middlewares.use('/api/user-profile', async (req, res) => {
@@ -1213,9 +1215,18 @@ function dynamicSpotifyPlugin(): Plugin {
 
       server.middlewares.use('/api/session-sync', handleSession);
       server.middlewares.use('/api/spotify/session', handleSession);
-    },
-  };
-}
+    };
+
+    return {
+      name: 'dynamic-spotify-plugin',
+      configureServer(server) {
+        registerAllMiddlewares(server);
+      },
+      configurePreviewServer(server) {
+        registerAllMiddlewares(server as any);
+      },
+    };
+  }
 
 // https://vite.dev/config/
 export default defineConfig({

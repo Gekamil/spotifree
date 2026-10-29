@@ -17,6 +17,23 @@ export interface SpotifreeAccount {
 }
 
 const STORAGE_KEY = 'spotifree_current_cloud_account';
+const LOCAL_ACCOUNTS_KEY = 'spotifree_local_accounts_db';
+
+function getLocalAccountsDb(): Record<string, any> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(LOCAL_ACCOUNTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return {};
+}
+
+function saveLocalAccountsDb(db: Record<string, any>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(LOCAL_ACCOUNTS_KEY, JSON.stringify(db));
+  } catch {}
+}
 
 export function getSavedSpotifreeAccount(): SpotifreeAccount | null {
   if (typeof window === 'undefined') return null;
@@ -61,28 +78,67 @@ export async function registerSpotifreeAccount(
   password: string,
   displayName?: string
 ): Promise<{ success: boolean; account?: SpotifreeAccount; error?: string }> {
+  const local = getLocalDataToMerge();
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = displayName?.trim() || cleanEmail.split('@')[0] || 'Usuario';
+
+  // 1. Try server endpoint
   try {
-    const local = getLocalDataToMerge();
     const res = await fetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email,
+        email: cleanEmail,
         password,
-        displayName,
+        displayName: cleanName,
         spotifyCookie: local.cookie,
         playlists: local.playlists,
         likedTracks: local.likedTracks,
       }),
     });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      saveCurrentSpotifreeAccount(data.account);
-      return { success: true, account: data.account };
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.account) {
+        saveCurrentSpotifreeAccount(data.account);
+        const db = getLocalAccountsDb();
+        db[cleanEmail] = { ...data.account, password };
+        saveLocalAccountsDb(db);
+        return { success: true, account: data.account };
+      }
+      if (data.error) {
+        return { success: false, error: data.error };
+      }
     }
-    return { success: false, error: data.error || 'Error al registrar la cuenta.' };
+  } catch {
+    // Server unavailable, fall through to instant offline local DB
+  }
+
+  // 2. Instant Local Accounts DB Fallback (works 100% offline & in PWA shortcuts)
+  try {
+    const db = getLocalAccountsDb();
+    if (db[cleanEmail]) {
+      return { success: false, error: 'Ya existe una cuenta registrada con este correo.' };
+    }
+
+    const newAcc: SpotifreeAccount = {
+      email: cleanEmail,
+      displayName: cleanName,
+      avatarUrl: null,
+      bannerUrl: null,
+      spotifyCookie: local.cookie,
+      playlists: local.playlists,
+      likedTracks: local.likedTracks,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    db[cleanEmail] = { ...newAcc, password };
+    saveLocalAccountsDb(db);
+    saveCurrentSpotifreeAccount(newAcc);
+    return { success: true, account: newAcc };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Error de conexión con el servidor.' };
+    return { success: false, error: err.message || 'Error al guardar la cuenta local.' };
   }
 }
 
@@ -90,31 +146,66 @@ export async function loginSpotifreeAccount(
   email: string,
   password: string
 ): Promise<{ success: boolean; account?: SpotifreeAccount; error?: string }> {
+  const local = getLocalDataToMerge();
+  const cleanEmail = email.trim().toLowerCase();
+
+  // 1. Try server endpoint
   try {
-    const local = getLocalDataToMerge();
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        email,
+        email: cleanEmail,
         password,
         spotifyCookie: local.cookie,
         playlists: local.playlists,
         likedTracks: local.likedTracks,
       }),
     });
-    const data = await res.json();
-    if (res.ok && data.success) {
-      saveCurrentSpotifreeAccount(data.account);
-      // If account had a cookie saved in cloud, preserve it locally
-      if (data.account.spotifyCookie && typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', data.account.spotifyCookie);
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.account) {
+        saveCurrentSpotifreeAccount(data.account);
+        if (data.account.spotifyCookie && typeof window !== 'undefined') {
+          window.localStorage.setItem('user_spotify_cookie', data.account.spotifyCookie);
+        }
+        const db = getLocalAccountsDb();
+        db[cleanEmail] = { ...data.account, password };
+        saveLocalAccountsDb(db);
+        return { success: true, account: data.account };
       }
-      return { success: true, account: data.account };
+      if (data.error) {
+        return { success: false, error: data.error };
+      }
     }
-    return { success: false, error: data.error || 'Correo o contraseña incorrectos.' };
+  } catch {
+    // Server unavailable, fall through to local accounts store
+  }
+
+  // 2. Instant Local Accounts DB Fallback
+  try {
+    const db = getLocalAccountsDb();
+    const existing = db[cleanEmail];
+    if (!existing || (existing.password && existing.password !== password)) {
+      return { success: false, error: 'Correo o contraseña incorrectos.' };
+    }
+
+    const mergedAcc: SpotifreeAccount = {
+      ...existing,
+      spotifyCookie: existing.spotifyCookie || local.cookie,
+      playlists: Array.isArray(existing.playlists) && existing.playlists.length > 0 ? existing.playlists : local.playlists,
+      likedTracks: Array.from(new Set([...(existing.likedTracks || []), ...local.likedTracks])),
+      updatedAt: Date.now(),
+    };
+
+    saveCurrentSpotifreeAccount(mergedAcc);
+    if (mergedAcc.spotifyCookie && typeof window !== 'undefined') {
+      window.localStorage.setItem('user_spotify_cookie', mergedAcc.spotifyCookie);
+    }
+    return { success: true, account: mergedAcc };
   } catch (err: any) {
-    return { success: false, error: err.message || 'Error de conexión con el servidor.' };
+    return { success: false, error: err.message || 'Error al autenticar la cuenta local.' };
   }
 }
 
@@ -122,8 +213,10 @@ export async function syncSpotifreeAccount(
   payload: Partial<SpotifreeAccount> & { password?: string }
 ): Promise<SpotifreeAccount | null> {
   const current = getSavedSpotifreeAccount();
-  const email = payload.email || current?.email;
+  const email = (payload.email || current?.email || '').trim().toLowerCase();
   if (!email) return null;
+
+  let syncedAccount: SpotifreeAccount | null = null;
 
   try {
     const res = await fetch(`${API_BASE}/api/auth/sync`, {
@@ -138,12 +231,26 @@ export async function syncSpotifreeAccount(
     if (res.ok) {
       const data = await res.json();
       if (data.success && data.account) {
-        saveCurrentSpotifreeAccount(data.account);
-        return data.account;
+        syncedAccount = data.account;
       }
     }
-  } catch (e) {
-    console.warn('[SpotifreeCloudSync error]:', e);
+  } catch {}
+
+  if (!syncedAccount) {
+    // Local fallback update
+    syncedAccount = {
+      ...(current || {}),
+      ...payload,
+      email,
+      updatedAt: Date.now(),
+    } as SpotifreeAccount;
   }
-  return null;
+
+  saveCurrentSpotifreeAccount(syncedAccount);
+  const db = getLocalAccountsDb();
+  if (db[email]) {
+    db[email] = { ...db[email], ...syncedAccount };
+    saveLocalAccountsDb(db);
+  }
+  return syncedAccount;
 }

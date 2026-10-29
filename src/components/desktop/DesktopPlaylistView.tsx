@@ -279,14 +279,34 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       toggleLike(track.id, newTrack);
     }
     saveCustomTrackToStorage(dynamicPlaylist.id, isLikedInitially, newTrack, user?.id);
+
+    // Update global store & cache
+    const store = useSpotifyDataStore.getState();
+    const currentPl = store.playlists.find((p) => p.id === dynamicPlaylist.id);
+    if (currentPl) {
+      const updatedPl = {
+        ...currentPl,
+        tracks: { total: updated.length, items: updated },
+      };
+      useSpotifyDataStore.setState((s) => ({
+        playlists: s.playlists.map((p) => (p.id === dynamicPlaylist.id ? updatedPl : p)),
+        playlistDetailsCache: {
+          ...s.playlistDetailsCache,
+          [dynamicPlaylist.id]: updatedPl,
+        },
+      }));
+    }
   };
 
   useEffect(() => {
     let cancelled = false;
     const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
-    const sourceTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
-      ? playlist.tracks.items
-      : currentCustom;
+    const customIds = new Set(currentCustom.map((t) => t.id));
+    const baseItems = playlist.tracks?.items || [];
+    const sourceTracks = [
+      ...currentCustom,
+      ...baseItems.filter((t) => !customIds.has(t.id)),
+    ];
 
     let mapped = sourceTracks.map((t) => {
       if (TRACK_COVER_CACHE.has(t.id)) {

@@ -74,9 +74,9 @@ export default async function handler(req, res) {
   const accounts = loadAccounts();
 
   // Determine intent (register, login, sync, or get)
-  const isRegister = pathname.endsWith('register') || body.action === 'register';
-  const isLogin = pathname.endsWith('login') || body.action === 'login';
-  const isSync = pathname.endsWith('sync') || body.action === 'sync';
+  const isRegister = pathname.includes('register') || body.action === 'register';
+  const isLogin = pathname.includes('login') || body.action === 'login';
+  const isSync = pathname.includes('sync') || body.action === 'sync';
 
   // 1. REGISTER
   if (isRegister) {

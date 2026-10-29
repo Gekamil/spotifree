@@ -153,7 +153,7 @@ const SpotifyCustomSelect: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab, viewMode, setViewMode, openLoginModal, theme, setTheme } = useUIStore();
+  const { setActiveMainTab, viewMode, setViewMode, openLoginModal } = useUIStore();
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
@@ -471,67 +471,6 @@ export const DesktopSettingsView: React.FC = () => {
       </div>
 
       <div className="space-y-8">
-        {/* TEMAS DE LA INTERFAZ (Estándar, OLED, Platinum) */}
-        {matchesSearch('tema temas oled platinum estándar liner apariencia interfaz color') && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Tema de la interfaz</h2>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">Personaliza la estética visual de Spotifree en tu escritorio.</p>
-              </div>
-              <span className="text-xs font-bold text-[#1ed760] uppercase tracking-wider">
-                {theme === 'standard' ? 'Estándar' : theme === 'oled' ? 'OLED' : 'Platinum'}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                {
-                  id: 'standard',
-                  title: 'Estándar',
-                  desc: 'Dark clásico #121212 original de Spotify',
-                  color: '#121212',
-                  accent: '#1ed760',
-                },
-                {
-                  id: 'oled',
-                  title: 'OLED',
-                  desc: 'Negros puros #000000 para contraste absoluto',
-                  color: '#000000',
-                  accent: '#ffffff',
-                },
-                {
-                  id: 'platinum',
-                  title: 'Platinum',
-                  desc: 'Efecto cristal Liner translúcido con desenfoque',
-                  color: '#1e293b',
-                  accent: '#e2e8f0',
-                },
-              ].map((t) => (
-                <button
-                  key={t.id}
-                  onClick={() => setTheme(t.id as any)}
-                  className={`p-4 rounded-xl border text-left transition-all active:scale-[0.98] cursor-pointer relative overflow-hidden flex flex-col justify-between h-28 ${
-                    theme === t.id
-                      ? 'border-[#1ed760] shadow-[0_0_16px_rgba(30,215,96,0.3)] bg-white/10'
-                      : 'border-white/10 hover:border-white/20 bg-[#181818]'
-                  }`}
-                  style={{ backgroundColor: t.color }}
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <span className="font-bold text-sm text-white">{t.title}</span>
-                    {theme === t.id && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760]" />
-                    )}
-                  </div>
-                  <p className="text-xs text-[#b3b3b3] leading-snug mt-1">{t.desc}</p>
-                  <div className="w-full h-1.5 rounded-full mt-2" style={{ backgroundColor: t.accent }} />
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
-
         {/* 1. CUENTA Y SESIÓN (Spotify 1:1 Clean Design) */}
         {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar') && (
           <section className="space-y-4">

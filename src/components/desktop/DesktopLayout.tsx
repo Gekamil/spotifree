@@ -212,6 +212,7 @@ export const DesktopLayout: React.FC = () => {
 
             {activeMainTab === 'playlist' && activePlaylist && (
               <DesktopPlaylistView
+                key={activePlaylist.id}
                 playlist={activePlaylist}
                 onSelectPlaylistById={handleSelectPlaylistById}
               />
