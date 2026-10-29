@@ -10,6 +10,8 @@ import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 // @ts-ignore
 import { extractSpotifySession } from './api/extract-session.js';
+// @ts-ignore
+import canvasHandler from './api/canvas.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -874,6 +876,18 @@ function dynamicSpotifyPlugin(): Plugin {
 
         res.statusCode = 200;
         return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
+      });
+
+      // 2f. Spotify Canvas Video API (/api/canvas)
+      server.middlewares.use('/api/canvas', async (req, res) => {
+        try {
+          const url = new URL(req.url || '', 'http://localhost');
+          (req as any).query = Object.fromEntries(url.searchParams.entries());
+          await canvasHandler(req, res);
+        } catch (e: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ canvasUrl: null, error: e?.message }));
+        }
       });
 
       // 2g. Spotifree Cloud Account Auth (/api/auth)

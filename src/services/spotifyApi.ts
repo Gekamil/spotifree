@@ -259,3 +259,30 @@ export async function searchSpotify(query: string): Promise<any | null> {
     playlists: { items: playlists },
   };
 }
+
+const CANVAS_LOCAL_CACHE = new Map<string, string | null>();
+
+export async function fetchTrackCanvas(trackId: string): Promise<string | null> {
+  const cleanId = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+  if (!cleanId) return null;
+  if (CANVAS_LOCAL_CACHE.has(cleanId)) return CANVAS_LOCAL_CACHE.get(cleanId) || null;
+
+  try {
+    const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+    const headers: Record<string, string> = {};
+    if (userCookie) headers['x-spotify-cookie'] = userCookie;
+
+    const res = await fetch(`/api/canvas?trackId=${encodeURIComponent(cleanId)}`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      const url = data?.canvasUrl || null;
+      CANVAS_LOCAL_CACHE.set(cleanId, url);
+      return url;
+    }
+  } catch (err) {
+    console.warn('[SpotifyApi] fetchTrackCanvas error:', err);
+  }
+
+  CANVAS_LOCAL_CACHE.set(cleanId, null);
+  return null;
+}

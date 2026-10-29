@@ -24,6 +24,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified } from '../../utils/lyricsService';
 import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
+import { fetchTrackCanvas } from '../../services/spotifyApi';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -142,7 +143,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
-  const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isCanvasMode, setIsCanvasMode] = useState(true);
+  const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
   const [extractedModalColor, setExtractedModalColor] = useState<string>(() =>
@@ -244,6 +246,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           if (!cancelled && vid) setVideoId(vid);
         });
       }
+
+      // Fetch Spotify Canvas video loop
+      setCanvasUrl(currentTrack.canvasUrl || null);
+      fetchTrackCanvas(currentTrack.id).then((cUrl) => {
+        if (!cancelled && cUrl) {
+          setCanvasUrl(cUrl);
+        }
+      });
 
       // Search official music video / videoclip for Video mode
       const clipQuery = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''} video oficial videoclip`;
@@ -347,13 +357,29 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-slide-up-modal"
+      className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-slide-up-modal overflow-hidden"
       style={{
-        background: isVideoMode && videoId
-          ? '#000'
+        background: isCanvasMode && canvasUrl
+          ? '#080808'
           : `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
       }}
     >
+      {/* Canvas Full-Screen Looping Video in Background (Identical to Spotify Mobile) */}
+      {isCanvasMode && canvasUrl && (
+        <div className="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+          <video
+            key={canvasUrl}
+            src={canvasUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+          {/* Authentic Spotify gradient overlay for pristine legibility of text and controls */}
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/20 to-black/85 pointer-events-none" />
+        </div>
+      )}
 
       {/* Top Header */}
       <div className="sticky top-0 z-20 flex items-center justify-between text-white px-4 py-2 bg-black/20 backdrop-blur-sm">
@@ -388,74 +414,75 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
       {/* Scrollable Player Body */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4 relative z-10">
-        {/* Large Artwork or Live Spotify Video / Canvas */}
+        {/* Large Artwork or Spotify Canvas Spacer */}
         <div className="flex items-center justify-center pt-2 pb-1">
-          <div className={`w-full overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#181818] relative transition-all duration-300 ${
-            isVideoMode
-              ? 'max-w-[350px] aspect-[9/16] max-h-[460px] rounded-3xl border border-white/10'
-              : 'max-w-[340px] aspect-square rounded-2xl'
-          }`}>
-            {isVideoMode ? (
-              <div className="w-full h-full relative overflow-hidden bg-black">
-                <iframe
-                  src={`https://www.youtube-nocookie.com/embed/${officialVideoId || videoId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${officialVideoId || videoId}&playsinline=1&modestbranding=1&rel=0`}
-                  title={currentTrack.name}
-                  className="w-full h-full object-cover border-0 scale-105 pointer-events-none"
-                  allow="autoplay; encrypted-media"
+          {isCanvasMode && canvasUrl ? (
+            <div className="w-full max-w-[340px] aspect-square max-h-[340px] flex items-center justify-center pointer-events-none" />
+          ) : (
+            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#181818] relative transition-all duration-300">
+              {displayCover ? (
+                <img
+                  src={displayCover}
+                  alt={currentTrack.name}
+                  onError={handleCoverError}
+                  className="w-full h-full object-cover"
                 />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-black/20 pointer-events-none" />
-              </div>
-            ) : displayCover ? (
-              <img
-                src={displayCover}
-                alt={currentTrack.name}
-                onError={handleCoverError}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-white/40">
-                <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                </svg>
-              </div>
-            )}
-          </div>
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Cambiar a vídeo / Cambiar a audio pill - POSITIONED DIRECTLY BELOW ARTWORK AND ABOVE SONG TITLE */}
-        <div className="flex items-center justify-start pl-1 -my-0.5">
-          <button
-            onClick={() => setIsVideoMode(!isVideoMode)}
-            className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-          >
-            {isVideoMode ? (
-              <>
-                <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
-                <span>Cambiar a audio</span>
-              </>
-            ) : (
-              <>
-                <VideoSwitchNativeIcon size={14} className="text-white" />
-                <span>Cambiar a vídeo</span>
-              </>
-            )}
-          </button>
-        </div>
+        {/* Cambiar a Canvas / Cambiar a carátula pill - VISIBLE WHEN SONG HAS CANVAS */}
+        {canvasUrl && (
+          <div className="flex items-center justify-start pl-1 -my-0.5">
+            <button
+              onClick={() => setIsCanvasMode(!isCanvasMode)}
+              className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm backdrop-blur-md"
+            >
+              {isCanvasMode ? (
+                <>
+                  <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
+                  <span>Cambiar a carátula</span>
+                </>
+              ) : (
+                <>
+                  <VideoSwitchNativeIcon size={14} className="text-white" />
+                  <span>Cambiar a Canvas</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Title & Artist & Like */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <div className="min-w-0 flex-1 mr-4">
-              <h1 className="text-2xl font-black text-white truncate font-['SpotifyMixUITitle']">
-                {currentTrack.name}
-              </h1>
-              <p className="text-base text-[#b3b3b3] truncate mt-0.5">
-                {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
-              </p>
+            <div className="min-w-0 flex-1 mr-4 flex items-center gap-3">
+              {isCanvasMode && canvasUrl && displayCover && (
+                <img
+                  src={displayCover}
+                  alt={currentTrack.name}
+                  className="w-12 h-12 rounded-lg object-cover shadow-lg shrink-0 border border-white/10"
+                />
+              )}
+              <div className="min-w-0 flex-1">
+                <h1 className="text-2xl font-black text-white truncate font-['SpotifyMixUITitle']">
+                  {currentTrack.name}
+                </h1>
+                <p className="text-base text-[#b3b3b3] truncate mt-0.5">
+                  {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
+                </p>
+              </div>
             </div>
             <button
               onClick={() => toggleLike(currentTrack.id)}
-              className="w-10 h-10 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-transform"
+              className="w-10 h-10 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-transform shrink-0"
             >
               {isLiked ? (
                 <CheckTrackNativeIcon size={26} className="text-[#1ed760]" />
@@ -696,6 +723,47 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <line x1="3" y1="21" x2="10" y2="14"></line>
               </svg>
             </button>
+          </div>
+        </div>
+
+        {/* SECTION: Official Music Video / Videoclip */}
+        <div className="rounded-2xl bg-[#181818] p-4 space-y-3 shadow-xl border border-white/5 overflow-hidden">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <VideoSwitchNativeIcon size={18} className="text-[#1ed760]" />
+              <span className="font-bold text-sm text-white font-['SpotifyMixUITitle']">
+                Videoclip oficial
+              </span>
+            </div>
+            <span className="text-[10px] font-bold text-white/60 bg-white/10 px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+              Video HD
+            </span>
+          </div>
+
+          <div className="w-full aspect-video rounded-xl overflow-hidden bg-black relative shadow-inner">
+            {officialVideoId || videoId ? (
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
+                title={`${currentTrack.name} - Videoclip oficial`}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center text-white/40 gap-2">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z" />
+                </svg>
+                <span className="text-xs">Buscando videoclip...</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-[#b3b3b3] pt-0.5">
+            <span className="truncate max-w-[240px]">
+              {currentTrack.name} — {artistName}
+            </span>
+            <span className="text-[11px] text-white/40 font-medium">YouTube</span>
           </div>
         </div>
 

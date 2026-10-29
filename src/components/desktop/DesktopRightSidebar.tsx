@@ -11,6 +11,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
+import { fetchTrackCanvas } from '../../services/spotifyApi';
 
 interface LyricWord {
   timeMs: number;
@@ -259,8 +260,10 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore();
   const playlists = useSpotifyDataStore((s) => s.playlists);
   const [isFollowing, setIsFollowing] = useState(true);
-  const [isVideoMode, setIsVideoMode] = useState(false);
+  const [isCanvasMode, setIsCanvasMode] = useState(true);
+  const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
+  const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
 
   // Real synchronized lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLine[]>([]);
@@ -271,10 +274,16 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
   const artistInfo = getArtistInfo(primaryArtist, hdCover);
 
-  // Resolve videoId for video mode
+  // Resolve videoId & canvas
   useEffect(() => {
     let cancelled = false;
     if (currentTrack) {
+      // Fetch Spotify Canvas
+      setCanvasUrl(currentTrack.canvasUrl || null);
+      fetchTrackCanvas(currentTrack.id).then((cUrl) => {
+        if (!cancelled && cUrl) setCanvasUrl(cUrl);
+      });
+
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
       const cachedVid = audioEngine.getCurrentVideoId();
       if (cachedVid) {
@@ -284,6 +293,12 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
           if (!cancelled && vid) setVideoId(vid);
         });
       }
+
+      // Search official music video / videoclip
+      const clipQuery = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''} video oficial videoclip`;
+      audioEngine.resolveVideoIdForTrack(clipQuery, `clip-${currentTrack.id}`).then((clipVid) => {
+        if (!cancelled && clipVid) setOfficialVideoId(clipVid);
+      });
     }
     return () => {
       cancelled = true;
@@ -448,17 +463,20 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
           {/* Scrollable Content Body */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 font-['SpotifyMixUI']">
-            {/* 1. Large High-Definition Album Artwork or Video Mode Canvas */}
+            {/* 1. Large High-Definition Album Artwork or Spotify Canvas */}
             <div className="w-full aspect-square rounded-[8px] overflow-hidden shadow-2xl bg-[#1e1e1e] relative group">
-              {isVideoMode && videoId ? (
+              {isCanvasMode && canvasUrl ? (
                 <div className="w-full h-full relative overflow-hidden pointer-events-none select-none">
-                  <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&disablekb=1&fs=0&loop=1&playlist=${videoId}&playsinline=1&modestbranding=1&rel=0&start=${Math.max(0, Math.floor(progressMs / 1000))}`}
-                    title={currentTrack?.name || 'Video'}
-                    className="w-[160%] h-[160%] -top-[30%] -left-[30%] absolute object-cover border-0 pointer-events-none scale-125"
-                    allow="autoplay; encrypted-media"
+                  <video
+                    key={canvasUrl}
+                    src={canvasUrl}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/20 pointer-events-none" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10 pointer-events-none" />
                 </div>
               ) : (
                 <img
@@ -469,25 +487,27 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               )}
             </div>
 
-            {/* Video / Audio Switch Pill Button */}
-            <div className="flex items-center justify-start pl-0.5 -mt-1 -mb-1">
-              <button
-                onClick={() => setIsVideoMode(!isVideoMode)}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-              >
-                {isVideoMode ? (
-                  <>
-                    <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
-                    <span>Cambiar a audio</span>
-                  </>
-                ) : (
-                  <>
-                    <VideoSwitchNativeIcon size={14} className="text-white" />
-                    <span>Cambiar a vídeo</span>
-                  </>
-                )}
-              </button>
-            </div>
+            {/* Canvas / Cover Switch Pill Button */}
+            {canvasUrl && (
+              <div className="flex items-center justify-start pl-0.5 -mt-1 -mb-1">
+                <button
+                  onClick={() => setIsCanvasMode(!isCanvasMode)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+                >
+                  {isCanvasMode ? (
+                    <>
+                      <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
+                      <span>Cambiar a carátula</span>
+                    </>
+                  ) : (
+                    <>
+                      <VideoSwitchNativeIcon size={14} className="text-white" />
+                      <span>Cambiar a Canvas</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
 
             {/* 2. Track Title + Checked Icon + Artists (Clickable) */}
             <div className="flex items-start justify-between gap-3">
@@ -699,6 +719,35 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                   </p>
                   <p className="text-[#b3b3b3]">Compositores y producción</p>
                 </div>
+              </div>
+            </div>
+
+            {/* Videoclip Oficial */}
+            <div className="rounded-xl p-4 bg-[#1f1f1f] space-y-3 shadow-lg border border-white/5">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <VideoSwitchNativeIcon size={16} className="text-[#1ed760]" />
+                  <h3 className="font-bold text-sm text-white">Videoclip oficial</h3>
+                </div>
+                <span className="text-[10px] font-bold text-white/50 bg-white/10 px-2 py-0.5 rounded uppercase">
+                  Video HD
+                </span>
+              </div>
+
+              <div className="w-full aspect-video rounded-lg overflow-hidden bg-black relative shadow-inner">
+                {officialVideoId || videoId ? (
+                  <iframe
+                    src={`https://www.youtube-nocookie.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
+                    title={`${currentTrack?.name} - Videoclip`}
+                    className="w-full h-full border-0"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-xs text-white/40">
+                    Buscando videoclip...
+                  </div>
+                )}
               </div>
             </div>
 
