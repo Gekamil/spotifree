@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
+import { importExternalPlaylist } from '../../utils/playlistImporter';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import type { Playlist } from '../../types/spotify';
 
 interface MobileCreateSheetProps {
   isOpen: boolean;
   onClose: () => void;
   onCreatePlaylist: (name: string) => void;
+  onImportPlaylist?: (playlist: Playlist) => void;
   onCreateFolder?: () => void;
   defaultPlaylistNumber?: number;
 }
@@ -12,11 +16,16 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
   isOpen,
   onClose,
   onCreatePlaylist,
+  onImportPlaylist,
   onCreateFolder,
   defaultPlaylistNumber = 1,
 }) => {
-  const [isNamingPlaylist, setIsNamingPlaylist] = useState(false);
+  const { user } = useSpotifyDataStore();
+  const [viewMode, setViewMode] = useState<'menu' | 'naming' | 'importing'>('menu');
   const [playlistName, setPlaylistName] = useState(`Mi playlist n.º ${defaultPlaylistNumber}`);
+  const [importUrl, setImportUrl] = useState('');
+  const [importLoading, setImportLoading] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
@@ -24,8 +33,31 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
     e.preventDefault();
     const finalName = playlistName.trim() || `Mi playlist n.º ${defaultPlaylistNumber}`;
     onCreatePlaylist(finalName);
-    setIsNamingPlaylist(false);
+    setViewMode('menu');
     onClose();
+  };
+
+  const handleImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!importUrl.trim()) return;
+    setImportLoading(true);
+    setImportError(null);
+
+    const result = await importExternalPlaylist(importUrl.trim(), user || undefined);
+    setImportLoading(false);
+
+    if (result.success && result.playlist) {
+      if (onImportPlaylist) {
+        onImportPlaylist(result.playlist);
+      } else {
+        useSpotifyDataStore.getState().addCustomPlaylist(result.playlist);
+      }
+      setViewMode('menu');
+      setImportUrl('');
+      onClose();
+    } else {
+      setImportError(result.error || 'No se pudo importar la playlist.');
+    }
   };
 
   return (
@@ -40,7 +72,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
         {/* Drag handle */}
         <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1 mb-2" />
 
-        {!isNamingPlaylist ? (
+        {viewMode === 'menu' && (
           <>
             {/* Header */}
             <div className="flex items-center justify-between pb-1">
@@ -59,7 +91,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
             <div className="space-y-2">
               {/* Option 1: Playlist */}
               <div
-                onClick={() => setIsNamingPlaylist(true)}
+                onClick={() => setViewMode('naming')}
                 className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
               >
                 <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-white shrink-0 shadow-lg">
@@ -75,7 +107,25 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                 </div>
               </div>
 
-              {/* Option 2: Carpeta */}
+              {/* Option 2: Importar playlist (YouTube, SoundCloud, Spotify) */}
+              <div
+                onClick={() => setViewMode('importing')}
+                className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
+              >
+                <div className="w-12 h-12 rounded-xl bg-[#282828] border border-white/10 flex items-center justify-center text-[#1ed760] shrink-0 shadow-lg">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z" />
+                  </svg>
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-white text-base">Importar playlist</span>
+                  <span className="text-xs text-[#b3b3b3] mt-0.5">
+                    Desde YouTube, SoundCloud, Spotify o lista de texto
+                  </span>
+                </div>
+              </div>
+
+              {/* Option 3: Carpeta */}
               <div
                 onClick={() => {
                   onCreateFolder?.();
@@ -96,11 +146,11 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                 </div>
               </div>
 
-              {/* Option 3: Fusión */}
+              {/* Option 4: Fusión */}
               <div
                 onClick={() => {
-                  setIsNamingPlaylist(true);
                   setPlaylistName('Fusión con amigos');
+                  setViewMode('naming');
                 }}
                 className="flex items-center gap-4 p-3 rounded-2xl hover:bg-white/10 active:bg-white/15 cursor-pointer transition-all active:scale-[0.98]"
               >
@@ -118,7 +168,9 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
               </div>
             </div>
           </>
-        ) : (
+        )}
+
+        {viewMode === 'naming' && (
           /* Sub-step: Ponle nombre a tu lista */
           <form onSubmit={handleSubmitPlaylist} className="space-y-6 pt-2 animate-in fade-in duration-200">
             <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] text-center">
@@ -137,7 +189,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
             <div className="flex items-center justify-center gap-4 pt-2">
               <button
                 type="button"
-                onClick={() => setIsNamingPlaylist(false)}
+                onClick={() => setViewMode('menu')}
                 className="px-6 py-2.5 rounded-full border border-white/30 text-white font-bold text-xs hover:border-white transition-colors cursor-pointer"
               >
                 Cancelar
@@ -147,6 +199,49 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                 className="px-8 py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] active:scale-95 text-black font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xl font-black"
               >
                 Crear
+              </button>
+            </div>
+          </form>
+        )}
+
+        {viewMode === 'importing' && (
+          /* Sub-step: Importar playlist externa */
+          <form onSubmit={handleImportSubmit} className="space-y-5 pt-2 animate-in fade-in duration-200">
+            <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] text-center">
+              Importar playlist
+            </h3>
+            <p className="text-xs text-[#b3b3b3] text-center max-w-xs mx-auto">
+              Pega un enlace de YouTube, SoundCloud, Spotify o escribe canciones línea por línea.
+            </p>
+            <div className="relative border-b-2 border-white/40 focus-within:border-[#1ed760] transition-colors pb-1">
+              <textarea
+                autoFocus
+                rows={2}
+                value={importUrl}
+                onChange={(e) => setImportUrl(e.target.value)}
+                className="w-full bg-transparent px-2 py-1 text-white text-sm outline-none text-center font-medium tracking-tight resize-none"
+                placeholder="https://www.youtube.com/playlist?list=... o https://open.spotify.com/..."
+              />
+            </div>
+
+            {importError && (
+              <p className="text-xs text-red-400 text-center font-medium">{importError}</p>
+            )}
+
+            <div className="flex items-center justify-center gap-4 pt-2">
+              <button
+                type="button"
+                onClick={() => setViewMode('menu')}
+                className="px-6 py-2.5 rounded-full border border-white/30 text-white font-bold text-xs hover:border-white transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={importLoading || !importUrl.trim()}
+                className="px-8 py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] disabled:opacity-50 active:scale-95 text-black font-bold text-xs uppercase tracking-wider transition-all cursor-pointer shadow-xl font-black"
+              >
+                {importLoading ? 'Importando...' : 'Importar'}
               </button>
             </div>
           </form>

@@ -13,9 +13,12 @@ import {
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
   SpotifyConnectNativeIcon,
+  VideoSwitchNativeIcon,
+  AudioSwitchNativeIcon,
+  ShareNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
-import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified } from '../../utils/lyricsService';
@@ -135,7 +138,37 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
+  const [isVideoMode, setIsVideoMode] = useState(false);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [extractedModalColor, setExtractedModalColor] = useState<string>(() =>
+    resolveVibrantColor(currentTrack?.id, currentTrack?.name)
+  );
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (currentTrack) {
+      const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
+      const cachedVid = audioEngine.getCurrentVideoId();
+      if (cachedVid) {
+        setVideoId(cachedVid);
+      } else {
+        audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
+          if (!cancelled && vid) setVideoId(vid);
+        });
+      }
+
+      const coverImg = currentTrack.album?.images?.[0]?.url;
+      if (coverImg) {
+        extractDominantColorFromImage(coverImg).then((hex) => {
+          if (!cancelled && hex) setExtractedModalColor(hex);
+        });
+      }
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id, currentTrack?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -193,7 +226,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const isLiked = likedTrackIds.includes(currentTrack.id);
   const coverUrl = currentTrack.album?.images?.[0]?.url;
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
-  const themeColor = resolveVibrantColor(currentTrack.id, currentTrack.name);
   const vocalProgressMs = progressMs + 220;
 
   const activeLineIndex = syncedLines.length > 0
@@ -223,7 +255,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     <div
       className="fixed inset-0 z-[100] bg-[#121212] flex flex-col select-none font-['SpotifyMixUI'] animate-in slide-in-from-bottom duration-300"
       style={{
-        background: `linear-gradient(180deg, ${themeColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
+        background: `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
       }}
     >
       {/* Top Header */}
@@ -258,25 +290,57 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       </div>
 
       {/* Scrollable Player Body */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-6">
-        {/* Large Artwork */}
-        <div className="flex items-center justify-center pt-2 pb-2">
-          <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424]">
-            {coverUrl ? (
-              <img
-                src={coverUrl}
-                alt={currentTrack.name}
-                onError={handleImageError}
-                className="w-full h-full object-cover"
-              />
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-5">
+        {/* Cambiar a vídeo / Cambiar a audio pill */}
+        <div className="flex items-center justify-center pt-1">
+          <button
+            onClick={() => setIsVideoMode(!isVideoMode)}
+            className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
+          >
+            {isVideoMode ? (
+              <>
+                <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
+                <span>Cambiar a audio</span>
+              </>
             ) : (
-              <div className="w-full h-full flex items-center justify-center text-white/40">
-                <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                </svg>
-              </div>
+              <>
+                <VideoSwitchNativeIcon size={14} className="text-white" />
+                <span>Cambiar a vídeo</span>
+              </>
             )}
-          </div>
+          </button>
+        </div>
+
+        {/* Large Artwork or Live Video */}
+        <div className="flex items-center justify-center pt-1 pb-1">
+          {isVideoMode && videoId ? (
+            <div className="w-full max-w-[340px] aspect-video rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] bg-black relative border border-white/10">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&modestbranding=1&rel=0`}
+                title={currentTrack.name}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424]">
+              {coverUrl ? (
+                <img
+                  src={coverUrl}
+                  alt={currentTrack.name}
+                  onError={handleImageError}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Title & Artist & Like */}
@@ -387,10 +451,18 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </button>
 
             <div className="flex items-center gap-4 text-[#b3b3b3]">
-              <button className="hover:text-white transition-colors active:scale-90" title="Compartir">
-                <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
-                  <path d="M11 2.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm-2.5 4a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 13.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13-2.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM5.5 4.5l-3 7 1 .5 3-7-1-.5zm5 0l3 7-1 .5-3-7 1-.5z" />
-                </svg>
+              <button
+                onClick={() => {
+                  if (navigator.share) {
+                    navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(window.location.href).catch(() => {});
+                  }
+                }}
+                className="hover:text-white transition-colors active:scale-90"
+                title="Compartir"
+              >
+                <ShareNativeIcon size={18} className="text-[#b3b3b3] hover:text-white" />
               </button>
               <button className="hover:text-white transition-colors active:scale-90" title="Cola de reproducción">
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
@@ -405,7 +477,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         <div
           className="rounded-[28px] p-6 transition-all duration-300 relative overflow-hidden shadow-2xl border border-white/10 flex flex-col justify-between"
           style={{
-            backgroundColor: `${themeColor}f0`,
+            backgroundColor: `${extractedModalColor}f0`,
           }}
         >
           {/* Lyrics Card Header */}
@@ -502,13 +574,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree` }).catch(() => {});
+                } else {
+                  navigator.clipboard.writeText(window.location.href).catch(() => {});
                 }
               }}
               className="px-4 py-1.5 rounded-full bg-black/25 hover:bg-black/40 text-xs font-bold uppercase tracking-wider flex items-center gap-2 active:scale-95 transition-all"
             >
-              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11 2.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zm-2.5 4a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM3 13.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zm13-2.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-1.5 2.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5zM5.5 4.5l-3 7 1 .5 3-7-1-.5zm5 0l3 7-1 .5-3-7 1-.5z" />
-              </svg>
+              <ShareNativeIcon size={14} className="text-white" />
               <span>Compartir</span>
             </button>
 

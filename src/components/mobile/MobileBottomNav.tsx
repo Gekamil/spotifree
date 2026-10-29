@@ -1,15 +1,18 @@
 import React from 'react';
+import { SearchActiveNativeIcon } from '../icons/SpotifyNativeIcons';
 
 interface MobileBottomNavProps {
   activeTab: 'home' | 'search' | 'library' | 'create';
   onTabChange: (tab: 'home' | 'search' | 'library') => void;
   onOpenCreate?: () => void;
+  isCreateOpen?: boolean;
 }
 
 export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   activeTab,
   onTabChange,
   onOpenCreate,
+  isCreateOpen = false,
 }) => {
   return (
     <nav
@@ -54,10 +57,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
       >
         <div className="w-6 h-6 flex items-center justify-center">
           {activeTab === 'search' ? (
-            /* Active Filled Solid Lens Search (Official Spotify Filled Search Icon) */
-            <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
-              <path d="M10.533 2.5a8.033 8.033 0 1 0 5.093 14.253l4.82 4.82a1.25 1.25 0 0 0 1.768-1.768l-4.82-4.82A8.033 8.033 0 0 0 10.533 2.5z" />
-            </svg>
+            /* Active Search with circle inside (matching user requirement & Spotify Mobile) */
+            <SearchActiveNativeIcon size={24} className="text-white" />
           ) : (
             /* Inactive Outline Search (Official Spotify Mobile SVG) */
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -103,21 +104,34 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         </span>
       </button>
 
-      {/* 4. Crear */}
+      {/* 4. Crear with smooth + to × rotation and label hiding */}
       <button
         onClick={() => {
           if (onOpenCreate) {
             onOpenCreate();
           }
         }}
-        className="flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer group active:scale-95 text-[#b3b3b3] hover:text-white"
+        className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer group active:scale-95 ${
+          isCreateOpen ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
+        }`}
+        title="Crear"
       >
-        <div className="w-6 h-6 flex items-center justify-center">
+        <div
+          className={`w-6 h-6 flex items-center justify-center transform transition-transform duration-300 ease-out ${
+            isCreateOpen ? 'rotate-45 text-white' : 'rotate-0 text-[#b3b3b3] group-hover:text-white'
+          }`}
+        >
           <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
           </svg>
         </div>
-        <span className="text-[10px] tracking-tight font-medium text-[#b3b3b3] group-hover:text-white">
+        <span
+          className={`text-[10px] tracking-tight font-medium transition-all duration-200 overflow-hidden ${
+            isCreateOpen
+              ? 'opacity-0 max-h-0 -translate-y-1'
+              : 'opacity-100 max-h-4 text-[#b3b3b3] group-hover:text-white'
+          }`}
+        >
           Crear
         </span>
       </button>

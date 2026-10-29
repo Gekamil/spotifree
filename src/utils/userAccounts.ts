@@ -3,6 +3,7 @@ export interface SavedAccount {
   displayName: string;
   email?: string;
   avatarUrl?: string;
+  bannerUrl?: string;
   cookie: string;
   accessToken?: string;
   lastUsed: number;
@@ -72,6 +73,7 @@ export function saveCookieToActiveAccount(cookie: string, sessionData?: any) {
     id: activeId,
     displayName: sessionData?.user?.display_name || existing?.displayName || 'Usuario Spotify',
     avatarUrl: sessionData?.user?.images?.[0]?.url || existing?.avatarUrl,
+    bannerUrl: existing?.bannerUrl,
     email: sessionData?.user?.email || existing?.email,
     cookie: clean,
     lastUsed: Date.now(),

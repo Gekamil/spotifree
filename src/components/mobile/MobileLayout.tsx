@@ -19,8 +19,10 @@ import { handleImageError } from '../../utils/imageFallback';
 
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
-  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica' | 'podcasts'>('todo');
+  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums'>('all');
+  const [isLibrarySearching, setIsLibrarySearching] = useState(false);
+  const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -150,29 +152,6 @@ export const MobileLayout: React.FC = () => {
           })),
         });
       });
-
-    if (homeFilter === 'podcasts') {
-      return [
-        {
-          id: 'shelf-podcasts-populares',
-          title: 'Tus programas y pódcasts',
-          cards: [
-            { id: 'pod-1', title: 'The Wild Project', subtitle: 'Jordi Wild • Conversaciones y actualidad', image: 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc' },
-            { id: 'pod-2', title: 'Nadie Sabe Nada', subtitle: 'Andreu Buenafuente y Berto Romero', image: 'https://images.unsplash.com/photo-1478737270239-2f02b77fc618' },
-            { id: 'pod-3', title: 'El Descampao', subtitle: 'Sergio Mengual • Cine y cultura pop', image: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4' },
-            { id: 'pod-4', title: 'Días Extraños', subtitle: 'Santiago Camacho • Misterio y periodismo', image: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819' },
-          ],
-        },
-        {
-          id: 'shelf-podcasts-historias',
-          title: 'Historias y Crimen Real',
-          cards: [
-            { id: 'pod-5', title: 'Criminopatía', subtitle: 'Clara Tiscar • Casos reales e investigación', image: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745' },
-            { id: 'pod-6', title: 'Terrores Nocturnos', subtitle: 'Emma Entrena • Leyendas y suspense', image: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23' },
-          ],
-        },
-      ];
-    }
 
     if (homeFilter === 'musica') {
       return list.filter((s) => !s.title.toLowerCase().includes('noticias'));
@@ -368,29 +347,73 @@ export const MobileLayout: React.FC = () => {
               <div className="flex items-center gap-3">
                 <button
                   onClick={isAuthenticated ? () => setMobileTab('profile') : openLoginModal}
-                  className="w-8 h-8 rounded-full bg-[#242424] overflow-hidden flex items-center justify-center text-[#b3b3b3] hover:text-white"
+                  className="w-8 h-8 rounded-full bg-[#242424] overflow-hidden flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-95 transition-transform"
                 >
-                  {isAuthenticated ? (
-                    <span className="font-bold text-xs text-white">
-                      {(user?.display_name || 'U').charAt(0).toUpperCase()}
-                    </span>
+                  {user?.images?.[0]?.url ? (
+                    <img src={user.images[0].url} alt={user.display_name} className="w-full h-full object-cover" />
                   ) : (
-                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z" />
-                    </svg>
+                    <span className="font-bold text-xs text-white">
+                      {(user?.display_name || 'J').charAt(0).toUpperCase()}
+                    </span>
                   )}
                 </button>
                 <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
                   Tu biblioteca
                 </h1>
               </div>
-              <button
-                onClick={openLoginModal}
-                className="text-xs bg-white/10 hover:bg-white/20 text-white font-bold px-3 py-1.5 rounded-full"
-              >
-                + Añadir cuenta
-              </button>
+
+              {/* Real Spotify Mobile Library Header Controls: Search Lupa + Create Button */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setIsLibrarySearching(!isLibrarySearching)}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors cursor-pointer ${
+                    isLibrarySearching ? 'text-[#1ed760] bg-white/10' : 'text-white/80 hover:text-white'
+                  }`}
+                  title="Buscar en tu biblioteca"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10.533 1.27893C5.35215 1.27893 1.12598 5.41887 1.12598 10.5579C1.12598 15.697 5.35215 19.8369 10.533 19.8369C12.767 19.8369 14.8235 19.0671 16.4402 17.7794L20.7929 22.132C21.1834 22.5226 21.8166 22.5226 22.2071 22.132C22.5976 21.7415 22.5976 21.1083 22.2071 20.7178L17.8634 16.3741C19.1616 14.7849 19.94 12.7634 19.94 10.5579C19.94 5.41887 15.7138 1.27893 10.533 1.27893ZM3.12598 10.5579C3.12598 6.55226 6.42768 3.27893 10.533 3.27893C14.6383 3.27893 17.94 6.55226 17.94 10.5579C17.94 14.5636 14.6383 17.8369 10.533 17.8369C6.42768 17.8369 3.12598 14.5636 3.12598 10.5579Z" />
+                  </svg>
+                </button>
+
+                <button
+                  onClick={() => setIsCreateOpen(true)}
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-white/80 hover:text-white cursor-pointer active:scale-90 transition-transform"
+                  title="Crear"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
+                  </svg>
+                </button>
+              </div>
             </div>
+
+            {/* In-library search bar when toggled */}
+            {isLibrarySearching && (
+              <div className="relative w-full pt-1">
+                <input
+                  type="text"
+                  autoFocus
+                  value={librarySearchQuery}
+                  onChange={(e) => setLibrarySearchQuery(e.target.value)}
+                  placeholder="Buscar en tu biblioteca..."
+                  className="w-full h-9 pl-9 pr-8 bg-[#242424] text-white text-xs rounded-full outline-none placeholder:text-[#a7a7a7] border border-white/10 focus:border-white/30"
+                />
+                <div className="absolute left-3 top-3.5 text-[#b3b3b3]">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M10.533 1.27893C5.35215 1.27893 1.12598 5.41887 1.12598 10.5579C1.12598 15.697 5.35215 19.8369 10.533 19.8369C12.767 19.8369 14.8235 19.0671 16.4402 17.7794L20.7929 22.132C21.1834 22.5226 21.8166 22.5226 22.2071 22.132C22.5976 21.7415 22.5976 21.1083 22.2071 20.7178L17.8634 16.3741C19.1616 14.7849 19.94 12.7634 19.94 10.5579C19.94 5.41887 15.7138 1.27893 10.533 1.27893ZM3.12598 10.5579C3.12598 6.55226 6.42768 3.27893 10.533 3.27893C14.6383 3.27893 17.94 6.55226 17.94 10.5579C17.94 14.5636 14.6383 17.8369 10.533 17.8369C6.42768 17.8369 3.12598 14.5636 3.12598 10.5579Z" />
+                  </svg>
+                </div>
+                {librarySearchQuery && (
+                  <button
+                    onClick={() => setLibrarySearchQuery('')}
+                    className="absolute right-3 top-2.5 text-[#b3b3b3] hover:text-white text-xs p-1"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            )}
 
             {/* Filter Chips */}
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -465,6 +488,9 @@ export const MobileLayout: React.FC = () => {
                 {playlists
                   .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
                   .filter((p) => {
+                    if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
+                      return false;
+                    }
                     const isArt = checkIsMobileArtist(p);
                     if (libraryFilter === 'artists') return isArt;
                     if (libraryFilter === 'playlists') return !isArt;
@@ -558,7 +584,8 @@ export const MobileLayout: React.FC = () => {
           setSelectedPlaylist(null);
           setMobileTab(tab);
         }}
-        onOpenCreate={() => setIsCreateOpen(true)}
+        onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
+        isCreateOpen={isCreateOpen}
       />
 
       {/* Spotify Mobile Creation Bottom Sheet */}
@@ -566,6 +593,11 @@ export const MobileLayout: React.FC = () => {
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
         onCreatePlaylist={handleCreatePlaylist}
+        onImportPlaylist={(pl) => {
+          useSpotifyDataStore.getState().addCustomPlaylist(pl);
+          setSelectedPlaylist(pl);
+          setMobileTab('playlist');
+        }}
         defaultPlaylistNumber={playlists.length + 1}
       />
 

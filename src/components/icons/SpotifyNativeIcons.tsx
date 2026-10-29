@@ -251,3 +251,40 @@ export const SpotifyConnectNativeIcon: React.FC<IconProps> = ({ size = 16, class
     <path d="M2.5 4a.75.75 0 0 0-.75.75v6.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 0-1.5H3.25v-5h.75a.75.75 0 0 0 0-1.5h-1.5z" />
   </svg>
 );
+
+export const ShareNativeIcon: React.FC<IconProps> = ({ size = 18, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <circle cx="18" cy="5" r="3" fill="currentColor" stroke="none" />
+    <circle cx="6" cy="12" r="3" fill="currentColor" stroke="none" />
+    <circle cx="18" cy="19" r="3" fill="currentColor" stroke="none" />
+    <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" strokeWidth="2" />
+    <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" strokeWidth="2" />
+  </svg>
+);
+
+export const SearchActiveNativeIcon: React.FC<IconProps> = ({ size = 24, className = 'text-white', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <path d="M10.533 1.279c-5.18 0-9.407 4.14-9.407 9.279s4.226 9.279 9.407 9.279c2.234 0 4.29-.77 5.907-2.058l4.353 4.353a1 1 0 1 0 1.414-1.414l-4.344-4.344a9.157 9.157 0 0 0 2.077-5.816c0-5.14-4.226-9.279-9.407-9.279zm-7.407 9.279c0-4.006 3.302-7.279 7.407-7.279s7.407 3.273 7.407 7.279-3.302 7.279-7.407 7.279-7.407-3.273-7.407-7.279z" />
+    <circle cx="10.533" cy="10.558" r="4.2" fill="currentColor" />
+  </svg>
+);
+
+export const OptionsNativeIcon: React.FC<IconProps> = ({ size = 20, className = 'text-[#b3b3b3]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <circle cx="4.5" cy="12" r="2" />
+    <circle cx="12" cy="12" r="2" />
+    <circle cx="19.5" cy="12" r="2" />
+  </svg>
+);
+
+export const VideoSwitchNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <path d="M4 4h10a2 2 0 0 1 2 2v2.5l4-2.5v12l-4-2.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
+  </svg>
+);
+
+export const AudioSwitchNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+  </svg>
+);

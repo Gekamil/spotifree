@@ -11,7 +11,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration } from '../../utils/formatters';
-import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 
@@ -528,11 +528,32 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       : `${totalMinutes} min`;
 
   // Determine dominant theme color with always-on vibrant atmospheric glow (never dull grey)
-  const themeColor = resolveVibrantColor(
-    dynamicPlaylist.id,
-    dynamicPlaylist.name,
-    dynamicPlaylist.color
+  const [extractedThemeColor, setExtractedThemeColor] = useState<string>(() =>
+    resolveVibrantColor(
+      dynamicPlaylist.id,
+      dynamicPlaylist.name,
+      dynamicPlaylist.color
+    )
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const imgUrl = isLikedPlaylist
+      ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+      : dynamicPlaylist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url;
+    if (imgUrl) {
+      extractDominantColorFromImage(imgUrl).then((hex) => {
+        if (!cancelled && hex) {
+          setExtractedThemeColor(hex);
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [dynamicPlaylist.id, dynamicPlaylist.images, tracks]);
+
+  const themeColor = extractedThemeColor;
 
   return (
     <div className="select-none min-h-full pb-20 relative bg-[#121212]">

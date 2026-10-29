@@ -210,3 +210,102 @@ export function resolveVibrantColor(
   const idx = Math.abs(hash) % SPOTIFY_VIBRANT_PALETTE.length;
   return SPOTIFY_VIBRANT_PALETTE[idx];
 }
+
+const imageColorCache = new Map<string, string>();
+
+/**
+ * Dynamically samples an image on an in-memory canvas to extract the most vibrant
+ * dominant saturated color (e.g. hot pink for pink covers, warm brown/terracotta for brown covers).
+ * Returns hex color string, cached in-memory and in localStorage.
+ */
+export async function extractDominantColorFromImage(imageUrl?: string | null): Promise<string | null> {
+  if (!imageUrl || typeof window === 'undefined') return null;
+  if (imageColorCache.has(imageUrl)) return imageColorCache.get(imageUrl)!;
+
+  try {
+    const cached = window.localStorage.getItem(`spotifree_vibrant_color_${imageUrl}`);
+    if (cached) {
+      imageColorCache.set(imageUrl, cached);
+      return cached;
+    }
+  } catch {}
+
+  return new Promise((resolve) => {
+    try {
+      const img = new Image();
+      img.crossOrigin = 'Anonymous';
+      img.referrerPolicy = 'no-referrer';
+      img.src = imageUrl;
+
+      const timer = setTimeout(() => {
+        resolve(null);
+      }, 2500);
+
+      img.onload = () => {
+        clearTimeout(timer);
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = 40;
+          canvas.height = 40;
+          const ctx = canvas.getContext('2d', { willReadFrequently: true });
+          if (!ctx) return resolve(null);
+
+          ctx.drawImage(img, 0, 0, 40, 40);
+          const imgData = ctx.getImageData(0, 0, 40, 40).data;
+
+          let bestR = 140, bestG = 80, bestB = 60;
+          let maxScore = -1;
+
+          for (let i = 0; i < imgData.length; i += 16) {
+            const r = imgData[i];
+            const g = imgData[i + 1];
+            const b = imgData[i + 2];
+            const a = imgData[i + 3];
+
+            if (a < 180) continue;
+
+            const max = Math.max(r, g, b);
+            const min = Math.min(r, g, b);
+            const delta = max - min;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+
+            // Reject pure black, muddy darks (< 35), or blown-out whites (> 230)
+            if (lum < 35 || lum > 230) continue;
+            // Reject monochromatic / washed out grays
+            if (delta < 25) continue;
+
+            const saturation = delta / max;
+            // Score balances vibrancy and saturation while prioritizing visually pleasing hues
+            const score = saturation * 1.5 + (lum > 50 && lum < 180 ? 0.5 : 0);
+
+            if (score > maxScore) {
+              maxScore = score;
+              bestR = r;
+              bestG = g;
+              bestB = b;
+            }
+          }
+
+          if (maxScore > 0) {
+            const hex = `#${bestR.toString(16).padStart(2, '0')}${bestG.toString(16).padStart(2, '0')}${bestB.toString(16).padStart(2, '0')}`.toUpperCase();
+            imageColorCache.set(imageUrl, hex);
+            try {
+              window.localStorage.setItem(`spotifree_vibrant_color_${imageUrl}`, hex);
+            } catch {}
+            return resolve(hex);
+          }
+        } catch (err) {
+          // Canvas cross-origin taint fallback
+        }
+        resolve(null);
+      };
+
+      img.onerror = () => {
+        clearTimeout(timer);
+        resolve(null);
+      };
+    } catch {
+      resolve(null);
+    }
+  });
+}

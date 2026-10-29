@@ -154,3 +154,43 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
     }
   } catch {}
 }
+
+export const SHARED_PLAYLISTS_KEY = 'spotifree_shared_playlists';
+
+export interface SharedPlaylistMetadata {
+  id: string;
+  name: string;
+  description?: string;
+  coverUrl?: string;
+  ownerId: string;
+  ownerName: string;
+  tracks: Track[];
+  isCollaborative: boolean;
+  updatedAt: number;
+}
+
+export function getSharedPlaylists(): SharedPlaylistMetadata[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(SHARED_PLAYLISTS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+export function saveSharedPlaylist(playlist: SharedPlaylistMetadata): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const current = getSharedPlaylists().filter((p) => p.id !== playlist.id);
+    current.unshift({ ...playlist, updatedAt: Date.now() });
+    window.localStorage.setItem(SHARED_PLAYLISTS_KEY, JSON.stringify(current));
+  } catch {}
+}
+
+export function getSharedPlaylistById(playlistId: string): SharedPlaylistMetadata | null {
+  const all = getSharedPlaylists();
+  return all.find((p) => p.id === playlistId) || null;
+}

@@ -777,19 +777,31 @@ export async function switchActiveAccount(account: import('../utils/userAccounts
     if (raw) cachedAccountSession = JSON.parse(raw);
   } catch {}
 
+  let customProfile: any = null;
+  try {
+    const rawCp = window.localStorage.getItem(`spotifree_custom_profile_${account.id}`);
+    if (rawCp) customProfile = JSON.parse(rawCp);
+  } catch {}
+
+  const activeAvatar = customProfile?.avatarUrl || account.avatarUrl;
+  const activeDisplayName = customProfile?.displayName || account.displayName;
+  const activeBanner = customProfile?.bannerUrl || account.bannerUrl;
+
   let cachedPlaylists: Record<string, any> = {};
   try {
     const rawPl = window.localStorage.getItem(`spotifree_playlist_cache_${account.id}`);
     if (rawPl) cachedPlaylists = JSON.parse(rawPl);
   } catch {}
 
-  const targetUser: UserProfile = cachedAccountSession?.user || {
+  const targetUser: UserProfile = {
+    ...(cachedAccountSession?.user || {}),
     id: account.id,
-    display_name: account.displayName || 'Usuario Spotify',
-    images: account.avatarUrl ? [{ url: account.avatarUrl }] : [],
-    email: account.email || '',
-    followers: { total: 0 },
-  };
+    display_name: activeDisplayName || cachedAccountSession?.user?.display_name || 'Usuario Spotify',
+    images: activeAvatar ? [{ url: activeAvatar }] : (cachedAccountSession?.user?.images || []),
+    email: account.email || cachedAccountSession?.user?.email || '',
+    followers: cachedAccountSession?.user?.followers || { total: 0 },
+    bannerUrl: activeBanner,
+  } as any;
 
   const initialPlaylists = cachedAccountSession?.playlists || [];
   const initialShelves = cachedAccountSession?.shelves || buildDynamicShelves(targetUser, initialPlaylists, 'Recomendado para ti');

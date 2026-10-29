@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import type { Playlist, Track } from '../../types/spotify';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
-import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
@@ -11,6 +11,8 @@ import {
   ShuffleNativeIcon,
   SmartShuffleNativeIcon,
   VerifiedArtistNativeIcon,
+  OptionsNativeIcon,
+  ShareNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -26,6 +28,8 @@ import {
   saveCustomLikedSong,
   getSavedCustomTracks,
   saveCustomTrackToStorage,
+  saveSharedPlaylist,
+  getSharedPlaylistById,
 } from '../../utils/userStorage';
 
 function getArtistMonthlyListeners(name: string): string {
@@ -126,8 +130,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [addSearchResults, setAddSearchResults] = useState<Track[]>([]);
   const [isSearchingAdd, setIsSearchingAdd] = useState(false);
   const [popularSuggestions, setPopularSuggestions] = useState<Track[]>([]);
+  const [isOptionsOpen, setIsOptionsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const themeColor = resolveVibrantColor(playlist.id, playlist.name, (playlist as any).color);
+  const [extractedThemeColor, setExtractedThemeColor] = useState<string>(() =>
+    resolveVibrantColor(playlist.id, playlist.name, (playlist as any).color)
+  );
 
   // Load popular suggestions for instant 1-click add
   useEffect(() => {
@@ -230,6 +238,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
     if (savedCustom.length > 0) {
       setTracks(savedCustom);
+      return;
+    }
+
+    // 5b. Check shared collaborative playlist storage
+    const sharedPl = getSharedPlaylistById(cleanId);
+    if (sharedPl && sharedPl.tracks && sharedPl.tracks.length > 0) {
+      setTracks(sharedPl.tracks);
       return;
     }
 
@@ -392,6 +407,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const trackWithMeta: Track = {
       ...track,
       added_at: 'Hoy',
+      added_by: user?.display_name || 'Jorge',
     };
 
     setTracks((prev) => {
@@ -418,18 +434,69 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
       : playlist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url;
 
+  useEffect(() => {
+    let cancelled = false;
+    if (coverUrl) {
+      extractDominantColorFromImage(coverUrl).then((hex) => {
+        if (!cancelled && hex) {
+          setExtractedThemeColor(hex);
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [coverUrl]);
+
+  const handleSharePlaylist = async () => {
+    const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+    const shareData = {
+      title: playlist.name,
+      text: `Escucha ${playlist.name} en Spotifree`,
+      url: shareUrl,
+    };
+
+    saveSharedPlaylist({
+      id: cleanId,
+      name: playlist.name,
+      description: playlist.description,
+      coverUrl,
+      ownerId: user?.id || 'me',
+      ownerName: playlist.owner?.display_name || user?.display_name || 'Spotify',
+      tracks,
+      isCollaborative: true,
+      updatedAt: Date.now(),
+    });
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (e) {}
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setToastMessage('¡Enlace copiado al portapapeles!');
+      setTimeout(() => setToastMessage(null), 3000);
+    } catch {
+      setToastMessage('¡Playlist compartida!');
+      setTimeout(() => setToastMessage(null), 2500);
+    }
+  };
+
   return (
     <div
       className="select-none min-h-screen text-white font-['SpotifyMixUI'] pb-36 relative overflow-hidden"
       style={{
-        backgroundColor: themeColor,
+        backgroundColor: extractedThemeColor,
         backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(18,18,18,0.85) 280px, #121212 420px)',
       }}
     >
       {/* Ambient atmospheric aura & glow shine at the top */}
       <div
         className="absolute -top-20 left-1/2 -translate-x-1/2 w-[340px] h-[340px] rounded-full pointer-events-none blur-[90px] opacity-50 z-0"
-        style={{ backgroundColor: themeColor }}
+        style={{ backgroundColor: extractedThemeColor }}
       />
 
       {/* Hero / Header matching Spotify Mobile */}
@@ -500,27 +567,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </span>
 
             <button
-              onClick={handleToggleLibrary}
-              className="w-9 h-9 flex items-center justify-center text-white/80 hover:text-white"
-              title={isSavedInLibrary ? 'Guardada en tu biblioteca' : 'Guardar en biblioteca'}
+              onClick={() => setIsOptionsOpen(true)}
+              className="w-9 h-9 flex items-center justify-center text-white/80 hover:text-white cursor-pointer active:scale-90 transition-transform"
+              title="Más opciones de la playlist"
             >
-              {isSavedInLibrary ? (
-                <CheckTrackNativeIcon size={22} className="text-[#1ed760]" />
-              ) : (
-                <AddTrackNativeIcon size={22} />
-              )}
+              <OptionsNativeIcon size={20} className="text-white" />
             </button>
           </div>
 
           {/* Regular Playlist Hero */}
           <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
-            <div className="w-52 h-52 rounded-lg overflow-hidden shadow-2xl bg-[#242424] mb-4 border border-white/10">
+            <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
               {coverUrl ? (
                 <img
                   src={coverUrl}
                   alt={playlist.name}
                   onError={handleImageError}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover opacity-100 block"
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-white/40">
@@ -574,6 +637,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </button>
           )}
 
+          {/* Share playlist button */}
+          <button
+            onClick={handleSharePlaylist}
+            className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer"
+            title="Compartir playlist"
+          >
+            <ShareNativeIcon size={22} className="text-white/80 hover:text-white" />
+          </button>
+
           {!isArtist && (
             <button
               className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
@@ -586,6 +658,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           )}
 
           <button
+            onClick={() => setIsOptionsOpen(true)}
             className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
             title="Más opciones"
           >
@@ -784,10 +857,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       >
                         {track.name}
                       </span>
-                      <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                        {isArtist
-                          ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
-                          : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                      <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
+                        <span className="truncate">
+                          {isArtist
+                            ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
+                            : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                        </span>
+                        {track.added_by && (
+                          <span className="text-[10px] text-[#1ed760] font-medium shrink-0">
+                            • {typeof track.added_by === 'string' ? track.added_by : track.added_by.name}
+                          </span>
+                        )}
                       </span>
                     </div>
                   </div>
@@ -893,6 +973,102 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </>
         )}
       </div>
+
+      {/* Options Bottom Sheet Modal */}
+      {isOptionsOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm animate-in fade-in select-none"
+          onClick={() => setIsOptionsOpen(false)}
+        >
+          <div
+            className="w-full bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-4 shadow-2xl border-t border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1 mb-2" />
+
+            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+              <img
+                src={coverUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                alt={playlist.name}
+                className="w-12 h-12 rounded object-cover shadow"
+              />
+              <div className="flex flex-col min-w-0">
+                <span className="font-bold text-white text-sm truncate">{playlist.name}</span>
+                <span className="text-xs text-[#b3b3b3] truncate">{playlist.owner?.display_name || 'Spotify'}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              {/* Option: Compartir */}
+              <button
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  handleSharePlaylist();
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+              >
+                <ShareNativeIcon size={20} className="text-white" />
+                <span className="font-bold text-white text-sm">Compartir playlist</span>
+              </button>
+
+              {/* Option: Guardar en biblioteca */}
+              <button
+                onClick={() => {
+                  handleToggleLibrary();
+                  setIsOptionsOpen(false);
+                  setToastMessage(isSavedInLibrary ? 'Eliminada de tu biblioteca' : 'Añadida a tu biblioteca');
+                  setTimeout(() => setToastMessage(null), 2500);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+              >
+                {isSavedInLibrary ? (
+                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+                ) : (
+                  <AddTrackNativeIcon size={20} className="text-white" />
+                )}
+                <span className="font-bold text-white text-sm">
+                  {isSavedInLibrary ? 'Eliminar de tu biblioteca' : 'Añadir a tu biblioteca'}
+                </span>
+              </button>
+
+              {/* Option: Copiar enlace */}
+              <button
+                onClick={async () => {
+                  setIsOptionsOpen(false);
+                  const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+                  try {
+                    await navigator.clipboard.writeText(shareUrl);
+                    setToastMessage('¡Enlace copiado al portapapeles!');
+                  } catch {
+                    setToastMessage('Enlace listo');
+                  }
+                  setTimeout(() => setToastMessage(null), 2500);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white">
+                  <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
+                </svg>
+                <span className="font-bold text-white text-sm">Copiar enlace</span>
+              </button>
+            </div>
+
+            <button
+              onClick={() => setIsOptionsOpen(false)}
+              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-full bg-white text-black font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {toastMessage}
+        </div>
+      )}
     </div>
   );
 };

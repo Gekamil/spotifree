@@ -3,8 +3,8 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 
 interface MobileHeaderProps {
-  activeTab: 'todo' | 'musica' | 'podcasts';
-  onTabChange: (tab: 'todo' | 'musica' | 'podcasts') => void;
+  activeTab: 'todo' | 'musica';
+  onTabChange: (tab: 'todo' | 'musica') => void;
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
@@ -20,7 +20,20 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const { user, isAuthenticated } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
 
-  const avatarUrl = user?.images?.[0]?.url;
+  // Check user image, or custom profile image per active account
+  const activeId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
+  let customAvatar: string | undefined;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = window.localStorage.getItem(`spotifree_custom_profile_${activeId}`) || window.localStorage.getItem('spotifree_custom_profile');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.avatarUrl) customAvatar = parsed.avatarUrl;
+      }
+    } catch {}
+  }
+
+  const avatarUrl = customAvatar || user?.images?.[0]?.url;
 
   return (
     <header className="sticky top-0 z-30 px-4 pt-3 pb-3 flex items-center justify-between gap-3 select-none font-['SpotifyMixUI']">
@@ -47,8 +60,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         )}
       </button>
 
-      {/* Center: Filter Pills (Todo, Música, Pódcasts) */}
-      <div className="flex items-center gap-2 flex-1 overflow-x-auto no-scrollbar">
+      {/* Center: Filter Pills (Only 'Todo' and 'Música' strictly without scroll) */}
+      <div className="flex items-center gap-2 flex-1">
         <button
           onClick={() => onTabChange('todo')}
           className={`h-8 px-4 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
@@ -68,16 +81,6 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           }`}
         >
           Música
-        </button>
-        <button
-          onClick={() => onTabChange('podcasts')}
-          className={`h-8 px-4 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-            activeTab === 'podcasts'
-              ? 'bg-[#1ed760] text-black shadow'
-              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
-          }`}
-        >
-          Pódcasts
         </button>
       </div>
 

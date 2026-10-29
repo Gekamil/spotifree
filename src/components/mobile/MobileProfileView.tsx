@@ -9,6 +9,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import {
   getSavedAccounts,
   switchActiveAccount,
+  saveAccount,
   type SavedAccount,
 } from '../../utils/userAccounts';
 import { MobileEditProfileModal } from './MobileEditProfileModal';
@@ -29,6 +30,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const { playTrack } = usePlayerStore();
   const { openLoginModal } = useUIStore();
 
+  const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => getSavedAccounts());
   const [customProfile, setCustomProfile] = useState<{
     displayName?: string;
@@ -37,13 +39,32 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   }>(() => {
     if (typeof window === 'undefined') return {};
     try {
-      const saved = window.localStorage.getItem('spotifree_custom_profile');
+      const saved = window.localStorage.getItem(`spotifree_custom_profile_${activeUserId}`) || window.localStorage.getItem('spotifree_custom_profile');
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
     }
   });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  // Sync profile when active user changes
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const targetId = user?.id || activeUserId;
+      const saved = window.localStorage.getItem(`spotifree_custom_profile_${targetId}`);
+      if (saved) {
+        setCustomProfile(JSON.parse(saved));
+      } else {
+        const found = getSavedAccounts().find((a) => a.id === targetId);
+        setCustomProfile({
+          displayName: found?.displayName || user?.display_name,
+          avatarUrl: found?.avatarUrl || user?.images?.[0]?.url,
+          bannerUrl: found?.bannerUrl,
+        });
+      }
+    } catch {}
+  }, [user?.id, activeUserId]);
 
   const userPlaylists = playlists.filter(
     (p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs' && p.type !== 'folder'
@@ -61,10 +82,23 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
 
   const handleSaveProfile = (data: { displayName: string; avatarUrl?: string; bannerUrl?: string }) => {
     setCustomProfile(data);
+    const targetId = user?.id || activeUserId;
     if (typeof window !== 'undefined') {
       try {
+        window.localStorage.setItem(`spotifree_custom_profile_${targetId}`, JSON.stringify(data));
         window.localStorage.setItem('spotifree_custom_profile', JSON.stringify(data));
       } catch {}
+    }
+    const accounts = getSavedAccounts();
+    const existing = accounts.find((a) => a.id === targetId);
+    if (existing) {
+      saveAccount({
+        ...existing,
+        displayName: data.displayName || existing.displayName,
+        avatarUrl: data.avatarUrl || existing.avatarUrl,
+        bannerUrl: data.bannerUrl || existing.bannerUrl,
+      });
+      setSavedAccounts(getSavedAccounts());
     }
     if (user) {
       useSpotifyDataStore.setState({

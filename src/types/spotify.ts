@@ -24,7 +24,7 @@ export interface Track {
   duration_ms: number;
   is_liked?: boolean;
   added_at?: string;
-  added_by?: string;
+  added_by?: string | { id?: string; name?: string; avatarUrl?: string };
   playlistId?: string;
   preview_url?: string | null;
 }

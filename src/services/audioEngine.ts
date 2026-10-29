@@ -660,6 +660,30 @@ class AudioEngine {
   public async prefetchTrack(query: string, trackId?: string) {
     return this.preloadTrack(trackId || 'temp', query);
   }
+
+  public getCurrentVideoId(): string | null {
+    if (this.currentTrackQuery && VIDEO_ID_CACHE.has(this.currentTrackQuery)) {
+      return VIDEO_ID_CACHE.get(this.currentTrackQuery) || null;
+    }
+    return null;
+  }
+
+  public async resolveVideoIdForTrack(query: string, trackId: string): Promise<string | null> {
+    if (VIDEO_ID_CACHE.has(query)) {
+      return VIDEO_ID_CACHE.get(query)!;
+    }
+    try {
+      const res = await fetch(`${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.videoId) {
+          persistVideoId(query, data.videoId);
+          return data.videoId;
+        }
+      }
+    } catch {}
+    return null;
+  }
 }
 
 export const audioEngine = new AudioEngine();
