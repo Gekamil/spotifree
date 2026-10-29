@@ -1,8 +1,7 @@
 /**
- * Antigravity Resilient Hybrid Audio Engine
- * Combines Native YouTube Web Player (100% resilient on residential & mobile IPs)
- * with HTML5 Web Audio Stream fallback.
- * Works natively on Desktop and Mobile browsers without datacenter IP bot challenges.
+ * Spotifree High-Performance Audio Engine
+ * Pure full-track audio playback with zero 30-second clips and automatic ad skipping.
+ * Fully compatible with Mobile browsers, PWA, and Desktop.
  */
 
 import { usePlayerStore } from '../store/usePlayerStore';
@@ -46,7 +45,9 @@ class AudioEngine {
   private filterNodes: BiquadFilterNode[] = [];
   private currentTrackId: string | null = null;
   private currentTrackQuery: string | null = null;
+  private currentVideoId: string | null = null;
   private isSeeking = false;
+  private isTransitioning = false;
   private activeEngine: 'youtube' | 'html5' = 'youtube';
 
   private ytPlayer: any = null;
@@ -59,8 +60,6 @@ class AudioEngine {
   constructor() {
     this.audio = new Audio();
     this.audio.preload = 'auto';
-    // Do NOT set crossOrigin='anonymous' — it blocks some iOS audio streams
-    // this.audio.crossOrigin = 'anonymous';
 
     this.setupHtml5Listeners();
 
@@ -71,24 +70,19 @@ class AudioEngine {
         this.silentCarrier.volume = 0.001;
       } catch {}
 
-      // Unlock audio context + silent carrier on first user gesture
+      // Unlock audio context + silent carrier on user gesture for mobile / PWA
       const unlockUserMedia = () => {
         try {
           if (this.audioContext && this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(() => {});
           }
-          // Play + immediately pause the silent carrier to unlock audio on iOS/Android
           if (this.silentCarrier && this.silentCarrier.paused) {
             this.silentCarrier.play().catch(() => {});
           }
-          // Also unlock the main audio element
-          if (this.audio && this.audio.paused && !this.audio.src) {
-            this.audio.play().then(() => this.audio.pause()).catch(() => {});
-          }
         } catch {}
       };
-      window.addEventListener('click', unlockUserMedia, { once: true, passive: true });
-      window.addEventListener('touchstart', unlockUserMedia, { once: true, passive: true });
+      window.addEventListener('click', unlockUserMedia, { passive: true });
+      window.addEventListener('touchstart', unlockUserMedia, { passive: true });
 
       // Pre-warm YouTube IFrame API immediately in background
       setTimeout(() => {
@@ -109,9 +103,9 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            // Position inside viewport (240x240px clipped) so mobile browsers (iOS WebKit / Android Chrome)
-            // treat the iframe as active and do not suspend or freeze background media playback
-            host.style.cssText = 'position:fixed;bottom:0;right:0;width:240px;height:240px;opacity:0.001;pointer-events:none;z-index:-9999;clip-path:inset(100%);';
+            // Render inside active viewport without clipping so mobile browsers (iOS WebKit / Android Chrome PWA)
+            // treat the player as an active visible media source and do not freeze or suspend background playback
+            host.style.cssText = 'position:fixed;bottom:0;left:0;width:2px;height:2px;opacity:0.05;pointer-events:none;z-index:1;overflow:hidden;';
             document.body.appendChild(host);
           }
 
@@ -128,8 +122,9 @@ class AudioEngine {
           }
 
           this.ytPlayer = new (window as any).YT.Player('spotifree-yt-player', {
-            height: '240',
-            width: '240',
+            height: '2',
+            width: '2',
+            host: 'https://www.youtube-nocookie.com',
             playerVars: {
               autoplay: 1,
               controls: 0,
@@ -139,6 +134,7 @@ class AudioEngine {
               rel: 0,
               playsinline: 1,
               enablejsapi: 1,
+              iv_load_policy: 3,
               origin: typeof window !== 'undefined' ? window.location.origin : undefined,
               widget_referrer: typeof window !== 'undefined' ? window.location.origin : undefined,
             },
@@ -156,11 +152,9 @@ class AudioEngine {
               },
               onError: (event: any) => {
                 console.warn('[AudioEngine] YouTube player error:', event.data);
-                // On error 101 or 150 (not embeddable), try alternate query (e.g. + audio)
-                if (this.currentTrackQuery && (event.data === 101 || event.data === 150)) {
-                  this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentTrackId);
-                } else if (this.currentTrackQuery) {
-                  this.fallbackToStream(this.currentTrackQuery);
+                // On error, retry with alternate query (+ audio)
+                if (this.currentTrackQuery) {
+                  this.resolveAndPlayAlternate(this.currentTrackQuery);
                 }
               },
             },
@@ -191,15 +185,43 @@ class AudioEngine {
     return this.ytReadyPromise;
   }
 
+  /** Detect and automatically skip pre-roll advertisements in YouTube Player */
+  private checkAndSkipAd() {
+    if (!this.ytPlayer) return;
+    try {
+      const data = typeof this.ytPlayer.getVideoData === 'function' ? this.ytPlayer.getVideoData() : null;
+      if (data && data.video_id && this.currentVideoId && data.video_id !== this.currentVideoId) {
+        // Active video is a pre-roll advertisement — mute and fast-forward past it
+        if (typeof this.ytPlayer.mute === 'function') this.ytPlayer.mute();
+        const duration = this.ytPlayer.getDuration?.() || 999;
+        this.ytPlayer.seekTo(duration, true);
+      } else if (data && data.video_id === this.currentVideoId) {
+        // Main song is playing — restore user's volume
+        const { volume, isMuted } = usePlayerStore.getState();
+        if (typeof this.ytPlayer.unMute === 'function' && !isMuted) {
+          this.ytPlayer.unMute();
+          this.ytPlayer.setVolume(Math.round(volume * 100));
+        }
+      }
+    } catch {}
+  }
+
   private handleYtStateChange(event: any) {
     const code = event.data;
-    // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING
+    // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (code === 1) {
+      this.isTransitioning = false;
+      this.checkAndSkipAd();
       usePlayerStore.setState({ isPlaying: true });
       this.startProgressTicker();
     } else if (code === 2) {
-      usePlayerStore.setState({ isPlaying: false });
-      this.stopProgressTicker();
+      // Ignore transient pause events fired during video loading/transitioning
+      if (!this.isTransitioning) {
+        usePlayerStore.setState({ isPlaying: false });
+        this.stopProgressTicker();
+      }
+    } else if (code === 3) {
+      this.checkAndSkipAd();
     } else if (code === 0) {
       this.stopProgressTicker();
       const state = usePlayerStore.getState();
@@ -219,6 +241,7 @@ class AudioEngine {
 
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
         try {
+          this.checkAndSkipAd();
           const curSec = this.ytPlayer.getCurrentTime();
           const durSec = this.ytPlayer.getDuration();
           if (isFinite(curSec) && curSec >= 0) {
@@ -229,7 +252,7 @@ class AudioEngine {
           }
         } catch {}
       }
-    }, 80);
+    }, 100);
   }
 
   private stopProgressTicker() {
@@ -247,12 +270,6 @@ class AudioEngine {
     });
 
     this.audio.addEventListener('durationchange', () => {
-      if (this.activeEngine === 'html5' && this.audio.duration && isFinite(this.audio.duration) && this.audio.duration > 0) {
-        usePlayerStore.getState().setDuration(this.audio.duration * 1000);
-      }
-    });
-
-    this.audio.addEventListener('loadedmetadata', () => {
       if (this.activeEngine === 'html5' && this.audio.duration && isFinite(this.audio.duration) && this.audio.duration > 0) {
         usePlayerStore.getState().setDuration(this.audio.duration * 1000);
       }
@@ -278,12 +295,6 @@ class AudioEngine {
     this.audio.addEventListener('pause', () => {
       if (this.activeEngine === 'html5' && usePlayerStore.getState().isPlaying) {
         usePlayerStore.setState({ isPlaying: false });
-      }
-    });
-
-    this.audio.addEventListener('error', (e) => {
-      if (this.activeEngine === 'html5') {
-        console.warn('[AudioEngine] HTML5 stream error:', e, this.audio.error);
       }
     });
   }
@@ -328,96 +339,82 @@ class AudioEngine {
     }
   }
 
+  /** Direct client-side Innertube search fallback if backend resolve times out */
+  private async resolveVideoIdClient(query: string): Promise<string | null> {
+    try {
+      const res = await fetch('https://music.youtube.com/youtubei/v1/search', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        },
+        body: JSON.stringify({
+          context: {
+            client: {
+              clientName: 'WEB_REMIX',
+              clientVersion: '1.20240318.01.00',
+              hl: 'es',
+              gl: 'ES',
+            },
+          },
+          query,
+          params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
+        }),
+        signal: AbortSignal.timeout?.(4000),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const text = JSON.stringify(data);
+        const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
+        if (matches.length > 0) return matches[0];
+      }
+    } catch {}
+    return null;
+  }
+
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
     this.currentTrackId = trackId;
     this.currentTrackQuery = query;
     this.isSeeking = false;
+    this.isTransitioning = true;
 
     // Reset progress to 0
     usePlayerStore.getState().setProgress(startSeconds * 1000);
-
-    // Check user preference in localStorage
-    const preferredEngine = typeof window !== 'undefined'
-      ? window.localStorage.getItem('spotifree_audio_engine') || 'hybrid'
-      : 'hybrid';
-
-    if (preferredEngine === 'stream') {
-      return this.fallbackToStream(query, startSeconds);
-    }
+    this.startBackgroundCarrier();
 
     try {
-      // 1. Resolve videoId — check cache first for instant playback
-      let videoId = VIDEO_ID_CACHE.get(query);
-      let previewUrl: string | null = null;
+      // 1. Check instant in-memory & persistent cache
+      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
+      // 2. Resolve videoId from backend API with client fallback
       if (!videoId) {
-        // Race the server resolve against a direct iTunes preview fetch for fastest result.
-        // Whichever completes first with a usable result wins.
-        const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-
-        const serverResolve = fetch(resolveUrl, { signal: AbortSignal.timeout?.(8000) })
-          .then(async (res) => {
-            if (!res.ok) return null;
+        try {
+          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+          const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(5000) });
+          if (res.ok) {
             const data = await res.json();
-            return data;
-          })
-          .catch(() => null);
+            if (data.videoId) {
+              videoId = data.videoId;
+              persistVideoId(query, videoId!);
+            }
+          }
+        } catch {}
 
-        const itunesFallback = fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`,
-          { signal: AbortSignal.timeout?.(6000) }
-        )
-          .then(async (res) => {
-            if (!res.ok) return null;
-            const d = await res.json();
-            const first = d.results?.[0];
-            return first?.previewUrl ? { previewUrl: first.previewUrl } : null;
-          })
-          .catch(() => null);
-
-        // Try the server resolve first (it now runs all strategies in parallel server-side)
-        // but race it against iTunes so we get audio even if server is slow
-        const resolvedData = await Promise.race([
-          serverResolve,
-          // Give the server 4s head-start before we also check iTunes
-          new Promise<any>((resolve) => setTimeout(() => itunesFallback.then(resolve), 4000)),
-        ]);
-
-        if (resolvedData?.videoId) {
-          videoId = resolvedData.videoId;
-          persistVideoId(query, videoId!);
-        } else if (resolvedData?.previewUrl) {
-          previewUrl = resolvedData.previewUrl;
-        }
-
-        // If still nothing, wait for both and take whatever succeeded
-        if (!videoId && !previewUrl) {
-          const [srvData, itunesData] = await Promise.all([serverResolve, itunesFallback]);
-          if (srvData?.videoId) {
-            videoId = srvData.videoId;
-            persistVideoId(query, videoId!);
-          } else if (srvData?.previewUrl) {
-            previewUrl = srvData.previewUrl;
-          } else if (itunesData?.previewUrl) {
-            previewUrl = itunesData.previewUrl;
+        // Fallback: direct browser search
+        if (!videoId) {
+          videoId = await this.resolveVideoIdClient(query);
+          if (videoId) {
+            persistVideoId(query, videoId);
           }
         }
       }
 
       if (videoId) {
-        // Try YouTube player — with a 3-second timeout so we don't stall on mobile
-        let ytReady = false;
-        try {
-          await Promise.race([
-            this.ensureYouTubeReady(),
-            new Promise<void>((_, rej) => setTimeout(() => rej(new Error('yt timeout')), 3000)),
-          ]);
-          ytReady = true;
-        } catch {
-          ytReady = false;
-        }
+        this.currentVideoId = videoId;
+        await this.ensureYouTubeReady();
 
-        if (ytReady && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+        if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
           this.activeEngine = 'youtube';
           this.audio.pause();
 
@@ -431,108 +428,36 @@ class AudioEngine {
           this.startBackgroundCarrier();
           usePlayerStore.setState({ isPlaying: true });
           this.startProgressTicker();
+
+          // Safety transition release after 4 seconds
+          setTimeout(() => {
+            this.isTransitioning = false;
+          }, 4000);
           return;
         }
-
-        // YouTube player not ready in time — fall through to iTunes / stream
-      }
-
-      if (previewUrl) {
-        return this.playDirectStream(previewUrl, startSeconds);
       }
     } catch (err: any) {
-      console.warn('[AudioEngine] Play error, attempting stream fallback:', err?.message);
+      console.warn('[AudioEngine] Play error:', err?.message);
     }
 
-    // Last resort: HTML5 stream via backend
-    return this.fallbackToStream(query, startSeconds);
+    this.isTransitioning = false;
   }
 
-  private async resolveAndPlayAlternate(originalQuery: string, _trackId: string | null) {
+  private async resolveAndPlayAlternate(originalQuery: string) {
     try {
       const altQuery = `${originalQuery} audio`;
-      const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(altQuery)}`;
-      const res = await fetch(resolveUrl);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
-          this.activeEngine = 'youtube';
-          this.ytPlayer.loadVideoById({ videoId: data.videoId, startSeconds: 0 });
-          this.ytPlayer.playVideo();
-          this.startBackgroundCarrier();
-          usePlayerStore.setState({ isPlaying: true });
-          this.startProgressTicker();
-          return;
-        } else if (data.previewUrl) {
-          return this.playDirectStream(data.previewUrl, 0);
-        }
+      const videoId = await this.resolveVideoIdClient(altQuery);
+      if (videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+        this.currentVideoId = videoId;
+        persistVideoId(originalQuery, videoId);
+        this.activeEngine = 'youtube';
+        this.ytPlayer.loadVideoById({ videoId, startSeconds: 0 });
+        this.ytPlayer.playVideo();
+        this.startBackgroundCarrier();
+        usePlayerStore.setState({ isPlaying: true });
+        this.startProgressTicker();
       }
     } catch {}
-
-    this.fallbackToStream(originalQuery, 0);
-  }
-
-  private async fallbackToStream(query: string, startSeconds = 0) {
-    // Race iTunes preview against backend stream — play whichever responds first
-    const itunesPromise = fetch(
-      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
-    )
-      .then(async (r) => {
-        if (!r.ok) return null;
-        const d = await r.json();
-        return d.results?.[0]?.previewUrl as string | null;
-      })
-      .catch(() => null);
-
-    const backendUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
-
-    // Give iTunes 2 seconds; if it doesn't answer, start the backend stream in parallel
-    const itunesResult = await Promise.race([
-      itunesPromise,
-      new Promise<null>((r) => setTimeout(() => r(null), 2000)),
-    ]);
-
-    if (itunesResult) {
-      return this.playDirectStream(itunesResult, startSeconds);
-    }
-
-    // iTunes didn't answer quickly — use backend stream, but still resolve iTunes in bg
-    const [_, itunesFinal] = await Promise.all([
-      this.playDirectStream(backendUrl, startSeconds),
-      itunesPromise,
-    ]);
-    // If iTunes resolved a proper URL and we haven't changed tracks, upgrade to it
-    void itunesFinal;
-  }
-
-  private playDirectStream(url: string, startSeconds = 0) {
-    this.activeEngine = 'html5';
-    this.stopProgressTicker();
-    if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-      try { this.ytPlayer.pauseVideo(); } catch {}
-    }
-
-    this.initAudioContext();
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume().catch(() => {});
-    }
-
-    this.audio.src = url;
-    if (startSeconds > 0) {
-      this.audio.currentTime = startSeconds;
-    }
-
-    const { volume, isMuted } = usePlayerStore.getState();
-    this.audio.volume = isMuted ? 0 : volume;
-
-    this.startBackgroundCarrier();
-    return this.audio.play()
-      .then(() => {
-        usePlayerStore.setState({ isPlaying: true });
-      })
-      .catch((err) => {
-        console.warn('[AudioEngine] Stream play failed:', err.message);
-      });
   }
 
   public startBackgroundCarrier() {
@@ -553,8 +478,8 @@ class AudioEngine {
       if (this.audioContext && this.audioContext.state === 'suspended') {
         this.audioContext.resume().catch(() => {});
       }
-      if (this.audio) {
-        this.audio.play().then(() => this.audio.pause()).catch(() => {});
+      if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+        // Prime the YouTube player on user gesture
       }
     } catch {}
   }
@@ -576,7 +501,6 @@ class AudioEngine {
       return;
     }
 
-    // HTML5 fallback
     if (this.audio.paused) {
       this.audio.play().catch(() => {});
       this.startBackgroundCarrier();
@@ -700,7 +624,7 @@ class AudioEngine {
     if (!query || VIDEO_ID_CACHE.has(query)) return;
     try {
       const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-      const res = await fetch(resolveUrl);
+      const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(4000) });
       if (res.ok) {
         const data = await res.json();
         if (data.videoId) {
@@ -715,6 +639,7 @@ class AudioEngine {
   }
 
   public getCurrentVideoId(): string | null {
+    if (this.currentVideoId) return this.currentVideoId;
     if (this.currentTrackQuery && VIDEO_ID_CACHE.has(this.currentTrackQuery)) {
       return VIDEO_ID_CACHE.get(this.currentTrackQuery) || null;
     }
@@ -726,7 +651,9 @@ class AudioEngine {
       return VIDEO_ID_CACHE.get(query)!;
     }
     try {
-      const res = await fetch(`${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`);
+      const res = await fetch(`${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`, {
+        signal: AbortSignal.timeout?.(5000),
+      });
       if (res.ok) {
         const data = await res.json();
         if (data.videoId) {
@@ -735,6 +662,11 @@ class AudioEngine {
         }
       }
     } catch {}
+    const clientVid = await this.resolveVideoIdClient(query);
+    if (clientVid) {
+      persistVideoId(query, clientVid);
+      return clientVid;
+    }
     return null;
   }
 }

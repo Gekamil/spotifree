@@ -79,6 +79,22 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     throw new Error('ID de playlist no proporcionado');
   }
 
+  // 0. Check pre-extracted cached playlist details from session feed (instant resolution for recommended cards & shelves)
+  try {
+    const fs = await import('node:fs');
+    const path = await import('node:path');
+    const sessionFile = path.resolve('src/data/liveExtractedSession.json');
+    if (fs.existsSync(sessionFile)) {
+      const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+      if (sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
+        const cached = sessionData.cachedPlaylistDetails[cleanId];
+        if (cached?.tracks?.items && cached.tracks.items.length > 0) {
+          return cached;
+        }
+      }
+    }
+  } catch {}
+
   const cleanCookie = cleanSpDcString(cookie);
 
   // 1. Resolve Auth Credentials (access token & client token)

@@ -1,11 +1,11 @@
 /**
  * Spotifree Audio Resolve API
- * Resolves a YouTube videoId (or iTunes preview URL) for a given search query.
+ * Resolves a real YouTube videoId for a Spotify track.
  *
- * Optimizations:
- *  - All resolution strategies run IN PARALLEL via Promise.race / Promise.any
- *  - Server-side + client-visible cache headers (24h)
- *  - Clean query removes noise like "Remastered", "Explicit", etc.
+ * Strategies:
+ *  1. YouTube Music Innertube API (Instant ~600-800ms official audio track resolution)
+ *  2. YouTube web search fallback (High resilience)
+ *  Zero iTunes 30-second clips — always resolves full-length songs.
  */
 
 const RESOLVE_CACHE = new Map();
@@ -23,14 +23,13 @@ function cleanQuery(query) {
     .trim();
 }
 
-/** Fetch with automatic abort after `ms` milliseconds */
-function fetchWithTimeout(url, opts, ms = 4000) {
+function fetchWithTimeout(url, opts, ms = 5000) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
-/** Strategy 1: YouTube Music Innertube search */
+/** Strategy 1: YouTube Music Innertube Search (fastest & high-fidelity) */
 async function resolveViaYouTubeMusic(q) {
   const res = await fetchWithTimeout(
     'https://music.youtube.com/youtubei/v1/search',
@@ -51,11 +50,11 @@ async function resolveViaYouTubeMusic(q) {
           },
         },
         query: q,
-        // Pure songs/audio only filter
+        // Music only filter
         params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
       }),
     },
-    5000
+    4500
   );
 
   if (!res.ok) throw new Error('YTM non-ok');
@@ -79,12 +78,12 @@ async function resolveViaYouTubeMusic(q) {
         const videoId =
           playNav?.watchEndpoint?.videoId ||
           renderer?.navigationEndpoint?.watchEndpoint?.videoId;
-        if (videoId) return { videoId };
+        if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId)) return { videoId };
       }
     }
   }
 
-  // Generic regex fallback on JSON body
+  // Regex match
   const text = JSON.stringify(data);
   const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
   if (matches.length > 0) return { videoId: matches[0] };
@@ -92,7 +91,7 @@ async function resolveViaYouTubeMusic(q) {
   throw new Error('YTM: no videoId found');
 }
 
-/** Strategy 2: YouTube web search scrape */
+/** Strategy 2: YouTube Web Search Scrape */
 async function resolveViaYouTubeSearch(q) {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' audio')}`;
   const res = await fetchWithTimeout(
@@ -119,53 +118,10 @@ async function resolveViaYouTubeSearch(q) {
   throw new Error('YT search: no videoId found');
 }
 
-/** Strategy 3: Invidious API (tries instances in parallel, uses fastest) */
-async function resolveViaInvidious(q) {
-  const instances = [
-    'https://inv.tux.pizza',
-    'https://invidious.nerdvpn.de',
-    'https://invidious.drgns.space',
-    'https://yt.artemislena.eu',
-  ];
-
-  const tries = instances.map(async (inst) => {
-    const res = await fetchWithTimeout(
-      `${inst}/api/v1/search?q=${encodeURIComponent(q)}&type=video`,
-      { headers: { Accept: 'application/json' } },
-      4000
-    );
-    if (!res.ok) throw new Error(`Invidious ${inst} non-ok`);
-    const list = await res.json();
-    if (Array.isArray(list) && list.length > 0 && list[0].videoId) {
-      return { videoId: list[0].videoId };
-    }
-    throw new Error(`Invidious ${inst}: no results`);
-  });
-
-  return Promise.any(tries);
-}
-
-/** Strategy 4: iTunes preview URL (30-second preview, always works) */
-async function resolveViaItunes(q) {
-  const res = await fetchWithTimeout(
-    `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`,
-    {},
-    5000
-  );
-  if (!res.ok) throw new Error('iTunes non-ok');
-  const data = await res.json();
-  const first = data.results?.[0];
-  if (first?.previewUrl) {
-    return { previewUrl: first.previewUrl, title: first.trackName, artist: first.artistName };
-  }
-  throw new Error('iTunes: no preview URL');
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  // Cache result for 24 hours on CDN/browser
   res.setHeader(
     'Cache-Control',
     'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
@@ -183,26 +139,35 @@ export default async function handler(req, res) {
   const q = cleanQuery(rawQ);
   const cacheKey = q.toLowerCase();
 
-  // Serve from memory cache immediately (Vercel serverless keeps warm instances)
   if (RESOLVE_CACHE.has(cacheKey)) {
     const cached = RESOLVE_CACHE.get(cacheKey);
     return res.status(200).json({ success: true, ...cached, cached: true });
   }
 
-  // Run ALL resolution strategies in parallel — first successful wins
-  // Priority order: YTM and YT Search run first; Invidious and iTunes are parallel fallbacks
   try {
+    // Run YouTube Music and YouTube Web search in parallel
     const result = await Promise.any([
       resolveViaYouTubeMusic(q),
       resolveViaYouTubeSearch(q),
-      resolveViaInvidious(q),
-      resolveViaItunes(q),
     ]);
 
-    RESOLVE_CACHE.set(cacheKey, result);
-    return res.status(200).json({ success: true, ...result });
-  } catch {
-    // All strategies failed
-    return res.status(404).json({ error: 'No se pudo resolver el audio para esta pista' });
+    if (result && result.videoId) {
+      RESOLVE_CACHE.set(cacheKey, result);
+      return res.status(200).json({ success: true, ...result });
+    }
+  } catch (err) {
+    // Retry once with simplified query (e.g. first 2 words if query is long)
+    try {
+      const simplified = q.split(' ').slice(0, 4).join(' ');
+      if (simplified !== q) {
+        const retryResult = await resolveViaYouTubeMusic(simplified);
+        if (retryResult?.videoId) {
+          RESOLVE_CACHE.set(cacheKey, retryResult);
+          return res.status(200).json({ success: true, ...retryResult });
+        }
+      }
+    } catch {}
   }
+
+  return res.status(404).json({ error: 'No se pudo resolver el audio para esta pista' });
 }

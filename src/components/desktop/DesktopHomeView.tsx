@@ -199,7 +199,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     }
 
     try {
-      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(card.id)}`);
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+      const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (userCookie) headers['x-spotify-cookie'] = userCookie;
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(card.id)}`, { headers });
       if (res.ok) {
         const data = await res.json();
         if (data.tracks?.items && data.tracks.items.length > 0) {
@@ -218,18 +224,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       }
     } catch (err) {}
 
-    playTrack({
-      id: `track-${card.id}`,
-      name: card.name,
-      duration_ms: 210000,
-      artists: [{ id: 'artist-1', name: user?.display_name || 'Spotify' }],
-      album: {
-        id: `album-${card.id}`,
-        name: card.name,
-        images: [{ url: card.image }],
-      },
-      playlistId: card.id,
-    } as any);
+    // Navigate to playlist so it loads directly with search & items instead of a corrupt dummy song
+    onSelectPlaylistById(card.id);
   };
 
   if (!isAuthenticated) {
