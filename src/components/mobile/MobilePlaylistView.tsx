@@ -980,7 +980,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         <path d="M8 1.314C12.438-3.248 23.534 4.735 8 15-7.534 4.736 3.562-3.248 8 1.314z" />
                       </svg>
                     </button>
-                    <span className="text-xs">{formatDuration(track.duration_ms)}</span>
+                    <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
                     <button
                       onClick={(e) => e.stopPropagation()}
                       className="p-1 hover:text-white"

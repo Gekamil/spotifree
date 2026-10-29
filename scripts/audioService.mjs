@@ -169,6 +169,47 @@ export async function resolveAudio(target) {
   return promise;
 }
 
+export function streamAudioDirect(target, req, res) {
+  let cleanTarget = (target || '').trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanTarget)) {
+    cleanTarget = `https://www.youtube.com/watch?v=${cleanTarget}`;
+  } else if (!cleanTarget.startsWith('http')) {
+    cleanTarget = `ytsearch1:${cleanTarget}`;
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'audio/webm',
+    'Transfer-Encoding': 'chunked',
+    'Accept-Ranges': 'none',
+    'Access-Control-Allow-Origin': '*',
+    'Cache-Control': 'no-cache',
+  });
+
+  const pythonCmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
+  const child = spawn(pythonCmd, [
+    '-m', 'yt_dlp',
+    '-f', 'ba[ext=webm]/ba/b',
+    '-o', '-',
+    '--no-warnings',
+    '-q',
+    cleanTarget,
+  ]);
+
+  child.stdout.pipe(res);
+
+  child.on('error', (err) => {
+    console.error('[streamAudioDirect error]:', err.message);
+    if (!res.headersSent) {
+      res.statusCode = 502;
+      res.end('Direct stream error');
+    }
+  });
+
+  req.on('close', () => {
+    try { child.kill(); } catch {}
+  });
+}
+
 export function streamAudioFromUrl(streamUrl, req, res) {
   const headers = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

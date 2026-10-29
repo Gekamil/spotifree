@@ -393,7 +393,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           </div>
 
           {/* Scrub Bar */}
-          <div className="space-y-1">
+          <div className="space-y-1.5 touch-none">
             <input
               type="range"
               min="0"
@@ -401,11 +401,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               step="0.1"
               value={percent}
               onChange={handleSeek}
-              className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1ed760]"
+              style={{
+                background: `linear-gradient(to right, #ffffff ${percent}%, rgba(255, 255, 255, 0.2) ${percent}%)`,
+              }}
+              className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1ed760] transition-all"
             />
-            <div className="flex justify-between text-[11px] text-[#b3b3b3] font-mono">
-              <span>{formatDuration(progressMs)}</span>
-              <span>{formatDuration(durationMs)}</span>
+            <div className="flex justify-between font-['SpotifyMixUI'] tabular-nums text-[11px] font-normal text-[#b3b3b3]">
+              <span className="select-none tracking-normal">{formatDuration(progressMs)}</span>
+              <span className="select-none tracking-normal">{formatDuration(durationMs)}</span>
             </div>
           </div>
 

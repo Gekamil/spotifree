@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl } from './scripts/audioService.mjs';
+import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
 
 const PORT = process.env.PORT || 10000;
@@ -121,14 +121,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const info = await resolveAudio(target);
-      if (!info || !info.url) {
-        res.statusCode = 404;
-        res.setHeader('Content-Type', 'application/json');
-        return res.end(JSON.stringify({ error: 'Stream URL not found' }));
-      }
-      currentPlayingTrackId = info.id;
-      return streamAudioFromUrl(info.url, req, res);
+      currentPlayingTrackId = target;
+      return streamAudioDirect(target, req, res);
     } catch (err) {
       console.error('[AudioStream error]:', err.message);
       if (!res.headersSent) {

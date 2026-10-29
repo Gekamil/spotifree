@@ -357,7 +357,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
                     <span className="font-bold text-white text-sm truncate">{trk.name}</span>
                     <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">{trk.artist}</span>
                   </div>
-                  <span className="text-xs text-[#b3b3b3] font-mono shrink-0">
+                  <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums shrink-0">
                     {trk.plays} reps
                   </span>
                 </div>

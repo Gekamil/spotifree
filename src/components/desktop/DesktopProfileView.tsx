@@ -301,7 +301,7 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-4">
-                    <span className="text-xs text-[#b3b3b3] font-mono pr-4">
+                    <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
                       {formatDuration(180000)}
                     </span>
                     <button

@@ -73,18 +73,42 @@ class AudioEngine {
       window.addEventListener('click', unlockUserMedia, { passive: true });
       window.addEventListener('touchstart', unlockUserMedia, { passive: true });
 
-      // Handle visibility changes without forcing silence
+      // Handle visibility changes: when the user comes back to the app,
+      // ensure audio is still playing and not muted (mobile browsers sometimes
+      // mute or pause the YT iframe when returning from background).
       document.addEventListener('visibilitychange', () => {
-        if (!document.hidden && usePlayerStore.getState().isPlaying) {
-          try {
-            if (this.ytPlayer && typeof this.ytPlayer.unMute === 'function') {
-              this.ytPlayer.unMute();
-              const { volume, isMuted } = usePlayerStore.getState();
-              if (!isMuted) {
-                this.ytPlayer.setVolume(Math.round(volume * 100));
+        if (!document.hidden) {
+          // Tab/app became visible again — restore playback if it was supposed to be playing
+          const { isPlaying } = usePlayerStore.getState();
+          if (isPlaying && this.ytPlayer) {
+            try {
+              // Unmute and restore volume first
+              if (typeof this.ytPlayer.unMute === 'function') {
+                this.ytPlayer.unMute();
+                const { volume, isMuted } = usePlayerStore.getState();
+                if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
               }
-            }
-          } catch {}
+              // Check if player is paused/stopped and resume if needed
+              const ytState = typeof this.ytPlayer.getPlayerState === 'function'
+                ? this.ytPlayer.getPlayerState() : -1;
+              // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+              if (ytState === 2 || ytState === -1) {
+                // Was paused by the browser — resume it
+                this.ytPlayer.playVideo();
+              }
+              // Always re-signal mediaSession that we're playing
+              if ('mediaSession' in navigator) {
+                try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+              }
+            } catch {}
+          }
+        } else {
+          // App going to background — make sure mediaSession is set to 'playing'
+          // so Android knows NOT to stop the audio
+          const { isPlaying } = usePlayerStore.getState();
+          if (isPlaying && 'mediaSession' in navigator) {
+            try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+          }
         }
       });
 
@@ -107,9 +131,10 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            // Render inside active viewport with real dimensions & opacity so mobile browsers (iOS WebKit / Android Chrome PWA)
-            // treat the player as an active visible media source and do NOT mute or suspend background playback
-            host.style.cssText = 'position:fixed;bottom:0;left:0;width:200px;height:120px;opacity:0.2;pointer-events:none;z-index:5;overflow:hidden;';
+            // Keep the YT iframe alive in the DOM but completely off-screen so it's invisible to the user.
+            // Using left:-300px (off-screen) instead of display:none because YouTube IFrame API suspends
+            // playback for display:none elements on mobile browsers.
+            host.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:200px;height:120px;opacity:0;pointer-events:none;z-index:-9999;overflow:hidden;';
             document.body.appendChild(host);
           }
 
@@ -558,6 +583,9 @@ class AudioEngine {
   public unlockAudio() {
     try {
       this.startBackgroundCarrier();
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
       if (this.ytPlayer && typeof this.ytPlayer.unMute === 'function') {
         this.ytPlayer.unMute();
         const { volume, isMuted } = usePlayerStore.getState();

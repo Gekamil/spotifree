@@ -85,7 +85,35 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   // Equalizer
   const [eqEnabled, setEqEnabled] = useState(true);
   const [activePreset, setActivePreset] = useState('flat');
-  const [eqBands, setEqBands] = useState<number[]>([0, 0, 0, 0, 0, 0]);
+  const [eqBands, setEqBands] = useState<number[]>(() => {
+    try {
+      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_eq_bands') : null;
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return [0, 0, 0, 0, 0, 0];
+  });
+  const [draggingBandIndex, setDraggingBandIndex] = useState<number | null>(null);
+
+  // Background audio & notifications permission
+  const [bgPermissionStatus, setBgPermissionStatus] = useState<'granted' | 'denied' | 'default'>(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission as any;
+    }
+    return 'default';
+  });
+
+  const handleRequestBgPermission = async () => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      try {
+        const res = await Notification.requestPermission();
+        setBgPermissionStatus(res as any);
+      } catch {}
+    }
+    try {
+      audioEngine.startBackgroundCarrier();
+      audioEngine.unlockAudio();
+    } catch {}
+  };
 
   // Storage
   const [cacheSize, setCacheSize] = useState('146.8 MB');
@@ -252,6 +280,77 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
       );
     } catch {}
   };
+
+  const handleBandPointerDown = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {}
+    setDraggingBandIndex(index);
+    updateBandFromClientY(index, e.clientY, e.currentTarget);
+  };
+
+  const handleBandPointerMove = (index: number, e: React.PointerEvent<HTMLDivElement>) => {
+    if (draggingBandIndex === index) {
+      e.preventDefault();
+      e.stopPropagation();
+      updateBandFromClientY(index, e.clientY, e.currentTarget);
+    }
+  };
+
+  const handleBandPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {}
+    setDraggingBandIndex(null);
+  };
+
+  const updateBandFromClientY = (index: number, clientY: number, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const padding = 12;
+    const availH = rect.height - padding * 2;
+    if (availH <= 0) return;
+    const relY = Math.max(0, Math.min(availH, clientY - (rect.top + padding)));
+    const norm = 1 - (relY / availH); // 0 at bottom (-12 dB), 1 at top (+12 dB)
+    const db = Math.round(((norm * 24) - 12) * 2) / 2;
+    const clampedDb = Math.max(-12, Math.min(12, db));
+    handleBandSlider(index, clampedDb);
+  };
+
+  // 6 points for real-time SVG curve
+  const svgW = 300;
+  const svgH = 88;
+  const padX = 20;
+  const padY = 10;
+  const availW = svgW - padX * 2;
+  const availH = svgH - padY * 2;
+  const zeroY = padY + availH / 2;
+
+  const curvePoints = eqBands.map((db, i) => {
+    const x = padX + (i / (eqBands.length - 1)) * availW;
+    const norm = (db + 12) / 24; // 0 to 1
+    const y = padY + (1 - norm) * availH;
+    return { x, y };
+  });
+
+  let eqCurvePath = '';
+  if (curvePoints.length > 0) {
+    eqCurvePath = `M ${curvePoints[0].x} ${curvePoints[0].y}`;
+    for (let i = 0; i < curvePoints.length - 1; i++) {
+      const p0 = curvePoints[i === 0 ? 0 : i - 1];
+      const p1 = curvePoints[i];
+      const p2 = curvePoints[i + 1];
+      const p3 = curvePoints[i + 2 < curvePoints.length ? i + 2 : i + 1];
+
+      const cp1x = p1.x + (p2.x - p0.x) / 5;
+      const cp1y = p1.y + (p2.y - p0.y) / 5;
+      const cp2x = p2.x - (p3.x - p1.x) / 5;
+      const cp2y = p2.y - (p3.y - p1.y) / 5;
+
+      eqCurvePath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+  }
 
   return (
     <div className="select-none min-h-full pb-32 bg-[#121212] font-['SpotifyMixUI'] text-white">
@@ -571,7 +670,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             <div className="pt-2 border-t border-white/5 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-bold text-white">Fundido entre canciones</p>
-                <span className="text-xs font-mono font-bold text-[#1ed760]">
+                <span className="text-xs font-['SpotifyMixUI'] tabular-nums font-bold text-[#1ed760]">
                   {crossfadeSeconds === 0 ? 'Desactivado' : `${crossfadeSeconds} s`}
                 </span>
               </div>
@@ -588,7 +687,10 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                     window.localStorage.setItem('spotifree_crossfade_sec', String(val));
                   }
                 }}
-                className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
+                style={{
+                  background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                }}
+                className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#1ed760] touch-none"
               />
             </div>
 
@@ -646,15 +748,50 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Ecualizador Gráfico (Paridad PC) */}
+        {/* Permisos de Audio y Segundo Plano */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+            Permisos de Segundo Plano
+          </h3>
+
+          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-white">Audio en segundo plano y pantalla bloqueada</p>
+                <p className="text-xs text-[#b3b3b3] mt-0.5">
+                  Mantiene la reproducción y los controles nativos al salir de la aplicación o bloquear el móvil.
+                </p>
+              </div>
+              {bgPermissionStatus === 'granted' ? (
+                <span className="px-3 py-1 bg-[#1ed760]/20 text-[#1ed760] text-xs font-bold rounded-full shrink-0 border border-[#1ed760]/30 select-none">
+                  Activo ✓
+                </span>
+              ) : (
+                <button
+                  onClick={handleRequestBgPermission}
+                  className="px-3.5 py-1.5 bg-[#1ed760] hover:bg-[#1fdf64] text-black text-xs font-bold rounded-full shrink-0 transition-transform active:scale-95 shadow-md cursor-pointer"
+                >
+                  Permitir
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Ecualizador Gráfico Rediseñado (Paridad PC y Spotify Mobile) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-              Ecualizador de Audio
-            </h3>
+            <div>
+              <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+                Ecualizador de Audio
+              </h3>
+              <p className="text-[11px] text-[#727272] mt-0.5">
+                Ajuste fino de frecuencias y decibelios en tiempo real
+              </p>
+            </div>
             <button
               onClick={() => setEqEnabled(!eqEnabled)}
-              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer ${
+              className={`w-10 h-5 rounded-full transition-colors relative cursor-pointer shrink-0 ${
                 eqEnabled ? 'bg-[#1ed760]' : 'bg-[#535353]'
               }`}
             >
@@ -667,45 +804,160 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
 
           {eqEnabled && (
-            <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-4 animate-in fade-in">
-              {/* Presets chips */}
-              <div>
-                <p className="text-xs text-[#b3b3b3] mb-2 font-medium">Presets</p>
-                <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                  {Object.keys(PRESETS).map((k) => (
-                    <button
-                      key={k}
-                      onClick={() => handlePresetSelect(k)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-colors ${
-                        activePreset === k ? 'bg-[#1ed760] text-black' : 'bg-[#242424] text-white hover:bg-white/10'
-                      }`}
-                    >
-                      {PRESET_LABELS[k] || k}
-                    </button>
-                  ))}
-                </div>
+            <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-4 animate-in fade-in select-none">
+              {/* Presets chips + Reset button */}
+              <div className="flex items-center justify-between">
+                <p className="text-xs text-[#b3b3b3] font-medium">Preajustes</p>
+                <button
+                  onClick={() => handlePresetSelect('flat')}
+                  className="text-[11px] text-[#1ed760] font-bold hover:underline transition-colors cursor-pointer"
+                >
+                  Restablecer a 0 dB
+                </button>
               </div>
 
-              {/* 6-Band Frequency Sliders */}
-              <div className="grid grid-cols-6 gap-2 pt-2 text-center">
-                {FREQ_POINTS.map((f, idx) => (
-                  <div key={f.label} className="flex flex-col items-center space-y-2">
-                    <span className="text-[10px] font-mono text-[#1ed760]">
-                      {eqBands[idx] > 0 ? `+${eqBands[idx]}` : eqBands[idx]} dB
-                    </span>
-                    <input
-                      type="range"
-                      min="-12"
-                      max="12"
-                      step="0.5"
-                      value={eqBands[idx]}
-                      onChange={(e) => handleBandSlider(idx, parseFloat(e.target.value))}
-                      className="w-16 h-2 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[#1ed760] -rotate-90 my-8"
-                    />
-                    <span className="text-[10px] text-[#b3b3b3] font-bold">{f.label}</span>
-                  </div>
+              <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none touch-pan-x">
+                {Object.keys(PRESETS).map((k) => (
+                  <button
+                    key={k}
+                    onClick={() => handlePresetSelect(k)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold shrink-0 transition-all cursor-pointer ${
+                      activePreset === k ? 'bg-[#1ed760] text-black shadow-md scale-102' : 'bg-[#242424] text-white hover:bg-white/10'
+                    }`}
+                  >
+                    {PRESET_LABELS[k] || k}
+                  </button>
                 ))}
               </div>
+
+              {/* Real-time SVG Frequency Curve Card */}
+              <div className="relative h-[88px] bg-[#121212] rounded-xl border border-white/5 overflow-hidden px-3 pt-2">
+                {/* Horizontal guide lines */}
+                <div className="absolute inset-x-3 top-2 bottom-2 flex flex-col justify-between pointer-events-none opacity-40">
+                  <div className="border-b border-dashed border-white/15 w-full flex justify-between">
+                    <span className="text-[9px] font-['SpotifyMixUI'] tabular-nums text-white/30 -mt-2">+12 dB</span>
+                  </div>
+                  <div className="border-b border-white/30 w-full flex justify-between">
+                    <span className="text-[9px] font-['SpotifyMixUI'] tabular-nums text-white/50 -mt-2">0 dB</span>
+                  </div>
+                  <div className="border-b border-dashed border-white/15 w-full flex justify-between">
+                    <span className="text-[9px] font-['SpotifyMixUI'] tabular-nums text-white/30 -mt-2">-12 dB</span>
+                  </div>
+                </div>
+
+                {/* SVG Curve */}
+                <svg
+                  viewBox={`0 0 ${svgW} ${svgH}`}
+                  preserveAspectRatio="none"
+                  className="w-full h-full pointer-events-none relative z-10"
+                >
+                  <defs>
+                    <linearGradient id="mobileEqGrad" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1ed760" stopOpacity="0.35" />
+                      <stop offset="100%" stopColor="#1ed760" stopOpacity="0.0" />
+                    </linearGradient>
+                  </defs>
+                  {/* Fill */}
+                  <path
+                    d={`${eqCurvePath} L ${curvePoints[curvePoints.length - 1].x} ${zeroY} L ${curvePoints[0].x} ${zeroY} Z`}
+                    fill="url(#mobileEqGrad)"
+                  />
+                  {/* Stroke */}
+                  <path
+                    d={eqCurvePath}
+                    fill="none"
+                    stroke="#1ed760"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {/* Curve Nodes */}
+                  {curvePoints.map((pt, idx) => (
+                    <circle
+                      key={`pt-${idx}`}
+                      cx={pt.x}
+                      cy={pt.y}
+                      r={draggingBandIndex === idx ? 4.5 : 3}
+                      fill={draggingBandIndex === idx ? '#ffffff' : '#1ed760'}
+                      className="transition-all"
+                    />
+                  ))}
+                </svg>
+              </div>
+
+              {/* 6 Touch-Optimized Vertical Decibel Sliders */}
+              <div className="grid grid-cols-6 gap-1 pt-1 text-center select-none">
+                {FREQ_POINTS.map((f, idx) => {
+                  const dbVal = eqBands[idx];
+                  const norm = (dbVal + 12) / 24; // 0 to 1
+                  const topPercent = (1 - norm) * 100;
+                  const isDraggingThis = draggingBandIndex === idx;
+
+                  return (
+                    <div key={f.label} className="flex flex-col items-center">
+                      {/* dB Value Badge */}
+                      <span
+                        className={`text-[11px] font-['SpotifyMixUI'] tabular-nums font-bold transition-colors ${
+                          dbVal > 0 ? 'text-[#1ed760]' : dbVal === 0 ? 'text-white/80' : 'text-[#888888]'
+                        }`}
+                      >
+                        {dbVal > 0 ? `+${dbVal.toFixed(1)}` : dbVal.toFixed(1)} dB
+                      </span>
+
+                      {/* Touch-safe vertical channel with touch-none */}
+                      <div
+                        className="relative w-full h-[140px] flex items-center justify-center cursor-pointer touch-none select-none my-1"
+                        onPointerDown={(e) => handleBandPointerDown(idx, e)}
+                        onPointerMove={(e) => handleBandPointerMove(idx, e)}
+                        onPointerUp={handleBandPointerUp}
+                        onPointerCancel={handleBandPointerUp}
+                      >
+                        {/* Background track bar */}
+                        <div className="absolute inset-y-3 w-1.5 bg-white/[0.08] rounded-full pointer-events-none" />
+
+                        {/* Midline at 0 dB (50%) */}
+                        <div className="absolute top-1/2 inset-x-2 h-[1px] bg-white/20 pointer-events-none" />
+
+                        {/* Dynamic Active Fill bar */}
+                        {dbVal >= 0 ? (
+                          <div
+                            style={{
+                              top: `${topPercent}%`,
+                              height: `${Math.max(0, 50 - topPercent)}%`,
+                            }}
+                            className="absolute w-1.5 bg-[#1ed760] rounded-t-full pointer-events-none transition-all duration-75"
+                          />
+                        ) : (
+                          <div
+                            style={{
+                              top: '50%',
+                              height: `${Math.max(0, topPercent - 50)}%`,
+                            }}
+                            className="absolute w-1.5 bg-white/30 rounded-b-full pointer-events-none transition-all duration-75"
+                          />
+                        )}
+
+                        {/* Draggable Circle Handle / Thumb */}
+                        <div
+                          style={{ top: `${topPercent}%` }}
+                          className={`absolute -translate-y-1/2 left-1/2 -translate-x-1/2 w-5 h-5 rounded-full bg-white border-[3px] border-[#1ed760] shadow-[0_2px_8px_rgba(0,0,0,0.8)] pointer-events-none transition-transform duration-75 ${
+                            isDraggingThis ? 'scale-130 bg-[#1ed760] border-white shadow-[0_0_12px_#1ed760]' : ''
+                          }`}
+                        />
+                      </div>
+
+                      {/* Frequency label */}
+                      <span className="text-[10px] text-[#b3b3b3] font-bold mt-1">
+                        {f.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <p className="text-[11px] text-[#727272] text-center pt-1 font-medium">
+                Desliza verticalmente sobre cualquier frecuencia para ajustar los decibelios (dB) con precisión.
+              </p>
             </div>
           )}
         </div>

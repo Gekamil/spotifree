@@ -928,7 +928,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 </span>
                               </div>
                             </div>
-                            <span className="text-xs text-[#b3b3b3] font-mono pr-4">
+                            <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
                               {formatDuration(track.duration_ms)}
                             </span>
                           </div>
@@ -1068,7 +1068,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             </span>
                           </div>
                         </div>
-                        <span className="text-xs text-[#b3b3b3] font-mono pr-4">
+                        <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
                           {formatDuration(track.duration_ms)}
                         </span>
                       </div>
