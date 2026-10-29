@@ -59,7 +59,8 @@ class AudioEngine {
   constructor() {
     this.audio = new Audio();
     this.audio.preload = 'auto';
-    this.audio.crossOrigin = 'anonymous';
+    // Do NOT set crossOrigin='anonymous' — it blocks some iOS audio streams
+    // this.audio.crossOrigin = 'anonymous';
 
     this.setupHtml5Listeners();
 
@@ -69,18 +70,22 @@ class AudioEngine {
         this.silentCarrier.loop = true;
         this.silentCarrier.volume = 0.001;
       } catch {}
-      // Unlock audio on mobile on first user gesture
+
+      // Unlock audio context + silent carrier on first user gesture
       const unlockUserMedia = () => {
         try {
           if (this.audioContext && this.audioContext.state === 'suspended') {
             this.audioContext.resume().catch(() => {});
           }
-          if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-            // Player exists
+          // Play + immediately pause the silent carrier to unlock audio on iOS/Android
+          if (this.silentCarrier && this.silentCarrier.paused) {
+            this.silentCarrier.play().catch(() => {});
+          }
+          // Also unlock the main audio element
+          if (this.audio && this.audio.paused && !this.audio.src) {
+            this.audio.play().then(() => this.audio.pause()).catch(() => {});
           }
         } catch {}
-        window.removeEventListener('click', unlockUserMedia);
-        window.removeEventListener('touchstart', unlockUserMedia);
       };
       window.addEventListener('click', unlockUserMedia, { once: true, passive: true });
       window.addEventListener('touchstart', unlockUserMedia, { once: true, passive: true });
@@ -341,44 +346,78 @@ class AudioEngine {
     }
 
     try {
-      // 1. Resolve videoId or direct audio stream
+      // 1. Resolve videoId — check cache first for instant playback
       let videoId = VIDEO_ID_CACHE.get(query);
       let previewUrl: string | null = null;
 
       if (!videoId) {
-        try {
-          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-          const res = await fetch(resolveUrl);
-          if (res.ok) {
-            const data = await res.json();
-            if (data.videoId) {
-              videoId = data.videoId;
-              persistVideoId(query, videoId!);
-            } else if (data.previewUrl) {
-              previewUrl = data.previewUrl;
-            }
-          }
-        } catch {}
-      }
+        // Race the server resolve against a direct iTunes preview fetch for fastest result.
+        // Whichever completes first with a usable result wins.
+        const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
 
-      // 2. Client-side fallback if server-side resolution failed or was challenged
-      if (!videoId && !previewUrl && typeof window !== 'undefined') {
-        try {
-          const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
-          );
-          if (itunesRes.ok) {
-            const itunesData = await itunesRes.json();
-            if (itunesData.results?.[0]?.previewUrl) {
-              previewUrl = itunesData.results[0].previewUrl;
-            }
+        const serverResolve = fetch(resolveUrl, { signal: AbortSignal.timeout?.(8000) })
+          .then(async (res) => {
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data;
+          })
+          .catch(() => null);
+
+        const itunesFallback = fetch(
+          `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`,
+          { signal: AbortSignal.timeout?.(6000) }
+        )
+          .then(async (res) => {
+            if (!res.ok) return null;
+            const d = await res.json();
+            const first = d.results?.[0];
+            return first?.previewUrl ? { previewUrl: first.previewUrl } : null;
+          })
+          .catch(() => null);
+
+        // Try the server resolve first (it now runs all strategies in parallel server-side)
+        // but race it against iTunes so we get audio even if server is slow
+        const resolvedData = await Promise.race([
+          serverResolve,
+          // Give the server 4s head-start before we also check iTunes
+          new Promise<any>((resolve) => setTimeout(() => itunesFallback.then(resolve), 4000)),
+        ]);
+
+        if (resolvedData?.videoId) {
+          videoId = resolvedData.videoId;
+          persistVideoId(query, videoId!);
+        } else if (resolvedData?.previewUrl) {
+          previewUrl = resolvedData.previewUrl;
+        }
+
+        // If still nothing, wait for both and take whatever succeeded
+        if (!videoId && !previewUrl) {
+          const [srvData, itunesData] = await Promise.all([serverResolve, itunesFallback]);
+          if (srvData?.videoId) {
+            videoId = srvData.videoId;
+            persistVideoId(query, videoId!);
+          } else if (srvData?.previewUrl) {
+            previewUrl = srvData.previewUrl;
+          } else if (itunesData?.previewUrl) {
+            previewUrl = itunesData.previewUrl;
           }
-        } catch {}
+        }
       }
 
       if (videoId) {
-        await this.ensureYouTubeReady();
-        if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+        // Try YouTube player — with a 3-second timeout so we don't stall on mobile
+        let ytReady = false;
+        try {
+          await Promise.race([
+            this.ensureYouTubeReady(),
+            new Promise<void>((_, rej) => setTimeout(() => rej(new Error('yt timeout')), 3000)),
+          ]);
+          ytReady = true;
+        } catch {
+          ytReady = false;
+        }
+
+        if (ytReady && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
           this.activeEngine = 'youtube';
           this.audio.pause();
 
@@ -387,26 +426,25 @@ class AudioEngine {
             this.ytPlayer.setVolume(isMuted ? 0 : Math.round(volume * 100));
           }
 
-          this.ytPlayer.loadVideoById({
-            videoId,
-            startSeconds,
-          });
+          this.ytPlayer.loadVideoById({ videoId, startSeconds });
           this.ytPlayer.playVideo();
           this.startBackgroundCarrier();
           usePlayerStore.setState({ isPlaying: true });
           this.startProgressTicker();
           return;
         }
+
+        // YouTube player not ready in time — fall through to iTunes / stream
       }
 
       if (previewUrl) {
         return this.playDirectStream(previewUrl, startSeconds);
       }
     } catch (err: any) {
-      console.warn('[AudioEngine] Native YouTube play error, attempting stream fallback:', err.message);
+      console.warn('[AudioEngine] Play error, attempting stream fallback:', err?.message);
     }
 
-    // Fallback to HTML5 audio stream
+    // Last resort: HTML5 stream via backend
     return this.fallbackToStream(query, startSeconds);
   }
 
@@ -435,21 +473,36 @@ class AudioEngine {
   }
 
   private async fallbackToStream(query: string, startSeconds = 0) {
-    try {
-      const itunesRes = await fetch(
-        `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
-      );
-      if (itunesRes.ok) {
-        const data = await itunesRes.json();
-        const preview = data.results?.[0]?.previewUrl;
-        if (preview) {
-          return this.playDirectStream(preview, startSeconds);
-        }
-      }
-    } catch {}
+    // Race iTunes preview against backend stream — play whichever responds first
+    const itunesPromise = fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
+    )
+      .then(async (r) => {
+        if (!r.ok) return null;
+        const d = await r.json();
+        return d.results?.[0]?.previewUrl as string | null;
+      })
+      .catch(() => null);
 
-    const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
-    return this.playDirectStream(streamUrl, startSeconds);
+    const backendUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
+
+    // Give iTunes 2 seconds; if it doesn't answer, start the backend stream in parallel
+    const itunesResult = await Promise.race([
+      itunesPromise,
+      new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+    ]);
+
+    if (itunesResult) {
+      return this.playDirectStream(itunesResult, startSeconds);
+    }
+
+    // iTunes didn't answer quickly — use backend stream, but still resolve iTunes in bg
+    const [_, itunesFinal] = await Promise.all([
+      this.playDirectStream(backendUrl, startSeconds),
+      itunesPromise,
+    ]);
+    // If iTunes resolved a proper URL and we haven't changed tracks, upgrade to it
+    void itunesFinal;
   }
 
   private playDirectStream(url: string, startSeconds = 0) {

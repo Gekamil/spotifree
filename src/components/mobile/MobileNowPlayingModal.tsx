@@ -352,7 +352,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         </div>
 
         {/* Cambiar a vídeo / Cambiar a audio pill - POSITIONED DIRECTLY BELOW ARTWORK AND ABOVE SONG TITLE */}
-        <div className="flex items-center justify-center -my-0.5">
+        <div className="flex items-center justify-start pl-1 -my-0.5">
           <button
             onClick={() => setIsVideoMode(!isVideoMode)}
             className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
