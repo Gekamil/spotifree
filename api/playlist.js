@@ -1,3 +1,4 @@
+const MEMORY_PLAYLIST_CACHE = new Map();
 import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './extract-session.js';
 
 function parseEmbedHtml(html, cleanId) {
@@ -79,6 +80,14 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     throw new Error('ID de playlist no proporcionado');
   }
 
+  // Check in-memory instant cache
+  if (MEMORY_PLAYLIST_CACHE.has(cleanId)) {
+    const cached = MEMORY_PLAYLIST_CACHE.get(cleanId);
+    if (cached?.tracks?.items?.length > 0) {
+      return cached;
+    }
+  }
+
   // 0. Check pre-extracted cached playlist details from session feed (instant resolution for recommended cards & shelves)
   try {
     const fs = await import('node:fs');
@@ -96,6 +105,27 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   } catch {}
 
   const cleanCookie = cleanSpDcString(cookie);
+  const isLikedCheck = cleanId === 'collection-tracks' || cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection:tracks';
+
+  // Instant fast-path for public playlists: resolve in < 700ms via embed instead of slow auth handshake
+  if (!cleanCookie && !isLikedCheck) {
+    for (const et of ['playlist', 'album', 'artist']) {
+      try {
+        const res = await fetch(`https://open.spotify.com/embed/${et}/${cleanId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+        });
+        if (res.ok) {
+          const html = await res.text();
+          const parsed = parseEmbedHtml(html, cleanId);
+          if (parsed && parsed.tracks?.items?.length > 0) {
+            MEMORY_PLAYLIST_CACHE.set(cleanId, parsed);
+            return parsed;
+          }
+        }
+      } catch {}
+    }
+  }
 
   // 1. Resolve Auth Credentials (access token & client token)
   let activeToken = (token || '').replace(/^Bearer\s+/i, '').trim();

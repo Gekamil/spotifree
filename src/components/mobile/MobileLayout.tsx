@@ -570,22 +570,22 @@ export const MobileLayout: React.FC = () => {
                     );
                   })}
 
-                {/* Spotify "AÑADIR ELEMENTOS" Card at the bottom of the Library list */}
+                {/* Spotify Native "Añadir a tu biblioteca" Row */}
                 <div
                   onClick={() => setIsAddLibraryModalOpen(true)}
-                  className="mt-4 p-4 border border-dashed border-white/20 hover:border-white/40 active:border-white rounded-xl flex items-center justify-center gap-3.5 bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.14] cursor-pointer transition-all active:scale-[0.99] group shadow-sm"
+                  className="mt-3 p-2.5 rounded-xl flex items-center gap-3.5 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group bg-white/[0.02]"
                 >
-                  <div className="w-12 h-12 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                  <div className="w-14 h-14 rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
                     </svg>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="font-black text-white text-sm font-['SpotifyMixUITitle']">
-                      Añadir elementos
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-white text-sm font-['SpotifyMixUITitle'] truncate">
+                      Añadir artistas o playlists
                     </span>
-                    <span className="text-xs text-[#b3b3b3]">
-                      Busca playlists y cantantes para tu biblioteca
+                    <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                      Busca y añade música a tu biblioteca
                     </span>
                   </div>
                 </div>

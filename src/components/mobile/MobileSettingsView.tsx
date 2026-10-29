@@ -1,3 +1,4 @@
+import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import React, { useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -80,8 +81,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     return 0;
   });
   const [autoplaySimilar, setAutoplaySimilar] = useState(true);
-  const [offlineMode, setOfflineMode] = useState(false);
-
+  
   // Equalizer
   const [eqEnabled, setEqEnabled] = useState(true);
   const [activePreset, setActivePreset] = useState('flat');
@@ -94,27 +94,9 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   });
   const [draggingBandIndex, setDraggingBandIndex] = useState<number | null>(null);
 
-  // Background audio & notifications permission
-  const [bgPermissionStatus, setBgPermissionStatus] = useState<'granted' | 'denied' | 'default'>(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission as any;
-    }
-    return 'default';
-  });
 
-  const handleRequestBgPermission = async () => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      try {
-        const res = await Notification.requestPermission();
-        setBgPermissionStatus(res as any);
-      } catch {}
-    }
-    try {
-      audioEngine.startBackgroundCarrier();
-      audioEngine.unlockAudio();
-    } catch {}
-  };
 
+  
   // Storage
   const [cacheSize, setCacheSize] = useState('146.8 MB');
   const [cacheCleared, setCacheCleared] = useState(false);
@@ -437,6 +419,14 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </p>
         </div>
 
+        {/* Tu Cuenta Spotifree en la Nube (Sincronización Móvil y PC) */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+            Tu Cuenta Spotifree
+          </h3>
+          <SpotifreeAuthCard />
+        </div>
+
         {/* Sesión y Conexión de Spotify */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
@@ -748,36 +738,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
-        {/* Permisos de Audio y Segundo Plano */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Permisos de Segundo Plano
-          </h3>
-
-          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-white">Audio en segundo plano y pantalla bloqueada</p>
-                <p className="text-xs text-[#b3b3b3] mt-0.5">
-                  Mantiene la reproducción y los controles nativos al salir de la aplicación o bloquear el móvil.
-                </p>
-              </div>
-              {bgPermissionStatus === 'granted' ? (
-                <span className="px-3 py-1 bg-[#1ed760]/20 text-[#1ed760] text-xs font-bold rounded-full shrink-0 border border-[#1ed760]/30 select-none">
-                  Activo ✓
-                </span>
-              ) : (
-                <button
-                  onClick={handleRequestBgPermission}
-                  className="px-3.5 py-1.5 bg-[#1ed760] hover:bg-[#1fdf64] text-black text-xs font-bold rounded-full shrink-0 transition-transform active:scale-95 shadow-md cursor-pointer"
-                >
-                  Permitir
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
         {/* Ecualizador Gráfico Rediseñado (Paridad PC y Spotify Mobile) */}
         <div className="space-y-3">
           <div className="flex items-center justify-between">
@@ -960,32 +920,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
               </p>
             </div>
           )}
-        </div>
-
-        {/* Modo Sin Conexión */}
-        <div className="space-y-3">
-          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
-            Modo Sin Conexión
-          </h3>
-
-          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] flex items-center justify-between">
-            <div>
-              <p className="text-sm font-bold text-white">Modo sin conexión</p>
-              <p className="text-xs text-[#b3b3b3]">Reproduce únicamente canciones guardadas en caché</p>
-            </div>
-            <button
-              onClick={() => setOfflineMode(!offlineMode)}
-              className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
-                offlineMode ? 'bg-[#1ed760]' : 'bg-[#535353]'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
-                  offlineMode ? 'left-5' : 'left-0.5'
-                }`}
-              />
-            </button>
-          </div>
         </div>
 
         {/* Almacenamiento & Caché */}

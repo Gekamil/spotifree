@@ -1,3 +1,4 @@
+import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -414,7 +415,10 @@ export const DesktopSettingsView: React.FC = () => {
         {/* 1. CUENTA Y SESIÓN (Spotify 1:1 Clean Design) */}
         {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar') && (
           <section className="space-y-4">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta</h2>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta Spotifree (Sincronización en la Nube)</h2>
+            <div className="max-w-xl">
+              <SpotifreeAuthCard />
+            </div>
 
             {/* Row 1: Estado de la cuenta */}
             <div className="flex items-center justify-between py-3 border-b border-white/5">

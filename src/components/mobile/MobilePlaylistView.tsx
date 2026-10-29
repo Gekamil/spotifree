@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -1061,14 +1062,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         )}
       </div>
 
-      {/* Options Bottom Sheet Modal */}
-      {isOptionsOpen && (
+      {/* Options Bottom Sheet Modal (Portaled to body to fix positioning) */}
+      {typeof document !== 'undefined' && isOptionsOpen && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm animate-in fade-in select-none"
+          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in select-none"
           onClick={() => setIsOptionsOpen(false)}
         >
           <div
-            className="w-full bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-4 shadow-2xl border-t border-white/10"
+            className="w-full max-w-lg bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-4 shadow-[0_-10px_40px_rgba(0,0,0,0.85)] border-t border-white/10"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1 mb-2" />
@@ -1092,7 +1093,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   setIsOptionsOpen(false);
                   handleSharePlaylist();
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
               >
                 <ShareNativeIcon size={20} className="text-white" />
                 <span className="font-bold text-white text-sm">Compartir playlist</span>
@@ -1106,7 +1107,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   setToastMessage(isSavedInLibrary ? 'Eliminada de tu biblioteca' : 'Añadida a tu biblioteca');
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
               >
                 {isSavedInLibrary ? (
                   <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
@@ -1131,13 +1132,32 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   }
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="text-white">
                   <path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z" />
                 </svg>
                 <span className="font-bold text-white text-sm">Copiar enlace</span>
               </button>
+
+              {/* Option: Eliminar playlist (visible para playlists del usuario o añadidas) */}
+              {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
+                <button
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    if (window.confirm(`¿Seguro que deseas eliminar «${playlist.name}» de tu biblioteca?`)) {
+                      useSpotifyDataStore.getState().deletePlaylist(playlist.id);
+                      onBack();
+                    }
+                  }}
+                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors text-left cursor-pointer"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                  </svg>
+                  <span className="font-bold text-sm">Eliminar playlist</span>
+                </button>
+              )}
             </div>
 
             <button
@@ -1147,7 +1167,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               Cerrar
             </button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Toast Notification */}

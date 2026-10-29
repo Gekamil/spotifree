@@ -6,7 +6,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 export const ContextMenu: React.FC = () => {
   const { contextMenu, closeContextMenu, openEditPlaylistModal, setActiveMainTab } = useUIStore();
   const { toggleLike, likedTrackIds } = usePlayerStore();
-  const { playlists, deletePlaylist, user } = useSpotifyDataStore();
+  const { playlists, deletePlaylist } = useSpotifyDataStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,33 +116,21 @@ export const ContextMenu: React.FC = () => {
     )
   );
 
-  const isUserCreatedPlaylist =
-    Boolean(targetPlaylist &&
+  const isUserCreatedPlaylist = Boolean(
+    targetPlaylist &&
     !isLikedPlaylist &&
     !isArtist &&
     !isFolder &&
-    !targetPlaylist.id.startsWith('37i9dQ') &&
-    targetPlaylist.id !== '37i9dQZF1DWZdsS73T1ogG' &&
-    targetPlaylist.id !== '37i9dQZF1DX2EiUAL7Wdfc' &&
-    targetPlaylist.id !== '4f0YTBqSbvM1iJpuY9r3yQ' &&
-    targetPlaylist.id !== 'zizi' &&
-    targetPlaylist.id !== 'el-nuevo-urbano' &&
-    targetPlaylist.id !== 'miticas' &&
-    targetPlaylist.owner?.display_name?.toLowerCase() !== 'spotify' &&
-    targetPlaylist.owner?.id !== 'spotify' &&
-    (
-      (targetPlaylist as any).is_custom === true ||
-      targetPlaylist.id === '7b3MrCWtettvBKlfBSdorn' ||
-      targetPlaylist.id === '7HsL4sBaR3dJMa0UJ5e4zG' ||
-      targetPlaylist.owner?.id === 'user' ||
-      targetPlaylist.owner?.id === user?.id ||
-      targetPlaylist.owner?.display_name?.toLowerCase() === (user?.display_name || 'jorgeperezvk').toLowerCase()
-    ));
+    targetPlaylist.id !== 'liked-songs' &&
+    targetPlaylist.id !== 'collection:tracks'
+  );
 
   const handleDeletePlaylist = () => {
     if (targetPlaylist && isUserCreatedPlaylist && !isLikedPlaylist) {
-      deletePlaylist(targetPlaylist.id);
-      setActiveMainTab('home');
+      if (window.confirm(`¿Seguro que deseas eliminar «${targetPlaylist.name}»?`)) {
+        deletePlaylist(targetPlaylist.id);
+        setActiveMainTab('home');
+      }
     }
     closeContextMenu();
   };

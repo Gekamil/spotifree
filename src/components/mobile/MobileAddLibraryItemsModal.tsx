@@ -10,125 +10,125 @@ export interface LibraryCandidateItem {
 }
 
 const DEFAULT_POPULAR_CANDIDATES: LibraryCandidateItem[] = [
-  // Top Artists / Cantantes
+  // Top Artists con fotos reales y verificadas
   {
     id: 'artist:bad_bunny',
     name: 'Bad Bunny',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb9ad50e478a4696881775a6fe',
+    image: 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:quevedo',
     name: 'Quevedo',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb5b23d91c7844ccb7541e25e8',
+    image: 'https://cdn-images.dzcdn.net/images/artist/79880cc1b999b15567e332203464c34e/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:feid',
     name: 'Feid',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb5629c1936c0a762ce3b879a9',
+    image: 'https://cdn-images.dzcdn.net/images/artist/e629c93e03b3c225d8d52a42bae71537/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:rosalia',
     name: 'ROSALÍA',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb4f4cb1be773e34b9d5c4125c',
+    image: 'https://cdn-images.dzcdn.net/images/artist/98d80d739eea47a52c21ce5e34dd15f3/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:myke_towers',
     name: 'Myke Towers',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5ebcb7f4a72d73fc7ae3e085e92',
+    image: 'https://cdn-images.dzcdn.net/images/artist/d3a7418b4e44bf8ee3ae268067a86f09/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:mora',
     name: 'Mora',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb268a2bf6cb87c2b3e5a5933c',
+    image: 'https://cdn-images.dzcdn.net/images/artist/41f7c7b1d3e4ead41fa9ec6aea33d736/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:aitana',
     name: 'Aitana',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5ebcae02611e3b6a96f849cf271',
+    image: 'https://cdn-images.dzcdn.net/images/artist/41a75229e7fb63066c6b8be08ff0dbce/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:duki',
     name: 'Duki',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5ebd1c416e09fb581c7f5367873',
+    image: 'https://cdn-images.dzcdn.net/images/artist/795d09a17bc833425e4b88639bb931af/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:bizarrap',
     name: 'Bizarrap',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb5b2149b14f8fa9596395dcfa',
+    image: 'https://cdn-images.dzcdn.net/images/artist/e121c1ef9b1135e6a5b71c1e65ab10b4/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:anuel_aa',
     name: 'Anuel AA',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb36d9365e6d6286fa6c9a05a4',
+    image: 'https://cdn-images.dzcdn.net/images/artist/d128822eb60817b362b9d6e8c696e933/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:rauw_alejandro',
     name: 'Rauw Alejandro',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5ebb6b9f5a052fffa480b0949d0',
+    image: 'https://cdn-images.dzcdn.net/images/artist/0e7b2b93b91789a054bc3f08bb3df3a8/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
   {
     id: 'artist:the_weeknd',
     name: 'The Weeknd',
     type: 'artist',
-    image: 'https://i.scdn.co/image/ab6761610000e5eb214f3cf1cbe7139c1e26ffbb',
+    image: 'https://cdn-images.dzcdn.net/images/artist/581693b4724a7fcfa754455101e13a44/250x250-000000-80-0-0.jpg',
     subtitle: 'Artista',
   },
-  // Top Playlists
+  // Top Playlists con portadas oficiales
   {
     id: '37i9dQZF1DXcBWIGoYBM5M',
     name: "Today's Top Hits",
     type: 'playlist',
-    image: 'https://i.scdn.co/image/ab67706f000000025f1ff414b434c75953531b79',
+    image: 'https://cdn-images.dzcdn.net/images/cover/518d7d043e005c17c96db2afb94f790f-141bba4b1ed8b5f04bf5f688c426dfab-a486d07805b171a5ba074ef59f5e7f8b-f7f85b17171a8b1d062dca5484c022de/250x250-000000-80-0-0.jpg',
     subtitle: 'Playlist • Spotify',
   },
   {
     id: '37i9dQZF1DX10zKzsJ2jva',
     name: '¡Viva Latino!',
     type: 'playlist',
-    image: 'https://i.scdn.co/image/ab67706f000000022d4f23e20d20d489b09ff382',
+    image: 'https://cdn-images.dzcdn.net/images/cover/f12cffbd0bf4451d7bbd3b1c636357c6-06bcdb6df8577e669479d57ca94dd78a-eff0e0e2fdd26ab5bd8a3d1529a12f3a-68b6ebdd0514f16c57a87552a33d26d3/250x250-000000-80-0-0.jpg',
     subtitle: 'Playlist • Spotify',
   },
   {
     id: '37i9dQZF1DX5q67ZpWyRrZ',
     name: 'Éxitos España',
     type: 'playlist',
-    image: 'https://i.scdn.co/image/ab67706f000000021c327cfebbb8144bda2f785a',
+    image: 'https://cdn-images.dzcdn.net/images/playlist/ef999f5fd9af88db516ad6626dcf4a89/250x250-000000-80-0-0.jpg',
     subtitle: 'Playlist • Spotify',
   },
   {
     id: '37i9dQZF1DX4vth7idTQch',
     name: 'Pop con Ñ',
     type: 'playlist',
-    image: 'https://i.scdn.co/image/ab67706f000000029b3c43491f2479e0fa950cb6',
+    image: 'https://cdn-images.dzcdn.net/images/playlist/c4fc444ba8f01b78163f2232a23b11fa/250x250-000000-80-0-0.jpg',
     subtitle: 'Playlist • Spotify',
   },
   {
     id: '37i9dQZF1DX8SfyweOX9ve',
     name: 'Mansión Reggaetón',
     type: 'playlist',
-    image: 'https://i.scdn.co/image/ab67706f00000002eec87a275466a0fe38779c13',
+    image: 'https://cdn-images.dzcdn.net/images/cover/fee4b7345f658a57a39747bf24b7466b-75aca8c6d242de6db22a9e22fbbf1ba9-7b2f6f5a8aeabafef0bd9ee26f937423-83d6fc387d304ee19772bf970ab7b477/250x250-000000-80-0-0.jpg',
     subtitle: 'Playlist • Spotify',
   },
   {
@@ -167,7 +167,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
     }
   }, [isOpen]);
 
-  // Live search lookup
+  // Live search lookup with real artist photos & playlist covers
   useEffect(() => {
     if (!searchQuery.trim()) {
       setDynamicItems(DEFAULT_POPULAR_CANDIDATES);
@@ -180,35 +180,69 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
     const timer = setTimeout(async () => {
       try {
         const q = searchQuery.trim();
-        // 1. Search iTunes for matching artists
+
+        // 1. Search iTunes for artists and songs
         const itunesRes = await fetch(
-          `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=musicArtist&limit=6`
+          `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=10`
         );
-        let artistCandidates: LibraryCandidateItem[] = [];
+        let foundCandidates: LibraryCandidateItem[] = [];
+
         if (itunesRes.ok) {
           const data = await itunesRes.json();
           if (data.results && data.results.length > 0) {
-            artistCandidates = data.results.map((r: any) => ({
-              id: `artist:${r.artistId || r.artistName}`,
-              name: r.artistName,
-              type: 'artist' as const,
-              image: `https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&auto=format&fit=crop&q=80`,
-              subtitle: 'Artista',
-            }));
+            const seenArtists = new Set<string>();
+
+            for (const r of data.results) {
+              const artName = r.artistName;
+              if (artName && !seenArtists.has(artName.toLowerCase())) {
+                seenArtists.add(artName.toLowerCase());
+
+                // Try to get artist portrait from artist-image endpoint or use high-res iTunes artwork
+                let artImg = (r.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+                try {
+                  const artRes = await fetch(`/api/artist-image?name=${encodeURIComponent(artName)}`);
+                  if (artRes.ok) {
+                    const artData = await artRes.json();
+                    if (artData.picture) {
+                      artImg = artData.picture;
+                    }
+                  }
+                } catch {}
+
+                foundCandidates.push({
+                  id: `artist:${r.artistId || artName}`,
+                  name: artName,
+                  type: 'artist',
+                  image: artImg || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+                  subtitle: 'Artista',
+                });
+              }
+
+              // Also add collection/album as playlist candidate
+              if (r.collectionName && !foundCandidates.some(c => c.name.toLowerCase() === r.collectionName.toLowerCase())) {
+                const albCover = (r.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+                foundCandidates.push({
+                  id: `album:${r.collectionId || r.collectionName}`,
+                  name: r.collectionName,
+                  type: 'playlist',
+                  image: albCover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+                  subtitle: `Álbum • ${artName}`,
+                });
+              }
+            }
           }
         }
 
-        // 2. Filter local catalog
+        // 2. Filter local catalog matches
         const localMatches = DEFAULT_POPULAR_CANDIDATES.filter((item) =>
           item.name.toLowerCase().includes(q.toLowerCase())
         );
 
         if (!cancelled) {
-          // Combine unique
           const combined = [...localMatches];
-          artistCandidates.forEach((art) => {
-            if (!combined.some((x) => x.name.toLowerCase() === art.name.toLowerCase())) {
-              combined.push(art);
+          foundCandidates.forEach((cand) => {
+            if (!combined.some((x) => x.name.toLowerCase() === cand.name.toLowerCase())) {
+              combined.push(cand);
             }
           });
           setDynamicItems(combined);
@@ -217,7 +251,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
       } catch {
         if (!cancelled) setIsSearching(false);
       }
-    }, 280);
+    }, 300);
 
     return () => {
       cancelled = true;
@@ -297,7 +331,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-2.5 text-[#b3b3b3] hover:text-white p-0.5 text-xs"
+              className="absolute right-3 top-2.5 text-[#b3b3b3] hover:text-white p-0.5 text-xs cursor-pointer"
             >
               ✕
             </button>

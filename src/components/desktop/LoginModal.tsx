@@ -1,3 +1,4 @@
+import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -40,7 +41,7 @@ export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, closeLoginModal } = useUIStore();
   const { initialize, user, authWarning } = useSpotifyDataStore();
 
-  const [activeTab, setActiveTab] = useState<'cookie' | 'oauth' | 'saved'>('cookie');
+  const [activeTab, setActiveTab] = useState<'spotifree' | 'cookie' | 'oauth' | 'saved'>('spotifree');
   const [cookieInput, setCookieInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -230,6 +231,20 @@ export const LoginModal: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                setActiveTab('spotifree');
+                setErrorMessage(null);
+              }}
+              className={`pb-2.5 text-xs font-bold tracking-tight transition-all relative ${
+                activeTab === 'spotifree'
+                  ? 'text-[#1ed760] border-b-2 border-[#1ed760]'
+                  : 'text-[#b3b3b3] hover:text-white'
+              }`}
+            >
+              Cuenta Spotifree
+            </button>
+            <button
+              type="button"
+              onClick={() => {
                 setActiveTab('cookie');
                 setErrorMessage(null);
               }}
@@ -279,6 +294,10 @@ export const LoginModal: React.FC = () => {
 
         {/* Modal Body */}
         <div className="px-8 pb-8 pt-4 space-y-4">
+          {/* TAB 0: SPOTIFREE CLOUD ACCOUNT */}
+          {activeTab === 'spotifree' && (
+            <SpotifreeAuthCard onAuthSuccess={() => setTimeout(closeLoginModal, 600)} />
+          )}
           {/* TAB 1: COOKIE SP_DC (AUTHENTIC ENCORE STYLING) */}
           {activeTab === 'cookie' && (
             <div className="space-y-4">

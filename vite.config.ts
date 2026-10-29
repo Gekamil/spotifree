@@ -878,6 +878,18 @@ function dynamicSpotifyPlugin(): Plugin {
         return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
       });
 
+      // 2g. Spotifree Cloud Account Auth (/api/auth)
+      server.middlewares.use('/api/auth', async (req, res) => {
+        try {
+          // @ts-ignore
+          const { default: authHandler } = await import('./api/auth.js');
+          return authHandler(req, res);
+        } catch (err: any) {
+          res.statusCode = 500;
+          return res.end(JSON.stringify({ error: err?.message || 'Auth error' }));
+        }
+      });
+
       // 2f. User Profile Sync (/api/user-profile)
       server.middlewares.use('/api/user-profile', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');

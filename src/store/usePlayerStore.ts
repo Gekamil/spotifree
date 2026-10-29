@@ -350,10 +350,16 @@ export function registerMediaSessionHandlers() {
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
   try {
     navigator.mediaSession.setActionHandler('play', () => {
-      usePlayerStore.getState().togglePlay();
+      const state = usePlayerStore.getState();
+      if (!state.isPlaying) {
+        state.togglePlay();
+      }
     });
     navigator.mediaSession.setActionHandler('pause', () => {
-      usePlayerStore.getState().togglePlay();
+      const state = usePlayerStore.getState();
+      if (state.isPlaying) {
+        state.togglePlay();
+      }
     });
     navigator.mediaSession.setActionHandler('previoustrack', () => {
       usePlayerStore.getState().previousTrack();
@@ -370,28 +376,17 @@ export function registerMediaSessionHandlers() {
         }
       }
     });
-    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
-      const skip = details.seekOffset || 10;
-      const currentSec = usePlayerStore.getState().progressMs / 1000;
-      const targetSec = Math.max(0, currentSec - skip);
-      usePlayerStore.getState().setProgress(targetSec * 1000);
-      if ((window as any).__audioEngine) {
-        (window as any).__audioEngine.seek(targetSec);
-      }
-    });
-    navigator.mediaSession.setActionHandler('seekforward', (details) => {
-      const skip = details.seekOffset || 10;
-      const currentSec = usePlayerStore.getState().progressMs / 1000;
-      const durSec = usePlayerStore.getState().durationMs / 1000;
-      const targetSec = Math.min(durSec > 0 ? durSec : currentSec + skip, currentSec + skip);
-      usePlayerStore.getState().setProgress(targetSec * 1000);
-      if ((window as any).__audioEngine) {
-        (window as any).__audioEngine.seek(targetSec);
-      }
-    });
+    // Remove seekbackward and seekforward handlers so Android Chrome & Brave
+    // dedicate action buttons to PREVIOUS TRACK (⏮) and NEXT TRACK (⏭) in the notification bar!
+    try {
+      (navigator.mediaSession as any).setActionHandler('seekbackward', null);
+      (navigator.mediaSession as any).setActionHandler('seekforward', null);
+    } catch {}
+
     navigator.mediaSession.setActionHandler('stop', () => {
-      if (usePlayerStore.getState().isPlaying) {
-        usePlayerStore.getState().togglePlay();
+      const state = usePlayerStore.getState();
+      if (state.isPlaying) {
+        state.togglePlay();
       }
     });
   } catch {}

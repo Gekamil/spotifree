@@ -58,6 +58,55 @@ class AudioEngine {
   private progressInterval: number | null = null;
 
   private eqFrequencies = [60, 150, 400, 1000, 2400, 15000];
+  private isCrossfading = false;
+
+  private checkCrossfade(curSec: number, durSec: number) {
+    if (this.isCrossfading || !durSec || durSec < 15 || this.isSeeking) return;
+    let crossfadeSec = 0;
+    try {
+      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
+      if (saved) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
+    } catch {}
+    if (crossfadeSec <= 0) return;
+
+    const remaining = durSec - curSec;
+    if (remaining > 0 && remaining <= crossfadeSec) {
+      this.isCrossfading = true;
+      const state = usePlayerStore.getState();
+      const initialVol = state.volume;
+      const stepMs = 250;
+      const totalSteps = Math.max(1, Math.round((crossfadeSec * 1000) / stepMs));
+      let currentStep = 0;
+
+      const fadeInterval = window.setInterval(() => {
+        currentStep++;
+        const factor = Math.max(0, 1 - currentStep / totalSteps);
+        this.setVolume(initialVol * factor);
+
+        if (currentStep >= totalSteps || !state.isPlaying) {
+          clearInterval(fadeInterval);
+          this.setVolume(initialVol);
+          this.isCrossfading = false;
+        }
+      }, stepMs);
+
+      // Trigger next track so it begins with fade-in
+      setTimeout(() => {
+        state.nextTrack();
+        let inStep = 0;
+        this.setVolume(0);
+        const inInterval = window.setInterval(() => {
+          inStep++;
+          const inFactor = Math.min(1, inStep / totalSteps);
+          this.setVolume(initialVol * inFactor);
+          if (inStep >= totalSteps || !state.isPlaying) {
+            clearInterval(inInterval);
+            this.setVolume(initialVol);
+          }
+        }, stepMs);
+      }, 400);
+    }
+  }
 
   constructor() {
     this.audio = new Audio();
@@ -332,6 +381,7 @@ class AudioEngine {
           }
           if (isFinite(durSec) && durSec > 0) {
             usePlayerStore.getState().setDuration(durSec * 1000);
+            if (isFinite(curSec)) this.checkCrossfade(curSec, durSec);
           }
         } catch {}
       }
@@ -348,7 +398,12 @@ class AudioEngine {
   private setupHtml5Listeners() {
     this.audio.addEventListener('timeupdate', () => {
       if (this.activeEngine === 'html5' && !this.isSeeking) {
-        usePlayerStore.getState().setProgress(this.audio.currentTime * 1000);
+        const cur = this.audio.currentTime;
+        usePlayerStore.getState().setProgress(cur * 1000);
+        const dur = this.audio.duration;
+        if (dur && isFinite(dur)) {
+          this.checkCrossfade(cur, dur);
+        }
       }
     });
 
@@ -490,9 +545,28 @@ class AudioEngine {
     this.isSeeking = false;
     this.isTransitioning = true;
 
-    // Reset progress to 0
     usePlayerStore.getState().setProgress(startSeconds * 1000);
     this.startBackgroundCarrier();
+
+    // MOBILE: HTML5 <audio> + server stream => full MediaSession (lockscreen prev/next/seek)
+    if (this.isMobileOrPWA()) {
+      try {
+        const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+        this.activeEngine = 'html5';
+        this.currentVideoId = null;
+        this.audio.pause();
+        this.audio.src = streamUrl;
+        this.audio.currentTime = startSeconds;
+        const { volume, isMuted } = usePlayerStore.getState();
+        this.audio.volume = isMuted ? 0 : volume;
+        this.audio.muted = false;
+        await this.audio.play();
+        usePlayerStore.setState({ isPlaying: true });
+        this.isTransitioning = false;
+        if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch {} }
+        return;
+      } catch { /* fall through to YouTube */ }
+    }
 
     try {
       // 1. Check instant in-memory & persistent cache
