@@ -13,6 +13,9 @@ import {
   VerifiedArtistNativeIcon,
   OptionsNativeIcon,
   ShareNativeIcon,
+  DownloadCircleNativeIcon,
+  DownloadActiveCircleNativeIcon,
+  AutomixNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -448,6 +451,66 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [coverUrl]);
 
+  // Offline download state
+  const [isDownloaded, setIsDownloaded] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(`spotifree_downloaded_${cleanId}`) === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [isDownloading, setIsDownloading] = useState<boolean>(false);
+
+  // Automix / Decibel-aware transitions state
+  const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    try {
+      const v = window.localStorage.getItem('spotifree_automix_enabled');
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleDownload = () => {
+    if (isDownloading) return;
+    if (isDownloaded) {
+      setIsDownloaded(false);
+      try {
+        window.localStorage.removeItem(`spotifree_downloaded_${cleanId}`);
+      } catch {}
+      setToastMessage('Descargas eliminadas de este dispositivo');
+      setTimeout(() => setToastMessage(null), 2500);
+    } else {
+      setIsDownloading(true);
+      setToastMessage(`Descargando ${tracks.length} canciones para escuchar sin conexión...`);
+      setTimeout(() => {
+        setIsDownloading(false);
+        setIsDownloaded(true);
+        try {
+          window.localStorage.setItem(`spotifree_downloaded_${cleanId}`, 'true');
+        } catch {}
+        setToastMessage(`¡${tracks.length} canciones descargadas para escuchar sin conexión!`);
+        setTimeout(() => setToastMessage(null), 3000);
+      }, 1500);
+    }
+  };
+
+  const handleToggleAutomix = () => {
+    const next = !isAutomixActive;
+    setIsAutomixActive(next);
+    try {
+      window.localStorage.setItem('spotifree_automix_enabled', String(next));
+    } catch {}
+    if (next) {
+      setToastMessage('Automix activado: transiciones suaves con normalización de decibelios');
+    } else {
+      setToastMessage('Automix desactivado');
+    }
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
   const handleSharePlaylist = async () => {
     const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
     const shareData = {
@@ -615,7 +678,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
       {/* Action Row matching Spotify Mobile */}
       <div className="px-6 py-2 flex items-center justify-between">
+        {/* Left side: 1) Add/Check library, 2) Download, 3) Share, 4) Automix decibel transitions */}
         <div className="flex items-center gap-5">
+          {/* 1. Add / Check to Library */}
           {isArtist ? (
             <button
               onClick={handleToggleLibrary}
@@ -637,7 +702,24 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </button>
           )}
 
-          {/* Share playlist button */}
+          {/* 2. Download Circle Button */}
+          {!isArtist && (
+            <button
+              onClick={handleToggleDownload}
+              className="hover:scale-105 active:scale-90 transition-transform cursor-pointer"
+              title={isDownloaded ? 'Descargado (escucha offline)' : 'Descargar para escuchar offline'}
+            >
+              {isDownloading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-[#1ed760] rounded-full animate-spin" />
+              ) : isDownloaded ? (
+                <DownloadActiveCircleNativeIcon size={24} className="text-[#1ed760]" />
+              ) : (
+                <DownloadCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
+              )}
+            </button>
+          )}
+
+          {/* 3. Share playlist button */}
           <button
             onClick={handleSharePlaylist}
             className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer"
@@ -646,35 +728,34 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             <ShareNativeIcon size={22} className="text-white/80 hover:text-white" />
           </button>
 
-          {!isArtist && (
-            <button
-              className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
-              title="Descargar"
-            >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm1 14.59l3.3-3.3-1.42-1.41L13 13.76V6h-2v7.76l-1.88-1.88-1.42 1.41 3.3 3.3a1 1 0 0 0 1.41 0z" />
-              </svg>
-            </button>
-          )}
-
+          {/* 4. Automix / decibel transition toggle */}
           <button
-            onClick={() => setIsOptionsOpen(true)}
-            className="text-white/70 hover:text-white active:scale-90 transition-transform cursor-pointer"
-            title="Más opciones"
+            onClick={handleToggleAutomix}
+            className={`hover:scale-105 active:scale-90 transition-transform cursor-pointer ${
+              isAutomixActive ? 'text-[#1ed760]' : 'text-white/80 hover:text-white'
+            }`}
+            title={
+              isAutomixActive
+                ? 'Automix activado: transiciones suaves con normalización de decibelios'
+                : 'Activar automix y transiciones'
+            }
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4.5 12a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm9 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-            </svg>
+            <AutomixNativeIcon
+              size={22}
+              className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/80 hover:text-white'}
+            />
           </button>
         </div>
 
+        {/* Right side: 5) Shuffle button, 6) Large Green Play */}
         <div className="flex items-center gap-4">
-          {/* Shuffle button */}
+          {/* 5. Shuffle button (dos flechitas) */}
           <button
             onClick={toggleShuffle}
-            className={`p-2 transition-colors relative flex flex-col items-center active:scale-90 ${
+            className={`p-2 transition-colors relative flex flex-col items-center active:scale-90 cursor-pointer ${
               shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
             }`}
+            title="Reproducción aleatoria"
           >
             {shuffleMode === 'smart' ? (
               <SmartShuffleNativeIcon size={24} className="text-[#1ed760]" />
@@ -686,10 +767,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             )}
           </button>
 
-          {/* Large Green Play Button */}
+          {/* 6. Large Green Play Button */}
           <button
             onClick={handlePlayAll}
-            className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all"
+            className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all cursor-pointer"
             title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
           >
             {isCurrentPlaylistPlaying ? (

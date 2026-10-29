@@ -4,7 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
-import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 
 const DEFAULT_SHORTCUTS = [
@@ -64,16 +64,35 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   }, [storeQuickAccess]);
 
   // Keep background on the last hovered color smoothly
+  const [extractedColors, setExtractedColors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    currentShortcuts.forEach((item) => {
+      if (item.image) {
+        extractDominantColorFromImage(item.image).then((hex) => {
+          if (!cancelled && hex) {
+            setExtractedColors((prev) => ({ ...prev, [item.id]: hex }));
+          }
+        });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [currentShortcuts]);
+
   const [activeBg, setActiveBg] = useState<string>(() => {
     return currentShortcuts[0]?.color || '#5018F0';
   });
 
   // If shortcuts update and activeBg is still initial, sync gently
   useEffect(() => {
-    if (currentShortcuts[0]?.color && activeBg === '#5018F0') {
-      setActiveBg(currentShortcuts[0].color);
+    const firstColor = extractedColors[currentShortcuts[0]?.id] || currentShortcuts[0]?.color;
+    if (firstColor && activeBg === '#5018F0') {
+      setActiveBg(firstColor);
     }
-  }, [currentShortcuts]);
+  }, [currentShortcuts, extractedColors]);
 
   const currentShelves = useMemo(() => {
     if (activeTab === 'siguiendo') {
@@ -392,7 +411,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       </div>
 
       {/* Main Home Content with Smooth Transition */}
-      <div key={activeTab} className="px-6 space-y-8 mt-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <div key={activeTab} className="px-6 space-y-8 mt-2 animate-cascade-down">
         {/* Quick Access Shortcuts Grid */}
         {currentShortcuts && currentShortcuts.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
@@ -405,7 +424,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 <div
                   key={item.id}
                   onClick={() => onSelectPlaylistById(item.id)}
-                  onMouseEnter={() => setActiveBg(item.color)}
+                  onMouseEnter={() => setActiveBg(extractedColors[item.id] || item.color)}
                   className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
                 >
                   <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">

@@ -288,3 +288,31 @@ export const AudioSwitchNativeIcon: React.FC<IconProps> = ({ size = 16, classNam
     <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
   </svg>
 );
+
+export const DownloadCircleNativeIcon: React.FC<IconProps> = ({ size = 22, className = 'text-[#b3b3b3]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <circle cx="12" cy="12" r="10" />
+    <path d="M12 7v8" />
+    <path d="m8.5 11.5 3.5 3.5 3.5-3.5" />
+    <path d="M8 17h8" />
+  </svg>
+);
+
+export const DownloadActiveCircleNativeIcon: React.FC<IconProps> = ({ size = 22, className = 'text-[#1ed760]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className} {...props}>
+    <circle cx="12" cy="12" r="11" />
+    <path d="M12 7v7.5" stroke="#121212" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <path d="m8.5 11 3.5 3.5 3.5-3.5" stroke="#121212" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    <path d="M8 17h8" stroke="#121212" strokeWidth="2.4" strokeLinecap="round" />
+  </svg>
+);
+
+export const AutomixNativeIcon: React.FC<IconProps> = ({ size = 22, className = 'text-[#b3b3b3]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <line x1="3" y1="8" x2="21" y2="8" />
+    <circle cx="8" cy="8" r="2.8" fill="currentColor" stroke="none" />
+    <line x1="3" y1="16" x2="21" y2="16" />
+    <circle cx="16" cy="16" r="2.8" fill="currentColor" stroke="none" />
+  </svg>
+);
+

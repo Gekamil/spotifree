@@ -22,6 +22,7 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { handleImageError } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified } from '../../utils/lyricsService';
+import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -145,9 +146,43 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   );
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
 
+  const [displayCover, setDisplayCover] = useState<string | null>(() => {
+    if (!currentTrack) return null;
+    return getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image || null;
+  });
+
+  const handleCoverError = async () => {
+    if (!currentTrack) return;
+    const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.results?.[0]?.artworkUrl100) {
+          const hd = data.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
+          persistTrackCover(currentTrack.id, hd);
+          setDisplayCover(hd);
+          extractDominantColorFromImage(hd).then((hex) => {
+            if (hex) setExtractedModalColor(hex);
+          });
+        }
+      }
+    } catch {}
+  };
+
   useEffect(() => {
     let cancelled = false;
     if (currentTrack) {
+      const initial = getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image;
+      if (initial && !initial.includes('liked-songs')) {
+        setDisplayCover(initial);
+        extractDominantColorFromImage(initial).then((hex) => {
+          if (!cancelled && hex) setExtractedModalColor(hex);
+        });
+      } else {
+        handleCoverError();
+      }
+
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
       const cachedVid = audioEngine.getCurrentVideoId();
       if (cachedVid) {
@@ -155,13 +190,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       } else {
         audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
           if (!cancelled && vid) setVideoId(vid);
-        });
-      }
-
-      const coverImg = currentTrack.album?.images?.[0]?.url;
-      if (coverImg) {
-        extractDominantColorFromImage(coverImg).then((hex) => {
-          if (!cancelled && hex) setExtractedModalColor(hex);
         });
       }
     }
@@ -290,9 +318,41 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       </div>
 
       {/* Scrollable Player Body */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-5">
-        {/* Cambiar a vídeo / Cambiar a audio pill */}
-        <div className="flex items-center justify-center pt-1">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4">
+        {/* Large Artwork or Live Video */}
+        <div className="flex items-center justify-center pt-2 pb-1">
+          {isVideoMode && videoId ? (
+            <div className="w-full max-w-[340px] aspect-video rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] bg-black relative border border-white/10">
+              <iframe
+                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&modestbranding=1&rel=0`}
+                title={currentTrack.name}
+                className="w-full h-full border-0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+              />
+            </div>
+          ) : (
+            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424]">
+              {displayCover ? (
+                <img
+                  src={displayCover}
+                  alt={currentTrack.name}
+                  onError={handleCoverError}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white/40">
+                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                  </svg>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Cambiar a vídeo / Cambiar a audio pill - POSITIONED DIRECTLY BELOW ARTWORK AND ABOVE SONG TITLE */}
+        <div className="flex items-center justify-center -my-0.5">
           <button
             onClick={() => setIsVideoMode(!isVideoMode)}
             className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
@@ -309,38 +369,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               </>
             )}
           </button>
-        </div>
-
-        {/* Large Artwork or Live Video */}
-        <div className="flex items-center justify-center pt-1 pb-1">
-          {isVideoMode && videoId ? (
-            <div className="w-full max-w-[340px] aspect-video rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] bg-black relative border border-white/10">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=1&playsinline=1&modestbranding=1&rel=0`}
-                title={currentTrack.name}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-              />
-            </div>
-          ) : (
-            <div className="w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#242424]">
-              {coverUrl ? (
-                <img
-                  src={coverUrl}
-                  alt={currentTrack.name}
-                  onError={handleImageError}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40">
-                  <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                  </svg>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Title & Artist & Like */}

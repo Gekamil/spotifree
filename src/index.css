@@ -164,3 +164,44 @@
   white-space: nowrap;
   animation: spotifyMarqueeSmooth 8s ease-in-out infinite;
 }
+
+/* Spotify Authentic Top-to-Bottom Cascade Reveal Animation */
+@keyframes spotifyCascadeDown {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  60% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cascade-down {
+  animation: spotifyCascadeDown 0.38s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes spotifyCascadeItem {
+  0% {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-cascade-item {
+  animation: spotifyCascadeItem 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.cascade-delay-1 { animation-delay: 0.04s; }
+.cascade-delay-2 { animation-delay: 0.08s; }
+.cascade-delay-3 { animation-delay: 0.12s; }
+.cascade-delay-4 { animation-delay: 0.16s; }
+.cascade-delay-5 { animation-delay: 0.2s; }
+

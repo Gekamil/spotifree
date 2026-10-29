@@ -11,10 +11,11 @@ import { MobileSearchView } from './MobileSearchView';
 import { MobileCreateSheet } from './MobileCreateSheet';
 import { MobileProfileView } from './MobileProfileView';
 import { MobileSettingsView } from './MobileSettingsView';
+import { MobileAddLibraryItemsModal, type LibraryCandidateItem } from './MobileAddLibraryItemsModal';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
-import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 
 export const MobileLayout: React.FC = () => {
@@ -27,6 +28,7 @@ export const MobileLayout: React.FC = () => {
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
 
   const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
@@ -165,6 +167,12 @@ export const MobileLayout: React.FC = () => {
     const color = resolveVibrantColor(cleanId, customName || cleanId);
     setLastVibrantColor(color);
 
+    if (customImage) {
+      extractDominantColorFromImage(customImage).then((hex) => {
+        if (hex) setLastVibrantColor(hex);
+      });
+    }
+
     const cached = useSpotifyDataStore.getState().playlistDetailsCache[cleanId];
     if (cached) {
       setSelectedPlaylist(cached);
@@ -193,6 +201,42 @@ export const MobileLayout: React.FC = () => {
     setMobileTab('playlist');
   };
 
+  const handleAddLibraryItems = (items: LibraryCandidateItem[]) => {
+    const currentPlaylists = useSpotifyDataStore.getState().playlists;
+    let savedList: string[] = [];
+    try {
+      const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
+      if (raw) savedList = JSON.parse(raw);
+    } catch {}
+
+    items.forEach((item) => {
+      if (!savedList.includes(item.id)) {
+        savedList.push(item.id);
+      }
+      if (!currentPlaylists.some((p) => p.id === item.id)) {
+        const isArt = item.type === 'artist';
+        const newPl: Playlist = {
+          id: item.id,
+          name: item.name,
+          description: isArt ? 'Artista oficial' : 'Playlist añadida a tu biblioteca',
+          images: [{ url: item.image, height: 300, width: 300 }],
+          owner: {
+            id: isArt ? item.id : 'spotify',
+            display_name: isArt ? 'Artista' : 'Spotify',
+          },
+          tracks: { href: '', total: 20, items: [] },
+          type: (isArt ? 'artist' : 'playlist') as any,
+          uri: `spotify:${isArt ? 'artist' : 'playlist'}:${item.id}`,
+        } as any;
+        useSpotifyDataStore.getState().addCustomPlaylist(newPl);
+      }
+    });
+
+    try {
+      window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(savedList));
+    } catch {}
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#121212] text-white overflow-hidden font-['SpotifyMixUI'] select-none relative">
       {/* Scrollable Center Content */}
@@ -200,7 +244,7 @@ export const MobileLayout: React.FC = () => {
         {/* TAB 1: HOME */}
         {mobileTab === 'home' && (
           <div
-            className="min-h-full transition-colors duration-500"
+            className="min-h-full transition-colors duration-500 animate-cascade-down"
             style={{
               background: `linear-gradient(180deg, ${lastVibrantColor}cc 0%, rgba(18, 18, 18, 0.98) 320px, #121212 100%)`,
             }}
@@ -334,14 +378,14 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 2: SEARCH */}
         {mobileTab === 'search' && (
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-4 animate-cascade-down">
             <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
           </div>
         )}
 
         {/* TAB 3: LIBRARY */}
         {mobileTab === 'library' && (
-          <div className="p-4 space-y-4">
+          <div className="p-4 space-y-4 animate-cascade-down">
             {/* Header */}
             <div className="flex items-center justify-between pt-2">
               <div className="flex items-center gap-3">
@@ -525,6 +569,26 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     );
                   })}
+
+                {/* Spotify "AÑADIR ELEMENTOS" Card at the bottom of the Library list */}
+                <div
+                  onClick={() => setIsAddLibraryModalOpen(true)}
+                  className="mt-4 p-4 border border-dashed border-white/20 hover:border-white/40 active:border-white rounded-xl flex items-center justify-center gap-3.5 bg-white/[0.04] hover:bg-white/[0.08] active:bg-white/[0.14] cursor-pointer transition-all active:scale-[0.99] group shadow-sm"
+                >
+                  <div className="w-12 h-12 rounded-full bg-white/10 group-hover:bg-white/20 flex items-center justify-center text-white transition-colors">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
+                    </svg>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-black text-white text-sm font-['SpotifyMixUITitle']">
+                      Añadir elementos
+                    </span>
+                    <span className="text-xs text-[#b3b3b3]">
+                      Busca playlists y cantantes para tu biblioteca
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
           </div>
@@ -532,31 +596,37 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 4: PLAYLIST VIEW */}
         {mobileTab === 'playlist' && selectedPlaylist && (
-          <MobilePlaylistView
-            playlist={selectedPlaylist}
-            onBack={() => setMobileTab('home')}
-            onSelectPlaylistById={handleSelectPlaylistById}
-          />
+          <div className="animate-cascade-down min-h-full">
+            <MobilePlaylistView
+              playlist={selectedPlaylist}
+              onBack={() => setMobileTab('home')}
+              onSelectPlaylistById={handleSelectPlaylistById}
+            />
+          </div>
         )}
 
         {/* TAB 5: DEDICATED SPOTIFY MOBILE PROFILE VIEW */}
         {mobileTab === 'profile' && (
-          <MobileProfileView
-            onBack={() => setMobileTab('home')}
-            onOpenSettings={() => setMobileTab('settings')}
-            onSelectPlaylist={(pl) => {
-              setSelectedPlaylist(pl);
-              setMobileTab('playlist');
-            }}
-          />
+          <div className="animate-cascade-down min-h-full">
+            <MobileProfileView
+              onBack={() => setMobileTab('home')}
+              onOpenSettings={() => setMobileTab('settings')}
+              onSelectPlaylist={(pl) => {
+                setSelectedPlaylist(pl);
+                setMobileTab('playlist');
+              }}
+            />
+          </div>
         )}
 
         {/* TAB 6: DEDICATED SPOTIFY MOBILE SETTINGS VIEW */}
         {mobileTab === 'settings' && (
-          <MobileSettingsView
-            onBack={() => setMobileTab('home')}
-            onOpenProfile={() => setMobileTab('profile')}
-          />
+          <div className="animate-cascade-down min-h-full">
+            <MobileSettingsView
+              onBack={() => setMobileTab('home')}
+              onOpenProfile={() => setMobileTab('profile')}
+            />
+          </div>
         )}
       </div>
 
@@ -586,6 +656,14 @@ export const MobileLayout: React.FC = () => {
         }}
         onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
         isCreateOpen={isCreateOpen}
+      />
+
+      {/* Spotify Mobile Add Items to Library Modal */}
+      <MobileAddLibraryItemsModal
+        isOpen={isAddLibraryModalOpen}
+        onClose={() => setIsAddLibraryModalOpen(false)}
+        onAddItems={handleAddLibraryItems}
+        existingIds={playlists.map((p) => p.id)}
       />
 
       {/* Spotify Mobile Creation Bottom Sheet */}

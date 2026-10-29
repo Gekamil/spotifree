@@ -556,7 +556,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const themeColor = extractedThemeColor;
 
   return (
-    <div className="select-none min-h-full pb-20 relative bg-[#121212]">
+    <div className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
       {/* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */}
       <div
         className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-700 overflow-hidden"
