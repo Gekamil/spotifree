@@ -4,8 +4,10 @@ import {
   PlayNativeIcon,
   PauseNativeIcon,
   ShuffleNativeIcon,
+  SmartShuffleNativeIcon,
   VerifiedArtistNativeIcon,
   CheckCircleNativeIcon,
+  PlusCircleNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -84,7 +86,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   } = usePlayerStore();
 
   const { openContextMenu, openEditPlaylistModal } = useUIStore();
-  const user = useSpotifyDataStore((s) => s.user);
+  const { user, playlists: allUserPlaylists } = useSpotifyDataStore();
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
@@ -143,19 +145,33 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   };
 
   // Library Saved status (+ / ✓)
-  const [isSavedInLibrary, setIsSavedInLibrary] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
-      if (saved) {
-        const list: string[] = JSON.parse(saved);
-        if (list.includes(playlist.id)) return true;
-      }
-      const currentLists = useSpotifyDataStore.getState().playlists;
-      return currentLists.some((p) => p.id === playlist.id);
-    } catch {}
+  const checkIsInLibrary = (id: string): boolean => {
+    if (!id) return false;
+    const clean = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
+    if (id === 'liked-songs' || id === 'collection:tracks' || clean === 'liked-songs') return true;
+    if (allUserPlaylists && allUserPlaylists.some((p) => p.id === id || p.id === clean)) return true;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
+        if (saved) {
+          const list: string[] = JSON.parse(saved);
+          if (list.includes(id) || list.includes(clean)) return true;
+        }
+        const userPlaylistsRaw = window.localStorage.getItem('spotifree_user_playlists');
+        if (userPlaylistsRaw) {
+          const list = JSON.parse(userPlaylistsRaw);
+          if (Array.isArray(list) && list.some((p: any) => p.id === id || p.id === clean)) return true;
+        }
+      } catch {}
+    }
     return false;
-  });
+  };
+
+  const [isSavedInLibrary, setIsSavedInLibrary] = useState<boolean>(() => checkIsInLibrary(playlist.id));
+
+  useEffect(() => {
+    setIsSavedInLibrary(checkIsInLibrary(playlist.id));
+  }, [playlist.id, allUserPlaylists]);
 
   const handleToggleLibrary = () => {
     const next = !isSavedInLibrary;
@@ -768,12 +784,25 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           {/* Shuffle button */}
           <button
             onClick={toggleShuffle}
-            className={`p-1.5 transition-colors ${
-              isShuffle ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+            className={`p-1.5 transition-colors relative flex flex-col items-center ${
+              shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
             }`}
-            title="Habilitar la reproducción aleatoria"
+            title={
+              shuffleMode === 'smart'
+                ? 'Aleatorio inteligente activado'
+                : shuffleMode === 'all'
+                ? 'Aleatorio activado'
+                : 'Habilitar la reproducción aleatoria'
+            }
           >
-            <ShuffleNativeIcon size={20} />
+            {shuffleMode === 'smart' ? (
+              <SmartShuffleNativeIcon size={20} className="text-[#1ed760]" />
+            ) : (
+              <ShuffleNativeIcon size={20} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+            )}
+            {shuffleMode !== 'off' && (
+              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
+            )}
           </button>
 
           {/* Add to Library / Checkmark toggle button (+ / ✓) */}
@@ -786,14 +815,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               title={isSavedInLibrary ? "Guardada en Tu biblioteca (clic para eliminar)" : "Añadir a Tu biblioteca"}
             >
               {isSavedInLibrary ? (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12m16.398-2.38a1 1 0 0 0-1.414-1.413l-6.011 6.01-1.894-1.893a1 1 0 0 0-1.414 1.414l3.308 3.308z" />
-                </svg>
+                <CheckCircleNativeIcon size={24} className="text-[#1ed760]" />
               ) : (
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 8v8m-4-4h8" />
-                </svg>
+                <PlusCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
               )}
             </button>
           )}

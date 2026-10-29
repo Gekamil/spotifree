@@ -27,6 +27,8 @@ export interface Track {
   added_by?: string | { id?: string; name?: string; avatarUrl?: string };
   playlistId?: string;
   preview_url?: string | null;
+  isSmartRecommendation?: boolean;
+  canvasUrl?: string | null;
 }
 
 export interface Playlist {

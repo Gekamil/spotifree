@@ -313,6 +313,7 @@ class AudioEngine {
 
         this.isCrossfading = false;
         this.preloadedNext = null;
+        this.startProgressTicker();
       }
     }, 60);
   }
@@ -604,9 +605,17 @@ class AudioEngine {
           if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
             this.ytPlayer.setVolume(Math.round(masterVolume * 100));
           }
-          state.completeCrossfadeTrack(next);
+          let elapsedSeconds = 0;
+          if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
+            const ct = this.ytPlayer.getCurrentTime();
+            if (isFinite(ct) && ct > 0) elapsedSeconds = ct;
+          } else if (this.activeEngine === 'html5' && this.audio && isFinite(this.audio.currentTime) && this.audio.currentTime > 0) {
+            elapsedSeconds = this.audio.currentTime;
+          }
+          state.completeCrossfadeTrack(next, Math.round(elapsedSeconds * 1000));
           this.isCrossfading = false;
           this.preloadedNext = null;
+          this.startProgressTicker();
           return;
         }
       }
@@ -658,50 +667,71 @@ class AudioEngine {
   }
 
   private setupHtml5Listeners() {
-    this.audio.addEventListener('timeupdate', () => {
-      if (this.activeEngine === 'html5' && !this.isSeeking) {
-        const cur = this.audio.currentTime;
-        usePlayerStore.getState().setProgress(cur * 1000);
-        const dur = this.audio.duration;
-        if (dur && isFinite(dur)) {
-          this.checkCrossfade(cur, dur);
+    this.audios.forEach((audioEl, idx) => {
+      audioEl.addEventListener('timeupdate', () => {
+        if (this.activeEngine === 'html5' && this.activeAudioIndex === idx && !this.isSeeking) {
+          const cur = audioEl.currentTime;
+          usePlayerStore.getState().setProgress(cur * 1000);
+          const dur = audioEl.duration;
+          if (dur && isFinite(dur)) {
+            this.checkCrossfade(cur, dur);
+          }
         }
-      }
-    });
+      });
 
-    this.audio.addEventListener('durationchange', () => {
-      if (this.activeEngine === 'html5' && this.audio.duration && isFinite(this.audio.duration) && this.audio.duration > 0) {
-        usePlayerStore.getState().setDuration(this.audio.duration * 1000);
-      } else if (this.activeEngine === 'html5') {
-        // Streaming source returns Infinity — fall back to track metadata duration
-        const trackDur = usePlayerStore.getState().currentTrack?.duration_ms;
-        if (trackDur && trackDur > 0) {
-          usePlayerStore.getState().setDuration(trackDur);
+      audioEl.addEventListener('durationchange', () => {
+        if (this.activeEngine === 'html5' && this.activeAudioIndex === idx && audioEl.duration && isFinite(audioEl.duration) && audioEl.duration > 0) {
+          usePlayerStore.getState().setDuration(audioEl.duration * 1000);
+        } else if (this.activeEngine === 'html5' && this.activeAudioIndex === idx) {
+          const trackDur = usePlayerStore.getState().currentTrack?.duration_ms;
+          if (trackDur && trackDur > 0) {
+            usePlayerStore.getState().setDuration(trackDur);
+          }
         }
-      }
-    });
+      });
 
-    this.audio.addEventListener('ended', () => {
-      if (this.activeEngine !== 'html5') return;
-      const state = usePlayerStore.getState();
-      if (state.repeatMode === 'one') {
-        this.audio.currentTime = 0;
-        this.audio.play().catch(() => {});
-      } else {
-        state.nextTrack();
-      }
-    });
+      audioEl.addEventListener('ended', () => {
+        if (this.activeEngine !== 'html5' || this.activeAudioIndex !== idx) return;
+        const state = usePlayerStore.getState();
+        if (this.isCrossfading) {
+          const next = this.preloadedNext?.track || state.getNextTrack?.();
+          if (next) {
+            if (this.crossfadeInterval !== null) {
+              clearInterval(this.crossfadeInterval);
+              this.crossfadeInterval = null;
+            }
+            this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
+            this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
+            this.currentTrackId = next.id;
+            const masterVolume = state.isMuted ? 0 : state.volume;
+            this.audio.volume = Math.max(0, Math.min(1, masterVolume));
+            const elapsedMs = Math.round((this.audio.currentTime || 0) * 1000);
+            state.completeCrossfadeTrack(next, elapsedMs);
+            this.isCrossfading = false;
+            this.preloadedNext = null;
+            this.startProgressTicker();
+            return;
+          }
+        }
+        if (state.repeatMode === 'one') {
+          audioEl.currentTime = 0;
+          audioEl.play().catch(() => {});
+        } else {
+          state.nextTrack();
+        }
+      });
 
-    this.audio.addEventListener('play', () => {
-      if (this.activeEngine === 'html5' && !usePlayerStore.getState().isPlaying) {
-        usePlayerStore.setState({ isPlaying: true });
-      }
-    });
+      audioEl.addEventListener('play', () => {
+        if (this.activeEngine === 'html5' && this.activeAudioIndex === idx && !usePlayerStore.getState().isPlaying) {
+          usePlayerStore.setState({ isPlaying: true });
+        }
+      });
 
-    this.audio.addEventListener('pause', () => {
-      if (this.activeEngine === 'html5' && usePlayerStore.getState().isPlaying) {
-        usePlayerStore.setState({ isPlaying: false });
-      }
+      audioEl.addEventListener('pause', () => {
+        if (this.activeEngine === 'html5' && this.activeAudioIndex === idx && usePlayerStore.getState().isPlaying && !this.isCrossfading && !this.isTransitioning) {
+          usePlayerStore.setState({ isPlaying: false });
+        }
+      });
     });
   }
 
@@ -1068,6 +1098,14 @@ class AudioEngine {
     const targetVol = isMuted ? 0 : volume;
 
     if (this.activeEngine === 'youtube') {
+      const currentTrack = usePlayerStore.getState().currentTrack;
+      if (!this.currentVideoId && currentTrack) {
+        const artistName = currentTrack.artists?.[0]?.name || '';
+        const query = `${currentTrack.name} ${artistName}`.trim();
+        const startSec = Math.floor((usePlayerStore.getState().progressMs || 0) / 1000);
+        this.playTrack(currentTrack.id, query, startSec);
+        return;
+      }
       if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
         try {
           if (typeof this.ytPlayer.unMute === 'function') {

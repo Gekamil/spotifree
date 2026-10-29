@@ -79,6 +79,7 @@ interface PlayerState {
   getNextTrack: () => Track | null;
   completeCrossfadeTrack: (track: Track, initialProgressMs?: number) => void;
   triggerAutoplaySimilar: (track: Track) => Promise<void>;
+  triggerSmartShuffleRecommendation: (track: Track) => Promise<void>;
   previousTrack: () => void;
   setProgress: (ms: number) => void;
   setDuration: (ms: number) => void;
@@ -257,6 +258,9 @@ const store = create<PlayerState>((set, get) => ({
 
     if (nextTrackCandidate) {
       get().playTrack(nextTrackCandidate);
+      if (get().shuffleMode === 'smart') {
+        get().triggerSmartShuffleRecommendation(nextTrackCandidate);
+      }
     }
   },
 
@@ -280,6 +284,32 @@ const store = create<PlayerState>((set, get) => ({
       console.warn('[Autoplay] Failed to fetch similar tracks:', err);
     }
     set({ isPlaying: false, progressMs: 0 });
+  },
+
+  triggerSmartShuffleRecommendation: async (track: Track) => {
+    try {
+      const { searchSpotify } = await import('../services/spotifyApi');
+      const artist = track.artists?.[0]?.name || track.name;
+      const res = await searchSpotify(artist);
+      const existingIds = new Set(get().queue.map((t) => t.id));
+      existingIds.add(track.id);
+      const items: Track[] = res?.tracks?.items || [];
+      const candidate = items.find((t: Track) => !existingIds.has(t.id));
+      if (candidate) {
+        const smartTrack: Track = {
+          ...candidate,
+          isSmartRecommendation: true,
+        };
+        const currentQueue = get().queue;
+        const currentIdx = get().currentTrack ? currentQueue.findIndex((t) => t.id === get().currentTrack?.id) : -1;
+        const insertIdx = currentIdx >= 0 ? currentIdx + 1 : currentQueue.length;
+        set({
+          queue: [...currentQueue.slice(0, insertIdx), smartTrack, ...currentQueue.slice(insertIdx)],
+        });
+      }
+    } catch (e) {
+      console.warn('[SmartShuffle] Failed to inject recommendation:', e);
+    }
   },
 
   getNextTrack: (): Track | null => {
@@ -338,6 +368,14 @@ const store = create<PlayerState>((set, get) => ({
           artwork: getMediaSessionArtwork(resolveTrackCover(track)),
         });
         navigator.mediaSession.playbackState = 'playing';
+        if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
+          (navigator.mediaSession as any).setPositionState({
+            duration: Math.max(1, track.duration_ms / 1000),
+            playbackRate: 1,
+            position: Math.max(0, initialProgressMs / 1000),
+          });
+          lastMediaSessionPositionUpdate = Date.now();
+        }
       } catch {}
     }
   },
@@ -422,12 +460,23 @@ const store = create<PlayerState>((set, get) => ({
     set((state) => {
       const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
       const isShuffle = nextShuffle !== 'off';
+      if (nextShuffle === 'off') {
+        return {
+          shuffleMode: nextShuffle,
+          isShuffle,
+          playedInShuffle: [],
+          queue: state.queue.filter((t: any) => !t.isSmartRecommendation),
+        };
+      }
       return {
         shuffleMode: nextShuffle,
         isShuffle,
         playedInShuffle: state.currentTrack && isShuffle ? [state.currentTrack.id] : [],
       };
     });
+    if (get().shuffleMode === 'smart' && get().currentTrack) {
+      get().triggerSmartShuffleRecommendation(get().currentTrack!);
+    }
   },
 
   toggleRepeat: () => {

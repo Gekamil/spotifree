@@ -20,6 +20,7 @@ import {
   EditNativeIcon,
   TrashNativeIcon,
   PlusCircleNativeIcon,
+  CheckCircleNativeIcon,
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
@@ -139,17 +140,32 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   });
 
   const [loading, setLoading] = useState(false);
-  const [isSavedInLibrary, setIsSavedInLibrary] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
-      if (saved) {
-        const list: string[] = JSON.parse(saved);
-        if (list.includes(playlist.id)) return true;
-      }
-    } catch {}
+  const checkIsInLibrary = (id: string, clean: string): boolean => {
+    if (!id) return false;
+    if (id === 'liked-songs' || id === 'collection:tracks' || clean === 'liked-songs') return true;
+    if (allUserPlaylists && allUserPlaylists.some((p) => p.id === id || p.id === clean)) return true;
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
+        if (saved) {
+          const list: string[] = JSON.parse(saved);
+          if (list.includes(id) || list.includes(clean)) return true;
+        }
+        const userPlaylistsRaw = window.localStorage.getItem('spotifree_user_playlists');
+        if (userPlaylistsRaw) {
+          const list = JSON.parse(userPlaylistsRaw);
+          if (Array.isArray(list) && list.some((p: any) => p.id === id || p.id === clean)) return true;
+        }
+      } catch {}
+    }
     return false;
-  });
+  };
+
+  const [isSavedInLibrary, setIsSavedInLibrary] = useState<boolean>(() => checkIsInLibrary(playlist.id, cleanId));
+
+  useEffect(() => {
+    setIsSavedInLibrary(checkIsInLibrary(playlist.id, cleanId));
+  }, [playlist.id, cleanId, allUserPlaylists]);
 
   // Track search state for empty lists
   const [addSearchQuery, setAddSearchQuery] = useState('');
@@ -806,12 +822,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             <button
               onClick={handleToggleLibrary}
               className="text-white hover:scale-105 active:scale-90 transition-transform cursor-pointer"
-              title={isSavedInLibrary ? 'Guardada en tu biblioteca' : 'Añadir a tu biblioteca'}
+              title={isSavedInLibrary ? 'Guardada en tu biblioteca (clic para eliminar)' : 'Añadir a tu biblioteca'}
             >
               {isSavedInLibrary ? (
-                <CheckTrackNativeIcon size={26} className="text-[#1ed760]" />
+                <CheckCircleNativeIcon size={26} className="text-[#1ed760]" />
               ) : (
-                <AddTrackNativeIcon size={26} className="text-white/80 hover:text-white" />
+                <PlusCircleNativeIcon size={26} className="text-white/80 hover:text-white" />
               )}
             </button>
           )}
