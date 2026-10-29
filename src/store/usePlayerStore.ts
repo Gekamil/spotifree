@@ -413,11 +413,31 @@ export function registerMediaSessionHandlers() {
       }
     });
 
-    // Null out seekbackward/seekforward so Android Chrome & Brave dedicate
-    // notification action slots to PREVIOUS TRACK (⏮) and NEXT TRACK (⏭)
+    // Register seekbackward (la flecha curva hacia atrás ↺ 10) and seekforward (↻ 10)
+    navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+      const skip = details.seekOffset || 10;
+      const currentSec = usePlayerStore.getState().progressMs / 1000;
+      const targetSec = Math.max(0, currentSec - skip);
+      usePlayerStore.getState().setProgress(targetSec * 1000);
+      const engine = getEngine();
+      if (engine && typeof engine.seek === 'function') engine.seek(targetSec);
+    });
+
+    navigator.mediaSession.setActionHandler('seekforward', (details) => {
+      const skip = details.seekOffset || 10;
+      const currentSec = usePlayerStore.getState().progressMs / 1000;
+      const durSec = usePlayerStore.getState().durationMs / 1000;
+      const targetSec = Math.min(durSec > 0 ? durSec : currentSec + skip, currentSec + skip);
+      usePlayerStore.getState().setProgress(targetSec * 1000);
+      const engine = getEngine();
+      if (engine && typeof engine.seek === 'function') engine.seek(targetSec);
+    });
+
+    // Register shuffle action if supported by the browser / platform
     try {
-      (navigator.mediaSession as any).setActionHandler('seekbackward', null);
-      (navigator.mediaSession as any).setActionHandler('seekforward', null);
+      (navigator.mediaSession as any).setActionHandler('shuffle', () => {
+        usePlayerStore.getState().toggleShuffle();
+      });
     } catch {}
 
     navigator.mediaSession.setActionHandler('stop', () => {

@@ -19,6 +19,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [cookieInput, setCookieInput] = useState('');
 
   useEffect(() => {
     const acc = getSavedSpotifreeAccount();
@@ -126,6 +127,33 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
     }
   };
 
+  const handleSaveCookie = async () => {
+    if (!currentAccount || !cookieInput.trim()) return;
+    setIsLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const cleanCookie = cookieInput.trim();
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('user_spotify_cookie', cleanCookie);
+      }
+      const updated = await syncSpotifreeAccount({
+        email: currentAccount.email,
+        spotifyCookie: cleanCookie,
+      });
+      if (updated) {
+        setCurrentAccount(updated);
+        setMessage('✓ Cookie vinculada y guardada en tu cuenta.');
+        setCookieInput('');
+        setTimeout(() => setMessage(null), 3500);
+      }
+    } catch {
+      setError('Error al guardar la cookie.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogout = () => {
     saveCurrentSpotifreeAccount(null);
     setCurrentAccount(null);
@@ -162,7 +190,38 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           <p className="text-xs text-red-400 mb-2">{error}</p>
         )}
 
-        <div className="grid grid-cols-2 gap-2 mt-1">
+        {/* Vincular Cookie de Spotify a esta cuenta */}
+        <div className="pt-3 pb-1 border-t border-white/10 space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-white">Cookie de Spotify (sp_dc)</span>
+            {currentAccount.spotifyCookie ? (
+              <span className="text-[10px] text-[#1ed760] font-bold">✓ Vinculada a tu cuenta</span>
+            ) : (
+              <span className="text-[10px] text-[#b3b3b3]">No vinculada</span>
+            )}
+          </div>
+          <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
+            Pega aquí tu cookie para vincular tus playlists privadas de Spotify. Se sincronizará automáticamente en todos tus dispositivos.
+          </p>
+          <div className="flex gap-2">
+            <input
+              type="password"
+              placeholder={currentAccount.spotifyCookie ? "•••••••••••••••• (Guardada)" : "Pega tu cookie sp_dc..."}
+              value={cookieInput}
+              onChange={(e) => setCookieInput(e.target.value)}
+              className="flex-1 bg-[#121212] border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
+            />
+            <button
+              onClick={handleSaveCookie}
+              disabled={isLoading || !cookieInput.trim()}
+              className="px-4 py-2 rounded-lg bg-white hover:bg-white/90 text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer shadow"
+            >
+              Guardar
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 mt-2">
           <button
             onClick={handleManualSync}
             disabled={isLoading}

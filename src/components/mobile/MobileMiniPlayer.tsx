@@ -35,8 +35,6 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
     previousTrack,
     progressMs,
     durationMs,
-    isShuffle,
-    toggleShuffle,
     likedTrackIds,
     toggleLike,
   } = usePlayerStore();
@@ -156,22 +154,6 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
       {/* Right Controls: Shuffle (a la izquierda) + Device Connect + Meter en playlist/Like + Play/Pause */}
       <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {/* Shuffle / Al azar button */}
-        <button
-          onClick={toggleShuffle}
-          className={`w-8 h-8 flex items-center justify-center relative active:scale-90 transition-transform cursor-pointer ${
-            isShuffle ? 'text-[#1ed760]' : 'text-white/60 hover:text-white'
-          }`}
-          title={isShuffle ? 'Aleatorio activado' : 'Activar aleatorio'}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
-          </svg>
-          {isShuffle && (
-            <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
-          )}
-        </button>
-
         {/* Device indicator button with genuine Spotify Connect icon */}
         <button
           className="w-8 h-8 flex items-center justify-center text-[#1ed760] hover:scale-105 active:scale-95 transition-transform"
