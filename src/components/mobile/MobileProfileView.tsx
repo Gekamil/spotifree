@@ -11,6 +11,7 @@ import {
   saveAccount,
   type SavedAccount,
 } from '../../utils/userAccounts';
+import { MobileEditProfileModal } from './MobileEditProfileModal';
 
 interface MobileProfileViewProps {
   onBack: () => void;
@@ -29,6 +30,20 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const { openLoginModal } = useUIStore();
 
   const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => getSavedAccounts());
+  const [customProfile, setCustomProfile] = useState<{
+    displayName?: string;
+    avatarUrl?: string;
+    bannerUrl?: string;
+  }>(() => {
+    if (typeof window === 'undefined') return {};
+    try {
+      const saved = window.localStorage.getItem('spotifree_custom_profile');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
 
   const userPlaylists = playlists.filter(
     (p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs' && p.type !== 'folder'
@@ -37,10 +52,29 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const topArtists = getTopArtists(5);
   const topTracks = getTopTracks(5);
 
-  const avatarUrl = user?.images?.[0]?.url;
-  const displayName = user?.display_name || 'Usuario de Spotify';
+  const avatarUrl = customProfile.avatarUrl || user?.images?.[0]?.url;
+  const displayName = customProfile.displayName || user?.display_name || 'Usuario de Spotify';
+  const bannerUrl = customProfile.bannerUrl;
   const followersCount = user?.followers?.total || 0;
   const profileColor = resolveVibrantColor(user?.id || 'profile', displayName);
+
+  const handleSaveProfile = (data: { displayName: string; avatarUrl?: string; bannerUrl?: string }) => {
+    setCustomProfile(data);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('spotifree_custom_profile', JSON.stringify(data));
+      } catch {}
+    }
+    if (user) {
+      useSpotifyDataStore.setState({
+        user: {
+          ...user,
+          display_name: data.displayName,
+          images: data.avatarUrl ? [{ url: data.avatarUrl }] : user.images,
+        },
+      });
+    }
+  };
 
   const handleTrackClick = (trk: any) => {
     const trackObj: Track = {
@@ -127,15 +161,28 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         </button>
       </div>
 
-      {/* Hero Header with Profile Ambient Gradient */}
+      {/* Hero Header with Profile Ambient Gradient or Custom Banner */}
       <div
         className="px-6 pt-6 pb-8 flex flex-col items-center text-center relative overflow-hidden"
         style={{
-          background: `linear-gradient(180deg, ${profileColor}88 0%, rgba(18, 18, 18, 0.95) 280px, #121212 100%)`,
+          background: bannerUrl
+            ? undefined
+            : `linear-gradient(180deg, ${profileColor}88 0%, rgba(18, 18, 18, 0.95) 280px, #121212 100%)`,
         }}
       >
+        {bannerUrl && (
+          <>
+            <img
+              src={bannerUrl}
+              alt="Banner"
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-[#121212]/75 to-[#121212] pointer-events-none" />
+          </>
+        )}
+
         {/* Avatar */}
-        <div className="w-28 h-28 rounded-full overflow-hidden shadow-2xl bg-[#242424] border-2 border-white/10 flex items-center justify-center shrink-0">
+        <div className="w-28 h-28 rounded-full overflow-hidden shadow-2xl bg-[#242424] border-2 border-white/10 flex items-center justify-center shrink-0 z-10">
           {avatarUrl ? (
             <img
               src={avatarUrl}
@@ -151,31 +198,22 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         </div>
 
         {/* Display Name */}
-        <h1 className="text-2xl font-black text-white mt-4 font-['SpotifyMixUITitle'] tracking-tight">
+        <h1 className="text-2xl font-black text-white mt-4 font-['SpotifyMixUITitle'] tracking-tight z-10">
           {displayName}
         </h1>
 
         {/* Followers / Stats */}
-        <p className="text-xs text-[#b3b3b3] mt-1.5 font-medium">
+        <p className="text-xs text-[#b3b3b3] mt-1.5 font-medium z-10">
           {followersCount} seguidores • 0 siguiendo
         </p>
 
         {/* Action Pills */}
-        <div className="flex items-center gap-3 mt-4">
+        <div className="flex items-center justify-center mt-4 z-10">
           <button
-            onClick={onOpenSettings}
-            className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white active:scale-95 transition-all shadow-sm"
+            onClick={() => setIsEditingProfile(true)}
+            className="px-6 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white active:scale-95 transition-all shadow-sm cursor-pointer hover:bg-white/5"
           >
             Editar perfil
-          </button>
-          <button
-            onClick={onOpenSettings}
-            className="w-9 h-9 rounded-full border border-[#727272] hover:border-white text-white flex items-center justify-center active:scale-95 transition-all shadow-sm"
-            title="Configuración"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-            </svg>
           </button>
         </div>
       </div>
@@ -390,6 +428,15 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
           </div>
         )}
       </div>
+
+      <MobileEditProfileModal
+        isOpen={isEditingProfile}
+        onClose={() => setIsEditingProfile(false)}
+        initialDisplayName={displayName}
+        initialAvatarUrl={avatarUrl}
+        initialBannerUrl={bannerUrl}
+        onSave={handleSaveProfile}
+      />
     </div>
   );
 };

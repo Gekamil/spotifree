@@ -7,6 +7,7 @@ interface MobileHeaderProps {
   onTabChange: (tab: 'todo' | 'musica') => void;
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
+  onOpenNotifications?: () => void;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -14,6 +15,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   onTabChange,
   onOpenProfile,
   onOpenSettings,
+  onOpenNotifications,
 }) => {
   const { user, isAuthenticated } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
@@ -80,9 +82,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           </button>
         ) : (
           <button
-            onClick={onOpenProfile}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer"
-            title="Perfil"
+            onClick={onOpenNotifications || onOpenProfile}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform"
+            title="Novedades y Mensajes"
           >
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
               <path d="M8 1.5a4 4 0 0 0-4 4v3.268l-.938 1.876A1 1 0 0 0 3.956 12h8.088a1 1 0 0 0 .894-1.356L12 8.768V5.5a4 4 0 0 0-4-4zM2.5 5.5a5.5 5.5 0 1 1 11 0v3.01l1.042 2.084A2.5 2.5 0 0 1 12.044 13.5H3.956a2.5 2.5 0 0 1-2.498-2.906L2.5 8.51V5.5zM6 14.5a2 2 0 1 0 4 0H6z" />

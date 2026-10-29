@@ -25,6 +25,9 @@ dist-ssr
 
 .vercel
 *.png
+!public/apple-touch-icon.png
+!public/icon-192.png
+!public/icon-512.png
 .agents
 cookies.txt
 yt_cookies.txt

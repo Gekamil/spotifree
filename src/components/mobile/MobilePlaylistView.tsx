@@ -17,6 +17,11 @@ import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
 import {
+  getTrackCoverUrl,
+  resolveTrackCoversBatch,
+  TrackArtwork,
+} from '../../utils/trackCovers';
+import {
   getCustomLikedSongs,
   saveCustomLikedSong,
   getSavedCustomTracks,
@@ -87,6 +92,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       return cached.tracks.items;
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        const storedTracks = window.localStorage.getItem(`spotifree_playlist_tracks_${cleanId}`);
+        if (storedTracks) {
+          const parsed = JSON.parse(storedTracks);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
     }
     if (isLikedPlaylist) {
       return getCustomLikedSongs(user?.id);
@@ -236,6 +250,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           const data = await res.json();
           if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
             setTracks(data.tracks.items);
+            if (typeof window !== 'undefined') {
+              try {
+                window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(data.tracks.items));
+              } catch {}
+            }
             useSpotifyDataStore.getState().cachePlaylistDetails({
               ...playlist,
               ...data,
@@ -300,6 +319,38 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       cancelled = true;
     };
   }, [playlist.id, playlist.name, isLikedPlaylist, user?.id]);
+
+  // Batch resolve individual track covers asynchronously on mobile
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return;
+    let cancelled = false;
+
+    const playlistCover = playlist.images?.[0]?.url;
+    resolveTrackCoversBatch(tracks, playlistCover, (updates) => {
+      if (cancelled || updates.size === 0) return;
+      setTracks((prev) =>
+        prev.map((t) => {
+          if (updates.has(t.id)) {
+            const newUrl = updates.get(t.id)!;
+            return {
+              ...t,
+              album: {
+                ...t.album,
+                id: t.album?.id || `alb-${t.id}`,
+                name: t.album?.name || t.name,
+                images: [{ url: newUrl }],
+              },
+            };
+          }
+          return t;
+        })
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [tracks.length, cleanId, playlist.images]);
 
   const handleToggleLibrary = () => {
     const next = !isSavedInLibrary;
@@ -699,7 +750,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           <>
             {tracks.map((track, idx) => {
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
-              const trackCover = track.album?.images?.[0]?.url;
+              const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
               const isLiked = likedTrackIds.includes(track.id);
 
               return (
@@ -717,18 +768,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     )}
 
                     <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
-                      {trackCover ? (
-                        <img
-                          src={trackCover}
-                          alt={track.name}
-                          onError={handleImageError}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-xs text-[#b3b3b3]">
-                          {idx + 1}
-                        </div>
-                      )}
+                      <TrackArtwork
+                        src={trackCover}
+                        alt={track.name}
+                        className="w-11 h-11 rounded"
+                        size={44}
+                      />
                       {isThisPlaying && (
                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                           <div className="w-3 h-3 bg-[#1ed760] rounded-full animate-ping" />

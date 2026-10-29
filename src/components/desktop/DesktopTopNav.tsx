@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   SpotifyLogoNativeIcon,
   HomeNativeIcon,
@@ -14,6 +14,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { syncChromeSession } from '../../services/sessionSync';
 import { ProfileDropdown } from './ProfileDropdown';
+import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 
 interface DesktopTopNavProps {
   onNavigateHome: () => void;
@@ -30,6 +31,7 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
     openLoginModal,
   } = useUIStore();
 
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const { isAuthenticated, user } = useSpotifyDataStore();
 
   useEffect(() => {
@@ -176,8 +178,9 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
         {/* Novedades (Bell) */}
         <button
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 hover:scale-104 transition-all shrink-0"
-          title="Novedades"
+          onClick={() => setIsNotificationsOpen(true)}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 hover:scale-104 transition-all shrink-0 cursor-pointer"
+          title="Novedades y Mensajes"
         >
           <BellNativeIcon size={16} />
         </button>
@@ -217,6 +220,11 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
         {/* Profile Dropdown */}
         <ProfileDropdown />
       </div>
+
+      <MessagesNotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
+      />
     </header>
   );
 };

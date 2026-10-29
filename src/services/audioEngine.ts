@@ -341,18 +341,39 @@ class AudioEngine {
     }
 
     try {
-      // 1. Resolve videoId
+      // 1. Resolve videoId or direct audio stream
       let videoId = VIDEO_ID_CACHE.get(query);
+      let previewUrl: string | null = null;
+
       if (!videoId) {
-        const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-        const res = await fetch(resolveUrl);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.videoId) {
-            videoId = data.videoId;
-            persistVideoId(query, videoId!);
+        try {
+          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+          const res = await fetch(resolveUrl);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.videoId) {
+              videoId = data.videoId;
+              persistVideoId(query, videoId!);
+            } else if (data.previewUrl) {
+              previewUrl = data.previewUrl;
+            }
           }
-        }
+        } catch {}
+      }
+
+      // 2. Client-side fallback if server-side resolution failed or was challenged
+      if (!videoId && !previewUrl && typeof window !== 'undefined') {
+        try {
+          const itunesRes = await fetch(
+            `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
+          );
+          if (itunesRes.ok) {
+            const itunesData = await itunesRes.json();
+            if (itunesData.results?.[0]?.previewUrl) {
+              previewUrl = itunesData.results[0].previewUrl;
+            }
+          }
+        } catch {}
       }
 
       if (videoId) {
@@ -371,10 +392,15 @@ class AudioEngine {
             startSeconds,
           });
           this.ytPlayer.playVideo();
+          this.startBackgroundCarrier();
           usePlayerStore.setState({ isPlaying: true });
           this.startProgressTicker();
           return;
         }
+      }
+
+      if (previewUrl) {
+        return this.playDirectStream(previewUrl, startSeconds);
       }
     } catch (err: any) {
       console.warn('[AudioEngine] Native YouTube play error, attempting stream fallback:', err.message);
@@ -395,9 +421,12 @@ class AudioEngine {
           this.activeEngine = 'youtube';
           this.ytPlayer.loadVideoById({ videoId: data.videoId, startSeconds: 0 });
           this.ytPlayer.playVideo();
+          this.startBackgroundCarrier();
           usePlayerStore.setState({ isPlaying: true });
           this.startProgressTicker();
           return;
+        } else if (data.previewUrl) {
+          return this.playDirectStream(data.previewUrl, 0);
         }
       }
     } catch {}
@@ -405,7 +434,25 @@ class AudioEngine {
     this.fallbackToStream(originalQuery, 0);
   }
 
-  private fallbackToStream(query: string, startSeconds = 0) {
+  private async fallbackToStream(query: string, startSeconds = 0) {
+    try {
+      const itunesRes = await fetch(
+        `https://itunes.apple.com/search?term=${encodeURIComponent(query)}&media=music&entity=song&limit=1`
+      );
+      if (itunesRes.ok) {
+        const data = await itunesRes.json();
+        const preview = data.results?.[0]?.previewUrl;
+        if (preview) {
+          return this.playDirectStream(preview, startSeconds);
+        }
+      }
+    } catch {}
+
+    const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
+    return this.playDirectStream(streamUrl, startSeconds);
+  }
+
+  private playDirectStream(url: string, startSeconds = 0) {
     this.activeEngine = 'html5';
     this.stopProgressTicker();
     if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
@@ -417,8 +464,7 @@ class AudioEngine {
       this.audioContext.resume().catch(() => {});
     }
 
-    const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
-    this.audio.src = streamUrl;
+    this.audio.src = url;
     if (startSeconds > 0) {
       this.audio.currentTime = startSeconds;
     }
@@ -426,7 +472,8 @@ class AudioEngine {
     const { volume, isMuted } = usePlayerStore.getState();
     this.audio.volume = isMuted ? 0 : volume;
 
-    this.audio.play()
+    this.startBackgroundCarrier();
+    return this.audio.play()
       .then(() => {
         usePlayerStore.setState({ isPlaying: true });
       })

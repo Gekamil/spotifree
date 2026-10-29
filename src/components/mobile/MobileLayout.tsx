@@ -10,6 +10,7 @@ import { MobileSearchView } from './MobileSearchView';
 import { MobileCreateSheet } from './MobileCreateSheet';
 import { MobileProfileView } from './MobileProfileView';
 import { MobileSettingsView } from './MobileSettingsView';
+import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { LoginModal } from '../desktop/LoginModal';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
@@ -22,6 +23,7 @@ export const MobileLayout: React.FC = () => {
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
 
   const checkIsMobileArtist = (p: any): boolean => {
@@ -191,6 +193,7 @@ export const MobileLayout: React.FC = () => {
               onTabChange={setHomeFilter}
               onOpenProfile={() => setMobileTab('profile')}
               onOpenSettings={() => setMobileTab('settings')}
+              onOpenNotifications={() => setIsNotificationsOpen(true)}
             />
 
             {!isAuthenticated ? (
@@ -509,6 +512,12 @@ export const MobileLayout: React.FC = () => {
         onClose={() => setIsCreateOpen(false)}
         onCreatePlaylist={handleCreatePlaylist}
         defaultPlaylistNumber={playlists.length + 1}
+      />
+
+      {/* Messages / Notifications Modal */}
+      <MessagesNotificationsModal
+        isOpen={isNotificationsOpen}
+        onClose={() => setIsNotificationsOpen(false)}
       />
 
       {/* Global Login / Cookie modal */}
