@@ -24,6 +24,7 @@ interface StatsState {
   tracks: Record<string, TrackStat>;
   audioPersonality: string;
   isWrappedOpen: boolean;
+  currentUserId: string | null;
   openWrapped: () => void;
   closeWrapped: () => void;
   recordPlaybackSecond: (track: Track) => void;
@@ -31,23 +32,32 @@ interface StatsState {
   syncWithSpotifyTop: (accessToken: string) => Promise<void>;
   getTopArtists: (limit?: number) => ArtistStat[];
   getTopTracks: (limit?: number) => TrackStat[];
+  /** Load and activate stats for a specific userId (call on account switch/init) */
+  loadStatsForUser: (userId: string) => void;
+  /** Reset stats in memory and localStorage for current user (call on logout) */
+  resetStats: () => void;
 }
 
-const STORAGE_KEY = 'spotifree_user_stats';
+const STORAGE_KEY_PREFIX = 'spotifree_user_stats';
 
-function loadSavedStats() {
-  if (typeof window === 'undefined') {
-    return {
-      totalSeconds: 0,
-      totalTracksPlayed: 0,
-      artists: {},
-      tracks: {},
-      audioPersonality: 'Oyente Musical',
-    };
-  }
+function storageKeyFor(userId: string | null) {
+  return userId ? `${STORAGE_KEY_PREFIX}_${userId}` : STORAGE_KEY_PREFIX;
+}
+
+const EMPTY_STATS = {
+  totalSeconds: 0,
+  totalTracksPlayed: 0,
+  artists: {} as Record<string, ArtistStat>,
+  tracks: {} as Record<string, TrackStat>,
+  audioPersonality: 'Oyente Musical',
+};
+
+function loadSavedStats(userId: string | null = null) {
+  if (typeof window === 'undefined') return { ...EMPTY_STATS };
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const key = storageKeyFor(userId);
+    const raw = window.localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       return {
@@ -60,20 +70,15 @@ function loadSavedStats() {
     }
   } catch {}
 
-  return {
-    totalSeconds: 0,
-    totalTracksPlayed: 0,
-    artists: {},
-    tracks: {},
-    audioPersonality: 'Oyente Musical',
-  };
+  return { ...EMPTY_STATS };
 }
 
-function persistStats(data: any) {
+function persistStats(data: any, userId: string | null = null) {
   if (typeof window === 'undefined') return;
   try {
+    const key = storageKeyFor(userId);
     window.localStorage.setItem(
-      STORAGE_KEY,
+      key,
       JSON.stringify({
         totalSeconds: data.totalSeconds,
         totalTracksPlayed: data.totalTracksPlayed,
@@ -85,7 +90,12 @@ function persistStats(data: any) {
   } catch {}
 }
 
-const initial = loadSavedStats();
+// Determine initial userId from localStorage
+const initialUserId = typeof window !== 'undefined'
+  ? window.localStorage.getItem('spotifree_active_user_id') || null
+  : null;
+
+const initial = loadSavedStats(initialUserId);
 
 export const useStatsStore = create<StatsState>((set, get) => ({
   totalSeconds: initial.totalSeconds,
@@ -94,9 +104,33 @@ export const useStatsStore = create<StatsState>((set, get) => ({
   tracks: initial.tracks,
   audioPersonality: initial.audioPersonality,
   isWrappedOpen: false,
+  currentUserId: initialUserId,
 
   openWrapped: () => set({ isWrappedOpen: true }),
   closeWrapped: () => set({ isWrappedOpen: false }),
+
+  loadStatsForUser: (userId: string) => {
+    const loaded = loadSavedStats(userId);
+    set({
+      currentUserId: userId,
+      totalSeconds: loaded.totalSeconds,
+      totalTracksPlayed: loaded.totalTracksPlayed,
+      artists: loaded.artists,
+      tracks: loaded.tracks,
+      audioPersonality: loaded.audioPersonality,
+    });
+  },
+
+  resetStats: () => {
+    set({
+      currentUserId: null,
+      totalSeconds: 0,
+      totalTracksPlayed: 0,
+      artists: {},
+      tracks: {},
+      audioPersonality: 'Oyente Musical',
+    });
+  },
 
   recordPlaybackSecond: (track: Track) => {
     if (!track) return;
@@ -126,7 +160,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       };
 
       if (newSec % 10 === 0) {
-        persistStats({ ...state, ...updated });
+        persistStats({ ...state, ...updated }, state.currentUserId);
       }
 
       return updated;
@@ -174,7 +208,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
         },
       };
 
-      persistStats({ ...state, ...next });
+      persistStats({ ...state, ...next }, state.currentUserId);
       return next;
     });
   },
@@ -208,7 +242,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
         if (Object.keys(incomingArtists).length > 0) {
           set((state) => {
             const next = { ...state.artists, ...incomingArtists };
-            persistStats({ ...state, artists: next });
+            persistStats({ ...state, artists: next }, state.currentUserId);
             return { artists: next };
           });
         }
@@ -230,7 +264,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
         if (Object.keys(incomingTracks).length > 0) {
           set((state) => {
             const next = { ...state.tracks, ...incomingTracks };
-            persistStats({ ...state, tracks: next });
+            persistStats({ ...state, tracks: next }, state.currentUserId);
             return { tracks: next };
           });
         }

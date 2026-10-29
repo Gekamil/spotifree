@@ -40,6 +40,12 @@ function persistVideoId(query: string, videoId: string) {
 class AudioEngine {
   private audio: HTMLAudioElement;
   private silentCarrier: HTMLAudioElement | null = null;
+  private carrierAudio: HTMLAudioElement | null = null;
+  private carrierOscillator: OscillatorNode | null = null;
+  private carrierGain: GainNode | null = null;
+  private wakeLockSentinel: any = null;
+  private isUserInitiatedPause = false;
+
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
@@ -65,31 +71,107 @@ class AudioEngine {
     this.setupHtml5Listeners();
 
     if (typeof window !== 'undefined') {
-      try {
-        this.silentCarrier = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-        this.silentCarrier.loop = true;
-        this.silentCarrier.volume = 0.001;
-      } catch {}
+      this.initBackgroundAudioCarrier();
 
       // Unlock audio context + silent carrier on user gesture for mobile / PWA
       const unlockUserMedia = () => {
-        try {
-          if (this.audioContext && this.audioContext.state === 'suspended') {
-            this.audioContext.resume().catch(() => {});
-          }
-          if (this.silentCarrier && this.silentCarrier.paused) {
-            this.silentCarrier.play().catch(() => {});
-          }
-        } catch {}
+        this.unlockAudio();
       };
       window.addEventListener('click', unlockUserMedia, { passive: true });
       window.addEventListener('touchstart', unlockUserMedia, { passive: true });
+
+      // Keep audio alive when PWA goes to background (screen off / tab hidden / app minimized)
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          // Page went to background / screen locked
+          if (usePlayerStore.getState().isPlaying && !this.isUserInitiatedPause) {
+            this.startBackgroundCarrier();
+            // In mobile browsers (Chrome / Safari), resume YouTube if it was interrupted by visibility change
+            if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+              try {
+                const ytState = this.ytPlayer.getPlayerState?.();
+                if (ytState !== 1) {
+                  this.ytPlayer.playVideo();
+                }
+              } catch {}
+            }
+          }
+        } else {
+          // Page came to foreground / unlocked
+          try {
+            if (this.audioContext && this.audioContext.state === 'suspended') {
+              this.audioContext.resume().catch(() => {});
+            }
+            if (usePlayerStore.getState().isPlaying && !this.isUserInitiatedPause) {
+              this.startBackgroundCarrier();
+              if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+                try {
+                  const ytState = this.ytPlayer.getPlayerState?.();
+                  if (ytState !== 1) {
+                    this.ytPlayer.playVideo();
+                  }
+                } catch {}
+              }
+            }
+          } catch {}
+        }
+      });
 
       // Pre-warm YouTube IFrame API immediately in background
       setTimeout(() => {
         this.ensureYouTubeReady().catch(() => {});
       }, 50);
     }
+  }
+
+  /** Initialize continuous carrier audio stream to keep Android/iOS audio session alive in background */
+  private initBackgroundAudioCarrier() {
+    if (typeof window === 'undefined') return;
+
+    // 1. Silent HTML5 audio element loop with 1-second real WAV buffer
+    if (!this.silentCarrier) {
+      try {
+        const silent1sWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+        this.silentCarrier = new Audio(silent1sWav);
+        this.silentCarrier.loop = true;
+        this.silentCarrier.volume = 0.01;
+      } catch {}
+    }
+
+    // 2. Continuous sub-audible WebAudio stream for Android Audio Focus & iOS AVAudioSession
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextClass && !this.audioContext) {
+        this.audioContext = new AudioContextClass();
+      }
+
+      if (this.audioContext && !this.carrierOscillator) {
+        // 20Hz infrasound (completely inaudible to human ear, passes audio hardware threshold)
+        this.carrierOscillator = this.audioContext.createOscillator();
+        this.carrierOscillator.type = 'sine';
+        this.carrierOscillator.frequency.setValueAtTime(20, this.audioContext.currentTime);
+
+        this.carrierGain = this.audioContext.createGain();
+        this.carrierGain.gain.setValueAtTime(0.0001, this.audioContext.currentTime);
+        this.carrierOscillator.connect(this.carrierGain);
+        this.carrierGain.connect(this.audioContext.destination);
+
+        // Pipe to MediaStream destination and HTML5 audio element if supported
+        if (typeof this.audioContext.createMediaStreamDestination === 'function') {
+          const streamDest = this.audioContext.createMediaStreamDestination();
+          this.carrierGain.connect(streamDest);
+          if (!this.carrierAudio) {
+            this.carrierAudio = new Audio();
+            this.carrierAudio.srcObject = streamDest.stream;
+            this.carrierAudio.autoplay = true;
+            this.carrierAudio.loop = true;
+            this.carrierAudio.volume = 0.01;
+          }
+        }
+
+        this.carrierOscillator.start();
+      }
+    } catch {}
   }
 
   private ensureYouTubeReady(): Promise<void> {
@@ -104,9 +186,9 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            // Render inside active viewport without clipping so mobile browsers (iOS WebKit / Android Chrome PWA)
-            // treat the player as an active visible media source and do not freeze or suspend background playback
-            host.style.cssText = 'position:fixed;bottom:0;left:0;width:2px;height:2px;opacity:0.05;pointer-events:none;z-index:1;overflow:hidden;';
+            // Non-zero dimensions in DOM so browser power heuristics treat it as an active viewport player
+            // Positioned behind everything with negative z-index, zero interaction, and near-zero opacity
+            host.style.cssText = 'position:fixed;bottom:0;right:0;width:240px;height:240px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;transform:scale(0.1);transform-origin:bottom right;';
             document.body.appendChild(host);
           }
 
@@ -123,8 +205,8 @@ class AudioEngine {
           }
 
           this.ytPlayer = new (window as any).YT.Player('spotifree-yt-player', {
-            height: '2',
-            width: '2',
+            height: '240',
+            width: '240',
             host: 'https://www.youtube-nocookie.com',
             playerVars: {
               autoplay: 1,
@@ -145,6 +227,10 @@ class AudioEngine {
                 const { volume, isMuted } = usePlayerStore.getState();
                 if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
                   this.ytPlayer.setVolume(isMuted ? 0 : Math.round(volume * 100));
+                }
+                const iframe = document.querySelector('#spotifree-yt-player-host iframe') as HTMLIFrameElement;
+                if (iframe) {
+                  iframe.setAttribute('allow', 'autoplay; encrypted-media; picture-in-picture');
                 }
                 resolve();
               },
@@ -218,11 +304,25 @@ class AudioEngine {
       this.checkAndSkipAd();
       usePlayerStore.setState({ isPlaying: true });
       this.startProgressTicker();
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      }
     } else if (code === 2) {
-      // Ignore transient pause events fired during video loading/transitioning
-      if (!this.isTransitioning) {
+      if (this.isUserInitiatedPause) {
+        // User explicitly paused playback
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+        }
+      } else if (!this.isTransitioning && usePlayerStore.getState().isPlaying) {
+        // Pause event triggered by mobile browser background or lock-screen throttling!
+        // Immediately trigger resume to keep background audio uninterrupted
+        setTimeout(() => {
+          if (!this.isUserInitiatedPause && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+            try { this.ytPlayer.playVideo(); } catch {}
+          }
+        }, 80);
       }
     } else if (code === 3) {
       this.checkAndSkipAd();
@@ -404,6 +504,7 @@ class AudioEngine {
     this.failedVideoIds.clear();
     this.isSeeking = false;
     this.isTransitioning = true;
+    this.isUserInitiatedPause = false;
 
     // Reset progress to 0
     usePlayerStore.getState().setProgress(startSeconds * 1000);
@@ -514,15 +615,41 @@ class AudioEngine {
     }
   }
 
-  public startBackgroundCarrier() {
+  public async startBackgroundCarrier() {
+    this.initBackgroundAudioCarrier();
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+    if (this.carrierAudio && this.carrierAudio.paused) {
+      this.carrierAudio.play().catch(() => {});
+    }
     if (this.silentCarrier && this.silentCarrier.paused) {
       this.silentCarrier.play().catch(() => {});
+    }
+
+    // Acquire Screen Wake Lock on mobile devices so user can keep lyrics / player on without screen sleep
+    if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock?.request) {
+      try {
+        if (!this.wakeLockSentinel) {
+          this.wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          this.wakeLockSentinel.addEventListener('release', () => {
+            this.wakeLockSentinel = null;
+          });
+        }
+      } catch {}
     }
   }
 
   public stopBackgroundCarrier() {
+    if (this.carrierAudio && !this.carrierAudio.paused) {
+      this.carrierAudio.pause();
+    }
     if (this.silentCarrier && !this.silentCarrier.paused) {
       this.silentCarrier.pause();
+    }
+    if (this.wakeLockSentinel) {
+      try { this.wakeLockSentinel.release(); } catch {}
+      this.wakeLockSentinel = null;
     }
   }
 
@@ -542,31 +669,48 @@ class AudioEngine {
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getPlayerState === 'function') {
       const state = this.ytPlayer.getPlayerState();
       if (state === 1) { // Playing -> Pause
+        this.isUserInitiatedPause = true;
         this.ytPlayer.pauseVideo();
         this.stopBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+        }
       } else { // Paused -> Play
+        this.isUserInitiatedPause = false;
         this.ytPlayer.playVideo();
         this.startBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: true });
         this.startProgressTicker();
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+        }
       }
       return;
     }
 
     if (this.audio.paused) {
+      this.isUserInitiatedPause = false;
       this.audio.play().catch(() => {});
       this.startBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: true });
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      }
     } else {
+      this.isUserInitiatedPause = true;
       this.audio.pause();
       this.stopBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: false });
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+      }
     }
   }
 
   public pause() {
+    this.isUserInitiatedPause = true;
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try { this.ytPlayer.pauseVideo(); } catch {}
       this.stopProgressTicker();
@@ -574,9 +718,13 @@ class AudioEngine {
     this.audio.pause();
     this.stopBackgroundCarrier();
     usePlayerStore.setState({ isPlaying: false });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = 'paused'; } catch {}
+    }
   }
 
   public resume() {
+    this.isUserInitiatedPause = false;
     this.startBackgroundCarrier();
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       try {
@@ -584,11 +732,17 @@ class AudioEngine {
         this.startProgressTicker();
       } catch {}
       usePlayerStore.setState({ isPlaying: true });
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      }
       return;
     }
 
     this.audio.play().catch(() => {});
     usePlayerStore.setState({ isPlaying: true });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    }
   }
 
   public seek(seconds: number) {

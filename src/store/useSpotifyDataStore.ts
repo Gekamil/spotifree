@@ -21,6 +21,7 @@ import {
   cleanSpDc,
   fetchUserProfileFromServer,
 } from '../utils/userAccounts';
+import { useStatsStore } from './useStatsStore';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -511,6 +512,11 @@ const store = create<SpotifyDataState>((set, get) => ({
             isLoading: false,
           });
 
+          // Load per-user stats so profile stats are isolated per account
+          if (session.user?.id) {
+            try { useStatsStore.getState().loadStatsForUser(session.user.id); } catch {}
+          }
+
           // In background, refresh session data if playlists were empty
           if (!session.playlists || session.playlists.length === 0) {
             extractSpotifySessionFromCookie(userCookie).then((fresh) => {
@@ -610,6 +616,11 @@ const store = create<SpotifyDataState>((set, get) => ({
             playlistDetailsCache: cachedPlaylists,
             isLoading: false,
           });
+
+          // Load per-user stats so profile stats are isolated per account
+          if (session.user?.id) {
+            try { useStatsStore.getState().loadStatsForUser(session.user.id); } catch {}
+          }
           return;
         }
       }
@@ -707,6 +718,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       authWarning: null,
       isLoading: false,
     });
+    // Reset stats for logged-out state
+    try { useStatsStore.getState().resetStats(); } catch {}
   },
 
   refreshData: async () => {
@@ -893,6 +906,9 @@ export async function switchActiveAccount(account: import('../utils/userAccounts
     playlistDetailsCache: cachedPlaylists,
     isLoading: false,
   });
+
+  // Load stats for the newly activated account immediately
+  try { useStatsStore.getState().loadStatsForUser(account.id); } catch {}
 
   if (account.cookie && account.cookie.trim().startsWith('AQ')) {
     try {

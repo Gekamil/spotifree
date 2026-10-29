@@ -3,6 +3,31 @@ import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
 import { saveCustomLikedSong, removeCustomLikedSong } from '../utils/userStorage';
 
+function getMediaSessionArtwork(imageUrl?: string) {
+  const base = imageUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  // Ensure HD 640x640 CDN image for crisp lockscreen artwork
+  const hd = base
+    .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
+    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
+    .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
+    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
+    .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
+    .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
+    .replace('liked-songs-64.png', 'liked-songs-640.jpg')
+    .replace('liked-songs-300.png', 'liked-songs-640.jpg');
+
+  return [
+    { src: hd, sizes: '96x96' },
+    { src: hd, sizes: '128x128' },
+    { src: hd, sizes: '192x192' },
+    { src: hd, sizes: '256x256' },
+    { src: hd, sizes: '384x384' },
+    { src: hd, sizes: '512x512' },
+  ];
+}
+
+let lastMediaSessionPositionUpdate = 0;
+
 interface PlayerState {
   currentTrack: Track | null;
   isPlaying: boolean;
@@ -107,13 +132,19 @@ const store = create<PlayerState>((set, get) => ({
       try {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: track.name,
-          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotify',
-          album: track.album?.name || '',
-          artwork: [
-            { src: track.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', sizes: '512x512', type: 'image/jpeg' },
-          ],
+          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+          album: track.album?.name || 'Spotifree',
+          artwork: getMediaSessionArtwork(track.album?.images?.[0]?.url),
         });
         navigator.mediaSession.playbackState = 'playing';
+        if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
+          (navigator.mediaSession as any).setPositionState({
+            duration: Math.max(1, track.duration_ms / 1000),
+            playbackRate: 1,
+            position: 0,
+          });
+          lastMediaSessionPositionUpdate = Date.now();
+        }
       } catch {}
     }
   },
@@ -216,13 +247,18 @@ const store = create<PlayerState>((set, get) => ({
       } catch {}
     }
     set({ progressMs: ms });
+
+    // Update native lockscreen / notification position state (throttled to every 2.5s or on manual seek)
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && (navigator.mediaSession as any).setPositionState) {
       const { durationMs } = get();
-      if (durationMs > 0 && ms <= durationMs) {
+      const now = Date.now();
+      const isManualSeek = Math.abs(ms - prev) > 2000;
+      if (durationMs > 0 && ms <= durationMs && (isManualSeek || now - lastMediaSessionPositionUpdate > 2500)) {
+        lastMediaSessionPositionUpdate = now;
         try {
           (navigator.mediaSession as any).setPositionState({
             duration: Math.max(1, durationMs / 1000),
-            playbackRate: 1,
+            playbackRate: get().isPlaying ? 1 : 0,
             position: Math.max(0, ms / 1000),
           });
         } catch {}
@@ -321,6 +357,30 @@ if (typeof window !== 'undefined') {
           if ((window as any).__audioEngine) {
             (window as any).__audioEngine.seek(details.seekTime);
           }
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekbackward', (details) => {
+        const skip = details.seekOffset || 10;
+        const currentSec = usePlayerStore.getState().progressMs / 1000;
+        const targetSec = Math.max(0, currentSec - skip);
+        usePlayerStore.getState().setProgress(targetSec * 1000);
+        if ((window as any).__audioEngine) {
+          (window as any).__audioEngine.seek(targetSec);
+        }
+      });
+      navigator.mediaSession.setActionHandler('seekforward', (details) => {
+        const skip = details.seekOffset || 10;
+        const currentSec = usePlayerStore.getState().progressMs / 1000;
+        const durSec = usePlayerStore.getState().durationMs / 1000;
+        const targetSec = Math.min(durSec > 0 ? durSec : currentSec + skip, currentSec + skip);
+        usePlayerStore.getState().setProgress(targetSec * 1000);
+        if ((window as any).__audioEngine) {
+          (window as any).__audioEngine.seek(targetSec);
+        }
+      });
+      navigator.mediaSession.setActionHandler('stop', () => {
+        if (usePlayerStore.getState().isPlaying) {
+          usePlayerStore.getState().togglePlay();
         }
       });
     } catch {}
