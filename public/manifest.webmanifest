@@ -1,13 +1,16 @@
 {
+  "id": "/",
   "name": "Spotifree",
   "short_name": "Spotifree",
   "description": "Spotifree - Reproductor web: música para todos",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "display_override": ["standalone", "window-controls-overlay", "minimal-ui", "browser"],
   "background_color": "#121212",
   "theme_color": "#121212",
   "orientation": "portrait-primary",
+  "prefer_related_applications": false,
   "categories": ["music", "entertainment", "audio"],
   "icons": [
     {

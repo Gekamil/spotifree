@@ -13,6 +13,13 @@ if (rootElement) {
   );
 }
 
+// ─── PWA Install Prompt Capture ───────────────────────────────────────────────
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  (window as any).__pwaInstallPrompt = e;
+  window.dispatchEvent(new Event('spotifree-can-install'));
+});
+
 // ─── Service Worker & Background Audio ───────────────────────────────────────
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
