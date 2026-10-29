@@ -819,9 +819,12 @@ class AudioEngine {
   public getDuration(): number {
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getDuration === 'function') {
       try {
-        return this.ytPlayer.getDuration() || 0;
+        const d = this.ytPlayer.getDuration();
+        if (d && isFinite(d) && d > 0) return d;
       } catch {}
     }
+    const stateDur = (usePlayerStore.getState().durationMs || 0) / 1000;
+    if (stateDur > 0) return stateDur;
     return this.audio.duration || 0;
   }
 

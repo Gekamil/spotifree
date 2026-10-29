@@ -249,18 +249,20 @@ const store = create<PlayerState>((set, get) => ({
     }
     set({ progressMs: ms });
 
-    // Update native lockscreen / notification position state (throttled to every 2.5s or on manual seek)
+    // Update native lockscreen / notification position state (throttled to every 1.5s or on manual seek)
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && (navigator.mediaSession as any).setPositionState) {
-      const { durationMs } = get();
+      const { durationMs, isPlaying } = get();
       const now = Date.now();
-      const isManualSeek = Math.abs(ms - prev) > 2000;
-      if (durationMs > 0 && ms <= durationMs && (isManualSeek || now - lastMediaSessionPositionUpdate > 2500)) {
+      const isManualSeek = Math.abs(ms - prev) > 1500;
+      if (durationMs > 0 && (isManualSeek || now - lastMediaSessionPositionUpdate > 1500)) {
         lastMediaSessionPositionUpdate = now;
         try {
+          const safeDuration = Math.max(1, durationMs / 1000);
+          const safePosition = Math.min(safeDuration, Math.max(0, ms / 1000));
           (navigator.mediaSession as any).setPositionState({
-            duration: Math.max(1, durationMs / 1000),
-            playbackRate: get().isPlaying ? 1 : 0,
-            position: Math.max(0, ms / 1000),
+            duration: safeDuration,
+            playbackRate: isPlaying ? 1 : 0,
+            position: safePosition,
           });
         } catch {}
       }
@@ -269,6 +271,17 @@ const store = create<PlayerState>((set, get) => ({
 
   setDuration: (ms: number) => {
     set({ durationMs: ms });
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && (navigator.mediaSession as any).setPositionState) {
+      try {
+        const safeDuration = Math.max(1, ms / 1000);
+        const safePosition = Math.min(safeDuration, Math.max(0, get().progressMs / 1000));
+        (navigator.mediaSession as any).setPositionState({
+          duration: safeDuration,
+          playbackRate: get().isPlaying ? 1 : 0,
+          position: safePosition,
+        });
+      } catch {}
+    }
   },
 
   setVolume: (volume: number) => {
