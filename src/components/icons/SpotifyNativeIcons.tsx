@@ -244,3 +244,10 @@ export const VerifiedArtistNativeIcon: React.FC<IconProps> = ({ size = 20, class
     <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1.2 14.8l-4.1-4.1 1.4-1.4 2.7 2.7 6.3-6.3 1.4 1.4-7.7 7.7z" />
   </svg>
 );
+
+export const SpotifyConnectNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'text-[#1ed760]', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" className={className} {...props}>
+    <path d="M6 2.75C6 1.784 6.784 1 7.75 1h6.5c.966 0 1.75.784 1.75 1.75v10.5A1.75 1.75 0 0 1 14.25 15h-6.5A1.75 1.75 0 0 1 6 13.25V2.75zm1.75-.25a.25.25 0 0 0-.25.25v10.5c0 .138.112.25.25.25h6.5a.25.25 0 0 0 .25-.25V2.75a.25.25 0 0 0-.25-.25h-6.5z" />
+    <path d="M2.5 4a.75.75 0 0 0-.75.75v6.5c0 .414.336.75.75.75h1.5a.75.75 0 0 0 0-1.5H3.25v-5h.75a.75.75 0 0 0 0-1.5h-1.5z" />
+  </svg>
+);

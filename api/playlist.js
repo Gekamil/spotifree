@@ -24,7 +24,8 @@ function parseEmbedHtml(html, cleanId) {
     const rawUri = t.uri || '';
     const trackId = rawUri.split(':').pop() || `track-${idx}`;
     const artistNames = t.subtitle ? t.subtitle.split(', ') : ['Spotify'];
-    const trackCover = toHDImage(t.visualIdentity?.image?.[0]?.url || t.coverArt?.sources?.[0]?.url || coverUrl);
+    const rawTrackCover = t.visualIdentity?.image?.[0]?.url || t.coverArt?.sources?.[0]?.url;
+    const trackCover = rawTrackCover ? toHDImage(rawTrackCover) : null;
 
     return {
       id: trackId,
@@ -36,7 +37,7 @@ function parseEmbedHtml(html, cleanId) {
       album: {
         id: `album-${cleanId}`,
         name: entity.name,
-        images: [{ url: trackCover }],
+        images: trackCover ? [{ url: trackCover }] : [],
       },
       duration_ms: t.duration || 180000,
       preview_url: t.audioPreview?.url || null,
@@ -288,12 +289,11 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
 
             const tracks = rawItems.map((c, idx) => {
               const tr = c.itemV2?.data || c.item?.data || c.track || c;
-              const trCover = toHDImage(
+              const explicitTrackArt =
                 tr.albumOfTrack?.coverArt?.sources?.find(s => (s.height || 0) >= 300)?.url ||
                 tr.albumOfTrack?.coverArt?.sources?.[0]?.url ||
-                tr.album?.images?.[0]?.url ||
-                coverUrl
-              );
+                tr.album?.images?.[0]?.url;
+              const trCover = explicitTrackArt ? toHDImage(explicitTrackArt) : null;
               const artistItems =
                 tr.artists?.items?.map(a => ({ id: a.uri?.split(':').pop() || `art-${idx}`, name: a.profile?.name || a.name })) ||
                 (tr.artists || []).map(a => ({ id: a.id || `art-${idx}`, name: a.name })) ||

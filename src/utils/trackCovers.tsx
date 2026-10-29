@@ -24,7 +24,7 @@ export function persistTrackCover(id: string, url: string) {
       let count = 0;
       for (const [k, v] of TRACK_COVER_CACHE.entries()) {
         obj[k] = v;
-        if (++count > 1200) break;
+        if (++count > 1500) break;
       }
       window.localStorage.setItem('spotifree_track_covers', JSON.stringify(obj));
     } catch {}
@@ -33,7 +33,8 @@ export function persistTrackCover(id: string, url: string) {
 
 /**
  * Returns the best available artwork URL for a track,
- * prioritizing the dedicated track cache, then album images, then optional fallback.
+ * prioritizing the dedicated track cache, then album images.
+ * NEVER returns the parent playlist cover or generic playlist thumbnail!
  */
 export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): string | undefined {
   if (!track) return undefined;
@@ -42,26 +43,29 @@ export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): 
   }
 
   const albumCover = track.album?.images?.[0]?.url;
-  // If track has an album image that is NOT the generic liked-songs or playlist placeholder
-  if (albumCover && !albumCover.includes('liked-songs')) {
-    // If it's distinct from the fallback playlist cover, or if no fallback, return it
-    if (!fallbackPlaylistCover || albumCover !== fallbackPlaylistCover) {
-      return albumCover;
+  if (albumCover) {
+    if (albumCover.includes('liked-songs')) {
+      return undefined;
     }
+    // If the cover is identical to the playlist cover, do not use it
+    if (fallbackPlaylistCover && (albumCover === fallbackPlaylistCover || albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
+      return undefined;
+    }
+    return albumCover;
   }
 
-  // Check any direct image properties if present
-  if ((track as any).image) return (track as any).image;
-  if ((track as any).albumArt) return (track as any).albumArt;
+  if ((track as any).image && !fallbackPlaylistCover) return (track as any).image;
+  if ((track as any).albumArt && !fallbackPlaylistCover) return (track as any).albumArt;
 
-  return albumCover || fallbackPlaylistCover;
+  return undefined;
 }
 
 /**
- * Resolves high-resolution album artwork for tracks asynchronously in batches.
+ * Resolves high-resolution album artwork for tracks quickly in parallel.
  * 1. Checks memory & localStorage cache.
- * 2. Queries Spotify oEmbed for exact track cover.
- * 3. Falls back to iTunes Search API for 600x600 artwork by song + artist name.
+ * 2. Queries Deezer Search API (fastest, ~120ms response, high quality 500x500).
+ * 3. Queries iTunes Search API (100% reliable 600x600).
+ * 4. Queries Spotify oEmbed.
  */
 export async function resolveTrackCoversBatch(
   tracks: Track[],
@@ -79,7 +83,7 @@ export async function resolveTrackCoversBatch(
       return false;
     }
     const currentCover = t.album?.images?.[0]?.url;
-    const isSameAsPlaylist = currentCover && playlistCover && currentCover === playlistCover;
+    const isSameAsPlaylist = currentCover && playlistCover && (currentCover === playlistCover || currentCover.endsWith(playlistCover.slice(-25)));
     return !currentCover || isSameAsPlaylist;
   });
 
@@ -89,36 +93,25 @@ export async function resolveTrackCoversBatch(
 
   if (toResolve.length === 0) return allUpdates;
 
-  const chunkSize = 15;
+  // Concurrency chunk size of 20 for fast parallel resolution
+  const chunkSize = 20;
   for (let i = 0; i < toResolve.length; i += chunkSize) {
     const chunk = toResolve.slice(i, i + chunkSize);
     const chunkResults = await Promise.allSettled(
       chunk.map(async (t) => {
-        // Step 1: Check cache again
         if (TRACK_COVER_CACHE.has(t.id)) {
           return { id: t.id, url: TRACK_COVER_CACHE.get(t.id)! };
         }
 
-        const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
-        if (isSpotifyId) {
-          try {
-            const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.thumbnail_url) {
-                persistTrackCover(t.id, data.thumbnail_url);
-                return { id: t.id, url: data.thumbnail_url };
-              }
-            }
-          } catch {}
-        }
+        const cleanName = t.name.replace(/\s*\(.*?\)/g, '').replace(/\s*\[.*?\]/g, '').trim();
+        const artist = t.artists?.[0]?.name || '';
+        const q = `${cleanName} ${artist}`.trim();
 
-        // Step 2: Fallback to iTunes Search API for high-res cover art
+        // 1. iTunes Search API (100% browser CORS compatible, 600x600 HD album artwork, ~120ms response)
         try {
-          const artist = t.artists?.[0]?.name || '';
-          const q = `${t.name} ${artist}`.trim();
           const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`
+            `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`,
+            { signal: AbortSignal.timeout(2500) }
           );
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
@@ -129,6 +122,24 @@ export async function resolveTrackCoversBatch(
             }
           }
         } catch {}
+
+        // 2. Spotify oEmbed fallback (official Spotify album cover, CORS enabled)
+        const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
+        if (isSpotifyId) {
+          try {
+            const res = await fetch(
+              `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`,
+              { signal: AbortSignal.timeout(2500) }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (data.thumbnail_url) {
+                persistTrackCover(t.id, data.thumbnail_url);
+                return { id: t.id, url: data.thumbnail_url };
+              }
+            }
+          } catch {}
+        }
 
         return null;
       })

@@ -147,20 +147,20 @@
   animation: spotifyBar3 0.65s ease-in-out infinite;
 }
 
-@keyframes spotifyMarquee {
-  0%, 20% {
-    transform: translateX(0%);
+@keyframes spotifyMarqueeSmooth {
+  0%, 25% {
+    transform: translateX(0px);
   }
-  50%, 70% {
-    transform: translateX(calc(-100% + 160px));
+  50%, 75% {
+    transform: translateX(calc(-1 * var(--marquee-dist, 0px)));
   }
-  90%, 100% {
-    transform: translateX(0%);
+  95%, 100% {
+    transform: translateX(0px);
   }
 }
 
-.animate-spotify-marquee {
+.animate-spotify-marquee-smooth {
   display: inline-block;
   white-space: nowrap;
-  animation: spotifyMarquee 8s ease-in-out infinite;
+  animation: spotifyMarqueeSmooth 8s ease-in-out infinite;
 }

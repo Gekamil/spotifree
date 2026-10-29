@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
+  SpotifyConnectNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
@@ -40,6 +41,22 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const [overflowDist, setOverflowDist] = useState<number>(0);
+
+  useEffect(() => {
+    if (!textRef.current || !containerRef.current) return;
+    const scrollW = textRef.current.scrollWidth;
+    const clientW = containerRef.current.clientWidth;
+    const diff = scrollW - clientW;
+    if (diff > 4) {
+      setOverflowDist(diff + 16);
+    } else {
+      setOverflowDist(0);
+    }
+  }, [currentTrack?.id, currentTrack?.name]);
 
   if (!currentTrack) return null;
 
@@ -112,12 +129,18 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
           )}
         </div>
 
-        <div className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1 overflow-hidden">
+        <div ref={containerRef} className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1 overflow-hidden">
           <div className="overflow-hidden whitespace-nowrap w-full">
             <span
-              className={`font-bold text-white text-[13px] leading-tight ${
-                (currentTrack.name || '').length > 20 && isPlaying
-                  ? 'animate-spotify-marquee'
+              ref={textRef}
+              style={
+                overflowDist > 0 && isPlaying
+                  ? ({ '--marquee-dist': `${overflowDist}px` } as React.CSSProperties)
+                  : undefined
+              }
+              className={`font-bold text-white text-[13px] leading-tight inline-block ${
+                overflowDist > 0 && isPlaying
+                  ? 'animate-spotify-marquee-smooth'
                   : 'truncate block'
               }`}
             >
@@ -132,14 +155,12 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
       {/* Right Controls: Device + Heart + Play/Pause */}
       <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-        {/* Device indicator button */}
+        {/* Device indicator button with genuine Spotify Connect icon */}
         <button
           className="w-8 h-8 flex items-center justify-center text-[#1ed760] hover:scale-105 active:scale-95 transition-transform"
           title="Escuchando en este teléfono"
         >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
-          </svg>
+          <SpotifyConnectNativeIcon size={16} />
         </button>
 
         {/* Favorite / Like button */}

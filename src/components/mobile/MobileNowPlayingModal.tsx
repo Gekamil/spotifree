@@ -12,10 +12,13 @@ import {
   RepeatOneNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
+  SpotifyConnectNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
+import { getArtistPicture } from '../../utils/artistImage';
+import { fetchLyricsUnified } from '../../utils/lyricsService';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -131,7 +134,30 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
+  const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadArtistPhoto() {
+      if (!currentTrack?.artists?.[0]?.name) {
+        setArtistPicture(null);
+        return;
+      }
+      try {
+        const pic = await getArtistPicture(currentTrack.artists[0].name);
+        if (!cancelled && pic) {
+          setArtistPicture(pic);
+        }
+      } catch {
+        // Fallback
+      }
+    }
+    loadArtistPhoto();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.artists?.[0]?.name]);
 
   useEffect(() => {
     let cancelled = false;
@@ -142,20 +168,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       try {
         const artist = currentTrack.artists?.[0]?.name || '';
         const title = currentTrack.name;
-        const res = await fetch(
-          `https://lrclib.net/api/get?track_name=${encodeURIComponent(title)}&artist_name=${encodeURIComponent(artist)}`
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (cancelled) return;
-          if (data.syncedLyrics) {
-            const parsed = parseEnhancedLyrics(data.syncedLyrics);
-            setSyncedLines(parsed);
-            setLyrics(data.plainLyrics || null);
-          } else if (data.plainLyrics) {
-            setLyrics(data.plainLyrics);
-            setSyncedLines([]);
-          }
+        const res = await fetchLyricsUnified(title, artist);
+        if (cancelled) return;
+        if (res.syncedLyrics) {
+          const parsed = parseEnhancedLyrics(res.syncedLyrics);
+          setSyncedLines(parsed);
+          setLyrics(res.plainLyrics || null);
+        } else if (res.plainLyrics) {
+          setLyrics(res.plainLyrics);
+          setSyncedLines([]);
         }
       } catch {
         // Fallback gracefully
@@ -361,9 +382,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           {/* Authentic Spotify Device Bar & Bottom Controls */}
           <div className="flex items-center justify-between pt-3 pb-1 border-t border-white/5">
             <button className="flex items-center gap-2 text-xs font-bold text-[#1ed760] tracking-wide cursor-pointer hover:underline">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
-              </svg>
+              <SpotifyConnectNativeIcon size={16} />
               <span className="uppercase tracking-wider text-[11px] font-black">Este teléfono</span>
             </button>
 
@@ -396,7 +415,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <span className="font-bold text-sm tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
               Letras
               {syncedLines.length > 0 && (
-                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760]" />
               )}
             </span>
             <div className="flex items-center gap-2">
@@ -488,16 +507,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
           <div className="flex items-center gap-3.5">
             <div className="w-14 h-14 rounded-full overflow-hidden bg-[#242424] shrink-0 shadow">
-              {coverUrl ? (
+              {(artistPicture || coverUrl) ? (
                 <img
-                  src={coverUrl}
+                  src={artistPicture || coverUrl}
                   alt={currentTrack.artists?.[0]?.name || 'Artista'}
                   onError={handleImageError}
                   className="w-full h-full object-cover"
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center font-bold text-white">
-                  A
+                <div className="w-full h-full flex items-center justify-center font-bold text-white bg-[#282828]">
+                  {currentTrack.artists?.[0]?.name?.charAt(0) || 'A'}
                 </div>
               )}
             </div>

@@ -242,6 +242,90 @@ async function run() {
 
     await page.screenshot({ path: path.join(artifactDir, 'mobile_bell_modal_verified.png') });
 
+    // 5. Test Mini Player and Fullscreen Player (Spotify Connect icon, no green pulses, artist info)
+    console.log('5. Testing Mini Player and Fullscreen Player...');
+    await page.evaluate(() => {
+      // Close bell modal if open
+      const closeBtn = document.querySelector('button[title="Cerrar"]');
+      if (closeBtn) closeBtn.click();
+
+      // Trigger playing track in player store
+      if (window.__usePlayerStore) {
+        window.__usePlayerStore.setState({
+          isPlaying: true,
+          currentTrack: {
+            id: 'trk-test-long',
+            name: 'Canción Con Un Título Increíblemente Largo Para Probar El Marquee Deslizante Suave',
+            duration_ms: 215000,
+            artists: [{ id: 'art-1', name: 'Bad Bunny' }],
+            album: {
+              id: 'alb-1',
+              name: 'Un Verano Sin Ti',
+              images: [{ url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819' }],
+            },
+          },
+        });
+      }
+    });
+
+    await new Promise((r) => setTimeout(r, 600));
+
+    // Verify Mini Player
+    const miniPlayerCheck = await page.evaluate(() => {
+      const mini = document.querySelector('[data-testid="mobile-mini-player"]');
+      if (!mini) return { found: false };
+      const hasDeviceBtn = mini.querySelector('button[title="Escuchando en este teléfono"]');
+      const marqueeSpan = mini.querySelector('.animate-spotify-marquee-smooth');
+      const pingPulses = mini.querySelectorAll('.animate-ping');
+      return {
+        found: true,
+        hasDeviceBtn: !!hasDeviceBtn,
+        hasSmoothMarquee: !!marqueeSpan,
+        pingPulsesCount: pingPulses.length,
+      };
+    });
+    console.log('5. Mini Player Check:', miniPlayerCheck);
+    if (!miniPlayerCheck.found || !miniPlayerCheck.hasDeviceBtn) {
+      throw new Error('Mini player or Spotify Connect device button not found');
+    }
+    if (miniPlayerCheck.pingPulsesCount > 0) {
+      throw new Error(`Mini player should not have green ping pulses, found ${miniPlayerCheck.pingPulsesCount}`);
+    }
+
+    // Click Mini Player to open Full Player
+    await page.evaluate(() => {
+      const mini = document.querySelector('[data-testid="mobile-mini-player"]');
+      if (mini) mini.click();
+    });
+
+    await new Promise((r) => setTimeout(r, 800));
+
+    const fullPlayerCheck = await page.evaluate(() => {
+      const modal = document.querySelector('.fixed.inset-0.z-\\[100\\]');
+      if (!modal) return { found: false };
+      const text = modal.innerText;
+      const hasArtistCard = text.includes('Información sobre el artista');
+      const hasLyricsCard = text.includes('Letras');
+      const hasDeviceBar = text.includes('ESTE TELÉFONO') || text.includes('Este teléfono');
+      const pingPulses = modal.querySelectorAll('.animate-ping');
+      return {
+        found: true,
+        hasArtistCard,
+        hasLyricsCard,
+        hasDeviceBar,
+        pingPulsesCount: pingPulses.length,
+      };
+    });
+    console.log('5. Full Player Modal Check:', fullPlayerCheck);
+    if (!fullPlayerCheck.found || !fullPlayerCheck.hasArtistCard || !fullPlayerCheck.hasLyricsCard) {
+      throw new Error('Full player modal or cards missing');
+    }
+    if (fullPlayerCheck.pingPulsesCount > 0) {
+      throw new Error(`Full player should not have green ping pulses, found ${fullPlayerCheck.pingPulsesCount}`);
+    }
+
+    await page.screenshot({ path: path.join(artifactDir, 'mobile_now_playing_verified.png') });
+
     console.log('ALL VERIFICATIONS PASSED SUCCESSFULLY!');
   } finally {
     await browser.close();

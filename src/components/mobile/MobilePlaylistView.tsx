@@ -774,11 +774,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         className="w-11 h-11 rounded"
                         size={44}
                       />
-                      {isThisPlaying && (
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <div className="w-3 h-3 bg-[#1ed760] rounded-full animate-ping" />
-                        </div>
-                      )}
                     </div>
 
                     <div className="flex flex-col min-w-0">

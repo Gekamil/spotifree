@@ -32,39 +32,6 @@ function getArtistMonthlyListeners(name: string): string {
   return `${count.toLocaleString('es-ES')} oyentes mensuales`;
 }
 
-const TRACK_COVER_CACHE = new Map<string, string>();
-
-if (typeof window !== 'undefined') {
-  try {
-    const saved = window.localStorage.getItem('spotifree_track_covers');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      Object.entries(parsed).forEach(([k, v]) => {
-        if (typeof v === 'string') TRACK_COVER_CACHE.set(k, v);
-      });
-    }
-  } catch {}
-}
-
-function persistTrackCover(id: string, url: string) {
-  TRACK_COVER_CACHE.set(id, url);
-  if (typeof window !== 'undefined') {
-    try {
-      const obj: Record<string, string> = {};
-      let count = 0;
-      for (const [k, v] of TRACK_COVER_CACHE.entries()) {
-        obj[k] = v;
-        if (++count > 1000) break;
-      }
-      window.localStorage.setItem('spotifree_track_covers', JSON.stringify(obj));
-    } catch {}
-  }
-}
-
-function toHDImage(url: string): string {
-  if (!url) return url;
-  return url;
-}
 
 const TrackArtwork: React.FC<{
   src?: string;
@@ -94,6 +61,7 @@ const TrackArtwork: React.FC<{
 };
 
 import { handleImageError } from '../../utils/imageFallback';
+import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE } from '../../utils/trackCovers';
 
 interface DesktopPlaylistViewProps {
   playlist: Playlist;
@@ -445,76 +413,31 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [playlist.id, playlist.tracks]);
 
-  // Asynchronously resolve individual album covers for all tracks in chunks of 20
+  // Asynchronously resolve individual album covers for all tracks in parallel
   useEffect(() => {
     if (!dynamicTracks || dynamicTracks.length === 0) return;
     let cancelled = false;
 
     const playlistCover = dynamicPlaylist.images?.[0]?.url;
-    const tracksToResolve = dynamicTracks.filter((t) => {
-      const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
-      if (!isSpotifyId) return false;
-      const currentCover = t.album?.images?.[0]?.url;
-      const isSameAsPlaylist = currentCover && playlistCover && currentCover === playlistCover;
-      return !currentCover || isSameAsPlaylist || !TRACK_COVER_CACHE.has(t.id);
+    resolveTrackCoversBatch(dynamicTracks, playlistCover, (updates) => {
+      if (cancelled || updates.size === 0) return;
+      setDynamicTracks((prev) =>
+        prev.map((track) => {
+          if (updates.has(track.id)) {
+            return {
+              ...track,
+              album: {
+                ...track.album,
+                id: track.album?.id || `alb-${track.id}`,
+                name: track.album?.name || track.name,
+                images: [{ url: updates.get(track.id)! }],
+              },
+            };
+          }
+          return track;
+        })
+      );
     });
-
-    if (tracksToResolve.length === 0) return;
-
-    const chunkSize = 20;
-    const runAllChunks = async () => {
-      for (let i = 0; i < tracksToResolve.length; i += chunkSize) {
-        if (cancelled) break;
-        const chunk = tracksToResolve.slice(i, i + chunkSize);
-        const results = await Promise.allSettled(
-          chunk.map(async (t) => {
-            if (TRACK_COVER_CACHE.has(t.id)) {
-              return { id: t.id, cover: TRACK_COVER_CACHE.get(t.id)! };
-            }
-            try {
-              const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`);
-              if (res.ok) {
-                const json = await res.json();
-                if (json.thumbnail_url) {
-                  const hd = toHDImage(json.thumbnail_url);
-                  persistTrackCover(t.id, hd);
-                  return { id: t.id, cover: hd };
-                }
-              }
-            } catch {}
-            return null;
-          })
-        );
-
-        if (cancelled) break;
-        const updates = new Map(
-          results
-            .filter((r): r is PromiseFulfilledResult<{ id: string; cover: string } | null> => r.status === 'fulfilled' && !!r.value)
-            .map((r) => [r.value!.id, r.value!.cover])
-        );
-
-        if (updates.size > 0) {
-          setDynamicTracks((prev) =>
-            prev.map((track) => {
-              if (updates.has(track.id)) {
-                return {
-                  ...track,
-                  album: {
-                    ...track.album,
-                    id: track.album?.id || `alb-${track.id}`,
-                    name: track.album?.name || track.name,
-                    images: [{ url: updates.get(track.id)! }],
-                  },
-                };
-              }
-              return track;
-            })
-          );
-        }
-      }
-    };
-
-    runAllChunks();
 
     return () => {
       cancelled = true;
@@ -991,14 +914,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   {/* Track Title + Artists */}
                   <div className="flex items-center gap-3 min-w-0 pr-2">
                     <TrackArtwork
-                      src={
-                        track.album?.images?.[0]?.url ||
-                        (dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs')
-                          ? dynamicPlaylist.images[0].url
-                          : isLikedPlaylist
-                          ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-                          : '')
-                      }
+                      src={getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
                       alt={track.name}
                     />
                     <div className="min-w-0 flex-1">
