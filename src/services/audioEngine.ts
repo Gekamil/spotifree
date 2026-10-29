@@ -39,12 +39,7 @@ function persistVideoId(query: string, videoId: string) {
 
 class AudioEngine {
   private audio: HTMLAudioElement;
-  private silentCarrier: HTMLAudioElement | null = null;
-  private carrierAudio: HTMLAudioElement | null = null;
-  private carrierOscillator: OscillatorNode | null = null;
-  private carrierGain: GainNode | null = null;
   private wakeLockSentinel: any = null;
-  private isUserInitiatedPause = false;
 
   private audioContext: AudioContext | null = null;
   private sourceNode: MediaElementAudioSourceNode | null = null;
@@ -71,46 +66,22 @@ class AudioEngine {
     this.setupHtml5Listeners();
 
     if (typeof window !== 'undefined') {
-      this.initBackgroundAudioCarrier();
-
-      // Unlock audio context + silent carrier on user gesture for mobile / PWA
+      // Unlock audio context on user gesture for mobile / PWA
       const unlockUserMedia = () => {
         this.unlockAudio();
       };
       window.addEventListener('click', unlockUserMedia, { passive: true });
       window.addEventListener('touchstart', unlockUserMedia, { passive: true });
 
-      // Keep audio alive when PWA goes to background (screen off / tab hidden / app minimized)
+      // Handle visibility changes without forcing silence
       document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          // Page went to background / screen locked
-          if (usePlayerStore.getState().isPlaying && !this.isUserInitiatedPause) {
-            this.startBackgroundCarrier();
-            // In mobile browsers (Chrome / Safari), resume YouTube if it was interrupted by visibility change
-            if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-              try {
-                const ytState = this.ytPlayer.getPlayerState?.();
-                if (ytState !== 1) {
-                  this.ytPlayer.playVideo();
-                }
-              } catch {}
-            }
-          }
-        } else {
-          // Page came to foreground / unlocked
+        if (!document.hidden && usePlayerStore.getState().isPlaying) {
           try {
-            if (this.audioContext && this.audioContext.state === 'suspended') {
-              this.audioContext.resume().catch(() => {});
-            }
-            if (usePlayerStore.getState().isPlaying && !this.isUserInitiatedPause) {
-              this.startBackgroundCarrier();
-              if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-                try {
-                  const ytState = this.ytPlayer.getPlayerState?.();
-                  if (ytState !== 1) {
-                    this.ytPlayer.playVideo();
-                  }
-                } catch {}
+            if (this.ytPlayer && typeof this.ytPlayer.unMute === 'function') {
+              this.ytPlayer.unMute();
+              const { volume, isMuted } = usePlayerStore.getState();
+              if (!isMuted) {
+                this.ytPlayer.setVolume(Math.round(volume * 100));
               }
             }
           } catch {}
@@ -122,56 +93,6 @@ class AudioEngine {
         this.ensureYouTubeReady().catch(() => {});
       }, 50);
     }
-  }
-
-  /** Initialize continuous carrier audio stream to keep Android/iOS audio session alive in background */
-  private initBackgroundAudioCarrier() {
-    if (typeof window === 'undefined') return;
-
-    // 1. Silent HTML5 audio element loop with 1-second real WAV buffer
-    if (!this.silentCarrier) {
-      try {
-        const silent1sWav = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
-        this.silentCarrier = new Audio(silent1sWav);
-        this.silentCarrier.loop = true;
-        this.silentCarrier.volume = 0.01;
-      } catch {}
-    }
-
-    // 2. Continuous sub-audible WebAudio stream for Android Audio Focus & iOS AVAudioSession
-    try {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioContextClass && !this.audioContext) {
-        this.audioContext = new AudioContextClass();
-      }
-
-      if (this.audioContext && !this.carrierOscillator) {
-        // 20Hz infrasound (completely inaudible to human ear, passes audio hardware threshold)
-        this.carrierOscillator = this.audioContext.createOscillator();
-        this.carrierOscillator.type = 'sine';
-        this.carrierOscillator.frequency.setValueAtTime(20, this.audioContext.currentTime);
-
-        this.carrierGain = this.audioContext.createGain();
-        this.carrierGain.gain.setValueAtTime(0.0001, this.audioContext.currentTime);
-        this.carrierOscillator.connect(this.carrierGain);
-        this.carrierGain.connect(this.audioContext.destination);
-
-        // Pipe to MediaStream destination and HTML5 audio element if supported
-        if (typeof this.audioContext.createMediaStreamDestination === 'function') {
-          const streamDest = this.audioContext.createMediaStreamDestination();
-          this.carrierGain.connect(streamDest);
-          if (!this.carrierAudio) {
-            this.carrierAudio = new Audio();
-            this.carrierAudio.srcObject = streamDest.stream;
-            this.carrierAudio.autoplay = true;
-            this.carrierAudio.loop = true;
-            this.carrierAudio.volume = 0.01;
-          }
-        }
-
-        this.carrierOscillator.start();
-      }
-    } catch {}
   }
 
   private ensureYouTubeReady(): Promise<void> {
@@ -186,9 +107,9 @@ class AudioEngine {
           if (!host) {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
-            // Non-zero dimensions in DOM so browser power heuristics treat it as an active viewport player
-            // Positioned behind everything with negative z-index, zero interaction, and near-zero opacity
-            host.style.cssText = 'position:fixed;bottom:0;right:0;width:240px;height:240px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;transform:scale(0.1);transform-origin:bottom right;';
+            // Render inside active viewport with real dimensions & opacity so mobile browsers (iOS WebKit / Android Chrome PWA)
+            // treat the player as an active visible media source and do NOT mute or suspend background playback
+            host.style.cssText = 'position:fixed;bottom:0;left:0;width:200px;height:120px;opacity:0.2;pointer-events:none;z-index:5;overflow:hidden;';
             document.body.appendChild(host);
           }
 
@@ -205,9 +126,9 @@ class AudioEngine {
           }
 
           this.ytPlayer = new (window as any).YT.Player('spotifree-yt-player', {
-            height: '240',
-            width: '240',
-            host: 'https://www.youtube-nocookie.com',
+            height: '120',
+            width: '200',
+            host: 'https://www.youtube.com',
             playerVars: {
               autoplay: 1,
               controls: 0,
@@ -308,21 +229,13 @@ class AudioEngine {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
       }
     } else if (code === 2) {
-      if (this.isUserInitiatedPause) {
-        // User explicitly paused playback
+      // Ignore transient pause events fired during video loading/transitioning
+      if (!this.isTransitioning) {
         usePlayerStore.setState({ isPlaying: false });
         this.stopProgressTicker();
         if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
           try { navigator.mediaSession.playbackState = 'paused'; } catch {}
         }
-      } else if (!this.isTransitioning && usePlayerStore.getState().isPlaying) {
-        // Pause event triggered by mobile browser background or lock-screen throttling!
-        // Immediately trigger resume to keep background audio uninterrupted
-        setTimeout(() => {
-          if (!this.isUserInitiatedPause && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-            try { this.ytPlayer.playVideo(); } catch {}
-          }
-        }, 80);
       }
     } else if (code === 3) {
       this.checkAndSkipAd();
@@ -346,6 +259,13 @@ class AudioEngine {
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
         try {
           this.checkAndSkipAd();
+          if (typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
+            const { volume, isMuted } = usePlayerStore.getState();
+            if (!isMuted) {
+              this.ytPlayer.unMute();
+              this.ytPlayer.setVolume(Math.round(volume * 100));
+            }
+          }
           const curSec = this.ytPlayer.getCurrentTime();
           const durSec = this.ytPlayer.getDuration();
           if (isFinite(curSec) && curSec >= 0) {
@@ -504,7 +424,6 @@ class AudioEngine {
     this.failedVideoIds.clear();
     this.isSeeking = false;
     this.isTransitioning = true;
-    this.isUserInitiatedPause = false;
 
     // Reset progress to 0
     usePlayerStore.getState().setProgress(startSeconds * 1000);
@@ -616,17 +535,6 @@ class AudioEngine {
   }
 
   public async startBackgroundCarrier() {
-    this.initBackgroundAudioCarrier();
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      this.audioContext.resume().catch(() => {});
-    }
-    if (this.carrierAudio && this.carrierAudio.paused) {
-      this.carrierAudio.play().catch(() => {});
-    }
-    if (this.silentCarrier && this.silentCarrier.paused) {
-      this.silentCarrier.play().catch(() => {});
-    }
-
     // Acquire Screen Wake Lock on mobile devices so user can keep lyrics / player on without screen sleep
     if (typeof navigator !== 'undefined' && 'wakeLock' in navigator && (navigator as any).wakeLock?.request) {
       try {
@@ -641,12 +549,6 @@ class AudioEngine {
   }
 
   public stopBackgroundCarrier() {
-    if (this.carrierAudio && !this.carrierAudio.paused) {
-      this.carrierAudio.pause();
-    }
-    if (this.silentCarrier && !this.silentCarrier.paused) {
-      this.silentCarrier.pause();
-    }
     if (this.wakeLockSentinel) {
       try { this.wakeLockSentinel.release(); } catch {}
       this.wakeLockSentinel = null;
@@ -656,11 +558,10 @@ class AudioEngine {
   public unlockAudio() {
     try {
       this.startBackgroundCarrier();
-      if (this.audioContext && this.audioContext.state === 'suspended') {
-        this.audioContext.resume().catch(() => {});
-      }
-      if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-        // Prime the YouTube player on user gesture
+      if (this.ytPlayer && typeof this.ytPlayer.unMute === 'function') {
+        this.ytPlayer.unMute();
+        const { volume, isMuted } = usePlayerStore.getState();
+        if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
       }
     } catch {}
   }
@@ -669,7 +570,6 @@ class AudioEngine {
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getPlayerState === 'function') {
       const state = this.ytPlayer.getPlayerState();
       if (state === 1) { // Playing -> Pause
-        this.isUserInitiatedPause = true;
         this.ytPlayer.pauseVideo();
         this.stopBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: false });
@@ -678,7 +578,11 @@ class AudioEngine {
           try { navigator.mediaSession.playbackState = 'paused'; } catch {}
         }
       } else { // Paused -> Play
-        this.isUserInitiatedPause = false;
+        if (typeof this.ytPlayer.unMute === 'function') {
+          this.ytPlayer.unMute();
+          const { volume, isMuted } = usePlayerStore.getState();
+          if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+        }
         this.ytPlayer.playVideo();
         this.startBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: true });
@@ -691,7 +595,6 @@ class AudioEngine {
     }
 
     if (this.audio.paused) {
-      this.isUserInitiatedPause = false;
       this.audio.play().catch(() => {});
       this.startBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: true });
@@ -699,7 +602,6 @@ class AudioEngine {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
       }
     } else {
-      this.isUserInitiatedPause = true;
       this.audio.pause();
       this.stopBackgroundCarrier();
       usePlayerStore.setState({ isPlaying: false });
@@ -710,7 +612,6 @@ class AudioEngine {
   }
 
   public pause() {
-    this.isUserInitiatedPause = true;
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
       try { this.ytPlayer.pauseVideo(); } catch {}
       this.stopProgressTicker();
@@ -724,10 +625,14 @@ class AudioEngine {
   }
 
   public resume() {
-    this.isUserInitiatedPause = false;
     this.startBackgroundCarrier();
     if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
       try {
+        if (typeof this.ytPlayer.unMute === 'function') {
+          this.ytPlayer.unMute();
+          const { volume, isMuted } = usePlayerStore.getState();
+          if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+        }
         this.ytPlayer.playVideo();
         this.startProgressTicker();
       } catch {}
