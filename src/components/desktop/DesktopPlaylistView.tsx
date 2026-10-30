@@ -1263,13 +1263,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       audioFeatures[nextTrack?.id] ||
                       resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
 
-                    const smartTrans = djTransitionService.calculateSmartTransition(
+                    const smartTrans = djTransitionService.getTransitionConfig(
                       track.id,
                       nextTrack.id,
                       feat?.tempo,
                       nextFeat?.tempo,
                       feat?.camelot,
-                      nextFeat?.camelot
+                      nextFeat?.camelot,
+                      index
                     );
 
                     return (
@@ -1290,7 +1291,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                             ✦
                           </div>
                           <span className="text-xs font-semibold text-white tracking-tight">
-                            {smartTrans.label || 'Automática'}
+                            {smartTrans.title || 'Automática'}
                           </span>
                           <span className="text-white/60 text-xs font-bold leading-none">
                             ›

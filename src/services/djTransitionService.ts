@@ -38,6 +38,7 @@ export interface DJTransitionConfig {
   tempoB?: number;
   camelotA?: string;
   camelotB?: string;
+  title?: string;
   label?: string;
   detail?: string;
   updatedAt?: number;
@@ -49,6 +50,7 @@ export const DEFAULT_TRANSITION_CONFIG: Omit<DJTransitionConfig, 'trackAId' | 't
   volumeEnvelope: 'superposicion',
   eqMode: 'intercambio_graves_central',
   fxMode: 'ninguno',
+  title: 'Automática',
 };
 
 class DJTransitionService {
@@ -75,7 +77,8 @@ class DJTransitionService {
     tempoA?: number,
     tempoB?: number,
     camelotA?: string,
-    camelotB?: string
+    camelotB?: string,
+    pairIndex = 0
   ): DJTransitionConfig {
     if (typeof window !== 'undefined') {
       try {
@@ -94,12 +97,12 @@ class DJTransitionService {
       } catch {}
     }
     // Calculate tailored dynamic parameters for this exact track pair
-    return this.calculateSmartTransition(trackAId, trackBId, tempoA, tempoB, camelotA, camelotB);
+    return this.calculateSmartTransition(trackAId, trackBId, tempoA, tempoB, camelotA, camelotB, pairIndex);
   }
 
   /**
-   * Intelligently analyzes acoustic properties (BPM & Camelot harmonic compatibility)
-   * to calculate the optimal DJ transition parameters between any pair of songs.
+   * Intelligently analyzes acoustic properties (BPM, Camelot harmonic compatibility & track progression)
+   * to calculate diverse, tailored, studio-grade DJ transitions for each track pair.
    */
   public calculateSmartTransition(
     trackAId: string,
@@ -107,7 +110,8 @@ class DJTransitionService {
     tempoA = 128,
     tempoB = 128,
     camelotA = '9A',
-    camelotB = '11A'
+    camelotB = '11A',
+    pairIndex = 0
   ): DJTransitionConfig {
     const diffBpm = Math.abs(tempoA - tempoB);
 
@@ -124,84 +128,190 @@ class DJTransitionService {
     const isHarmonicMatch = (numDiff === 0 || numDiff === 1) && isSameLetter;
     const isRelativeMajorMinor = numDiff === 0 && !isSameLetter;
 
-    // Rule 1: High Tempo Gap (> 20 BPM) -> Turntable Vinyl Brake & Sharp Drop
-    if (diffBpm >= 20) {
-      return {
-        trackAId,
-        trackBId,
-        compases: 1,
-        preset: 'freno_vinilo',
-        volumeEnvelope: 'corte_directo',
-        eqMode: 'intercambio_graves_central',
-        fxMode: 'freno_vinilo',
-        tempoA,
-        tempoB,
-        camelotA,
-        camelotB,
-        label: '✦ Automática · Freno vinilo (1 compás)',
-        detail: 'Freno de tornamesa y corte directo en primer tiempo para salvar diferencia de tempo',
-      };
+    // Generate a deterministic variation seed so consecutive transitions always stay varied and exciting
+    const seed = Math.abs(
+      (trackAId ? trackAId.charCodeAt(trackAId.length - 1) : 0) +
+      (trackBId ? trackBId.charCodeAt(trackBId.length - 1) * 31 : 0) +
+      pairIndex * 17
+    );
+
+    // Rule 1: High Tempo Gap (>= 18 BPM) -> Turntable Vinyl Brake OR Spatial Echo Out
+    if (diffBpm >= 18) {
+      if (seed % 2 === 0) {
+        return {
+          trackAId,
+          trackBId,
+          compases: 1,
+          preset: 'freno_vinilo',
+          volumeEnvelope: 'corte_directo',
+          eqMode: 'intercambio_graves_central',
+          fxMode: 'freno_vinilo',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Freno vinilo · 1 compás',
+          label: '✦ Freno vinilo · 1 compás',
+          detail: 'Freno analógico de tornamesa con corte directo en primer tiempo',
+        };
+      } else {
+        return {
+          trackAId,
+          trackBId,
+          compases: 2,
+          preset: 'eco_out',
+          volumeEnvelope: 'curva_s',
+          eqMode: 'filtro_paso_bajo',
+          fxMode: 'eco',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Eco y filtro · 2 compases',
+          label: '✦ Eco y filtro · 2 compases',
+          detail: 'Eco espacial retardado disolviendo la pista saliente para salvar el cambio de tempo',
+        };
+      }
     }
 
-    // Rule 2: Large BPM gap (12 - 19 BPM) or Dissonant Key -> Echo Out & Low-Pass Filter
-    if (diffBpm > 12 || numDiff >= 3) {
-      return {
-        trackAId,
-        trackBId,
-        compases: 2,
-        preset: 'eco_out',
-        volumeEnvelope: 'curva_s',
-        eqMode: 'filtro_paso_bajo',
-        fxMode: 'eco',
-        tempoA,
-        tempoB,
-        camelotA,
-        camelotB,
-        label: '✦ Automática · Eco y filtro paso bajo',
-        detail: 'Eco retardado con filtro progresivo para enlazar el ritmo',
-      };
+    // Rule 2: Moderate BPM gap (8 - 17 BPM) -> Alternating Beat Roll, Echo Out, or Dry Drop Cut
+    if (diffBpm > 8) {
+      const mode = seed % 3;
+      if (mode === 0) {
+        return {
+          trackAId,
+          trackBId,
+          compases: 2,
+          preset: 'beat_roll',
+          volumeEnvelope: 'curva_s',
+          eqMode: 'intercambio_gradual',
+          fxMode: 'repeticion_loop',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Beat Roll · 2 compases',
+          label: '✦ Beat Roll · 2 compases',
+          detail: 'Redoble rítmico acelerado (1/4 a 1/8) construyendo tensión hacia el drop',
+        };
+      } else if (mode === 1) {
+        return {
+          trackAId,
+          trackBId,
+          compases: 2,
+          preset: 'eco_out',
+          volumeEnvelope: 'curva_s',
+          eqMode: 'filtro_paso_bajo',
+          fxMode: 'eco',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Eco y filtro · 2 compases',
+          label: '✦ Eco y filtro · 2 compases',
+          detail: 'Filtro paso bajo progresivo con cola de delay espacial',
+        };
+      } else {
+        return {
+          trackAId,
+          trackBId,
+          compases: 1,
+          preset: 'corte',
+          volumeEnvelope: 'corte_directo',
+          eqMode: 'intercambio_graves_central',
+          fxMode: 'ninguno',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Corte al golpe · 1 compás',
+          label: '✦ Corte directo · 1 compás',
+          detail: 'Corte seco al inicio del compás con impacto inmediato de bombo',
+        };
+      }
     }
 
-    // Rule 3: Moderate BPM gap (7 - 12 BPM) -> Beat Roll Loop Stutter build-up
-    if (diffBpm > 6) {
-      return {
-        trackAId,
-        trackBId,
-        compases: 2,
-        preset: 'beat_roll',
-        volumeEnvelope: 'curva_s',
-        eqMode: 'intercambio_gradual',
-        fxMode: 'repeticion_loop',
-        tempoA,
-        tempoB,
-        camelotA,
-        camelotB,
-        label: '✦ Automática · Beat Roll (Stutter)',
-        detail: 'Redoble rítmico acelerado antes del impacto de entrada',
-      };
+    // Rule 3: Perfect Harmonic Match + Low BPM Gap (<= 5 BPM) -> 4-bar Melodic Blend or Saturation Riser
+    if (isHarmonicMatch && diffBpm <= 5) {
+      if (seed % 2 === 0) {
+        return {
+          trackAId,
+          trackBId,
+          compases: 4,
+          preset: 'automatica',
+          volumeEnvelope: 'superposicion',
+          eqMode: 'intercambio_graves_central',
+          fxMode: 'ninguno',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Armónica pura · 4 compases',
+          label: '✦ Armónica pura · 4 compases',
+          detail: 'Fusión tonal melódica extendida en clave armónica con intercambio de bajo central',
+        };
+      } else {
+        return {
+          trackAId,
+          trackBId,
+          compases: 4,
+          preset: 'crescendo',
+          volumeEnvelope: 'curva_s',
+          eqMode: 'intercambio_gradual',
+          fxMode: 'distorsion_wash',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Crescendo energía · 4 compases',
+          label: '✦ Crescendo · 4 compases',
+          detail: 'Subida exponencial de energía y saturación armónica antes de la entrada',
+        };
+      }
     }
 
-    // Rule 4: Perfect Harmonic Match + Low BPM Gap (<= 4 BPM) -> Long 4-bar harmonic blend with saturation wash
-    if (isHarmonicMatch && diffBpm <= 4) {
-      return {
-        trackAId,
-        trackBId,
-        compases: 4,
-        preset: 'automatica',
-        volumeEnvelope: 'superposicion',
-        eqMode: 'intercambio_graves_central',
-        fxMode: 'distorsion_wash',
-        tempoA,
-        tempoB,
-        camelotA,
-        camelotB,
-        label: '✦ Automática · 4 compases (Armónica)',
-        detail: 'Mezcla armónica extendida con saturación suave y bajo central',
-      };
-    }
-
-    // Rule 5: Relative Major/Minor or standard adjacent match -> 2-bar bass swap blend
+    // Rule 4: Relative Major/Minor or adjacent harmonic match -> 2-bar Bass Swap or Beat Roll
     if (isRelativeMajorMinor || isHarmonicMatch) {
+      if (seed % 2 === 0) {
+        return {
+          trackAId,
+          trackBId,
+          compases: 2,
+          preset: 'automatica',
+          volumeEnvelope: 'superposicion',
+          eqMode: 'intercambio_graves_central',
+          fxMode: 'ninguno',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Intercambio graves · 2 compases',
+          label: '✦ Intercambio graves · 2 compases',
+          detail: 'Cruce dinámico de frecuencias graves en el segundo compás evitando barullo',
+        };
+      } else {
+        return {
+          trackAId,
+          trackBId,
+          compases: 2,
+          preset: 'beat_roll',
+          volumeEnvelope: 'curva_s',
+          eqMode: 'intercambio_graves_central',
+          fxMode: 'repeticion_loop',
+          tempoA,
+          tempoB,
+          camelotA,
+          camelotB,
+          title: 'Beat Roll · 2 compases',
+          label: '✦ Beat Roll · 2 compases',
+          detail: 'Loop stutter progresivo sobre el compás previo al cruce tonal',
+        };
+      }
+    }
+
+    // Default Balanced Transition rotating based on seed
+    const defMode = seed % 3;
+    if (defMode === 0) {
       return {
         trackAId,
         trackBId,
@@ -214,27 +324,128 @@ class DJTransitionService {
         tempoB,
         camelotA,
         camelotB,
-        label: '✦ Automática · 2 compases',
-        detail: 'Transición tonal armónica con intercambio de graves',
+        title: 'Intercambio graves · 2 compases',
+        label: '✦ Intercambio graves · 2 compases',
+        detail: 'Intercambio dinámico de frecuencias graves central',
+      };
+    } else if (defMode === 1) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 1,
+        preset: 'freno_vinilo',
+        volumeEnvelope: 'corte_directo',
+        eqMode: 'intercambio_graves_central',
+        fxMode: 'freno_vinilo',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        title: 'Freno vinilo · 1 compás',
+        label: '✦ Freno vinilo · 1 compás',
+        detail: 'Freno de tornamesa con corte limpio al inicio del compás',
+      };
+    } else {
+      return {
+        trackAId,
+        trackBId,
+        compases: 2,
+        preset: 'eco_out',
+        volumeEnvelope: 'curva_s',
+        eqMode: 'filtro_paso_bajo',
+        fxMode: 'eco',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        title: 'Eco y filtro · 2 compases',
+        label: '✦ Eco y filtro · 2 compases',
+        detail: 'Eco espacial retardado y barrido de frecuencias para suavizar la entrada',
       };
     }
+  }
 
-    // Default Balanced Transition
-    return {
-      trackAId,
-      trackBId,
-      compases: 2,
-      preset: 'automatica',
-      volumeEnvelope: 'superposicion',
-      eqMode: 'intercambio_graves_central',
-      fxMode: 'ninguno',
-      tempoA,
-      tempoB,
-      camelotA,
-      camelotB,
-      label: '✦ Automática · 2 compases',
-      detail: 'Intercambio de frecuencias graves central',
-    };
+  /**
+   * Generates studio-grade DJ acoustic sound effects using the Web Audio API.
+   * Delivers that authentic club/festival physical sound impact.
+   */
+  public triggerDJEffect(
+    ctx: AudioContext,
+    type: 'freno_vinilo' | 'beat_roll' | 'sub_impact' | 'riser'
+  ): void {
+    if (!ctx || ctx.state === 'suspended') return;
+    const now = ctx.currentTime;
+
+    try {
+      if (type === 'sub_impact') {
+        // Deep punchy sub-bass drop transient (sine 95Hz -> 36Hz)
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(95, now);
+        osc.frequency.exponentialRampToValueAtTime(36, now + 0.35);
+
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.42);
+      } else if (type === 'freno_vinilo') {
+        // Turntable motor power-off sweep
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(380, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.55);
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, now);
+        filter.frequency.exponentialRampToValueAtTime(150, now + 0.55);
+
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.55);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.58);
+      } else if (type === 'riser') {
+        // White noise frequency sweep building into drop
+        const bufferSize = Math.floor(ctx.sampleRate * 0.8);
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.Q.value = 3.0;
+        filter.frequency.setValueAtTime(350, now);
+        filter.frequency.exponentialRampToValueAtTime(4500, now + 0.8);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(0.05, now);
+        gain.gain.linearRampToValueAtTime(0.3, now + 0.75);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.8);
+
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        noise.start(now);
+        noise.stop(now + 0.82);
+      }
+    } catch {}
   }
 
   /**
@@ -461,6 +672,29 @@ class DJTransitionService {
     // Generate harmonic acoustic elements so the user hears authentic music with beats and tone!
     this.createDeckAcousticTone(ctx, this.filterA, tempoA, 220, now, transEnd + 0.5);
     this.createDeckAcousticTone(ctx, this.filterB, tempoB, 261.63, transStart, transEnd + leadOutSec);
+
+    // Schedule Dynamic Sound Effects at the drop and transition point
+    setTimeout(() => {
+      if (this.isAuditionPlaying && this.audioCtx) {
+        this.triggerDJEffect(this.audioCtx, 'sub_impact');
+      }
+    }, Math.max(0, (crossoverTime - now) * 1000));
+
+    if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
+      setTimeout(() => {
+        if (this.isAuditionPlaying && this.audioCtx) {
+          this.triggerDJEffect(this.audioCtx, 'freno_vinilo');
+        }
+      }, Math.max(0, (crossoverTime - 0.25 - now) * 1000));
+    }
+
+    if (config.preset === 'crescendo' || config.fxMode === 'distorsion_wash') {
+      setTimeout(() => {
+        if (this.isAuditionPlaying && this.audioCtx) {
+          this.triggerDJEffect(this.audioCtx, 'riser');
+        }
+      }, Math.max(0, (transStart - now) * 1000));
+    }
 
     // Playhead progress loop
     const startTime = Date.now();
