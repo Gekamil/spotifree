@@ -267,9 +267,6 @@ class AudioEngine {
     const durationMs = crossfadeSec * 1000;
     let accumulatedCrossfadeMs = 0;
     let lastTick = Date.now();
-    let hasFiredDropEffect = false;
-    let hasFiredBrake = false;
-    let hasFiredRiser = false;
     const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
     const beatSec = 60 / safeTempo;
 
@@ -320,7 +317,7 @@ class AudioEngine {
         // 2nd half (crossover beat): Outgoing drops bass by -24dB while incoming bass snaps to 100%!
         if (djConfig.eqMode === 'intercambio_graves_central' || djConfig.preset === 'automatica') {
           if (progress < 0.5) {
-            inVol = inVol * 0.65; // attenuated low frequencies
+            inVol = inVol * 0.65; // attenuated low frequencies on incoming track
           } else {
             outVol = outVol * 0.35; // instant low-cut on outgoing track
           }
@@ -328,25 +325,9 @@ class AudioEngine {
           outVol = outVol * (1.0 - progress * 0.65);
         }
 
-        // --- Studio DJ Real-Time Acoustic & Physical Effects ---
-        // 1. Drop Transient: Sub-bass punch when incoming track kicks in (progress >= 0.5)
-        if (progress >= 0.5 && !hasFiredDropEffect) {
-          hasFiredDropEffect = true;
-          this.initAudioContext();
-          if (this.audioContext) {
-            djTransitionService.triggerDJEffect(this.audioContext, 'sub_impact');
-          }
-        }
-
-        // 2. Turntable Vinyl Brake: Platter slows down, pitch dives, and cut to drop
+        // --- Studio DJ Real-Audio Physical Track Manipulation ---
+        // 1. Turntable Vinyl Brake: Platter decelerates real track audio down to halt
         if (djConfig.preset === 'freno_vinilo' || djConfig.fxMode === 'freno_vinilo') {
-          if (progress > 0.6 && !hasFiredBrake) {
-            hasFiredBrake = true;
-            this.initAudioContext();
-            if (this.audioContext) {
-              djTransitionService.triggerDJEffect(this.audioContext, 'freno_vinilo');
-            }
-          }
           if (this.ytPlayer && typeof this.ytPlayer.setPlaybackRate === 'function') {
             if (progress > 0.65 && progress <= 0.85) {
               try { this.ytPlayer.setPlaybackRate(0.5); } catch {}
@@ -357,7 +338,7 @@ class AudioEngine {
           }
         }
 
-        // 3. Beat Roll / Stutter: Volume gating tension builder
+        // 2. Beat Roll / Stutter: Real audio volume rhythmic gating on the beat grid
         if (djConfig.preset === 'beat_roll' || djConfig.fxMode === 'repeticion_loop') {
           if (progress > 0.35 && progress < 0.85) {
             const rollFraction = progress > 0.65 ? beatSec / 8 : beatSec / 4;
@@ -368,20 +349,9 @@ class AudioEngine {
           }
         }
 
-        // 4. Spatial Echo Out: Exponential decay tail
+        // 3. Spatial Echo Out: Exponential decay tail
         if (djConfig.preset === 'eco_out' || djConfig.fxMode === 'eco') {
           outVol = Math.pow(Math.max(0, 1.0 - progress), 2.2) * masterVolume;
-        }
-
-        // 5. White Noise Riser: Building suspense into drop
-        if (djConfig.preset === 'crescendo' || djConfig.fxMode === 'distorsion_wash') {
-          if (progress >= 0.25 && !hasFiredRiser) {
-            hasFiredRiser = true;
-            this.initAudioContext();
-            if (this.audioContext) {
-              djTransitionService.triggerDJEffect(this.audioContext, 'riser');
-            }
-          }
         }
       } else {
         // Equal power sinusoidal curve for continuous crossfade
@@ -583,8 +553,8 @@ class AudioEngine {
     const totalSec = leadInSec + transitionDur + leadOutSec;
 
     const durA = (trackA.duration_ms || 210000) / 1000;
-    // Seek Track A right to its finale/outro so the transition captures the real ending
-    const startSecA = Math.max(0, Math.round(durA - (transitionDur + leadInSec + 1.5)));
+    // Cue Track A to an energetic musical groove (72% through the track) so the user hears real music and rhythm
+    const startSecA = Math.max(10, Math.round(durA * 0.72));
     const startSecB = 0;
 
     await this.ensureYouTubeReady();
@@ -602,7 +572,7 @@ class AudioEngine {
       if (typeof p1.setPlaybackRate === 'function') p1.setPlaybackRate(1);
     } catch {}
 
-    // Deck A (Track A): 100% volume, start near the end
+    // Deck A (Track A): 100% volume, start at energetic phrase
     try {
       if (typeof p0.unMute === 'function') p0.unMute();
       if (typeof p0.setVolume === 'function') p0.setVolume(100);
@@ -610,7 +580,7 @@ class AudioEngine {
       p0.playVideo();
     } catch {}
 
-    // Deck B (Track B): cued, muted
+    // Deck B (Track B): cued at beginning, muted
     try {
       if (typeof p1.unMute === 'function') p1.unMute();
       if (typeof p1.setVolume === 'function') p1.setVolume(0);
@@ -618,11 +588,24 @@ class AudioEngine {
       p1.pauseVideo();
     } catch {}
 
+    // Wait until Deck A actually begins playing audio before starting the transition timeline
+    let isP0Playing = false;
+    const waitStart = Date.now();
+    while (!isP0Playing && Date.now() - waitStart < 3500) {
+      if (!this.isAuditioning) return false;
+      try {
+        const state0 = typeof p0.getPlayerState === 'function' ? p0.getPlayerState() : -1;
+        const ct0 = typeof p0.getCurrentTime === 'function' ? p0.getCurrentTime() : 0;
+        if (state0 === 1 || ct0 > 0) {
+          isP0Playing = true;
+          break;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, 60));
+    }
+
     const startTime = Date.now();
     let startedB = false;
-    let hasFiredDropEffect = false;
-    let hasFiredBrake = false;
-    let hasFiredRiser = false;
     const totalDurationMs = totalSec * 1000;
 
     this.auditionInterval = window.setInterval(() => {
@@ -678,25 +661,9 @@ class AudioEngine {
           outVol = outVol * (1.0 - pMix * 0.6);
         }
 
-        // Drop Transient: Sub-bass punch when incoming track kicks in (pMix >= 0.5)
-        if (pMix >= 0.5 && !hasFiredDropEffect) {
-          hasFiredDropEffect = true;
-          this.initAudioContext();
-          if (this.audioContext) {
-            djTransitionService.triggerDJEffect(this.audioContext, 'sub_impact');
-          }
-        }
-
         // DJ FX 1: Turntable / Vinyl Brake (Freno de vinilo)
         if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
           const remainingSec = (leadInSec + transitionDur) - elapsedSec;
-          if (remainingSec <= 0.7 && !hasFiredBrake) {
-            hasFiredBrake = true;
-            this.initAudioContext();
-            if (this.audioContext) {
-              djTransitionService.triggerDJEffect(this.audioContext, 'freno_vinilo');
-            }
-          }
           if (remainingSec <= 0.7 && remainingSec > 0.25) {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.5); } catch {}
           } else if (remainingSec <= 0.25 && remainingSec > 0) {
@@ -708,7 +675,7 @@ class AudioEngine {
           }
         }
 
-        // DJ FX 2: Beat Roll / Stutter loop acceleration
+        // DJ FX 2: Beat Roll / Stutter loop acceleration on real track
         if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
           const beatSec = 60 / safeTempo;
           const progressInPhase = elapsedSec - leadInSec;
@@ -724,17 +691,6 @@ class AudioEngine {
         // DJ FX 3: Echo Out tail
         if (config.preset === 'eco_out' || config.fxMode === 'eco') {
           outVol = Math.pow(Math.max(0, 1.0 - pMix), 2.2);
-        }
-
-        // DJ FX 4: Riser on Crescendo
-        if (config.preset === 'crescendo' || config.fxMode === 'distorsion_wash') {
-          if (pMix >= 0.25 && !hasFiredRiser) {
-            hasFiredRiser = true;
-            this.initAudioContext();
-            if (this.audioContext) {
-              djTransitionService.triggerDJEffect(this.audioContext, 'riser');
-            }
-          }
         }
 
         if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));

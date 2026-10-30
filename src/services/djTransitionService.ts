@@ -57,13 +57,7 @@ class DJTransitionService {
   private audioCtx: AudioContext | null = null;
   private previewInterval: number | null = null;
   private isAuditionPlaying = false;
-  private onProgressCallback: ((progress: number) => void) | null = null;
   private onStopCallback: (() => void) | null = null;
-  private gainA: GainNode | null = null;
-  private gainB: GainNode | null = null;
-  private filterA: BiquadFilterNode | null = null;
-  private filterB: BiquadFilterNode | null = null;
-  private synthNodes: Array<{ stop: () => void }> = [];
 
   public getTransitionKey(trackAId: string, trackBId: string): string {
     const cleanA = (trackAId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -150,8 +144,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Freno vinilo · 1 compás',
-          label: '✦ Freno vinilo · 1 compás',
+          title: 'Freno vinilo',
+          label: '✦ Freno vinilo',
           detail: 'Freno analógico de tornamesa con corte directo en primer tiempo',
         };
       } else {
@@ -167,8 +161,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Eco y filtro · 2 compases',
-          label: '✦ Eco y filtro · 2 compases',
+          title: 'Eco y filtro',
+          label: '✦ Eco y filtro',
           detail: 'Eco espacial retardado disolviendo la pista saliente para salvar el cambio de tempo',
         };
       }
@@ -190,8 +184,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Beat Roll · 2 compases',
-          label: '✦ Beat Roll · 2 compases',
+          title: 'Beat Roll',
+          label: '✦ Beat Roll',
           detail: 'Redoble rítmico acelerado (1/4 a 1/8) construyendo tensión hacia el drop',
         };
       } else if (mode === 1) {
@@ -207,8 +201,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Eco y filtro · 2 compases',
-          label: '✦ Eco y filtro · 2 compases',
+          title: 'Eco y filtro',
+          label: '✦ Eco y filtro',
           detail: 'Filtro paso bajo progresivo con cola de delay espacial',
         };
       } else {
@@ -224,8 +218,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Corte al golpe · 1 compás',
-          label: '✦ Corte directo · 1 compás',
+          title: 'Corte directo',
+          label: '✦ Corte directo',
           detail: 'Corte seco al inicio del compás con impacto inmediato de bombo',
         };
       }
@@ -246,8 +240,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Armónica pura · 4 compases',
-          label: '✦ Armónica pura · 4 compases',
+          title: 'Automática',
+          label: '✦ Automática',
           detail: 'Fusión tonal melódica extendida en clave armónica con intercambio de bajo central',
         };
       } else {
@@ -263,8 +257,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Crescendo energía · 4 compases',
-          label: '✦ Crescendo · 4 compases',
+          title: 'Crescendo',
+          label: '✦ Crescendo',
           detail: 'Subida exponencial de energía y saturación armónica antes de la entrada',
         };
       }
@@ -285,8 +279,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Intercambio graves · 2 compases',
-          label: '✦ Intercambio graves · 2 compases',
+          title: 'Automática',
+          label: '✦ Automática',
           detail: 'Cruce dinámico de frecuencias graves en el segundo compás evitando barullo',
         };
       } else {
@@ -302,8 +296,8 @@ class DJTransitionService {
           tempoB,
           camelotA,
           camelotB,
-          title: 'Beat Roll · 2 compases',
-          label: '✦ Beat Roll · 2 compases',
+          title: 'Beat Roll',
+          label: '✦ Beat Roll',
           detail: 'Loop stutter progresivo sobre el compás previo al cruce tonal',
         };
       }
@@ -324,8 +318,8 @@ class DJTransitionService {
         tempoB,
         camelotA,
         camelotB,
-        title: 'Intercambio graves · 2 compases',
-        label: '✦ Intercambio graves · 2 compases',
+        title: 'Automática',
+        label: '✦ Automática',
         detail: 'Intercambio dinámico de frecuencias graves central',
       };
     } else if (defMode === 1) {
@@ -341,8 +335,8 @@ class DJTransitionService {
         tempoB,
         camelotA,
         camelotB,
-        title: 'Freno vinilo · 1 compás',
-        label: '✦ Freno vinilo · 1 compás',
+        title: 'Freno vinilo',
+        label: '✦ Freno vinilo',
         detail: 'Freno de tornamesa con corte limpio al inicio del compás',
       };
     } else {
@@ -358,94 +352,11 @@ class DJTransitionService {
         tempoB,
         camelotA,
         camelotB,
-        title: 'Eco y filtro · 2 compases',
-        label: '✦ Eco y filtro · 2 compases',
+        title: 'Eco y filtro',
+        label: '✦ Eco y filtro',
         detail: 'Eco espacial retardado y barrido de frecuencias para suavizar la entrada',
       };
     }
-  }
-
-  /**
-   * Generates studio-grade DJ acoustic sound effects using the Web Audio API.
-   * Delivers that authentic club/festival physical sound impact.
-   */
-  public triggerDJEffect(
-    ctx: AudioContext,
-    type: 'freno_vinilo' | 'beat_roll' | 'sub_impact' | 'riser'
-  ): void {
-    if (!ctx || ctx.state === 'suspended') return;
-    const now = ctx.currentTime;
-
-    try {
-      if (type === 'sub_impact') {
-        // Deep punchy sub-bass drop transient (sine 95Hz -> 36Hz)
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(95, now);
-        osc.frequency.exponentialRampToValueAtTime(36, now + 0.35);
-
-        gain.gain.setValueAtTime(0.4, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now);
-        osc.stop(now + 0.42);
-      } else if (type === 'freno_vinilo') {
-        // Turntable motor power-off sweep
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(380, now);
-        osc.frequency.exponentialRampToValueAtTime(30, now + 0.55);
-
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'lowpass';
-        filter.frequency.setValueAtTime(1200, now);
-        filter.frequency.exponentialRampToValueAtTime(150, now + 0.55);
-
-        gain.gain.setValueAtTime(0.25, now);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.55);
-
-        osc.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-
-        osc.start(now);
-        osc.stop(now + 0.58);
-      } else if (type === 'riser') {
-        // White noise frequency sweep building into drop
-        const bufferSize = Math.floor(ctx.sampleRate * 0.8);
-        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-          data[i] = Math.random() * 2 - 1;
-        }
-
-        const noise = ctx.createBufferSource();
-        noise.buffer = buffer;
-
-        const filter = ctx.createBiquadFilter();
-        filter.type = 'bandpass';
-        filter.Q.value = 3.0;
-        filter.frequency.setValueAtTime(350, now);
-        filter.frequency.exponentialRampToValueAtTime(4500, now + 0.8);
-
-        const gain = ctx.createGain();
-        gain.gain.setValueAtTime(0.05, now);
-        gain.gain.linearRampToValueAtTime(0.3, now + 0.75);
-        gain.gain.linearRampToValueAtTime(0.001, now + 0.8);
-
-        noise.connect(filter);
-        filter.connect(gain);
-        gain.connect(ctx.destination);
-
-        noise.start(now);
-        noise.stop(now + 0.82);
-      }
-    } catch {}
   }
 
   /**
@@ -537,263 +448,22 @@ class DJTransitionService {
     return Math.max(1.5, Math.min(16, barSec * compases));
   }
 
-  /**
-   * Starts a client-side Web Audio API audition of the DJ transition.
-   * Runs 100% on the device with zero server latency or load.
-   */
-  public startAudition(
-    config: DJTransitionConfig,
-    tempoA = 128,
-    tempoB = 128,
-    onProgress: (progress: number) => void,
-    onEnded: () => void
-  ): void {
-    this.stopAudition();
-
-    const AudioContextClass =
-      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-    if (!AudioContextClass) {
-      onEnded();
-      return;
-    }
-
-    try {
-      this.audioCtx = new AudioContextClass();
-    } catch {
-      onEnded();
-      return;
-    }
-
-    if (this.audioCtx.state === 'suspended') {
-      this.audioCtx.resume().catch(() => {});
-    }
-
-    this.isAuditionPlaying = true;
-    this.onProgressCallback = onProgress;
-    this.onStopCallback = onEnded;
-
-    const ctx = this.audioCtx;
-    const now = ctx.currentTime;
-    const transitionDur = this.calculateDurationSeconds(tempoA, config.compases);
-    // Add 1.5 seconds of lead-in for Song A and 1.5 seconds of lead-out for Song B so user feels the full context
-    const leadInSec = 1.2;
-    const leadOutSec = 1.5;
-    const totalAuditionSec = leadInSec + transitionDur + leadOutSec;
-
-    // Deck A (Outgoing): LowShelf filter + Gain
-    this.filterA = ctx.createBiquadFilter();
-    this.filterA.type = 'lowshelf';
-    this.filterA.frequency.value = 250;
-    this.filterA.gain.setValueAtTime(0, now);
-
-    this.gainA = ctx.createGain();
-    this.gainA.gain.setValueAtTime(1.0, now);
-
-    // Deck B (Incoming): LowShelf filter + Gain
-    this.filterB = ctx.createBiquadFilter();
-    this.filterB.type = 'lowshelf';
-    this.filterB.frequency.value = 250;
-    this.filterB.gain.setValueAtTime(-24, now); // Starts with bass cut
-
-    this.gainB = ctx.createGain();
-    this.gainB.gain.setValueAtTime(0.0, now); // Starts muted
-
-    // Master bus
-    const masterGain = ctx.createGain();
-    masterGain.gain.setValueAtTime(0.85, now);
-    masterGain.connect(ctx.destination);
-
-    this.filterA.connect(this.gainA);
-    this.gainA.connect(masterGain);
-
-    this.filterB.connect(this.gainB);
-    this.gainB.connect(masterGain);
-
-    // Schedule Volume curves based on selected preset & volume envelope
-    const transStart = now + leadInSec;
-    const transEnd = transStart + transitionDur;
-    const crossoverTime = transStart + transitionDur * 0.5;
-
-    // Deck A Volume
-    if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
-      // Maintains 100% through the first bar, then ramps down to 0
-      this.gainA.gain.setValueAtTime(1.0, transStart);
-      this.gainA.gain.setValueAtTime(1.0, crossoverTime);
-      this.gainA.gain.linearRampToValueAtTime(0.0, transEnd);
-    } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
-      this.gainA.gain.setValueAtTime(1.0, crossoverTime);
-      this.gainA.gain.setValueAtTime(0.0, crossoverTime + 0.01);
-    } else {
-      // Linear or equal-power crossfade
-      this.gainA.gain.setValueAtTime(1.0, transStart);
-      this.gainA.gain.linearRampToValueAtTime(0.0, transEnd);
-    }
-
-    // Deck B Volume
-    if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
-      this.gainB.gain.setValueAtTime(0.0, transStart);
-      this.gainB.gain.linearRampToValueAtTime(1.0, transEnd);
-    } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
-      this.gainB.gain.setValueAtTime(0.0, crossoverTime);
-      this.gainB.gain.setValueAtTime(1.0, crossoverTime + 0.01);
-    } else if (config.preset === 'crescendo') {
-      this.gainB.gain.setValueAtTime(0.0, transStart);
-      this.gainB.gain.exponentialRampToValueAtTime(1.0, transEnd);
-    } else {
-      this.gainB.gain.setValueAtTime(0.0, transStart);
-      this.gainB.gain.linearRampToValueAtTime(1.0, transEnd);
-    }
-
-    // Schedule EQ Bass curves
-    if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica') {
-      // Bass Swap: At the crossover beat, Deck A drops bass by -24dB and Deck B bass snaps to 0dB!
-      this.filterA.gain.setValueAtTime(0, transStart);
-      this.filterA.gain.setValueAtTime(0, crossoverTime - 0.05);
-      this.filterA.gain.linearRampToValueAtTime(-24, crossoverTime);
-
-      this.filterB.gain.setValueAtTime(-24, transStart);
-      this.filterB.gain.setValueAtTime(-24, crossoverTime - 0.05);
-      this.filterB.gain.linearRampToValueAtTime(0, crossoverTime);
-    } else if (config.eqMode === 'intercambio_gradual') {
-      this.filterA.gain.setValueAtTime(0, transStart);
-      this.filterA.gain.linearRampToValueAtTime(-24, transEnd);
-      this.filterB.gain.setValueAtTime(-24, transStart);
-      this.filterB.gain.linearRampToValueAtTime(0, transEnd);
-    } else if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
-      this.filterA.frequency.setValueAtTime(4000, transStart);
-      this.filterA.frequency.exponentialRampToValueAtTime(350, transEnd);
-      this.filterB.gain.setValueAtTime(0, transStart);
-    } else {
-      // No EQ filter change
-      this.filterA.gain.setValueAtTime(0, transStart);
-      this.filterB.gain.setValueAtTime(0, transStart);
-    }
-
-    // Generate harmonic acoustic elements so the user hears authentic music with beats and tone!
-    this.createDeckAcousticTone(ctx, this.filterA, tempoA, 220, now, transEnd + 0.5);
-    this.createDeckAcousticTone(ctx, this.filterB, tempoB, 261.63, transStart, transEnd + leadOutSec);
-
-    // Schedule Dynamic Sound Effects at the drop and transition point
-    setTimeout(() => {
-      if (this.isAuditionPlaying && this.audioCtx) {
-        this.triggerDJEffect(this.audioCtx, 'sub_impact');
-      }
-    }, Math.max(0, (crossoverTime - now) * 1000));
-
-    if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
-      setTimeout(() => {
-        if (this.isAuditionPlaying && this.audioCtx) {
-          this.triggerDJEffect(this.audioCtx, 'freno_vinilo');
-        }
-      }, Math.max(0, (crossoverTime - 0.25 - now) * 1000));
-    }
-
-    if (config.preset === 'crescendo' || config.fxMode === 'distorsion_wash') {
-      setTimeout(() => {
-        if (this.isAuditionPlaying && this.audioCtx) {
-          this.triggerDJEffect(this.audioCtx, 'riser');
-        }
-      }, Math.max(0, (transStart - now) * 1000));
-    }
-
-    // Playhead progress loop
-    const startTime = Date.now();
-    const durationMs = totalAuditionSec * 1000;
-
-    this.previewInterval = window.setInterval(() => {
-      if (!this.isAuditionPlaying) return;
-      const elapsed = Date.now() - startTime;
-      const progress = Math.min(1.0, Math.max(0.0, elapsed / durationMs));
-
-      if (this.onProgressCallback) {
-        this.onProgressCallback(progress);
-      }
-
-      if (progress >= 1.0) {
-        this.stopAudition();
-      }
-    }, 30);
-  }
-
-  private createDeckAcousticTone(
-    ctx: AudioContext,
-    dest: AudioNode,
-    bpm: number,
-    baseFreq: number,
-    startTime: number,
-    endTime: number
-  ) {
-    const beatSec = 60 / Math.max(60, Math.min(200, bpm));
-    let t = startTime;
-
-    // Rhythmic kick & bass pulses
-    while (t < endTime) {
-      try {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-
-        // Punchy kick / bass note
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(baseFreq * 0.5, t);
-        osc.frequency.exponentialRampToValueAtTime(45, t + beatSec * 0.4);
-
-        gain.gain.setValueAtTime(0.65, t);
-        gain.gain.exponentialRampToValueAtTime(0.001, t + beatSec * 0.35);
-
-        osc.connect(gain);
-        gain.connect(dest);
-
-        osc.start(t);
-        osc.stop(t + beatSec * 0.4);
-        this.synthNodes.push({ stop: () => { try { osc.stop(); } catch {} } });
-      } catch {}
-
-      // Chord warmth on the upbeat
-      try {
-        const chordOsc = ctx.createOscillator();
-        const chordGain = ctx.createGain();
-        chordOsc.type = 'sine';
-        chordOsc.frequency.setValueAtTime(baseFreq, t + beatSec * 0.5);
-        chordGain.gain.setValueAtTime(0.2, t + beatSec * 0.5);
-        chordGain.gain.exponentialRampToValueAtTime(0.001, t + beatSec * 0.9);
-
-        chordOsc.connect(chordGain);
-        chordGain.connect(dest);
-
-        chordOsc.start(t + beatSec * 0.5);
-        chordOsc.stop(t + beatSec * 0.95);
-        this.synthNodes.push({ stop: () => { try { chordOsc.stop(); } catch {} } });
-      } catch {}
-
-      t += beatSec;
-    }
-  }
-
   public stopAudition(): void {
     if (this.previewInterval !== null) {
       clearInterval(this.previewInterval);
       this.previewInterval = null;
     }
-    this.synthNodes.forEach((node) => {
-      try {
-        node.stop();
-      } catch {}
-    });
-    this.synthNodes = [];
-
     if (this.audioCtx) {
       try {
         this.audioCtx.close().catch(() => {});
       } catch {}
       this.audioCtx = null;
     }
-
     this.isAuditionPlaying = false;
     if (this.onStopCallback) {
       this.onStopCallback();
       this.onStopCallback = null;
     }
-    this.onProgressCallback = null;
   }
 
   public isPlaying(): boolean {

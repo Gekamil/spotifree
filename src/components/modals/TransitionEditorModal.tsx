@@ -177,7 +177,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       };
 
       try {
-        // 1. Try real audio from actual songs first!
+        // 1. Audition the transition with 100% REAL track audio
         const playedReal = await audioEngine.startTransitionAudition(
           trackA,
           trackB,
@@ -194,23 +194,11 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           }
         );
 
-        // 2. If real audio is unavailable, fallback to synthesized preview
         if (!playedReal) {
           setIsAuditionLoading(false);
-          setIsPlayingAudition(true);
-          djTransitionService.startAudition(
-            config,
-            featA.tempo,
-            featB.tempo,
-            (progress) => {
-              setAuditionProgress(progress);
-            },
-            () => {
-              setIsPlayingAudition(false);
-              setIsAuditionLoading(false);
-              setAuditionProgress(0);
-            }
-          );
+          setIsPlayingAudition(false);
+          setToastMessage('No se pudo precargar el audio para la preescucha.');
+          setTimeout(() => setToastMessage(null), 3000);
         }
       } catch (e) {
         setIsAuditionLoading(false);
