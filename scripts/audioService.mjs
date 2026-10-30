@@ -11,11 +11,16 @@ let rl = null;
 let isReady = false;
 
 export async function resolveYouTubeVideoId(query) {
-  const cleanQ = query.trim();
+  const cleanQ = (query || '').trim();
   if (!cleanQ) return null;
   if (/^[a-zA-Z0-9_-]{11}$/.test(cleanQ)) return cleanQ;
 
-  // 1. YouTube Music API / Innertube search
+  const cached = CACHE.get(`yt_vid_${cleanQ}`);
+  if (cached && Date.now() - cached.timestamp < 12 * 3600 * 1000) {
+    return cached.id;
+  }
+
+  // 1. YouTube Music Innertube search
   try {
     const ytmRes = await fetch('https://music.youtube.com/youtubei/v1/search', {
       method: 'POST',
@@ -33,8 +38,8 @@ export async function resolveYouTubeVideoId(query) {
           },
         },
         query: cleanQ,
-        params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
       }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
     });
     if (ytmRes.ok) {
       const data = await ytmRes.json();
@@ -42,34 +47,70 @@ export async function resolveYouTubeVideoId(query) {
       for (const sec of sections) {
         const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
         if (shelf) {
-          if (shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId) {
-            return shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId;
-          }
           for (const item of shelf.contents || []) {
             const itemRenderer = item.musicResponsiveListItemRenderer;
             const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
             const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
-            if (videoId) return videoId;
+            if (videoId) {
+              CACHE.set(`yt_vid_${cleanQ}`, { id: videoId, timestamp: Date.now() });
+              return videoId;
+            }
           }
         }
       }
-      const text = JSON.stringify(data);
-      const matches = Array.from(text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
-      if (matches.length > 0) return matches[0];
     }
   } catch {}
 
-  // 2. Fallback to YouTube web search
+  // 2. Structured search via searchYouTubeTracks with title/artist scoring
   try {
-    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(cleanQ + ' audio')}`;
-    const res = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-    });
-    const html = await res.text();
-    const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map((m) => m[1]);
-    if (matches.length > 0) return matches[0];
+    const candidates = await searchYouTubeTracks(cleanQ, 8);
+    if (candidates && candidates.length > 0) {
+      const qWords = cleanQ.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/g, ' ').split(/\s+/).filter(Boolean);
+      
+      let bestCandidate = null;
+      let highestScore = -999;
+
+      for (const cand of candidates) {
+        const cleanVidId = (cand.id || '').replace(/^yt-/, '').trim();
+        if (!cleanVidId || cleanVidId.length !== 11) continue;
+
+        const candTitle = (cand.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const candArtist = (cand.artists?.[0]?.name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const combined = `${candTitle} ${candArtist}`;
+
+        let score = 0;
+        for (const w of qWords) {
+          if (candTitle.includes(w)) score += 3;
+          if (candArtist.includes(w)) score += 2;
+        }
+
+        // Duration sanity check: typical track is between 60s and 480s (8 mins)
+        const durSec = (cand.duration_ms || 0) / 1000;
+        if (durSec >= 60 && durSec <= 480) {
+          score += 3; // Standard song duration bonus
+        } else if (durSec > 600) {
+          score -= 10; // Penalize 10-minute+ mixes, albums, podcasts
+        } else if (durSec < 45) {
+          score -= 10; // Penalize teaser shorts
+        }
+
+        // Bonus for official / high quality matches
+        if (combined.includes('official') || combined.includes('audio') || combined.includes('video') || combined.includes('visualizer')) {
+          score += 2;
+        }
+
+        if (score > highestScore) {
+          highestScore = score;
+          bestCandidate = cleanVidId;
+        }
+      }
+
+      const winnerId = bestCandidate || (candidates[0].id || '').replace(/^yt-/, '');
+      if (winnerId) {
+        CACHE.set(`yt_vid_${cleanQ}`, { id: winnerId, timestamp: Date.now() });
+        return winnerId;
+      }
+    }
   } catch {}
 
   return null;

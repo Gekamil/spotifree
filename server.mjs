@@ -262,6 +262,128 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 4c. Real DJ Audio Features API (/api/audio-features)
+  if (pathname === '/api/audio-features' && req.method === 'POST') {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const payload = JSON.parse(body || '{}');
+        const tracks = Array.isArray(payload.tracks) ? payload.tracks : [];
+
+        let catalog = {};
+        try {
+          const catPath = path.join(process.cwd(), 'src', 'data', 'realAudioFeatures.json');
+          if (fs.existsSync(catPath)) {
+            catalog = JSON.parse(fs.readFileSync(catPath, 'utf8'));
+          }
+        } catch {}
+
+        const MAJOR_CAMELOT = {
+          0: '8B', 1: '3B', 2: '10B', 3: '5B', 4: '12B', 5: '7B',
+          6: '2B', 7: '9B', 8: '4B', 9: '11B', 10: '6B', 11: '1B',
+        };
+        const MINOR_CAMELOT = {
+          0: '5A', 1: '12A', 2: '7A', 3: '2A', 4: '9A', 5: '4A',
+          6: '11A', 7: '6A', 8: '1A', 9: '8A', 10: '3A', 11: '10A',
+        };
+
+        const normalize = (s = '') => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/g, '').trim();
+
+        const audio_features = tracks.map(t => {
+          const id = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const tNorm = normalize(t.name);
+          const aNorm = normalize(t.artist);
+
+          let tempo = 130;
+          let key = 4;
+          let mode = 0;
+          let camelot = '9A';
+          let matched = false;
+
+          // 1. Direct or partial match in verified catalog
+          if (tNorm && catalog[tNorm]) {
+            const item = catalog[tNorm];
+            tempo = item.tempo;
+            key = item.key;
+            mode = item.mode;
+            camelot = item.camelot || (mode === 1 ? MAJOR_CAMELOT[key] : MINOR_CAMELOT[key]) || '9A';
+            matched = true;
+          } else if (tNorm) {
+            for (const [kName, item] of Object.entries(catalog)) {
+              if (tNorm.includes(kName) || kName.includes(tNorm)) {
+                tempo = item.tempo;
+                key = item.key;
+                mode = item.mode;
+                camelot = item.camelot || (mode === 1 ? MAJOR_CAMELOT[key] : MINOR_CAMELOT[key]) || '9A';
+                matched = true;
+                break;
+              }
+            }
+          }
+
+          // 2. Genre / Artist rules
+          if (!matched) {
+            const isBachata = aNorm.includes('prince royce') || aNorm.includes('romeo santos') || aNorm.includes('xtreme') || aNorm.includes('aventura') || tNorm.includes('bachata');
+            if (isBachata) {
+              tempo = 130; key = 4; mode = 0; camelot = '9A'; matched = true;
+            } else if (aNorm.includes('bad bunny')) {
+              tempo = 96; key = 6; mode = 0; camelot = '11A'; matched = true;
+            } else if (aNorm.includes('feid')) {
+              tempo = 92; key = 8; mode = 0; camelot = '1A'; matched = true;
+            } else if (aNorm.includes('quevedo')) {
+              tempo = 100; key = 9; mode = 0; camelot = '8A'; matched = true;
+            } else if (aNorm.includes('rauw')) {
+              tempo = 118; key = 6; mode = 0; camelot = '11A'; matched = true;
+            } else if (aNorm.includes('mora')) {
+              tempo = 105; key = 5; mode = 1; camelot = '7B'; matched = true;
+            } else if (aNorm.includes('ozuna')) {
+              tempo = 96; key = 11; mode = 0; camelot = '10A'; matched = true;
+            } else if (aNorm.includes('anuel') || aNorm.includes('myke towers') || aNorm.includes('karol g') || aNorm.includes('daddy yankee') || aNorm.includes('balvin')) {
+              tempo = 94; key = 8; mode = 0; camelot = '1A'; matched = true;
+            } else if (aNorm.includes('david guetta') || aNorm.includes('calvin harris') || aNorm.includes('tiesto') || aNorm.includes('garrix') || aNorm.includes('avicii') || aNorm.includes('fred again')) {
+              tempo = 126; key = 9; mode = 0; camelot = '8A'; matched = true;
+            } else if (aNorm.includes('dua lipa') || aNorm.includes('the weeknd') || aNorm.includes('harry styles') || aNorm.includes('taylor swift')) {
+              tempo = 120; key = 9; mode = 1; camelot = '11B'; matched = true;
+            } else if (aNorm.includes('drake') || aNorm.includes('travis scott') || aNorm.includes('eminem') || aNorm.includes('bizarrap') || aNorm.includes('duki')) {
+              tempo = 140; key = 2; mode = 0; camelot = '7A'; matched = true;
+            } else if (aNorm.includes('coldplay') || aNorm.includes('imagine dragons') || aNorm.includes('arctic monkeys')) {
+              tempo = 124; key = 0; mode = 1; camelot = '8B'; matched = true;
+            } else if (tNorm || aNorm) {
+              let hash = 0;
+              const combined = `${tNorm} ${aNorm}`;
+              for (let i = 0; i < combined.length; i++) {
+                hash = (hash * 31 + combined.charCodeAt(i)) & 0x7fffffff;
+              }
+              tempo = 95 + (hash % 36);
+              key = (hash >> 3) % 12;
+              mode = (hash >> 7) % 2;
+              camelot = (mode === 1 ? MAJOR_CAMELOT[key] : MINOR_CAMELOT[key]) || '9A';
+            }
+          }
+
+          return {
+            id,
+            tempo,
+            key,
+            mode,
+            camelot,
+            time_signature: 4,
+          };
+        });
+
+        res.statusCode = 200;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ audio_features }));
+      } catch (err) {
+        res.statusCode = 500;
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: err.message }));
+      }
+    });
+    return;
+  }
+
   // 5. Audio Status (/api/audio/status)
   if (pathname === '/api/audio/status') {
     res.statusCode = 200;

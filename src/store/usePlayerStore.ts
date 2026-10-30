@@ -70,6 +70,7 @@ interface PlayerState {
   playedInShuffle: string[];
   likedTrackIds: string[];
   currentContextId: string | null;
+  preselectedNextTrackId: string | null;
 
   // Actions
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => void;
@@ -122,6 +123,7 @@ const store = create<PlayerState>((set, get) => ({
   playedInShuffle: [],
   likedTrackIds: getInitialLikedTrackIds(),
   currentContextId: null,
+  preselectedNextTrackId: null,
 
   setContextId: (id: string | null) => set({ currentContextId: id }),
 
@@ -159,15 +161,26 @@ const store = create<PlayerState>((set, get) => ({
       ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
       : [];
 
+    const activeQueue = newQueue ?? state.queue;
+    let nextPreselectedId: string | null = null;
+    if (state.isShuffle && activeQueue.length > 1) {
+      const unplayed = activeQueue.filter((t) => !updatedShuffle.includes(t.id));
+      if (unplayed.length > 0) {
+        const rnd = Math.floor(Math.random() * unplayed.length);
+        nextPreselectedId = unplayed[rnd].id;
+      }
+    }
+
     set({
       currentTrack: track,
       currentContextId: contextId !== undefined ? contextId : (track.album?.id || state.currentContextId),
       isPlaying: true,
       progressMs: 0,
       durationMs: track.duration_ms,
-      queue: newQueue ?? state.queue,
+      queue: activeQueue,
       history: updatedHistory,
       playedInShuffle: updatedShuffle,
+      preselectedNextTrackId: nextPreselectedId,
     });
 
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
@@ -220,7 +233,7 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle } = get();
+    const { queue, currentTrack, repeatMode } = get();
     if (queue.length === 0) return;
 
     if (repeatMode === 'one' && currentTrack) {
@@ -234,93 +247,41 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    let nextTrackCandidate: Track | null = null;
+    const nextTrackCandidate = get().getNextTrack();
 
-    if (isShuffle && queue.length > 1) {
-      // Find tracks in queue that have not been played yet in this shuffle cycle
-      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id));
-
-      if (unplayed.length > 0) {
-        // Pick random track from unplayed without repeats
-        const randomIndex = Math.floor(Math.random() * unplayed.length);
-        nextTrackCandidate = unplayed[randomIndex];
-      } else {
-        // All tracks in queue have been played once
-        if (repeatMode === 'off') {
-          const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
-          if (isAutoplay && currentTrack) {
-            get().triggerAutoplaySimilar(currentTrack);
-            return;
-          }
-
-          // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
-          const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
-          const currentContextId = get().currentContextId;
-          const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
-
-          if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {
-            const nextPlaylist = playlists[currentPlaylistIdx + 1];
-            const tracks = nextPlaylist.tracks?.items || [];
-            if (tracks.length > 0) {
-              get().playTrack(tracks[0], tracks, nextPlaylist.id);
-              return;
-            }
-          }
-
-          if (queue.length > 0) {
-            get().playTrack(queue[0], queue, currentContextId || undefined);
-            return;
-          }
-
-          set({ isPlaying: false, progressMs: 0 });
-          return;
-        }
-        // Repeat mode is on ('all' or 'smart'): start fresh cycle
-        const candidates = queue.filter((t) => t.id !== currentTrack?.id);
-        const nextIndex = Math.floor(Math.random() * candidates.length);
-        nextTrackCandidate = candidates[nextIndex] || queue[0];
-        set({ playedInShuffle: [nextTrackCandidate.id] });
-      }
-    } else {
-      const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
-      if (currentIndex === queue.length - 1 && repeatMode === 'off') {
-        const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
-        if (isAutoplay && currentTrack) {
-          get().triggerAutoplaySimilar(currentTrack);
-          return;
-        }
-
-        // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
-        const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
-        const currentContextId = get().currentContextId;
-        const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
-
-        if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {
-          const nextPlaylist = playlists[currentPlaylistIdx + 1];
-          const tracks = nextPlaylist.tracks?.items || [];
-          if (tracks.length > 0) {
-            get().playTrack(tracks[0], tracks, nextPlaylist.id);
-            return;
-          }
-        }
-
-        if (queue.length > 0) {
-          get().playTrack(queue[0], queue, currentContextId || undefined);
-          return;
-        }
-
-        set({ isPlaying: false, progressMs: 0 });
+    if (!nextTrackCandidate) {
+      const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
+      if (isAutoplay && currentTrack) {
+        get().triggerAutoplaySimilar(currentTrack);
         return;
       }
-      const nextIndex = (currentIndex + 1) % queue.length;
-      nextTrackCandidate = queue[nextIndex];
+
+      // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
+      const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
+      const currentContextId = get().currentContextId;
+      const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
+
+      if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {
+        const nextPlaylist = playlists[currentPlaylistIdx + 1];
+        const tracks = nextPlaylist.tracks?.items || [];
+        if (tracks.length > 0) {
+          get().playTrack(tracks[0], tracks, nextPlaylist.id);
+          return;
+        }
+      }
+
+      if (queue.length > 0) {
+        get().playTrack(queue[0], queue, currentContextId || undefined);
+        return;
+      }
+
+      set({ isPlaying: false, progressMs: 0 });
+      return;
     }
 
-    if (nextTrackCandidate) {
-      get().playTrack(nextTrackCandidate);
-      if (get().shuffleMode === 'smart') {
-        get().triggerSmartShuffleRecommendation(nextTrackCandidate);
-      }
+    get().playTrack(nextTrackCandidate);
+    if (get().shuffleMode === 'smart') {
+      get().triggerSmartShuffleRecommendation(nextTrackCandidate);
     }
   },
 
@@ -406,7 +367,7 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   getNextTrack: (): Track | null => {
-    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle } = get();
+    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle, preselectedNextTrackId } = get();
     if (queue.length === 0) return null;
 
     if (repeatMode === 'one' && currentTrack) {
@@ -414,6 +375,10 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     if (isShuffle && queue.length > 1) {
+      if (preselectedNextTrackId) {
+        const found = queue.find((t) => t.id === preselectedNextTrackId);
+        if (found) return found;
+      }
       const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id));
       if (unplayed.length > 0) {
         return unplayed[0];
@@ -441,6 +406,15 @@ const store = create<PlayerState>((set, get) => ({
       ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
       : [];
 
+    let nextPreselectedId: string | null = null;
+    if (state.isShuffle && state.queue.length > 1) {
+      const unplayed = state.queue.filter((t) => !updatedShuffle.includes(t.id));
+      if (unplayed.length > 0) {
+        const rnd = Math.floor(Math.random() * unplayed.length);
+        nextPreselectedId = unplayed[rnd].id;
+      }
+    }
+
     set({
       currentTrack: track,
       currentContextId: track.album?.id || state.currentContextId,
@@ -449,6 +423,7 @@ const store = create<PlayerState>((set, get) => ({
       durationMs: track.duration_ms,
       history: updatedHistory,
       playedInShuffle: updatedShuffle,
+      preselectedNextTrackId: nextPreselectedId,
     });
 
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {

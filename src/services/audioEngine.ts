@@ -13,10 +13,12 @@ import { resolveClientSideRealFeature } from '../utils/audioFeatures';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
-// Initialize persistent cache from localStorage
+// Initialize persistent cache from localStorage (v2 clean cache to discard obsolete/ad mappings)
 if (typeof window !== 'undefined') {
   try {
-    const saved = window.localStorage.getItem('spotifree_yt_cache');
+    // Purge legacy cache v1 which may contain bad/ad video IDs
+    window.localStorage.removeItem('spotifree_yt_cache');
+    const saved = window.localStorage.getItem('spotifree_yt_cache_v2');
     if (saved) {
       const parsed = JSON.parse(saved);
       Object.entries(parsed).forEach(([k, v]) => {
@@ -36,7 +38,7 @@ function persistVideoId(query: string, videoId: string) {
         obj[k] = v;
         if (++count > 500) break;
       }
-      window.localStorage.setItem('spotifree_yt_cache', JSON.stringify(obj));
+      window.localStorage.setItem('spotifree_yt_cache_v2', JSON.stringify(obj));
     } catch {}
   }
 }
@@ -313,45 +315,63 @@ class AudioEngine {
         }
 
         // Bass Swap (Intercambio de graves central):
-        // 1st half: Outgoing track retains full bass punch, incoming bass is attenuated to avoid frequency mud
-        // 2nd half (crossover beat): Outgoing drops bass by -24dB while incoming bass snaps to 100%!
+        // 1st half: Outgoing track retains full punch, incoming enters with melodic highs/mids
+        // 2nd half (crossover downbeat): Outgoing drops low frequencies immediately (-20dB ducking), incoming slams at 100%!
         if (djConfig.eqMode === 'intercambio_graves_central' || djConfig.preset === 'automatica') {
           if (progress < 0.5) {
-            inVol = inVol * 0.65; // attenuated low frequencies on incoming track
+            inVol = inVol * 0.5;
           } else {
-            outVol = outVol * 0.35; // instant low-cut on outgoing track
+            outVol = outVol * 0.20;
+            inVol = masterVolume;
           }
         } else if (djConfig.eqMode === 'filtro_paso_bajo' || djConfig.preset === 'filtro') {
-          outVol = outVol * (1.0 - progress * 0.65);
+          outVol = outVol * Math.pow(Math.max(0, 1.0 - progress), 1.6);
         }
 
         // --- Studio DJ Real-Audio Physical Track Manipulation ---
         // 1. Turntable Vinyl Brake: Platter decelerates real track audio down to halt
         if (djConfig.preset === 'freno_vinilo' || djConfig.fxMode === 'freno_vinilo') {
-          if (this.ytPlayer && typeof this.ytPlayer.setPlaybackRate === 'function') {
-            if (progress > 0.65 && progress <= 0.85) {
-              try { this.ytPlayer.setPlaybackRate(0.5); } catch {}
-            } else if (progress > 0.85) {
-              try { this.ytPlayer.setPlaybackRate(0.25); } catch {}
-              outVol = outVol * Math.max(0, 1 - (progress - 0.85) / 0.15);
-            }
+          if (progress >= 0.50 && progress < 0.75) {
+            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.75); } catch {}
+            try { if (this.audio) this.audio.playbackRate = 0.75; } catch {}
+          } else if (progress >= 0.75 && progress < 0.92) {
+            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.5); } catch {}
+            try { if (this.audio) this.audio.playbackRate = 0.5; } catch {}
+            outVol = outVol * (1.0 - ((progress - 0.75) / 0.17) * 0.6);
+          } else if (progress >= 0.92 && progress < 0.98) {
+            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.25); } catch {}
+            try { if (this.audio) this.audio.playbackRate = 0.25; } catch {}
+            outVol = outVol * 0.15;
+          } else if (progress >= 0.98) {
+            outVol = 0;
+            inVol = masterVolume;
           }
         }
 
         // 2. Beat Roll / Stutter: Real audio volume rhythmic gating on the beat grid
         if (djConfig.preset === 'beat_roll' || djConfig.fxMode === 'repeticion_loop') {
-          if (progress > 0.35 && progress < 0.85) {
-            const rollFraction = progress > 0.65 ? beatSec / 8 : beatSec / 4;
-            const rollTick = ((accumulatedCrossfadeMs / 1000) % rollFraction) / rollFraction;
-            if (rollTick > 0.5) {
-              outVol = outVol * 0.25;
+          if (progress >= 0.35 && progress < 0.98) {
+            let division = 1; // 1/4 note
+            if (progress >= 0.65) division = 2; // 1/8 note
+            if (progress >= 0.85) division = 4; // 1/16 note machine gun roll
+            const stepDur = beatSec / division;
+            const cycle = ((accumulatedCrossfadeMs / 1000) % stepDur) / stepDur;
+            if (cycle > 0.55) {
+              outVol = outVol * 0.05; // sharp rhythmic audio gate
             }
+          } else if (progress >= 0.98) {
+            outVol = 0; // micro-silence before drop
+            inVol = masterVolume;
           }
         }
 
-        // 3. Spatial Echo Out: Exponential decay tail
+        // 3. Spatial Echo Out: Rhythmic 3/4 beat delay decay pulses
         if (djConfig.preset === 'eco_out' || djConfig.fxMode === 'eco') {
-          outVol = Math.pow(Math.max(0, 1.0 - progress), 2.2) * masterVolume;
+          const echoPeriod = beatSec * 0.75;
+          const cycle = ((accumulatedCrossfadeMs / 1000) % echoPeriod) / echoPeriod;
+          const decay = Math.pow(Math.max(0, 1.0 - progress), 2.0);
+          const pulse = Math.cos(cycle * Math.PI * 0.5);
+          outVol = masterVolume * decay * (0.35 + 0.65 * pulse);
         }
       } else {
         // Equal power sinusoidal curve for continuous crossfade
@@ -653,23 +673,28 @@ class AudioEngine {
         // Bass Swap / Low-pass Filter EQ logic
         if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica') {
           if (pMix < 0.5) {
-            inVol = inVol * 0.65;
+            inVol = inVol * 0.5;
           } else {
-            outVol = outVol * 0.35;
+            outVol = outVol * 0.20;
+            inVol = 1.0;
           }
         } else if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
-          outVol = outVol * (1.0 - pMix * 0.6);
+          outVol = outVol * Math.pow(Math.max(0, 1.0 - pMix), 1.6);
         }
 
         // DJ FX 1: Turntable / Vinyl Brake (Freno de vinilo)
         if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
-          const remainingSec = (leadInSec + transitionDur) - elapsedSec;
-          if (remainingSec <= 0.7 && remainingSec > 0.25) {
+          if (pMix >= 0.50 && pMix < 0.75) {
+            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.75); } catch {}
+          } else if (pMix >= 0.75 && pMix < 0.92) {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.5); } catch {}
-          } else if (remainingSec <= 0.25 && remainingSec > 0) {
+            outVol = outVol * (1.0 - ((pMix - 0.75) / 0.17) * 0.6);
+          } else if (pMix >= 0.92 && pMix < 0.98) {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.25); } catch {}
-            outVol = Math.max(0, outVol * (remainingSec / 0.25));
-          } else if (remainingSec <= 0) {
+            outVol = outVol * 0.15;
+          } else if (pMix >= 0.98) {
+            outVol = 0;
+            inVol = 1.0;
             try { if (typeof p0.pauseVideo === 'function') p0.pauseVideo(); } catch {}
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1); } catch {}
           }
@@ -678,19 +703,29 @@ class AudioEngine {
         // DJ FX 2: Beat Roll / Stutter loop acceleration on real track
         if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
           const beatSec = 60 / safeTempo;
-          const progressInPhase = elapsedSec - leadInSec;
-          if (progressInPhase > transitionDur * 0.5) {
-            const rollRate = progressInPhase > transitionDur * 0.75 ? beatSec / 8 : beatSec / 4;
-            const rollTick = (progressInPhase % rollRate) / rollRate;
-            if (rollTick > 0.5) {
-              outVol = outVol * 0.25;
+          if (pMix >= 0.35 && pMix < 0.98) {
+            let division = 1;
+            if (pMix >= 0.65) division = 2;
+            if (pMix >= 0.85) division = 4;
+            const stepDur = beatSec / division;
+            const cycle = ((elapsedSec - leadInSec) % stepDur) / stepDur;
+            if (cycle > 0.55) {
+              outVol = outVol * 0.05; // sharp acoustic gate
             }
+          } else if (pMix >= 0.98) {
+            outVol = 0; // micro-silence before drop
+            inVol = 1.0;
           }
         }
 
         // DJ FX 3: Echo Out tail
         if (config.preset === 'eco_out' || config.fxMode === 'eco') {
-          outVol = Math.pow(Math.max(0, 1.0 - pMix), 2.2);
+          const beatSec = 60 / safeTempo;
+          const echoPeriod = beatSec * 0.75;
+          const cycle = ((elapsedSec - leadInSec) % echoPeriod) / echoPeriod;
+          const decay = Math.pow(Math.max(0, 1.0 - pMix), 2.0);
+          const pulse = Math.cos(cycle * Math.PI * 0.5);
+          outVol = decay * (0.35 + 0.65 * pulse);
         }
 
         if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));
@@ -769,7 +804,9 @@ class AudioEngine {
         if (!document.hidden) {
           // Tab/app became visible again — restore playback if it was supposed to be playing
           const { isPlaying } = usePlayerStore.getState();
-          if (isPlaying) {
+          if (isPlaying && !this.isExplicitlyPaused) {
+            this.startCarrier();
+            this.startProgressTicker();
             if (this.activeEngine === 'html5' && this.audio.paused) {
               // HTML5 audio was paused while in background — resume it
               this.audio.play().catch(() => {});
@@ -785,7 +822,7 @@ class AudioEngine {
                 const ytState = typeof this.ytPlayer.getPlayerState === 'function'
                   ? this.ytPlayer.getPlayerState() : -1;
                 // States: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-                if (ytState === 2 || ytState === -1) {
+                if (ytState === 2 || ytState === -1 || ytState === 5) {
                   // Was paused by the browser — resume it
                   this.ytPlayer.playVideo();
                 }
@@ -797,11 +834,14 @@ class AudioEngine {
             }
           }
         } else {
-          // App going to background — make sure mediaSession is set to 'playing'
-          // so Android knows NOT to stop the audio
+          // App going to background — ensure carrier stays active and mediaSession is set to 'playing'
+          // so Android and iOS know NOT to suspend or kill background audio
           const { isPlaying } = usePlayerStore.getState();
-          if (isPlaying && 'mediaSession' in navigator) {
-            try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+          if (isPlaying && !this.isExplicitlyPaused) {
+            this.startCarrier();
+            if ('mediaSession' in navigator) {
+              try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+            }
           }
         }
       });
@@ -1004,7 +1044,7 @@ class AudioEngine {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
       }
     } else if (code === 2) {
-      if (this.isExplicitlyPaused || !usePlayerStore.getState().isPlaying) {
+      if (this.isExplicitlyPaused) {
         this.stopCarrier();
         this.stopProgressTicker();
         if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
@@ -1013,7 +1053,9 @@ class AudioEngine {
         return;
       }
 
-      if (typeof document !== 'undefined' && document.hidden && usePlayerStore.getState().isPlaying && !this.isExplicitlyPaused) {
+      // App is in background / screen is locked: keep carrier alive so Android/iOS does not kill playback!
+      if (typeof document !== 'undefined' && document.hidden) {
+        this.startCarrier();
         try {
           if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
             this.ytPlayer.playVideo();
@@ -1025,6 +1067,7 @@ class AudioEngine {
         return;
       }
 
+      // Only stop if visible, user didn't request playback, and not in transition
       if (!this.isTransitioning && !this.isCrossfading) {
         this.stopCarrier();
         usePlayerStore.setState({ isPlaying: false });
@@ -1243,20 +1286,20 @@ class AudioEngine {
     return null;
   }
 
-  /** Unified Fast Video ID resolution: Cache -> Fast Concurrent Backend & Client Fallback */
+  /** Unified Fast Video ID resolution: Cache -> Robust Server Resolution with smart retries */
   public async resolveVideoId(query: string, trackId?: string): Promise<string | null> {
     if (!query) return null;
     const cleanQuery = query.trim();
     const cached = VIDEO_ID_CACHE.get(cleanQuery);
     if (cached) return cached;
 
-    // Concurrently race Backend /api/audio/resolve and client-side Innertube search
     let resolvedId: string | null = null;
 
+    // 1. Primary backend resolve with 6.5s timeout (safe for 4G/5G mobile connections)
     const backendPromise = (async () => {
       try {
         const url = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery)}${trackId ? `&trackId=${encodeURIComponent(trackId)}` : ''}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(2200) : undefined });
+        const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined });
         if (res.ok) {
           const data = await res.json();
           if (data && data.videoId) return data.videoId as string;
@@ -1265,25 +1308,29 @@ class AudioEngine {
       return null;
     })();
 
-    const clientPromise = (async () => {
-      // Start client fallback after a tiny 250ms buffer to prioritize local cache/backend,
-      // but never block if backend takes longer or is cold
-      await new Promise((r) => setTimeout(r, 250));
+    // 2. Parallel secondary retry with audio qualifier if primary takes > 1200ms
+    const fallbackPromise = (async () => {
+      await new Promise((r) => setTimeout(r, 1200));
       try {
-        return await this.resolveVideoIdClient(cleanQuery);
+        const altUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery + ' audio')}`;
+        const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.videoId) return data.videoId as string;
+        }
       } catch {}
       return null;
     })();
 
     try {
       resolvedId = await Promise.race([
-        backendPromise.then((id) => id || clientPromise),
-        clientPromise.then((id) => id || backendPromise),
+        backendPromise.then((id) => id || fallbackPromise),
+        fallbackPromise.then((id) => id || backendPromise),
       ]);
     } catch {}
 
     if (!resolvedId) {
-      resolvedId = (await backendPromise) || (await clientPromise);
+      resolvedId = (await backendPromise) || (await fallbackPromise);
     }
 
     if (resolvedId) {

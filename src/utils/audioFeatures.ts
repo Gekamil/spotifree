@@ -109,32 +109,50 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
   const tNorm = normalizeTitle(trackName);
   const aNorm = normalizeTitle(artistName);
 
+  // If both trackName and artistName are absent/empty, safely return neutral baseline
+  if (!tNorm && !aNorm) {
+    const visuals = getCamelotVisuals('9A');
+    return {
+      id: trackId,
+      tempo: 130,
+      key: 4,
+      mode: 0,
+      camelot: '9A',
+      color: visuals.bg,
+      textColor: visuals.text,
+      time_signature: 4,
+    };
+  }
+
   let tempo = 130;
   let key = 4;
   let mode = 0;
   let camelot = '9A';
+  let matched = false;
 
-  // 1. Direct or partial catalog match
+  // 1. Direct or partial catalog match in verified DB
   if (tNorm && VERIFIED_CLIENT_DB[tNorm]) {
     const item = VERIFIED_CLIENT_DB[tNorm];
     tempo = item.tempo;
     key = item.key;
     mode = item.mode;
     camelot = item.camelot || getCamelotKey(key, mode);
-  } else {
+    matched = true;
+  } else if (tNorm) {
     for (const [keyName, item] of Object.entries(VERIFIED_CLIENT_DB)) {
-      if (tNorm && (tNorm.includes(keyName) || keyName.includes(tNorm))) {
+      if (tNorm.includes(keyName) || keyName.includes(tNorm)) {
         tempo = item.tempo;
         key = item.key;
         mode = item.mode;
         camelot = item.camelot || getCamelotKey(key, mode);
+        matched = true;
         break;
       }
     }
   }
 
-  // 2. Genre rules
-  if (!tNorm || (!VERIFIED_CLIENT_DB[tNorm] && tempo === 130 && key === 4)) {
+  // 2. Genre & Artist Heuristics when not in verified database
+  if (!matched) {
     const isBachata =
       aNorm.includes('prince royce') ||
       aNorm.includes('romeo santos') ||
@@ -142,24 +160,45 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
       aNorm.includes('aventura') ||
       tNorm.includes('bachata');
 
-    const isReggaeton =
-      aNorm.includes('bad bunny') ||
-      aNorm.includes('feid') ||
-      aNorm.includes('quevedo') ||
-      aNorm.includes('rauw') ||
-      aNorm.includes('mora') ||
-      aNorm.includes('ozuna');
-
     if (isBachata) {
       tempo = 130;
       key = 4;
       mode = 0;
       camelot = '9A';
-    } else if (isReggaeton) {
-      tempo = 96;
-      key = 6;
-      mode = 0;
-      camelot = '11A';
+      matched = true;
+    } else if (aNorm.includes('bad bunny')) {
+      tempo = 96; key = 6; mode = 0; camelot = '11A'; matched = true;
+    } else if (aNorm.includes('feid')) {
+      tempo = 92; key = 8; mode = 0; camelot = '1A'; matched = true;
+    } else if (aNorm.includes('quevedo')) {
+      tempo = 100; key = 9; mode = 0; camelot = '8A'; matched = true;
+    } else if (aNorm.includes('rauw')) {
+      tempo = 118; key = 6; mode = 0; camelot = '11A'; matched = true;
+    } else if (aNorm.includes('mora')) {
+      tempo = 105; key = 5; mode = 1; camelot = '7B'; matched = true;
+    } else if (aNorm.includes('ozuna')) {
+      tempo = 96; key = 11; mode = 0; camelot = '10A'; matched = true;
+    } else if (aNorm.includes('anuel') || aNorm.includes('myke towers') || aNorm.includes('karol g') || aNorm.includes('daddy yankee') || aNorm.includes('balvin')) {
+      tempo = 94; key = 8; mode = 0; camelot = '1A'; matched = true;
+    } else if (aNorm.includes('david guetta') || aNorm.includes('calvin harris') || aNorm.includes('tiesto') || aNorm.includes('garrix') || aNorm.includes('avicii') || aNorm.includes('fred again')) {
+      tempo = 126; key = 9; mode = 0; camelot = '8A'; matched = true;
+    } else if (aNorm.includes('dua lipa') || aNorm.includes('the weeknd') || aNorm.includes('harry styles') || aNorm.includes('taylor swift')) {
+      tempo = 120; key = 9; mode = 1; camelot = '11B'; matched = true;
+    } else if (aNorm.includes('drake') || aNorm.includes('travis scott') || aNorm.includes('eminem') || aNorm.includes('bizarrap') || aNorm.includes('duki')) {
+      tempo = 140; key = 2; mode = 0; camelot = '7A'; matched = true;
+    } else if (aNorm.includes('coldplay') || aNorm.includes('imagine dragons') || aNorm.includes('arctic monkeys')) {
+      tempo = 124; key = 0; mode = 1; camelot = '8B'; matched = true;
+    } else {
+      // 3. Deterministic musical dispersion for arbitrary tracks
+      let hash = 0;
+      const combined = `${tNorm} ${aNorm}`;
+      for (let i = 0; i < combined.length; i++) {
+        hash = (hash * 31 + combined.charCodeAt(i)) & 0x7fffffff;
+      }
+      tempo = 95 + (hash % 36); // Realistic tempos between 95 and 130 BPM
+      key = (hash >> 3) % 12;
+      mode = (hash >> 7) % 2;
+      camelot = getCamelotKey(key, mode);
     }
   }
 
