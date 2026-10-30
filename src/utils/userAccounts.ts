@@ -19,11 +19,25 @@ export function getSavedAccounts(): SavedAccount[] {
     const list: SavedAccount[] = JSON.parse(raw);
     if (!Array.isArray(list)) return [];
 
+    // Filter out ghost/dummy accounts like 'spotify-oauth-user' or 'Cuenta de Spotify'
+    const cleanList = list.filter((a) => {
+      if (!a) return false;
+      const normId = (a.id || '').toLowerCase().trim();
+      const normName = (a.displayName || '').toLowerCase().trim();
+      if (normId === 'spotify-oauth-user' || normId === 'spotify-dummy-user') return false;
+      if (normName === 'cuenta de spotify') return false;
+      return true;
+    });
+
+    if (cleanList.length !== list.length) {
+      window.localStorage.setItem(ACCOUNTS_STORAGE_KEY, JSON.stringify(cleanList));
+    }
+
     // Deduplicate accounts strictly by displayName, id, email, or cookie
     const seen = new Set<string>();
     const deduplicated: SavedAccount[] = [];
 
-    for (const a of list) {
+    for (const a of cleanList) {
       if (!a) continue;
       const keyName = a.displayName ? a.displayName.toLowerCase().trim() : '';
       const keyId = a.id ? a.id.toLowerCase().trim() : '';
@@ -54,6 +68,13 @@ export function getSavedAccounts(): SavedAccount[] {
 
 export function saveAccount(account: SavedAccount) {
   if (typeof window === 'undefined' || !account) return;
+  // Never save ghost/dummy accounts
+  const rawId = (account.id || '').toLowerCase().trim();
+  const rawName = (account.displayName || '').toLowerCase().trim();
+  if (rawId === 'spotify-oauth-user' || rawId === 'spotify-dummy-user' || rawName === 'cuenta de spotify') {
+    return;
+  }
+
   try {
     const normName = account.displayName ? account.displayName.toLowerCase().trim() : '';
     const normId = account.id ? account.id.toLowerCase().trim() : '';

@@ -9,6 +9,7 @@ import {
   removeSavedAccount,
   cleanSpDc,
 } from '../../utils/userAccounts';
+import { switchActiveAccount } from '../../store/useSpotifyDataStore';
 
 export type { SavedAccount };
 export { getSavedAccounts, saveAccount, removeSavedAccount, cleanSpDc };
@@ -38,7 +39,7 @@ const AccountAvatar: React.FC<{ url?: string; name: string }> = ({ url, name }) 
 
 export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, closeLoginModal } = useUIStore();
-  const { initialize, user } = useSpotifyDataStore();
+  const { user } = useSpotifyDataStore();
 
   const [activeTab, setActiveTab] = useState<'spotifree' | 'saved'>('spotifree');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -58,37 +59,19 @@ export const LoginModal: React.FC = () => {
   if (!isLoginModalOpen) return null;
 
   const handleSwitchAccount = async (account: SavedAccount) => {
-    
     setErrorMessage(null);
     setSuccessMessage(`Cambiando a cuenta de ${account.displayName}...`);
 
     try {
-      if (typeof window !== 'undefined') {
-        if (account.cookie) {
-          window.localStorage.setItem('user_spotify_cookie', account.cookie);
-        }
-        if (account.id) {
-          window.localStorage.setItem('spotifree_active_user_id', account.id);
-        }
-        if (account.accessToken) {
-          window.localStorage.setItem('spotify_access_token', account.accessToken);
-        }
-        window.localStorage.removeItem('spotify_extracted_session');
-        window.localStorage.removeItem('spotify_logged_out');
-      }
-
-      account.lastUsed = Date.now();
-      saveAccount(account);
-
-      await initialize();
+      await switchActiveAccount(account);
+      const accounts = getSavedAccounts();
+      setSavedAccounts(accounts);
       setSuccessMessage(`Sesión activa: ${account.displayName}`);
       setTimeout(() => {
         closeLoginModal();
-      }, 600);
+      }, 500);
     } catch {
       setErrorMessage('Error al cambiar de cuenta.');
-    } finally {
-      
     }
   };
 
@@ -191,36 +174,45 @@ export const LoginModal: React.FC = () => {
               </p>
 
               <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
-                {savedAccounts.map((account) => {
-                  const isCurrent = account.id === user?.id;
-                  return (
-                    <div
-                      key={account.id}
-                      onClick={() => handleSwitchAccount(account)}
-                      className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'border-[#1ed760] bg-[#1ed760]/10'
-                          : 'border-[#282828] bg-[#181818] hover:border-white/20 hover:bg-[#222222]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <AccountAvatar url={account.avatarUrl} name={account.displayName} />
-                        <div className="min-w-0">
-                          <p className="text-sm font-bold text-white truncate">
-                            {account.displayName}
-                          </p>
-                          <p className="text-xs text-[#b3b3b3] truncate">
-                            {account.email || 'Cuenta de Spotify'}
-                          </p>
-                        </div>
-                      </div>
+                {(() => {
+                  const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '');
+                  const activeCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : '';
+                  const matchedAcc = savedAccounts.find(
+                    (a) => (activeUserId && a.id === activeUserId) ||
+                           (activeCookie && a.cookie && cleanSpDc(a.cookie) === cleanSpDc(activeCookie))
+                  );
+                  const singleActiveId = matchedAcc?.id || null;
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        {isCurrent ? (
-                          <span className="text-xs font-bold text-[#1ed760] bg-[#1ed760]/20 px-2 py-0.5 rounded-full">
-                            Activa
-                          </span>
-                        ) : (
+                  return savedAccounts.map((account) => {
+                    const isCurrent = account.id === singleActiveId;
+                    return (
+                      <div
+                        key={account.id}
+                        onClick={() => handleSwitchAccount(account)}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all cursor-pointer ${
+                          isCurrent
+                            ? 'border-[#1ed760] bg-[#1ed760]/10'
+                            : 'border-[#282828] bg-[#181818] hover:border-white/20 hover:bg-[#222222]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <AccountAvatar url={account.avatarUrl} name={account.displayName} />
+                          <div className="min-w-0">
+                            <p className="text-sm font-bold text-white truncate">
+                              {account.displayName}
+                            </p>
+                            <p className="text-xs text-[#b3b3b3] truncate">
+                              {account.email || 'Cuenta de Spotify'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          {isCurrent && (
+                            <span className="text-xs font-bold text-[#1ed760] bg-[#1ed760]/20 px-2 py-0.5 rounded-full">
+                              Activa
+                            </span>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => handleDeleteSavedAccount(account.id, e)}
@@ -231,11 +223,11 @@ export const LoginModal: React.FC = () => {
                               <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
                             </svg>
                           </button>
-                        )}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  });
+                })()}
               </div>
             </div>
           )}

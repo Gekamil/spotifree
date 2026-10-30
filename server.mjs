@@ -317,6 +317,118 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
   }
 
+  // 6b. Spotify Recommendations API (/api/spotify/recommendations)
+  if (pathname === '/api/spotify/recommendations') {
+    res.setHeader('Content-Type', 'application/json');
+    const seedTracks = reqUrl.searchParams.get('seed_tracks') || '';
+    const seedArtists = reqUrl.searchParams.get('seed_artists') || '';
+    const artist = (reqUrl.searchParams.get('artist') || '').trim();
+    const trackName = (reqUrl.searchParams.get('track_name') || '').trim();
+    const limit = Math.min(parseInt(reqUrl.searchParams.get('limit') || '15', 10), 30);
+    const authHeader = req.headers['authorization'];
+
+    // 1. Try official Spotify API if auth header provided
+    if (authHeader && authHeader.startsWith('Bearer ') && (seedTracks || seedArtists)) {
+      try {
+        const spotifyParams = new URLSearchParams({ limit: String(limit) });
+        if (seedTracks) spotifyParams.set('seed_tracks', seedTracks);
+        if (seedArtists) spotifyParams.set('seed_artists', seedArtists);
+
+        const spRes = await fetch(`https://api.spotify.com/v1/recommendations?${spotifyParams.toString()}`, {
+          headers: { Authorization: authHeader },
+        });
+        if (spRes.ok) {
+          const spData = await spRes.json();
+          if (spData && Array.isArray(spData.tracks) && spData.tracks.length > 0) {
+            res.statusCode = 200;
+            return res.end(JSON.stringify({ tracks: spData.tracks }));
+          }
+        }
+      } catch (err) {
+        console.warn('[Spotify recommendations failed, falling back to smart style matching]:', err.message);
+      }
+    }
+
+    // 2. High-Fidelity Style & Genre Similarity matching (iTunes + YouTube Music Radio)
+    try {
+      const searchTarget = artist || trackName;
+      let primaryGenre = '';
+      const candidateTracks = [];
+
+      if (searchTarget) {
+        // Query artist's top tracks to identify genre and vibe
+        const itunesArtistRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(searchTarget)}&entity=song&limit=15`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] }));
+
+        const results = itunesArtistRes.results || [];
+        if (results.length > 0) {
+          primaryGenre = results[0].primaryGenreName || '';
+          const itunesFormatted = results.map(t => ({
+            id: `itunes-${t.trackId}`,
+            name: t.trackName,
+            duration_ms: t.trackTimeMillis || 210000,
+            preview_url: t.previewUrl || null,
+            artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
+            album: {
+              id: `alb-${t.collectionId}`,
+              name: t.collectionName || t.trackName,
+              images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+            },
+            genre: t.primaryGenreName,
+          }));
+          candidateTracks.push(...itunesFormatted);
+        }
+      }
+
+      // Query similar tracks in that exact genre and musical style
+      const genreQuery = primaryGenre ? `${primaryGenre} ${artist}`.trim() : `${artist} radio hits`;
+      const [genreSongs, ytRadio] = await Promise.all([
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(genreQuery)}&entity=song&limit=25`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+        searchYouTubeTracks(`${artist} mix radio hits`, 12).catch(() => []),
+      ]);
+
+      const genreFormatted = (genreSongs.results || []).map(t => ({
+        id: `itunes-${t.trackId}`,
+        name: t.trackName,
+        duration_ms: t.trackTimeMillis || 210000,
+        preview_url: t.previewUrl || null,
+        artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
+        album: {
+          id: `alb-${t.collectionId}`,
+          name: t.collectionName || t.trackName,
+          images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+        },
+        genre: t.primaryGenreName,
+      }));
+
+      candidateTracks.push(...ytRadio, ...genreFormatted);
+
+      // Deduplicate strictly by normalized track title + artist
+      const seen = new Set();
+      if (trackName) seen.add(trackName.toLowerCase().replace(/[^a-z0-9]/g, ''));
+      const unique = [];
+
+      for (const t of candidateTracks) {
+        const key = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (key && !seen.has(key)) {
+          seen.add(key);
+          unique.push(t);
+        }
+        if (unique.length >= limit) break;
+      }
+
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ tracks: unique }));
+    } catch (e) {
+      console.error('[Recommendations error]:', e);
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ tracks: [] }));
+    }
+  }
+
   // 7. Search API (/api/spotify/search) - Combined iTunes + YouTube Music
   if (pathname === '/api/spotify/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();

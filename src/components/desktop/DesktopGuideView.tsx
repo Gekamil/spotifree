@@ -14,12 +14,9 @@ export const DesktopGuideView: React.FC = () => {
       ? window.localStorage.getItem('user_spotify_cookie') || ''
       : '';
   });
-  const [playlistUrlInput, setPlaylistUrlInput] = useState('');
   const [cookieSaved, setCookieSaved] = useState(false);
   const [cookieError, setCookieError] = useState<string | null>(null);
   const [isExtractingCookie, setIsExtractingCookie] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [importMessage, setImportMessage] = useState<string | null>(null);
 
   const handleSaveCookie = async () => {
     setCookieError(null);
@@ -56,47 +53,6 @@ export const DesktopGuideView: React.FC = () => {
     }
   };
 
-  const handleImportPlaylist = async () => {
-    const raw = playlistUrlInput.trim();
-    if (!raw) return;
-
-    // Extract playlist ID from URL or bare ID
-    const match = raw.match(/playlist\/([a-zA-Z0-9]+)/) || raw.match(/^([a-zA-Z0-9]{22})$/);
-    const id = match ? match[1] : raw;
-
-    setImporting(true);
-    setImportMessage(null);
-
-    try {
-      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`);
-      if (res.ok) {
-        const playlist = await res.json();
-        if (playlist && playlist.name) {
-          useSpotifyDataStore.getState().cachePlaylistDetails(playlist);
-          const currentList = useSpotifyDataStore.getState().playlists;
-          if (!currentList.some((p) => p.id === playlist.id)) {
-            const updated = [playlist, ...currentList];
-            useSpotifyDataStore.setState({
-              playlists: updated,
-              isAuthenticated: true,
-            });
-            if (typeof window !== 'undefined') {
-              window.localStorage.setItem('user_imported_playlists', JSON.stringify(updated));
-            }
-          }
-          setImportMessage(`Lista importada con éxito: ${playlist.name}`);
-          setPlaylistUrlInput('');
-          return;
-        }
-      }
-      setImportMessage('No se pudo cargar la lista. Comprueba que el enlace sea correcto y público.');
-    } catch (err: any) {
-      setImportMessage('Error de red al importar la lista.');
-    } finally {
-      setImporting(false);
-    }
-  };
-
   return (
     <div className="select-none min-h-full pb-24 bg-[#121212] px-8 pt-6 space-y-8 font-['SpotifyMixUI',-apple-system,BlinkMacSystemFont,system-ui,sans-serif]">
       {/* Top Bar Navigation inside Main Panel */}
@@ -121,19 +77,16 @@ export const DesktopGuideView: React.FC = () => {
           Conexión con Spotify
         </h1>
         <p className="text-sm text-[#b3b3b3] max-w-2xl leading-relaxed">
-          Para sincronizar tu biblioteca y tus listas de reproducción sin restricciones, puedes conectar tu sesión de Spotify mediante la cookie segura de navegación o importar directamente enlaces de tus listas.
+          Para sincronizar tu biblioteca y tus listas de reproducción sin restricciones, conecta tu sesión de Spotify mediante la cookie segura de navegación (sp_dc).
         </p>
       </div>
 
-      {/* Method 1: Cookie sp_dc (Spotube Method) */}
+      {/* Guía: Cookie sp_dc */}
       <div className="bg-[#181818] rounded-xl p-6 border border-white/5 space-y-6">
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/10 text-white">
-              Método 1
-            </span>
             <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">
-              Sincronización por cookie de sesión (sp_dc)
+              ¿Cómo obtener tu cookie sp_dc?
             </h2>
           </div>
           <p className="text-xs text-[#b3b3b3] leading-relaxed">
@@ -224,48 +177,6 @@ export const DesktopGuideView: React.FC = () => {
           {cookieSaved && (
             <p className="text-xs font-semibold text-[#1ed760] animate-in fade-in">
               ¡Sesión sincronizada con éxito! Cargando tu cuenta de Spotify...
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Method 2: Import by Link (Instant) */}
-      <div className="bg-[#181818] rounded-xl p-6 border border-white/5 space-y-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold px-2 py-0.5 rounded bg-white/10 text-white">
-              Método 2
-            </span>
-            <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">
-              Importar lista de Spotify por enlace directo
-            </h2>
-          </div>
-          <p className="text-xs text-[#b3b3b3] leading-relaxed">
-            Sin necesidad de extraer cookies ni configurar claves. Abre cualquier lista en Spotify, copia el enlace para compartir y pégalo a continuación.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={playlistUrlInput}
-              onChange={(e) => setPlaylistUrlInput(e.target.value)}
-              placeholder="https://open.spotify.com/playlist/..."
-              className="flex-1 bg-[#121212] border border-white/10 rounded-md px-3.5 py-2 text-xs text-white placeholder:text-[#666] outline-none focus:border-white transition-colors"
-            />
-            <button
-              onClick={handleImportPlaylist}
-              disabled={importing}
-              className="bg-[#1ed760] hover:bg-[#1fdf64] active:scale-98 text-black text-xs font-bold px-5 py-2 rounded-full transition-transform shrink-0 cursor-pointer shadow disabled:opacity-50"
-            >
-              {importing ? 'Importando...' : 'Importar lista'}
-            </button>
-          </div>
-
-          {importMessage && (
-            <p className="text-xs font-semibold text-[#1ed760] animate-in fade-in">
-              {importMessage}
             </p>
           )}
         </div>

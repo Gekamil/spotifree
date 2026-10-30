@@ -888,41 +888,72 @@ const store = create<SpotifyDataState>((set, get) => ({
       ]);
 
       if (!user) {
-        // Spotify token was issued, but Spotify Web API returned 403 (Developer Mode limitation)
-        // Preserve the authenticated session so the user stays logged in!
-        console.warn('Spotify /v1/me returned 403; preserving active session for authorized user.');
+        // Spotify Web API token check didn't return a profile (Developer Mode or expired token)
+        console.warn('Spotify /v1/me returned no user profile; checking for active Spotifree account.');
         
-        const oauthUser: UserProfile = {
-          id: 'spotify-oauth-user',
-          display_name: 'Cuenta de Spotify',
-          email: '',
-          images: [],
-          followers: { total: 0 },
-        };
+        const { getSavedSpotifreeAccount } = await import('../services/spotifreeAuth');
+        const spotifreeAccount = getSavedSpotifreeAccount();
+        const savedAccounts = getSavedAccounts();
+        const activeFallback = savedAccounts[0];
 
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('spotifree_active_user_id', 'spotify-oauth-user');
-          window.localStorage.removeItem('spotify_logged_out');
+        if (spotifreeAccount) {
+          const userId = spotifreeAccount.uid || spotifreeAccount.email || 'spotifree-user';
+          const cloudUser: UserProfile = {
+            id: userId,
+            display_name: spotifreeAccount.displayName || 'Usuario Spotifree',
+            email: spotifreeAccount.email || '',
+            images: spotifreeAccount.avatarUrl ? [{ url: spotifreeAccount.avatarUrl }] : [],
+            followers: { total: 0 },
+          };
+
+          if (typeof window !== 'undefined') {
+            window.localStorage.setItem('spotifree_active_user_id', userId);
+            window.localStorage.removeItem('spotify_logged_out');
+          }
+
+          set({
+            isAuthenticated: true,
+            user: cloudUser,
+            playlists: playlists || [],
+            topTracks: top || [],
+            dynamicShelves: [],
+            quickAccessCards: [],
+            authWarning: null,
+            featuredMessage: `Sesión activa: ${cloudUser.display_name}`,
+            isLoading: false,
+          });
+          return;
+        } else if (activeFallback) {
+          const fallbackUser: UserProfile = {
+            id: activeFallback.id,
+            display_name: activeFallback.displayName,
+            email: activeFallback.email || '',
+            images: activeFallback.avatarUrl ? [{ url: activeFallback.avatarUrl }] : [],
+            followers: { total: 0 },
+          };
+
+          set({
+            isAuthenticated: true,
+            user: fallbackUser,
+            playlists: playlists || [],
+            topTracks: top || [],
+            dynamicShelves: [],
+            quickAccessCards: [],
+            authWarning: null,
+            isLoading: false,
+          });
+          return;
         }
 
-        saveAccount({
-          id: 'spotify-oauth-user',
-          displayName: 'Cuenta de Spotify',
-          email: '',
-          cookie: '',
-          accessToken: userToken,
-          lastUsed: Date.now(),
-        });
+        // Clean stale token so it doesn't repeatedly attempt failed oauth
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem('spotify_access_token');
+        }
 
         set({
-          isAuthenticated: true,
-          user: oauthUser,
-          playlists: playlists || [],
-          topTracks: top || [],
-          dynamicShelves: [],
-          quickAccessCards: [],
-          authWarning: null,
-          featuredMessage: 'Cuenta de Spotify conectada',
+          isAuthenticated: false,
+          user: null,
+          playlists: [],
           isLoading: false,
         });
         return;

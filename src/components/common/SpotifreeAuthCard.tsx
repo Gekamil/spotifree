@@ -11,7 +11,10 @@ import {
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 
-export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ onAuthSuccess }) => {
+export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCookieInput?: boolean }> = ({
+  onAuthSuccess,
+  showCookieInput = true,
+}) => {
   const [currentAccount, setCurrentAccount] = useState<SpotifreeAccount | null>(null);
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
@@ -190,36 +193,38 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           <p className="text-xs text-red-400 mb-2">{error}</p>
         )}
 
-        {/* Vincular Cookie de Spotify a esta cuenta */}
-        <div className="pt-3 pb-1 border-t border-white/10 space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-white">Cookie de Spotify (sp_dc)</span>
-            {currentAccount.spotifyCookie ? (
-              <span className="text-[10px] text-[#1ed760] font-bold">✓ Vinculada en la nube</span>
-            ) : (
-              <span className="text-[10px] text-[#b3b3b3]">No vinculada</span>
-            )}
+        {/* Vincular Cookie de Spotify a esta cuenta (opcional si ya se pide abajo) */}
+        {showCookieInput && (
+          <div className="pt-3 pb-1 border-t border-white/10 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-white">Cookie de Spotify (sp_dc)</span>
+              {currentAccount.spotifyCookie ? (
+                <span className="text-[10px] text-[#1ed760] font-bold">✓ Vinculada en la nube</span>
+              ) : (
+                <span className="text-[10px] text-[#b3b3b3]">No vinculada</span>
+              )}
+            </div>
+            <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
+              Pega aquí tu cookie para vincular tus playlists privadas de Spotify. Se sincronizará automáticamente en todos tus dispositivos.
+            </p>
+            <div className="flex gap-2">
+              <input
+                type="password"
+                placeholder={currentAccount.spotifyCookie ? "•••••••••••••••• (Guardada)" : "Pega tu cookie sp_dc..."}
+                value={cookieInput}
+                onChange={(e) => setCookieInput(e.target.value)}
+                className="flex-1 bg-[#121212] border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
+              />
+              <button
+                onClick={handleSaveCookie}
+                disabled={isLoading || !cookieInput.trim()}
+                className="px-4 py-2 rounded-lg bg-white hover:bg-white/90 text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer shadow"
+              >
+                Guardar
+              </button>
+            </div>
           </div>
-          <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
-            Pega aquí tu cookie para vincular tus playlists privadas de Spotify. Se sincronizará automáticamente en todos tus dispositivos.
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              placeholder={currentAccount.spotifyCookie ? "•••••••••••••••• (Guardada)" : "Pega tu cookie sp_dc..."}
-              value={cookieInput}
-              onChange={(e) => setCookieInput(e.target.value)}
-              className="flex-1 bg-[#121212] border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
-            />
-            <button
-              onClick={handleSaveCookie}
-              disabled={isLoading || !cookieInput.trim()}
-              className="px-4 py-2 rounded-lg bg-white hover:bg-white/90 text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer shadow"
-            >
-              Guardar
-            </button>
-          </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2 mt-3">
           <button

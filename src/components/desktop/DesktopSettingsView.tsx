@@ -225,6 +225,8 @@ export const DesktopSettingsView: React.FC = () => {
     setIsExtractingCookie(true);
     try {
       await switchActiveAccount(account);
+      const cleanCookie = cleanSpDc(account.cookie || '');
+      setSpotifyCookie(cleanCookie);
       setSavedAccountsList(getSavedAccounts());
       setSavedSpotifyCookieSuccess(true);
       setTimeout(() => setSavedSpotifyCookieSuccess(false), 2500);
@@ -493,7 +495,7 @@ export const DesktopSettingsView: React.FC = () => {
           <section className="space-y-4">
             <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta Spotifree (Sincronización en la Nube)</h2>
             <div className="max-w-xl">
-              <SpotifreeAuthCard />
+              <SpotifreeAuthCard showCookieInput={false} />
             </div>
 
             {/* Row 1: Estado de la cuenta */}
@@ -502,7 +504,13 @@ export const DesktopSettingsView: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760]' : 'bg-[#727272]'}`} />
                   <span className="text-sm font-semibold text-white">
-                    {isAuthenticated ? `Conectado como ${user?.display_name || 'Usuario'}` : 'Sesión no conectada'}
+                    {isAuthenticated
+                      ? `Conectado como ${
+                          user?.display_name && user.display_name !== 'Cuenta de Spotify'
+                            ? user.display_name
+                            : (typeof window !== 'undefined' && JSON.parse(window.localStorage.getItem('spotifree_account') || '{}')?.displayName) || 'Usuario'
+                        }`
+                      : 'Sesión no conectada'}
                   </span>
                 </div>
                 <p className="text-xs text-[#a7a7a7] mt-1">
@@ -546,59 +554,80 @@ export const DesktopSettingsView: React.FC = () => {
                   </button>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {savedAccountsList.map((acc) => {
-                    const isActive = acc.cookie === spotifyCookie || (acc.id === user?.id && isAuthenticated);
-                    return (
-                      <div
-                        key={acc.id}
-                        onClick={() => handleSwitchAccount(acc)}
-                        className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all border ${
-                          isActive
-                            ? 'bg-white/10 border-[#1ed760]/60 shadow-sm'
-                            : 'bg-[#181818] border-white/5 hover:bg-white/[0.08]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-9 h-9 rounded-full bg-[#242424] flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
-                            {acc.avatarUrl ? (
-                              <img src={acc.avatarUrl} alt={acc.displayName} className="w-full h-full object-cover" />
-                            ) : (
-                              (acc.displayName || 'U').charAt(0).toUpperCase()
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <p className="text-xs font-bold text-white truncate">{acc.displayName}</p>
-                            <p className="text-[11px] text-[#a7a7a7] truncate">
-                              {isActive ? (
-                                <span className="text-[#1ed760] font-semibold">Cuenta activa</span>
+                  {(() => {
+                    const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '');
+                    const activeCookie = spotifyCookie || (typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : '');
+                    const matchedAcc = savedAccountsList.find(
+                      (a) => (activeUserId && a.id === activeUserId) ||
+                             (activeCookie && a.cookie && cleanSpDc(a.cookie) === cleanSpDc(activeCookie))
+                    );
+                    const singleActiveId = matchedAcc?.id || (isAuthenticated && savedAccountsList.length > 0 ? savedAccountsList[0].id : null);
+
+                    return savedAccountsList.map((acc) => {
+                      const isActive = acc.id === singleActiveId;
+                      return (
+                        <div
+                          key={acc.id}
+                          onClick={() => handleSwitchAccount(acc)}
+                          className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all border ${
+                            isActive
+                              ? 'bg-white/10 border-[#1ed760]/60 shadow-sm'
+                              : 'bg-[#181818] border-white/5 hover:bg-white/[0.08]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-9 h-9 rounded-full bg-[#242424] flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
+                              {acc.avatarUrl ? (
+                                <img src={acc.avatarUrl} alt={acc.displayName} className="w-full h-full object-cover" />
                               ) : (
-                                'Toca para cambiar'
+                                (acc.displayName || 'U').charAt(0).toUpperCase()
                               )}
-                            </p>
+                            </div>
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-white truncate">{acc.displayName}</p>
+                              <p className="text-[11px] text-[#a7a7a7] truncate">
+                                {isActive ? (
+                                  <span className="text-[#1ed760] font-semibold">Cuenta activa</span>
+                                ) : (
+                                  'Toca para cambiar'
+                                )}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isActive && (
+                              <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shrink-0 mr-1 shadow-[0_0_8px_#1ed760]" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeSavedAccount(acc.id);
+                                if (acc.displayName) removeSavedAccount(acc.displayName);
+                                if (acc.email) removeSavedAccount(acc.email);
+                                const updated = getSavedAccounts();
+                                setSavedAccountsList(updated);
+                                if (isActive) {
+                                  if (updated.length > 0) {
+                                    handleSwitchAccount(updated[0]);
+                                  } else {
+                                    logout();
+                                  }
+                                }
+                              }}
+                              className="text-[#727272] hover:text-red-400 text-xs p-1 rounded hover:bg-white/10 transition-colors"
+                              title="Eliminar de cuentas recordadas"
+                            >
+                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
-                        {isActive ? (
-                          <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shrink-0 mr-1 shadow-[0_0_8px_#1ed760]" />
-                        ) : (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeSavedAccount(acc.id);
-                              if (acc.displayName) removeSavedAccount(acc.displayName);
-                              if (acc.email) removeSavedAccount(acc.email);
-                              setSavedAccountsList(getSavedAccounts());
-                            }}
-                            className="text-[#727272] hover:text-white text-xs p-1 rounded transition-colors"
-                            title="Eliminar de cuentas recordadas"
-                          >
-                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                              <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
+                      );
+                    });
+                  })()}
                 </div>
               </div>
             )}
@@ -955,15 +984,15 @@ export const DesktopSettingsView: React.FC = () => {
               {/* Reproducción automática */}
               <div className="flex items-center justify-between py-3 border-b border-white/5">
                 <div>
-                  <div className="text-sm font-medium text-white">Reproducción automática</div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    Sigue escuchando temas similares sin parar cuando termine tu lista de reproducción.
+                  <div className="text-sm font-medium text-white">Reproducción automática similar</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5 max-w-xl">
+                    Recomienda y reproduce música similar del mismo estilo y género como el algoritmo de Spotify cuando finalice tu lista. Si se desactiva, pasa a tu siguiente lista o vuelve al inicio sin añadir temas aleatorios.
                   </div>
                 </div>
                 <SpotifyToggle
                   checked={autoplaySimilar}
                   onChange={handleToggleAutoplay}
-                  ariaLabel="Reproducción automática"
+                  ariaLabel="Reproducción automática similar"
                 />
               </div>
             </div>

@@ -252,6 +252,26 @@ const store = create<PlayerState>((set, get) => ({
             get().triggerAutoplaySimilar(currentTrack);
             return;
           }
+
+          // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
+          const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
+          const currentContextId = get().currentContextId;
+          const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
+
+          if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {
+            const nextPlaylist = playlists[currentPlaylistIdx + 1];
+            const tracks = nextPlaylist.tracks?.items || [];
+            if (tracks.length > 0) {
+              get().playTrack(tracks[0], tracks, nextPlaylist.id);
+              return;
+            }
+          }
+
+          if (queue.length > 0) {
+            get().playTrack(queue[0], queue, currentContextId || undefined);
+            return;
+          }
+
           set({ isPlaying: false, progressMs: 0 });
           return;
         }
@@ -269,6 +289,26 @@ const store = create<PlayerState>((set, get) => ({
           get().triggerAutoplaySimilar(currentTrack);
           return;
         }
+
+        // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
+        const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
+        const currentContextId = get().currentContextId;
+        const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
+
+        if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {
+          const nextPlaylist = playlists[currentPlaylistIdx + 1];
+          const tracks = nextPlaylist.tracks?.items || [];
+          if (tracks.length > 0) {
+            get().playTrack(tracks[0], tracks, nextPlaylist.id);
+            return;
+          }
+        }
+
+        if (queue.length > 0) {
+          get().playTrack(queue[0], queue, currentContextId || undefined);
+          return;
+        }
+
         set({ isPlaying: false, progressMs: 0 });
         return;
       }
@@ -286,14 +326,40 @@ const store = create<PlayerState>((set, get) => ({
 
   triggerAutoplaySimilar: async (track: Track) => {
     try {
-      const { searchSpotify } = await import('../services/spotifyApi');
-      const query = track.artists?.[0]?.name || track.name;
-      const res = await searchSpotify(query);
+      const { fetchRecommendations } = await import('../services/spotifyApi');
+      const seedArtist = track.artists?.[0]?.name;
+      const seedArtistId = track.artists?.[0]?.id;
+      const seedTrackId = track.id && !track.id.startsWith('yt-') && !track.id.startsWith('itunes-') ? track.id : undefined;
+
+      // Extract context from recent queue to enrich seed
+      const recentTracks = get().queue.slice(-5);
+      const seedArtists = Array.from(new Set([
+        seedArtistId,
+        ...recentTracks.map((t) => t.artists?.[0]?.id).filter(Boolean),
+      ])).filter((id): id is string => Boolean(id && !id.startsWith('art-')));
+
+      const candidateTracks = await fetchRecommendations({
+        seedTracks: seedTrackId ? [seedTrackId] : undefined,
+        seedArtists: seedArtists.length > 0 ? seedArtists.slice(0, 3) : undefined,
+        artistName: seedArtist,
+        trackName: track.name,
+        limit: 15,
+      });
+
       const existingIds = new Set(get().queue.map((t) => t.id));
       existingIds.add(track.id);
-      const candidateTracks: Track[] = (res?.tracks?.items || []).filter((t: Track) => !existingIds.has(t.id));
-      if (candidateTracks.length > 0) {
-        const toAdd = candidateTracks.slice(0, 10);
+      const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
+      existingTitles.add((track.name || '').toLowerCase().trim());
+
+      const validTracks = candidateTracks.filter(
+        (t) => !existingIds.has(t.id) && !existingTitles.has((t.name || '').toLowerCase().trim())
+      );
+
+      if (validTracks.length > 0) {
+        const toAdd = validTracks.slice(0, 10).map((t) => ({
+          ...t,
+          isAutoplayRecommendation: true,
+        }));
         set((s) => ({
           queue: [...s.queue, ...toAdd],
         }));
@@ -303,7 +369,14 @@ const store = create<PlayerState>((set, get) => ({
     } catch (err) {
       console.warn('[Autoplay] Failed to fetch similar tracks:', err);
     }
-    set({ isPlaying: false, progressMs: 0 });
+
+    // Fallback if no similar tracks found: restart playlist
+    const currentQueue = get().queue;
+    if (currentQueue.length > 0) {
+      get().playTrack(currentQueue[0]);
+    } else {
+      set({ isPlaying: false, progressMs: 0 });
+    }
   },
 
   triggerSmartShuffleRecommendation: async (track: Track) => {

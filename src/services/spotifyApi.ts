@@ -352,3 +352,37 @@ export async function fetchTrackCanvas(trackId: string): Promise<string | null> 
   CANVAS_LOCAL_CACHE.set(cleanId, null);
   return null;
 }
+
+export async function fetchRecommendations(options: {
+  seedTracks?: string[];
+  seedArtists?: string[];
+  artistName?: string;
+  trackName?: string;
+  limit?: number;
+}): Promise<Track[]> {
+  try {
+    const validToken = await getValidAccessToken().catch(() => null);
+    const params = new URLSearchParams();
+    if (options.seedTracks?.length) params.set('seed_tracks', options.seedTracks.slice(0, 3).join(','));
+    if (options.seedArtists?.length) params.set('seed_artists', options.seedArtists.slice(0, 2).join(','));
+    if (options.artistName) params.set('artist', options.artistName);
+    if (options.trackName) params.set('track_name', options.trackName);
+    if (options.limit) params.set('limit', String(options.limit));
+
+    const headers: Record<string, string> = {};
+    if (validToken && validToken !== 'session-bridge-active') {
+      headers['Authorization'] = `Bearer ${validToken}`;
+    }
+
+    const res = await fetch(`/api/spotify/recommendations?${params.toString()}`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.tracks && Array.isArray(data.tracks)) {
+        return data.tracks;
+      }
+    }
+  } catch (err) {
+    console.warn('[SpotifyApi] fetchRecommendations error:', err);
+  }
+  return [];
+}
