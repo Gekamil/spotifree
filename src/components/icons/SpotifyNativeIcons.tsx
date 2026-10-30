@@ -310,11 +310,22 @@ export const DownloadActiveCircleNativeIcon: React.FC<IconProps> = ({ size = 22,
 );
 
 export const AutomixNativeIcon: React.FC<IconProps> = ({ size = 22, className = 'text-[#b3b3b3]', ...props }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-    <line x1="3" y1="8" x2="21" y2="8" />
-    <circle cx="8" cy="8" r="2.8" fill="currentColor" stroke="none" />
-    <line x1="3" y1="16" x2="21" y2="16" />
-    <circle cx="16" cy="16" r="2.8" fill="currentColor" stroke="none" />
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    className={className}
+    {...props}
+  >
+    {/* Left vertical channel slider */}
+    <line x1="7.5" y1="3.5" x2="7.5" y2="20.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <rect x="4.5" y="6.5" width="6" height="3" rx="1.5" fill="currentColor" />
+
+    {/* Right vertical channel slider */}
+    <line x1="16.5" y1="3.5" x2="16.5" y2="20.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+    <rect x="13.5" y="14" width="6" height="3" rx="1.5" fill="currentColor" />
   </svg>
 );
 

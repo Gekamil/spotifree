@@ -24,7 +24,7 @@ import {
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml } from '../../utils/formatters';
-import { fetchAudioFeaturesBatch, type AudioFeature } from '../../utils/audioFeatures';
+import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
@@ -897,22 +897,25 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
         {/* Right side: 4) DJ Automix bars, 5) Shuffle button, 6) Large Green Play */}
         <div className="flex items-center gap-3">
-          {/* 4. Automix / decibel transition toggle (DJ bars with circles) placed next to shuffle */}
+          {/* 4. DJ Mixer Faders Toggle Button */}
           <button
             onClick={handleToggleAutomix}
-            className={`p-1.5 hover:scale-105 active:scale-90 transition-transform cursor-pointer ${
+            className={`p-2 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
               isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
             }`}
             title={
               isAutomixActive
-                ? 'Automix activado: transiciones suaves con normalización de decibelios'
-                : 'Activar automix y transiciones'
+                ? 'Modo DJ activado: BPM, tonalidad armónica y transiciones inteligentes'
+                : 'Activar Modo DJ'
             }
           >
             <AutomixNativeIcon
-              size={22}
+              size={24}
               className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'}
             />
+            {isAutomixActive && (
+              <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
+            )}
           </button>
 
           {/* 5. Shuffle button (dos flechitas) */}
@@ -937,32 +940,36 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           {isAutomixActive ? (
             <button
               onClick={handlePlayAll}
-              className="relative w-14 h-14 rounded-full p-[2.5px] bg-[#1ed760] shadow-[0_0_18px_rgba(30,215,96,0.65)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
+              className="relative w-14 h-14 rounded-full p-[2.5px] bg-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
               title={isCurrentPlaylistPlaying ? 'Pausar (Modo DJ)' : 'Reproducir con transiciones DJ'}
             >
-              <div
-                className={`w-full h-full rounded-full relative flex items-center justify-center overflow-hidden ${
-                  isCurrentPlaylistPlaying ? 'animate-[spin_10s_linear_infinite]' : ''
-                }`}
-                style={{
-                  background: 'radial-gradient(circle, #2c2c2c 0%, #1c1c1c 45%, #101010 80%, #050505 100%)',
-                }}
-              >
-                {/* Concentric vinyl groove circles */}
-                <div className="absolute inset-[3px] rounded-full border border-white/[0.12] pointer-events-none" />
-                <div className="absolute inset-[7px] rounded-full border border-white/[0.08] pointer-events-none" />
-                <div className="absolute inset-[11px] rounded-full border border-white/[0.06] pointer-events-none" />
-                <div className="absolute inset-[15px] rounded-full border border-white/[0.04] pointer-events-none" />
+              {/* Outer vinyl chassis */}
+              <div className="w-full h-full rounded-full bg-[#121212] relative overflow-hidden flex items-center justify-center">
+                {/* Rotating vinyl platter with realistic grooves and angular sheen */}
+                <div
+                  className={`absolute inset-0 rounded-full ${
+                    isCurrentPlaylistPlaying ? 'animate-[spin_8s_linear_infinite]' : ''
+                  }`}
+                  style={{
+                    background:
+                      'conic-gradient(from 0deg, #111111 0deg, #2a2a2a 45deg, #0d0d0d 90deg, #2a2a2a 135deg, #111111 180deg, #2a2a2a 225deg, #0d0d0d 270deg, #2a2a2a 315deg, #111111 360deg)',
+                  }}
+                >
+                  {/* Concentric microgroove borders */}
+                  <div className="absolute inset-[3px] rounded-full border border-white/[0.12] pointer-events-none" />
+                  <div className="absolute inset-[6px] rounded-full border border-white/[0.08] pointer-events-none" />
+                  <div className="absolute inset-[9px] rounded-full border border-white/[0.06] pointer-events-none" />
+                  <div className="absolute inset-[12px] rounded-full border border-white/[0.08] pointer-events-none" />
+                  <div className="absolute inset-[15px] rounded-full border border-white/[0.05] pointer-events-none" />
+                  <div className="absolute inset-[18px] rounded-full border border-white/[0.07] pointer-events-none" />
+                </div>
 
-                {/* Subtle radial sheen reflection */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.08] via-transparent to-white/[0.04] pointer-events-none" />
-
-                {/* Center spindle hub */}
-                <div className="relative z-10 w-6 h-6 rounded-full bg-black/80 flex items-center justify-center shadow-inner border border-white/10">
+                {/* Center vinyl spindle label - stays steady and upright */}
+                <div className="relative z-10 w-7 h-7 rounded-full bg-[#181818] border border-white/15 flex items-center justify-center shadow-lg pointer-events-none">
                   {isCurrentPlaylistPlaying ? (
-                    <PauseNativeIcon size={14} className="text-white" />
+                    <PauseNativeIcon size={16} className="text-white drop-shadow-md" />
                   ) : (
-                    <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                    <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
                   )}
                 </div>
               </div>
@@ -1108,7 +1115,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
               const isLiked = likedTrackIds.includes(track.id);
               const cleanTrackId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-              const feat = audioFeatures[cleanTrackId] || audioFeatures[track.id];
+              const feat =
+                audioFeatures[cleanTrackId] ||
+                audioFeatures[track.id] ||
+                resolveClientSideRealFeature(cleanTrackId, track.name, track.artists?.[0]?.name);
 
               return (
                 <React.Fragment key={track.id || idx}>
@@ -1223,7 +1233,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       <button
                         onClick={() => {
                           const nextTrack = tracks[idx + 1];
-                          const nextFeat = audioFeatures[nextTrack?.id?.replace(/^spotify:track:/i, '')] || audioFeatures[nextTrack?.id];
+                          const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                          const nextFeat =
+                            audioFeatures[nextCleanId] ||
+                            audioFeatures[nextTrack?.id] ||
+                            resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
                           setToastMessage(
                             `Transición armónica automática: ${feat?.camelot || '9A'} (${feat?.tempo || 130} bpm) → ${
                               nextFeat?.camelot || '11A'
