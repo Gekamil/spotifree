@@ -1,0 +1,136 @@
+rules_version = '2';
+
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Application: Spotifree App (delightful-borg)
+// Database: Cloud Firestore
+//
+// Collection: users
+// Document ID: {userId} (Must match request.auth.uid)
+// Fields:
+//   - uid: string (optional, immutable, must equal userId) - Firebase Auth User ID
+//   - id: string (optional, must equal userId) - Redundant identifier alias
+//   - email: string (required, max 254 chars, valid email format) - User account email
+//   - displayName: string (optional, 1-100 chars) - User display name
+//   - avatarUrl: string | null (optional, max 2000 chars) - Profile picture URL
+//   - photoURL: string | null (optional, max 2000 chars) - Profile picture URL alias
+//   - bannerUrl: string | null (optional, max 2000 chars) - Profile banner URL
+//   - spotifyCookie: string | null (optional, max 10000 chars) - Stored Spotify session cookie
+//   - playlists: list (required, max 500 items) - User's playlists array
+//   - likedTracks: list (required, max 20000 items) - Array of liked track IDs
+//   - history: list (optional, max 500 items) - Recent playback history tracks array
+//   - stats: map (optional) - Playback and listening statistics map
+//   - customTransitions: map (optional) - Custom playback transition preferences map
+//   - theme: string (optional, allowed: 'standard' | 'oled' | 'platinum') - UI theme
+//   - createdAt: number (optional, immutable, positive) - Creation timestamp in ms
+//   - updatedAt: number (optional, positive) - Last update timestamp in ms
+//
+// Default Deny:
+//   - All other collections and paths are denied by default.
+//
+// ===============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    // Check if the request is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if the authenticated user is the owner of this document path
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Validate email format
+    function isValidEmail(email) {
+      return email is string &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    // Validate complete user document structure, schema, types, and limits
+    // Used in BOTH create and update rules (Validator Function Pattern)
+    function isValidUser(data, userId) {
+      return data.keys().hasOnly([
+          'uid', 'id', 'email', 'displayName',
+          'avatarUrl', 'photoURL', 'bannerUrl',
+          'spotifyCookie', 'playlists', 'likedTracks',
+          'history', 'stats', 'customTransitions',
+          'theme', 'createdAt', 'updatedAt'
+        ]) &&
+        data.keys().hasAll(['email', 'playlists', 'likedTracks']) &&
+        // Required fields sanity and bounds
+        data.email is string &&
+        data.email.size() >= 3 &&
+        data.email.size() <= 254 &&
+        isValidEmail(data.email) &&
+        data.playlists is list &&
+        data.playlists.size() <= 500 &&
+        data.likedTracks is list &&
+        data.likedTracks.size() <= 20000 &&
+        // Optional UID consistency (prevents spoofing)
+        (!('uid' in data) || (data.uid is string && data.uid == userId)) &&
+        (!('id' in data) || (data.id is string && data.id == userId)) &&
+        // Profile metadata bounds
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 100)) &&
+        (!('avatarUrl' in data) || data.avatarUrl == null || (data.avatarUrl is string && data.avatarUrl.size() <= 2000)) &&
+        (!('photoURL' in data) || data.photoURL == null || (data.photoURL is string && data.photoURL.size() <= 2000)) &&
+        (!('bannerUrl' in data) || data.bannerUrl == null || (data.bannerUrl is string && data.bannerUrl.size() <= 2000)) &&
+        (!('spotifyCookie' in data) || data.spotifyCookie == null || (data.spotifyCookie is string && data.spotifyCookie.size() <= 10000)) &&
+        // Collections & configurations bounds
+        (!('history' in data) || (data.history is list && data.history.size() <= 500)) &&
+        (!('stats' in data) || data.stats is map) &&
+        (!('customTransitions' in data) || data.customTransitions is map) &&
+        (!('theme' in data) || (data.theme is string && data.theme in ['standard', 'oled', 'platinum'])) &&
+        // Timestamps (stored as milliseconds number via Date.now())
+        (!('createdAt' in data) || (data.createdAt is number && data.createdAt > 0)) &&
+        (!('updatedAt' in data) || (data.updatedAt is number && data.updatedAt > 0));
+    }
+
+    // Ensure immutable fields (uid, createdAt) cannot be modified or replaced on update
+    function areUserImmutableFieldsUnchanged() {
+      return (!('uid' in resource.data) || !('uid' in request.resource.data) || request.resource.data.uid == resource.data.uid) &&
+             (!('createdAt' in resource.data) || !('createdAt' in request.resource.data) || request.resource.data.createdAt == resource.data.createdAt);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // User profile documents: users/{userId}
+    match /users/{userId} {
+      // Authenticated users can only read their own document (PII & session protection)
+      allow read: if isOwner(userId);
+
+      // Create: Owner-only with full domain validation
+      allow create: if isOwner(userId) && isValidUser(request.resource.data, userId);
+
+      // Update: Owner-only with full domain validation and immutable field lockdown
+      allow update: if isOwner(userId) &&
+                       isValidUser(request.resource.data, userId) &&
+                       areUserImmutableFieldsUnchanged();
+
+      // Delete: Owner-only
+      allow delete: if isOwner(userId);
+    }
+
+    // ===============================================================
+    // Default Deny Rule
+    // ===============================================================
+    // Deny read and write access to all other paths and collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

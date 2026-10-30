@@ -3,8 +3,9 @@ import {
   getSavedSpotifreeAccount,
   loginSpotifreeAccount,
   registerSpotifreeAccount,
+  loginWithGoogleAccount,
+  logoutSpotifreeAccount,
   syncSpotifreeAccount,
-  saveCurrentSpotifreeAccount,
   type SpotifreeAccount,
 } from '../../services/spotifreeAuth';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -50,7 +51,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           return;
         }
         setCurrentAccount(res.account);
-        setMessage('¡Cuenta creada! Todo listo para sincronizar.');
+        setMessage('¡Cuenta creada y sincronizada con Firebase!');
       } else {
         const res = await loginSpotifreeAccount(cleanEmail, cleanPass);
         if (!res.success || !res.account) {
@@ -60,34 +61,32 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
         }
         setCurrentAccount(res.account);
         setMessage(`Bienvenido de nuevo, ${res.account.displayName}.`);
-
-        const acc = res.account;
-        if (acc.displayName) {
-          useSpotifyDataStore.setState((s) => ({
-            user: s.user ? { ...s.user, display_name: acc.displayName } : s.user,
-          }));
-        }
-        if (Array.isArray(acc.playlists) && acc.playlists.length > 0) {
-          useSpotifyDataStore.setState((s) => {
-            const currentIds = new Set(s.playlists.map((p) => p.id));
-            const toAdd = acc.playlists.filter((p) => !currentIds.has(p.id));
-            return { playlists: [...toAdd, ...s.playlists] };
-          });
-        }
-        if (Array.isArray(acc.likedTracks) && acc.likedTracks.length > 0) {
-          usePlayerStore.setState((s) => ({
-            likedTrackIds: Array.from(new Set([...s.likedTrackIds, ...acc.likedTracks])),
-          }));
-        }
-        if (acc.spotifyCookie) {
-          window.localStorage.setItem('user_spotify_cookie', acc.spotifyCookie);
-          useSpotifyDataStore.getState().initialize?.();
-        }
       }
 
       onAuthSuccess?.();
     } catch (err: any) {
       setError(err.message || 'Error de autenticación.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setMessage(null);
+    setIsLoading(true);
+    try {
+      const res = await loginWithGoogleAccount();
+      if (!res.success || !res.account) {
+        setError(res.error || 'Error al iniciar sesión con Google.');
+        setIsLoading(false);
+        return;
+      }
+      setCurrentAccount(res.account);
+      setMessage(`Sesión iniciada como ${res.account.displayName}`);
+      onAuthSuccess?.();
+    } catch (err: any) {
+      setError(err.message || 'Error con Google Sign In.');
     } finally {
       setIsLoading(false);
     }
@@ -107,9 +106,9 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
 
       const updated = await syncSpotifreeAccount({
         email: currentAccount.email,
+        uid: currentAccount.uid,
         displayName: user?.display_name || currentAccount.displayName,
         avatarUrl: user?.images?.[0]?.url || currentAccount.avatarUrl,
-        bannerUrl: (user as any)?.bannerUrl || currentAccount.bannerUrl,
         playlists,
         likedTracks,
         spotifyCookie: cookie,
@@ -117,7 +116,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
 
       if (updated) {
         setCurrentAccount(updated);
-        setMessage('Datos sincronizados con la nube.');
+        setMessage('✓ Datos sincronizados con Cloud Firestore.');
         setTimeout(() => setMessage(null), 3000);
       }
     } catch {
@@ -139,6 +138,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
       }
       const updated = await syncSpotifreeAccount({
         email: currentAccount.email,
+        uid: currentAccount.uid,
         spotifyCookie: cleanCookie,
       });
       if (updated) {
@@ -154,8 +154,8 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
     }
   };
 
-  const handleLogout = () => {
-    saveCurrentSpotifreeAccount(null);
+  const handleLogout = async () => {
+    await logoutSpotifreeAccount();
     setCurrentAccount(null);
     setMessage(null);
     setError(null);
@@ -177,9 +177,9 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
             <p className="text-sm font-bold text-white truncate">{currentAccount.displayName}</p>
             <p className="text-xs text-[#b3b3b3] truncate">{currentAccount.email}</p>
           </div>
-          <span className="flex items-center gap-1 text-[10px] font-bold text-[#1ed760] uppercase">
+          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#1ed760]/10 border border-[#1ed760]/20 text-[10px] font-bold text-[#1ed760] shrink-0">
             <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-            Activa
+            Firebase
           </span>
         </div>
 
@@ -195,7 +195,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-white">Cookie de Spotify (sp_dc)</span>
             {currentAccount.spotifyCookie ? (
-              <span className="text-[10px] text-[#1ed760] font-bold">✓ Vinculada a tu cuenta</span>
+              <span className="text-[10px] text-[#1ed760] font-bold">✓ Vinculada en la nube</span>
             ) : (
               <span className="text-[10px] text-[#b3b3b3]">No vinculada</span>
             )}
@@ -221,17 +221,17 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-2">
+        <div className="grid grid-cols-2 gap-2 mt-3">
           <button
             onClick={handleManualSync}
             disabled={isLoading}
-            className="py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+            className="py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-md"
           >
-            {isLoading ? 'Sincronizando...' : 'Sincronizar'}
+            {isLoading ? 'Sincronizando...' : 'Sincronizar nube'}
           </button>
           <button
             onClick={handleLogout}
-            className="py-2.5 rounded-full border border-white/20 text-white font-bold text-xs hover:border-white/40 transition-colors active:scale-95 cursor-pointer"
+            className="py-2.5 rounded-full border border-white/20 text-white font-bold text-xs hover:border-white/40 hover:bg-white/5 transition-colors active:scale-95 cursor-pointer"
           >
             Cerrar sesión
           </button>
@@ -241,13 +241,36 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
   }
 
   return (
-    <div className="font-['SpotifyMixUI']">
-      {/* Tab switcher — like Spotify login/signup */}
-      <div className="flex gap-1 mb-4 bg-[#121212] p-1 rounded-full">
+    <div className="font-['SpotifyMixUI'] space-y-3">
+      {/* 1-Click Google Sign In */}
+      <button
+        type="button"
+        onClick={handleGoogleSignIn}
+        disabled={isLoading}
+        className="w-full py-2.5 px-4 rounded-full border border-white/20 hover:border-white/40 bg-[#1e1e1e] hover:bg-[#282828] text-white font-bold text-xs flex items-center justify-center gap-2.5 transition-all active:scale-[0.98] cursor-pointer"
+      >
+        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+        </svg>
+        <span>Continuar con Google</span>
+      </button>
+
+      {/* Divider */}
+      <div className="flex items-center gap-3 my-1">
+        <div className="flex-1 h-px bg-white/10" />
+        <span className="text-[11px] text-[#727272] uppercase font-semibold">o con correo</span>
+        <div className="flex-1 h-px bg-white/10" />
+      </div>
+
+      {/* Tab switcher — Login / Register */}
+      <div className="flex gap-1 bg-[#121212] p-1 rounded-full">
         <button
           type="button"
           onClick={() => { setMode('login'); setError(null); }}
-          className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
             mode === 'login' ? 'bg-white text-black shadow' : 'text-[#b3b3b3] hover:text-white'
           }`}
         >
@@ -256,7 +279,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
         <button
           type="button"
           onClick={() => { setMode('register'); setError(null); }}
-          className={`flex-1 py-2 rounded-full text-xs font-bold transition-all cursor-pointer ${
+          className={`flex-1 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
             mode === 'register' ? 'bg-white text-black shadow' : 'text-[#b3b3b3] hover:text-white'
           }`}
         >
@@ -264,27 +287,27 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
         </button>
       </div>
 
-      <form onSubmit={handleAuth} className="space-y-3">
+      <form onSubmit={handleAuth} className="space-y-2.5">
         {mode === 'register' && (
           <div>
             <input
               type="text"
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Cómo te llamamos"
-              className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
+              placeholder="¿Cómo te llamas?"
+              className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-2.5 text-xs text-white placeholder-[#727272] focus:outline-none transition-colors"
             />
           </div>
         )}
 
         <div>
           <input
-            type="text"
+            type="email"
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="Correo electrónico o usuario"
-            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
+            placeholder="Correo electrónico (ej: usuario@gmail.com)"
+            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-2.5 text-xs text-white placeholder-[#727272] focus:outline-none transition-colors"
           />
         </div>
 
@@ -292,10 +315,11 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
           <input
             type="password"
             required
+            minLength={6}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="Contraseña"
-            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-3 text-sm text-white placeholder-[#727272] focus:outline-none transition-colors"
+            placeholder="Contraseña (mínimo 6 caracteres)"
+            className="w-full bg-[#2a2a2a] border border-transparent focus:border-white/30 rounded-lg px-4 py-2.5 text-xs text-white placeholder-[#727272] focus:outline-none transition-colors"
           />
         </div>
 
@@ -309,13 +333,13 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void }> = ({ on
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-sm tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer mt-1"
+          className="w-full py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold text-xs tracking-wide transition-all active:scale-[0.98] disabled:opacity-50 cursor-pointer shadow-md"
         >
           {isLoading
-            ? 'Un momento...'
+            ? 'Conectando con Firebase...'
             : mode === 'login'
             ? 'Iniciar sesión'
-            : 'Crear cuenta'}
+            : 'Crear cuenta en la nube'}
         </button>
       </form>
     </div>
