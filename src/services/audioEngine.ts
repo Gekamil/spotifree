@@ -197,9 +197,24 @@ class AudioEngine {
       this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
     }
 
-    const nextTrack = this.preloadedNext?.track;
-    const nextVideoId = this.preloadedNext?.videoId;
+    let nextTrack = this.preloadedNext?.track;
+    let nextVideoId = this.preloadedNext?.videoId;
     if (!nextTrack) {
+      this.isCrossfading = false;
+      return;
+    }
+
+    if (this.activeEngine === 'youtube' && !nextVideoId) {
+      const artistName = nextTrack.artists?.[0]?.name || '';
+      const query = `${nextTrack.name} ${artistName}`.trim();
+      nextVideoId = VIDEO_ID_CACHE.get(query) || (await this.resolveVideoIdClient(query)) || undefined;
+      if (nextVideoId && this.preloadedNext) {
+        this.preloadedNext.videoId = nextVideoId;
+        persistVideoId(query, nextVideoId);
+      }
+    }
+
+    if (this.activeEngine === 'youtube' && !nextVideoId) {
       this.isCrossfading = false;
       return;
     }
@@ -279,66 +294,113 @@ class AudioEngine {
 
       // When crossfade finishes:
       if (progress >= 1) {
-        if (this.crossfadeInterval !== null) {
-          clearInterval(this.crossfadeInterval);
-          this.crossfadeInterval = null;
-        }
-
-        // 1. Stop outgoing player
-        if (this.activeEngine === 'youtube') {
-          const oldActive = this.ytPlayer;
-          if (oldActive && typeof oldActive.stopVideo === 'function') {
-            oldActive.stopVideo();
-          }
-        } else {
-          const oldAudio = this.audio;
-          if (oldAudio) {
-            oldAudio.pause();
-            oldAudio.currentTime = 0;
-          }
-        }
-
-        // 2. Swap active player index so incoming player becomes active
-        this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
-        this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
-        this.currentTrackId = nextTrack.id;
-        this.currentTrackQuery = this.preloadedNext?.query || null;
-        this.currentVideoId = nextVideoId || null;
-
-        // Restore active volume to master volume
-        if (this.activeEngine === 'youtube') {
-          const newActive = this.ytPlayer;
-          if (newActive && typeof newActive.setVolume === 'function') {
-            newActive.setVolume(Math.round(masterVolume * 100));
-          }
-        } else {
-          const newActiveAudio = this.audio;
-          if (newActiveAudio) newActiveAudio.volume = Math.max(0, Math.min(1, masterVolume));
-        }
-
-        // 3. Update UI: NOW that Song A has finished and Song B has reached 100% volume,
-        // switch album cover, title, artist and real elapsed progress to Song B!
-        let elapsedSeconds = crossfadeSec;
-        if (this.activeEngine === 'youtube') {
-          const newActive = this.ytPlayer;
-          if (newActive && typeof newActive.getCurrentTime === 'function') {
-            const ct = newActive.getCurrentTime();
-            if (isFinite(ct) && ct > 0) elapsedSeconds = ct;
-          }
-        } else {
-          const newActiveAudio = this.audio;
-          if (newActiveAudio && isFinite(newActiveAudio.currentTime) && newActiveAudio.currentTime > 0) {
-            elapsedSeconds = newActiveAudio.currentTime;
-          }
-        }
-
-        usePlayerStore.getState().completeCrossfadeTrack(nextTrack, Math.round(elapsedSeconds * 1000));
-
-        this.isCrossfading = false;
-        this.preloadedNext = null;
-        this.startProgressTicker();
+        this.finishCrossfade(crossfadeSec);
       }
     }, 60);
+  }
+
+  /**
+   * Atomic finalizer for crossfade and Automix transitions.
+   * Ensures the incoming song continues playing seamlessly from its elapsed time
+   * without skipping, avoids false-positive ad detection, and smoothly pauses the outgoing player.
+   */
+  private finishCrossfade(crossfadeSec = 0) {
+    if (!this.isCrossfading) return;
+    this.isCrossfading = false;
+
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+
+    const state = usePlayerStore.getState();
+    const nextTrack = this.preloadedNext?.track || state.getNextTrack?.();
+    const nextVideoId = this.preloadedNext?.videoId;
+    const nextQuery = this.preloadedNext?.query;
+    this.preloadedNext = null;
+
+    if (!nextTrack) {
+      this.startProgressTicker();
+      return;
+    }
+
+    const masterVolume = state.isMuted ? 0 : state.volume;
+    const oldYtIndex = this.activeYtIndex;
+    const newYtIndex: 0 | 1 = oldYtIndex === 0 ? 1 : 0;
+    const oldAudioIndex = this.activeAudioIndex;
+    const newAudioIndex: 0 | 1 = oldAudioIndex === 0 ? 1 : 0;
+
+    // 1. Silence and gently pause outgoing player (pauseVideo avoids state change 0 'ENDED')
+    if (this.activeEngine === 'youtube') {
+      const oldPlayer = this.ytPlayers[oldYtIndex];
+      if (oldPlayer) {
+        try {
+          if (typeof oldPlayer.setVolume === 'function') oldPlayer.setVolume(0);
+          if (typeof oldPlayer.pauseVideo === 'function') oldPlayer.pauseVideo();
+        } catch {}
+      }
+    } else {
+      const oldAudio = this.audios[oldAudioIndex];
+      if (oldAudio) {
+        try {
+          oldAudio.volume = 0;
+          oldAudio.pause();
+          oldAudio.currentTime = 0;
+        } catch {}
+      }
+    }
+
+    // 2. Atomically swap active player indices
+    this.activeYtIndex = newYtIndex;
+    this.activeAudioIndex = newAudioIndex;
+    this.currentTrackId = nextTrack.id;
+    this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
+
+    // 3. Bring incoming player to full volume and ensure it continues playing
+    let detectedVideoId = nextVideoId || null;
+    let elapsedSeconds = crossfadeSec > 0 ? crossfadeSec : 0;
+
+    if (this.activeEngine === 'youtube') {
+      const newPlayer = this.ytPlayers[newYtIndex];
+      if (newPlayer) {
+        try {
+          if (typeof newPlayer.unMute === 'function') newPlayer.unMute();
+          if (typeof newPlayer.setVolume === 'function') newPlayer.setVolume(Math.round(masterVolume * 100));
+          if (typeof newPlayer.playVideo === 'function') newPlayer.playVideo();
+
+          const data = typeof newPlayer.getVideoData === 'function' ? newPlayer.getVideoData() : null;
+          if (data && data.video_id) {
+            detectedVideoId = data.video_id;
+          }
+
+          if (typeof newPlayer.getCurrentTime === 'function') {
+            const ct = newPlayer.getCurrentTime();
+            if (isFinite(ct) && ct > 0) {
+              elapsedSeconds = ct;
+            }
+          }
+        } catch {}
+      }
+    } else {
+      const newAudio = this.audios[newAudioIndex];
+      if (newAudio) {
+        try {
+          newAudio.volume = Math.max(0, Math.min(1, masterVolume));
+          newAudio.play().catch(() => {});
+          if (isFinite(newAudio.currentTime) && newAudio.currentTime > 0) {
+            elapsedSeconds = newAudio.currentTime;
+          }
+        } catch {}
+      }
+    }
+
+    this.currentVideoId = detectedVideoId;
+
+    // 4. Update player store with Song B and the exact elapsed time (e.g. 10s into the track)
+    state.completeCrossfadeTrack(nextTrack, Math.round(elapsedSeconds * 1000));
+
+    // 5. Resume progress ticker on new active player
+    this.startProgressTicker();
   }
 
   constructor() {
@@ -541,21 +603,32 @@ class AudioEngine {
 
   /** Detect and automatically skip pre-roll advertisements in YouTube Player */
   private checkAndSkipAd() {
-    if (!this.ytPlayer) return;
+    if (!this.ytPlayer || this.isCrossfading || this.isTransitioning || this.isSeeking) return;
     try {
-      const data = typeof this.ytPlayer.getVideoData === 'function' ? this.ytPlayer.getVideoData() : null;
-      if (data && data.video_id && this.currentVideoId && data.video_id !== this.currentVideoId) {
-        // Active video is a pre-roll advertisement — mute and fast-forward past it
-        if (typeof this.ytPlayer.mute === 'function') this.ytPlayer.mute();
-        const duration = this.ytPlayer.getDuration?.() || 999;
-        this.ytPlayer.seekTo(duration, true);
-      } else if (data && data.video_id === this.currentVideoId) {
-        // Main song is playing — restore user's volume
+      const duration = typeof this.ytPlayer.getDuration === 'function' ? this.ytPlayer.getDuration() : 0;
+      const expectedTrackMs = usePlayerStore.getState().currentTrack?.duration_ms || 0;
+
+      // Real music tracks are never fast-forwarded! If duration > 45s, this is the song.
+      if (duration > 45 || (expectedTrackMs > 0 && Math.abs(duration - expectedTrackMs / 1000) < 30)) {
+        const data = typeof this.ytPlayer.getVideoData === 'function' ? this.ytPlayer.getVideoData() : null;
+        if (data && data.video_id && data.video_id !== this.currentVideoId) {
+          // Keep currentVideoId synchronized with YouTube's canonical ID for the track
+          this.currentVideoId = data.video_id;
+        }
+
         const { volume, isMuted } = usePlayerStore.getState();
-        if (typeof this.ytPlayer.unMute === 'function' && !isMuted) {
+        if (typeof this.ytPlayer.unMute === 'function' && !isMuted && typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
           this.ytPlayer.unMute();
           this.ytPlayer.setVolume(Math.round(volume * 100));
         }
+        return;
+      }
+
+      // Pre-roll advertisement (< 45s while real song is > 60s) — mute and fast-forward past it
+      const data = typeof this.ytPlayer.getVideoData === 'function' ? this.ytPlayer.getVideoData() : null;
+      if (data && data.video_id && this.currentVideoId && data.video_id !== this.currentVideoId && duration > 0 && duration <= 45 && expectedTrackMs > 60000) {
+        if (typeof this.ytPlayer.mute === 'function') this.ytPlayer.mute();
+        this.ytPlayer.seekTo(duration, true);
       }
     } catch {}
   }
@@ -613,34 +686,9 @@ class AudioEngine {
     } else if (code === 0) {
       this.stopProgressTicker();
       if (this.isCrossfading) {
-        // Complete crossfade immediately if primary track naturally reached end
-        const state = usePlayerStore.getState();
-        const next = this.preloadedNext?.track || state.getNextTrack?.();
-        if (next) {
-          if (this.crossfadeInterval !== null) {
-            clearInterval(this.crossfadeInterval);
-            this.crossfadeInterval = null;
-          }
-          this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
-          this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
-          this.currentTrackId = next.id;
-          const masterVolume = state.isMuted ? 0 : state.volume;
-          if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
-            this.ytPlayer.setVolume(Math.round(masterVolume * 100));
-          }
-          let elapsedSeconds = 0;
-          if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
-            const ct = this.ytPlayer.getCurrentTime();
-            if (isFinite(ct) && ct > 0) elapsedSeconds = ct;
-          } else if (this.activeEngine === 'html5' && this.audio && isFinite(this.audio.currentTime) && this.audio.currentTime > 0) {
-            elapsedSeconds = this.audio.currentTime;
-          }
-          state.completeCrossfadeTrack(next, Math.round(elapsedSeconds * 1000));
-          this.isCrossfading = false;
-          this.preloadedNext = null;
-          this.startProgressTicker();
-          return;
-        }
+        // Complete crossfade cleanly if primary track naturally reached end during transition
+        this.finishCrossfade();
+        return;
       }
 
       const state = usePlayerStore.getState();
@@ -661,7 +709,7 @@ class AudioEngine {
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
         try {
           this.checkAndSkipAd();
-          if (typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
+          if (!this.isCrossfading && typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
             const { volume, isMuted } = usePlayerStore.getState();
             if (!isMuted) {
               this.ytPlayer.unMute();
@@ -675,7 +723,7 @@ class AudioEngine {
           }
           if (isFinite(durSec) && durSec > 0) {
             usePlayerStore.getState().setDuration(durSec * 1000);
-            if (isFinite(curSec)) this.checkCrossfade(curSec, durSec);
+            if (isFinite(curSec) && !this.isCrossfading) this.checkCrossfade(curSec, durSec);
           }
         } catch {}
       }
@@ -696,7 +744,7 @@ class AudioEngine {
           const cur = audioEl.currentTime;
           usePlayerStore.getState().setProgress(cur * 1000);
           const dur = audioEl.duration;
-          if (dur && isFinite(dur)) {
+          if (dur && isFinite(dur) && !this.isCrossfading) {
             this.checkCrossfade(cur, dur);
           }
         }
@@ -715,27 +763,11 @@ class AudioEngine {
 
       audioEl.addEventListener('ended', () => {
         if (this.activeEngine !== 'html5' || this.activeAudioIndex !== idx) return;
-        const state = usePlayerStore.getState();
         if (this.isCrossfading) {
-          const next = this.preloadedNext?.track || state.getNextTrack?.();
-          if (next) {
-            if (this.crossfadeInterval !== null) {
-              clearInterval(this.crossfadeInterval);
-              this.crossfadeInterval = null;
-            }
-            this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
-            this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
-            this.currentTrackId = next.id;
-            const masterVolume = state.isMuted ? 0 : state.volume;
-            this.audio.volume = Math.max(0, Math.min(1, masterVolume));
-            const elapsedMs = Math.round((this.audio.currentTime || 0) * 1000);
-            state.completeCrossfadeTrack(next, elapsedMs);
-            this.isCrossfading = false;
-            this.preloadedNext = null;
-            this.startProgressTicker();
-            return;
-          }
+          this.finishCrossfade();
+          return;
         }
+        const state = usePlayerStore.getState();
         if (state.repeatMode === 'one') {
           audioEl.currentTime = 0;
           audioEl.play().catch(() => {});
