@@ -13,6 +13,7 @@ import {
   type VolumeEnvelope,
   type EQFilterMode,
 } from '../../services/djTransitionService';
+import { audioEngine } from '../../services/audioEngine';
 
 interface TransitionEditorModalProps {
   isOpen: boolean;
@@ -79,6 +80,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   // Clean up audition on close
   useEffect(() => {
     if (!isOpen) {
+      audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
       setIsPlayingAudition(false);
       setAuditionProgress(0);
@@ -119,9 +121,10 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     }
   };
 
-  // Toggle Audition
-  const handleToggleAudition = () => {
+  // Toggle Audition with Real Songs Audio
+  const handleToggleAudition = async () => {
     if (isPlayingAudition) {
+      audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
       setIsPlayingAudition(false);
       setAuditionProgress(0);
@@ -139,10 +142,12 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         camelotA: featA.camelot,
         camelotB: featB.camelot,
       };
-      djTransitionService.startAudition(
+
+      // 1. Try real audio from actual songs first!
+      const playedReal = await audioEngine.startTransitionAudition(
+        trackA,
+        trackB,
         config,
-        featA.tempo,
-        featB.tempo,
         (progress) => {
           setAuditionProgress(progress);
         },
@@ -151,6 +156,22 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           setAuditionProgress(0);
         }
       );
+
+      // 2. If real audio is unavailable (e.g. offline or unresolvable), fallback to acoustic tone
+      if (!playedReal) {
+        djTransitionService.startAudition(
+          config,
+          featA.tempo,
+          featB.tempo,
+          (progress) => {
+            setAuditionProgress(progress);
+          },
+          () => {
+            setIsPlayingAudition(false);
+            setAuditionProgress(0);
+          }
+        );
+      }
     }
   };
 

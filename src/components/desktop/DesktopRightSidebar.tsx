@@ -904,7 +904,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                           }
                         }}
                         onClick={() => playTrack(item, queue)}
-                        className={`flex items-center gap-2.5 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 group relative select-none ${
+                        className={`flex items-center gap-3 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 group relative select-none ${
                           isDragging
                             ? 'opacity-30 scale-95 bg-white/5'
                             : isOver
@@ -913,18 +913,6 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                         }`}
                         title="Arrastra para reordenar la cola · Clic para reproducir"
                       >
-                        {/* Drag Handle Grip Icon */}
-                        <div className="text-white/40 group-hover:text-white/80 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-grab">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="8" cy="6" r="2" />
-                            <circle cx="16" cy="6" r="2" />
-                            <circle cx="8" cy="12" r="2" />
-                            <circle cx="16" cy="12" r="2" />
-                            <circle cx="8" cy="18" r="2" />
-                            <circle cx="16" cy="18" r="2" />
-                          </svg>
-                        </div>
-
                         <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
                           <img
                             src={toHDImage(item.album?.images?.[0]?.url)}

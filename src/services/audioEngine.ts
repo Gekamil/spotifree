@@ -71,6 +71,8 @@ class AudioEngine {
   private preloadedNext: { track: Track; videoId?: string; query: string } | null = null;
   private isPreloadingNext = false;
   private crossfadeInterval: number | null = null;
+  private auditionInterval: number | null = null;
+  private isAuditioning = false;
 
   public get ytPlayer(): any {
     return this.ytPlayers[this.activeYtIndex];
@@ -452,6 +454,201 @@ class AudioEngine {
 
     // 5. Resume progress ticker on new active player
     this.startProgressTicker();
+  }
+
+  /**
+   * High-Fidelity DJ Transition Audition with Real Songs.
+   * Plays the real ending/outro of Track A into the real beginning of Track B
+   * with the exact volume envelope, filter/EQ, and compás duration selected by the user.
+   */
+  public async startTransitionAudition(
+    trackA: Track,
+    trackB: Track,
+    config: DJTransitionConfig,
+    onProgress: (progress: number) => void,
+    onEnded: () => void
+  ): Promise<boolean> {
+    this.stopTransitionAudition();
+
+    // Pause regular playback so audio doesn't clash
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    if (this.progressInterval !== null) {
+      clearInterval(this.progressInterval);
+      this.progressInterval = null;
+    }
+    for (const p of this.ytPlayers) {
+      if (p && typeof p.pauseVideo === 'function') {
+        try { p.pauseVideo(); } catch {}
+      }
+    }
+    for (const a of this.audios) {
+      if (a) {
+        try { a.pause(); } catch {}
+      }
+    }
+    this.isAuditioning = true;
+
+    // Resolve video IDs for Track A and Track B
+    const queryA = `${trackA.name} ${trackA.artists?.[0]?.name || ''}`.trim();
+    const queryB = `${trackB.name} ${trackB.artists?.[0]?.name || ''}`.trim();
+
+    let videoIdA = VIDEO_ID_CACHE.get(queryA);
+    if (!videoIdA) {
+      videoIdA = (await this.resolveVideoIdClient(queryA)) || undefined;
+      if (videoIdA) persistVideoId(queryA, videoIdA);
+    }
+
+    let videoIdB = VIDEO_ID_CACHE.get(queryB);
+    if (!videoIdB) {
+      videoIdB = (await this.resolveVideoIdClient(queryB)) || undefined;
+      if (videoIdB) persistVideoId(queryB, videoIdB);
+    }
+
+    if (!videoIdA || !videoIdB) {
+      this.isAuditioning = false;
+      return false; // Fallback to acoustic synthesis
+    }
+
+    // Compute DJ timing parameters
+    const tempoA = config.tempoA || 128;
+    const safeTempo = tempoA > 40 && tempoA < 240 ? tempoA : 128;
+    const barSec = (4 * 60) / safeTempo;
+    const transitionDur = Math.max(2.0, Math.min(16.0, barSec * (config.compases || 2)));
+    const leadInSec = 1.2;
+    const leadOutSec = 2.0;
+    const totalSec = leadInSec + transitionDur + leadOutSec;
+
+    const durA = (trackA.duration_ms || 210000) / 1000;
+    // Seek Track A right to its finale/outro so the transition captures the real ending
+    const startSecA = Math.max(0, Math.round(durA - (transitionDur + leadInSec + 1.5)));
+    const startSecB = 0;
+
+    await this.ensureYouTubeReady();
+    const p0 = this.ytPlayers[0];
+    const p1 = this.ytPlayers[1];
+
+    if (!p0 || !p1) {
+      this.isAuditioning = false;
+      return false;
+    }
+
+    // Deck A (Track A): 100% volume, start near the end
+    try {
+      if (typeof p0.unMute === 'function') p0.unMute();
+      if (typeof p0.setVolume === 'function') p0.setVolume(100);
+      p0.loadVideoById({ videoId: videoIdA, startSeconds: startSecA });
+      p0.playVideo();
+    } catch {}
+
+    // Deck B (Track B): cued, muted
+    try {
+      if (typeof p1.unMute === 'function') p1.unMute();
+      if (typeof p1.setVolume === 'function') p1.setVolume(0);
+      p1.loadVideoById({ videoId: videoIdB, startSeconds: startSecB });
+      p1.pauseVideo();
+    } catch {}
+
+    const startTime = Date.now();
+    let startedB = false;
+    const totalDurationMs = totalSec * 1000;
+
+    this.auditionInterval = window.setInterval(() => {
+      if (!this.isAuditioning) {
+        this.stopTransitionAudition();
+        return;
+      }
+
+      const elapsedMs = Date.now() - startTime;
+      const elapsedSec = elapsedMs / 1000;
+      const progress = Math.min(1.0, Math.max(0.0, elapsedMs / totalDurationMs));
+      onProgress(progress);
+
+      // Phase 1: Lead-in (Song A outro playing solo)
+      if (elapsedSec < leadInSec) {
+        if (typeof p0.setVolume === 'function') p0.setVolume(100);
+        if (typeof p1.setVolume === 'function') p1.setVolume(0);
+      }
+      // Phase 2: Active DJ Transition Window
+      else if (elapsedSec < leadInSec + transitionDur) {
+        if (!startedB) {
+          startedB = true;
+          try { p1.playVideo(); } catch {}
+        }
+
+        const pMix = Math.min(1.0, Math.max(0.0, (elapsedSec - leadInSec) / transitionDur));
+        let outVol = 1.0;
+        let inVol = pMix;
+
+        if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
+          outVol = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
+          inVol = pMix;
+        } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
+          outVol = pMix < 0.5 ? 1.0 : 0.0;
+          inVol = pMix < 0.5 ? 0.0 : 1.0;
+        } else if (config.preset === 'crescendo') {
+          outVol = Math.cos(pMix * 0.5 * Math.PI);
+          inVol = Math.pow(pMix, 1.8);
+        } else {
+          // Lineal
+          outVol = 1.0 - pMix;
+          inVol = pMix;
+        }
+
+        // Bass Swap / Low-pass Filter EQ logic
+        if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica') {
+          if (pMix < 0.5) {
+            inVol = inVol * 0.65;
+          } else {
+            outVol = outVol * 0.35;
+          }
+        } else if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
+          outVol = outVol * (1.0 - pMix * 0.6);
+        }
+
+        if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));
+        if (typeof p1.setVolume === 'function') p1.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100));
+      }
+      // Phase 3: Lead-out (Song B playing solo at full volume)
+      else if (elapsedSec < totalSec) {
+        if (typeof p0.setVolume === 'function') p0.setVolume(0);
+        try { p0.pauseVideo(); } catch {}
+        if (typeof p1.setVolume === 'function') p1.setVolume(100);
+      }
+      // Phase 4: Completed
+      else {
+        this.stopTransitionAudition();
+        onEnded();
+      }
+    }, 35);
+
+    return true;
+  }
+
+  public stopTransitionAudition(): void {
+    this.isAuditioning = false;
+    if (this.auditionInterval !== null) {
+      clearInterval(this.auditionInterval);
+      this.auditionInterval = null;
+    }
+    for (const p of this.ytPlayers) {
+      if (p) {
+        try {
+          if (typeof p.setVolume === 'function') p.setVolume(0);
+          if (typeof p.pauseVideo === 'function') p.pauseVideo();
+        } catch {}
+      }
+    }
+    for (const a of this.audios) {
+      if (a) {
+        try {
+          a.volume = 0;
+          a.pause();
+        } catch {}
+      }
+    }
   }
 
   constructor() {

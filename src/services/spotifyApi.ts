@@ -127,22 +127,66 @@ export async function searchSpotify(query: string): Promise<any | null> {
   const cleanQ = query.trim();
   if (!cleanQ) return null;
 
+  // Normalized query removing parentheses, brackets, and extra punctuation
+  // so queries like "body(remix) eladio carrion" cleanly match "body remix eladio carrion"
+  const normalizedQ = cleanQ.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+
   let tracks: Track[] = [];
   let artists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
   let albums: Array<{ id: string; name: string; images: Array<{ url: string }>; release_date?: string; artists: Array<{ name: string }> }> = [];
   let playlists: Array<{ id: string; name: string; images: Array<{ url: string }>; owner?: { display_name: string } }> = [];
 
-  // 1. Try Spotify Official Web API if valid token exists
+  // 1. Search in-app loaded playlists & library tracks for instant accurate local matching
+  try {
+    const { useSpotifyDataStore } = await import('../store/useSpotifyDataStore');
+    const allPlaylists = useSpotifyDataStore.getState().playlists || [];
+    const searchWords = (normalizedQ || cleanQ).toLowerCase().split(' ').filter(Boolean);
+    const seenLocal = new Set<string>();
+
+    for (const p of allPlaylists) {
+      for (const t of p.tracks?.items || []) {
+        if (!t || !t.id || seenLocal.has(t.id)) continue;
+        const targetText = `${t.name} ${t.artists?.map((a) => a.name).join(' ') || ''}`.toLowerCase();
+        const matchesAll = searchWords.every((word) => targetText.includes(word));
+        if (matchesAll) {
+          seenLocal.add(t.id);
+          tracks.push(t);
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Query Backend Search API (/api/spotify/search) which combines YouTube Music & iTunes
+  try {
+    const searchUrl = `/api/spotify/search?q=${encodeURIComponent(cleanQ)}`;
+    const res = await fetch(searchUrl, { signal: AbortSignal.timeout?.(4500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.tracks?.items?.length) {
+        for (const item of data.tracks.items) {
+          if (!tracks.some((t) => t.id === item.id || t.name.toLowerCase() === item.name.toLowerCase())) {
+            tracks.push(item);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // 3. Try Spotify Official Web API if valid token exists
   try {
     const validToken = await getValidAccessToken();
     if (validToken) {
       const res = await fetch(
-        `https://api.spotify.com/v1/search?q=${encodeURIComponent(cleanQ)}&type=track,artist,album,playlist&limit=12`,
+        `https://api.spotify.com/v1/search?q=${encodeURIComponent(normalizedQ || cleanQ)}&type=track,artist,album,playlist&limit=12`,
         { headers: { Authorization: `Bearer ${validToken}` } }
       );
       if (res.ok) {
         const data = await res.json();
-        if (data.tracks?.items?.length) tracks = data.tracks.items;
+        if (data.tracks?.items?.length) {
+          for (const item of data.tracks.items) {
+            if (!tracks.some((t) => t.id === item.id)) tracks.push(item);
+          }
+        }
         if (data.artists?.items?.length) artists = data.artists.items;
         if (data.albums?.items?.length) albums = data.albums.items;
         if (data.playlists?.items?.length) playlists = data.playlists.items;
@@ -152,31 +196,36 @@ export async function searchSpotify(query: string): Promise<any | null> {
     console.warn('Spotify official search failed:', err);
   }
 
-  // 2. Parallel multi-entity iTunes Search Fallback to guarantee Artists, Albums, and Playlists
+  // 4. Multi-entity iTunes Search Fallback to guarantee Artists, Albums, and Playlists
   try {
+    const queryForStore = normalizedQ || cleanQ;
     const [songsRes, albumsRes, artistsRes] = await Promise.all([
-      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=song&limit=15`),
-      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=album&limit=8`),
-      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ)}&media=music&entity=musicArtist&limit=6`),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(queryForStore)}&media=music&entity=song&limit=15`),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(queryForStore)}&media=music&entity=album&limit=8`),
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(queryForStore)}&media=music&entity=musicArtist&limit=6`),
     ]);
 
     const songData = songsRes.ok ? await songsRes.json() : { results: [] };
     const albumData = albumsRes.ok ? await albumsRes.json() : { results: [] };
     const artistData = artistsRes.ok ? await artistsRes.json() : { results: [] };
 
-    if (tracks.length === 0) {
-      tracks = (songData.results || []).map((t: any, idx: number) => ({
-        id: `search-${t.trackId || idx}`,
-        name: t.trackName || 'Canción',
-        duration_ms: t.trackTimeMillis || 210000,
-        preview_url: t.previewUrl || null,
-        artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-        album: {
-          id: `alb-${t.collectionId || idx}`,
-          name: t.collectionName || t.trackName,
-          images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-        },
-      }));
+    const itunesTracks: Track[] = (songData.results || []).map((t: any, idx: number) => ({
+      id: `search-${t.trackId || idx}`,
+      name: t.trackName || 'Canción',
+      duration_ms: t.trackTimeMillis || 210000,
+      preview_url: t.previewUrl || null,
+      artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
+      album: {
+        id: `alb-${t.collectionId || idx}`,
+        name: t.collectionName || t.trackName,
+        images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+      },
+    }));
+
+    for (const t of itunesTracks) {
+      if (!tracks.some((existing) => existing.id === t.id || existing.name.toLowerCase() === t.name.toLowerCase())) {
+        tracks.push(t);
+      }
     }
 
     if (artists.length === 0) {

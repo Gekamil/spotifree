@@ -2,7 +2,7 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect } from './scripts/audioService.mjs';
+import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
 
 const PORT = process.env.PORT || 10000;
@@ -317,7 +317,7 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
   }
 
-  // 7. Search API (/api/spotify/search)
+  // 7. Search API (/api/spotify/search) - Combined iTunes + YouTube Music
   if (pathname === '/api/spotify/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
     res.setHeader('Content-Type', 'application/json');
@@ -328,35 +328,46 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=25`;
-      const itunesRes = await fetch(itunesUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      });
+      const cleanQ = q.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+      const [itunesRes, ytTracks] = await Promise.all([
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+        searchYouTubeTracks(q, 15).catch(() => []),
+      ]);
 
-      if (itunesRes.ok) {
-        const itunesData = await itunesRes.json();
-        const items = (itunesData.results || []).map(t => ({
-          id: `itunes-${t.trackId}`,
-          name: t.trackName,
-          duration_ms: t.trackTimeMillis || 210000,
-          preview_url: t.previewUrl || null,
-          artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
-          album: {
-            id: `alb-${t.collectionId}`,
-            name: t.collectionName || t.trackName,
-            images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-          },
-        }));
+      const itunesItems = (itunesRes.results || []).map(t => ({
+        id: `itunes-${t.trackId}`,
+        name: t.trackName,
+        duration_ms: t.trackTimeMillis || 210000,
+        preview_url: t.previewUrl || null,
+        artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
+        album: {
+          id: `alb-${t.collectionId}`,
+          name: t.collectionName || t.trackName,
+          images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+        },
+      }));
 
-        res.statusCode = 200;
-        return res.end(JSON.stringify({ tracks: { items } }));
+      // Combine results: if query specifically targets a remix or YouTube title, prioritize YouTube tracks
+      const seenTitles = new Set();
+      const combined = [];
+
+      for (const t of [...ytTracks, ...itunesItems]) {
+        const key = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (key && !seenTitles.has(key)) {
+          seenTitles.add(key);
+          combined.push(t);
+        }
       }
+
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ tracks: { items: combined } }));
     } catch (e) {
       console.error('[Search error]:', e);
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ tracks: { items: [] } }));
     }
-
-    res.statusCode = 200;
-    return res.end(JSON.stringify({ tracks: { items: [] } }));
   }
 
   // 8. Playlist scrape (/api/spotify/playlist/:id)
