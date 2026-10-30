@@ -32,7 +32,7 @@ export const MobileLayout: React.FC = () => {
   const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
 
-  const { currentTrack, isPlaying, currentContextId, likedTrackIds, isCarMode, setCarMode } = usePlayerStore();
+  const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
 
   const isCardPlaying = (cardId: string, cardName: string) => {
     if (!isPlaying) return false;
@@ -646,14 +646,11 @@ export const MobileLayout: React.FC = () => {
       {/* Docked Mini Player right above Bottom Navigation */}
       <MobileMiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
 
-      {/* Full-screen Now Playing Modal or Car View */}
-      {(isFullPlayerOpen || isCarMode) && (
+      {/* Full-screen Now Playing Modal */}
+      {isFullPlayerOpen && (
         <MobileNowPlayingModal
-          isOpen={isFullPlayerOpen || isCarMode}
-          onClose={() => {
-            setIsFullPlayerOpen(false);
-            setCarMode(false);
-          }}
+          isOpen={isFullPlayerOpen}
+          onClose={() => setIsFullPlayerOpen(false)}
           onSelectPlaylistById={handleSelectPlaylistById}
         />
       )}

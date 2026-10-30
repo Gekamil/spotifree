@@ -22,7 +22,6 @@ import {
   PlusCircleNativeIcon,
   CheckCircleNativeIcon,
   QueueNativeIcon,
-  CarNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -1215,27 +1214,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </div>
 
             <div className="space-y-1">
-              {/* Option: Modo coche */}
-              <button
-                onClick={() => {
-                  setIsOptionsOpen(false);
-                  const playerState = usePlayerStore.getState();
-                  if (!playerState.currentTrack || playerState.currentContextId !== playlist.id) {
-                    handlePlayAll();
-                  }
-                  usePlayerStore.getState().setCarMode(true);
-                }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer group"
-              >
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[#1ed760] group-hover:bg-[#1ed760] group-hover:text-black transition-colors shrink-0">
-                  <CarNativeIcon size={18} className="currentColor" />
-                </div>
-                <div className="flex flex-col">
-                  <span className="font-bold text-white text-sm">Modo coche</span>
-                  <span className="text-xs text-[#b3b3b3]">Vista simplificada para conducir</span>
-                </div>
-              </button>
-
               {/* Option: Compartir */}
               <button
                 onClick={() => {
