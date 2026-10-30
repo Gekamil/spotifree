@@ -23,7 +23,7 @@ function cleanQuery(query) {
     .trim();
 }
 
-function fetchWithTimeout(url, opts, ms = 5000) {
+function fetchWithTimeout(url, opts, ms = 3500) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
@@ -54,7 +54,7 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
         params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
       }),
     },
-    4500
+    3000
   );
 
   if (!res.ok) throw new Error('YTM non-ok');
@@ -110,7 +110,7 @@ async function resolveViaYouTubeSearch(q, excludeSet = new Set()) {
         'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
       },
     },
-    5000
+    3500
   );
 
   if (!res.ok) throw new Error('YT search non-ok');

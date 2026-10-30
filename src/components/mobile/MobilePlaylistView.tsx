@@ -22,6 +22,7 @@ import {
   PlusCircleNativeIcon,
   CheckCircleNativeIcon,
   QueueNativeIcon,
+  CarNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -442,6 +443,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       cancelled = true;
     };
   }, [tracks.length, cleanId, playlist.images]);
+
+  // Preload video IDs for top tracks in this playlist in background for instant 0ms playback
+  useEffect(() => {
+    if (!tracks || tracks.length === 0) return;
+    const topTracks = tracks.slice(0, 4);
+    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+    if (engine && typeof engine.preloadTrack === 'function') {
+      topTracks.forEach((t, i) => {
+        setTimeout(() => {
+          const artistName = t.artists?.[0]?.name || '';
+          const q = `${t.name} ${artistName}`.trim();
+          engine.preloadTrack(t.id, q);
+        }, i * 300);
+      });
+    }
+  }, [cleanId, tracks.length]);
 
   const handleToggleLibrary = () => {
     const next = !isSavedInLibrary;
@@ -1198,6 +1215,27 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </div>
 
             <div className="space-y-1">
+              {/* Option: Modo coche */}
+              <button
+                onClick={() => {
+                  setIsOptionsOpen(false);
+                  const playerState = usePlayerStore.getState();
+                  if (!playerState.currentTrack || playerState.currentContextId !== playlist.id) {
+                    handlePlayAll();
+                  }
+                  usePlayerStore.getState().setCarMode(true);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer group"
+              >
+                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-[#1ed760] group-hover:bg-[#1ed760] group-hover:text-black transition-colors shrink-0">
+                  <CarNativeIcon size={18} className="currentColor" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="font-bold text-white text-sm">Modo coche</span>
+                  <span className="text-xs text-[#b3b3b3]">Vista simplificada para conducir</span>
+                </div>
+              </button>
+
               {/* Option: Compartir */}
               <button
                 onClick={() => {

@@ -471,18 +471,16 @@ class AudioEngine {
         }
       });
 
-      // Pre-warm YouTube IFrame API immediately in background (desktop only)
-      // Mobile uses HTML5 Audio + server stream, no need to initialize YT IFrame
-      if (!this.isMobileOrPWA()) {
-        setTimeout(() => {
-          this.ensureYouTubeReady().catch(() => {});
-        }, 50);
-      }
+      // Pre-warm YouTube IFrame API immediately in background across ALL platforms
+      // (Desktop, Mobile, PWA) so tracks begin instantly with 0ms cold-start latency!
+      setTimeout(() => {
+        this.ensureYouTubeReady().catch(() => {});
+      }, 50);
     }
   }
 
-  /** Detect mobile devices or PWA standalone mode — these use HTML5 Audio + server stream */
-  private isMobileOrPWA(): boolean {
+  /** Detect mobile devices or PWA standalone mode */
+  public isMobileOrPWA(): boolean {
     if (typeof window === 'undefined') return false;
     return (
       window.matchMedia('(display-mode: standalone)').matches ||
@@ -506,7 +504,7 @@ class AudioEngine {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
             host.style.cssText =
-              'position:fixed;bottom:0;left:0;width:1px;height:1px;opacity:0.001;pointer-events:none;z-index:-9999;overflow:hidden;';
+              'position:fixed;bottom:10px;right:10px;width:200px;height:120px;opacity:0.002;pointer-events:none;z-index:1;overflow:hidden;transform:scale(0.01);transform-origin:bottom right;';
             document.body.appendChild(host);
           }
 
@@ -549,6 +547,12 @@ class AudioEngine {
               },
               events: {
                 onReady: () => {
+                  try {
+                    const iframe = document.getElementById(divId);
+                    if (iframe) {
+                      iframe.setAttribute('allow', 'autoplay *; encrypted-media *; fullscreen *');
+                    }
+                  } catch {}
                   if (index === 0) {
                     this.isYtReady = true;
                     const { volume, isMuted } = usePlayerStore.getState();
@@ -857,7 +861,7 @@ class AudioEngine {
           query,
           params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
         }),
-        signal: AbortSignal.timeout?.(4000),
+        signal: AbortSignal.timeout?.(1500),
       });
 
       if (res.ok) {
@@ -875,7 +879,7 @@ class AudioEngine {
     // Fallback: direct web search
     try {
       const searchRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-        signal: AbortSignal.timeout?.(4000),
+        signal: AbortSignal.timeout?.(1500),
       });
       if (searchRes.ok) {
         const html = await searchRes.text();

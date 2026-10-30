@@ -138,13 +138,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     toggleRepeat,
     likedTrackIds,
     toggleLike,
+    isCarMode,
+    setCarMode,
   } = usePlayerStore();
 
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isCarMode, setIsCarMode] = useState(false);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(true);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
@@ -904,7 +905,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
-                  setIsCarMode(true);
+                  setCarMode(true);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer group"
               >
@@ -1003,7 +1004,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           {/* Top Bar: Exit button & Car indicator */}
           <div className="flex items-center justify-between text-white pt-2">
             <button
-              onClick={() => setIsCarMode(false)}
+              onClick={() => setCarMode(false)}
               className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold transition-all border border-white/10 shadow cursor-pointer"
             >
               <CarNativeIcon size={18} className="text-[#1ed760]" />
@@ -1021,7 +1022,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </div>
 
             <button
-              onClick={() => setIsCarMode(false)}
+              onClick={() => setCarMode(false)}
               className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white/80 active:scale-90 cursor-pointer"
               title="Cerrar modo coche"
             >

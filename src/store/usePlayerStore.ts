@@ -70,8 +70,10 @@ interface PlayerState {
   playedInShuffle: string[];
   likedTrackIds: string[];
   currentContextId: string | null;
+  isCarMode: boolean;
 
   // Actions
+  setCarMode: (open: boolean) => void;
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => void;
   setContextId: (id: string | null) => void;
   togglePlay: () => void;
@@ -120,7 +122,9 @@ const store = create<PlayerState>((set, get) => ({
   playedInShuffle: [],
   likedTrackIds: getInitialLikedTrackIds(),
   currentContextId: null,
+  isCarMode: false,
 
+  setCarMode: (open: boolean) => set({ isCarMode: open }),
   setContextId: (id: string | null) => set({ currentContextId: id }),
 
   addToQueue: (tracks: Track | Track[]) => {
