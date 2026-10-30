@@ -263,17 +263,17 @@ export const DesktopSettingsView: React.FC = () => {
     return 0;
   });
 
-  const [automix, setAutomix] = useState(() => {
+  const [crossfadeEnabled, setCrossfadeEnabled] = useState(() => {
     if (typeof window !== 'undefined') {
-      return window.localStorage.getItem('spotifree_automix') !== 'false';
+      return window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
     }
     return true;
   });
 
-  const handleToggleAutomix = (val: boolean) => {
-    setAutomix(val);
+  const handleToggleCrossfade = (val: boolean) => {
+    setCrossfadeEnabled(val);
     if (typeof window !== 'undefined') {
-      window.localStorage.setItem('spotifree_automix', String(val));
+      window.localStorage.setItem('spotifree_crossfade_enabled', String(val));
     }
   };
 
@@ -881,53 +881,90 @@ export const DesktopSettingsView: React.FC = () => {
 
               {/* Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
               {gaplessAudio && (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5 animate-in fade-in">
-                  <div>
-                    <div className="text-sm font-medium text-white">Fundido entre canciones</div>
-                    <div className="text-xs text-[#a7a7a7] mt-0.5">
-                      Transición gradual donde la canción actual baja mientras la siguiente comienza.
+                <div className="py-3 border-b border-white/5 animate-in fade-in space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-medium text-white">Fundido entre canciones</div>
+                      <div className="text-xs text-[#a7a7a7] mt-0.5">
+                        Permite que las canciones se fundan suavemente sin silencios ni cortes bruscos.
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3 w-full sm:w-64">
-                    <input
-                      type="range"
-                      min="0"
-                      max="12"
-                      step="1"
-                      value={crossfadeSeconds}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        setCrossfadeSeconds(val);
-                        if (typeof window !== 'undefined') {
-                          window.localStorage.setItem('spotifree_crossfade_sec', String(val));
-                        }
-                      }}
-                      style={{
-                        background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
-                      }}
-                      className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
+                    <SpotifyToggle
+                      checked={crossfadeEnabled}
+                      onChange={handleToggleCrossfade}
+                      ariaLabel="Fundido entre canciones"
                     />
-                    <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 w-12 text-right">
-                      {crossfadeSeconds === 0 ? '0 s' : `${crossfadeSeconds} s`}
-                    </span>
                   </div>
+
+                  {crossfadeEnabled && (
+                    <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="text-xs text-[#b3b3b3]">
+                          {crossfadeSeconds === 0 ? (
+                            <span className="text-[#1ed760] font-semibold">
+                              Automix inteligente: detecta niveles y calcula la duración óptima para cada tema
+                            </span>
+                          ) : (
+                            <span>Duración del fundido continuo entre pistas</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 w-full sm:w-72">
+                          <input
+                            type="range"
+                            min="0"
+                            max="12"
+                            step="1"
+                            value={crossfadeSeconds}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              setCrossfadeSeconds(val);
+                              if (typeof window !== 'undefined') {
+                                window.localStorage.setItem('spotifree_crossfade_sec', String(val));
+                              }
+                            }}
+                            style={{
+                              background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                            }}
+                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
+                          />
+                          <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 min-w-[70px] text-right">
+                            {crossfadeSeconds === 0 ? 'Automix' : `${crossfadeSeconds} s`}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Quick chips */}
+                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                        <button
+                          onClick={() => {
+                            setCrossfadeSeconds(0);
+                            if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', '0');
+                          }}
+                          className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                            crossfadeSeconds === 0 ? 'bg-[#1ed760] text-black shadow' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                          }`}
+                        >
+                          Automix
+                        </button>
+                        {[3, 5, 8, 10, 12].map((s) => (
+                          <button
+                            key={s}
+                            onClick={() => {
+                              setCrossfadeSeconds(s);
+                              if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', String(s));
+                            }}
+                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                              crossfadeSeconds === s ? 'bg-[#1ed760] text-black shadow' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                            }`}
+                          >
+                            {s} s
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-
-              {/* Automix */}
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="text-sm font-medium text-white">Automix</div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    Detecta cambios de nivel y calcula la transición óptima dejando hueco a ambas canciones.
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={automix}
-                  onChange={handleToggleAutomix}
-                  ariaLabel="Automix"
-                />
-              </div>
 
               {/* Reproducción automática */}
               <div className="flex items-center justify-between py-3 border-b border-white/5">
@@ -966,63 +1003,82 @@ export const DesktopSettingsView: React.FC = () => {
                 </div>
               </div>
 
-              {/* Modificadores Rápidos de Sonido */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              {/* Modificadores Rápidos de Sonido (Estilo Spotify UI minimalista, sin emojis) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
                 <button
                   onClick={() => handlePresetSelect('vocal')}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                     activePreset === 'vocal'
                       ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="block text-xs font-bold text-white">🎤 Realzar Voz</span>
-                  <span className="block text-[10px] text-[#a7a7a7]">Voces cristalinas</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'vocal' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                      <line x1="12" y1="19" x2="12" y2="22"/>
+                    </svg>
+                    <span className="text-xs font-bold text-white">Realzar voz</span>
+                  </div>
+                  <span className="block text-[10px] text-[#a7a7a7]">Frecuencias medias y voces claras</span>
                 </button>
+
                 <button
                   onClick={() => handlePresetSelect('rock')}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                     activePreset === 'rock'
                       ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="block text-xs font-bold text-white">🎵 Realzar Música</span>
-                  <span className="block text-[10px] text-[#a7a7a7]">Brillo e instrumentos</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'rock' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
+                      <path d="M9 18V5l12-2v13"/>
+                      <circle cx="6" cy="18" r="3"/>
+                      <circle cx="18" cy="16" r="3"/>
+                    </svg>
+                    <span className="text-xs font-bold text-white">Realzar música</span>
+                  </div>
+                  <span className="block text-[10px] text-[#a7a7a7]">Armonías, brillo e instrumentos</span>
                 </button>
+
                 <button
                   onClick={() => handlePresetSelect('bassBoost')}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                     activePreset === 'bassBoost'
                       ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="block text-xs font-bold text-white">🔊 Graves Profundos</span>
-                  <span className="block text-[10px] text-[#a7a7a7]">Subgraves potenciados</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'bassBoost' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
+                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
+                    </svg>
+                    <span className="text-xs font-bold text-white">Graves profundos</span>
+                  </div>
+                  <span className="block text-[10px] text-[#a7a7a7]">Subgraves y pegada potente</span>
                 </button>
+
                 <button
                   onClick={() => handlePresetSelect('flat')}
-                  className={`p-3 rounded-lg border text-left transition-all cursor-pointer ${
+                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                     activePreset === 'flat'
                       ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20'
+                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="block text-xs font-bold text-white">⚖️ Plano (0 dB)</span>
-                  <span className="block text-[10px] text-[#a7a7a7]">Fidelidad original</span>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'flat' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
+                      <line x1="3" y1="12" x2="21" y2="12"/>
+                      <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
+                    </svg>
+                    <span className="text-xs font-bold text-white">Plano (Fidelidad)</span>
+                  </div>
+                  <span className="block text-[10px] text-[#a7a7a7]">Respuesta neutra de estudio (0 dB)</span>
                 </button>
-              </div>
-
-              {/* Presets Dropdown */}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-[#a7a7a7]">Preajuste:</span>
-                <SpotifyCustomSelect
-                  value={activePreset}
-                  options={PRESET_OPTIONS}
-                  onChange={handlePresetSelect}
-                  minWidth="160px"
-                />
               </div>
             </div>
 

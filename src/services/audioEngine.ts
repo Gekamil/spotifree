@@ -89,25 +89,25 @@ class AudioEngine {
   private checkCrossfade(curSec: number, durSec: number) {
     if (this.isSeeking || !durSec || durSec < 15) return;
 
-    let crossfadeSec = 0;
-    try {
-      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
-      if (saved) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
-    } catch {}
-
-    const automixSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_automix') : null;
-    const isAutomix = automixSaved === null ? true : automixSaved !== 'false';
-
     const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
     if (gaplessSaved === 'false') return;
 
-    // Automix calculates dynamic transition timing and audio level allocation
+    const crossfadeEnabledSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_enabled') : null;
+    if (crossfadeEnabledSaved === 'false') return;
+
+    let crossfadeSec = 0;
+    try {
+      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
+      if (saved !== null) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
+    } catch {}
+
+    // Unified crossfade logic:
+    // If crossfadeSec === 0 (slider at minimum), Automix calculates dynamic level-balanced transitions (~4-6.5s)
+    // If crossfadeSec > 0 (slider at 1s-12s), explicit manual crossfade duration is applied
+    const isAutomix = crossfadeSec === 0;
     let effectiveCrossfade = crossfadeSec;
     if (isAutomix) {
-      if (effectiveCrossfade <= 0) {
-        // Dynamic automix calculation based on duration (~5 seconds adapted)
-        effectiveCrossfade = Math.max(4, Math.min(6.5, Math.round(durSec * 0.035)));
-      }
+      effectiveCrossfade = Math.max(4, Math.min(6.5, Math.round(durSec * 0.035)));
     }
 
     const remaining = durSec - curSec;

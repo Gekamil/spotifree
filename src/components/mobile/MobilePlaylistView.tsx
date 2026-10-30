@@ -567,12 +567,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(cleanId));
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
-  // Automix / Decibel-aware transitions state
+  // Automix / Transiciones inteligentes
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     try {
-      const v = window.localStorage.getItem('spotifree_automix_enabled');
-      return v === null ? true : v === 'true';
+      return window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
     } catch {
       return true;
     }
@@ -647,12 +646,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const next = !isAutomixActive;
     setIsAutomixActive(next);
     try {
-      window.localStorage.setItem('spotifree_automix_enabled', String(next));
+      window.localStorage.setItem('spotifree_crossfade_enabled', String(next));
+      if (next) {
+        window.localStorage.setItem('spotifree_crossfade_sec', '0');
+      }
     } catch {}
     if (next) {
-      setToastMessage('Automix activado: transiciones suaves con normalización de decibelios');
+      setToastMessage('Automix activado: transiciones fluidas e inteligentes');
     } else {
-      setToastMessage('Automix desactivado');
+      setToastMessage('Fundido y transiciones desactivados');
     }
     setTimeout(() => setToastMessage(null), 3000);
   };
