@@ -264,6 +264,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
+  const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
 
   // Real synchronized lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLine[]>([]);
@@ -468,8 +470,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
           {/* Scrollable Content Body */}
           <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4 font-['SpotifyMixUI']">
-            {/* 1. Large High-Definition Album Artwork or Spotify Canvas with smooth crossfade */}
-            <div className="w-full aspect-square rounded-[8px] overflow-hidden shadow-2xl bg-[#1e1e1e] relative group">
+            {/* 1. Expanded High-Definition Album Artwork or Spotify Canvas with smooth gradient bleed */}
+            <div className="w-full aspect-[4/5] min-h-[340px] max-h-[48vh] rounded-[10px] overflow-hidden shadow-2xl bg-[#181818] relative group">
               {/* Canvas video with smooth fade */}
               <div className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
                 isCanvasMode && canvasUrl ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
@@ -485,40 +487,42 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                     className="w-full h-full object-cover"
                   />
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-black/10 pointer-events-none" />
               </div>
 
-              {/* Cover Image with smooth fade */}
+              {/* Cover Image with smooth fade and subtle hover zoom */}
               <img
                 src={hdCover}
                 alt={currentTrack?.name || 'Portada'}
-                className={`w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-102 ${
+                className={`w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-103 ${
                   isCanvasMode && canvasUrl ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                 }`}
               />
-            </div>
 
-            {/* Canvas / Cover Switch Pill Button */}
-            {canvasUrl && (
-              <div className="flex items-center justify-start pl-0.5 -mt-1 -mb-1">
-                <button
-                  onClick={() => setIsCanvasMode(!isCanvasMode)}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm"
-                >
-                  {isCanvasMode ? (
-                    <>
-                      <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
-                      <span>Cambiar a carátula</span>
-                    </>
-                  ) : (
-                    <>
-                      <VideoSwitchNativeIcon size={14} className="text-white" />
-                      <span>Cambiar a Canvas</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
+              {/* Bottom Gradient Fade: Bleeds artwork smoothly downwards into the sidebar background */}
+              <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#121212] via-[#121212]/60 to-transparent pointer-events-none z-20" />
+
+              {/* Floating Canvas / Cover Switch Pill Button over gradient bleed */}
+              {canvasUrl && (
+                <div className="absolute bottom-3 left-3 z-30">
+                  <button
+                    onClick={() => setIsCanvasMode(!isCanvasMode)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 backdrop-blur-md text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/15 shadow-lg"
+                  >
+                    {isCanvasMode ? (
+                      <>
+                        <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
+                        <span>Cambiar a carátula</span>
+                      </>
+                    ) : (
+                      <>
+                        <VideoSwitchNativeIcon size={14} className="text-white" />
+                        <span>Cambiar a Canvas</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
 
             {/* 2. Track Title + Checked Icon + Artists (Clickable) */}
             <div className="flex items-start justify-between gap-3">
@@ -860,32 +864,88 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               </h4>
               {upcomingQueue.length > 0 ? (
                 <div className="space-y-1">
-                  {upcomingQueue.map((item, idx) => (
-                    <div
-                      key={`${item.id}-${idx}`}
-                      onClick={() => playTrack(item, queue)}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 cursor-pointer transition-all duration-200 group hover:translate-x-1"
-                    >
-                      <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
-                        <img
-                          src={toHDImage(item.album?.images?.[0]?.url)}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                          <PlayNativeIcon size={16} className="text-white ml-0.5" />
+                  {upcomingQueue.map((item, idx) => {
+                    const isDragging = draggedQueueIndex === idx;
+                    const isOver = dragOverQueueIndex === idx;
+                    return (
+                      <div
+                        key={`${item.id}-${idx}`}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.setData('text/plain', String(idx));
+                          e.dataTransfer.effectAllowed = 'move';
+                          setDraggedQueueIndex(idx);
+                        }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = 'move';
+                          if (dragOverQueueIndex !== idx) {
+                            setDragOverQueueIndex(idx);
+                          }
+                        }}
+                        onDragLeave={() => {
+                          if (dragOverQueueIndex === idx) setDragOverQueueIndex(null);
+                        }}
+                        onDragEnd={() => {
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          const fromIdx =
+                            draggedQueueIndex !== null
+                              ? draggedQueueIndex
+                              : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                          setDraggedQueueIndex(null);
+                          setDragOverQueueIndex(null);
+                          if (!isNaN(fromIdx) && fromIdx !== idx) {
+                            const baseOffset = currentTrackIndex >= 0 ? currentTrackIndex + 1 : 0;
+                            usePlayerStore.getState().reorderQueue(baseOffset + fromIdx, baseOffset + idx);
+                          }
+                        }}
+                        onClick={() => playTrack(item, queue)}
+                        className={`flex items-center gap-2.5 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 group relative select-none ${
+                          isDragging
+                            ? 'opacity-30 scale-95 bg-white/5'
+                            : isOver
+                            ? 'bg-[#1ed760]/20 border-t-2 border-[#1ed760]'
+                            : 'hover:bg-white/10'
+                        }`}
+                        title="Arrastra para reordenar la cola · Clic para reproducir"
+                      >
+                        {/* Drag Handle Grip Icon */}
+                        <div className="text-white/40 group-hover:text-white/80 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 cursor-grab">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="8" cy="6" r="2" />
+                            <circle cx="16" cy="6" r="2" />
+                            <circle cx="8" cy="12" r="2" />
+                            <circle cx="16" cy="12" r="2" />
+                            <circle cx="8" cy="18" r="2" />
+                            <circle cx="16" cy="18" r="2" />
+                          </svg>
+                        </div>
+
+                        <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
+                          <img
+                            src={toHDImage(item.album?.images?.[0]?.url)}
+                            alt={item.name}
+                            className="w-full h-full object-cover pointer-events-none"
+                          />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                            <PlayNativeIcon size={16} className="text-white ml-0.5" />
+                          </div>
+                        </div>
+                        <div className="min-w-0 flex-1 pointer-events-none">
+                          <p className="font-bold text-white group-hover:text-[#1ed760] truncate text-sm">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                            {item.artists.map((a) => a.name).join(', ')}
+                          </p>
                         </div>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-white group-hover:text-[#1ed760] truncate text-sm">
-                          {item.name}
-                        </p>
-                        <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                          {item.artists.map((a) => a.name).join(', ')}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="py-8 text-center text-[#b3b3b3] space-y-1">

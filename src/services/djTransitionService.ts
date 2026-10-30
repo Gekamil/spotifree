@@ -1,3 +1,6 @@
+import type { Track } from '../types/spotify';
+import type { AudioFeature } from '../utils/audioFeatures';
+
 export type TransitionPreset = 'automatica' | 'fundido' | 'crescendo' | 'filtro' | 'corte';
 export type VolumeEnvelope = 'superposicion' | 'lineal' | 'curva_s' | 'corte_directo';
 export type EQFilterMode =
@@ -17,10 +20,12 @@ export interface DJTransitionConfig {
   tempoB?: number;
   camelotA?: string;
   camelotB?: string;
+  label?: string;
+  detail?: string;
   updatedAt?: number;
 }
 
-const DEFAULT_CONFIG: Omit<DJTransitionConfig, 'trackAId' | 'trackBId'> = {
+export const DEFAULT_TRANSITION_CONFIG: Omit<DJTransitionConfig, 'trackAId' | 'trackBId'> = {
   compases: 2,
   preset: 'automatica',
   volumeEnvelope: 'superposicion',
@@ -45,18 +50,216 @@ class DJTransitionService {
     return `spotifree_dj_transition_${cleanA}_${cleanB}`;
   }
 
-  public getTransitionConfig(trackAId: string, trackBId: string): DJTransitionConfig {
-    if (typeof window === 'undefined') {
-      return { trackAId, trackBId, ...DEFAULT_CONFIG };
+  public getTransitionConfig(
+    trackAId: string,
+    trackBId: string,
+    tempoA?: number,
+    tempoB?: number,
+    camelotA?: string,
+    camelotB?: string
+  ): DJTransitionConfig {
+    if (typeof window !== 'undefined') {
+      try {
+        const key = this.getTransitionKey(trackAId, trackBId);
+        const saved = window.localStorage.getItem(key);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          return {
+            ...parsed,
+            tempoA: parsed.tempoA ?? tempoA,
+            tempoB: parsed.tempoB ?? tempoB,
+            camelotA: parsed.camelotA ?? camelotA,
+            camelotB: parsed.camelotB ?? camelotB,
+          };
+        }
+      } catch {}
     }
-    try {
-      const key = this.getTransitionKey(trackAId, trackBId);
-      const saved = window.localStorage.getItem(key);
-      if (saved) {
-        return JSON.parse(saved);
+    // Calculate tailored dynamic parameters for this exact track pair
+    return this.calculateSmartTransition(trackAId, trackBId, tempoA, tempoB, camelotA, camelotB);
+  }
+
+  /**
+   * Intelligently analyzes acoustic properties (BPM & Camelot harmonic compatibility)
+   * to calculate the optimal DJ transition parameters between any pair of songs.
+   */
+  public calculateSmartTransition(
+    trackAId: string,
+    trackBId: string,
+    tempoA = 128,
+    tempoB = 128,
+    camelotA = '9A',
+    camelotB = '11A'
+  ): DJTransitionConfig {
+    const diffBpm = Math.abs(tempoA - tempoB);
+
+    const parseCam = (c?: string) => {
+      const match = (c || '9A').match(/^(\d+)([AB])$/i);
+      if (!match) return { num: 9, letter: 'A' };
+      return { num: parseInt(match[1], 10), letter: match[2].toUpperCase() };
+    };
+
+    const cA = parseCam(camelotA);
+    const cB = parseCam(camelotB);
+    const numDiff = Math.min((cA.num - cB.num + 12) % 12, (cB.num - cA.num + 12) % 12);
+    const isSameLetter = cA.letter === cB.letter;
+    const isHarmonicMatch = (numDiff === 0 || numDiff === 1) && isSameLetter;
+    const isRelativeMajorMinor = numDiff === 0 && !isSameLetter;
+
+    // Rule 1: High Tempo Gap (> 20 BPM) -> Tight Rhythm Drop / Cut
+    if (diffBpm >= 20) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 1,
+        preset: 'corte',
+        volumeEnvelope: 'corte_directo',
+        eqMode: 'intercambio_graves_central',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        label: '✦ Automática · Corte rítmico (1 compás)',
+        detail: 'Corte directo en primer tiempo para salvar diferencia de tempo',
+      };
+    }
+
+    // Rule 2: Large BPM gap (11 - 19 BPM) or Dissonant Key -> Low-Pass Filter sweep
+    if (diffBpm > 10 || numDiff >= 3) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 2,
+        preset: 'filtro',
+        volumeEnvelope: 'curva_s',
+        eqMode: 'filtro_paso_bajo',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        label: '✦ Automática · Filtro paso bajo',
+        detail: 'Filtro de frecuencias para suavizar cambio de tempo',
+      };
+    }
+
+    // Rule 3: Perfect Harmonic Match + Low BPM Gap (<= 4 BPM) -> Long 4-bar harmonic blend
+    if (isHarmonicMatch && diffBpm <= 4) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 4,
+        preset: 'automatica',
+        volumeEnvelope: 'superposicion',
+        eqMode: 'intercambio_graves_central',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        label: '✦ Automática · 4 compases (Armónica)',
+        detail: 'Mezcla armónica extendida con intercambio de bajos',
+      };
+    }
+
+    // Rule 4: Relative Major/Minor or standard adjacent match -> 2-bar bass swap blend
+    if (isRelativeMajorMinor || isHarmonicMatch) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 2,
+        preset: 'automatica',
+        volumeEnvelope: 'superposicion',
+        eqMode: 'intercambio_graves_central',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        label: '✦ Automática · 2 compases',
+        detail: 'Transición tonal armónica con intercambio de graves',
+      };
+    }
+
+    // Default Balanced Transition
+    return {
+      trackAId,
+      trackBId,
+      compases: 2,
+      preset: 'automatica',
+      volumeEnvelope: 'superposicion',
+      eqMode: 'intercambio_graves_central',
+      tempoA,
+      tempoB,
+      camelotA,
+      camelotB,
+      label: '✦ Automática · 2 compases',
+      detail: 'Intercambio de frecuencias graves central',
+    };
+  }
+
+  /**
+   * Sorts a list of tracks using the Camelot Wheel & BPM proximity to produce
+   * a continuous, harmonically mixed DJ path.
+   */
+  public sortPlaylistHarmonically(
+    tracks: Track[],
+    features: Record<string, AudioFeature>
+  ): Track[] {
+    if (!tracks || tracks.length <= 2) return tracks;
+
+    const remaining = [...tracks];
+    const sorted: Track[] = [];
+
+    // Start with the first track
+    const first = remaining.shift()!;
+    sorted.push(first);
+
+    const parseCam = (c?: string) => {
+      const match = (c || '9A').match(/^(\d+)([AB])$/i);
+      if (!match) return { num: 9, letter: 'A' };
+      return { num: parseInt(match[1], 10), letter: match[2].toUpperCase() };
+    };
+
+    while (remaining.length > 0) {
+      const prevTrack = sorted[sorted.length - 1];
+      const prevCleanId = (prevTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      const prevFeat = features[prevCleanId] || features[prevTrack.id];
+      const prevTempo = prevFeat?.tempo || 128;
+      const prevCam = parseCam(prevFeat?.camelot);
+
+      let bestIndex = 0;
+      let minPenalty = Infinity;
+
+      for (let i = 0; i < remaining.length; i++) {
+        const candidate = remaining[i];
+        const candCleanId = (candidate.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        const candFeat = features[candCleanId] || features[candidate.id];
+        const candTempo = candFeat?.tempo || 128;
+        const candCam = parseCam(candFeat?.camelot);
+
+        const bpmDelta = Math.abs(prevTempo - candTempo);
+        const numDiff = Math.min(
+          (prevCam.num - candCam.num + 12) % 12,
+          (candCam.num - prevCam.num + 12) % 12
+        );
+        const isSameLetter = prevCam.letter === candCam.letter;
+
+        let keyPenalty = 0;
+        if (numDiff === 0 && isSameLetter) keyPenalty = 0; // Identical Key
+        else if (numDiff === 1 && isSameLetter) keyPenalty = 8; // Adjacent Key (+1/-1)
+        else if (numDiff === 0 && !isSameLetter) keyPenalty = 12; // Relative Maj/Min
+        else if (numDiff === 1 && !isSameLetter) keyPenalty = 25;
+        else keyPenalty = 50 + numDiff * 15;
+
+        const totalPenalty = keyPenalty + bpmDelta * 1.5;
+
+        if (totalPenalty < minPenalty) {
+          minPenalty = totalPenalty;
+          bestIndex = i;
+        }
       }
-    } catch {}
-    return { trackAId, trackBId, ...DEFAULT_CONFIG };
+
+      sorted.push(remaining.splice(bestIndex, 1)[0]);
+    }
+
+    return sorted;
   }
 
   public saveTransitionConfig(config: DJTransitionConfig): void {

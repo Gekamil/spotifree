@@ -89,6 +89,8 @@ interface PlayerState {
   toggleRepeat: () => void;
   toggleLike: (trackId: string, trackObj?: Track) => void;
   addToQueue: (tracks: Track | Track[]) => void;
+  setQueue: (tracks: Track[]) => void;
+  reorderQueue: (fromIndex: number, toIndex: number) => void;
 }
 
 const getInitialLikedTrackIds = (): string[] => {
@@ -126,6 +128,24 @@ const store = create<PlayerState>((set, get) => ({
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
     set((s) => ({ queue: [...s.queue, ...list] }));
+  },
+
+  setQueue: (tracks: Track[]) => {
+    set({ queue: tracks });
+  },
+
+  reorderQueue: (fromIndex: number, toIndex: number) => {
+    const current = [...get().queue];
+    if (
+      fromIndex < 0 ||
+      fromIndex >= current.length ||
+      toIndex < 0 ||
+      toIndex >= current.length
+    )
+      return;
+    const [moved] = current.splice(fromIndex, 1);
+    current.splice(toIndex, 0, moved);
+    set({ queue: current });
   },
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {

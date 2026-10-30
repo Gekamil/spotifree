@@ -295,9 +295,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
             ) : (
               <ShuffleNativeIcon size={16} className={shuffleMode === 'all' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
             )}
-            {shuffleMode !== 'off' && (
-              <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
-            )}
           </button>
 
           <button
@@ -345,9 +342,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
               <RepeatOneNativeIcon size={16} className="text-spotify-green" />
             ) : (
               <RepeatNativeIcon size={16} className={repeatMode === 'all' ? 'text-spotify-green' : 'text-[#b3b3b3] hover:text-white'} />
-            )}
-            {repeatMode !== 'off' && (
-              <span className="absolute -bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
             )}
           </button>
         </div>
@@ -398,9 +392,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
             <path d="M11.196 8 6 5.03v5.94z" />
             <path d="M15 1H1v14h14zM2 14V2h12v12z" />
           </svg>
-          {activeRightSidebar === 'now-playing' && (
-            <span className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-[#1ed760]" />
-          )}
         </button>
 
         <button
@@ -411,9 +402,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           title="Letra"
         >
           <LyricsNativeIcon size={16} className={activeRightSidebar === 'lyrics' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'} />
-          {activeRightSidebar === 'lyrics' && (
-            <span className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-[#1ed760]" />
-          )}
         </button>
 
         <button
@@ -424,9 +412,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           title="Cola"
         >
           <QueueNativeIcon size={16} className={activeRightSidebar === 'queue' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'} />
-          {activeRightSidebar === 'queue' && (
-            <span className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-[#1ed760]" />
-          )}
         </button>
 
         <button

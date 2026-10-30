@@ -542,9 +542,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               ) : (
                 <ShuffleNativeIcon size={22} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
               )}
-              {shuffleMode !== 'off' && (
-                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
-              )}
             </button>
 
             <button
@@ -582,9 +579,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <RepeatOneNativeIcon size={22} className="text-[#1ed760]" />
               ) : (
                 <RepeatNativeIcon size={22} className={repeatMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
-              )}
-              {repeatMode !== 'off' && (
-                <span className="absolute bottom-1 w-1 h-1 rounded-full bg-[#1ed760]" />
               )}
             </button>
           </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -29,6 +29,7 @@ import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
+import { djTransitionService } from '../../services/djTransitionService';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -582,6 +583,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   // Spotify Audio Features (BPM, Key, Mode, Camelot Wheel)
   const [audioFeatures, setAudioFeatures] = useState<Record<string, AudioFeature>>({});
+  const originalTracksRef = useRef<Track[] | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -667,14 +669,26 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     setIsAutomixActive(next);
     try {
       window.localStorage.setItem('spotifree_crossfade_enabled', String(next));
+      window.localStorage.setItem('spotifree_dj_mode', String(next));
       if (next) {
         window.localStorage.setItem('spotifree_crossfade_sec', '0');
       }
     } catch {}
+
     if (next) {
-      setToastMessage('Automix activado: transiciones fluidas e inteligentes');
+      // 1. Save original order before harmonic sorting
+      originalTracksRef.current = [...tracks];
+      // 2. Sort tracks along Camelot Wheel & BPM proximity
+      const harmonized = djTransitionService.sortPlaylistHarmonically(tracks, audioFeatures);
+      setTracks(harmonized);
+      setToastMessage('✦ Modo DJ activado: orden armónico y transiciones calculadas');
     } else {
-      setToastMessage('Fundido y transiciones desactivados');
+      // 3. Restore exact original order when leaving DJ mode
+      if (originalTracksRef.current && originalTracksRef.current.length > 0) {
+        setTracks(originalTracksRef.current);
+        originalTracksRef.current = null;
+      }
+      setToastMessage('Modo DJ desactivado: orden original restaurado');
     }
     setTimeout(() => setToastMessage(null), 3000);
   };
@@ -915,9 +929,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               size={24}
               className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'}
             />
-            {isAutomixActive && (
-              <span className="absolute -bottom-0.5 w-1 h-1 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
-            )}
           </button>
 
           {/* 5. Shuffle button (dos flechitas) */}
@@ -932,9 +943,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               <SmartShuffleNativeIcon size={24} className="text-[#1ed760]" />
             ) : (
               <ShuffleNativeIcon size={24} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-white/70'} />
-            )}
-            {shuffleMode !== 'off' && (
-              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
             )}
           </button>
 
@@ -1229,30 +1237,48 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   </div>
 
                   {/* DJ Mode Transition Indicator between tracks */}
-                  {isAutomixActive && idx < tracks.length - 1 && (
-                    <div className="relative pl-7 py-1 flex items-center">
-                      <div className="absolute left-[34px] top-0 bottom-0 w-[1.5px] bg-white/15" />
-                      <button
-                        onClick={() => {
-                          const nextTrack = tracks[idx + 1];
-                          if (nextTrack) {
-                            setTransitionModalPair({ trackA: track, trackB: nextTrack });
-                          }
-                        }}
-                        className="relative z-10 ml-2 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all"
-                      >
-                        <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black">
-                          ✦
-                        </div>
-                        <span className="text-xs font-semibold text-white tracking-tight">
-                          Automática
-                        </span>
-                        <span className="text-white/60 text-xs font-bold leading-none">
-                          ›
-                        </span>
-                      </button>
-                    </div>
-                  )}
+                  {isAutomixActive && idx < tracks.length - 1 && (() => {
+                    const nextTrack = tracks[idx + 1];
+                    const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                    const nextFeat: AudioFeature =
+                      audioFeatures[nextCleanId] ||
+                      audioFeatures[nextTrack?.id] ||
+                      resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
+
+                    const smartTrans = djTransitionService.calculateSmartTransition(
+                      track.id,
+                      nextTrack.id,
+                      feat?.tempo,
+                      nextFeat?.tempo,
+                      feat?.camelot,
+                      nextFeat?.camelot
+                    );
+
+                    return (
+                      <div className="relative pl-7 py-1 flex items-center">
+                        <div className="absolute left-[34px] top-0 bottom-0 w-[1.5px] bg-white/15" />
+                        <button
+                          onClick={() => {
+                            if (nextTrack) {
+                              setTransitionModalPair({ trackA: track, trackB: nextTrack });
+                            }
+                          }}
+                          className="relative z-10 ml-2 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                          title={`Editar transición DJ: ${smartTrans.detail || ''}`}
+                        >
+                          <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black">
+                            ✦
+                          </div>
+                          <span className="text-xs font-semibold text-white tracking-tight">
+                            {smartTrans.label || 'Automática'}
+                          </span>
+                          <span className="text-white/60 text-xs font-bold leading-none">
+                            ›
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </React.Fragment>
               );
             })}

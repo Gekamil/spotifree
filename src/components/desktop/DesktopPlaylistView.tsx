@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Playlist, Track } from '../../types/spotify';
 import {
   PlayNativeIcon,
@@ -20,6 +20,7 @@ import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/user
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
+import { djTransitionService } from '../../services/djTransitionService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 
 function getArtistMonthlyListeners(name: string): string {
@@ -140,7 +141,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   });
   const [audioFeatures, setAudioFeatures] = useState<Record<string, AudioFeature>>({});
   const [transitionModalPair, setTransitionModalPair] = useState<{ trackA: Track; trackB: Track } | null>(null);
-  const [videoFilterActive, setVideoFilterActive] = useState<boolean>(false);
+  const originalTracksRef = useRef<Track[] | null>(null);
 
   // Load real Spotify Audio Features in batch for DJ mode
   useEffect(() => {
@@ -162,6 +163,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
       window.localStorage.setItem('spotifree_dj_mode', String(next));
+    }
+
+    if (next) {
+      // 1. Save original playlist order before harmonic DJ set sorting
+      originalTracksRef.current = [...dynamicTracks];
+      // 2. Sort tracks along Camelot Wheel & BPM proximity for seamless transitions
+      const harmonized = djTransitionService.sortPlaylistHarmonically(dynamicTracks, audioFeatures);
+      setDynamicTracks(harmonized);
+    } else {
+      // 3. Restore exact original order when leaving DJ mode
+      if (originalTracksRef.current && originalTracksRef.current.length > 0) {
+        setDynamicTracks(originalTracksRef.current);
+        originalTracksRef.current = null;
+      }
     }
   };
   useEffect(() => {
@@ -873,9 +888,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               ) : (
                 <ShuffleNativeIcon size={20} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
               )}
-              {shuffleMode !== 'off' && (
-                <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
-              )}
             </button>
 
             {/* DJ Mode Toggle (Automix Faders icon) */}
@@ -886,7 +898,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               }`}
               title={
                 isAutomixActive
-                  ? 'Modo DJ activado (BPM, compases y transiciones armónicas)'
+                  ? 'Modo DJ activado (Orden armónico, BPM y transiciones automáticas)'
                   : 'Activar Modo DJ'
               }
             >
@@ -894,9 +906,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 size={24}
                 className={isAutomixActive ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}
               />
-              {isAutomixActive && (
-                <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
-              )}
             </button>
 
             {/* Add to Library / Checkmark toggle button (+ / ✓) */}
@@ -971,30 +980,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </svg>
             </div>
           </div>
-        </div>
-
-        {/* Filter Chips row (matching authentic Spotify Desktop & Mobile) */}
-        <div className="flex items-center gap-2 pt-1 pb-2">
-          <button
-            onClick={() => setVideoFilterActive(!videoFilterActive)}
-            className={`px-3.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
-              videoFilterActive
-                ? 'bg-white text-black font-bold shadow'
-                : 'bg-white/10 text-white hover:bg-white/15'
-            }`}
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4 4h10a2 2 0 0 1 2 2v2.5l4-2.5v12l-4-2.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
-            </svg>
-            <span>Vídeo</span>
-          </button>
-
-          <button
-            onClick={() => {}}
-            className="px-3.5 py-1 rounded-full text-xs font-semibold bg-white/10 text-white hover:bg-white/15 transition-all cursor-pointer"
-          >
-            Haz que no sea personalizada
-          </button>
         </div>
       </div>
 
@@ -1270,32 +1255,50 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </div>
 
                   {/* DJ Transition Connector between tracks */}
-                  {isAutomixActive && index < tracks.length - 1 && (
-                    <div className="relative pl-14 py-1 flex items-center my-0.5">
-                      <div className="absolute left-[36px] top-0 bottom-0 w-[1.5px] bg-white/15" />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setTransitionModalPair({
-                            trackA: track,
-                            trackB: tracks[index + 1],
-                          });
-                        }}
-                        className="relative z-10 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all group"
-                        title="Editar transición DJ (compases, curvas y filtros)"
-                      >
-                        <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black group-hover:scale-105 transition-transform">
-                          ✦
-                        </div>
-                        <span className="text-xs font-semibold text-white tracking-tight">
-                          Automática
-                        </span>
-                        <span className="text-white/60 text-xs font-bold leading-none">
-                          ›
-                        </span>
-                      </button>
-                    </div>
-                  )}
+                  {isAutomixActive && index < tracks.length - 1 && (() => {
+                    const nextTrack = tracks[index + 1];
+                    const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                    const nextFeat: AudioFeature =
+                      audioFeatures[nextCleanId] ||
+                      audioFeatures[nextTrack?.id] ||
+                      resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
+
+                    const smartTrans = djTransitionService.calculateSmartTransition(
+                      track.id,
+                      nextTrack.id,
+                      feat?.tempo,
+                      nextFeat?.tempo,
+                      feat?.camelot,
+                      nextFeat?.camelot
+                    );
+
+                    return (
+                      <div className="relative pl-14 py-1 flex items-center my-0.5">
+                        <div className="absolute left-[36px] top-0 bottom-0 w-[1.5px] bg-white/15" />
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setTransitionModalPair({
+                              trackA: track,
+                              trackB: nextTrack,
+                            });
+                          }}
+                          className="relative z-10 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all group"
+                          title={`Editar transición DJ: ${smartTrans.detail || ''}`}
+                        >
+                          <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black group-hover:scale-105 transition-transform">
+                            ✦
+                          </div>
+                          <span className="text-xs font-semibold text-white tracking-tight">
+                            {smartTrans.label || 'Automática'}
+                          </span>
+                          <span className="text-white/60 text-xs font-bold leading-none">
+                            ›
+                          </span>
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </React.Fragment>
               );
             })}

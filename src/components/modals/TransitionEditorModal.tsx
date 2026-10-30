@@ -59,15 +59,22 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   const [auditionProgress, setAuditionProgress] = useState(0.0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Load saved config on mount or track change
+  // Load saved config on mount or track change, calculating tailored smart parameters
   useEffect(() => {
     if (!trackA?.id || !trackB?.id) return;
-    const config = djTransitionService.getTransitionConfig(trackA.id, trackB.id);
+    const config = djTransitionService.getTransitionConfig(
+      trackA.id,
+      trackB.id,
+      featA?.tempo,
+      featB?.tempo,
+      featA?.camelot,
+      featB?.camelot
+    );
     setCompases(config.compases || 2);
     setPreset(config.preset || 'automatica');
     setVolumeEnvelope(config.volumeEnvelope || 'superposicion');
     setEqMode(config.eqMode || 'intercambio_graves_central');
-  }, [trackA?.id, trackB?.id]);
+  }, [trackA?.id, trackB?.id, featA?.tempo, featB?.tempo, featA?.camelot, featB?.camelot]);
 
   // Clean up audition on close
   useEffect(() => {
@@ -78,13 +85,21 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     }
   }, [isOpen]);
 
-  // Handle Preset selection
+  // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {
     setPreset(p);
     if (p === 'automatica') {
-      setVolumeEnvelope('superposicion');
-      setEqMode('intercambio_graves_central');
-      setCompases(2);
+      const smart = djTransitionService.calculateSmartTransition(
+        trackA.id,
+        trackB.id,
+        featA?.tempo,
+        featB?.tempo,
+        featA?.camelot,
+        featB?.camelot
+      );
+      setVolumeEnvelope(smart.volumeEnvelope);
+      setEqMode(smart.eqMode);
+      setCompases(smart.compases);
     } else if (p === 'fundido') {
       setVolumeEnvelope('lineal');
       setEqMode('sin_filtro');
@@ -374,9 +389,9 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in font-['SpotifyMixUI']">
-      <div className="w-full max-w-md bg-[#121212] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[96vh]">
+      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-[#121212] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[96vh] md:max-h-[88vh]">
         {/* Top Header Row matching Spotify Screenshot */}
-        <div className="px-4 pt-4 pb-3 flex items-center justify-between border-b border-white/5">
+        <div className="px-4 py-2.5 sm:px-5 flex items-center justify-between border-b border-white/5">
           {/* Close button (✕) */}
           <button
             onClick={onClose}
@@ -417,15 +432,15 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           </div>
         </div>
 
-        {/* Scrollable Content Body */}
-        <div className="p-4 overflow-y-auto space-y-3.5 flex-1">
+        {/* Content Body */}
+        <div className="p-3.5 sm:p-5 overflow-y-auto md:overflow-y-visible space-y-2.5 sm:space-y-3 flex-1">
           {/* Track 1 Card (Outgoing Track) */}
           <div className="flex items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-3 min-w-0">
               <img
                 src={getTrackCoverUrl(trackA)}
                 alt={trackA.name}
-                className="w-12 h-12 rounded-[6px] object-cover bg-[#282828] shadow-md shrink-0"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-[6px] object-cover bg-[#282828] shadow-md shrink-0"
               />
               <div className="min-w-0">
                 <h4 className="text-sm font-bold text-white truncate leading-tight font-['SpotifyMixUITitle']">
@@ -463,17 +478,17 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           <div className="relative rounded-2xl bg-[#181818] border border-white/5 p-2 shadow-inner overflow-hidden select-none">
             <canvas
               ref={canvasRef}
-              width={380}
-              height={230}
+              width={640}
+              height={165}
               onClick={handleCanvasClick}
-              className="w-full h-[230px] rounded-xl cursor-pointer block"
+              className="w-full h-[165px] rounded-xl cursor-pointer block"
             />
 
             {/* Center Floating Audition Button (▶ / ■) */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <button
                 onClick={handleToggleAudition}
-                className="pointer-events-auto w-11 h-11 rounded-xl bg-black/75 hover:bg-black/90 active:scale-95 border border-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl transition-all cursor-pointer z-30 group"
+                className="pointer-events-auto w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-black/75 hover:bg-black/90 active:scale-95 border border-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl transition-all cursor-pointer z-30 group"
                 title={isPlayingAudition ? 'Detener preescucha' : 'Escuchar transición DJ'}
               >
                 {isPlayingAudition ? (
@@ -485,7 +500,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
             </div>
 
             {/* Compases Dropdown Pill at the bottom center of Waveform Card */}
-            <div className="absolute bottom-2.5 left-0 right-0 flex justify-center z-20">
+            <div className="absolute bottom-2 left-0 right-0 flex justify-center z-20">
               <div className="relative">
                 <button
                   onClick={() => setIsCompasesMenuOpen(!isCompasesMenuOpen)}
@@ -526,7 +541,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               <img
                 src={getTrackCoverUrl(trackB)}
                 alt={trackB.name}
-                className="w-12 h-12 rounded-[6px] object-cover bg-[#282828] shadow-md shrink-0"
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-[6px] object-cover bg-[#282828] shadow-md shrink-0"
               />
               <div className="min-w-0">
                 <h4 className="text-sm font-bold text-white truncate leading-tight font-['SpotifyMixUITitle']">
@@ -560,179 +575,188 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
             </div>
           </div>
 
-          {/* Section: Ajustes predefinidos */}
-          <div className="pt-2">
-            <h5 className="text-xs font-semibold text-[#a7a7a7] mb-2.5 px-1">
-              Ajustes predefinidos
-            </h5>
+          {/* Lower Controls: Responsive side-by-side on desktop */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 border-t border-white/5">
+            {/* Left: Ajustes predefinidos */}
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">
+                Ajustes predefinidos
+              </h5>
 
-            <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
-              {/* ✦ Automática */}
-              <button
-                onClick={() => handleSelectPreset('automatica')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                  preset === 'automatica'
-                    ? 'bg-white text-black shadow-md'
-                    : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                }`}
-              >
-                <span>✦</span>
-                <span>Automática</span>
-              </button>
-
-              {/* Fundido */}
-              <button
-                onClick={() => handleSelectPreset('fundido')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  preset === 'fundido'
-                    ? 'bg-white text-black shadow-md'
-                    : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                }`}
-              >
-                Fundido
-              </button>
-
-              {/* Crescendo */}
-              <button
-                onClick={() => handleSelectPreset('crescendo')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  preset === 'crescendo'
-                    ? 'bg-white text-black shadow-md'
-                    : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                }`}
-              >
-                Crescendo
-              </button>
-
-              {/* Filtro */}
-              <button
-                onClick={() => handleSelectPreset('filtro')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  preset === 'filtro'
-                    ? 'bg-white text-black shadow-md'
-                    : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                }`}
-              >
-                Filtro
-              </button>
-
-              {/* Corte */}
-              <button
-                onClick={() => handleSelectPreset('corte')}
-                className={`px-3.5 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                  preset === 'corte'
-                    ? 'bg-white text-black shadow-md'
-                    : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                }`}
-              >
-                Corte
-              </button>
-            </div>
-          </div>
-
-          {/* Section: Detailed Parameter Rows */}
-          <div className="space-y-3 pt-2 px-1">
-            {/* Row 1: | Volumen */}
-            <div className="flex items-center justify-between relative">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-3.5 bg-[#38bdf8] rounded-full inline-block" />
-                <span className="text-sm font-semibold text-white">Volumen</span>
-              </div>
-
-              <div className="relative">
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-wrap">
+                {/* ✦ Automática */}
                 <button
-                  onClick={() => setIsVolumeMenuOpen(!isVolumeMenuOpen)}
-                  className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                  onClick={() => handleSelectPreset('automatica')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    preset === 'automatica'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
                 >
-                  <span className="capitalize">
-                    {volumeEnvelope === 'superposicion'
-                      ? 'Superposición'
-                      : volumeEnvelope === 'lineal'
-                      ? 'Fundido lineal'
-                      : volumeEnvelope === 'curva_s'
-                      ? 'Curva en S'
-                      : 'Corte directo'}
-                  </span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
+                  <span>✦</span>
+                  <span>Automática</span>
                 </button>
 
-                {isVolumeMenuOpen && (
-                  <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-44 shadow-2xl z-40">
-                    {[
-                      { id: 'superposicion', label: 'Superposición' },
-                      { id: 'lineal', label: 'Fundido lineal' },
-                      { id: 'curva_s', label: 'Curva en S' },
-                      { id: 'corte_directo', label: 'Corte directo' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        onClick={() => {
-                          setVolumeEnvelope(opt.id as VolumeEnvelope);
-                          setIsVolumeMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                          volumeEnvelope === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {/* Fundido */}
+                <button
+                  onClick={() => handleSelectPreset('fundido')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'fundido'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Fundido
+                </button>
+
+                {/* Crescendo */}
+                <button
+                  onClick={() => handleSelectPreset('crescendo')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'crescendo'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Crescendo
+                </button>
+
+                {/* Filtro */}
+                <button
+                  onClick={() => handleSelectPreset('filtro')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'filtro'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Filtro
+                </button>
+
+                {/* Corte */}
+                <button
+                  onClick={() => handleSelectPreset('corte')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'corte'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Corte
+                </button>
               </div>
             </div>
 
-            {/* Row 2: | EQ */}
-            <div className="flex items-center justify-between relative">
-              <div className="flex items-center gap-2">
-                <span className="w-1 h-3.5 bg-[#facc15] rounded-full inline-block" />
-                <span className="text-sm font-semibold text-white">EQ</span>
-              </div>
+            {/* Right: Detailed Parameter Rows (Volumen & EQ) */}
+            <div className="space-y-2">
+              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">
+                Parámetros de mezcla
+              </h5>
 
-              <div className="relative">
-                <button
-                  onClick={() => setIsEqMenuOpen(!isEqMenuOpen)}
-                  className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  <span>
-                    {eqMode === 'intercambio_graves_central'
-                      ? 'Intercambio de graves central'
-                      : eqMode === 'intercambio_gradual'
-                      ? 'Intercambio gradual'
-                      : eqMode === 'filtro_paso_bajo'
-                      ? 'Filtro paso bajo'
-                      : 'Sin filtro EQ'}
-                  </span>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-
-                {isEqMenuOpen && (
-                  <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-52 shadow-2xl z-40">
-                    {[
-                      { id: 'intercambio_graves_central', label: 'Intercambio de graves central' },
-                      { id: 'intercambio_gradual', label: 'Intercambio gradual' },
-                      { id: 'filtro_paso_bajo', label: 'Filtro paso bajo' },
-                      { id: 'sin_filtro', label: 'Sin filtro EQ' },
-                    ].map((opt) => (
-                      <button
-                        key={opt.id}
-                        onClick={() => {
-                          setEqMode(opt.id as EQFilterMode);
-                          setIsEqMenuOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                          eqMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+              <div className="bg-[#181818] p-2 sm:p-2.5 rounded-xl space-y-2 border border-white/5">
+                {/* Row 1: | Volumen */}
+                <div className="flex items-center justify-between relative">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-3.5 bg-[#38bdf8] rounded-full inline-block" />
+                    <span className="text-xs font-semibold text-white">Volumen</span>
                   </div>
-                )}
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsVolumeMenuOpen(!isVolumeMenuOpen)}
+                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <span className="capitalize">
+                        {volumeEnvelope === 'superposicion'
+                          ? 'Superposición'
+                          : volumeEnvelope === 'lineal'
+                          ? 'Fundido lineal'
+                          : volumeEnvelope === 'curva_s'
+                          ? 'Curva en S'
+                          : 'Corte directo'}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+
+                    {isVolumeMenuOpen && (
+                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-44 shadow-2xl z-40">
+                        {[
+                          { id: 'superposicion', label: 'Superposición' },
+                          { id: 'lineal', label: 'Fundido lineal' },
+                          { id: 'curva_s', label: 'Curva en S' },
+                          { id: 'corte_directo', label: 'Corte directo' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setVolumeEnvelope(opt.id as VolumeEnvelope);
+                              setIsVolumeMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                              volumeEnvelope === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 2: | EQ */}
+                <div className="flex items-center justify-between relative">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-3.5 bg-[#facc15] rounded-full inline-block" />
+                    <span className="text-xs font-semibold text-white">EQ</span>
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsEqMenuOpen(!isEqMenuOpen)}
+                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <span>
+                        {eqMode === 'intercambio_graves_central'
+                          ? 'Intercambio de graves central'
+                          : eqMode === 'intercambio_gradual'
+                          ? 'Intercambio gradual'
+                          : eqMode === 'filtro_paso_bajo'
+                          ? 'Filtro paso bajo'
+                          : 'Sin filtro EQ'}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+
+                    {isEqMenuOpen && (
+                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-52 shadow-2xl z-40">
+                        {[
+                          { id: 'intercambio_graves_central', label: 'Intercambio de graves central' },
+                          { id: 'intercambio_gradual', label: 'Intercambio gradual' },
+                          { id: 'filtro_paso_bajo', label: 'Filtro paso bajo' },
+                          { id: 'sin_filtro', label: 'Sin filtro EQ' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setEqMode(opt.id as EQFilterMode);
+                              setIsEqMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                              eqMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           </div>
