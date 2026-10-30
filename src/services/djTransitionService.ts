@@ -1,13 +1,30 @@
 import type { Track } from '../types/spotify';
 import type { AudioFeature } from '../utils/audioFeatures';
 
-export type TransitionPreset = 'automatica' | 'fundido' | 'crescendo' | 'filtro' | 'corte';
+export type TransitionPreset =
+  | 'automatica'
+  | 'fundido'
+  | 'crescendo'
+  | 'filtro'
+  | 'corte'
+  | 'eco_out'
+  | 'freno_vinilo'
+  | 'beat_roll'
+  | 'distorsion_wash';
+
 export type VolumeEnvelope = 'superposicion' | 'lineal' | 'curva_s' | 'corte_directo';
 export type EQFilterMode =
   | 'intercambio_graves_central'
   | 'intercambio_gradual'
   | 'sin_filtro'
   | 'filtro_paso_bajo';
+
+export type DJFXMode =
+  | 'ninguno'
+  | 'eco'
+  | 'freno_vinilo'
+  | 'repeticion_loop'
+  | 'distorsion_wash';
 
 export interface DJTransitionConfig {
   trackAId: string;
@@ -16,6 +33,7 @@ export interface DJTransitionConfig {
   preset: TransitionPreset;
   volumeEnvelope: VolumeEnvelope;
   eqMode: EQFilterMode;
+  fxMode?: DJFXMode;
   tempoA?: number;
   tempoB?: number;
   camelotA?: string;
@@ -30,6 +48,7 @@ export const DEFAULT_TRANSITION_CONFIG: Omit<DJTransitionConfig, 'trackAId' | 't
   preset: 'automatica',
   volumeEnvelope: 'superposicion',
   eqMode: 'intercambio_graves_central',
+  fxMode: 'ninguno',
 };
 
 class DJTransitionService {
@@ -105,43 +124,64 @@ class DJTransitionService {
     const isHarmonicMatch = (numDiff === 0 || numDiff === 1) && isSameLetter;
     const isRelativeMajorMinor = numDiff === 0 && !isSameLetter;
 
-    // Rule 1: High Tempo Gap (> 20 BPM) -> Tight Rhythm Drop / Cut
+    // Rule 1: High Tempo Gap (> 20 BPM) -> Turntable Vinyl Brake & Sharp Drop
     if (diffBpm >= 20) {
       return {
         trackAId,
         trackBId,
         compases: 1,
-        preset: 'corte',
+        preset: 'freno_vinilo',
         volumeEnvelope: 'corte_directo',
         eqMode: 'intercambio_graves_central',
+        fxMode: 'freno_vinilo',
         tempoA,
         tempoB,
         camelotA,
         camelotB,
-        label: '✦ Automática · Corte rítmico (1 compás)',
-        detail: 'Corte directo en primer tiempo para salvar diferencia de tempo',
+        label: '✦ Automática · Freno vinilo (1 compás)',
+        detail: 'Freno de tornamesa y corte directo en primer tiempo para salvar diferencia de tempo',
       };
     }
 
-    // Rule 2: Large BPM gap (11 - 19 BPM) or Dissonant Key -> Low-Pass Filter sweep
-    if (diffBpm > 10 || numDiff >= 3) {
+    // Rule 2: Large BPM gap (12 - 19 BPM) or Dissonant Key -> Echo Out & Low-Pass Filter
+    if (diffBpm > 12 || numDiff >= 3) {
       return {
         trackAId,
         trackBId,
         compases: 2,
-        preset: 'filtro',
+        preset: 'eco_out',
         volumeEnvelope: 'curva_s',
         eqMode: 'filtro_paso_bajo',
+        fxMode: 'eco',
         tempoA,
         tempoB,
         camelotA,
         camelotB,
-        label: '✦ Automática · Filtro paso bajo',
-        detail: 'Filtro de frecuencias para suavizar cambio de tempo',
+        label: '✦ Automática · Eco y filtro paso bajo',
+        detail: 'Eco retardado con filtro progresivo para enlazar el ritmo',
       };
     }
 
-    // Rule 3: Perfect Harmonic Match + Low BPM Gap (<= 4 BPM) -> Long 4-bar harmonic blend
+    // Rule 3: Moderate BPM gap (7 - 12 BPM) -> Beat Roll Loop Stutter build-up
+    if (diffBpm > 6) {
+      return {
+        trackAId,
+        trackBId,
+        compases: 2,
+        preset: 'beat_roll',
+        volumeEnvelope: 'curva_s',
+        eqMode: 'intercambio_gradual',
+        fxMode: 'repeticion_loop',
+        tempoA,
+        tempoB,
+        camelotA,
+        camelotB,
+        label: '✦ Automática · Beat Roll (Stutter)',
+        detail: 'Redoble rítmico acelerado antes del impacto de entrada',
+      };
+    }
+
+    // Rule 4: Perfect Harmonic Match + Low BPM Gap (<= 4 BPM) -> Long 4-bar harmonic blend with saturation wash
     if (isHarmonicMatch && diffBpm <= 4) {
       return {
         trackAId,
@@ -150,16 +190,17 @@ class DJTransitionService {
         preset: 'automatica',
         volumeEnvelope: 'superposicion',
         eqMode: 'intercambio_graves_central',
+        fxMode: 'distorsion_wash',
         tempoA,
         tempoB,
         camelotA,
         camelotB,
         label: '✦ Automática · 4 compases (Armónica)',
-        detail: 'Mezcla armónica extendida con intercambio de bajos',
+        detail: 'Mezcla armónica extendida con saturación suave y bajo central',
       };
     }
 
-    // Rule 4: Relative Major/Minor or standard adjacent match -> 2-bar bass swap blend
+    // Rule 5: Relative Major/Minor or standard adjacent match -> 2-bar bass swap blend
     if (isRelativeMajorMinor || isHarmonicMatch) {
       return {
         trackAId,
@@ -168,6 +209,7 @@ class DJTransitionService {
         preset: 'automatica',
         volumeEnvelope: 'superposicion',
         eqMode: 'intercambio_graves_central',
+        fxMode: 'ninguno',
         tempoA,
         tempoB,
         camelotA,
@@ -185,6 +227,7 @@ class DJTransitionService {
       preset: 'automatica',
       volumeEnvelope: 'superposicion',
       eqMode: 'intercambio_graves_central',
+      fxMode: 'ninguno',
       tempoA,
       tempoB,
       camelotA,

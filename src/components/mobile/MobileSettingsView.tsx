@@ -69,9 +69,12 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const [crossfadeSeconds, setCrossfadeSeconds] = useState(() => {
     if (typeof window !== 'undefined') {
       const v = window.localStorage.getItem('spotifree_crossfade_sec');
-      return v ? parseInt(v, 10) : 0;
+      if (v) {
+        const parsed = parseInt(v, 10);
+        return parsed > 0 ? parsed : 5;
+      }
     }
-    return 0;
+    return 5;
   });
 
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(() => {
@@ -459,16 +462,16 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                   <div className="p-3 rounded-xl bg-[#181818] border border-white/5 space-y-2.5 animate-in fade-in">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-[#b3b3b3]">
-                        {crossfadeSeconds === 0 ? 'Modo inteligente' : 'Duración manual'}
+                        Duración del fundido
                       </span>
                       <span className="text-xs font-['SpotifyMixUI'] tabular-nums font-bold text-[#1ed760]">
-                        {crossfadeSeconds === 0 ? 'Automix' : `${crossfadeSeconds} s`}
+                        {`${crossfadeSeconds} s`}
                       </span>
                     </div>
 
                     <input
                       type="range"
-                      min="0"
+                      min="1"
                       max="12"
                       step="1"
                       value={crossfadeSeconds}
@@ -480,30 +483,17 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                         }
                       }}
                       style={{
-                        background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                        background: `linear-gradient(to right, #1ed760 ${((crossfadeSeconds - 1) / 11) * 100}%, rgba(255, 255, 255, 0.2) ${((crossfadeSeconds - 1) / 11) * 100}%)`,
                       }}
                       className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760] touch-none"
                     />
 
                     <p className="text-[11px] text-[#a7a7a7]">
-                      {crossfadeSeconds === 0
-                        ? 'Automix: calcula niveles de audio y el punto óptimo de fundido para cada tema.'
-                        : `Fundido manual continuo de ${crossfadeSeconds} segundos entre canciones.`}
+                      {`Fundido continuo de ${crossfadeSeconds} segundos entre canciones.`}
                     </p>
 
                     <div className="flex items-center gap-1.5 overflow-x-auto pt-1 scrollbar-none">
-                      <button
-                        onClick={() => {
-                          setCrossfadeSeconds(0);
-                          if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', '0');
-                        }}
-                        className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 transition-all cursor-pointer ${
-                          crossfadeSeconds === 0 ? 'bg-[#1ed760] text-black shadow' : 'bg-[#242424] text-white/70'
-                        }`}
-                      >
-                        Automix
-                      </button>
-                      {[3, 5, 8, 10, 12].map((s) => (
+                      {[2, 4, 6, 8, 10, 12].map((s) => (
                         <button
                           key={s}
                           onClick={() => {

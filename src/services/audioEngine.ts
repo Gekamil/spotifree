@@ -103,6 +103,7 @@ class AudioEngine {
     try {
       const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
       if (saved !== null) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
+      else crossfadeSec = 5;
     } catch {}
 
     // DJ Mode Check: When DJ Mode is active, bypass simple flat fade and use beat-aligned transition duration & custom transition config
@@ -112,7 +113,6 @@ class AudioEngine {
         window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
 
     let djConfig: DJTransitionConfig | null = null;
-    let isAutomix = crossfadeSec === 0;
     let effectiveCrossfade = crossfadeSec;
 
     if (isDjMode) {
@@ -126,9 +126,9 @@ class AudioEngine {
       } else {
         effectiveCrossfade = 3.8;
       }
-    } else if (isAutomix) {
-      effectiveCrossfade = Math.max(4, Math.min(6.5, Math.round(durSec * 0.035)));
     }
+
+    if (effectiveCrossfade <= 0) return;
 
     const remaining = durSec - curSec;
 
@@ -142,11 +142,9 @@ class AudioEngine {
       this.preloadUpcomingTrack();
     }
 
-    if (effectiveCrossfade <= 0) return;
-
     // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
     if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
-      this.executeCrossfade(effectiveCrossfade, isAutomix, djConfig);
+      this.executeCrossfade(effectiveCrossfade, djConfig);
     }
   }
 
@@ -169,8 +167,7 @@ class AudioEngine {
           : VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = await this.resolveVideoIdClient(query);
-        if (videoId) persistVideoId(query, videoId);
+        videoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
       }
 
       this.preloadedNext = {
@@ -193,7 +190,7 @@ class AudioEngine {
     }
   }
 
-  private async executeCrossfade(crossfadeSec: number, isAutomix = false, djConfig: DJTransitionConfig | null = null) {
+  private async executeCrossfade(crossfadeSec: number, djConfig: DJTransitionConfig | null = null) {
     this.isCrossfading = true;
     const state = usePlayerStore.getState();
 
@@ -211,8 +208,7 @@ class AudioEngine {
           : VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = await this.resolveVideoIdClient(query);
-        if (videoId) persistVideoId(query, videoId);
+        videoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
       }
       this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
     }
@@ -227,10 +223,9 @@ class AudioEngine {
     if (this.activeEngine === 'youtube' && !nextVideoId) {
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
-      nextVideoId = VIDEO_ID_CACHE.get(query) || (await this.resolveVideoIdClient(query)) || undefined;
+      nextVideoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
       if (nextVideoId && this.preloadedNext) {
         this.preloadedNext.videoId = nextVideoId;
-        persistVideoId(query, nextVideoId);
       }
     }
 
@@ -315,16 +310,8 @@ class AudioEngine {
             outVol = outVol * 0.35; // instant low-cut on outgoing track
           }
         }
-      } else if (isAutomix) {
-        // DJ Automix: detects levels and creates acoustic headroom so neither song clashes
-        // Outgoing track gently yields the center stage, while incoming track builds energy smoothly
-        const outCurve = Math.cos(progress * 0.5 * Math.PI);
-        outVol = Math.pow(outCurve, 1.4) * masterVolume;
-
-        const inCurve = Math.sin(progress * 0.5 * Math.PI);
-        inVol = Math.pow(inCurve, 0.8) * masterVolume;
       } else {
-        // Equal power sinusoidal curve
+        // Equal power sinusoidal curve for continuous crossfade
         outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
         inVol = Math.sin(progress * 0.5 * Math.PI) * masterVolume;
       }
@@ -383,7 +370,16 @@ class AudioEngine {
     const oldAudioIndex = this.activeAudioIndex;
     const newAudioIndex: 0 | 1 = oldAudioIndex === 0 ? 1 : 0;
 
-    // 1. Silence and gently pause outgoing player (pauseVideo avoids state change 0 'ENDED')
+    // 1. ATOMICALLY SWAP ACTIVE PLAYER INDICES FIRST!
+    this.activeYtIndex = newYtIndex;
+    this.activeAudioIndex = newAudioIndex;
+    this.currentTrackId = nextTrack.id;
+    this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
+    this.isTransitioning = false;
+
+    // 2. NOW silence and gently pause outgoing old player
+    // Because activeYtIndex is ALREADY newYtIndex, handleYtStateChange will safely ignore
+    // the pause event from oldYtIndex!
     if (this.activeEngine === 'youtube') {
       const oldPlayer = this.ytPlayers[oldYtIndex];
       if (oldPlayer) {
@@ -402,12 +398,6 @@ class AudioEngine {
         } catch {}
       }
     }
-
-    // 2. Atomically swap active player indices
-    this.activeYtIndex = newYtIndex;
-    this.activeAudioIndex = newAudioIndex;
-    this.currentTrackId = nextTrack.id;
-    this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
 
     // 3. Bring incoming player to full volume and ensure it continues playing
     let detectedVideoId = nextVideoId || null;
@@ -449,8 +439,9 @@ class AudioEngine {
 
     this.currentVideoId = detectedVideoId;
 
-    // 4. Update player store with Song B and the exact elapsed time (e.g. 10s into the track)
+    // 4. Update player store with Song B and the exact elapsed time
     state.completeCrossfadeTrack(nextTrack, Math.round(elapsedSeconds * 1000));
+    usePlayerStore.setState({ isPlaying: true });
 
     // 5. Resume progress ticker on new active player
     this.startProgressTicker();
@@ -491,21 +482,16 @@ class AudioEngine {
     }
     this.isAuditioning = true;
 
-    // Resolve video IDs for Track A and Track B
+    // Resolve video IDs for Track A and Track B using resilient cache + backend + client fallback
     const queryA = `${trackA.name} ${trackA.artists?.[0]?.name || ''}`.trim();
     const queryB = `${trackB.name} ${trackB.artists?.[0]?.name || ''}`.trim();
 
-    let videoIdA = VIDEO_ID_CACHE.get(queryA);
-    if (!videoIdA) {
-      videoIdA = (await this.resolveVideoIdClient(queryA)) || undefined;
-      if (videoIdA) persistVideoId(queryA, videoIdA);
-    }
+    let videoIdA =
+      trackA.id === this.currentTrackId && this.currentVideoId
+        ? this.currentVideoId
+        : await this.resolveVideoId(queryA, trackA.id);
 
-    let videoIdB = VIDEO_ID_CACHE.get(queryB);
-    if (!videoIdB) {
-      videoIdB = (await this.resolveVideoIdClient(queryB)) || undefined;
-      if (videoIdB) persistVideoId(queryB, videoIdB);
-    }
+    let videoIdB = await this.resolveVideoId(queryB, trackB.id);
 
     if (!videoIdA || !videoIdB) {
       this.isAuditioning = false;
@@ -534,6 +520,12 @@ class AudioEngine {
       this.isAuditioning = false;
       return false;
     }
+
+    // Reset playback rates
+    try {
+      if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1);
+      if (typeof p1.setPlaybackRate === 'function') p1.setPlaybackRate(1);
+    } catch {}
 
     // Deck A (Track A): 100% volume, start near the end
     try {
@@ -608,6 +600,38 @@ class AudioEngine {
           outVol = outVol * (1.0 - pMix * 0.6);
         }
 
+        // DJ FX 1: Turntable / Vinyl Brake (Freno de vinilo)
+        if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
+          const remainingSec = (leadInSec + transitionDur) - elapsedSec;
+          if (remainingSec <= 0.7 && remainingSec > 0.25) {
+            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.5); } catch {}
+          } else if (remainingSec <= 0.25 && remainingSec > 0) {
+            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.25); } catch {}
+            outVol = Math.max(0, outVol * (remainingSec / 0.25));
+          } else if (remainingSec <= 0) {
+            try { if (typeof p0.pauseVideo === 'function') p0.pauseVideo(); } catch {}
+            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1); } catch {}
+          }
+        }
+
+        // DJ FX 2: Beat Roll / Stutter loop acceleration
+        if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+          const beatSec = 60 / safeTempo;
+          const progressInPhase = elapsedSec - leadInSec;
+          if (progressInPhase > transitionDur * 0.5) {
+            const rollRate = progressInPhase > transitionDur * 0.75 ? beatSec / 8 : beatSec / 4;
+            const rollTick = (progressInPhase % rollRate) / rollRate;
+            if (rollTick > 0.5) {
+              outVol = outVol * 0.25;
+            }
+          }
+        }
+
+        // DJ FX 3: Echo Out tail
+        if (config.preset === 'eco_out' || config.fxMode === 'eco') {
+          outVol = Math.pow(Math.max(0, 1.0 - pMix), 2.2);
+        }
+
         if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));
         if (typeof p1.setVolume === 'function') p1.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100));
       }
@@ -615,6 +639,7 @@ class AudioEngine {
       else if (elapsedSec < totalSec) {
         if (typeof p0.setVolume === 'function') p0.setVolume(0);
         try { p0.pauseVideo(); } catch {}
+        try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1); } catch {}
         if (typeof p1.setVolume === 'function') p1.setVolume(100);
       }
       // Phase 4: Completed
@@ -636,6 +661,7 @@ class AudioEngine {
     for (const p of this.ytPlayers) {
       if (p) {
         try {
+          if (typeof p.setPlaybackRate === 'function') p.setPlaybackRate(1);
           if (typeof p.setVolume === 'function') p.setVolume(0);
           if (typeof p.pauseVideo === 'function') p.pauseVideo();
         } catch {}
@@ -745,6 +771,18 @@ class AudioEngine {
     if (this.ytReadyPromise) return this.ytReadyPromise;
 
     this.ytReadyPromise = new Promise<void>((resolve) => {
+      let isDone = false;
+      const finish = () => {
+        if (!isDone) {
+          isDone = true;
+          this.isYtReady = true;
+          resolve();
+        }
+      };
+
+      // Safety timeout: Never hang for more than 2000ms
+      const safetyTimeout = setTimeout(finish, 2000);
+
       const initPlayer = () => {
         try {
           let host = document.getElementById('spotifree-yt-player-host');
@@ -752,7 +790,7 @@ class AudioEngine {
             host = document.createElement('div');
             host.id = 'spotifree-yt-player-host';
             host.style.cssText =
-              'position:fixed;bottom:10px;right:10px;width:200px;height:120px;opacity:0.002;pointer-events:none;z-index:1;overflow:hidden;transform:scale(0.01);transform-origin:bottom right;';
+              'position:fixed;bottom:0px;right:0px;width:64px;height:64px;opacity:0.02;pointer-events:none;z-index:-1;overflow:hidden;';
             document.body.appendChild(host);
           }
 
@@ -777,8 +815,8 @@ class AudioEngine {
 
           const createPlayerInstance = (divId: string, index: 0 | 1) => {
             return new (window as any).YT.Player(divId, {
-              height: '120',
-              width: '200',
+              height: '64',
+              width: '64',
               host: 'https://www.youtube.com',
               playerVars: {
                 autoplay: 1,
@@ -802,12 +840,12 @@ class AudioEngine {
                     }
                   } catch {}
                   if (index === 0) {
-                    this.isYtReady = true;
+                    clearTimeout(safetyTimeout);
                     const { volume, isMuted } = usePlayerStore.getState();
                     if (this.ytPlayers[0] && typeof this.ytPlayers[0].setVolume === 'function') {
                       this.ytPlayers[0].setVolume(isMuted ? 0 : Math.round(volume * 100));
                     }
-                    resolve();
+                    finish();
                   }
                 },
                 onStateChange: (event: any) => {
@@ -829,7 +867,8 @@ class AudioEngine {
           this.ytPlayers[1] = createPlayerInstance('spotifree-yt-player-1', 1);
         } catch (err) {
           console.warn('[AudioEngine] Failed to initialize YouTube players:', err);
-          resolve();
+          clearTimeout(safetyTimeout);
+          finish();
         }
       };
 
@@ -1143,6 +1182,38 @@ class AudioEngine {
     return null;
   }
 
+  /** Unified Video ID resolution: Cache -> Local Backend Scrape -> Client Fallback */
+  public async resolveVideoId(query: string, trackId?: string): Promise<string | null> {
+    if (!query) return null;
+    const cleanQuery = query.trim();
+    const cached = VIDEO_ID_CACHE.get(cleanQuery);
+    if (cached) return cached;
+
+    // 1. Try local server backend API (/api/audio/resolve)
+    try {
+      const url = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery)}${trackId ? `&trackId=${encodeURIComponent(trackId)}` : ''}`;
+      const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.videoId) {
+          persistVideoId(cleanQuery, data.videoId);
+          return data.videoId;
+        }
+      }
+    } catch {}
+
+    // 2. Client-side fallback
+    try {
+      const clientVid = await this.resolveVideoIdClient(cleanQuery);
+      if (clientVid) {
+        persistVideoId(cleanQuery, clientVid);
+        return clientVid;
+      }
+    } catch {}
+
+    return null;
+  }
+
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
@@ -1195,31 +1266,8 @@ class AudioEngine {
         }
       } catch {}
 
-      // 1. Check instant in-memory & persistent cache
-      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
-
-      // 2. Resolve videoId from backend API with client fallback
-      if (!videoId) {
-        try {
-          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
-          const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(5000) });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.videoId) {
-              videoId = data.videoId;
-              persistVideoId(query, videoId!);
-            }
-          }
-        } catch {}
-
-        // Fallback: direct browser search
-        if (!videoId) {
-          videoId = await this.resolveVideoIdClient(query);
-          if (videoId) {
-            persistVideoId(query, videoId);
-          }
-        }
-      }
+      // 1. Resolve videoId instantly via unified cache & resolver
+      let videoId = await this.resolveVideoId(query, trackId);
 
       if (videoId) {
         this.currentVideoId = videoId;

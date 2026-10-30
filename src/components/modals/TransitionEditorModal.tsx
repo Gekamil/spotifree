@@ -12,6 +12,7 @@ import {
   type TransitionPreset,
   type VolumeEnvelope,
   type EQFilterMode,
+  type DJFXMode,
 } from '../../services/djTransitionService';
 import { audioEngine } from '../../services/audioEngine';
 
@@ -49,13 +50,16 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   const [preset, setPreset] = useState<TransitionPreset>('automatica');
   const [volumeEnvelope, setVolumeEnvelope] = useState<VolumeEnvelope>('superposicion');
   const [eqMode, setEqMode] = useState<EQFilterMode>('intercambio_graves_central');
+  const [fxMode, setFxMode] = useState<DJFXMode>('ninguno');
 
   // Dropdown menus
   const [isCompasesMenuOpen, setIsCompasesMenuOpen] = useState(false);
   const [isVolumeMenuOpen, setIsVolumeMenuOpen] = useState(false);
   const [isEqMenuOpen, setIsEqMenuOpen] = useState(false);
+  const [isFxMenuOpen, setIsFxMenuOpen] = useState(false);
 
   // Audition playback state
+  const [isAuditionLoading, setIsAuditionLoading] = useState(false);
   const [isPlayingAudition, setIsPlayingAudition] = useState(false);
   const [auditionProgress, setAuditionProgress] = useState(0.0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -75,6 +79,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     setPreset(config.preset || 'automatica');
     setVolumeEnvelope(config.volumeEnvelope || 'superposicion');
     setEqMode(config.eqMode || 'intercambio_graves_central');
+    setFxMode(config.fxMode || 'ninguno');
   }, [trackA?.id, trackB?.id, featA?.tempo, featB?.tempo, featA?.camelot, featB?.camelot]);
 
   // Clean up audition on close
@@ -83,6 +88,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
       setIsPlayingAudition(false);
+      setIsAuditionLoading(false);
       setAuditionProgress(0);
     }
   }, [isOpen]);
@@ -101,35 +107,61 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       );
       setVolumeEnvelope(smart.volumeEnvelope);
       setEqMode(smart.eqMode);
+      setFxMode(smart.fxMode || 'ninguno');
       setCompases(smart.compases);
     } else if (p === 'fundido') {
       setVolumeEnvelope('lineal');
       setEqMode('sin_filtro');
+      setFxMode('ninguno');
       setCompases(2);
     } else if (p === 'crescendo') {
       setVolumeEnvelope('curva_s');
       setEqMode('intercambio_gradual');
+      setFxMode('ninguno');
       setCompases(4);
     } else if (p === 'filtro') {
       setVolumeEnvelope('superposicion');
       setEqMode('filtro_paso_bajo');
+      setFxMode('ninguno');
       setCompases(2);
     } else if (p === 'corte') {
       setVolumeEnvelope('corte_directo');
       setEqMode('intercambio_graves_central');
+      setFxMode('ninguno');
       setCompases(1);
+    } else if (p === 'eco_out') {
+      setVolumeEnvelope('curva_s');
+      setEqMode('filtro_paso_bajo');
+      setFxMode('eco');
+      setCompases(2);
+    } else if (p === 'freno_vinilo') {
+      setVolumeEnvelope('corte_directo');
+      setEqMode('intercambio_graves_central');
+      setFxMode('freno_vinilo');
+      setCompases(1);
+    } else if (p === 'beat_roll') {
+      setVolumeEnvelope('curva_s');
+      setEqMode('intercambio_gradual');
+      setFxMode('repeticion_loop');
+      setCompases(2);
+    } else if (p === 'distorsion_wash') {
+      setVolumeEnvelope('superposicion');
+      setEqMode('intercambio_graves_central');
+      setFxMode('distorsion_wash');
+      setCompases(4);
     }
   };
 
   // Toggle Audition with Real Songs Audio
   const handleToggleAudition = async () => {
-    if (isPlayingAudition) {
+    if (isPlayingAudition || isAuditionLoading) {
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
       setIsPlayingAudition(false);
+      setIsAuditionLoading(false);
       setAuditionProgress(0);
     } else {
-      setIsPlayingAudition(true);
+      setIsAuditionLoading(true);
       const config: DJTransitionConfig = {
         trackAId: trackA.id,
         trackBId: trackB.id,
@@ -137,40 +169,52 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         preset,
         volumeEnvelope,
         eqMode,
+        fxMode,
         tempoA: featA.tempo,
         tempoB: featB.tempo,
         camelotA: featA.camelot,
         camelotB: featB.camelot,
       };
 
-      // 1. Try real audio from actual songs first!
-      const playedReal = await audioEngine.startTransitionAudition(
-        trackA,
-        trackB,
-        config,
-        (progress) => {
-          setAuditionProgress(progress);
-        },
-        () => {
-          setIsPlayingAudition(false);
-          setAuditionProgress(0);
-        }
-      );
-
-      // 2. If real audio is unavailable (e.g. offline or unresolvable), fallback to acoustic tone
-      if (!playedReal) {
-        djTransitionService.startAudition(
+      try {
+        // 1. Try real audio from actual songs first!
+        const playedReal = await audioEngine.startTransitionAudition(
+          trackA,
+          trackB,
           config,
-          featA.tempo,
-          featB.tempo,
           (progress) => {
+            setIsAuditionLoading(false);
+            setIsPlayingAudition(true);
             setAuditionProgress(progress);
           },
           () => {
             setIsPlayingAudition(false);
+            setIsAuditionLoading(false);
             setAuditionProgress(0);
           }
         );
+
+        // 2. If real audio is unavailable, fallback to synthesized preview
+        if (!playedReal) {
+          setIsAuditionLoading(false);
+          setIsPlayingAudition(true);
+          djTransitionService.startAudition(
+            config,
+            featA.tempo,
+            featB.tempo,
+            (progress) => {
+              setAuditionProgress(progress);
+            },
+            () => {
+              setIsPlayingAudition(false);
+              setIsAuditionLoading(false);
+              setAuditionProgress(0);
+            }
+          );
+        }
+      } catch (e) {
+        setIsAuditionLoading(false);
+        setIsPlayingAudition(false);
       }
     }
   };
@@ -184,6 +228,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       preset,
       volumeEnvelope,
       eqMode,
+      fxMode,
       tempoA: featA.tempo,
       tempoB: featB.tempo,
       camelotA: featA.camelot,
@@ -372,6 +417,32 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.lineTo(width, deckBY + deckHeight * 0.25);
     ctx.stroke();
 
+    // --- Draw Purple FX Envelope Curve if active ---
+    if (fxMode !== 'ninguno' || ['eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash'].includes(preset)) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = '#c084fc'; // Light Purple
+      ctx.beginPath();
+      if (fxMode === 'freno_vinilo' || preset === 'freno_vinilo') {
+        // Turntable brake steep plunge curve
+        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.35);
+        ctx.lineTo(midA - 10, deckAY + deckHeight * 0.35);
+        ctx.quadraticCurveTo(midA, deckAY + deckHeight * 0.9, boxEndA, deckAY + deckHeight * 0.95);
+      } else if (fxMode === 'repeticion_loop' || preset === 'beat_roll') {
+        // Stutter roll steps
+        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.4);
+        for (let sx = boxStartA; sx < boxEndA; sx += (boxEndA - boxStartA) / 8) {
+          ctx.lineTo(sx, deckAY + deckHeight * 0.2);
+          ctx.lineTo(sx + 5, deckAY + deckHeight * 0.6);
+        }
+      } else {
+        // Eco tail
+        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.3);
+        ctx.lineTo(midA, deckAY + deckHeight * 0.3);
+        ctx.lineTo(boxEndA, deckAY + deckHeight * 0.9);
+      }
+      ctx.stroke();
+    }
+
     // --- Draw Green Scrub Playhead ---
     // If playing, position moves from left to right; if stopped, stays at scrub point
     const playheadX = auditionProgress > 0 ? auditionProgress * width : 16;
@@ -393,6 +464,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     preset,
     volumeEnvelope,
     eqMode,
+    fxMode,
     auditionProgress,
   ]);
 
@@ -505,14 +577,22 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               className="w-full h-[165px] rounded-xl cursor-pointer block"
             />
 
-            {/* Center Floating Audition Button (▶ / ■) */}
+            {/* Center Floating Audition Button (▶ / ■ / Loading spinner) */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <button
                 onClick={handleToggleAudition}
                 className="pointer-events-auto w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-black/75 hover:bg-black/90 active:scale-95 border border-white/20 backdrop-blur-md flex items-center justify-center shadow-2xl transition-all cursor-pointer z-30 group"
-                title={isPlayingAudition ? 'Detener preescucha' : 'Escuchar transición DJ'}
+                title={
+                  isAuditionLoading
+                    ? 'Cargando y sincronizando canciones reales...'
+                    : isPlayingAudition
+                    ? 'Detener preescucha'
+                    : 'Escuchar transición DJ'
+                }
               >
-                {isPlayingAudition ? (
+                {isAuditionLoading ? (
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-[#1ed760] rounded-full animate-spin" />
+                ) : isPlayingAudition ? (
                   <div className="w-3.5 h-3.5 bg-white rounded-sm group-hover:scale-105 transition-transform" />
                 ) : (
                   <div className="w-0 h-0 border-y-[7px] border-y-transparent border-l-[11px] border-l-white ml-0.5 group-hover:scale-105 transition-transform" />
@@ -665,6 +745,54 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                 >
                   Corte
                 </button>
+
+                {/* Eco Out */}
+                <button
+                  onClick={() => handleSelectPreset('eco_out')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'eco_out'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Eco Out
+                </button>
+
+                {/* Freno Vinilo */}
+                <button
+                  onClick={() => handleSelectPreset('freno_vinilo')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'freno_vinilo'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Freno Vinilo
+                </button>
+
+                {/* Beat Roll */}
+                <button
+                  onClick={() => handleSelectPreset('beat_roll')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'beat_roll'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Beat Roll
+                </button>
+
+                {/* Saturación */}
+                <button
+                  onClick={() => handleSelectPreset('distorsion_wash')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    preset === 'distorsion_wash'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  Saturación
+                </button>
               </div>
             </div>
 
@@ -769,6 +897,61 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                             }}
                             className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
                               eqMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Row 3: | FX */}
+                <div className="flex items-center justify-between relative">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1 h-3.5 bg-[#a855f7] rounded-full inline-block" />
+                    <span className="text-xs font-semibold text-white">Efectos FX</span>
+                  </div>
+
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsFxMenuOpen(!isFxMenuOpen)}
+                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <span>
+                        {fxMode === 'ninguno'
+                          ? 'Sin efectos FX'
+                          : fxMode === 'eco'
+                          ? 'Eco / Delay Out'
+                          : fxMode === 'freno_vinilo'
+                          ? 'Freno de vinilo'
+                          : fxMode === 'repeticion_loop'
+                          ? 'Loop Roll / Stutter'
+                          : 'Saturación & Wash'}
+                      </span>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+
+                    {isFxMenuOpen && (
+                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-52 shadow-2xl z-40">
+                        {[
+                          { id: 'ninguno', label: 'Sin efectos FX' },
+                          { id: 'eco', label: 'Eco / Delay Out' },
+                          { id: 'freno_vinilo', label: 'Freno de vinilo' },
+                          { id: 'repeticion_loop', label: 'Loop Roll / Stutter' },
+                          { id: 'distorsion_wash', label: 'Saturación & Wash' },
+                        ].map((opt) => (
+                          <button
+                            key={opt.id}
+                            onClick={() => {
+                              setFxMode(opt.id as DJFXMode);
+                              setIsFxMenuOpen(false);
+                            }}
+                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                              fxMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
                             }`}
                           >
                             {opt.label}

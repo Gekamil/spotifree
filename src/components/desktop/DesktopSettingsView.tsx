@@ -258,9 +258,12 @@ export const DesktopSettingsView: React.FC = () => {
   const [crossfadeSeconds, setCrossfadeSeconds] = useState(() => {
     if (typeof window !== 'undefined') {
       const v = window.localStorage.getItem('spotifree_crossfade_sec');
-      return v ? parseInt(v, 10) : 0;
+      if (v) {
+        const parsed = parseInt(v, 10);
+        return parsed > 0 ? parsed : 5;
+      }
     }
-    return 0;
+    return 5;
   });
 
   const [crossfadeEnabled, setCrossfadeEnabled] = useState(() => {
@@ -900,18 +903,12 @@ export const DesktopSettingsView: React.FC = () => {
                     <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="text-xs text-[#b3b3b3]">
-                          {crossfadeSeconds === 0 ? (
-                            <span className="text-[#1ed760] font-semibold">
-                              Automix inteligente: detecta niveles y calcula la duración óptima para cada tema
-                            </span>
-                          ) : (
-                            <span>Duración del fundido continuo entre pistas</span>
-                          )}
+                          <span>Duración del fundido continuo entre pistas</span>
                         </div>
                         <div className="flex items-center gap-3 w-full sm:w-72">
                           <input
                             type="range"
-                            min="0"
+                            min="1"
                             max="12"
                             step="1"
                             value={crossfadeSeconds}
@@ -923,30 +920,19 @@ export const DesktopSettingsView: React.FC = () => {
                               }
                             }}
                             style={{
-                              background: `linear-gradient(to right, #1ed760 ${(crossfadeSeconds / 12) * 100}%, rgba(255, 255, 255, 0.2) ${(crossfadeSeconds / 12) * 100}%)`,
+                              background: `linear-gradient(to right, #1ed760 ${((crossfadeSeconds - 1) / 11) * 100}%, rgba(255, 255, 255, 0.2) ${((crossfadeSeconds - 1) / 11) * 100}%)`,
                             }}
                             className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
                           />
                           <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 min-w-[70px] text-right">
-                            {crossfadeSeconds === 0 ? 'Automix' : `${crossfadeSeconds} s`}
+                            {`${crossfadeSeconds} s`}
                           </span>
                         </div>
                       </div>
 
                       {/* Quick chips */}
                       <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                        <button
-                          onClick={() => {
-                            setCrossfadeSeconds(0);
-                            if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', '0');
-                          }}
-                          className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                            crossfadeSeconds === 0 ? 'bg-[#1ed760] text-black shadow' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
-                          }`}
-                        >
-                          Automix
-                        </button>
-                        {[3, 5, 8, 10, 12].map((s) => (
+                        {[2, 4, 6, 8, 10, 12].map((s) => (
                           <button
                             key={s}
                             onClick={() => {
