@@ -30,6 +30,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
+import { audioEngine } from '../../services/audioEngine';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -447,20 +448,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [tracks.length, cleanId, playlist.images]);
 
-  // Preload video IDs for top tracks in this playlist in background for instant 0ms playback
+  // Preload and pre-warm audio & video IDs for top tracks in this playlist for instant 0ms playback
   useEffect(() => {
     if (!tracks || tracks.length === 0) return;
-    const topTracks = tracks.slice(0, 4);
-    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-    if (engine && typeof engine.preloadTrack === 'function') {
-      topTracks.forEach((t, i) => {
-        setTimeout(() => {
-          const artistName = t.artists?.[0]?.name || '';
-          const q = `${t.name} ${artistName}`.trim();
-          engine.preloadTrack(t.id, q);
-        }, i * 300);
-      });
-    }
+    audioEngine.warmupInitialTracks(tracks.slice(0, 8));
   }, [cleanId, tracks.length]);
 
   const handleToggleLibrary = () => {
@@ -670,6 +661,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     try {
       window.localStorage.setItem('spotifree_crossfade_enabled', String(next));
       window.localStorage.setItem('spotifree_dj_mode', String(next));
+      window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
       if (next) {
         window.localStorage.setItem('spotifree_crossfade_sec', '0');
       }

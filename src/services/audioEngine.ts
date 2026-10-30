@@ -1287,36 +1287,103 @@ class AudioEngine {
     return null;
   }
 
-  /** Unified Video ID resolution: Cache -> Local Backend Scrape -> Client Fallback */
+  /** Unified Fast Video ID resolution: Cache -> Fast Concurrent Backend & Client Fallback */
   public async resolveVideoId(query: string, trackId?: string): Promise<string | null> {
     if (!query) return null;
     const cleanQuery = query.trim();
     const cached = VIDEO_ID_CACHE.get(cleanQuery);
     if (cached) return cached;
 
-    // 1. Try local server backend API (/api/audio/resolve)
-    try {
-      const url = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery)}${trackId ? `&trackId=${encodeURIComponent(trackId)}` : ''}`;
-      const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.videoId) {
-          persistVideoId(cleanQuery, data.videoId);
-          return data.videoId;
+    // Concurrently race Backend /api/audio/resolve and client-side Innertube search
+    let resolvedId: string | null = null;
+
+    const backendPromise = (async () => {
+      try {
+        const url = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery)}${trackId ? `&trackId=${encodeURIComponent(trackId)}` : ''}`;
+        const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(2200) : undefined });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.videoId) return data.videoId as string;
         }
-      }
+      } catch {}
+      return null;
+    })();
+
+    const clientPromise = (async () => {
+      // Start client fallback after a tiny 250ms buffer to prioritize local cache/backend,
+      // but never block if backend takes longer or is cold
+      await new Promise((r) => setTimeout(r, 250));
+      try {
+        return await this.resolveVideoIdClient(cleanQuery);
+      } catch {}
+      return null;
+    })();
+
+    try {
+      resolvedId = await Promise.race([
+        backendPromise.then((id) => id || clientPromise),
+        clientPromise.then((id) => id || backendPromise),
+      ]);
     } catch {}
 
-    // 2. Client-side fallback
-    try {
-      const clientVid = await this.resolveVideoIdClient(cleanQuery);
-      if (clientVid) {
-        persistVideoId(cleanQuery, clientVid);
-        return clientVid;
-      }
-    } catch {}
+    if (!resolvedId) {
+      resolvedId = (await backendPromise) || (await clientPromise);
+    }
+
+    if (resolvedId) {
+      persistVideoId(cleanQuery, resolvedId);
+      return resolvedId;
+    }
 
     return null;
+  }
+
+  /**
+   * Pre-warms the top tracks from the home feed or opened playlist in the background.
+   * Caches video IDs and pre-cues the very first track in the YouTube player so that
+   * the instant the user presses play, playback begins in < 100ms with zero cold-start delay.
+   */
+  public warmupInitialTracks(tracks: Track[]): void {
+    if (!tracks || tracks.length === 0) return;
+    const slice = tracks.slice(0, 8);
+
+    // 1. Resolve and pre-cue first track immediately
+    const first = slice[0];
+    if (first) {
+      const q = `${first.name} ${first.artists?.[0]?.name || ''}`.trim();
+      this.resolveVideoId(q, first.id).then((vid) => {
+        if (vid && !usePlayerStore.getState().isPlaying) {
+          this.ensureYouTubeReady()
+            .then(() => {
+              if (this.ytPlayer && typeof this.ytPlayer.cueVideoById === 'function') {
+                try {
+                  this.ytPlayer.cueVideoById({ videoId: vid, startSeconds: 0 });
+                } catch {}
+              }
+            })
+            .catch(() => {});
+        }
+      });
+    }
+
+    // 2. Concurrently resolve upcoming tracks into persistent cache in background
+    const bgResolve = () => {
+      slice.slice(1).forEach((t, i) => {
+        setTimeout(() => {
+          if (usePlayerStore.getState().isPlaying) return;
+          const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
+          if (!VIDEO_ID_CACHE.has(q)) {
+            this.resolveVideoId(q, t.id).catch(() => {});
+          }
+        }, 300 + i * 350);
+      });
+    };
+
+    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(bgResolve);
+    } else {
+      setTimeout(bgResolve, 500);
+    }
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {

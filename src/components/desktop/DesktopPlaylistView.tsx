@@ -157,6 +157,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [isAutomixActive, dynamicTracks]);
 
+  // Preload and pre-warm audio & video IDs for top tracks in this playlist for instant 0ms playback
+  useEffect(() => {
+    if (dynamicTracks && dynamicTracks.length > 0) {
+      audioEngine.warmupInitialTracks(dynamicTracks.slice(0, 8));
+    }
+  }, [dynamicTracks.length, dynamicPlaylist.id]);
+
   const handleToggleAutomix = () => {
     const next = !isAutomixActive;
     setIsAutomixActive(next);

@@ -136,22 +136,39 @@ export async function searchSpotify(query: string): Promise<any | null> {
   let albums: Array<{ id: string; name: string; images: Array<{ url: string }>; release_date?: string; artists: Array<{ name: string }> }> = [];
   let playlists: Array<{ id: string; name: string; images: Array<{ url: string }>; owner?: { display_name: string } }> = [];
 
-  // 1. Search in-app loaded playlists & library tracks for instant accurate local matching
+  // 1. Search in-app loaded playlists, menus, top tracks & library for instant accurate local matching
   try {
     const { useSpotifyDataStore } = await import('../store/useSpotifyDataStore');
-    const allPlaylists = useSpotifyDataStore.getState().playlists || [];
+    const { usePlayerStore } = await import('../store/usePlayerStore');
+    const spotifyState = useSpotifyDataStore.getState();
+    const playerState = usePlayerStore.getState();
+
+    const allPlaylists = spotifyState.playlists || [];
+    const topTracks = spotifyState.topTracks || [];
+    const newReleases = (spotifyState.newReleases || []).flatMap((nr: any) => nr.tracks?.items || [nr]);
+    const recentlyPlayed = spotifyState.recentlyPlayed || [];
+    const queueTracks = playerState.queue || [];
+
+    const candidateTracks: Track[] = [];
+    for (const p of allPlaylists) {
+      if (p.tracks?.items) candidateTracks.push(...p.tracks.items);
+    }
+    candidateTracks.push(...topTracks, ...newReleases, ...recentlyPlayed, ...queueTracks);
+
     const searchWords = (normalizedQ || cleanQ).toLowerCase().split(' ').filter(Boolean);
     const seenLocal = new Set<string>();
 
-    for (const p of allPlaylists) {
-      for (const t of p.tracks?.items || []) {
-        if (!t || !t.id || seenLocal.has(t.id)) continue;
-        const targetText = `${t.name} ${t.artists?.map((a) => a.name).join(' ') || ''}`.toLowerCase();
-        const matchesAll = searchWords.every((word) => targetText.includes(word));
-        if (matchesAll) {
-          seenLocal.add(t.id);
-          tracks.push(t);
-        }
+    for (const t of candidateTracks) {
+      if (!t || !t.id || seenLocal.has(t.id)) continue;
+      const rawTarget = `${t.name} ${t.artists?.map((a) => a.name).join(' ') || ''}`.toLowerCase();
+      const targetNormalized = rawTarget.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ');
+      
+      const matchesAll = searchWords.every(
+        (word) => rawTarget.includes(word) || targetNormalized.includes(word)
+      );
+      if (matchesAll) {
+        seenLocal.add(t.id);
+        tracks.push(t);
       }
     }
   } catch {}

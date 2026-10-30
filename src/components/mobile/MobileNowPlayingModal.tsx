@@ -137,8 +137,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     toggleRepeat,
     likedTrackIds,
     toggleLike,
+    playTrack,
+    queue,
   } = usePlayerStore();
 
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
@@ -604,7 +607,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               >
                 <ShareNativeIcon size={18} className="text-[#b3b3b3] hover:text-white" />
               </button>
-              <button className="hover:text-white transition-colors active:scale-90" title="Cola de reproducción">
+              <button
+                onClick={() => setIsQueueOpen(true)}
+                className="hover:text-white transition-colors active:scale-90 text-[#b3b3b3] cursor-pointer"
+                title="Cola de reproducción"
+              >
                 <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
                   <path d="M15 15H1v-1.5h14V15zm0-4.5H1V9h14v1.5zm0-4.5H1V4.5h14V6zm0-4.5H1V0h14v1.5z" />
                 </svg>
@@ -968,6 +975,120 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             >
               Cerrar
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile Queue Sheet (1:1 Spotify Mobile Parity) */}
+      {isQueueOpen && (
+        <div className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] animate-slide-up-modal select-none">
+          {/* Header */}
+          <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#121212]/95 backdrop-blur-md border-b border-white/5">
+            <button
+              onClick={() => setIsQueueOpen(false)}
+              className="p-2 text-white/80 hover:text-white active:scale-90 transition-transform -ml-1 cursor-pointer"
+              title="Volver al reproductor"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+              </svg>
+            </button>
+            <h3 className="font-bold text-white text-base font-['SpotifyMixUITitle']">
+              Cola de reproducción
+            </h3>
+            <div className="w-8" />
+          </div>
+
+          {/* Queue Body */}
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+            {/* Now Playing Section */}
+            {currentTrack && (
+              <div>
+                <h4 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider mb-3 px-1">
+                  Reproduciendo ahora
+                </h4>
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 border border-white/5">
+                  <div className="w-12 h-12 rounded-md overflow-hidden bg-[#282828] shrink-0 relative shadow">
+                    <img
+                      src={displayCover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                      alt={currentTrack.name}
+                      className="w-full h-full object-cover"
+                    />
+                    {isPlaying && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                        <span className="w-2.5 h-2.5 rounded-full bg-[#1ed760] animate-pulse" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-sm text-[#1ed760] truncate">{currentTrack.name}</p>
+                    <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                      {currentTrack.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                    </p>
+                  </div>
+                  <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">
+                    {formatDuration(currentTrack.duration_ms)}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Upcoming Queue Section */}
+            <div>
+              <h4 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider mb-3 px-1">
+                A continuación
+              </h4>
+              {(() => {
+                const curIdx = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+                const upcoming = curIdx >= 0 ? queue.slice(curIdx + 1) : queue;
+
+                if (upcoming.length === 0) {
+                  return (
+                    <div className="py-12 text-center text-[#b3b3b3] space-y-2">
+                      <p className="text-sm font-semibold text-white">No hay más canciones en la cola</p>
+                      <p className="text-xs text-white/50 max-w-xs mx-auto">
+                        La reproducción continuará automáticamente con recomendaciones similares de Spotify.
+                      </p>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div className="space-y-1">
+                    {upcoming.map((t, idx) => {
+                      const cover = getTrackCoverUrl(t) || t.album?.images?.[0]?.url || (t as any).image;
+                      return (
+                        <div
+                          key={`${t.id}-${idx}`}
+                          onClick={() => {
+                            playTrack(t, queue);
+                            setIsQueueOpen(false);
+                          }}
+                          className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors cursor-pointer"
+                        >
+                          <div className="w-11 h-11 rounded-md overflow-hidden bg-[#282828] shrink-0 shadow">
+                            <img
+                              src={cover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                              alt={t.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-sm text-white truncate">{t.name}</p>
+                            <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                              {t.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                            </p>
+                          </div>
+                          <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">
+                            {formatDuration(t.duration_ms)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
           </div>
         </div>
       )}

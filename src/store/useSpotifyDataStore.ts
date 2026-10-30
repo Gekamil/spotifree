@@ -640,6 +640,14 @@ const store = create<SpotifyDataState>((set, get) => ({
             isLoading: false,
           });
 
+          // Pre-warm initial top tracks in the background so audio playback starts instantaneously
+          const topCandidates = (uniquePlaylists[0]?.tracks?.items || DEFAULT_SESSION_PLAYLISTS[0]?.tracks?.items || []).slice(0, 6);
+          if (topCandidates.length > 0) {
+            import('../services/audioEngine').then(({ audioEngine }) => {
+              audioEngine.warmupInitialTracks(topCandidates);
+            }).catch(() => {});
+          }
+
           // Load per-user stats so profile stats are isolated per account
           if (session.user?.id) {
             try { useStatsStore.getState().loadStatsForUser(session.user.id); } catch {}
@@ -744,6 +752,14 @@ const store = create<SpotifyDataState>((set, get) => ({
             playlistDetailsCache: cachedPlaylists,
             isLoading: false,
           });
+
+          // Pre-warm initial top tracks in the background so audio playback starts instantaneously
+          const topCandidates = (uniquePlaylists[0]?.tracks?.items || DEFAULT_SESSION_PLAYLISTS[0]?.tracks?.items || []).slice(0, 6);
+          if (topCandidates.length > 0) {
+            import('../services/audioEngine').then(({ audioEngine }) => {
+              audioEngine.warmupInitialTracks(topCandidates);
+            }).catch(() => {});
+          }
 
           // Load per-user stats so profile stats are isolated per account
           if (session.user?.id) {
