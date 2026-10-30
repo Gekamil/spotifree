@@ -556,6 +556,18 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           </div>
 
           {/* Dual-Deck Waveform Canvas Box */}
+          <div className="flex items-center justify-between px-1 text-[11px] text-[#a7a7a7]">
+            <div className="flex items-center gap-1.5 text-[#1ed760] font-semibold">
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+              </svg>
+              <span>Detección de silencios y salto de vacíos activa</span>
+            </div>
+            <div className="flex items-center gap-1.5 font-medium">
+              <span>Camelot:</span>
+              <span className="font-bold text-white">{featA.camelot} → {featB.camelot}</span>
+            </div>
+          </div>
           <div className="relative rounded-2xl bg-[#181818] border border-white/5 p-2 shadow-inner overflow-hidden select-none">
             <canvas
               ref={canvasRef}

@@ -114,13 +114,14 @@ class AudioEngine {
       (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
         window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
 
+    const state = usePlayerStore.getState();
+    const curTrack = state.currentTrack;
+    const nextTrack = state.getNextTrack?.();
+
     let djConfig: DJTransitionConfig | null = null;
     let effectiveCrossfade = crossfadeSec;
 
     if (isDjMode) {
-      const state = usePlayerStore.getState();
-      const curTrack = state.currentTrack;
-      const nextTrack = state.getNextTrack?.();
       if (curTrack && nextTrack) {
         const curIdx = state.queue.findIndex((t) => t.id === curTrack.id);
         const feat = resolveClientSideRealFeature(curTrack.id, curTrack.name, curTrack.artists?.[0]?.name);
@@ -142,7 +143,28 @@ class AudioEngine {
 
     if (effectiveCrossfade <= 0) return;
 
-    const remaining = durSec - curSec;
+    // Silence Truncation & Outro Dead Air Elimination:
+    // Spotify duration represents true studio audio length. YouTube videos often include
+    // 5-25 seconds of outro cards, silent credits, or sponsors after the music ends.
+    const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 ? curTrack.duration_ms / 1000 : durSec;
+    const effectiveTrackEndSec =
+      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 1.5
+        ? spotifyDurationSec
+        : durSec;
+
+    const remaining = Math.max(0, effectiveTrackEndSec - curSec);
+
+    // Instant Cold-Stop / Silence Gap Skip:
+    // If the music has reached its actual ending (< 0.4s left before outro dead air),
+    // instantly drop cut into Track B rather than playing dead silence for seconds.
+    if (!this.isCrossfading && remaining <= 0.4 && nextTrack) {
+      if (djConfig) {
+        djConfig.volumeEnvelope = 'corte_directo';
+        djConfig.preset = 'corte';
+      }
+      this.executeCrossfade(1.5, djConfig);
+      return;
+    }
 
     // 1. Preload upcoming song in the background before crossfade starts
     if (
