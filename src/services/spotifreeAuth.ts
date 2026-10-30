@@ -195,7 +195,7 @@ export async function loginSpotifreeAccount(
       displayName: cloudData?.displayName || fbRes.user.displayName || cleanEmail.split('@')[0] || 'Usuario',
       avatarUrl: cloudData?.photoURL || fbRes.user.photoURL || null,
       bannerUrl: null,
-      spotifyCookie: local.cookie,
+      spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
       playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
       likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
       updatedAt: Date.now(),
@@ -269,9 +269,9 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
     uid,
     email: fbRes.user.email || '',
     displayName: cloudData?.displayName || fbRes.user.displayName || 'Usuario Google',
-    avatarUrl: fbRes.user.photoURL || null,
-    bannerUrl: null,
-    spotifyCookie: local.cookie,
+    avatarUrl: cloudData?.photoURL || fbRes.user.photoURL || null,
+    bannerUrl: cloudData?.bannerUrl || null,
+    spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
     playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
     likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
     updatedAt: Date.now(),
@@ -290,7 +290,12 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
 
 export async function logoutSpotifreeAccount(): Promise<void> {
   saveCurrentSpotifreeAccount(null);
+  if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('user_spotify_cookie');
+    window.localStorage.removeItem('spotify_access_token');
+  }
   await logoutFirebase();
+  useSpotifyDataStore.getState().initialize?.();
 }
 
 /**
@@ -319,13 +324,24 @@ export async function syncSpotifreeAccount(
   }
 
   saveCurrentSpotifreeAccount(merged);
+  applyAccountToAppStores(merged);
   return merged;
 }
 
 /**
  * Pushes account data into live React stores (Spotify Store, Player Store, Library)
+ * and ensures any cloud-synced Spotify cookie is applied to the local session.
  */
 export function applyAccountToAppStores(acc: SpotifreeAccount): void {
+  // Sync Spotify cookie to localStorage and reinitialize store if new
+  if (acc.spotifyCookie && typeof window !== 'undefined') {
+    const currentCookie = window.localStorage.getItem('user_spotify_cookie');
+    if (currentCookie !== acc.spotifyCookie) {
+      window.localStorage.setItem('user_spotify_cookie', acc.spotifyCookie);
+      useSpotifyDataStore.getState().initialize?.();
+    }
+  }
+
   if (acc.displayName) {
     useSpotifyDataStore.setState((s) => ({
       user: s.user
@@ -372,10 +388,11 @@ export function initAuthListener(): () => void {
         email: user.email || '',
         displayName: cloudData?.displayName || user.displayName || 'Usuario',
         avatarUrl: cloudData?.photoURL || user.photoURL || null,
-        bannerUrl: null,
+        bannerUrl: cloudData?.bannerUrl || null,
+        spotifyCookie: cloudData?.spotifyCookie,
         playlists: cloudData?.playlists || [],
         likedTracks: cloudData?.likedTracks || [],
-        updatedAt: Date.now(),
+        updatedAt: cloudData?.updatedAt || Date.now(),
       };
       saveCurrentSpotifreeAccount(acc);
       applyAccountToAppStores(acc);
