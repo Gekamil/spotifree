@@ -8,6 +8,7 @@ import {
   VerifiedArtistNativeIcon,
   CheckCircleNativeIcon,
   PlusCircleNativeIcon,
+  AutomixNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -18,6 +19,8 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
+import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
+import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -126,6 +129,41 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
+
+  // DJ Mode and Transitions State (Desktop)
+  const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
+      window.localStorage.getItem('spotifree_dj_mode') === 'true'
+    );
+  });
+  const [audioFeatures, setAudioFeatures] = useState<Record<string, AudioFeature>>({});
+  const [transitionModalPair, setTransitionModalPair] = useState<{ trackA: Track; trackB: Track } | null>(null);
+  const [videoFilterActive, setVideoFilterActive] = useState<boolean>(false);
+
+  // Load real Spotify Audio Features in batch for DJ mode
+  useEffect(() => {
+    if (!isAutomixActive || dynamicTracks.length === 0) return;
+    let cancelled = false;
+    fetchAudioFeaturesBatch(dynamicTracks).then((feats) => {
+      if (!cancelled) {
+        setAudioFeatures((prev) => ({ ...prev, ...feats }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAutomixActive, dynamicTracks]);
+
+  const handleToggleAutomix = () => {
+    const next = !isAutomixActive;
+    setIsAutomixActive(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
+      window.localStorage.setItem('spotifree_dj_mode', String(next));
+    }
+  };
   useEffect(() => {
     setIsDownloaded(isPlaylistDownloaded(dynamicPlaylist.id));
   }, [dynamicPlaylist.id]);
@@ -766,116 +804,197 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       </div>
 
       {/* Action Bar */}
-      <div className="px-8 py-6 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          {/* Big Green Play/Pause Button */}
-          <button
-            onClick={handlePlayAll}
-            className="w-14 h-14 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 active:scale-96 shadow-lg flex items-center justify-center transition-all duration-200"
-            title={isCurrentPlaylistPlaying ? "Pausar" : "Reproducir"}
-          >
-            {isCurrentPlaylistPlaying ? (
-              <PauseNativeIcon size={24} className="text-black" />
+      <div className="px-8 pt-6 pb-2 flex flex-col gap-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            {/* Play Button: Turntable Platter (Modo DJ) or Classic Big Green */}
+            {isAutomixActive ? (
+              <button
+                onClick={handlePlayAll}
+                className="relative w-14 h-14 rounded-full p-[2.5px] bg-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.7)] hover:scale-106 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
+                title={isCurrentPlaylistPlaying ? 'Pausar (Modo DJ)' : 'Reproducir con transiciones DJ'}
+              >
+                <div className="w-full h-full rounded-full bg-[#121212] relative overflow-hidden flex items-center justify-center">
+                  <div
+                    className={`absolute inset-0 rounded-full ${
+                      isCurrentPlaylistPlaying ? 'animate-[spin_8s_linear_infinite]' : ''
+                    }`}
+                    style={{
+                      background:
+                        'conic-gradient(from 0deg, #111111 0deg, #2a2a2a 45deg, #0d0d0d 90deg, #2a2a2a 135deg, #111111 180deg, #2a2a2a 225deg, #0d0d0d 270deg, #2a2a2a 315deg, #111111 360deg)',
+                    }}
+                  >
+                    <div className="absolute inset-[3px] rounded-full border border-white/[0.12] pointer-events-none" />
+                    <div className="absolute inset-[6px] rounded-full border border-white/[0.08] pointer-events-none" />
+                    <div className="absolute inset-[9px] rounded-full border border-white/[0.06] pointer-events-none" />
+                    <div className="absolute inset-[12px] rounded-full border border-white/[0.08] pointer-events-none" />
+                    <div className="absolute inset-[15px] rounded-full border border-white/[0.05] pointer-events-none" />
+                    <div className="absolute inset-[18px] rounded-full border border-white/[0.07] pointer-events-none" />
+                  </div>
+                  <div className="relative z-10 w-7 h-7 rounded-full bg-[#181818] border border-white/15 flex items-center justify-center shadow-lg pointer-events-none">
+                    {isCurrentPlaylistPlaying ? (
+                      <PauseNativeIcon size={16} className="text-white drop-shadow-md" />
+                    ) : (
+                      <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
+                    )}
+                  </div>
+                </div>
+              </button>
             ) : (
-              <PlayNativeIcon size={24} className="text-black ml-1" />
+              <button
+                onClick={handlePlayAll}
+                className="w-14 h-14 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 active:scale-96 shadow-lg flex items-center justify-center transition-all duration-200"
+                title={isCurrentPlaylistPlaying ? "Pausar" : "Reproducir"}
+              >
+                {isCurrentPlaylistPlaying ? (
+                  <PauseNativeIcon size={24} className="text-black" />
+                ) : (
+                  <PlayNativeIcon size={24} className="text-black ml-1" />
+                )}
+              </button>
             )}
-          </button>
 
-          {/* Shuffle button */}
-          <button
-            onClick={toggleShuffle}
-            className={`p-1.5 transition-colors relative flex flex-col items-center ${
-              shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
-            }`}
-            title={
-              shuffleMode === 'smart'
-                ? 'Aleatorio inteligente activado'
-                : shuffleMode === 'all'
-                ? 'Aleatorio activado'
-                : 'Habilitar la reproducción aleatoria'
-            }
-          >
-            {shuffleMode === 'smart' ? (
-              <SmartShuffleNativeIcon size={20} className="text-[#1ed760]" />
-            ) : (
-              <ShuffleNativeIcon size={20} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
-            )}
-            {shuffleMode !== 'off' && (
-              <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
-            )}
-          </button>
-
-          {/* Add to Library / Checkmark toggle button (+ / ✓) */}
-          {!isLikedPlaylist && !isFolder && (
+            {/* Shuffle button */}
             <button
-              onClick={handleToggleLibrary}
-              className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-106 active:scale-95 transition-all cursor-pointer ${
-                isSavedInLibrary ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+              onClick={toggleShuffle}
+              className={`p-1.5 transition-colors relative flex flex-col items-center ${
+                shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
               }`}
-              title={isSavedInLibrary ? "Guardada en Tu biblioteca (clic para eliminar)" : "Añadir a Tu biblioteca"}
+              title={
+                shuffleMode === 'smart'
+                  ? 'Aleatorio inteligente activado'
+                  : shuffleMode === 'all'
+                  ? 'Aleatorio activado'
+                  : 'Habilitar la reproducción aleatoria'
+              }
             >
-              {isSavedInLibrary ? (
-                <CheckCircleNativeIcon size={24} className="text-[#1ed760]" />
+              {shuffleMode === 'smart' ? (
+                <SmartShuffleNativeIcon size={20} className="text-[#1ed760]" />
               ) : (
-                <PlusCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
+                <ShuffleNativeIcon size={20} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+              )}
+              {shuffleMode !== 'off' && (
+                <span className="absolute bottom-0 w-1 h-1 rounded-full bg-[#1ed760]" />
               )}
             </button>
-          )}
 
-          {/* Download button (↓) Real Offline */}
-          <button
-            onClick={handleToggleDownload}
-            disabled={isDownloading}
-            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
-              isDownloaded
-                ? 'text-[#1ed760]'
-                : isDownloading
-                ? 'text-[#1ed760] animate-pulse'
-                : 'text-[#b3b3b3] hover:text-white'
-            }`}
-            title={
-              isDownloading
-                ? `Descargando (${downloadProgress.current}/${downloadProgress.total})...`
-                : isDownloaded
-                ? "Descargada sin conexión en «musica-spotifree»"
-                : "Descargar playlist completa para escuchar sin conexión"
-            }
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12" />
-              <path d="M12 6.05a1 1 0 0 1 1 1v7.486l1.793-1.793a1 1 0 1 1 1.414 1.414L12 18.364l-4.207-4.207a1 1 0 1 1 1.414-1.414L11 14.536V7.05a1 1 0 0 1 1-1" />
-            </svg>
-          </button>
-
-          {/* More options (...) */}
-          <button
-            onClick={(e) => {
-              const rect = e.currentTarget.getBoundingClientRect();
-              openContextMenu(e.clientX || rect.left, rect.bottom + 8, undefined, dynamicPlaylist.id);
-            }}
-            className="text-[#b3b3b3] hover:text-white hover:scale-106 transition-all p-1"
-            title="Más opciones para esta lista"
-          >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
-            </svg>
-          </button>
-
-          {isArtist && (
-            <button className="px-6 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white hover:scale-105 active:scale-95 transition-all cursor-pointer">
-              Seguir
+            {/* DJ Mode Toggle (Automix Faders icon) */}
+            <button
+              onClick={handleToggleAutomix}
+              className={`p-1.5 transition-all relative flex flex-col items-center hover:scale-106 active:scale-95 cursor-pointer ${
+                isAutomixActive ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title={
+                isAutomixActive
+                  ? 'Modo DJ activado (BPM, compases y transiciones armónicas)'
+                  : 'Activar Modo DJ'
+              }
+            >
+              <AutomixNativeIcon
+                size={24}
+                className={isAutomixActive ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}
+              />
+              {isAutomixActive && (
+                <span className="absolute -bottom-1 w-1.5 h-1.5 rounded-full bg-[#1ed760] shadow-[0_0_6px_#1ed760]" />
+              )}
             </button>
-          )}
+
+            {/* Add to Library / Checkmark toggle button (+ / ✓) */}
+            {!isLikedPlaylist && !isFolder && (
+              <button
+                onClick={handleToggleLibrary}
+                className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-106 active:scale-95 transition-all cursor-pointer ${
+                  isSavedInLibrary ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+                }`}
+                title={isSavedInLibrary ? "Guardada en Tu biblioteca (clic para eliminar)" : "Añadir a Tu biblioteca"}
+              >
+                {isSavedInLibrary ? (
+                  <CheckCircleNativeIcon size={24} className="text-[#1ed760]" />
+                ) : (
+                  <PlusCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
+                )}
+              </button>
+            )}
+
+            {/* Download button (↓) Real Offline */}
+            <button
+              onClick={handleToggleDownload}
+              disabled={isDownloading}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                isDownloaded
+                  ? 'text-[#1ed760]'
+                  : isDownloading
+                  ? 'text-[#1ed760] animate-pulse'
+                  : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title={
+                isDownloading
+                  ? `Descargando (${downloadProgress.current}/${downloadProgress.total})...`
+                  : isDownloaded
+                  ? "Descargada sin conexión en «musica-spotifree»"
+                  : "Descargar playlist completa para escuchar sin conexión"
+              }
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12" />
+                <path d="M12 6.05a1 1 0 0 1 1 1v7.486l1.793-1.793a1 1 0 1 1 1.414 1.414L12 18.364l-4.207-4.207a1 1 0 1 1 1.414-1.414L11 14.536V7.05a1 1 0 0 1 1-1" />
+              </svg>
+            </button>
+
+            {/* More options (...) */}
+            <button
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                openContextMenu(e.clientX || rect.left, rect.bottom + 8, undefined, dynamicPlaylist.id);
+              }}
+              className="text-[#b3b3b3] hover:text-white hover:scale-106 transition-all p-1"
+              title="Más opciones para esta lista"
+            >
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
+              </svg>
+            </button>
+
+            {isArtist && (
+              <button className="px-6 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white hover:scale-105 active:scale-95 transition-all cursor-pointer">
+                Seguir
+              </button>
+            )}
+          </div>
+
+          {/* Right view switcher */}
+          <div className="flex items-center gap-4 text-xs text-[#b3b3b3]">
+            <div className="flex items-center gap-1.5 font-semibold hover:text-white cursor-pointer transition-colors">
+              <span>Lista</span>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
+              </svg>
+            </div>
+          </div>
         </div>
 
-        {/* Right view switcher */}
-        <div className="flex items-center gap-4 text-xs text-[#b3b3b3]">
-          <div className="flex items-center gap-1.5 font-semibold hover:text-white cursor-pointer transition-colors">
-            <span>Lista</span>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-              <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
+        {/* Filter Chips row (matching authentic Spotify Desktop & Mobile) */}
+        <div className="flex items-center gap-2 pt-1 pb-2">
+          <button
+            onClick={() => setVideoFilterActive(!videoFilterActive)}
+            className={`px-3.5 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer ${
+              videoFilterActive
+                ? 'bg-white text-black font-bold shadow'
+                : 'bg-white/10 text-white hover:bg-white/15'
+            }`}
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M4 4h10a2 2 0 0 1 2 2v2.5l4-2.5v12l-4-2.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" />
             </svg>
-          </div>
+            <span>Vídeo</span>
+          </button>
+
+          <button
+            onClick={() => {}}
+            className="px-3.5 py-1 rounded-full text-xs font-semibold bg-white/10 text-white hover:bg-white/15 transition-all cursor-pointer"
+          >
+            Haz que no sea personalizada
+          </button>
         </div>
       </div>
 
@@ -888,10 +1007,18 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         )}
         {/* Table Header - Only rendered when tracks exist */}
         {tracks.length > 0 && (
-          <div className="grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2">
+          <div
+            className={`grid ${
+              isAutomixActive
+                ? 'grid-cols-[20px_4fr_2.5fr_100px_90px_2fr_minmax(80px,1fr)]'
+                : 'grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)]'
+            } gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2`}
+          >
             <span>#</span>
             <span>Título</span>
             <span>Álbum</span>
+            {isAutomixActive && <span>BPM</span>}
+            {isAutomixActive && <span>Tono</span>}
             <span>Fecha en la que se añadió</span>
             <div className="flex justify-end pr-8">
               <ClockIcon size={16} />
@@ -972,143 +1099,204 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               const isLiked = likedTrackIds.includes(track.id);
               const isHovered = hoveredTrackId === track.id;
 
+              const cleanId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+              const feat: AudioFeature =
+                audioFeatures[cleanId] ||
+                audioFeatures[track.id] ||
+                resolveClientSideRealFeature(cleanId, track.name, track.artists?.[0]?.name);
+
               return (
-                <div
-                  key={`${track.id}-${index}`}
-                  data-testid="track-row"
-                  onMouseEnter={() => setHoveredTrackId(track.id)}
-                  onMouseLeave={() => setHoveredTrackId(null)}
-                  onClick={() => handleTrackClick(track)}
-                  onContextMenu={(e) => {
-                    e.preventDefault();
-                    openContextMenu(e.clientX, e.clientY, track.id);
-                  }}
-                  className={`grid grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)] gap-4 px-4 py-2 rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
-                    isThisTrackSelected ? 'bg-white/10' : ''
-                  }`}
-                >
-                  {/* Index / Play / Pause / Equalizer */}
-                  <div className="flex items-center justify-center text-sm font-normal text-[#b3b3b3] w-5">
-                    {isHovered ? (
+                <React.Fragment key={`${track.id}-${index}`}>
+                  <div
+                    data-testid="track-row"
+                    onMouseEnter={() => setHoveredTrackId(track.id)}
+                    onMouseLeave={() => setHoveredTrackId(null)}
+                    onClick={() => handleTrackClick(track)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      openContextMenu(e.clientX, e.clientY, track.id);
+                    }}
+                    className={`grid ${
+                      isAutomixActive
+                        ? 'grid-cols-[20px_4fr_2.5fr_100px_90px_2fr_minmax(80px,1fr)]'
+                        : 'grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)]'
+                    } gap-4 px-4 py-2 rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
+                      isThisTrackSelected ? 'bg-white/10' : ''
+                    }`}
+                  >
+                    {/* Index / Play / Pause / Equalizer */}
+                    <div className="flex items-center justify-center text-sm font-normal text-[#b3b3b3] w-5">
+                      {isHovered ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleTrackClick(track);
+                          }}
+                          className="text-white hover:scale-110 transition-transform"
+                        >
+                          {isThisTrackPlaying ? (
+                            <PauseNativeIcon size={14} className="text-white" />
+                          ) : (
+                            <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                          )}
+                        </button>
+                      ) : isThisTrackPlaying ? (
+                        <div className="w-4 h-4 flex items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
+                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                        </div>
+                      ) : (
+                        <span className="font-['SpotifyMixUI'] tabular-nums text-xs">
+                          {index + 1}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Track Title + Artists */}
+                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                      <TrackArtwork
+                        src={getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
+                        alt={track.name}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p
+                          className={`text-sm font-semibold truncate ${
+                            isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
+                          }`}
+                        >
+                          {track.name}
+                        </p>
+                        <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
+                          {track.artists.map((a, aIdx) => (
+                            <span
+                              key={`${track.id}-art-${aIdx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onSelectPlaylistById) {
+                                  onSelectPlaylistById(
+                                    `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
+                                    a.name
+                                  );
+                                }
+                              }}
+                              className="hover:underline hover:text-white cursor-pointer"
+                            >
+                              {a.name}
+                              {aIdx < track.artists.length - 1 ? ', ' : ''}
+                            </span>
+                          ))}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Album Name */}
+                    <div className="text-xs text-[#b3b3b3] truncate group-hover:text-white transition-colors">
+                      {track.album?.name || dynamicPlaylist.name}
+                    </div>
+
+                    {/* BPM Column (Modo DJ) */}
+                    {isAutomixActive && (
+                      <div className="text-xs text-[#a7a7a7] font-['SpotifyMixUI'] tabular-nums font-medium">
+                        {feat?.tempo || 128} bpm
+                      </div>
+                    )}
+
+                    {/* Camelot Tonalidad Badge (Modo DJ) */}
+                    {isAutomixActive && (
+                      <div className="flex items-center">
+                        <span
+                          className="px-2 py-0.5 rounded-[4px] text-[10px] font-black uppercase tracking-tight font-['SpotifyMixUI']"
+                          style={{
+                            backgroundColor: feat?.color || '#cfa23e',
+                            color: feat?.textColor || '#000000',
+                          }}
+                        >
+                          {feat?.camelot || '9A'}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Date Added */}
+                    <div className="text-xs text-[#b3b3b3]">
+                      {track.added_at || 'Reciente'}
+                    </div>
+
+                    {/* Duration, Spotify Checkmark/Plus, and 3-Dots Menu */}
+                    <div className="flex items-center justify-end gap-3 text-xs text-[#b3b3b3] pr-4">
+                      {/* Like status: Spotify Green Checkmark if liked, + in circle on hover if not liked */}
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleTrackClick(track);
+                          toggleLike(track.id, track);
                         }}
-                        className="text-white hover:scale-110 transition-transform"
+                        className={`transition-all ${
+                          isLiked
+                            ? 'text-[#1ed760] opacity-100'
+                            : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
+                        }`}
+                        title={isLiked ? "Eliminar de Canciones que te gustan" : "Añadir a Canciones que te gustan"}
                       >
-                        {isThisTrackPlaying ? (
-                          <PauseNativeIcon size={14} className="text-white" />
+                        {isLiked ? (
+                          <CheckCircleNativeIcon size={16} className="text-[#1ed760]" />
                         ) : (
-                          <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                            <path d="M12 7.25H8.75V4h-1.5v3.25H4v1.5h3.25V12h1.5V8.75H12z" />
+                          </svg>
                         )}
                       </button>
-                    ) : isThisTrackPlaying ? (
-                      <div className="w-4 h-4 flex items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
-                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
-                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
-                        <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
-                      </div>
-                    ) : (
-                      <span className="font-['SpotifyMixUI'] tabular-nums text-xs">
-                        {index + 1}
-                      </span>
-                    )}
-                  </div>
 
-                  {/* Track Title + Artists */}
-                  <div className="flex items-center gap-3 min-w-0 pr-2">
-                    <TrackArtwork
-                      src={getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
-                      alt={track.name}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p
-                        className={`text-sm font-semibold truncate ${
-                          isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
+                      <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
+                        {formatDuration(track.duration_ms)}
+                      </span>
+
+                      {/* 3-dots button on hover */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
+                        }}
+                        className={`p-1 text-[#b3b3b3] hover:text-white transition-opacity ${
+                          isHovered ? 'opacity-100' : 'opacity-0'
                         }`}
+                        title="Más opciones de la canción"
                       >
-                        {track.name}
-                      </p>
-                      <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
-                        {track.artists.map((a, aIdx) => (
-                          <span
-                            key={`${track.id}-art-${aIdx}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (onSelectPlaylistById) {
-                                onSelectPlaylistById(
-                                  `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
-                                  a.name
-                                );
-                              }
-                            }}
-                            className="hover:underline hover:text-white cursor-pointer"
-                          >
-                            {a.name}
-                            {aIdx < track.artists.length - 1 ? ', ' : ''}
-                          </span>
-                        ))}
-                      </p>
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM16 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                        </svg>
+                      </button>
                     </div>
                   </div>
 
-                  {/* Album Name */}
-                  <div className="text-xs text-[#b3b3b3] truncate group-hover:text-white transition-colors">
-                    {track.album?.name || dynamicPlaylist.name}
-                  </div>
-
-                  {/* Date Added */}
-                  <div className="text-xs text-[#b3b3b3]">
-                    {track.added_at || 'Reciente'}
-                  </div>
-
-                  {/* Duration, Spotify Checkmark/Plus, and 3-Dots Menu */}
-                  <div className="flex items-center justify-end gap-3 text-xs text-[#b3b3b3] pr-4">
-                    {/* Like status: Spotify Green Checkmark if liked, + in circle on hover if not liked */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleLike(track.id, track);
-                      }}
-                      className={`transition-all ${
-                        isLiked
-                          ? 'text-[#1ed760] opacity-100'
-                          : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
-                      }`}
-                      title={isLiked ? "Eliminar de Canciones que te gustan" : "Añadir a Canciones que te gustan"}
-                    >
-                      {isLiked ? (
-                        <CheckCircleNativeIcon size={16} className="text-[#1ed760]" />
-                      ) : (
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                          <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-                          <path d="M12 7.25H8.75V4h-1.5v3.25H4v1.5h3.25V12h1.5V8.75H12z" />
-                        </svg>
-                      )}
-                    </button>
-
-                    <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
-                      {formatDuration(track.duration_ms)}
-                    </span>
-
-                    {/* 3-dots button on hover */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
-                      }}
-                      className={`p-1 text-[#b3b3b3] hover:text-white transition-opacity ${
-                        isHovered ? 'opacity-100' : 'opacity-0'
-                      }`}
-                      title="Más opciones de la canción"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zM16 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                  {/* DJ Transition Connector between tracks */}
+                  {isAutomixActive && index < tracks.length - 1 && (
+                    <div className="relative pl-14 py-1 flex items-center my-0.5">
+                      <div className="absolute left-[36px] top-0 bottom-0 w-[1.5px] bg-white/15" />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTransitionModalPair({
+                            trackA: track,
+                            trackB: tracks[index + 1],
+                          });
+                        }}
+                        className="relative z-10 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all group"
+                        title="Editar transición DJ (compases, curvas y filtros)"
+                      >
+                        <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black group-hover:scale-105 transition-transform">
+                          ✦
+                        </div>
+                        <span className="text-xs font-semibold text-white tracking-tight">
+                          Automática
+                        </span>
+                        <span className="text-white/60 text-xs font-bold leading-none">
+                          ›
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
           </div>
@@ -1200,6 +1388,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           })}
         </div>
       </div>
+
+      {/* Interactive DJ Transition Editor Modal (✦ Automática) */}
+      {transitionModalPair && (
+        <TransitionEditorModal
+          isOpen={!!transitionModalPair}
+          onClose={() => setTransitionModalPair(null)}
+          trackA={transitionModalPair.trackA}
+          trackB={transitionModalPair.trackB}
+          onSaved={() => {}}
+        />
+      )}
     </div>
   );
 };

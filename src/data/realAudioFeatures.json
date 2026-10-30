@@ -91,5 +91,7 @@
   "tqg": { "tempo": 90, "key": 4, "mode": 0, "camelot": "9A" },
   "blinding lights": { "tempo": 171, "key": 6, "mode": 0, "camelot": "11A" },
   "as it was": { "tempo": 174, "key": 9, "mode": 1, "camelot": "11B" },
-  "shape of you": { "tempo": 96, "key": 1, "mode": 0, "camelot": "12A" }
+  "shape of you": { "tempo": 96, "key": 1, "mode": 0, "camelot": "12A" },
+  "i want you back": { "tempo": 98, "key": 8, "mode": 1, "camelot": "4B" },
+  "abc": { "tempo": 188, "key": 8, "mode": 1, "camelot": "4B" }
 }

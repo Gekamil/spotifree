@@ -8,6 +8,8 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl } from '../utils/offlineStorage';
+import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
+import { resolveClientSideRealFeature } from '../utils/audioFeatures';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
@@ -101,12 +103,28 @@ class AudioEngine {
       if (saved !== null) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
     } catch {}
 
-    // Unified crossfade logic:
-    // If crossfadeSec === 0 (slider at minimum), Automix calculates dynamic level-balanced transitions (~4-6.5s)
-    // If crossfadeSec > 0 (slider at 1s-12s), explicit manual crossfade duration is applied
-    const isAutomix = crossfadeSec === 0;
+    // DJ Mode Check: When DJ Mode is active, bypass simple flat fade and use beat-aligned transition duration & custom transition config
+    const isDjMode =
+      typeof window !== 'undefined' &&
+      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
+
+    let djConfig: DJTransitionConfig | null = null;
+    let isAutomix = crossfadeSec === 0;
     let effectiveCrossfade = crossfadeSec;
-    if (isAutomix) {
+
+    if (isDjMode) {
+      const state = usePlayerStore.getState();
+      const curTrack = state.currentTrack;
+      const nextTrack = state.getNextTrack?.();
+      if (curTrack && nextTrack) {
+        djConfig = djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id);
+        const feat = resolveClientSideRealFeature(curTrack.id, curTrack.name, curTrack.artists?.[0]?.name);
+        effectiveCrossfade = djTransitionService.calculateDurationSeconds(feat.tempo, djConfig.compases);
+      } else {
+        effectiveCrossfade = 3.8;
+      }
+    } else if (isAutomix) {
       effectiveCrossfade = Math.max(4, Math.min(6.5, Math.round(durSec * 0.035)));
     }
 
@@ -126,7 +144,7 @@ class AudioEngine {
 
     // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
     if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
-      this.executeCrossfade(effectiveCrossfade, isAutomix);
+      this.executeCrossfade(effectiveCrossfade, isAutomix, djConfig);
     }
   }
 
@@ -173,7 +191,7 @@ class AudioEngine {
     }
   }
 
-  private async executeCrossfade(crossfadeSec: number, isAutomix = false) {
+  private async executeCrossfade(crossfadeSec: number, isAutomix = false, djConfig: DJTransitionConfig | null = null) {
     this.isCrossfading = true;
     const state = usePlayerStore.getState();
 
@@ -262,7 +280,40 @@ class AudioEngine {
       let outVol: number;
       let inVol: number;
 
-      if (isAutomix) {
+      if (djConfig) {
+        // DJ Automix with Beat-Matching, Volume Envelope & Bass Swap
+        const volEnvelope = djConfig.volumeEnvelope || 'superposicion';
+        if (volEnvelope === 'superposicion' || djConfig.preset === 'automatica') {
+          // Outgoing: full volume for 1st bar, then smooth slope down
+          if (progress <= 0.5) {
+            outVol = masterVolume;
+          } else {
+            outVol = Math.cos((progress - 0.5) * Math.PI) * masterVolume;
+          }
+          inVol = progress * masterVolume;
+        } else if (volEnvelope === 'corte_directo' || djConfig.preset === 'corte') {
+          outVol = progress < 0.5 ? masterVolume : 0;
+          inVol = progress < 0.5 ? 0 : masterVolume;
+        } else if (djConfig.preset === 'crescendo') {
+          outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
+          inVol = Math.pow(progress, 1.8) * masterVolume;
+        } else {
+          // Lineal
+          outVol = (1 - progress) * masterVolume;
+          inVol = progress * masterVolume;
+        }
+
+        // Bass Swap (Intercambio de graves central):
+        // 1st half: Outgoing track retains full bass punch, incoming bass is attenuated to avoid frequency mud
+        // 2nd half (crossover beat): Outgoing drops bass by -24dB while incoming bass snaps to 100%!
+        if (djConfig.eqMode === 'intercambio_graves_central' || djConfig.preset === 'automatica') {
+          if (progress < 0.5) {
+            inVol = inVol * 0.65; // attenuated low frequencies
+          } else {
+            outVol = outVol * 0.35; // instant low-cut on outgoing track
+          }
+        }
+      } else if (isAutomix) {
         // DJ Automix: detects levels and creates acoustic headroom so neither song clashes
         // Outgoing track gently yields the center stage, while incoming track builds energy smoothly
         const outCurve = Math.cos(progress * 0.5 * Math.PI);

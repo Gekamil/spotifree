@@ -386,6 +386,23 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
 
       {/* Right: Extras & Volume */}
       <div className="flex items-center justify-end gap-2.5 w-[30%] min-w-[180px]">
+        {/* Vista En reproducción (Spotify Canvas & Now Playing View) */}
+        <button
+          onClick={() => toggleRightSidebar('now-playing')}
+          className={`p-1 relative flex flex-col items-center transition-colors cursor-pointer ${
+            activeRightSidebar === 'now-playing' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+          }`}
+          title="Vista En reproducción (Canvas y detalles)"
+        >
+          <svg width={16} height={16} viewBox="0 0 16 16" fill="currentColor">
+            <path d="M11.196 8 6 5.03v5.94z" />
+            <path d="M15 1H1v14h14zM2 14V2h12v12z" />
+          </svg>
+          {activeRightSidebar === 'now-playing' && (
+            <span className="absolute -bottom-1.5 w-1 h-1 rounded-full bg-[#1ed760]" />
+          )}
+        </button>
+
         <button
           onClick={() => toggleRightSidebar('lyrics')}
           className={`p-1 relative flex flex-col items-center transition-colors ${

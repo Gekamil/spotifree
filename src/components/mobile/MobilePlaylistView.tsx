@@ -28,6 +28,7 @@ import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeatur
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
+import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -91,6 +92,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [activeTrackMenu, setActiveTrackMenu] = useState<Track | null>(null);
   const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
+  const [transitionModalPair, setTransitionModalPair] = useState<{ trackA: Track; trackB: Track } | null>(null);
 
   const isLikedPlaylist =
     playlist.id === 'liked-songs' ||
@@ -1233,17 +1235,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       <button
                         onClick={() => {
                           const nextTrack = tracks[idx + 1];
-                          const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-                          const nextFeat =
-                            audioFeatures[nextCleanId] ||
-                            audioFeatures[nextTrack?.id] ||
-                            resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
-                          setToastMessage(
-                            `Transición armónica automática: ${feat?.camelot || '9A'} (${feat?.tempo || 130} bpm) → ${
-                              nextFeat?.camelot || '11A'
-                            } (${nextFeat?.tempo || 130} bpm)`
-                          );
-                          setTimeout(() => setToastMessage(null), 3500);
+                          if (nextTrack) {
+                            setTransitionModalPair({ trackA: track, trackB: nextTrack });
+                          }
                         }}
                         className="relative z-10 ml-2 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all"
                       >
@@ -1733,6 +1727,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </div>
           </div>
         </div>,
+        document.body
+      )}
+
+      {/* Interactive DJ Transition Editor Modal (✦ Automática) */}
+      {transitionModalPair && typeof document !== 'undefined' && createPortal(
+        <TransitionEditorModal
+          isOpen={!!transitionModalPair}
+          onClose={() => setTransitionModalPair(null)}
+          trackA={transitionModalPair.trackA}
+          trackB={transitionModalPair.trackB}
+          onSaved={() => {
+            setToastMessage('✦ Transición DJ guardada correctamente');
+            setTimeout(() => setToastMessage(null), 3000);
+          }}
+        />,
         document.body
       )}
 

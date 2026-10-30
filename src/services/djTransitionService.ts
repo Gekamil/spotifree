@@ -1,0 +1,324 @@
+export type TransitionPreset = 'automatica' | 'fundido' | 'crescendo' | 'filtro' | 'corte';
+export type VolumeEnvelope = 'superposicion' | 'lineal' | 'curva_s' | 'corte_directo';
+export type EQFilterMode =
+  | 'intercambio_graves_central'
+  | 'intercambio_gradual'
+  | 'sin_filtro'
+  | 'filtro_paso_bajo';
+
+export interface DJTransitionConfig {
+  trackAId: string;
+  trackBId: string;
+  compases: number; // 1, 2, 4, 8, 16
+  preset: TransitionPreset;
+  volumeEnvelope: VolumeEnvelope;
+  eqMode: EQFilterMode;
+  tempoA?: number;
+  tempoB?: number;
+  camelotA?: string;
+  camelotB?: string;
+  updatedAt?: number;
+}
+
+const DEFAULT_CONFIG: Omit<DJTransitionConfig, 'trackAId' | 'trackBId'> = {
+  compases: 2,
+  preset: 'automatica',
+  volumeEnvelope: 'superposicion',
+  eqMode: 'intercambio_graves_central',
+};
+
+class DJTransitionService {
+  private audioCtx: AudioContext | null = null;
+  private previewInterval: number | null = null;
+  private isAuditionPlaying = false;
+  private onProgressCallback: ((progress: number) => void) | null = null;
+  private onStopCallback: (() => void) | null = null;
+  private gainA: GainNode | null = null;
+  private gainB: GainNode | null = null;
+  private filterA: BiquadFilterNode | null = null;
+  private filterB: BiquadFilterNode | null = null;
+  private synthNodes: Array<{ stop: () => void }> = [];
+
+  public getTransitionKey(trackAId: string, trackBId: string): string {
+    const cleanA = (trackAId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanB = (trackBId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    return `spotifree_dj_transition_${cleanA}_${cleanB}`;
+  }
+
+  public getTransitionConfig(trackAId: string, trackBId: string): DJTransitionConfig {
+    if (typeof window === 'undefined') {
+      return { trackAId, trackBId, ...DEFAULT_CONFIG };
+    }
+    try {
+      const key = this.getTransitionKey(trackAId, trackBId);
+      const saved = window.localStorage.getItem(key);
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {}
+    return { trackAId, trackBId, ...DEFAULT_CONFIG };
+  }
+
+  public saveTransitionConfig(config: DJTransitionConfig): void {
+    if (typeof window === 'undefined') return;
+    try {
+      const key = this.getTransitionKey(config.trackAId, config.trackBId);
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ ...config, updatedAt: Date.now() })
+      );
+    } catch {}
+  }
+
+  /**
+   * Calculates the exact transition duration in seconds based on BPM and bars (compases).
+   * 1 compás (4/4 time) = 4 beats = (4 * 60) / tempo seconds.
+   */
+  public calculateDurationSeconds(tempo: number, compases: number): number {
+    const safeTempo = tempo > 40 && tempo < 240 ? tempo : 128;
+    const barSec = (4 * 60) / safeTempo;
+    return Math.max(1.5, Math.min(16, barSec * compases));
+  }
+
+  /**
+   * Starts a client-side Web Audio API audition of the DJ transition.
+   * Runs 100% on the device with zero server latency or load.
+   */
+  public startAudition(
+    config: DJTransitionConfig,
+    tempoA = 128,
+    tempoB = 128,
+    onProgress: (progress: number) => void,
+    onEnded: () => void
+  ): void {
+    this.stopAudition();
+
+    const AudioContextClass =
+      window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) {
+      onEnded();
+      return;
+    }
+
+    try {
+      this.audioCtx = new AudioContextClass();
+    } catch {
+      onEnded();
+      return;
+    }
+
+    if (this.audioCtx.state === 'suspended') {
+      this.audioCtx.resume().catch(() => {});
+    }
+
+    this.isAuditionPlaying = true;
+    this.onProgressCallback = onProgress;
+    this.onStopCallback = onEnded;
+
+    const ctx = this.audioCtx;
+    const now = ctx.currentTime;
+    const transitionDur = this.calculateDurationSeconds(tempoA, config.compases);
+    // Add 1.5 seconds of lead-in for Song A and 1.5 seconds of lead-out for Song B so user feels the full context
+    const leadInSec = 1.2;
+    const leadOutSec = 1.5;
+    const totalAuditionSec = leadInSec + transitionDur + leadOutSec;
+
+    // Deck A (Outgoing): LowShelf filter + Gain
+    this.filterA = ctx.createBiquadFilter();
+    this.filterA.type = 'lowshelf';
+    this.filterA.frequency.value = 250;
+    this.filterA.gain.setValueAtTime(0, now);
+
+    this.gainA = ctx.createGain();
+    this.gainA.gain.setValueAtTime(1.0, now);
+
+    // Deck B (Incoming): LowShelf filter + Gain
+    this.filterB = ctx.createBiquadFilter();
+    this.filterB.type = 'lowshelf';
+    this.filterB.frequency.value = 250;
+    this.filterB.gain.setValueAtTime(-24, now); // Starts with bass cut
+
+    this.gainB = ctx.createGain();
+    this.gainB.gain.setValueAtTime(0.0, now); // Starts muted
+
+    // Master bus
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.85, now);
+    masterGain.connect(ctx.destination);
+
+    this.filterA.connect(this.gainA);
+    this.gainA.connect(masterGain);
+
+    this.filterB.connect(this.gainB);
+    this.gainB.connect(masterGain);
+
+    // Schedule Volume curves based on selected preset & volume envelope
+    const transStart = now + leadInSec;
+    const transEnd = transStart + transitionDur;
+    const crossoverTime = transStart + transitionDur * 0.5;
+
+    // Deck A Volume
+    if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
+      // Maintains 100% through the first bar, then ramps down to 0
+      this.gainA.gain.setValueAtTime(1.0, transStart);
+      this.gainA.gain.setValueAtTime(1.0, crossoverTime);
+      this.gainA.gain.linearRampToValueAtTime(0.0, transEnd);
+    } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
+      this.gainA.gain.setValueAtTime(1.0, crossoverTime);
+      this.gainA.gain.setValueAtTime(0.0, crossoverTime + 0.01);
+    } else {
+      // Linear or equal-power crossfade
+      this.gainA.gain.setValueAtTime(1.0, transStart);
+      this.gainA.gain.linearRampToValueAtTime(0.0, transEnd);
+    }
+
+    // Deck B Volume
+    if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
+      this.gainB.gain.setValueAtTime(0.0, transStart);
+      this.gainB.gain.linearRampToValueAtTime(1.0, transEnd);
+    } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
+      this.gainB.gain.setValueAtTime(0.0, crossoverTime);
+      this.gainB.gain.setValueAtTime(1.0, crossoverTime + 0.01);
+    } else if (config.preset === 'crescendo') {
+      this.gainB.gain.setValueAtTime(0.0, transStart);
+      this.gainB.gain.exponentialRampToValueAtTime(1.0, transEnd);
+    } else {
+      this.gainB.gain.setValueAtTime(0.0, transStart);
+      this.gainB.gain.linearRampToValueAtTime(1.0, transEnd);
+    }
+
+    // Schedule EQ Bass curves
+    if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica') {
+      // Bass Swap: At the crossover beat, Deck A drops bass by -24dB and Deck B bass snaps to 0dB!
+      this.filterA.gain.setValueAtTime(0, transStart);
+      this.filterA.gain.setValueAtTime(0, crossoverTime - 0.05);
+      this.filterA.gain.linearRampToValueAtTime(-24, crossoverTime);
+
+      this.filterB.gain.setValueAtTime(-24, transStart);
+      this.filterB.gain.setValueAtTime(-24, crossoverTime - 0.05);
+      this.filterB.gain.linearRampToValueAtTime(0, crossoverTime);
+    } else if (config.eqMode === 'intercambio_gradual') {
+      this.filterA.gain.setValueAtTime(0, transStart);
+      this.filterA.gain.linearRampToValueAtTime(-24, transEnd);
+      this.filterB.gain.setValueAtTime(-24, transStart);
+      this.filterB.gain.linearRampToValueAtTime(0, transEnd);
+    } else if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
+      this.filterA.frequency.setValueAtTime(4000, transStart);
+      this.filterA.frequency.exponentialRampToValueAtTime(350, transEnd);
+      this.filterB.gain.setValueAtTime(0, transStart);
+    } else {
+      // No EQ filter change
+      this.filterA.gain.setValueAtTime(0, transStart);
+      this.filterB.gain.setValueAtTime(0, transStart);
+    }
+
+    // Generate harmonic acoustic elements so the user hears authentic music with beats and tone!
+    this.createDeckAcousticTone(ctx, this.filterA, tempoA, 220, now, transEnd + 0.5);
+    this.createDeckAcousticTone(ctx, this.filterB, tempoB, 261.63, transStart, transEnd + leadOutSec);
+
+    // Playhead progress loop
+    const startTime = Date.now();
+    const durationMs = totalAuditionSec * 1000;
+
+    this.previewInterval = window.setInterval(() => {
+      if (!this.isAuditionPlaying) return;
+      const elapsed = Date.now() - startTime;
+      const progress = Math.min(1.0, Math.max(0.0, elapsed / durationMs));
+
+      if (this.onProgressCallback) {
+        this.onProgressCallback(progress);
+      }
+
+      if (progress >= 1.0) {
+        this.stopAudition();
+      }
+    }, 30);
+  }
+
+  private createDeckAcousticTone(
+    ctx: AudioContext,
+    dest: AudioNode,
+    bpm: number,
+    baseFreq: number,
+    startTime: number,
+    endTime: number
+  ) {
+    const beatSec = 60 / Math.max(60, Math.min(200, bpm));
+    let t = startTime;
+
+    // Rhythmic kick & bass pulses
+    while (t < endTime) {
+      try {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        // Punchy kick / bass note
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq * 0.5, t);
+        osc.frequency.exponentialRampToValueAtTime(45, t + beatSec * 0.4);
+
+        gain.gain.setValueAtTime(0.65, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + beatSec * 0.35);
+
+        osc.connect(gain);
+        gain.connect(dest);
+
+        osc.start(t);
+        osc.stop(t + beatSec * 0.4);
+        this.synthNodes.push({ stop: () => { try { osc.stop(); } catch {} } });
+      } catch {}
+
+      // Chord warmth on the upbeat
+      try {
+        const chordOsc = ctx.createOscillator();
+        const chordGain = ctx.createGain();
+        chordOsc.type = 'sine';
+        chordOsc.frequency.setValueAtTime(baseFreq, t + beatSec * 0.5);
+        chordGain.gain.setValueAtTime(0.2, t + beatSec * 0.5);
+        chordGain.gain.exponentialRampToValueAtTime(0.001, t + beatSec * 0.9);
+
+        chordOsc.connect(chordGain);
+        chordGain.connect(dest);
+
+        chordOsc.start(t + beatSec * 0.5);
+        chordOsc.stop(t + beatSec * 0.95);
+        this.synthNodes.push({ stop: () => { try { chordOsc.stop(); } catch {} } });
+      } catch {}
+
+      t += beatSec;
+    }
+  }
+
+  public stopAudition(): void {
+    if (this.previewInterval !== null) {
+      clearInterval(this.previewInterval);
+      this.previewInterval = null;
+    }
+    this.synthNodes.forEach((node) => {
+      try {
+        node.stop();
+      } catch {}
+    });
+    this.synthNodes = [];
+
+    if (this.audioCtx) {
+      try {
+        this.audioCtx.close().catch(() => {});
+      } catch {}
+      this.audioCtx = null;
+    }
+
+    this.isAuditionPlaying = false;
+    if (this.onStopCallback) {
+      this.onStopCallback();
+      this.onStopCallback = null;
+    }
+    this.onProgressCallback = null;
+  }
+
+  public isPlaying(): boolean {
+    return this.isAuditionPlaying;
+  }
+}
+
+export const djTransitionService = new DJTransitionService();
