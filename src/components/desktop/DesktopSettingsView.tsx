@@ -8,14 +8,8 @@ import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
 } from '../../services/spotifyCookieService';
-import {
-  saveAccount,
-  cleanSpDc,
-  getSavedAccounts,
-  removeSavedAccount,
-  switchActiveAccount,
-  type SavedAccount,
-} from '../../utils/userAccounts';
+import { cleanSpDc } from '../../utils/userAccounts';
+import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 
 interface FrequencyPoint {
   label: string;
@@ -153,8 +147,8 @@ const SpotifyCustomSelect: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab, viewMode, setViewMode, openLoginModal } = useUIStore();
-  const { user, isAuthenticated, logout } = useSpotifyDataStore();
+  const { setActiveMainTab, viewMode, setViewMode } = useUIStore();
+  const { user } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
     return typeof window !== 'undefined'
@@ -182,25 +176,29 @@ export const DesktopSettingsView: React.FC = () => {
       if (typeof window !== 'undefined') {
         window.localStorage.setItem('user_spotify_cookie', val);
         window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: val }));
-        if (session.user?.id) {
-          window.localStorage.setItem('spotifree_active_user_id', session.user.id);
-        }
         window.localStorage.removeItem('spotify_logged_out');
       }
 
-      saveAccount({
-        id: session.user.id || `user-${Date.now()}`,
-        displayName: session.user.display_name || 'Usuario Spotify',
-        email: session.user.email,
-        avatarUrl: session.user.images?.[0]?.url,
-        cookie: val,
-        accessToken: session.accessToken,
-        lastUsed: Date.now(),
-      });
+      const cloudAcc = getSavedSpotifreeAccount();
+      if (cloudAcc) {
+        await syncSpotifreeAccount({
+          email: cloudAcc.email,
+          uid: cloudAcc.uid,
+          spotifyCookie: val,
+        });
+      }
 
       useSpotifyDataStore.setState({
         isAuthenticated: true,
-        user: session.user,
+        user: cloudAcc
+          ? {
+              id: cloudAcc.uid || session.user.id,
+              display_name: cloudAcc.displayName,
+              email: cloudAcc.email,
+              images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : session.user.images,
+              followers: session.user.followers || { total: 0 },
+            }
+          : session.user,
         playlists: session.playlists,
         dynamicShelves: session.shelves,
         quickAccessCards: session.quickAccess,
@@ -213,25 +211,6 @@ export const DesktopSettingsView: React.FC = () => {
       }, 1000);
     } catch (err: any) {
       setCookieError(err.message || 'Error al procesar la cookie.');
-    } finally {
-      setIsExtractingCookie(false);
-    }
-  };
-
-  const [savedAccountsList, setSavedAccountsList] = useState<SavedAccount[]>(() => getSavedAccounts());
-
-  const handleSwitchAccount = async (account: SavedAccount) => {
-    setCookieError(null);
-    setIsExtractingCookie(true);
-    try {
-      await switchActiveAccount(account);
-      const cleanCookie = cleanSpDc(account.cookie || '');
-      setSpotifyCookie(cleanCookie);
-      setSavedAccountsList(getSavedAccounts());
-      setSavedSpotifyCookieSuccess(true);
-      setTimeout(() => setSavedSpotifyCookieSuccess(false), 2500);
-    } catch (err: any) {
-      setCookieError(err.message || 'Error al cambiar de cuenta.');
     } finally {
       setIsExtractingCookie(false);
     }
@@ -497,140 +476,6 @@ export const DesktopSettingsView: React.FC = () => {
             <div className="max-w-xl">
               <SpotifreeAuthCard showCookieInput={false} />
             </div>
-
-            {/* Row 1: Estado de la cuenta */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className={`w-2.5 h-2.5 rounded-full ${isAuthenticated ? 'bg-[#1ed760]' : 'bg-[#727272]'}`} />
-                  <span className="text-sm font-semibold text-white">
-                    {isAuthenticated
-                      ? `Conectado como ${
-                          user?.display_name && user.display_name !== 'Cuenta de Spotify'
-                            ? user.display_name
-                            : (typeof window !== 'undefined' && JSON.parse(window.localStorage.getItem('spotifree_account') || '{}')?.displayName) || 'Usuario'
-                        }`
-                      : 'Sesión no conectada'}
-                  </span>
-                </div>
-                <p className="text-xs text-[#a7a7a7] mt-1">
-                  {isAuthenticated
-                    ? 'Tus listas y recomendaciones están sincronizadas en este dispositivo.'
-                    : 'Vincula tu cuenta mediante tu cookie sp_dc para cargar todas tus listas privadas.'}
-                </p>
-              </div>
-
-              <div>
-                {isAuthenticated ? (
-                  <button
-                    onClick={logout}
-                    className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer"
-                  >
-                    Cerrar sesión
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setActiveMainTab('guide')}
-                    className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 cursor-pointer"
-                  >
-                    Ver guía
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Row 1b: Cuentas guardadas (Spotify Multi-Account Selector) */}
-            {savedAccountsList.length > 0 && (
-              <div className="py-3 border-b border-white/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#a7a7a7]">
-                    Cuentas guardadas en este dispositivo
-                  </span>
-                  <button
-                    onClick={openLoginModal}
-                    className="text-xs font-bold text-[#1ed760] hover:underline cursor-pointer"
-                  >
-                    + Añadir cuenta
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  {(() => {
-                    const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '');
-                    const activeCookie = spotifyCookie || (typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : '');
-                    const matchedAcc = savedAccountsList.find(
-                      (a) => (activeUserId && a.id === activeUserId) ||
-                             (activeCookie && a.cookie && cleanSpDc(a.cookie) === cleanSpDc(activeCookie))
-                    );
-                    const singleActiveId = matchedAcc?.id || (isAuthenticated && savedAccountsList.length > 0 ? savedAccountsList[0].id : null);
-
-                    return savedAccountsList.map((acc) => {
-                      const isActive = acc.id === singleActiveId;
-                      return (
-                        <div
-                          key={acc.id}
-                          onClick={() => handleSwitchAccount(acc)}
-                          className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all border ${
-                            isActive
-                              ? 'bg-white/10 border-[#1ed760]/60 shadow-sm'
-                              : 'bg-[#181818] border-white/5 hover:bg-white/[0.08]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-9 h-9 rounded-full bg-[#242424] flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
-                              {acc.avatarUrl ? (
-                                <img src={acc.avatarUrl} alt={acc.displayName} className="w-full h-full object-cover" />
-                              ) : (
-                                (acc.displayName || 'U').charAt(0).toUpperCase()
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-white truncate">{acc.displayName}</p>
-                              <p className="text-[11px] text-[#a7a7a7] truncate">
-                                {isActive ? (
-                                  <span className="text-[#1ed760] font-semibold">Cuenta activa</span>
-                                ) : (
-                                  'Toca para cambiar'
-                                )}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            {isActive && (
-                              <div className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shrink-0 mr-1 shadow-[0_0_8px_#1ed760]" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeSavedAccount(acc.id);
-                                if (acc.displayName) removeSavedAccount(acc.displayName);
-                                if (acc.email) removeSavedAccount(acc.email);
-                                const updated = getSavedAccounts();
-                                setSavedAccountsList(updated);
-                                if (isActive) {
-                                  if (updated.length > 0) {
-                                    handleSwitchAccount(updated[0]);
-                                  } else {
-                                    logout();
-                                  }
-                                }
-                              }}
-                              className="text-[#727272] hover:text-red-400 text-xs p-1 rounded hover:bg-white/10 transition-colors"
-                              title="Eliminar de cuentas recordadas"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                                <path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
-                              </svg>
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    });
-                  })()}
-                </div>
-              </div>
-            )}
 
             {/* Row 2: Sincronización mediante cookie sp_dc */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">

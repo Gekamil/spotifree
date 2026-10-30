@@ -7,7 +7,7 @@ import { PlayNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { EditProfileModal } from '../common/EditProfileModal';
-import { syncUserProfileToServer, getSavedAccounts, saveAccount } from '../../utils/userAccounts';
+import { syncUserProfileToServer } from '../../utils/userAccounts';
 
 interface DesktopProfileViewProps {
   onSelectPlaylist?: (playlist: Playlist) => void;
@@ -96,16 +96,7 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
       cookie: currentCookie,
     });
 
-    const accounts = getSavedAccounts();
-    const existing = accounts.find((a) => a.id === targetId || a.displayName === data.displayName);
-    if (existing) {
-      saveAccount({
-        ...existing,
-        displayName: data.displayName || existing.displayName,
-        avatarUrl: data.avatarUrl || existing.avatarUrl,
-        bannerUrl: data.bannerUrl || existing.bannerUrl,
-      });
-    }
+
 
     if (user) {
       useSpotifyDataStore.setState({

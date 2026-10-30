@@ -2,18 +2,11 @@ import React, { useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useStatsStore } from '../../store/useStatsStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useUIStore } from '../../store/useUIStore';
 import type { Playlist, Track } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
-import {
-  getSavedAccounts,
-  switchActiveAccount,
-  saveAccount,
-  removeSavedAccount,
-  syncUserProfileToServer,
-  type SavedAccount,
-} from '../../utils/userAccounts';
+import { syncUserProfileToServer } from '../../utils/userAccounts';
+import { logoutSpotifreeAccount } from '../../services/spotifreeAuth';
 import { MobileEditProfileModal } from './MobileEditProfileModal';
 
 interface MobileProfileViewProps {
@@ -30,10 +23,9 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const { user, playlists, isAuthenticated, logout } = useSpotifyDataStore();
   const { getTopArtists, getTopTracks } = useStatsStore();
   const { playTrack } = usePlayerStore();
-  const { openLoginModal } = useUIStore();
+
 
   const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
-  const [savedAccounts, setSavedAccounts] = useState<SavedAccount[]>(() => getSavedAccounts());
   const [customProfile, setCustomProfile] = useState<{
     displayName?: string;
     avatarUrl?: string;
@@ -58,11 +50,10 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
       if (saved) {
         setCustomProfile(JSON.parse(saved));
       } else {
-        const found = getSavedAccounts().find((a) => a.id === targetId);
         setCustomProfile({
-          displayName: found?.displayName || user?.display_name,
-          avatarUrl: found?.avatarUrl || user?.images?.[0]?.url,
-          bannerUrl: found?.bannerUrl,
+          displayName: user?.display_name,
+          avatarUrl: user?.images?.[0]?.url,
+          bannerUrl: (user as any)?.bannerUrl,
         });
       }
     } catch {}
@@ -102,17 +93,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
       cookie: currentCookie,
     });
 
-    const accounts = getSavedAccounts();
-    const existing = accounts.find((a) => a.id === targetId || a.displayName === data.displayName);
-    if (existing) {
-      saveAccount({
-        ...existing,
-        displayName: data.displayName || existing.displayName,
-        avatarUrl: data.avatarUrl || existing.avatarUrl,
-        bannerUrl: data.bannerUrl || existing.bannerUrl,
-      });
-      setSavedAccounts(getSavedAccounts());
-    }
     if (user) {
       useSpotifyDataStore.setState({
         user: {
@@ -138,16 +118,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
       },
     };
     playTrack(trackObj);
-  };
-
-  const handleSwitchAccount = async (acc: SavedAccount) => {
-    if (acc.id === user?.id) return;
-    try {
-      await switchActiveAccount(acc);
-      setSavedAccounts(getSavedAccounts());
-    } catch (err) {
-      console.error('Error switching account on mobile profile:', err);
-    }
   };
 
   return (
@@ -366,101 +336,14 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
           </div>
         )}
 
-        {/* SECTION 4: Conmutador de Cuentas Guardadas */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-lg font-black text-white font-['SpotifyMixUITitle']">
-              Tus cuentas de Spotify
-            </h3>
-            <button
-              onClick={openLoginModal}
-              className="text-xs text-[#1ed760] font-bold hover:underline cursor-pointer"
-            >
-              + Añadir cuenta
-            </button>
-          </div>
-
-          <div className="space-y-2">
-            {savedAccounts.map((acc) => {
-              const isCurrent = acc.id === user?.id;
-              return (
-                <div
-                  key={acc.id}
-                  onClick={() => handleSwitchAccount(acc)}
-                  className={`flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer ${
-                    isCurrent
-                      ? 'bg-white/[0.08] border border-[#1ed760]/30'
-                      : 'bg-[#181818] hover:bg-[#222222] active:bg-[#282828]'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-[#242424] shrink-0 border border-white/10 flex items-center justify-center">
-                      {acc.avatarUrl ? (
-                        <img
-                          src={acc.avatarUrl}
-                          alt={acc.displayName}
-                          onError={handleImageError}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="font-bold text-white text-sm">
-                          {acc.displayName.charAt(0).toUpperCase()}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-white text-sm truncate">
-                        {acc.displayName}
-                      </span>
-                      <span className="text-xs text-[#b3b3b3] truncate">
-                        {isCurrent ? 'Cuenta activa' : 'Guardada'}
-                      </span>
-                    </div>
-                  </div>
-
-                  {isCurrent ? (
-                    <span className="px-2.5 py-1 rounded-full bg-[#1ed760]/20 text-[#1ed760] text-[11px] font-bold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760]" />
-                      Activa
-                    </span>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSwitchAccount(acc);
-                        }}
-                        className="px-3 py-1 rounded-full border border-white/20 text-xs font-bold text-white hover:border-white active:scale-95 cursor-pointer"
-                      >
-                        Cambiar
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          removeSavedAccount(acc.id);
-                          removeSavedAccount(acc.displayName);
-                          setSavedAccounts(getSavedAccounts());
-                        }}
-                        className="p-1.5 rounded-full text-[#b3b3b3] hover:text-red-400 hover:bg-white/10 active:scale-90 transition-colors cursor-pointer"
-                        title="Eliminar cuenta guardada"
-                      >
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
-                        </svg>
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* SECTION 5: Botón de Cerrar Sesión */}
+        {/* Botón de Cerrar Sesión */}
         {isAuthenticated && (
           <div className="pt-4 pb-8 flex flex-col items-center">
             <button
-              onClick={logout}
+              onClick={async () => {
+                await logoutSpotifreeAccount();
+                logout();
+              }}
               className="px-8 py-3 rounded-full border border-white/30 text-white font-bold text-xs uppercase tracking-wider active:scale-95 hover:border-white transition-all shadow-md cursor-pointer"
             >
               Cerrar sesión

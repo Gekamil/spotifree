@@ -15,9 +15,6 @@ import {
   extractSpotifySessionFromCookie,
 } from '../services/spotifyCookieService';
 import {
-  saveAccount,
-  getSavedAccounts,
-  removeSavedAccount,
   cleanSpDc,
   fetchUserProfileFromServer,
 } from '../utils/userAccounts';
@@ -273,10 +270,39 @@ interface SpotifyDataState {
 
 let isInitializing = false;
 
+function getInitialSession(): { user: UserProfile | null; isAuthenticated: boolean } {
+  if (typeof window !== 'undefined') {
+    try {
+      const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+      if (rawCloud) {
+        const cloud = JSON.parse(rawCloud);
+        if (cloud && (cloud.email || cloud.displayName)) {
+          return {
+            user: {
+              id: cloud.uid || 'spotifree-user',
+              display_name: cloud.displayName || cloud.email?.split('@')[0] || 'Usuario',
+              email: cloud.email || '',
+              images: cloud.avatarUrl ? [{ url: cloud.avatarUrl }] : [],
+              followers: { total: 0 },
+            } as any,
+            isAuthenticated: true,
+          };
+        }
+      }
+      if (window.localStorage.getItem('spotify_logged_out') === 'true') {
+        return { user: null, isAuthenticated: false };
+      }
+    } catch {}
+  }
+  return { user: DEFAULT_SESSION_USER, isAuthenticated: true };
+}
+
+const initialSession = getInitialSession();
+
 const store = create<SpotifyDataState>((set, get) => ({
-  isAuthenticated: true,
+  isAuthenticated: initialSession.isAuthenticated,
   isLoading: false,
-  user: DEFAULT_SESSION_USER,
+  user: initialSession.user,
   authWarning: null,
   playlists: DEFAULT_SESSION_PLAYLISTS,
   categories: [],
@@ -286,7 +312,7 @@ const store = create<SpotifyDataState>((set, get) => ({
   topTracks: [],
   topArtists: [],
   recentlyPlayed: [],
-  dynamicShelves: buildDynamicShelves(DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
+  dynamicShelves: buildDynamicShelves(initialSession.user || DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
   quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
   playlistDetailsCache: DEFAULT_SESSION_CACHE,
 
@@ -532,16 +558,22 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
       }
 
+      // Prioritize active Cloud Account if present
+      let cloudAcc: any = null;
+      if (typeof window !== 'undefined') {
+        try {
+          const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+          if (rawCloud) cloudAcc = JSON.parse(rawCloud);
+        } catch {}
+      }
+
       // 2. Prioritize active validated cookie session if present
       const isLoggedOut = typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true';
       let userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
-      if (!userCookie && !isLoggedOut) {
-        const savedAccounts = getSavedAccounts();
-        if (savedAccounts.length > 0 && savedAccounts[0].cookie) {
-          userCookie = savedAccounts[0].cookie;
-          if (typeof window !== 'undefined') {
-            window.localStorage.setItem('user_spotify_cookie', userCookie);
-          }
+      if (!userCookie && cloudAcc?.spotifyCookie && !isLoggedOut) {
+        userCookie = cloudAcc.spotifyCookie || null;
+        if (typeof window !== 'undefined' && userCookie) {
+          window.localStorage.setItem('user_spotify_cookie', userCookie);
         }
       }
 
@@ -630,9 +662,19 @@ const store = create<SpotifyDataState>((set, get) => ({
             return p;
           });
 
+          const activeUser = cloudAcc
+            ? {
+                id: cloudAcc.uid || session.user.id,
+                display_name: cloudAcc.displayName || session.user.display_name,
+                email: cloudAcc.email || session.user.email,
+                images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : session.user.images,
+                followers: session.user.followers || { total: 0 },
+              }
+            : session.user;
+
           set({
             isAuthenticated: true,
-            user: session.user,
+            user: activeUser,
             playlists: uniquePlaylists,
             dynamicShelves: session.shelves || [],
             quickAccessCards: session.quickAccess || [],
@@ -727,25 +769,26 @@ const store = create<SpotifyDataState>((set, get) => ({
             }
           } catch {}
 
-          saveAccount({
-            id: session.user.id || `user-${Date.now()}`,
-            displayName: session.user.display_name || 'Usuario Spotify',
-            email: session.user.email,
-            avatarUrl: session.user.images?.[0]?.url,
-            bannerUrl: (session.user as any).bannerUrl,
-            cookie: userCookie,
-            accessToken: session.accessToken,
-            lastUsed: Date.now(),
-          });
+
 
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
           const uniquePlaylists = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
           );
 
+          const activeUser = cloudAcc
+            ? {
+                id: cloudAcc.uid || session.user.id,
+                display_name: cloudAcc.displayName || session.user.display_name,
+                email: cloudAcc.email || session.user.email,
+                images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : session.user.images,
+                followers: session.user.followers || { total: 0 },
+              }
+            : session.user;
+
           set({
             isAuthenticated: true,
-            user: session.user,
+            user: activeUser,
             playlists: uniquePlaylists,
             dynamicShelves: session.shelves || [],
             quickAccessCards: session.quickAccess || [],
@@ -831,16 +874,6 @@ const store = create<SpotifyDataState>((set, get) => ({
   },
 
   logout: () => {
-    const currentUser = get().user;
-    if (currentUser) {
-      if (currentUser.id) removeSavedAccount(currentUser.id);
-      if (currentUser.display_name) removeSavedAccount(currentUser.display_name);
-      if (currentUser.email) removeSavedAccount(currentUser.email);
-    }
-    const currentCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
-    if (currentCookie) {
-      removeSavedAccount(currentCookie);
-    }
     logoutSpotify();
     if (typeof window !== 'undefined') {
       window.localStorage.removeItem('spotify_access_token');
@@ -851,6 +884,9 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('user_imported_playlists');
       window.localStorage.removeItem('spotify_extracted_session');
       window.localStorage.removeItem('spotifree_active_user_id');
+      window.localStorage.removeItem('spotifree_current_cloud_account');
+      window.localStorage.removeItem('spotifree_account');
+      window.localStorage.removeItem('spotifree_saved_accounts');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }
@@ -893,8 +929,6 @@ const store = create<SpotifyDataState>((set, get) => ({
         
         const { getSavedSpotifreeAccount } = await import('../services/spotifreeAuth');
         const spotifreeAccount = getSavedSpotifreeAccount();
-        const savedAccounts = getSavedAccounts();
-        const activeFallback = savedAccounts[0];
 
         if (spotifreeAccount) {
           const userId = spotifreeAccount.uid || spotifreeAccount.email || 'spotifree-user';
@@ -923,26 +957,6 @@ const store = create<SpotifyDataState>((set, get) => ({
             isLoading: false,
           });
           return;
-        } else if (activeFallback) {
-          const fallbackUser: UserProfile = {
-            id: activeFallback.id,
-            display_name: activeFallback.displayName,
-            email: activeFallback.email || '',
-            images: activeFallback.avatarUrl ? [{ url: activeFallback.avatarUrl }] : [],
-            followers: { total: 0 },
-          };
-
-          set({
-            isAuthenticated: true,
-            user: fallbackUser,
-            playlists: playlists || [],
-            topTracks: top || [],
-            dynamicShelves: [],
-            quickAccessCards: [],
-            authWarning: null,
-            isLoading: false,
-          });
-          return;
         }
 
         // Clean stale token so it doesn't repeatedly attempt failed oauth
@@ -965,15 +979,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         window.localStorage.setItem('spotifree_active_user_id', user.id);
       }
 
-      saveAccount({
-        id: user.id || `user-${Date.now()}`,
-        displayName: user.display_name || 'Usuario Spotify',
-        email: user.email,
-        avatarUrl: user.images?.[0]?.url,
-        cookie: (typeof window !== 'undefined' && window.localStorage.getItem('user_spotify_cookie')) || '',
-        accessToken: userToken,
-        lastUsed: Date.now(),
-      });
+
       const shelves = buildDynamicShelves(
         user,
         userPlaylists,
@@ -1015,123 +1021,7 @@ if (typeof window !== 'undefined') {
   (window as any).__useSpotifyDataStore = useSpotifyDataStore;
 }
 
-export async function switchActiveAccount(account: import('../utils/userAccounts').SavedAccount): Promise<void> {
-  if (typeof window === 'undefined') return;
-
-  const updatedAccount = { ...account, lastUsed: Date.now() };
-  saveAccount(updatedAccount);
-
-  window.localStorage.setItem('spotifree_active_user_id', account.id);
-  window.localStorage.setItem('user_spotify_cookie', account.cookie || '');
-  window.localStorage.removeItem('spotify_logged_out');
-
-  let cachedAccountSession: any = null;
-  try {
-    const raw = window.localStorage.getItem(`spotifree_account_session_${account.id}`);
-    if (raw) cachedAccountSession = JSON.parse(raw);
-  } catch {}
-
-  let customProfile: any = null;
-  try {
-    const rawCp = window.localStorage.getItem(`spotifree_custom_profile_${account.id}`);
-    if (rawCp) customProfile = JSON.parse(rawCp);
-  } catch {}
-
-  try {
-    const serverProfile = await fetchUserProfileFromServer({
-      userId: account.id,
-      displayName: account.displayName,
-      cookie: account.cookie,
-    });
-    if (serverProfile) {
-      customProfile = { ...customProfile, ...serverProfile };
-    }
-  } catch {}
-
-  const activeAvatar = customProfile?.avatarUrl || account.avatarUrl;
-  const activeDisplayName = customProfile?.displayName || account.displayName;
-  const activeBanner = customProfile?.bannerUrl || account.bannerUrl;
-
-  let cachedPlaylists: Record<string, any> = {};
-  try {
-    const rawPl = window.localStorage.getItem(`spotifree_playlist_cache_${account.id}`);
-    if (rawPl) cachedPlaylists = JSON.parse(rawPl);
-  } catch {}
-
-  const targetUser: UserProfile = {
-    ...(cachedAccountSession?.user || {}),
-    id: account.id,
-    display_name: activeDisplayName || cachedAccountSession?.user?.display_name || 'Usuario Spotify',
-    images: activeAvatar ? [{ url: activeAvatar }] : (cachedAccountSession?.user?.images || []),
-    email: account.email || cachedAccountSession?.user?.email || '',
-    followers: cachedAccountSession?.user?.followers || { total: 0 },
-    bannerUrl: activeBanner,
-  } as any;
-
-  const initialPlaylists = cachedAccountSession?.playlists || [];
-  const initialShelves = cachedAccountSession?.shelves || buildDynamicShelves(targetUser, initialPlaylists, 'Recomendado para ti');
-  const initialQuickAccess = cachedAccountSession?.quickAccess || [];
-
-  useSpotifyDataStore.setState({
-    isAuthenticated: true,
-    user: targetUser,
-    playlists: initialPlaylists,
-    dynamicShelves: initialShelves,
-    quickAccessCards: initialQuickAccess,
-    playlistDetailsCache: cachedPlaylists,
-    isLoading: false,
-  });
-
-  // Load stats for the newly activated account immediately
-  try { useStatsStore.getState().loadStatsForUser(account.id); } catch {}
-
-  if (account.cookie && account.cookie.trim().startsWith('AQ')) {
-    try {
-      const res = await fetch('/api/extract-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ cookie: account.cookie }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.user) {
-          const cacheToSave: Record<string, any> = { ...cachedPlaylists };
-          if (data.playlists && Array.isArray(data.playlists)) {
-            data.playlists.forEach((p: any) => {
-              if (p?.id) cacheToSave[p.id] = p;
-            });
-          }
-          if (data.cachedPlaylistDetails) {
-            Object.assign(cacheToSave, data.cachedPlaylistDetails);
-          }
-
-          window.localStorage.setItem(`spotifree_account_session_${account.id}`, JSON.stringify(data));
-          window.localStorage.setItem(`spotifree_playlist_cache_${account.id}`, JSON.stringify(cacheToSave));
-          window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...data, _cookie: account.cookie }));
-          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheToSave));
-
-          saveAccount({
-            ...updatedAccount,
-            displayName: data.user.display_name || updatedAccount.displayName,
-            avatarUrl: data.user.images?.[0]?.url || updatedAccount.avatarUrl,
-            lastUsed: Date.now(),
-          });
-
-          useSpotifyDataStore.setState({
-            isAuthenticated: true,
-            user: data.user,
-            playlists: data.playlists || [],
-            dynamicShelves: data.shelves || [],
-            quickAccessCards: data.quickAccess || [],
-            playlistDetailsCache: cacheToSave,
-            isLoading: false,
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('[AccountSwitch] Error updating account from cookie in background:', e);
-    }
-  }
+export async function switchActiveAccount(_account: any): Promise<void> {
+  // Legacy account switcher deprecated - Firebase cloud auth is unified
 }
 

@@ -291,11 +291,20 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
 export async function logoutSpotifreeAccount(): Promise<void> {
   saveCurrentSpotifreeAccount(null);
   if (typeof window !== 'undefined') {
+    window.localStorage.removeItem('spotifree_current_cloud_account');
+    window.localStorage.removeItem('spotifree_account');
     window.localStorage.removeItem('user_spotify_cookie');
     window.localStorage.removeItem('spotify_access_token');
+    window.localStorage.removeItem('spotify_refresh_token');
+    window.localStorage.removeItem('spotify_extracted_session');
+    window.localStorage.removeItem('spotifree_saved_accounts');
+    window.localStorage.removeItem('spotifree_active_user_id');
+    window.localStorage.setItem('spotify_logged_out', 'true');
   }
   await logoutFirebase();
-  useSpotifyDataStore.getState().initialize?.();
+  try {
+    useSpotifyDataStore.getState().logout?.();
+  } catch {}
 }
 
 /**
@@ -342,23 +351,20 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     }
   }
 
-  if (acc.displayName) {
-    useSpotifyDataStore.setState((s) => ({
-      user: s.user
-        ? {
-            ...s.user,
-            display_name: acc.displayName,
-            images: acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : s.user.images,
-          }
-        : {
-            id: acc.uid || 'spotifree-user',
-            display_name: acc.displayName,
-            email: acc.email,
-            images: acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [],
-            followers: { total: 0 },
-          },
-    }));
-  }
+  const userId = acc.uid || acc.email || 'spotifree-user';
+  const displayName = acc.displayName || acc.email.split('@')[0] || 'Usuario';
+  const images = acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [];
+
+  useSpotifyDataStore.setState((s) => ({
+    isAuthenticated: true,
+    user: {
+      id: userId,
+      display_name: displayName,
+      email: acc.email,
+      images: images.length > 0 ? images : (s.user?.images || []),
+      followers: s.user?.followers || { total: 0 },
+    },
+  }));
 
   if (Array.isArray(acc.playlists) && acc.playlists.length > 0) {
     useSpotifyDataStore.setState((s) => {
