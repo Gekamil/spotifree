@@ -23,7 +23,8 @@ import {
   CheckCircleNativeIcon,
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
-import { formatDuration } from '../../utils/formatters';
+import { formatDuration, stripHtml } from '../../utils/formatters';
+import { fetchAudioFeaturesBatch, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
@@ -567,7 +568,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(cleanId));
   const [isDownloading, setIsDownloading] = useState<boolean>(false);
 
-  // Automix / Transiciones inteligentes
+  // Automix / Transiciones inteligentes (Modo DJ)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     try {
@@ -576,6 +577,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       return true;
     }
   });
+
+  // Spotify Audio Features (BPM, Key, Mode, Camelot Wheel)
+  const [audioFeatures, setAudioFeatures] = useState<Record<string, AudioFeature>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (tracks && tracks.length > 0) {
+      fetchAudioFeaturesBatch(tracks).then((feats) => {
+        if (!cancelled && feats) {
+          setAudioFeatures(feats);
+        }
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [tracks, isAutomixActive]);
 
   const handleToggleDownload = async () => {
     if (isDownloading) return;
@@ -811,7 +829,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
             {playlist.description && (
               <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
-                {playlist.description}
+                {stripHtml(playlist.description)}
               </p>
             )}
 
@@ -915,18 +933,53 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             )}
           </button>
 
-          {/* 6. Large Green Play Button */}
-          <button
-            onClick={handlePlayAll}
-            className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all cursor-pointer"
-            title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
-          >
-            {isCurrentPlaylistPlaying ? (
-              <PauseNativeIcon size={24} className="text-black" />
-            ) : (
-              <PlayNativeIcon size={24} className="text-black ml-1" />
-            )}
-          </button>
+          {/* 6. Play Button: Authentic Vinyl Turntable (Modo DJ) or Classic Green */}
+          {isAutomixActive ? (
+            <button
+              onClick={handlePlayAll}
+              className="relative w-14 h-14 rounded-full p-[2.5px] bg-[#1ed760] shadow-[0_0_18px_rgba(30,215,96,0.65)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
+              title={isCurrentPlaylistPlaying ? 'Pausar (Modo DJ)' : 'Reproducir con transiciones DJ'}
+            >
+              <div
+                className={`w-full h-full rounded-full relative flex items-center justify-center overflow-hidden ${
+                  isCurrentPlaylistPlaying ? 'animate-[spin_10s_linear_infinite]' : ''
+                }`}
+                style={{
+                  background: 'radial-gradient(circle, #2c2c2c 0%, #1c1c1c 45%, #101010 80%, #050505 100%)',
+                }}
+              >
+                {/* Concentric vinyl groove circles */}
+                <div className="absolute inset-[3px] rounded-full border border-white/[0.12] pointer-events-none" />
+                <div className="absolute inset-[7px] rounded-full border border-white/[0.08] pointer-events-none" />
+                <div className="absolute inset-[11px] rounded-full border border-white/[0.06] pointer-events-none" />
+                <div className="absolute inset-[15px] rounded-full border border-white/[0.04] pointer-events-none" />
+
+                {/* Subtle radial sheen reflection */}
+                <div className="absolute inset-0 bg-gradient-to-tr from-white/[0.08] via-transparent to-white/[0.04] pointer-events-none" />
+
+                {/* Center spindle hub */}
+                <div className="relative z-10 w-6 h-6 rounded-full bg-black/80 flex items-center justify-center shadow-inner border border-white/10">
+                  {isCurrentPlaylistPlaying ? (
+                    <PauseNativeIcon size={14} className="text-white" />
+                  ) : (
+                    <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                  )}
+                </div>
+              </div>
+            </button>
+          ) : (
+            <button
+              onClick={handlePlayAll}
+              className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all cursor-pointer shrink-0"
+              title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
+            >
+              {isCurrentPlaylistPlaying ? (
+                <PauseNativeIcon size={24} className="text-black" />
+              ) : (
+                <PlayNativeIcon size={24} className="text-black ml-1" />
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1054,73 +1107,145 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
               const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
               const isLiked = likedTrackIds.includes(track.id);
+              const cleanTrackId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+              const feat = audioFeatures[cleanTrackId] || audioFeatures[track.id];
 
               return (
-                <div
-                  key={track.id || idx}
-                  onClick={() => handleTrackClick(track)}
-                  className="flex items-center justify-between p-2.5 rounded-lg active:bg-white/10 cursor-pointer transition-colors group"
-                >
-                  {/* Left: Cover or Number + Info */}
-                  <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
-                    {isArtist && (
-                      <span className={`w-4 text-center text-xs font-bold shrink-0 ${isThisPlaying ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}`}>
-                        {idx + 1}
-                      </span>
-                    )}
-
-                    <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
-                      <TrackArtwork
-                        src={trackCover}
-                        alt={track.name}
-                        className="w-11 h-11 rounded"
-                        size={44}
-                      />
-                    </div>
-
-                    <div className="flex flex-col min-w-0">
-                      <span
-                        className={`font-bold text-sm truncate ${
-                          isThisPlaying ? 'text-[#1ed760]' : 'text-white'
-                        }`}
-                      >
-                        {track.name}
-                      </span>
-                      <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
-                        <span className="truncate">
-                          {isArtist
-                            ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
-                            : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                <React.Fragment key={track.id || idx}>
+                  <div
+                    onClick={() => handleTrackClick(track)}
+                    className="flex items-center justify-between p-2.5 rounded-lg active:bg-white/10 cursor-pointer transition-colors group"
+                  >
+                    {/* Left: Cover or Number + Info */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
+                      {isArtist && (
+                        <span className={`w-4 text-center text-xs font-bold shrink-0 ${isThisPlaying ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}`}>
+                          {idx + 1}
                         </span>
-                        {track.added_by && (
-                          <span className="text-[10px] text-[#1ed760] font-medium shrink-0">
-                            • {typeof track.added_by === 'string' ? track.added_by : track.added_by.name}
+                      )}
+
+                      <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
+                        <TrackArtwork
+                          src={trackCover}
+                          alt={track.name}
+                          className="w-11 h-11 rounded"
+                          size={44}
+                        />
+                      </div>
+
+                      <div className="flex flex-col min-w-0">
+                        <span
+                          className={`font-bold text-sm truncate ${
+                            isThisPlaying ? 'text-[#1ed760]' : 'text-white'
+                          }`}
+                        >
+                          {track.name}
+                        </span>
+                        <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
+                          <span className="truncate">
+                            {isArtist
+                              ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
+                              : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
                           </span>
-                        )}
-                      </span>
+                          {track.added_by && (
+                            <span className="text-[10px] text-[#1ed760] font-medium shrink-0">
+                              • {typeof track.added_by === 'string' ? track.added_by : track.added_by.name}
+                            </span>
+                          )}
+                        </span>
+                      </div>
                     </div>
+
+                    {/* Right: DJ Mode (BPM + Camelot chip + Duration + Options) or Regular Mode */}
+                    {isAutomixActive ? (
+                      <div className="flex flex-col items-end gap-1 shrink-0">
+                        {/* Top: BPM */}
+                        <span className="text-[12px] font-bold text-white/90 font-['SpotifyMixUI'] tracking-tight">
+                          {feat?.tempo || 130} bpm
+                        </span>
+
+                        {/* Bottom: Camelot chip + Duration + Options */}
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="px-1.5 py-0.5 rounded-[3px] text-[10px] font-black leading-none tracking-tight uppercase"
+                            style={{
+                              backgroundColor: feat?.color || '#9d78db',
+                              color: feat?.textColor || '#ffffff',
+                            }}
+                          >
+                            {feat?.camelot || '9A'}
+                          </span>
+
+                          <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">
+                            {formatDuration(track.duration_ms)}
+                          </span>
+
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActiveTrackMenu(track);
+                            }}
+                            className="p-1 text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform -mr-1"
+                            title="Opciones de la canción"
+                          >
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2.5 shrink-0 text-[#b3b3b3]">
+                        {isLiked && (
+                          <CheckTrackNativeIcon size={16} className="text-[#1ed760] shrink-0" />
+                        )}
+                        <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActiveTrackMenu(track);
+                          }}
+                          className="p-1 text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform"
+                          title="Opciones de la canción"
+                        >
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Right: duration + options (matching Spotify Mobile) */}
-                  <div className="flex items-center gap-2.5 shrink-0 text-[#b3b3b3]">
-                    {isLiked && (
-                      <CheckTrackNativeIcon size={16} className="text-[#1ed760] shrink-0" />
-                    )}
-                    <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveTrackMenu(track);
-                      }}
-                      className="p-1 text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform"
-                      title="Opciones de la canción"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M3 8a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm6.5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
+                  {/* DJ Mode Transition Indicator between tracks */}
+                  {isAutomixActive && idx < tracks.length - 1 && (
+                    <div className="relative pl-7 py-1 flex items-center">
+                      <div className="absolute left-[34px] top-0 bottom-0 w-[1.5px] bg-white/15" />
+                      <button
+                        onClick={() => {
+                          const nextTrack = tracks[idx + 1];
+                          const nextFeat = audioFeatures[nextTrack?.id?.replace(/^spotify:track:/i, '')] || audioFeatures[nextTrack?.id];
+                          setToastMessage(
+                            `Transición armónica automática: ${feat?.camelot || '9A'} (${feat?.tempo || 130} bpm) → ${
+                              nextFeat?.camelot || '11A'
+                            } (${nextFeat?.tempo || 130} bpm)`
+                          );
+                          setTimeout(() => setToastMessage(null), 3500);
+                        }}
+                        className="relative z-10 ml-2 h-7 px-3 rounded-[6px] bg-[#222222] hover:bg-[#2a2a2a] active:bg-[#333333] border border-white/10 flex items-center gap-2 cursor-pointer shadow-sm transition-all"
+                      >
+                        <div className="w-3.5 h-3.5 rounded-[3px] bg-[#1ed760] flex items-center justify-center text-black text-[9px] font-black">
+                          ✦
+                        </div>
+                        <span className="text-xs font-semibold text-white tracking-tight">
+                          Automática
+                        </span>
+                        <span className="text-white/60 text-xs font-bold leading-none">
+                          ›
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </React.Fragment>
               );
             })}
 

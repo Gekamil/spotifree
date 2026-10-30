@@ -12,6 +12,8 @@ import { resolveSpotifyPlaylist } from './api/playlist.js';
 import { extractSpotifySession } from './api/extract-session.js';
 // @ts-ignore
 import canvasHandler from './api/canvas.js';
+// @ts-ignore
+import audioFeaturesHandler from './api/audio-features.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -887,6 +889,18 @@ function dynamicSpotifyPlugin(): Plugin {
         } catch (e: any) {
           res.statusCode = 500;
           res.end(JSON.stringify({ canvasUrl: null, error: e?.message }));
+        }
+      });
+
+      // 2f-bis. Spotify Audio Features / BPM & Key API (/api/audio-features)
+      server.middlewares.use('/api/audio-features', async (req, res) => {
+        try {
+          const url = new URL(req.url || '', 'http://localhost');
+          (req as any).query = Object.fromEntries(url.searchParams.entries());
+          await audioFeaturesHandler(req, res);
+        } catch (e: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ audio_features: [], error: e?.message }));
         }
       });
 

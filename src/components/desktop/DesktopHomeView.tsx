@@ -6,6 +6,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
+import { stripHtml } from '../../utils/formatters';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -335,7 +336,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   {card.title}
                 </span>
                 <span className="text-xs text-[#b3b3b3] line-clamp-2 mt-1 leading-snug">
-                  {card.subtitle}
+                  {stripHtml(card.subtitle)}
                 </span>
               </div>
             );

@@ -18,6 +18,7 @@ import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
 import { handleImageError } from '../../utils/imageFallback';
+import { stripHtml } from '../../utils/formatters';
 
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
@@ -129,7 +130,7 @@ export const MobileLayout: React.FC = () => {
         cards: userLists.map((p) => ({
           id: p.id,
           title: p.name,
-          subtitle: p.description || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
+          subtitle: stripHtml(p.description) || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
           image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
         })),
       });
@@ -150,7 +151,7 @@ export const MobileLayout: React.FC = () => {
           cards: s.cards.map((c) => ({
             id: c.id,
             title: c.title,
-            subtitle: c.subtitle,
+            subtitle: stripHtml(c.subtitle),
             image: c.image,
           })),
         });
@@ -285,28 +286,28 @@ export const MobileLayout: React.FC = () => {
                   {greeting}
                 </h1>
 
-                {/* Quick Access 2-Column Grid matching Spotify Mobile 01_mobile_home.png */}
+                {/* Quick Access 2-Column Grid matching Spotify Mobile */}
                 {shortcuts && shortcuts.length > 0 && (
-                  <div className="px-4 mb-6">
-                    <div className="grid grid-cols-2 gap-2">
+                  <div className="px-4 mb-5">
+                    <div className="grid grid-cols-2 gap-1.5">
                       {shortcuts.map((card) => {
                         const isPlayingThis = isCardPlaying(card.id, card.name);
                         return (
                           <div
                             key={card.id}
                             onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
-                            className="h-14 bg-white/[0.08] hover:bg-white/[0.14] active:bg-white/[0.22] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-98 transition-all pr-2.5"
+                            className="h-12 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2"
                           >
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1 mr-1">
+                            <div className="flex items-center min-w-0 flex-1 mr-1">
                               <img
                                 src={card.image}
                                 alt={card.name}
                                 onError={handleImageError}
                                 referrerPolicy="no-referrer"
-                                className="w-14 h-14 object-cover shrink-0"
+                                className="w-12 h-12 object-cover shrink-0 rounded-l-[4px]"
                               />
                               <span
-                                className={`font-bold text-xs leading-snug line-clamp-2 ${
+                                className={`font-bold text-[12px] leading-[15px] line-clamp-2 px-2 ${
                                   isPlayingThis ? 'text-[#1ed760]' : 'text-white'
                                 }`}
                               >
@@ -315,7 +316,7 @@ export const MobileLayout: React.FC = () => {
                             </div>
 
                             {isPlayingThis && (
-                              <div className="flex items-end gap-[2px] h-3.5 px-1 shrink-0" title="Reproduciendo">
+                              <div className="flex items-end gap-[2px] h-3.5 px-0.5 shrink-0" title="Reproduciendo">
                                 <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
                                 <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
                                 <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
@@ -328,49 +329,93 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 )}
 
-                {/* Shelves Horizontal Carousels */}
-                <div className="space-y-7 px-4">
-                  {shelves.map((shelf) => (
-                    <div key={shelf.id} className="space-y-3">
-                      <div>
-                        {shelf.prefix && (
-                          <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block mb-0.5">
-                            {shelf.prefix}
-                          </span>
-                        )}
-                        <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
-                          {shelf.title}
-                        </h3>
-                      </div>
-                      <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
-                        {shelf.cards.map((card) => (
+                {/* Shelves: Horizontal Carousels or Full-width Release Spotlight for single items */}
+                <div className="space-y-6 px-4">
+                  {shelves.map((shelf) => {
+                    const isSingleCard = shelf.cards.length === 1;
+                    const single = shelf.cards[0];
+
+                    return (
+                      <div key={shelf.id} className="space-y-2.5">
+                        <div>
+                          {shelf.prefix && (
+                            <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block mb-0.5">
+                              {shelf.prefix}
+                            </span>
+                          )}
+                          <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+                            {shelf.title}
+                          </h3>
+                        </div>
+
+                        {isSingleCard ? (
+                          /* Real Spotify Full-width Release Spotlight (avoids blank right gaps) */
                           <div
-                            key={card.id}
-                            onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
-                            className="w-36 shrink-0 space-y-2 cursor-pointer active:scale-95 transition-transform"
+                            onClick={() => handleSelectPlaylistById(single.id, single.title, single.image)}
+                            className="w-full rounded-xl bg-gradient-to-r from-white/[0.08] via-white/[0.04] to-transparent p-3.5 flex items-center justify-between border border-white/5 active:scale-[0.98] transition-transform cursor-pointer shadow-md"
                           >
-                            <div className="w-36 h-36 rounded-md overflow-hidden bg-[#242424] shadow-md relative">
-                              <img
-                                src={card.image}
-                                alt={card.title}
-                                onError={handleImageError}
-                                referrerPolicy="no-referrer"
-                                className="w-full h-full object-cover"
-                              />
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-3">
+                              <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#242424] shadow-lg shrink-0 relative">
+                                <img
+                                  src={single.image}
+                                  alt={single.title}
+                                  onError={handleImageError}
+                                  referrerPolicy="no-referrer"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-[10px] font-bold text-[#1ed760] uppercase tracking-wider mb-0.5">
+                                  Nuevo lanzamiento
+                                </span>
+                                <h4 className="font-bold text-white text-sm line-clamp-1">
+                                  {single.title}
+                                </h4>
+                                <p className="text-xs text-[#b3b3b3] line-clamp-2 mt-0.5 leading-snug">
+                                  {stripHtml(single.subtitle)}
+                                </p>
+                              </div>
                             </div>
-                            <div className="space-y-0.5">
-                              <h4 className="font-bold text-white text-xs line-clamp-1">
-                                {card.title}
-                              </h4>
-                              <p className="text-[11px] text-[#b3b3b3] line-clamp-2 leading-tight">
-                                {card.subtitle}
-                              </p>
+
+                            <div className="w-10 h-10 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0 shadow-lg hover:scale-105 transition-transform">
+                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l11-6.86a1 1 0 0 0 0-1.68l-11-6.86A1 1 0 0 0 8 5.14z" />
+                              </svg>
                             </div>
                           </div>
-                        ))}
+                        ) : (
+                          /* Multi-Card Horizontal Carousel */
+                          <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
+                            {shelf.cards.map((card) => (
+                              <div
+                                key={card.id}
+                                onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
+                                className="w-36 shrink-0 space-y-2 cursor-pointer active:scale-95 transition-transform"
+                              >
+                                <div className="w-36 h-36 rounded-md overflow-hidden bg-[#242424] shadow-md relative">
+                                  <img
+                                    src={card.image}
+                                    alt={card.title}
+                                    onError={handleImageError}
+                                    referrerPolicy="no-referrer"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                                <div className="space-y-0.5">
+                                  <h4 className="font-bold text-white text-xs line-clamp-1">
+                                    {card.title}
+                                  </h4>
+                                  <p className="text-[11px] text-[#b3b3b3] line-clamp-2 leading-tight">
+                                    {stripHtml(card.subtitle)}
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </>
             )}
