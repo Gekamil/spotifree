@@ -233,11 +233,22 @@ class AudioEngine {
         query,
       };
 
-      // In YouTube mode, cue on secondary player so it's pre-buffered
+      // In YouTube mode, pre-warm secondary player at volume 0 so it's pre-buffered in RAM
       const secPlayer = this.secondaryYtPlayer;
-      if (videoId && secPlayer && typeof secPlayer.cueVideoById === 'function') {
+      if (videoId && secPlayer && typeof secPlayer.loadVideoById === 'function') {
         try {
-          secPlayer.cueVideoById({ videoId, startSeconds: 0 });
+          if (typeof secPlayer.unMute === 'function') secPlayer.unMute();
+          if (typeof secPlayer.setVolume === 'function') secPlayer.setVolume(0);
+          secPlayer.loadVideoById({ videoId, startSeconds: 0 });
+          secPlayer.playVideo();
+          // Pause after 350ms of silent buffering
+          setTimeout(() => {
+            try {
+              if (secPlayer.getPlayerState() === 1) {
+                secPlayer.pauseVideo();
+              }
+            } catch {}
+          }, 350);
         } catch {}
       }
     } catch (e) {
@@ -766,8 +777,8 @@ class AudioEngine {
     const totalSec = leadInSec + transitionDur + leadOutSec;
 
     const durA = (trackA.duration_ms || 210000) / 1000;
-    // Cue Track A to an energetic musical groove (72% through the track) so the user hears real music and rhythm
-    const startSecA = Math.max(10, Math.round(durA * 0.72));
+    // Cue Track A to its authentic outro phrase so the transition sounds 100% real
+    const startSecA = Math.max(10, Math.round(durA - leadInSec - transitionDur - 3));
     const startSecB = 0;
 
     await this.ensureYouTubeReady();
@@ -785,7 +796,7 @@ class AudioEngine {
       if (typeof p1.setPlaybackRate === 'function') p1.setPlaybackRate(1);
     } catch {}
 
-    // Deck A (Track A): 100% volume, start at energetic phrase
+    // Deck A (Track A): 100% volume, start at energetic outro phrase
     try {
       if (typeof p0.unMute === 'function') p0.unMute();
       if (typeof p0.setVolume === 'function') p0.setVolume(100);
@@ -793,32 +804,35 @@ class AudioEngine {
       p0.playVideo();
     } catch {}
 
-    // Deck B (Track B): cued at beginning, muted
+    // Deck B (Track B): Pre-buffer actively in memory at volume 0 to eliminate 1.5s latency hole
     try {
       if (typeof p1.unMute === 'function') p1.unMute();
       if (typeof p1.setVolume === 'function') p1.setVolume(0);
       p1.loadVideoById({ videoId: videoIdB, startSeconds: startSecB });
-      p1.pauseVideo();
+      p1.playVideo();
     } catch {}
 
-    // Wait until Deck A actually begins playing audio before starting the transition timeline
+    // Wait until BOTH Deck A and Deck B are actively streaming audio before starting timeline
     let isP0Playing = false;
+    let isP1Playing = false;
     const waitStart = Date.now();
-    while (!isP0Playing && Date.now() - waitStart < 3500) {
+    while ((!isP0Playing || !isP1Playing) && Date.now() - waitStart < 4500) {
       if (!this.isAuditioning) return false;
       try {
         const state0 = typeof p0.getPlayerState === 'function' ? p0.getPlayerState() : -1;
         const ct0 = typeof p0.getCurrentTime === 'function' ? p0.getCurrentTime() : 0;
-        if (state0 === 1 || ct0 > 0) {
-          isP0Playing = true;
-          break;
-        }
+        if (state0 === 1 || ct0 > 0) isP0Playing = true;
+
+        const state1 = typeof p1.getPlayerState === 'function' ? p1.getPlayerState() : -1;
+        const ct1 = typeof p1.getCurrentTime === 'function' ? p1.getCurrentTime() : 0;
+        if (state1 === 1 || ct1 > 0) isP1Playing = true;
+
+        if (isP0Playing && isP1Playing) break;
       } catch {}
       await new Promise((r) => setTimeout(r, 60));
     }
 
     const startTime = Date.now();
-    let startedB = false;
     const totalDurationMs = totalSec * 1000;
 
     this.initAudioContext();
@@ -889,50 +903,42 @@ class AudioEngine {
       }
       // Phase 2: Active DJ Transition Window
       else if (elapsedSec < leadInSec + transitionDur) {
-        if (!startedB) {
-          startedB = true;
-          try { p1.playVideo(); } catch {}
-        }
-
         const pMix = Math.min(1.0, Math.max(0.0, (elapsedSec - leadInSec) / transitionDur));
         let outVol = 1.0;
-        let inVol = pMix;
+        let inVol = 0.0;
 
-        if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica' || config.preset === 'mezcla_voces') {
-          outVol = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
-          inVol = pMix;
-        } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
-          // Downbeat handoff with smooth equal-power crossover — ZERO dry cold cuts
-          if (pMix < 0.4) {
+        if (config.preset === 'mezcla_voces') {
+          // Vocal blend handoff: Track A stays dominant during lead-in phrase, then smoothly crosses with Track B
+          outVol = Math.cos(Math.pow(pMix, 1.3) * 0.5 * Math.PI);
+          inVol = Math.sin(Math.pow(pMix, 0.75) * 0.5 * Math.PI);
+        } else if (config.preset === 'repeticion_ritmo' || config.fxMode === 'distorsion_wash') {
+          // Rhythmic Groove Transition: Constant equal-power curve with subtle rhythmic pulse
+          const beatSec = 60 / safeTempo;
+          const cycle = ((elapsedSec - leadInSec) % (beatSec * 0.5)) / (beatSec * 0.5);
+          const groovePulse = 0.70 + 0.30 * Math.sin(cycle * Math.PI * 2);
+          outVol = Math.cos(pMix * 0.5 * Math.PI) * (pMix > 0.4 ? groovePulse : 1.0);
+          inVol = Math.sin(pMix * 0.5 * Math.PI);
+        } else if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
+          if (pMix < 0.6) {
             outVol = 1.0;
-            inVol = (pMix / 0.4) * 0.4;
-          } else if (pMix < 0.6) {
-            const sub = (pMix - 0.4) / 0.2;
-            outVol = Math.cos(sub * 0.5 * Math.PI);
-            inVol = Math.sin((0.4 + sub * 0.6) * 0.5 * Math.PI);
+            inVol = (pMix / 0.6) * 0.35;
           } else {
-            outVol = Math.max(0, (1 - pMix) * 0.25);
-            inVol = 1.0;
+            const brakeP = (pMix - 0.6) / 0.4;
+            outVol = Math.max(0, 1.0 - brakeP * 1.5);
+            inVol = 0.35 + 0.65 * brakeP;
           }
         } else if (config.preset === 'crescendo') {
           outVol = Math.cos(pMix * 0.5 * Math.PI);
-          inVol = Math.pow(pMix, 1.8);
+          inVol = Math.pow(pMix, 1.4);
         } else {
-          // Lineal
-          outVol = 1.0 - pMix;
-          inVol = pMix;
+          // Automix Standard & Equal Power Crossover (Zero volume dips, zero silent cuts)
+          outVol = Math.cos(pMix * 0.5 * Math.PI);
+          inVol = Math.sin(pMix * 0.5 * Math.PI);
         }
 
-        // Bass Swap / Low-pass Filter EQ logic
-        if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica') {
-          if (pMix < 0.5) {
-            inVol = inVol * 0.5;
-          } else {
-            outVol = outVol * 0.20;
-            inVol = 1.0;
-          }
-        } else if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
-          outVol = outVol * Math.pow(Math.max(0, 1.0 - pMix), 1.6);
+        // Resonant Highpass / Lowpass filter attenuation
+        if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
+          outVol = outVol * Math.pow(Math.max(0, 1.0 - pMix), 1.2);
         }
 
         // DJ FX 1: Turntable / Vinyl Brake (Freno de vinilo)
@@ -941,38 +947,26 @@ class AudioEngine {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.75); } catch {}
           } else if (pMix >= 0.75 && pMix < 0.92) {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.5); } catch {}
-            outVol = outVol * (1.0 - ((pMix - 0.75) / 0.17) * 0.6);
           } else if (pMix >= 0.92 && pMix < 0.98) {
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.25); } catch {}
-            outVol = outVol * 0.15;
           } else if (pMix >= 0.98) {
-            outVol = 0;
-            inVol = 1.0;
             try { if (typeof p0.pauseVideo === 'function') p0.pauseVideo(); } catch {}
             try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1); } catch {}
           }
         }
 
-        // DJ FX 2: Beat Roll & Rhythm Repetition / Stutter loop acceleration on real track
-        if (
-          config.preset === 'beat_roll' ||
-          config.preset === 'repeticion_ritmo' ||
-          config.fxMode === 'repeticion_loop' ||
-          config.fxMode === 'distorsion_wash'
-        ) {
+        // DJ FX 2: Beat Roll / Loop Stutter acceleration
+        if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
           const beatSec = 60 / safeTempo;
-          if (pMix >= 0.25 && pMix < 0.98) {
+          if (pMix >= 0.35 && pMix < 0.98) {
             let division = 1;
-            if (pMix >= 0.60) division = 2;
-            if (pMix >= 0.82) division = 4;
+            if (pMix >= 0.65) division = 2;
+            if (pMix >= 0.85) division = 4;
             const stepDur = beatSec / division;
             const cycle = ((elapsedSec - leadInSec) % stepDur) / stepDur;
-            if (cycle > 0.55) {
-              outVol = outVol * 0.10; // rhythmic acoustic gate
+            if (cycle > 0.65) {
+              outVol = outVol * 0.45; // Gentle rhythmic pump instead of silence
             }
-          } else if (pMix >= 0.98) {
-            outVol = 0; // micro-silence before drop
-            inVol = 1.0;
           }
         }
 
@@ -981,9 +975,9 @@ class AudioEngine {
           const beatSec = 60 / safeTempo;
           const echoPeriod = beatSec * 0.75;
           const cycle = ((elapsedSec - leadInSec) % echoPeriod) / echoPeriod;
-          const decay = Math.pow(Math.max(0, 1.0 - pMix), 2.0);
+          const decay = Math.pow(Math.max(0, 1.0 - pMix), 1.8);
           const pulse = Math.cos(cycle * Math.PI * 0.5);
-          outVol = decay * (0.35 + 0.65 * pulse);
+          outVol = decay * (0.45 + 0.55 * pulse);
         }
 
         if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));

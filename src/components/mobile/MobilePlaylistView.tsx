@@ -673,16 +673,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       // 2. Sort tracks along Camelot Wheel & BPM proximity
       const harmonized = djTransitionService.sortPlaylistHarmonically(tracks, audioFeatures);
       setTracks(harmonized);
-      setToastMessage('✦ Modo DJ activado: orden armónico y transiciones calculadas');
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {
         setTracks(originalTracksRef.current);
         originalTracksRef.current = null;
       }
-      setToastMessage('Modo DJ desactivado: orden original restaurado');
     }
-    setTimeout(() => setToastMessage(null), 3000);
   };
 
   const handleSharePlaylist = async () => {

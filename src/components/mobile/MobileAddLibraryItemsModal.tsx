@@ -387,7 +387,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
                   src={item.image}
                   alt={item.name}
                   onError={handleImageError}
-                  className={`w-14 h-14 object-cover bg-[#282828] shadow shrink-0 ${
+                  className={`w-12 h-12 object-cover bg-[#282828] shadow shrink-0 ${
                     item.type === 'artist' ? 'rounded-full' : 'rounded-[4px]'
                   }`}
                 />

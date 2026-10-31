@@ -269,11 +269,20 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       setIsAuditionLoading(false);
       setAuditionProgress(0);
     }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
     return () => {
+      window.removeEventListener('keydown', handleKeyDown);
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
-    }
-  }, [isOpen]);
+    };
+  }, [isOpen, onClose]);
 
   // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {
@@ -1012,20 +1021,21 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   if (!isOpen || !trackA || !trackB) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in font-['SpotifyMixUI']">
-      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-[#121212] rounded-t-3xl sm:rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[96vh] md:max-h-[88vh]">
+    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in font-['SpotifyMixUI'] overflow-hidden">
+      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-[#121212] rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[92vh] sm:max-h-[90vh]">
         {/* Top Header Row matching Spotify Screenshot */}
-        <div className="px-4 py-2.5 sm:px-5 flex items-center justify-between border-b border-white/5">
-          {/* Close button (✕) */}
+        <div className="px-4 py-3 sm:px-5 flex items-center justify-between border-b border-white/10 shrink-0 bg-[#121212] sticky top-0 z-40">
+          {/* Close button (✕ Cerrar) */}
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            title="Cerrar"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white transition-all cursor-pointer font-bold text-xs"
+            title="Cerrar modal (Esc)"
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
               <line x1="18" y1="6" x2="6" y2="18" />
               <line x1="6" y1="6" x2="18" y2="18" />
             </svg>
+            <span>Cerrar</span>
           </button>
 
           {/* Center Beta badge */}
@@ -1056,8 +1066,8 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           </div>
         </div>
 
-        {/* Content Body */}
-        <div className="p-3.5 sm:p-5 overflow-y-auto md:overflow-y-visible space-y-2.5 sm:space-y-3 flex-1">
+        {/* Content Body with proper internal scrolling */}
+        <div className="p-3.5 sm:p-5 overflow-y-auto space-y-3 flex-1 min-h-0">
           {/* Track 1 Card (Outgoing Track) */}
           <div className="flex items-center justify-between gap-3 px-1">
             <div className="flex items-center gap-3 min-w-0">

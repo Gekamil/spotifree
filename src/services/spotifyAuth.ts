@@ -188,6 +188,21 @@ export async function getClientCredentialsToken(): Promise<string | null> {
     return cached;
   }
 
+  // 1. Try local backend proxy endpoint (/api/spotify/app-token) which completely bypasses browser CORS restrictions
+  try {
+    const res = await fetch('/api/spotify/app-token');
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.access_token) {
+        const expires = Date.now() + (data.expires_in || 3600) * 1000;
+        window.localStorage.setItem('spotify_app_token', data.access_token);
+        window.localStorage.setItem('spotify_app_expires_at', expires.toString());
+        return data.access_token;
+      }
+    }
+  } catch {}
+
+  // 2. Direct Spotify accounts API call fallback
   try {
     const response = await fetch('https://accounts.spotify.com/api/token', {
       method: 'POST',
@@ -198,19 +213,20 @@ export async function getClientCredentialsToken(): Promise<string | null> {
       body: new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
     });
 
-    if (!response.ok) return null;
+    if (response.ok) {
+      const data = await response.json();
+      const expires = Date.now() + data.expires_in * 1000;
 
-    const data = await response.json();
-    const expires = Date.now() + data.expires_in * 1000;
+      window.localStorage.setItem('spotify_app_token', data.access_token);
+      window.localStorage.setItem('spotify_app_expires_at', expires.toString());
 
-    window.localStorage.setItem('spotify_app_token', data.access_token);
-    window.localStorage.setItem('spotify_app_expires_at', expires.toString());
-
-    return data.access_token;
+      return data.access_token;
+    }
   } catch (err) {
     console.error('Error fetching client credentials token:', err);
-    return null;
   }
+
+  return null;
 }
 
 export async function refreshAccessToken(): Promise<string | null> {

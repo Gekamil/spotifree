@@ -173,19 +173,25 @@ export async function searchSpotify(query: string): Promise<any | null> {
     }
   } catch {}
 
-  // 2. Query Backend Search API (/api/spotify/search) which combines YouTube Music & iTunes
+  // 2. Query Backend Search API (/api/spotify/search) which accesses official Spotify Web API
   try {
     const searchUrl = `/api/spotify/search?q=${encodeURIComponent(cleanQ)}`;
     const res = await fetch(searchUrl, { signal: AbortSignal.timeout?.(4500) });
     if (res.ok) {
       const data = await res.json();
       if (data.tracks?.items?.length) {
+        // Put official Spotify search results at the forefront
+        const newSpotifyTracks: Track[] = [];
         for (const item of data.tracks.items) {
-          if (!tracks.some((t) => t.id === item.id || t.name.toLowerCase() === item.name.toLowerCase())) {
-            tracks.push(item);
+          if (!tracks.some((t) => t.id === item.id || (t.name.toLowerCase() === item.name.toLowerCase() && t.artists?.[0]?.name.toLowerCase() === item.artists?.[0]?.name.toLowerCase()))) {
+            newSpotifyTracks.push(item);
           }
         }
+        tracks = [...newSpotifyTracks, ...tracks];
       }
+      if (data.artists?.items?.length && artists.length === 0) artists = data.artists.items;
+      if (data.albums?.items?.length && albums.length === 0) albums = data.albums.items;
+      if (data.playlists?.items?.length && playlists.length === 0) playlists = data.playlists.items;
     }
   } catch {}
 

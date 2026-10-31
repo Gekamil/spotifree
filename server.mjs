@@ -93,6 +93,59 @@ function parseEmbedHtml(html, cleanId) {
   };
 }
 
+// Server-side Spotify Token Manager
+let cachedSpotifyServerToken = null;
+let cachedSpotifyServerTokenExpires = 0;
+
+async function getSpotifyServerToken() {
+  if (cachedSpotifyServerToken && Date.now() < cachedSpotifyServerTokenExpires - 60000) {
+    return cachedSpotifyServerToken;
+  }
+  // 1. Try official client_credentials flow using Spotify Developer Credentials
+  try {
+    const authHeader = 'Basic ' + Buffer.from('ea3003771e264c4690a2ac289afd22a4:3976fc2dadf04e9c857ff2afdcc07d2b').toString('base64');
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': authHeader,
+      },
+      body: new URLSearchParams({ grant_type: 'client_credentials' }).toString(),
+    });
+    if (tokenRes.ok) {
+      const data = await tokenRes.json();
+      if (data && data.access_token) {
+        cachedSpotifyServerToken = data.access_token;
+        cachedSpotifyServerTokenExpires = Date.now() + (data.expires_in || 3600) * 1000;
+        return cachedSpotifyServerToken;
+      }
+    }
+  } catch (err) {
+    console.warn('[Spotify client credentials error]:', err.message);
+  }
+
+  // 2. Fallback: anonymous Spotify Web Player token
+  try {
+    const webRes = await fetch('https://open.spotify.com/get_access_token?reason=transport&productType=web_player', {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (webRes.ok) {
+      const data = await webRes.json();
+      if (data && data.accessToken) {
+        cachedSpotifyServerToken = data.accessToken;
+        cachedSpotifyServerTokenExpires = data.accessTokenExpirationTimestampMs || (Date.now() + 3600000);
+        return cachedSpotifyServerToken;
+      }
+    }
+  } catch (err) {
+    console.warn('[Spotify web player token error]:', err.message);
+  }
+
+  return null;
+}
+
 const server = http.createServer(async (req, res) => {
   setCorsHeaders(res);
 
@@ -213,6 +266,18 @@ const server = http.createServer(async (req, res) => {
       }
     });
     return;
+  }
+
+  // 4a. Spotify App Token Endpoint (/api/spotify/app-token)
+  if (pathname === '/api/spotify/app-token') {
+    res.setHeader('Content-Type', 'application/json');
+    const token = await getSpotifyServerToken();
+    if (token) {
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ access_token: token, expires_in: 3600 }));
+    }
+    res.statusCode = 502;
+    return res.end(JSON.stringify({ error: 'Could not acquire Spotify token' }));
   }
 
   // 4b. Spotify Token Proxy (/api/spotify/token)
@@ -551,18 +616,56 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 7. Search API (/api/spotify/search) - Combined iTunes + YouTube Music
+  // 7. Search API (/api/spotify/search) - Official Spotify API + iTunes + YouTube Music
   if (pathname === '/api/spotify/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
     res.setHeader('Content-Type', 'application/json');
 
     if (!q) {
       res.statusCode = 200;
-      return res.end(JSON.stringify({ tracks: { items: [] } }));
+      return res.end(JSON.stringify({ tracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
     }
 
     try {
       const cleanQ = q.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+      const spotifyToken = await getSpotifyServerToken();
+
+      let spotifyData = null;
+      if (spotifyToken) {
+        try {
+          const sRes = await fetch(
+            `https://api.spotify.com/v1/search?q=${encodeURIComponent(cleanQ || q)}&type=track,artist,album,playlist&limit=25`,
+            {
+              headers: { Authorization: `Bearer ${spotifyToken}` },
+              signal: AbortSignal.timeout?.(4000),
+            }
+          );
+          if (sRes.ok) {
+            spotifyData = await sRes.json();
+          }
+        } catch (e) {
+          console.warn('[Spotify official search error]:', e.message);
+        }
+      }
+
+      // If Spotify Web API returned tracks, enrich HD images and return primary!
+      if (spotifyData && spotifyData.tracks?.items?.length > 0) {
+        // Ensure image URLs are HD 640x640
+        if (spotifyData.tracks?.items) {
+          spotifyData.tracks.items = spotifyData.tracks.items.map(t => ({
+            ...t,
+            preview_url: null, // Zero 30-sec previews
+            album: {
+              ...t.album,
+              images: (t.album?.images || []).map(img => ({ ...img, url: toHDImage(img.url) })),
+            },
+          }));
+        }
+        res.statusCode = 200;
+        return res.end(JSON.stringify(spotifyData));
+      }
+
+      // Secondary Fallback: iTunes + YouTube
       const [itunesRes, ytTracks] = await Promise.all([
         fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -574,7 +677,7 @@ const server = http.createServer(async (req, res) => {
         id: `itunes-${t.trackId}`,
         name: t.trackName,
         duration_ms: t.trackTimeMillis || 210000,
-        preview_url: t.previewUrl || null,
+        preview_url: null,
         artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
         album: {
           id: `alb-${t.collectionId}`,
@@ -583,11 +686,10 @@ const server = http.createServer(async (req, res) => {
         },
       }));
 
-      // Combine results: if query specifically targets a remix or YouTube title, prioritize YouTube tracks
       const seenTitles = new Set();
       const combined = [];
 
-      for (const t of [...ytTracks, ...itunesItems]) {
+      for (const t of [...itunesItems, ...ytTracks]) {
         const key = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
         if (key && !seenTitles.has(key)) {
           seenTitles.add(key);
@@ -596,7 +698,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       res.statusCode = 200;
-      return res.end(JSON.stringify({ tracks: { items: combined } }));
+      return res.end(JSON.stringify({ tracks: { items: combined }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
     } catch (e) {
       console.error('[Search error]:', e);
       res.statusCode = 200;

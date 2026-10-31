@@ -49,6 +49,32 @@ export async function resolveYouTubeVideoId(query) {
         if (shelf) {
           for (const item of shelf.contents || []) {
             const itemRenderer = item.musicResponsiveListItemRenderer;
+            // 1. Sanity check: discard teasers, snippets, previews, and shorts
+            const titleRun = itemRenderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.title?.runs?.[0]?.text || '';
+            const titleLower = titleRun.toLowerCase();
+            if (
+              titleLower.includes('teaser') ||
+              titleLower.includes('snippet') ||
+              titleLower.includes('preview') ||
+              titleLower.includes('#shorts') ||
+              titleLower.includes('30s') ||
+              titleLower.includes('adelanto')
+            ) {
+              continue;
+            }
+
+            // 2. Check duration if present in columns (reject < 50s clips)
+            let isShortDuration = false;
+            const fixedCols = itemRenderer?.fixedColumns || [];
+            for (const col of fixedCols) {
+              const text = col?.musicResponsiveListItemFixedColumnRenderer?.title?.runs?.[0]?.text || '';
+              if (/^0:[0-4][0-9]$/.test(text.trim())) {
+                isShortDuration = true;
+                break;
+              }
+            }
+            if (isShortDuration) continue;
+
             const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
             const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
             if (videoId) {
