@@ -7,7 +7,7 @@
 import { usePlayerStore } from '../store/usePlayerStore';
 import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
-import { getDownloadedTrackBlobUrl } from '../utils/offlineStorage';
+import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { resolveClientSideRealFeature } from '../utils/audioFeatures';
 import {
@@ -29,6 +29,7 @@ const VIDEO_ID_CACHE = new Map<string, string>();
 // Initialize persistent cache from localStorage (v2 clean cache to discard obsolete/ad mappings)
 if (typeof window !== 'undefined') {
   try {
+    purgeCorruptedPreviewAudio().catch(() => {});
     // Purge legacy cache v1 which may contain bad/ad video IDs
     window.localStorage.removeItem('spotifree_yt_cache');
     const saved = window.localStorage.getItem('spotifree_yt_cache_v2');
@@ -337,6 +338,21 @@ class AudioEngine {
         scheduleBassSwap(outStrip, inStrip, crossoverTime, now);
       }
 
+      // 1b. Vocal Blend (Mezcla de voces): Lows ducked (-36dB) on both decks while mid frequencies (+2.5dB) are lifted
+      if (preset === 'mezcla_voces') {
+        outStrip.eqLow.gain.setValueAtTime(0, now);
+        outStrip.eqLow.gain.setTargetAtTime(-36, now, 0.05);
+        outStrip.eqMid.gain.setValueAtTime(0, now);
+        outStrip.eqMid.gain.setTargetAtTime(2.5, now, 0.05);
+
+        inStrip.eqLow.gain.setValueAtTime(-36, now);
+        inStrip.eqMid.gain.setValueAtTime(0, now);
+        inStrip.eqMid.gain.setTargetAtTime(2.0, now, 0.05);
+
+        inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
+        outStrip.eqMid.gain.setTargetAtTime(0, crossoverTime, 0.1);
+      }
+
       // 2. Resonant Filter Sweeps
       if (preset === 'filtro') {
         scheduleResonantHPFSweep(outStrip, now, crossfadeSec, 20, 18000, 3.0);
@@ -352,9 +368,10 @@ class AudioEngine {
         inStrip.eqLow.gain.setValueAtTime(0, now);
       }
 
-      // 4. Accelerating Loop Stutter Roll
-      if (preset === 'beat_roll' || fxMode === 'repeticion_loop') {
-        scheduleLoopStutter(outStrip, now + crossfadeSec * 0.35, crossfadeSec * 0.63, safeTempo);
+      // 4. Accelerating Loop Stutter Roll / Rhythm Repetition
+      if (preset === 'beat_roll' || preset === 'repeticion_ritmo' || fxMode === 'repeticion_loop' || fxMode === 'distorsion_wash') {
+        scheduleLoopStutter(outStrip, now + crossfadeSec * 0.25, crossfadeSec * 0.73, safeTempo);
+        scheduleResonantHPFSweep(outStrip, now + crossfadeSec * 0.3, crossfadeSec * 0.65, 40, 8000, 2.5);
         inStrip.eqLow.gain.setValueAtTime(-40, now);
         inStrip.eqLow.gain.setTargetAtTime(0, now + crossfadeSec * 0.98, 0.02);
       }
@@ -448,7 +465,7 @@ class AudioEngine {
       if (djConfig) {
         // DJ Automix with Beat-Matching, Volume Envelope & Bass Swap
         const volEnvelope = djConfig.volumeEnvelope || 'superposicion';
-        if (volEnvelope === 'superposicion' || djConfig.preset === 'automatica') {
+        if (volEnvelope === 'superposicion' || djConfig.preset === 'automatica' || djConfig.preset === 'mezcla_voces') {
           // Outgoing: full volume for 1st bar, then smooth slope down
           if (progress <= 0.5) {
             outVol = masterVolume;
@@ -457,8 +474,18 @@ class AudioEngine {
           }
           inVol = progress * masterVolume;
         } else if (volEnvelope === 'corte_directo' || djConfig.preset === 'corte') {
-          outVol = progress < 0.5 ? masterVolume : 0;
-          inVol = progress < 0.5 ? 0 : masterVolume;
+          // Downbeat handoff with smooth equal-power crossover — ZERO dry cold cuts
+          if (progress < 0.4) {
+            outVol = masterVolume;
+            inVol = (progress / 0.4) * 0.4 * masterVolume;
+          } else if (progress < 0.6) {
+            const sub = (progress - 0.4) / 0.2;
+            outVol = Math.cos(sub * 0.5 * Math.PI) * masterVolume;
+            inVol = Math.sin((0.4 + sub * 0.6) * 0.5 * Math.PI) * masterVolume;
+          } else {
+            outVol = Math.max(0, (1 - progress) * 0.25) * masterVolume;
+            inVol = masterVolume;
+          }
         } else if (djConfig.preset === 'crescendo') {
           outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
           inVol = Math.pow(progress, 1.8) * masterVolume;
@@ -502,19 +529,24 @@ class AudioEngine {
           }
         }
 
-        // 2. Beat Roll / Stutter: Real audio volume rhythmic gating on the beat grid
-        if (djConfig.preset === 'beat_roll' || djConfig.fxMode === 'repeticion_loop') {
-          if (progress >= 0.35 && progress < 0.98) {
+        // 2. Beat Roll & Rhythm Repetition / Stutter: Real audio volume rhythmic gating on the beat grid
+        if (
+          djConfig.preset === 'beat_roll' ||
+          djConfig.preset === 'repeticion_ritmo' ||
+          djConfig.fxMode === 'repeticion_loop' ||
+          djConfig.fxMode === 'distorsion_wash'
+        ) {
+          if (progress >= 0.25 && progress < 0.98) {
             let division = 1; // 1/4 note
-            if (progress >= 0.65) division = 2; // 1/8 note
-            if (progress >= 0.85) division = 4; // 1/16 note machine gun roll
+            if (progress >= 0.60) division = 2; // 1/8 note
+            if (progress >= 0.82) division = 4; // 1/16 note roll
             const stepDur = beatSec / division;
             const cycle = ((accumulatedCrossfadeMs / 1000) % stepDur) / stepDur;
             if (cycle > 0.55) {
-              outVol = outVol * 0.05; // sharp rhythmic audio gate
+              outVol = outVol * 0.10; // rhythmic chop
             }
           } else if (progress >= 0.98) {
-            outVol = 0; // micro-silence before drop
+            outVol = 0;
             inVol = masterVolume;
           }
         }
@@ -866,12 +898,22 @@ class AudioEngine {
         let outVol = 1.0;
         let inVol = pMix;
 
-        if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica') {
+        if (config.volumeEnvelope === 'superposicion' || config.preset === 'automatica' || config.preset === 'mezcla_voces') {
           outVol = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
           inVol = pMix;
         } else if (config.volumeEnvelope === 'corte_directo' || config.preset === 'corte') {
-          outVol = pMix < 0.5 ? 1.0 : 0.0;
-          inVol = pMix < 0.5 ? 0.0 : 1.0;
+          // Downbeat handoff with smooth equal-power crossover — ZERO dry cold cuts
+          if (pMix < 0.4) {
+            outVol = 1.0;
+            inVol = (pMix / 0.4) * 0.4;
+          } else if (pMix < 0.6) {
+            const sub = (pMix - 0.4) / 0.2;
+            outVol = Math.cos(sub * 0.5 * Math.PI);
+            inVol = Math.sin((0.4 + sub * 0.6) * 0.5 * Math.PI);
+          } else {
+            outVol = Math.max(0, (1 - pMix) * 0.25);
+            inVol = 1.0;
+          }
         } else if (config.preset === 'crescendo') {
           outVol = Math.cos(pMix * 0.5 * Math.PI);
           inVol = Math.pow(pMix, 1.8);
@@ -911,17 +953,22 @@ class AudioEngine {
           }
         }
 
-        // DJ FX 2: Beat Roll / Stutter loop acceleration on real track
-        if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+        // DJ FX 2: Beat Roll & Rhythm Repetition / Stutter loop acceleration on real track
+        if (
+          config.preset === 'beat_roll' ||
+          config.preset === 'repeticion_ritmo' ||
+          config.fxMode === 'repeticion_loop' ||
+          config.fxMode === 'distorsion_wash'
+        ) {
           const beatSec = 60 / safeTempo;
-          if (pMix >= 0.35 && pMix < 0.98) {
+          if (pMix >= 0.25 && pMix < 0.98) {
             let division = 1;
-            if (pMix >= 0.65) division = 2;
-            if (pMix >= 0.85) division = 4;
+            if (pMix >= 0.60) division = 2;
+            if (pMix >= 0.82) division = 4;
             const stepDur = beatSec / division;
             const cycle = ((elapsedSec - leadInSec) % stepDur) / stepDur;
             if (cycle > 0.55) {
-              outVol = outVol * 0.05; // sharp acoustic gate
+              outVol = outVol * 0.10; // rhythmic acoustic gate
             }
           } else if (pMix >= 0.98) {
             outVol = 0; // micro-silence before drop

@@ -990,16 +990,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         </div>
       </div>
 
-      {/* Modo DJ Active Banner */}
-      {isAutomixActive && (
-        <div className="px-8 pb-3">
-          <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1ed760]/10 border border-[#1ed760]/20 text-[#1ed760] text-xs font-semibold w-fit shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-            <span>✦ MODO DJ ACTIVO • MEZCLA ARMÓNICA AUTOMÁTICA • DETECCIÓN DE SILENCIOS ACTIVA</span>
-          </div>
-        </div>
-      )}
-
       {/* Track List Table */}
       <div className="px-8">
         {isArtist && (

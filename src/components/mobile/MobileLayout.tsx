@@ -562,7 +562,7 @@ export const MobileLayout: React.FC = () => {
                       src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
                       alt="Canciones que te gustan"
                       onError={handleImageError}
-                      className="w-16 h-16 rounded-[4px] object-cover shadow shrink-0"
+                      className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
                     />
                     <div className="flex flex-col min-w-0">
                       <span className="font-bold text-white text-sm truncate">
@@ -611,7 +611,7 @@ export const MobileLayout: React.FC = () => {
                           src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                           alt={pl.name}
                           onError={handleImageError}
-                          className={`w-16 h-16 object-cover bg-[#242424] shadow shrink-0 ${
+                          className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
                             isArt ? 'rounded-full' : 'rounded-[4px]'
                           }`}
                         />
@@ -632,8 +632,8 @@ export const MobileLayout: React.FC = () => {
                   onClick={() => setIsAddLibraryModalOpen(true)}
                   className="mt-3 p-2.5 rounded-xl flex items-center gap-3.5 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group bg-white/[0.02]"
                 >
-                  <div className="w-14 h-14 rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <div className="w-12 h-12 rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                       <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
                     </svg>
                   </div>

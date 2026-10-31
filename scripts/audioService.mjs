@@ -84,14 +84,16 @@ export async function resolveYouTubeVideoId(query) {
           if (candArtist.includes(w)) score += 2;
         }
 
-        // Duration sanity check: typical track is between 60s and 480s (8 mins)
+        // Duration sanity check: strictly eliminate shorts / teasers under 50 seconds
         const durSec = (cand.duration_ms || 0) / 1000;
+        if (durSec > 0 && durSec < 50) {
+          continue; // Discard previews, snippets, and shorts
+        }
+
         if (durSec >= 60 && durSec <= 480) {
           score += 3; // Standard song duration bonus
         } else if (durSec > 600) {
           score -= 10; // Penalize 10-minute+ mixes, albums, podcasts
-        } else if (durSec < 45) {
-          score -= 10; // Penalize teaser shorts
         }
 
         // Bonus for official / high quality matches
@@ -105,7 +107,8 @@ export async function resolveYouTubeVideoId(query) {
         }
       }
 
-      const winnerId = bestCandidate || (candidates[0].id || '').replace(/^yt-/, '');
+      const validCandidates = candidates.filter(c => !c.duration_ms || (c.duration_ms / 1000) >= 50);
+      const winnerId = bestCandidate || (validCandidates[0]?.id || '').replace(/^yt-/, '');
       if (winnerId) {
         CACHE.set(`yt_vid_${cleanQ}`, { id: winnerId, timestamp: Date.now() });
         return winnerId;

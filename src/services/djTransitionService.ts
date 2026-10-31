@@ -21,7 +21,9 @@ export type TransitionPreset =
   | 'beat_roll'
   | 'crescendo'
   | 'fundido'
-  | 'distorsion_wash';
+  | 'distorsion_wash'
+  | 'mezcla_voces'
+  | 'repeticion_ritmo';
 
 export type VolumeEnvelope = 'superposicion' | 'corte_directo' | 'lineal' | 'curva_s';
 
@@ -162,6 +164,26 @@ export const DJ_PRESET_DEFINITIONS: Record<TransitionPreset, PresetDefinition> =
     compases: 4,
     volumeEnvelope: 'superposicion',
     eqMode: 'intercambio_graves_central',
+    fxMode: 'distorsion_wash',
+  },
+  mezcla_voces: {
+    preset: 'mezcla_voces',
+    title: 'Fusión Vocal',
+    label: '✦ Fusión Vocal',
+    detail: 'Aislamiento de voces y melodías sin conflicto de graves en clave armónica',
+    compases: 4,
+    volumeEnvelope: 'superposicion',
+    eqMode: 'intercambio_graves_central',
+    fxMode: 'ninguno',
+  },
+  repeticion_ritmo: {
+    preset: 'repeticion_ritmo',
+    title: 'Ritmo & Distorsión',
+    label: '✦ Ritmo & Distorsión',
+    detail: 'Repetición rítmica de la base con saturación progresiva conectando al ritmo entrante',
+    compases: 2,
+    volumeEnvelope: 'curva_s',
+    eqMode: 'intercambio_gradual',
     fxMode: 'distorsion_wash',
   },
 };
@@ -358,14 +380,14 @@ class DJTransitionService {
         );
       } else {
         return baseResult(
-          'corte',
-          1,
-          'corte_directo',
-          'intercambio_graves_central',
-          'ninguno',
-          'Corte directo',
-          '✦ Corte directo',
-          'Corte seco al inicio del compás con impacto inmediato de bombo'
+          'repeticion_ritmo',
+          2,
+          'curva_s',
+          'intercambio_gradual',
+          'distorsion_wash',
+          'Ritmo & Distorsión',
+          '✦ Ritmo & Distorsión',
+          'Repetición rítmica de la base con saturación progresiva conectando al ritmo entrante'
         );
       }
     }
@@ -397,18 +419,18 @@ class DJTransitionService {
       }
     }
 
-    // Rule 4: Relative Major/Minor or adjacent harmonic match -> 2-bar Bass Swap or Beat Roll
+    // Rule 4: Relative Major/Minor or adjacent harmonic match -> 2-bar Vocal Blend or Beat Roll
     if (isRelativeMajorMinor || isHarmonicMatch) {
       if (seed % 2 === 0) {
         return baseResult(
-          'automatica',
+          'mezcla_voces',
           2,
           'superposicion',
           'intercambio_graves_central',
           'ninguno',
-          'Automática',
-          '✦ Automática',
-          'Cruce dinámico de frecuencias graves en el segundo compás evitando barullo'
+          'Fusión Vocal',
+          '✦ Fusión Vocal',
+          'Aislamiento de voces y melodías sin conflicto de graves en clave armónica'
         );
       } else {
         return baseResult(
@@ -480,14 +502,14 @@ class DJTransitionService {
       );
     } else if (defMode === 1) {
       return baseResult(
-        'freno_vinilo',
-        1,
-        'corte_directo',
+        'mezcla_voces',
+        2,
+        'superposicion',
         'intercambio_graves_central',
-        'freno_vinilo',
-        'Freno vinilo',
-        '✦ Freno vinilo',
-        'Freno de tornamesa con corte limpio al inicio del compás'
+        'ninguno',
+        'Fusión Vocal',
+        '✦ Fusión Vocal',
+        'Entrelazado dinámico de melodías y voces disolviendo la pista saliente'
       );
     } else {
       return baseResult(

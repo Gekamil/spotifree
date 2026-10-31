@@ -572,6 +572,63 @@ export function triggerAuxiliaryTransitionFX(
           } catch {}
         },
       };
+    } else if (preset === 'repeticion_ritmo' || preset === 'distorsion_wash') {
+      // Saturated Rhythmic Overdrive Pulse & Resonant Sweep
+      const osc = ctx.createOscillator();
+      const waveShaper = ctx.createWaveShaper();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(80, start);
+      osc.frequency.exponentialRampToValueAtTime(320, start + durationSec);
+
+      // Warm distortion curve
+      const n_samples = 256;
+      const curve = new Float32Array(n_samples);
+      for (let i = 0; i < n_samples; ++i) {
+        const x = (i * 2) / n_samples - 1;
+        curve[i] = ((3 + 20) * x * 20 * (Math.PI / 180)) / (Math.PI + 20 * Math.abs(x));
+      }
+      waveShaper.curve = curve;
+
+      filter.type = 'lowpass';
+      filter.Q.setValueAtTime(3.5, start);
+      filter.frequency.setValueAtTime(300, start);
+      filter.frequency.exponentialRampToValueAtTime(4500, start + durationSec * 0.9);
+
+      const beatSec = 60 / safeBpm;
+      const schedulePulses = (from: number, to: number, subSec: number) => {
+        let t = from;
+        while (t + subSec <= to) {
+          gain.gain.setValueAtTime(0.08 * safeVol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + subSec * 0.45);
+          t += subSec;
+        }
+      };
+
+      schedulePulses(start, start + durationSec * 0.5, beatSec * 0.25);
+      schedulePulses(start + durationSec * 0.5, start + durationSec * 0.8, beatSec * 0.125);
+      schedulePulses(start + durationSec * 0.8, start + durationSec * 0.98, beatSec * 0.0625);
+
+      osc.connect(waveShaper);
+      waveShaper.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationSec);
+
+      return {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+            waveShaper.disconnect();
+            filter.disconnect();
+            gain.disconnect();
+          } catch {}
+        },
+      };
     }
   } catch (err) {
     console.warn('[djAudioNodes] triggerAuxiliaryTransitionFX error:', err);

@@ -332,6 +332,16 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       setEqMode('intercambio_graves_central');
       setFxMode('distorsion_wash');
       setCompases(4);
+    } else if (p === 'mezcla_voces') {
+      setVolumeEnvelope('superposicion');
+      setEqMode('intercambio_graves_central');
+      setFxMode('ninguno');
+      setCompases(4);
+    } else if (p === 'repeticion_ritmo') {
+      setVolumeEnvelope('curva_s');
+      setEqMode('intercambio_gradual');
+      setFxMode('distorsion_wash');
+      setCompases(2);
     }
   };
 
@@ -618,26 +628,26 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         const pMix = Math.max(0, Math.min(1, (x - W_leadIn) / W_mix));
 
         // 1. Deck A Volume Envelope
-        if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+        if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
           volA = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
         } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-          volA = pMix < 0.5 ? 1.0 : 0.0;
+          volA = pMix < 0.4 ? 1.0 : pMix < 0.6 ? Math.cos(((pMix - 0.4) / 0.2) * 0.5 * Math.PI) : Math.max(0, (1 - pMix) * 0.25);
         } else if (preset === 'crescendo') {
           volA = Math.cos(pMix * 0.5 * Math.PI);
-        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
           volA = 0.5 * (1.0 + Math.cos(pMix * Math.PI));
         } else {
           volA = Math.max(0, 1.0 - pMix);
         }
 
         // 2. Deck B Volume Envelope
-        if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+        if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
           volB = pMix;
         } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-          volB = pMix < 0.5 ? 0.0 : 1.0;
+          volB = pMix < 0.4 ? (pMix / 0.4) * 0.4 : pMix < 0.6 ? Math.sin((0.4 + ((pMix - 0.4) / 0.2) * 0.6) * 0.5 * Math.PI) : 1.0;
         } else if (preset === 'crescendo') {
           volB = Math.pow(pMix, 1.8);
-        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
           volB = 0.5 * (1.0 - Math.cos(pMix * Math.PI));
         } else {
           volB = Math.min(1, pMix);
@@ -867,13 +877,13 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       const p = s / curveSteps;
       const cx = X_mixStart + p * W_mix;
       let valA = 1.0;
-      if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+      if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
         valA = p <= 0.5 ? 1.0 : Math.cos((p - 0.5) * Math.PI);
       } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-        valA = p < 0.5 ? 1.0 : 0.0;
+        valA = p < 0.4 ? 1.0 : p < 0.6 ? Math.cos(((p - 0.4) / 0.2) * 0.5 * Math.PI) : Math.max(0, (1 - p) * 0.25);
       } else if (preset === 'crescendo') {
         valA = Math.cos(p * 0.5 * Math.PI);
-      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
         valA = 0.5 * (1.0 + Math.cos(p * Math.PI));
       } else {
         valA = Math.max(0, 1.0 - p);
@@ -904,13 +914,13 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       const p = s / curveSteps;
       const cx = X_mixStart + p * W_mix;
       let valB = 0.0;
-      if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+      if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
         valB = p;
       } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-        valB = p < 0.5 ? 0.0 : 1.0;
+        valB = p < 0.4 ? (p / 0.4) * 0.4 : p < 0.6 ? Math.sin((0.4 + ((p - 0.4) / 0.2) * 0.6) * 0.5 * Math.PI) : 1.0;
       } else if (preset === 'crescendo') {
         valB = Math.pow(p, 1.8);
-      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
         valB = 0.5 * (1.0 - Math.cos(p * Math.PI));
       } else {
         valB = Math.min(1, p);
@@ -924,7 +934,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.shadowBlur = 0;
 
     // Filter Sweep / FX Overlays (Purple #c084fc)
-    if (fxMode !== 'ninguno' || ['filtro', 'eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash'].includes(preset)) {
+    if (fxMode !== 'ninguno' || ['filtro', 'eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash', 'repeticion_ritmo'].includes(preset)) {
       ctx.strokeStyle = '#c084fc';
       ctx.lineWidth = 2.0;
       ctx.beginPath();
@@ -934,9 +944,9 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         ctx.lineTo(X_crossover, Y_1);
         ctx.quadraticCurveTo(X_crossover + W_mix * 0.25, Y_0 - 4, X_mixEnd - 4, Y_0);
         ctx.lineTo(X_mixEnd, Y_0);
-      } else if (preset === 'beat_roll' || fxMode === 'repeticion_loop') {
+      } else if (preset === 'beat_roll' || preset === 'repeticion_ritmo' || fxMode === 'repeticion_loop' || fxMode === 'distorsion_wash') {
         ctx.moveTo(X_mixStart, HUB_Y_MID);
-        const stutterStart = X_mixStart + W_mix * 0.35;
+        const stutterStart = X_mixStart + W_mix * 0.25;
         ctx.lineTo(stutterStart, HUB_Y_MID);
         for (let sx = stutterStart; sx < X_mixEnd - 6; sx += (X_mixEnd - stutterStart) / 10) {
           ctx.lineTo(sx, Y_1 + 4);
@@ -1089,14 +1099,31 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           </div>
 
           {/* Dual-Deck Waveform Canvas Box */}
-          <div className="flex items-center justify-between px-1 text-[11px] text-[#a7a7a7]">
-            <div className="flex items-center gap-1.5 text-[#1ed760] font-semibold">
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
-              </svg>
-              <span>Detección de silencios y salto de vacíos activa</span>
+          <div className="flex items-center justify-between px-1 text-[11px] text-[#a7a7a7] flex-wrap gap-2">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#38bdf8]" />
+                <span className="text-xs text-white/90 font-medium">Pista A (Voces & Salida)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-[#f43f5e]" />
+                <span className="text-xs text-white/90 font-medium">Pista B (Entrante)</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm bg-[#facc15]" />
+                <span className="text-xs text-[#facc15] font-semibold">Cruce de Bombo/Bajo</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-sm bg-[#c084fc]" />
+                <span className="text-xs text-[#c084fc] font-semibold">Filtro / FX</span>
+              </div>
             </div>
-            <div className="flex items-center gap-1.5 font-medium">
+            <div className="flex items-center gap-2 font-medium">
+              <span className="text-[#1ed760] flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                Sin vacíos
+              </span>
+              <span>•</span>
               <span>Camelot:</span>
               <span className="font-bold text-white">{featA.camelot} → {featB.camelot}</span>
             </div>
@@ -1218,6 +1245,65 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
             </div>
           </div>
 
+          {/* Plan de Transición y Mezcla DJ Dinámica */}
+          <div className="rounded-xl bg-white/[0.03] border border-white/10 p-3.5 shadow-sm space-y-1.5">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+                <span className="text-xs font-bold text-white font-['SpotifyMixUITitle']">
+                  {preset === 'mezcla_voces'
+                    ? '✦ Fusión Vocal Armónica'
+                    : preset === 'repeticion_ritmo'
+                    ? '✦ Ritmo & Distorsión Progresiva'
+                    : preset === 'automatica'
+                    ? '✦ Mezcla Adaptativa Inteligente'
+                    : preset === 'filtro'
+                    ? '✦ Filtro Resonante Pasa-Altos'
+                    : preset === 'eco_out'
+                    ? '✦ Eco Espacial y Filtro'
+                    : preset === 'freno_vinilo'
+                    ? '✦ Freno de Tornamesa Analógico'
+                    : preset === 'beat_roll'
+                    ? '✦ Beat Roll Rítmico'
+                    : preset === 'crescendo'
+                    ? '✦ Crescendo Exponencial'
+                    : preset === 'corte'
+                    ? '✦ Drop de Impacto'
+                    : '✦ Fundido Dinámico'}
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-[#b3b3b3]">
+                  {compases} {compases === 1 ? 'compás' : 'compases'} ({((compases * 4 * 60) / (featA.tempo || 128)).toFixed(1)}s)
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-[#a7a7a7]">
+                <span>Tempo: <strong className="text-white">{featA.tempo}</strong> → <strong className="text-white">{featB.tempo} BPM</strong></span>
+                <span>•</span>
+                <span>Clave: <strong className="text-white">{featA.camelot}</strong> → <strong className="text-white">{featB.camelot}</strong></span>
+              </div>
+            </div>
+            <p className="text-xs text-[#b3b3b3] leading-relaxed">
+              {preset === 'mezcla_voces'
+                ? 'Aísla las frecuencias vocales suprimiendo el bajo en ambas pistas (-36dB) para entrelazar las voces con nitidez total. Al llegar al compás central, el bombo de la pista entrante toma el control sin choques ni silencios.'
+                : preset === 'repeticion_ritmo'
+                ? 'Repite el compás de la base rítmica acelerando en 1/4 y 1/8 con saturación armónica y barrido de frecuencias, adaptando progresivamente el pulso hasta encajar perfectamente en el drop de la nueva pista.'
+                : preset === 'automatica'
+                ? 'Analiza el tempo y la clave armónica para un intercambio quirúrgico de graves en el punto central, manteniendo la energía y eliminando silencios o choques de sonido.'
+                : preset === 'eco_out'
+                ? 'Aplica un retardo espacial sincronizado al compás con filtro pasa-bajos, disolviendo suavemente la pista saliente en una nube de reverberación.'
+                : preset === 'freno_vinilo'
+                ? 'Decelera la rotación del plato como en una tornamesa de vinilo analógica mientras la pista entrante entra gradualmente sin silencios bruscos.'
+                : preset === 'beat_roll'
+                ? 'Crea un redoble rítmico acelerado sobre el tiempo antes del drop para construir tensión en la transición.'
+                : preset === 'crescendo'
+                ? 'Incrementa progresivamente la energía y frecuencias agudas antes de lanzar la nueva pista con máxima potencia.'
+                : preset === 'filtro'
+                ? 'Barrido resonante de frecuencias para disolver disonancias antes de dar paso limpio a la siguiente pista.'
+                : preset === 'corte'
+                ? 'Cruce enérgico con rampa rápida anti-clic para pasar directamente a la pegada del bombo de la nueva pista sin pausas.'
+                : 'Cruce suave de volumen para conectar ambas canciones de forma balanceada.'}
+            </p>
+          </div>
+
           {/* Lower Controls: Responsive side-by-side on desktop */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 border-t border-white/5">
             {/* Left: Ajustes predefinidos */}
@@ -1238,6 +1324,32 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                 >
                   <span>✦</span>
                   <span>Automática</span>
+                </button>
+
+                {/* ✦ Fusión Vocal */}
+                <button
+                  onClick={() => handleSelectPreset('mezcla_voces')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    preset === 'mezcla_voces'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  <span>✦</span>
+                  <span>Fusión Vocal</span>
+                </button>
+
+                {/* ✦ Ritmo & Distorsión */}
+                <button
+                  onClick={() => handleSelectPreset('repeticion_ritmo')}
+                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                    preset === 'repeticion_ritmo'
+                      ? 'bg-white text-black shadow-md'
+                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                  }`}
+                >
+                  <span>✦</span>
+                  <span>Ritmo & Distorsión</span>
                 </button>
 
                 {/* Fundido */}

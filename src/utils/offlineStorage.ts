@@ -33,9 +33,15 @@ export async function getDownloadedTrackBlobUrl(trackId: string): Promise<string
   try {
     if ('caches' in window) {
       const cache = await caches.open(CACHE_NAME);
-      const res = await cache.match(`/musica-spotifree/tracks/${trackId}.mp3`);
+      const cacheKey = `/musica-spotifree/tracks/${trackId}.mp3`;
+      const res = await cache.match(cacheKey);
       if (res && res.ok) {
         const blob = await res.blob();
+        // Discard truncated / 30-second preview audio snippets (< 1.2 MB)
+        if (blob && blob.size < 1_200_000) {
+          try { await cache.delete(cacheKey); } catch {}
+          return null;
+        }
         return URL.createObjectURL(blob);
       }
     }
@@ -44,7 +50,34 @@ export async function getDownloadedTrackBlobUrl(trackId: string): Promise<string
 }
 
 /**
- * Download a single track audio stream and store in musica-spotifree cache
+ * Purges any corrupted or short 30-second preview clips from CacheStorage.
+ * Full studio tracks are always > 1.2 MB.
+ */
+export async function purgeCorruptedPreviewAudio(): Promise<number> {
+  if (typeof window === 'undefined' || !('caches' in window)) return 0;
+  let purgedCount = 0;
+  try {
+    const cache = await caches.open(CACHE_NAME);
+    const requests = await cache.keys();
+    for (const req of requests) {
+      if (req.url.includes('/musica-spotifree/tracks/')) {
+        const res = await cache.match(req);
+        if (res && res.ok) {
+          const blob = await res.blob();
+          if (blob && blob.size < 1_200_000) {
+            await cache.delete(req);
+            purgedCount++;
+          }
+        }
+      }
+    }
+  } catch {}
+  return purgedCount;
+}
+
+/**
+ * Download a single track audio stream and store in musica-spotifree cache.
+ * Strictly downloads full studio audio stream — NEVER caches 30-second previews.
  */
 export async function downloadTrackAudio(track: Track): Promise<boolean> {
   if (typeof window === 'undefined') return false;
@@ -55,21 +88,14 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
 
     try {
       const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
-      res = await fetch(streamUrl, { signal: AbortSignal.timeout?.(15000) });
+      res = await fetch(streamUrl, { signal: AbortSignal.timeout?.(25000) });
     } catch {}
-
-    if (!res || !res.ok) {
-      if (track.preview_url) {
-        try {
-          res = await fetch(track.preview_url);
-        } catch {}
-      }
-    }
 
     if (!res || !res.ok) return false;
 
     const blob = await res.blob();
-    if (!blob || blob.size < 1000) return false;
+    // Strictly require >= 1.2 MB to guarantee full audio rather than previews
+    if (!blob || blob.size < 1_200_000) return false;
 
     // 1. Store in CacheStorage
     if ('caches' in window) {

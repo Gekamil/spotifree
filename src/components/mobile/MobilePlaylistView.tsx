@@ -1000,15 +1000,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         </div>
       )}
 
-      {/* Modo DJ Active Banner */}
-      {isAutomixActive && (
-        <div className="px-4 pb-2">
-          <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-[#1ed760]/10 border border-[#1ed760]/20 text-[#1ed760] text-[11px] font-semibold w-fit shadow-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-            <span>✦ MODO DJ ACTIVO • MEZCLA ARMÓNICA Y SIN SILENCIOS</span>
-          </div>
-        </div>
-      )}
 
       {/* Track List */}
       <div className="px-4 pt-2 space-y-1">
