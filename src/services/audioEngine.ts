@@ -126,7 +126,7 @@ class AudioEngine {
   }
 
   private checkCrossfade(curSec: number, durSec: number) {
-    if (this.isSeeking || !durSec || durSec < 15) return;
+    if (this.isAuditioning || this.isSeeking || !durSec || durSec < 15) return;
 
     const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
     if (gaplessSaved === 'false') return;
@@ -772,13 +772,13 @@ class AudioEngine {
     const safeTempo = tempoA > 40 && tempoA < 240 ? tempoA : 128;
     const barSec = (4 * 60) / safeTempo;
     const transitionDur = Math.max(2.0, Math.min(16.0, barSec * (config.compases || 2)));
-    const leadInSec = 1.2;
+    const leadInSec = 1.5;
     const leadOutSec = 2.0;
     const totalSec = leadInSec + transitionDur + leadOutSec;
 
     const durA = (trackA.duration_ms || 210000) / 1000;
-    // Cue Track A to its authentic outro phrase so the transition sounds 100% real
-    const startSecA = Math.max(10, Math.round(durA - leadInSec - transitionDur - 3));
+    // Cue Track A to an energetic musical phrase with plenty of runway before the track ends
+    const startSecA = Math.max(15, Math.min(Math.round(durA * 0.65), Math.max(15, Math.round(durA - leadInSec - transitionDur - 25))));
     const startSecB = 0;
 
     await this.ensureYouTubeReady();
@@ -796,7 +796,7 @@ class AudioEngine {
       if (typeof p1.setPlaybackRate === 'function') p1.setPlaybackRate(1);
     } catch {}
 
-    // Deck A (Track A): 100% volume, start at energetic outro phrase
+    // Deck A (Track A): 100% volume, start at energetic phrase
     try {
       if (typeof p0.unMute === 'function') p0.unMute();
       if (typeof p0.setVolume === 'function') p0.setVolume(100);
@@ -804,7 +804,7 @@ class AudioEngine {
       p0.playVideo();
     } catch {}
 
-    // Deck B (Track B): Pre-buffer actively in memory at volume 0 to eliminate 1.5s latency hole
+    // Deck B (Track B): Pre-warm secondary player at volume 0 in background
     try {
       if (typeof p1.unMute === 'function') p1.unMute();
       if (typeof p1.setVolume === 'function') p1.setVolume(0);
@@ -812,24 +812,20 @@ class AudioEngine {
       p1.playVideo();
     } catch {}
 
-    // Wait until BOTH Deck A and Deck B are actively streaming audio before starting timeline
+    // Wait until Deck A actually begins playing audio before starting the transition timeline
     let isP0Playing = false;
-    let isP1Playing = false;
     const waitStart = Date.now();
-    while ((!isP0Playing || !isP1Playing) && Date.now() - waitStart < 4500) {
+    while (!isP0Playing && Date.now() - waitStart < 4000) {
       if (!this.isAuditioning) return false;
       try {
         const state0 = typeof p0.getPlayerState === 'function' ? p0.getPlayerState() : -1;
         const ct0 = typeof p0.getCurrentTime === 'function' ? p0.getCurrentTime() : 0;
-        if (state0 === 1 || ct0 > 0) isP0Playing = true;
-
-        const state1 = typeof p1.getPlayerState === 'function' ? p1.getPlayerState() : -1;
-        const ct1 = typeof p1.getCurrentTime === 'function' ? p1.getCurrentTime() : 0;
-        if (state1 === 1 || ct1 > 0) isP1Playing = true;
-
-        if (isP0Playing && isP1Playing) break;
+        if (state0 === 1 || ct0 > 0) {
+          isP0Playing = true;
+          break;
+        }
       } catch {}
-      await new Promise((r) => setTimeout(r, 60));
+      await new Promise((r) => setTimeout(r, 50));
     }
 
     const startTime = Date.now();
@@ -885,6 +881,7 @@ class AudioEngine {
       );
     }
 
+    let startedB = false;
     this.auditionInterval = window.setInterval(() => {
       if (!this.isAuditioning) {
         this.stopTransitionAudition();
@@ -903,6 +900,10 @@ class AudioEngine {
       }
       // Phase 2: Active DJ Transition Window
       else if (elapsedSec < leadInSec + transitionDur) {
+        if (!startedB) {
+          startedB = true;
+          try { p1.playVideo(); } catch {}
+        }
         const pMix = Math.min(1.0, Math.max(0.0, (elapsedSec - leadInSec) / transitionDur));
         let outVol = 1.0;
         let inVol = 0.0;
@@ -1291,6 +1292,10 @@ class AudioEngine {
   }
 
   private handleYtStateChange(event: any, playerIndex: 0 | 1 = 0) {
+    if (this.isAuditioning) {
+      // Standard player listeners (progress ticker, crossfade trigger, next track) MUST NOT run during audition
+      return;
+    }
     const code = event.data;
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (playerIndex !== this.activeYtIndex) {
@@ -1363,8 +1368,9 @@ class AudioEngine {
 
   private startProgressTicker() {
     this.stopProgressTicker();
+    if (this.isAuditioning) return;
     this.progressInterval = window.setInterval(() => {
-      if (this.isSeeking) return;
+      if (this.isSeeking || this.isAuditioning) return;
 
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
         try {
