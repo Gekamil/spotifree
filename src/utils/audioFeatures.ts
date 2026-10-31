@@ -306,3 +306,163 @@ export async function fetchAudioFeaturesBatch(
 
   return result;
 }
+
+// ============================================================================
+// Camelot & Harmonic Matching Utilities
+// ============================================================================
+
+export interface CamelotParsed {
+  num: number;
+  letter: 'A' | 'B';
+}
+
+export type HarmonicRelation =
+  | 'exact'
+  | 'relative'
+  | 'adjacent'
+  | 'diagonal'
+  | 'energy_boost'
+  | 'clash';
+
+export interface HarmonicCompatibilityResult {
+  score: number; // 0 to 100
+  relation: HarmonicRelation;
+  isHarmonicMatch: boolean;
+  isRelativeMajorMinor: boolean;
+  numDiff: number;
+  sameLetter: boolean;
+  description: string;
+}
+
+/**
+ * Parses Camelot key string (e.g. "8A", "11B") into normalized numerical and letter components.
+ */
+export function parseCamelot(camelot?: string): CamelotParsed {
+  const match = (camelot || '9A').match(/^(\d+)([AB])$/i);
+  if (!match) return { num: 9, letter: 'A' };
+  const rawNum = parseInt(match[1], 10);
+  const num = (((rawNum - 1) % 12) + 12) % 12 + 1; // Normalize 1-12
+  const letter = (match[2].toUpperCase() === 'B' ? 'B' : 'A') as 'A' | 'B';
+  return { num, letter };
+}
+
+/**
+ * Calculates modular distance along the 12-hour Camelot wheel.
+ */
+export function calculateCamelotDistance(camelotA?: string, camelotB?: string): {
+  numDiff: number;
+  sameLetter: boolean;
+  cA: CamelotParsed;
+  cB: CamelotParsed;
+} {
+  const cA = parseCamelot(camelotA);
+  const cB = parseCamelot(camelotB);
+  const numDiff = Math.min((cA.num - cB.num + 12) % 12, (cB.num - cA.num + 12) % 12);
+  const sameLetter = cA.letter === cB.letter;
+  return { numDiff, sameLetter, cA, cB };
+}
+
+/**
+ * Calculates harmonic score (10-100) between two Camelot keys.
+ * Delegates directly to calculateHarmonicCompatibility as Single Source of Truth.
+ */
+export function calculateHarmonicScore(camelotA?: string, camelotB?: string): number {
+  return calculateHarmonicCompatibility(camelotA, camelotB).score;
+}
+
+/**
+ * Full harmonic compatibility analysis with descriptive feedback.
+ */
+export function calculateHarmonicCompatibility(camelotA?: string, camelotB?: string): HarmonicCompatibilityResult {
+  const { numDiff, sameLetter, cA, cB } = calculateCamelotDistance(camelotA, camelotB);
+  const isHarmonicMatch = (numDiff === 0 || numDiff === 1) && sameLetter;
+  const isRelativeMajorMinor = numDiff === 0 && !sameLetter;
+  const forwardStep = (cB.num - cA.num + 12) % 12;
+
+  if (numDiff === 0 && sameLetter) {
+    return {
+      score: 100,
+      relation: 'exact',
+      isHarmonicMatch,
+      isRelativeMajorMinor: false,
+      numDiff,
+      sameLetter,
+      description: 'Clave idéntica (consonancia tonal perfecta)',
+    };
+  }
+
+  if (isRelativeMajorMinor) {
+    return {
+      score: 85,
+      relation: 'relative',
+      isHarmonicMatch: false,
+      isRelativeMajorMinor,
+      numDiff,
+      sameLetter,
+      description: 'Relativa mayor/menor (mismas notas de escala)',
+    };
+  }
+
+  if (numDiff === 1 && sameLetter) {
+    return {
+      score: 90,
+      relation: 'adjacent',
+      isHarmonicMatch,
+      isRelativeMajorMinor: false,
+      numDiff,
+      sameLetter,
+      description: 'Quinta adyacente (modulación armónica natural)',
+    };
+  }
+
+  if (numDiff === 1 && !sameLetter) {
+    return {
+      score: 75,
+      relation: 'diagonal',
+      isHarmonicMatch: false,
+      isRelativeMajorMinor: false,
+      numDiff,
+      sameLetter,
+      description: 'Modulación diagonal de modo',
+    };
+  }
+
+  if (sameLetter && (forwardStep === 7 || forwardStep === 2)) {
+    return {
+      score: 60,
+      relation: 'energy_boost',
+      isHarmonicMatch: false,
+      isRelativeMajorMinor: false,
+      numDiff,
+      sameLetter,
+      description: forwardStep === 7 ? 'Salto de energía (+1 semitono)' : 'Salto de energía (+2 semitonos)',
+    };
+  }
+
+  const score = Math.max(10, 60 - numDiff * 10);
+  return {
+    score,
+    relation: 'clash',
+    isHarmonicMatch: false,
+    isRelativeMajorMinor: false,
+    numDiff,
+    sameLetter,
+    description: 'Incompatible tonalmente (transición por filtro o corte)',
+  };
+}
+
+/**
+ * Calculates effective BPM difference taking 1:2 and 2:1 octave ratios (half-time/double-time) into account.
+ */
+export function calculateOctaveDelta(bpmA: number, bpmB: number): number {
+  const safeA = typeof bpmA === 'number' && Number.isFinite(bpmA) && bpmA > 40 && bpmA < 240 ? bpmA : 128;
+  const safeB = typeof bpmB === 'number' && Number.isFinite(bpmB) && bpmB > 40 && bpmB < 240 ? bpmB : 128;
+  return Math.min(
+    Math.abs(safeA - safeB),
+    Math.abs(safeA - 2 * safeB),
+    Math.abs(2 * safeA - safeB)
+  );
+}
+
+export const calculateOctaveBpmDelta = calculateOctaveDelta;
+

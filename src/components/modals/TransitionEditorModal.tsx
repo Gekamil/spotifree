@@ -16,12 +16,158 @@ import {
 } from '../../services/djTransitionService';
 import { audioEngine } from '../../services/audioEngine';
 
-interface TransitionEditorModalProps {
+export interface SpectralSlice {
+  low: number;   // 0.0 - 1.0 (sub-bass / kick foundation)
+  mid: number;   // 0.0 - 1.0 (midrange / vocals / synth)
+  high: number;  // 0.0 - 1.0 (treble / hats / air)
+  peak: number;  // 0.0 - 1.0 (transient peak)
+}
+
+export interface DeckSpectralPalette {
+  lows: string;
+  mids: string;
+  highs: string;
+  ghostLine: string;
+  labelColor: string;
+}
+
+const DECK_A_PALETTE: DeckSpectralPalette = {
+  lows: '#0077b6',       // Deep electric cyan/blue
+  mids: '#00b4d8',       // Bright cyan
+  highs: '#caf0f8',      // Crisp ice white/cyan
+  ghostLine: 'rgba(0, 180, 216, 0.15)',
+  labelColor: 'rgba(56, 189, 248, 0.70)',
+};
+
+const DECK_B_PALETTE: DeckSpectralPalette = {
+  lows: '#be185d',       // Deep magenta / crimson base
+  mids: '#f43f5e',       // Vibrant neon pink
+  highs: '#ffe4e6',      // Warm white / pink transients
+  ghostLine: 'rgba(244, 63, 94, 0.15)',
+  labelColor: 'rgba(244, 63, 94, 0.70)',
+};
+
+export interface TimelineCoordinates {
+  T_leadIn: number;
+  T_mix: number;
+  T_leadOut: number;
+  T_total: number;
+  W: number;
+  H: number;
+  W_leadIn: number;
+  W_mix: number;
+  W_leadOut: number;
+  X_mixStart: number;
+  X_mixEnd: number;
+  X_crossover: number;
+  N_beats: number;
+  stepBeat: number;
+}
+
+function computeTimelineCoordinates(
+  width: number,
+  height: number,
+  tempo: number,
+  compases: number
+): TimelineCoordinates {
+  const safeTempo = tempo > 40 && tempo < 240 ? tempo : 128;
+  const barSec = 240 / safeTempo;
+  const T_leadIn = 1.2;
+  const T_mix = Math.max(2.0, Math.min(16.0, barSec * (compases || 2)));
+  const T_leadOut = 2.0;
+  const T_total = T_leadIn + T_mix + T_leadOut;
+
+  const W = Math.max(320, width);
+  const H = height;
+
+  const W_leadIn = W * (T_leadIn / T_total);
+  const W_mix = W * (T_mix / T_total);
+  const W_leadOut = W - W_leadIn - W_mix;
+
+  const X_mixStart = W_leadIn;
+  const X_mixEnd = W_leadIn + W_mix;
+  const X_crossover = W_leadIn + 0.5 * W_mix;
+
+  const N_beats = (compases || 2) * 4;
+  const stepBeat = W_mix / N_beats;
+
+  return {
+    T_leadIn,
+    T_mix,
+    T_leadOut,
+    T_total,
+    W,
+    H,
+    W_leadIn,
+    W_mix,
+    W_leadOut,
+    X_mixStart,
+    X_mixEnd,
+    X_crossover,
+    N_beats,
+    stepBeat,
+  };
+}
+
+function generateSpectralWaveform(
+  seedStr: string,
+  count: number,
+  tempo: number
+): SpectralSlice[] {
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) {
+    h ^= seedStr.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const seed = h >>> 0;
+
+  const prng = (offset: number) => {
+    let s = (seed + offset * 1013904223) >>> 0;
+    s = (s ^ (s >> 15)) * 2246822507 >>> 0;
+    s = (s ^ (s >> 13)) * 3266489909 >>> 0;
+    return ((s ^ (s >> 16)) >>> 0) / 4294967296;
+  };
+
+  const safeTempo = tempo > 40 && tempo < 240 ? tempo : 128;
+  const beatInterval = Math.max(3, Math.round(120 / safeTempo));
+  const slices: SpectralSlice[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const r1 = prng(i * 3 + 1);
+    const r2 = prng(i * 3 + 2);
+    const r3 = prng(i * 3 + 3);
+
+    const phrasePhase = (i / count) * Math.PI * 4;
+    const macroEnergy = 0.65 + 0.35 * Math.sin(phrasePhase * 0.5 + (seed % 7));
+
+    const beatPhase = i % (beatInterval * 2);
+    const isKick = beatPhase === 0 || beatPhase === beatInterval;
+    const isSnare = beatPhase === Math.floor(beatInterval / 2) || beatPhase === Math.floor(beatInterval * 1.5);
+    const isHiHat = beatPhase % 2 === 1;
+
+    const lowBase = isKick ? 0.75 + r1 * 0.25 : 0.22 + r1 * 0.35;
+    const low = Math.min(1.0, Math.max(0.12, lowBase * macroEnergy));
+
+    const midBase = isSnare ? 0.70 + r2 * 0.30 : 0.28 + r2 * 0.45;
+    const mid = Math.min(1.0, Math.max(0.15, midBase * (0.8 + macroEnergy * 0.2)));
+
+    const highBase = isHiHat ? 0.65 + r3 * 0.35 : (isKick || isSnare ? 0.45 + r3 * 0.35 : 0.20 + r3 * 0.30);
+    const high = Math.min(1.0, Math.max(0.10, highBase * (0.85 + macroEnergy * 0.15)));
+
+    const peak = Math.min(1.0, Math.max(low, Math.max(mid, high)) * (1.05 + r1 * 0.15));
+    slices.push({ low, mid, high, peak });
+  }
+
+  return slices;
+}
+
+export interface TransitionEditorModalProps {
   isOpen: boolean;
   onClose: () => void;
-  trackA: Track;
-  trackB: Track;
+  trackA: Track | null;
+  trackB: Track | null;
   onSaved?: () => void;
+  onSaveConfig?: (config: DJTransitionConfig) => void;
 }
 
 export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
@@ -30,19 +176,24 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   trackA,
   trackB,
   onSaved,
+  onSaveConfig,
 }) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [canvasWidth, setCanvasWidth] = useState<number>(640);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const CANVAS_HEIGHT = 196;
 
   // Audio features
   const featA: AudioFeature = resolveClientSideRealFeature(
-    trackA.id,
-    trackA.name,
-    trackA.artists?.[0]?.name
+    trackA?.id || '',
+    trackA?.name || '',
+    trackA?.artists?.[0]?.name
   );
   const featB: AudioFeature = resolveClientSideRealFeature(
-    trackB.id,
-    trackB.name,
-    trackB.artists?.[0]?.name
+    trackB?.id || '',
+    trackB?.name || '',
+    trackB?.artists?.[0]?.name
   );
 
   // Transition parameters state
@@ -63,6 +214,33 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   const [isPlayingAudition, setIsPlayingAudition] = useState(false);
   const [auditionProgress, setAuditionProgress] = useState(0.0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Responsive ResizeObserver for canvas width
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    if (container.clientWidth > 0) {
+      setCanvasWidth(container.clientWidth);
+    }
+
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const cr = entry.contentRect;
+        if (cr.width > 0) {
+          setCanvasWidth((prev) => {
+            if (Math.abs(cr.width - prev) >= 1) {
+              return Math.floor(cr.width);
+            }
+            return prev;
+          });
+        }
+      }
+    });
+
+    ro.observe(container);
+    return () => ro.disconnect();
+  }, []);
 
   // Load saved config on mount or track change, calculating tailored smart parameters
   useEffect(() => {
@@ -91,10 +269,15 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       setIsAuditionLoading(false);
       setAuditionProgress(0);
     }
+    return () => {
+      audioEngine.stopTransitionAudition();
+      djTransitionService.stopAudition();
+    }
   }, [isOpen]);
 
   // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {
+    if (!trackA || !trackB) return;
     setPreset(p);
     if (p === 'automatica') {
       const smart = djTransitionService.calculateSmartTransition(
@@ -154,6 +337,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
 
   // Toggle Audition with Real Songs Audio
   const handleToggleAudition = async () => {
+    if (!trackA || !trackB) return;
     if (isPlayingAudition || isAuditionLoading) {
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
@@ -177,7 +361,6 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       };
 
       try {
-        // 1. Audition the transition with 100% REAL track audio
         const playedReal = await audioEngine.startTransitionAudition(
           trackA,
           trackB,
@@ -200,7 +383,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           setToastMessage('No se pudo precargar el audio para la preescucha.');
           setTimeout(() => setToastMessage(null), 3000);
         }
-      } catch (e) {
+      } catch {
         setIsAuditionLoading(false);
         setIsPlayingAudition(false);
       }
@@ -209,6 +392,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
 
   // Save Config
   const handleSave = () => {
+    if (!trackA || !trackB) return;
     const config: DJTransitionConfig = {
       trackAId: trackA.id,
       trackBId: trackB.id,
@@ -223,6 +407,9 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       camelotB: featB.camelot,
     };
     djTransitionService.saveTransitionConfig(config);
+    if (onSaveConfig) {
+      onSaveConfig(config);
+    }
     setToastMessage('✦ Transición DJ guardada correctamente');
     setTimeout(() => {
       setToastMessage(null);
@@ -231,242 +418,588 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     }, 900);
   };
 
-  // Draw high-fidelity dual-deck waveform canvas
+  // Pointer & mouse interactive scrubbing
+  const updateScrub = (clientX: number, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    const progress = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    setAuditionProgress(progress);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    setIsDragging(true);
+    updateScrub(e.clientX, e.currentTarget);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!isDragging && e.buttons !== 1) return;
+    updateScrub(e.clientX, e.currentTarget);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    setIsDragging(false);
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+  };
+
+  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    updateScrub(e.clientX, e.currentTarget);
+  };
+
+  // Draw high-fidelity professional dual-deck waveform & transition visualizer
   useEffect(() => {
+    if (!isOpen || !trackA || !trackB) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const width = canvas.width;
-    const height = canvas.height;
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const width = canvasWidth > 0 ? canvasWidth : (canvas.clientWidth || 640);
+    const height = CANVAS_HEIGHT;
+
+    // Retina High-DPI buffer scaling
+    const targetBufferW = Math.round(width * dpr);
+    const targetBufferH = Math.round(height * dpr);
+    if (canvas.width !== targetBufferW || canvas.height !== targetBufferH) {
+      canvas.width = targetBufferW;
+      canvas.height = targetBufferH;
+    }
+
+    // Set 2D transform to logical CSS pixels
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, width, height);
 
-    // Deck heights & axes
-    const deckHeight = height * 0.44;
-    const deckAY = 6;
-    const deckBY = height - deckHeight - 6;
-    const centerAY = deckAY + deckHeight / 2;
-    const centerBY = deckBY + deckHeight / 2;
+    // Compute unified temporal coordinates
+    const coords = computeTimelineCoordinates(width, height, featA.tempo, compases);
+    const {
+      W_leadIn,
+      W_mix,
+      W_leadOut,
+      X_mixStart,
+      X_mixEnd,
+      X_crossover,
+      N_beats,
+      stepBeat,
+    } = coords;
 
-    // Transition Window coordinates
-    // Outgoing transition occurs at the right half of Deck A
-    // Incoming transition occurs at the left half of Deck B
-    const boxWidth = Math.min(width * 0.72, width * (0.35 + (compases / 16) * 0.45));
-    const boxStartA = width - boxWidth - 12;
-    const boxEndA = width - 12;
-    const boxStartB = 12;
-    const boxEndB = 12 + boxWidth;
+    // Layer 1: Time & Bar Ruler Header (Y: 0 to 24px)
+    ctx.fillStyle = '#141414';
+    ctx.fillRect(0, 0, width, 24);
 
-    // Helper: generate seeded pseudo-random waveform bars based on track string
-    const generateWaveform = (seedStr: string, count: number, tempo: number) => {
-      let hash = 0;
-      for (let i = 0; i < seedStr.length; i++) {
-        hash = (hash << 5) - hash + seedStr.charCodeAt(i);
-        hash |= 0;
-      }
-      const bars: Array<{ amp: number; peak: number }> = [];
-      const beatInterval = Math.max(3, Math.round(120 / (tempo || 120)));
-
-      for (let i = 0; i < count; i++) {
-        const beatBoost = i % beatInterval === 0 ? 1.4 : 1.0;
-        const pseudo = Math.abs(Math.sin((hash + i * 17) * 0.23));
-        const amp = Math.min(1.0, (0.25 + pseudo * 0.6) * beatBoost);
-        const peak = Math.min(1.0, amp * (1.1 + Math.abs(Math.cos(i * 0.3)) * 0.25));
-        bars.push({ amp, peak });
-      }
-      return bars;
-    };
-
-    const numBars = 110;
-    const barsA = generateWaveform(trackA.id + trackA.name, numBars, featA.tempo);
-    const barsB = generateWaveform(trackB.id + trackB.name, numBars, featB.tempo);
-
-    const barWidth = width / numBars;
-
-    // Draw Deck Waveform Function
-    const drawDeckWaveform = (
-      bars: Array<{ amp: number; peak: number }>,
-      centerY: number,
-      h: number,
-      dimmed = false
-    ) => {
-      const halfH = h * 0.46;
-
-      for (let i = 0; i < bars.length; i++) {
-        const x = i * barWidth;
-        const { amp, peak } = bars[i];
-        const barH = amp * halfH;
-        const peakH = peak * halfH;
-
-        // 1. Layer 1: Body (Amber/Bronze Base Envelope)
-        ctx.fillStyle = dimmed ? '#5a3d1d' : '#ab7232';
-        ctx.fillRect(x, centerY - barH, barWidth * 0.85, barH * 2);
-
-        // 2. Layer 2: Electric Blue Peak Envelope
-        ctx.fillStyle = dimmed ? '#1e3a66' : '#2979ff';
-        const diffH = Math.max(1, peakH - barH);
-        ctx.fillRect(x, centerY - peakH, barWidth * 0.85, diffH);
-        ctx.fillRect(x, centerY + barH, barWidth * 0.85, diffH);
-
-        // 3. Layer 3: White/Cream Core Transient Spine
-        ctx.fillStyle = dimmed ? '#999999' : '#fff8e7';
-        ctx.fillRect(x, centerY - barH * 0.25, barWidth * 0.85, barH * 0.5);
-      }
-    };
-
-    // Draw Deck A Waveform
-    drawDeckWaveform(barsA, centerAY, deckHeight);
-
-    // Draw Deck B Waveform
-    drawDeckWaveform(barsB, centerBY, deckHeight);
-
-    // --- Draw Cyan Transition Framing Boxes ---
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = '#00e5ff';
-
-    // Deck A Cyan Box (Right aligned outro)
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.05)';
-    ctx.fillRect(boxStartA, deckAY, boxWidth, deckHeight);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(boxStartA, deckAY);
-    ctx.lineTo(boxEndA, deckAY);
-    ctx.lineTo(boxEndA, deckAY + deckHeight);
-    ctx.lineTo(boxStartA, deckAY + deckHeight);
+    ctx.moveTo(0, 24);
+    ctx.lineTo(width, 24);
     ctx.stroke();
 
-    // Deck B Cyan Box (Left aligned intro)
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.05)';
-    ctx.fillRect(boxStartB, deckBY, boxWidth, deckHeight);
+    // 1. "Solo A" badge in lead-in
+    const soloAW = Math.min(48, Math.max(36, W_leadIn * 0.55));
+    const soloAX = Math.max(8, (W_leadIn - soloAW) / 2);
+    ctx.fillStyle = 'rgba(0, 180, 216, 0.12)';
+    ctx.strokeStyle = 'rgba(0, 180, 216, 0.35)';
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.moveTo(boxEndB, deckBY);
-    ctx.lineTo(boxStartB, deckBY);
-    ctx.lineTo(boxStartB, deckBY + deckHeight);
-    ctx.lineTo(boxEndB, deckBY + deckHeight);
+    ctx.roundRect(soloAX, 4, soloAW, 16, 4);
+    ctx.fill();
     ctx.stroke();
 
-    // --- Draw Pink Volume Curves ---
+    ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#38bdf8';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('Solo A', soloAX + soloAW / 2, 12);
+
+    // 2. Bar labels & Downbeats across the Mix Window
+    ctx.textAlign = 'left';
+    for (let b = 1; b <= compases; b++) {
+      const barX = W_leadIn + (b - 1) * 4 * stepBeat;
+      ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.fillText(`Bar ${b}`, barX + 5, 12);
+    }
+
+    // Secondary beat ticks in ruler header
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = 1;
+    for (let k = 1; k < N_beats; k++) {
+      if (k % 4 !== 0) {
+        const bx = W_leadIn + k * stepBeat;
+        ctx.beginPath();
+        ctx.moveTo(bx, 16);
+        ctx.lineTo(bx, 23);
+        ctx.stroke();
+      }
+    }
+
+    // 3. Golden Diamond Crossover Marker (◆ CRUCE)
+    const cruceW = 54;
+    const cruceX = X_crossover - cruceW / 2;
+    ctx.fillStyle = 'rgba(250, 204, 21, 0.18)';
+    ctx.strokeStyle = 'rgba(250, 204, 21, 0.70)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.roundRect(cruceX, 4, cruceW, 16, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.fillStyle = '#facc15';
+    ctx.textAlign = 'center';
+    ctx.fillText('◆ CRUCE', X_crossover, 12);
+
+    // 4. "Solo B" badge in lead-out
+    const soloBW = Math.min(48, Math.max(36, W_leadOut * 0.55));
+    const soloBX = W_leadIn + W_mix + Math.max(8, (W_leadOut - soloBW) / 2);
+    ctx.fillStyle = 'rgba(244, 63, 94, 0.12)';
+    ctx.strokeStyle = 'rgba(244, 63, 94, 0.35)';
+    ctx.beginPath();
+    ctx.roundRect(soloBX, 4, soloBW, 16, 4);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = '#f43f5e';
+    ctx.fillText('Solo B', soloBX + soloBW / 2, 12);
+
+    // Layer 2 & 4: Dual-Deck 3-Band Spectral Waveforms
+    const numSlices = 120;
+    const barsCount = numSlices;
+    const slicesA = generateSpectralWaveform(trackA.id + trackA.name, barsCount, featA.tempo);
+    const slicesB = generateSpectralWaveform(trackB.id + trackB.name, barsCount, featB.tempo);
+
+    const barWidth = width / numSlices;
+    const sliceRenderW = Math.max(1.5, barWidth * 0.82);
+
+    const centerAY = 57;
+    const centerBY = 163;
+    const maxHalfH = 26;
+
+    // Deck Labels / Watermarks
+    ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = DECK_A_PALETTE.labelColor;
+    ctx.fillText('DECK A • SALIENTE', 8, 38);
+
+    ctx.fillStyle = DECK_B_PALETTE.labelColor;
+    ctx.fillText('DECK B • ENTRANTE', 8, 144);
+
+    // Render Slices across full timeline
+    for (let i = 0; i < numSlices; i++) {
+      const x = i * barWidth;
+      const sliceA = slicesA[i];
+      const sliceB = slicesB[i];
+
+      let volA = 1.0;
+      let bassA = 1.0;
+      let midsA = 1.0;
+      let highsA = 1.0;
+      let isGhostA = false;
+
+      let volB = 1.0;
+      let bassB = 1.0;
+      let midsB = 1.0;
+      let highsB = 1.0;
+      let isGhostB = false;
+
+      if (x < W_leadIn) {
+        // Zone 1: Solo A (Deck B in standby)
+        isGhostB = true;
+      } else if (x > W_leadIn + W_mix) {
+        // Zone 3: Solo B (Deck A muted)
+        isGhostA = true;
+      } else {
+        // Zone 2: Mix Window
+        const pMix = Math.max(0, Math.min(1, (x - W_leadIn) / W_mix));
+
+        // 1. Deck A Volume Envelope
+        if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+          volA = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
+        } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
+          volA = pMix < 0.5 ? 1.0 : 0.0;
+        } else if (preset === 'crescendo') {
+          volA = Math.cos(pMix * 0.5 * Math.PI);
+        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+          volA = 0.5 * (1.0 + Math.cos(pMix * Math.PI));
+        } else {
+          volA = Math.max(0, 1.0 - pMix);
+        }
+
+        // 2. Deck B Volume Envelope
+        if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+          volB = pMix;
+        } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
+          volB = pMix < 0.5 ? 0.0 : 1.0;
+        } else if (preset === 'crescendo') {
+          volB = Math.pow(pMix, 1.8);
+        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+          volB = 0.5 * (1.0 - Math.cos(pMix * Math.PI));
+        } else {
+          volB = Math.min(1, pMix);
+        }
+
+        // 3. Bass Swap Modulation
+        if (eqMode === 'intercambio_graves_central' || ['automatica', 'corte'].includes(preset)) {
+          bassA = pMix < 0.50 ? 1.0 : 0.08;
+          bassB = pMix < 0.50 ? 0.05 : 1.0;
+        } else if (eqMode === 'intercambio_gradual') {
+          bassA = 1.0 - pMix;
+          bassB = pMix;
+        } else if (eqMode === 'filtro_paso_alto') {
+          bassA = Math.max(0.08, 1.0 - pMix * 2.0);
+          bassB = Math.min(1.0, pMix * 2.0);
+        }
+
+        // 4. Filter / FX Modulation
+        if (preset === 'filtro' || eqMode === 'filtro_paso_bajo') {
+          highsA = Math.pow(Math.max(0, 1 - pMix), 1.8);
+          midsA = Math.pow(Math.max(0, 1 - pMix), 1.2);
+        }
+        if (fxMode === 'repeticion_loop' || preset === 'beat_roll') {
+          const stutterTick = Math.floor(pMix * 24);
+          if (stutterTick % 2 === 1 && pMix > 0.35) {
+            volA *= 0.25;
+          }
+        }
+      }
+
+      // Render Deck A Slice
+      if (isGhostA) {
+        ctx.fillStyle = DECK_A_PALETTE.ghostLine;
+        ctx.fillRect(x, centerAY - 1, sliceRenderW, 2);
+      } else {
+        const aLow = Math.max(0.05, sliceA.low * volA * bassA);
+        const aMid = Math.max(0.05, sliceA.mid * volA * midsA);
+        const aHigh = Math.max(0.05, sliceA.high * volA * highsA);
+        const aPeak = Math.max(aLow, sliceA.peak * volA);
+
+        const hLow = Math.max(1.5, aLow * maxHalfH);
+        const hMid = Math.max(1.5, aMid * maxHalfH * 0.80);
+        const hHigh = Math.max(1.0, aHigh * maxHalfH * 0.45);
+        const hPeak = Math.max(hLow, aPeak * maxHalfH);
+
+        // Lows (Base foundation)
+        ctx.fillStyle = DECK_A_PALETTE.lows;
+        ctx.fillRect(x, centerAY - hLow, sliceRenderW, hLow * 2);
+
+        // Mids (Musical body)
+        ctx.fillStyle = DECK_A_PALETTE.mids;
+        ctx.fillRect(x, centerAY - hMid, sliceRenderW, hMid * 2);
+
+        // Highs (Core spine & peaks)
+        ctx.fillStyle = DECK_A_PALETTE.highs;
+        ctx.fillRect(x, centerAY - hHigh, sliceRenderW, hHigh * 2);
+
+        // Transient Needle Peaks
+        if (hPeak > hLow + 1) {
+          ctx.fillRect(x, centerAY - hPeak, sliceRenderW, hPeak - hLow);
+          ctx.fillRect(x, centerAY + hLow, sliceRenderW, hPeak - hLow);
+        }
+      }
+
+      // Render Deck B Slice
+      if (isGhostB) {
+        ctx.fillStyle = DECK_B_PALETTE.ghostLine;
+        ctx.fillRect(x, centerBY - 1, sliceRenderW, 2);
+      } else {
+        const bLow = Math.max(0.05, sliceB.low * volB * bassB);
+        const bMid = Math.max(0.05, sliceB.mid * volB * midsB);
+        const bHigh = Math.max(0.05, sliceB.high * volB * highsB);
+        const bPeak = Math.max(bLow, sliceB.peak * volB);
+
+        const hLow = Math.max(1.5, bLow * maxHalfH);
+        const hMid = Math.max(1.5, bMid * maxHalfH * 0.80);
+        const hHigh = Math.max(1.0, bHigh * maxHalfH * 0.45);
+        const hPeak = Math.max(hLow, bPeak * maxHalfH);
+
+        // Lows (Base foundation)
+        ctx.fillStyle = DECK_B_PALETTE.lows;
+        ctx.fillRect(x, centerBY - hLow, sliceRenderW, hLow * 2);
+
+        // Mids (Musical body)
+        ctx.fillStyle = DECK_B_PALETTE.mids;
+        ctx.fillRect(x, centerBY - hMid, sliceRenderW, hMid * 2);
+
+        // Highs (Core spine & peaks)
+        ctx.fillStyle = DECK_B_PALETTE.highs;
+        ctx.fillRect(x, centerBY - hHigh, sliceRenderW, hHigh * 2);
+
+        // Transient Needle Peaks
+        if (hPeak > hLow + 1) {
+          ctx.fillRect(x, centerBY - hPeak, sliceRenderW, hPeak - hLow);
+          ctx.fillRect(x, centerBY + hLow, sliceRenderW, hPeak - hLow);
+        }
+      }
+    }
+
+    // Synchronized Beat Grid across both decks (Y: 24 to 196)
+    for (let k = 0; k <= N_beats; k++) {
+      const bx = W_leadIn + k * stepBeat;
+      const isDownbeat = k % 4 === 0;
+
+      ctx.beginPath();
+      ctx.moveTo(bx, 24);
+      ctx.lineTo(bx, height);
+
+      if (isDownbeat) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([]);
+      } else {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        ctx.lineWidth = 1.0;
+        ctx.setLineDash([2, 4]);
+      }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    // Golden Crossover Downbeat Line with Glow
+    ctx.save();
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 8;
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 2.0;
+    ctx.beginPath();
+    ctx.moveTo(X_crossover, 24);
+    ctx.lineTo(X_crossover, height);
+    ctx.stroke();
+    ctx.restore();
+
+    // Layer 3: Center Mixing Hub & Envelope Curves (Y: 90 to 130px)
+    const HUB_Y_TOP = 90;
+    const HUB_Y_BOTTOM = 130;
+    const HUB_HEIGHT = 40;
+    const HUB_Y_MID = 110;
+    const Y_1 = 96;  // 100% volume
+    const Y_0 = 124; // 0% volume
+    const Y_RANGE = 28;
+
+    const yFromLevel = (v: number) => Y_0 - Math.max(0, Math.min(1, v)) * Y_RANGE;
+
+    // Hub background & subtle borders
+    ctx.fillStyle = 'rgba(18, 18, 18, 0.75)';
+    ctx.fillRect(0, HUB_Y_TOP, width, HUB_HEIGHT);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(0, HUB_Y_TOP);
+    ctx.lineTo(width, HUB_Y_TOP);
+    ctx.moveTo(0, HUB_Y_BOTTOM);
+    ctx.lineTo(width, HUB_Y_BOTTOM);
+    ctx.stroke();
+
+    // Guideline 50%
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.setLineDash([2, 4]);
+    ctx.beginPath();
+    ctx.moveTo(0, HUB_Y_MID);
+    ctx.lineTo(width, HUB_Y_MID);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Bass Swap vertical dashed line in Hub
+    ctx.strokeStyle = '#facc15';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(X_crossover, HUB_Y_TOP);
+    ctx.lineTo(X_crossover, HUB_Y_BOTTOM);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Diamond badge at (X_crossover, 110)
+    ctx.fillStyle = '#facc15';
+    ctx.shadowColor = '#facc15';
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    ctx.moveTo(X_crossover, HUB_Y_MID - 5);
+    ctx.lineTo(X_crossover + 5, HUB_Y_MID);
+    ctx.lineTo(X_crossover, HUB_Y_MID + 5);
+    ctx.lineTo(X_crossover - 5, HUB_Y_MID);
+    ctx.closePath();
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // Bass EQ Step Lines in Hub
+    if (eqMode === 'intercambio_graves_central' || preset === 'automatica' || preset === 'corte') {
+      ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+      ctx.lineWidth = 1.5;
+      // Deck A step: High -> Low
+      ctx.beginPath();
+      ctx.moveTo(X_mixStart, Y_1 + 3);
+      ctx.lineTo(X_crossover, Y_1 + 3);
+      ctx.lineTo(X_crossover, Y_0 - 3);
+      ctx.lineTo(X_mixEnd, Y_0 - 3);
+      ctx.stroke();
+
+      // Deck B step: Low -> High
+      ctx.beginPath();
+      ctx.moveTo(X_mixStart, Y_0 - 3);
+      ctx.lineTo(X_crossover, Y_0 - 3);
+      ctx.lineTo(X_crossover, Y_1 + 3);
+      ctx.lineTo(X_mixEnd, Y_1 + 3);
+      ctx.stroke();
+    }
+
+    // Deck A Volume Curve (Cyan #38bdf8)
+    ctx.strokeStyle = '#38bdf8';
     ctx.lineWidth = 2.5;
-    ctx.strokeStyle = '#f472b6'; // Vibrant Pink
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-
-    // Deck A Pink Curve: Flat at 100% until transition midpoint/ramp down to 0% at boxEnd
+    ctx.shadowColor = '#38bdf8';
+    ctx.shadowBlur = 4;
     ctx.beginPath();
-    ctx.moveTo(0, deckAY + deckHeight * 0.15);
-    const midA = boxStartA + boxWidth * 0.5;
-    if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
-      ctx.lineTo(midA, deckAY + deckHeight * 0.15);
-      ctx.lineTo(boxEndA, deckAY + deckHeight * 0.85);
-    } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-      ctx.lineTo(midA, deckAY + deckHeight * 0.15);
-      ctx.lineTo(midA, deckAY + deckHeight * 0.85);
-      ctx.lineTo(boxEndA, deckAY + deckHeight * 0.85);
-    } else {
-      ctx.lineTo(boxStartA, deckAY + deckHeight * 0.15);
-      ctx.lineTo(boxEndA, deckAY + deckHeight * 0.85);
-    }
-    ctx.stroke();
 
-    // Deck B Pink Curve: Ramps up from 0% at boxStart to 100% at boxEnd
-    ctx.beginPath();
-    ctx.moveTo(boxStartB, deckBY + deckHeight * 0.85);
-    const midB = boxStartB + boxWidth * 0.5;
-    if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
-      ctx.lineTo(midB, deckBY + deckHeight * 0.15);
-      ctx.lineTo(boxEndB, deckBY + deckHeight * 0.15);
-    } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-      ctx.lineTo(midB, deckBY + deckHeight * 0.85);
-      ctx.lineTo(midB, deckBY + deckHeight * 0.15);
-      ctx.lineTo(boxEndB, deckBY + deckHeight * 0.15);
-    } else {
-      ctx.lineTo(boxEndB, deckBY + deckHeight * 0.15);
-    }
-    ctx.lineTo(width, deckBY + deckHeight * 0.15);
-    ctx.stroke();
+    // Lead-in: 100%
+    ctx.moveTo(0, Y_1);
+    ctx.lineTo(X_mixStart, Y_1);
 
-    // --- Draw Yellow EQ Bass-Swap Curves ---
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = '#facc15'; // Pure Yellow
-
-    // Deck A Yellow Curve: 100% bass, at crossover midpoint drops sharply to 0!
-    ctx.beginPath();
-    ctx.moveTo(0, deckAY + deckHeight * 0.25);
-    ctx.lineTo(midA, deckAY + deckHeight * 0.25);
-    ctx.lineTo(midA + 4, deckAY + deckHeight * 0.85);
-    ctx.lineTo(boxEndA, deckAY + deckHeight * 0.85);
-    ctx.stroke();
-
-    // Deck B Yellow Curve: 0% bass during first half, then steps up sharply to 100% at crossover!
-    ctx.beginPath();
-    ctx.moveTo(boxStartB, deckBY + deckHeight * 0.85);
-    ctx.lineTo(midB, deckBY + deckHeight * 0.85);
-    ctx.lineTo(midB + 4, deckBY + deckHeight * 0.25);
-    ctx.lineTo(width, deckBY + deckHeight * 0.25);
-    ctx.stroke();
-
-    // --- Draw Purple FX Envelope Curve if active ---
-    if (fxMode !== 'ninguno' || ['eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash'].includes(preset)) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = '#c084fc'; // Light Purple
-      ctx.beginPath();
-      if (fxMode === 'freno_vinilo' || preset === 'freno_vinilo') {
-        // Turntable brake steep plunge curve
-        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.35);
-        ctx.lineTo(midA - 10, deckAY + deckHeight * 0.35);
-        ctx.quadraticCurveTo(midA, deckAY + deckHeight * 0.9, boxEndA, deckAY + deckHeight * 0.95);
-      } else if (fxMode === 'repeticion_loop' || preset === 'beat_roll') {
-        // Stutter roll steps
-        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.4);
-        for (let sx = boxStartA; sx < boxEndA; sx += (boxEndA - boxStartA) / 8) {
-          ctx.lineTo(sx, deckAY + deckHeight * 0.2);
-          ctx.lineTo(sx + 5, deckAY + deckHeight * 0.6);
-        }
+    // Mix window
+    const curveSteps = 32;
+    for (let s = 0; s <= curveSteps; s++) {
+      const p = s / curveSteps;
+      const cx = X_mixStart + p * W_mix;
+      let valA = 1.0;
+      if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+        valA = p <= 0.5 ? 1.0 : Math.cos((p - 0.5) * Math.PI);
+      } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
+        valA = p < 0.5 ? 1.0 : 0.0;
+      } else if (preset === 'crescendo') {
+        valA = Math.cos(p * 0.5 * Math.PI);
+      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+        valA = 0.5 * (1.0 + Math.cos(p * Math.PI));
       } else {
-        // Eco tail
-        ctx.moveTo(boxStartA, deckAY + deckHeight * 0.3);
-        ctx.lineTo(midA, deckAY + deckHeight * 0.3);
-        ctx.lineTo(boxEndA, deckAY + deckHeight * 0.9);
+        valA = Math.max(0, 1.0 - p);
+      }
+      ctx.lineTo(cx, yFromLevel(valA));
+    }
+
+    // Lead-out: muted (0%)
+    ctx.lineTo(width, Y_0);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Deck B Volume Curve (Neon Pink #f43f5e)
+    ctx.strokeStyle = '#f43f5e';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = '#f43f5e';
+    ctx.shadowBlur = 4;
+    ctx.beginPath();
+
+    // Lead-in: standby (0%)
+    ctx.moveTo(0, Y_0);
+    ctx.lineTo(X_mixStart, Y_0);
+
+    // Mix window
+    for (let s = 0; s <= curveSteps; s++) {
+      const p = s / curveSteps;
+      const cx = X_mixStart + p * W_mix;
+      let valB = 0.0;
+      if (volumeEnvelope === 'superposicion' || preset === 'automatica') {
+        valB = p;
+      } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
+        valB = p < 0.5 ? 0.0 : 1.0;
+      } else if (preset === 'crescendo') {
+        valB = Math.pow(p, 1.8);
+      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll') {
+        valB = 0.5 * (1.0 - Math.cos(p * Math.PI));
+      } else {
+        valB = Math.min(1, p);
+      }
+      ctx.lineTo(cx, yFromLevel(valB));
+    }
+
+    // Lead-out: full groove (100%)
+    ctx.lineTo(width, Y_1);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    // Filter Sweep / FX Overlays (Purple #c084fc)
+    if (fxMode !== 'ninguno' || ['filtro', 'eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash'].includes(preset)) {
+      ctx.strokeStyle = '#c084fc';
+      ctx.lineWidth = 2.0;
+      ctx.beginPath();
+
+      if (preset === 'freno_vinilo' || fxMode === 'freno_vinilo') {
+        ctx.moveTo(X_mixStart, Y_1);
+        ctx.lineTo(X_crossover, Y_1);
+        ctx.quadraticCurveTo(X_crossover + W_mix * 0.25, Y_0 - 4, X_mixEnd - 4, Y_0);
+        ctx.lineTo(X_mixEnd, Y_0);
+      } else if (preset === 'beat_roll' || fxMode === 'repeticion_loop') {
+        ctx.moveTo(X_mixStart, HUB_Y_MID);
+        const stutterStart = X_mixStart + W_mix * 0.35;
+        ctx.lineTo(stutterStart, HUB_Y_MID);
+        for (let sx = stutterStart; sx < X_mixEnd - 6; sx += (X_mixEnd - stutterStart) / 10) {
+          ctx.lineTo(sx, Y_1 + 4);
+          ctx.lineTo(sx + 4, Y_0 - 4);
+        }
+        ctx.lineTo(X_mixEnd, Y_0);
+      } else {
+        ctx.moveTo(X_mixStart, Y_1 + 4);
+        ctx.bezierCurveTo(X_crossover, Y_1 + 4, X_crossover + W_mix * 0.2, Y_0 - 2, X_mixEnd, Y_0);
       }
       ctx.stroke();
     }
 
-    // --- Draw Green Scrub Playhead ---
-    // If playing, position moves from left to right; if stopped, stays at scrub point
-    const playheadX = auditionProgress > 0 ? auditionProgress * width : 16;
-    ctx.lineWidth = 2.5;
+    // Playhead & Pointer Caps (Spotify Neon Green #1ed760)
+    const playheadX = Math.max(0, Math.min(width, auditionProgress * width));
+    ctx.save();
     ctx.strokeStyle = '#1ed760';
+    ctx.lineWidth = 2.5;
     ctx.shadowColor = '#1ed760';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.moveTo(playheadX, 0);
     ctx.lineTo(playheadX, height);
     ctx.stroke();
-    ctx.shadowBlur = 0; // reset
+
+    // Top Pointer Cap (Downward Triangle at Y = 0)
+    ctx.fillStyle = '#1ed760';
+    ctx.beginPath();
+    ctx.moveTo(playheadX - 6, 0);
+    ctx.lineTo(playheadX + 6, 0);
+    ctx.lineTo(playheadX, 8);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bottom Pointer Cap (Upward Triangle at Y = height)
+    ctx.beginPath();
+    ctx.moveTo(playheadX - 6, height);
+    ctx.lineTo(playheadX + 6, height);
+    ctx.lineTo(playheadX, height - 8);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+
   }, [
-    trackA.id,
-    trackB.id,
-    featA.tempo,
-    featB.tempo,
+    canvasWidth,
+    trackA,
+    trackA?.id,
+    trackA?.name,
+    trackB,
+    trackB?.id,
+    trackB?.name,
+    featA?.tempo,
+    featB?.tempo,
     compases,
     preset,
     volumeEnvelope,
     eqMode,
     fxMode,
     auditionProgress,
+    isOpen,
   ]);
 
-  // Scrub click handler on canvas
-  const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const progress = Math.max(0, Math.min(1, clickX / rect.width));
-    setAuditionProgress(progress);
-  };
-
-  if (!isOpen) return null;
+  if (!isOpen || !trackA || !trackB) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end sm:items-center justify-center p-0 sm:p-4 animate-fade-in font-['SpotifyMixUI']">
@@ -568,13 +1101,22 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               <span className="font-bold text-white">{featA.camelot} → {featB.camelot}</span>
             </div>
           </div>
-          <div className="relative rounded-2xl bg-[#181818] border border-white/5 p-2 shadow-inner overflow-hidden select-none">
+
+          {/* Visualizer Canvas Container with High-DPI Support */}
+          <div
+            ref={containerRef}
+            className="relative rounded-2xl bg-[#181818] border border-white/5 p-2 shadow-inner overflow-hidden select-none"
+          >
             <canvas
               ref={canvasRef}
-              width={640}
-              height={165}
+              width={canvasWidth}
+              height={CANVAS_HEIGHT}
+              style={{ width: '100%', height: `${CANVAS_HEIGHT}px` }}
               onClick={handleCanvasClick}
-              className="w-full h-[165px] rounded-xl cursor-pointer block"
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className="w-full h-[196px] rounded-xl cursor-pointer block"
             />
 
             {/* Center Floating Audition Button (▶ / ■ / Loading spinner) */}
@@ -976,3 +1518,5 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     </div>
   );
 };
+
+export { TransitionEditorModal as DJTransitionPreviewModal };

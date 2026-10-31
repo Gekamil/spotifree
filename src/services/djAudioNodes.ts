@@ -132,13 +132,18 @@ export const createDeckDSPStrip = createDJChannelStrip;
 
 /**
  * Schedules instantaneous bass swap at the crossover downbeat using a 20ms anti-click time constant.
+ * Optionally initializes incoming deck's low shelf at -40dB from mixStartTime to prevent low-end clash.
  * Cuts outgoing low-shelf gain to -40dB and snaps incoming low-shelf gain to 0dB.
  */
 export function scheduleBassSwap(
   deckOut: DJChannelStrip,
   deckIn: DJChannelStrip,
-  crossoverTime: number
+  crossoverTime: number,
+  mixStartTime?: number
 ): void {
+  if (mixStartTime !== undefined && mixStartTime < crossoverTime) {
+    deckIn.eqLow.gain.setValueAtTime(-40, mixStartTime);
+  }
   deckOut.eqLow.gain.setTargetAtTime(-40, crossoverTime, 0.02);
   deckIn.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
 }
@@ -388,3 +393,201 @@ export function disposeDJChannelStrip(strip: DJChannelStrip): void {
  * Alias for disposeDJChannelStrip.
  */
 export const disposeChannelStrip = disposeDJChannelStrip;
+
+// ============================================================================
+// Auxiliary Acoustic Layering for YouTube FX Presets
+// ============================================================================
+
+export interface ActiveAuxFX {
+  stop: () => void;
+}
+
+/**
+ * Triggers synthesized Web Audio acoustic textures to layer over YouTube playback,
+ * ensuring DJ transition presets ('filtro', 'freno_vinilo', 'eco_out', 'beat_roll')
+ * are audibly distinct despite YouTube iframe CORS restrictions.
+ */
+export function triggerAuxiliaryTransitionFX(
+  ctx: AudioContext,
+  preset: string,
+  durationSec: number,
+  bpm: number,
+  masterVol = 1.0,
+  startTime?: number
+): ActiveAuxFX | null {
+  if (!ctx || ctx.state === 'closed') return null;
+
+  try {
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
+    const start = startTime !== undefined ? startTime : ctx.currentTime;
+    const safeVol = Math.max(0, Math.min(1, masterVol));
+    const safeBpm = bpm > 40 && bpm < 240 ? bpm : 128;
+
+    if (preset === 'filtro') {
+      // Resonant Highpass Filter Sweep Texture
+      const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(65, start);
+
+      filter.type = 'highpass';
+      filter.Q.setValueAtTime(3.0, start);
+      filter.frequency.setValueAtTime(20, start);
+      filter.frequency.exponentialRampToValueAtTime(16000, start + durationSec);
+
+      gain.gain.setValueAtTime(0.001, start);
+      gain.gain.linearRampToValueAtTime(0.12 * safeVol, start + durationSec * 0.5);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationSec);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationSec);
+
+      return {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+            gain.disconnect();
+          } catch {}
+        },
+      };
+    } else if (preset === 'freno_vinilo') {
+      // Turntable Platter Deceleration Tone & Needle Drag
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(120, start);
+      osc.frequency.exponentialRampToValueAtTime(20, start + durationSec * 0.95);
+
+      gain.gain.setValueAtTime(0.15 * safeVol, start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + durationSec * 0.95);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationSec);
+
+      return {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+            gain.disconnect();
+          } catch {}
+        },
+      };
+    } else if (preset === 'eco_out') {
+      // Dotted-Eighth Delay Ping Dissolve
+      const delaySec = (60 / safeBpm) * 0.75;
+      const osc = ctx.createOscillator();
+      const delay = ctx.createDelay(5.0);
+      const feedback = ctx.createGain();
+      const damp = ctx.createBiquadFilter();
+      const wetGain = ctx.createGain();
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(440, start);
+
+      delay.delayTime.setValueAtTime(delaySec, start);
+      feedback.gain.setValueAtTime(0.65, start);
+      feedback.gain.exponentialRampToValueAtTime(0.001, start + durationSec);
+
+      damp.type = 'highpass';
+      damp.frequency.setValueAtTime(250, start);
+
+      wetGain.gain.setValueAtTime(0.18 * safeVol, start);
+      wetGain.gain.exponentialRampToValueAtTime(0.001, start + durationSec);
+
+      const burstGain = ctx.createGain();
+      burstGain.gain.setValueAtTime(1.0, start);
+      burstGain.gain.exponentialRampToValueAtTime(0.001, start + 0.08);
+
+      osc.connect(burstGain);
+      burstGain.connect(delay);
+      delay.connect(feedback);
+      feedback.connect(damp);
+      damp.connect(delay);
+      delay.connect(wetGain);
+      wetGain.connect(ctx.destination);
+
+      osc.start(start);
+      osc.stop(start + 0.1);
+
+      return {
+        stop: () => {
+          try {
+            osc.stop();
+            delay.disconnect();
+            wetGain.disconnect();
+          } catch {}
+        },
+      };
+    } else if (preset === 'beat_roll') {
+      // Stutter Roll Transient Accents
+      const beatSec = 60 / safeBpm;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(220, start);
+
+      const p1End = start + durationSec * 0.50;
+      const p2End = start + durationSec * 0.75;
+      const p3End = start + durationSec * 0.98;
+
+      const schedulePulses = (from: number, to: number, subSec: number) => {
+        let t = from;
+        while (t + subSec <= to) {
+          gain.gain.setValueAtTime(0.10 * safeVol, t);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + subSec * 0.4);
+          t += subSec;
+        }
+      };
+
+      schedulePulses(start, p1End, beatSec * 0.25);
+      schedulePulses(p1End, p2End, beatSec * 0.125);
+      schedulePulses(p2End, p3End, beatSec * 0.0625);
+
+      gain.gain.setValueAtTime(0, p3End);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + durationSec);
+
+      return {
+        stop: () => {
+          try {
+            osc.stop();
+            osc.disconnect();
+            gain.disconnect();
+          } catch {}
+        },
+      };
+    }
+  } catch (err) {
+    console.warn('[djAudioNodes] triggerAuxiliaryTransitionFX error:', err);
+  }
+
+  return null;
+}
+
+/**
+ * Stops any actively running auxiliary transition effect.
+ */
+export function stopAuxiliaryTransitionFX(active: ActiveAuxFX | null): void {
+  if (active) {
+    try {
+      active.stop();
+    } catch {}
+  }
+}
+

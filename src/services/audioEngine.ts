@@ -10,6 +10,19 @@ import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { resolveClientSideRealFeature } from '../utils/audioFeatures';
+import {
+  createDJChannelStrip,
+  scheduleBassSwap,
+  scheduleResonantHPFSweep,
+  scheduleResonantLPFSweep,
+  scheduleBeatDelay,
+  scheduleLoopStutter,
+  cancelScheduledAutomations,
+  triggerAuxiliaryTransitionFX,
+  stopAuxiliaryTransitionFX,
+  type DJChannelStrip,
+  type ActiveAuxFX,
+} from './djAudioNodes';
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
@@ -51,9 +64,12 @@ class AudioEngine {
   private wakeLockSentinel: any = null;
 
   private audioContext: AudioContext | null = null;
-  private sourceNode: MediaElementAudioSourceNode | null = null;
+  private deckStrips: [DJChannelStrip | null, DJChannelStrip | null] = [null, null];
+  private sourceNodes: [MediaElementAudioSourceNode | null, MediaElementAudioSourceNode | null] = [null, null];
+  private masterGain: GainNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
   private compressorNode: DynamicsCompressorNode | null = null;
+  private activeAuxFX: ActiveAuxFX | null = null;
   private currentTrackId: string | null = null;
   private currentTrackQuery: string | null = null;
   private currentVideoId: string | null = null;
@@ -90,6 +106,22 @@ class AudioEngine {
 
   public get secondaryAudio(): HTMLAudioElement {
     return this.audios[this.activeAudioIndex === 0 ? 1 : 0];
+  }
+
+  public get deckStrip0(): DJChannelStrip | null {
+    return this.deckStrips[0];
+  }
+
+  public get deckStrip1(): DJChannelStrip | null {
+    return this.deckStrips[1];
+  }
+
+  public get activeDeckStrip(): DJChannelStrip | null {
+    return this.deckStrips[this.activeAudioIndex];
+  }
+
+  public get secondaryDeckStrip(): DJChannelStrip | null {
+    return this.deckStrips[this.activeAudioIndex === 0 ? 1 : 0];
   }
 
   private checkCrossfade(curSec: number, durSec: number) {
@@ -154,18 +186,6 @@ class AudioEngine {
 
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
 
-    // Instant Cold-Stop / Silence Gap Skip:
-    // If the music has reached its actual ending (< 0.4s left before outro dead air),
-    // instantly drop cut into Track B rather than playing dead silence for seconds.
-    if (!this.isCrossfading && remaining <= 0.4 && nextTrack) {
-      if (djConfig) {
-        djConfig.volumeEnvelope = 'corte_directo';
-        djConfig.preset = 'corte';
-      }
-      this.executeCrossfade(1.5, djConfig);
-      return;
-    }
-
     // 1. Preload upcoming song in the background before crossfade starts
     if (
       !this.preloadedNext &&
@@ -177,8 +197,10 @@ class AudioEngine {
     }
 
     // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
+    // If remaining time is shorter than calculated phrase, clamp duration without altering preset
     if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
-      this.executeCrossfade(effectiveCrossfade, djConfig);
+      const clampedDuration = Math.min(effectiveCrossfade, Math.max(1.5, remaining));
+      this.executeCrossfade(clampedDuration, djConfig);
     }
   }
 
@@ -288,11 +310,68 @@ class AudioEngine {
       } catch {}
     }
 
+    // Schedule Web Audio DSP Strip automations
+    this.initAudioContext();
+    const outIdx = this.activeAudioIndex;
+    const inIdx: 0 | 1 = outIdx === 0 ? 1 : 0;
+    const outStrip = this.deckStrips[outIdx];
+    const inStrip = this.deckStrips[inIdx];
+    const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
+    const beatSec = 60 / safeTempo;
+
+    if (this.audioContext && outStrip && inStrip) {
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
+      const now = this.audioContext.currentTime;
+      cancelScheduledAutomations(outStrip, now);
+      cancelScheduledAutomations(inStrip, now);
+
+      const crossoverTime = now + crossfadeSec * 0.5;
+      const preset = djConfig?.preset || 'automatica';
+      const eqMode = djConfig?.eqMode || 'intercambio_graves_central';
+      const fxMode = djConfig?.fxMode || 'ninguno';
+
+      // 1. Low-End Clash Prevention & Bass Swap (-40dB cut on outgoing, incoming pre-cut to -40dB then snapping to 0dB)
+      if (eqMode === 'intercambio_graves_central' || preset === 'automatica' || preset === 'corte') {
+        scheduleBassSwap(outStrip, inStrip, crossoverTime, now);
+      }
+
+      // 2. Resonant Filter Sweeps
+      if (preset === 'filtro') {
+        scheduleResonantHPFSweep(outStrip, now, crossfadeSec, 20, 18000, 3.0);
+        inStrip.eqLow.gain.setValueAtTime(-40, now);
+        inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
+      } else if (eqMode === 'filtro_paso_bajo') {
+        scheduleResonantLPFSweep(outStrip, now, crossfadeSec, 20000, 80, 2.5);
+      }
+
+      // 3. Beat-Synchronized Echo Delay
+      if (preset === 'eco_out' || fxMode === 'eco') {
+        scheduleBeatDelay(outStrip, crossoverTime, crossfadeSec * 0.5, safeTempo, 0.75, 0.65);
+        inStrip.eqLow.gain.setValueAtTime(0, now);
+      }
+
+      // 4. Accelerating Loop Stutter Roll
+      if (preset === 'beat_roll' || fxMode === 'repeticion_loop') {
+        scheduleLoopStutter(outStrip, now + crossfadeSec * 0.35, crossfadeSec * 0.63, safeTempo);
+        inStrip.eqLow.gain.setValueAtTime(-40, now);
+        inStrip.eqLow.gain.setTargetAtTime(0, now + crossfadeSec * 0.98, 0.02);
+      }
+
+      // 5. Channel Faders Output
+      outStrip.outputNode.gain.setValueAtTime(masterVolume, now);
+      outStrip.outputNode.gain.linearRampToValueAtTime(0.0001, now + crossfadeSec);
+
+      inStrip.outputNode.gain.setValueAtTime(0.0001, now);
+      inStrip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + crossfadeSec);
+    }
+
     const durationMs = crossfadeSec * 1000;
     let accumulatedCrossfadeMs = 0;
     let lastTick = Date.now();
-    const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
-    const beatSec = 60 / safeTempo;
+    const crossfadeStartTime = Date.now();
+    let isDeckBReady = false;
 
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
@@ -300,13 +379,66 @@ class AudioEngine {
 
     this.crossfadeInterval = window.setInterval(() => {
       const now = Date.now();
-      const delta = now - lastTick;
-      lastTick = now;
 
       if (!usePlayerStore.getState().isPlaying) {
+        lastTick = now;
         return;
       }
 
+      // Ready-State Gate: Verify secondary player is actively outputting audio before advancing crossfade
+      if (!isDeckBReady) {
+        let ready = false;
+        if (this.activeEngine === 'youtube') {
+          const curSecYt = this.secondaryYtPlayer;
+          if (curSecYt && typeof curSecYt.getPlayerState === 'function') {
+            const state = curSecYt.getPlayerState();
+            const ct = typeof curSecYt.getCurrentTime === 'function' ? curSecYt.getCurrentTime() : 0;
+            ready = (state === 1 || ct > 0);
+          }
+        } else {
+          const curSecAudio = this.secondaryAudio;
+          ready = !!(curSecAudio && curSecAudio.readyState >= 3 && !curSecAudio.paused);
+        }
+
+        if (!ready) {
+          // Safety timeout: If secondary player takes > 4000ms to buffer, proceed with fallback
+          if (now - crossfadeStartTime > 4000) {
+            console.warn('[AudioEngine] Secondary player buffering timeout (4000ms), advancing fallback');
+            isDeckBReady = true;
+            lastTick = now;
+          } else {
+            // Keep Deck A at full master volume, Deck B at 0 volume while waiting to eliminate silence hole
+            if (this.activeEngine === 'youtube') {
+              try {
+                if (this.ytPlayer?.setVolume) this.ytPlayer.setVolume(Math.round(masterVolume * 100));
+                if (this.secondaryYtPlayer?.setVolume) this.secondaryYtPlayer.setVolume(0);
+              } catch {}
+            } else {
+              if (this.audio) this.audio.volume = masterVolume;
+              if (this.secondaryAudio) this.secondaryAudio.volume = 0;
+            }
+            lastTick = now;
+            return;
+          }
+        } else {
+          isDeckBReady = true;
+          lastTick = now;
+          // Trigger auxiliary Web Audio acoustic FX layer for YouTube mode presets
+          if (this.activeEngine === 'youtube' && this.audioContext && djConfig) {
+            this.stopAuxiliaryTransitionFX();
+            this.activeAuxFX = triggerAuxiliaryTransitionFX(
+              this.audioContext,
+              djConfig.preset,
+              crossfadeSec,
+              safeTempo,
+              masterVolume
+            );
+          }
+        }
+      }
+
+      const delta = now - lastTick;
+      lastTick = now;
       accumulatedCrossfadeMs += delta;
       const progress = Math.min(1, Math.max(0, accumulatedCrossfadeMs / durationMs));
 
@@ -436,6 +568,13 @@ class AudioEngine {
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
       this.crossfadeInterval = null;
+    }
+
+    this.stopAuxiliaryTransitionFX();
+    if (this.audioContext) {
+      const now = this.audioContext.currentTime;
+      if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+      if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
     }
 
     const state = usePlayerStore.getState();
@@ -650,6 +789,56 @@ class AudioEngine {
     let startedB = false;
     const totalDurationMs = totalSec * 1000;
 
+    this.initAudioContext();
+    if (this.audioContext && this.deckStrips[0] && this.deckStrips[1]) {
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
+      const now = this.audioContext.currentTime;
+      cancelScheduledAutomations(this.deckStrips[0], now);
+      cancelScheduledAutomations(this.deckStrips[1], now);
+
+      const mixStart = now + leadInSec;
+      const crossoverTime = mixStart + transitionDur * 0.5;
+
+      // 1. Low-End Clash Prevention & Bass Swap
+      if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica' || config.preset === 'corte') {
+        scheduleBassSwap(this.deckStrips[0], this.deckStrips[1], crossoverTime, mixStart);
+      }
+
+      // 2. Resonant Filter Sweeps
+      if (config.preset === 'filtro') {
+        scheduleResonantHPFSweep(this.deckStrips[0], mixStart, transitionDur, 20, 18000, 3.0);
+        this.deckStrips[1].eqLow.gain.setValueAtTime(-40, mixStart);
+        this.deckStrips[1].eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
+      } else if (config.eqMode === 'filtro_paso_bajo') {
+        scheduleResonantLPFSweep(this.deckStrips[0], mixStart, transitionDur, 20000, 80, 2.5);
+      }
+
+      // 3. Beat-Synchronized Echo Delay
+      if (config.preset === 'eco_out' || config.fxMode === 'eco') {
+        scheduleBeatDelay(this.deckStrips[0], crossoverTime, transitionDur * 0.5, safeTempo, 0.75, 0.65);
+      }
+
+      // 4. Accelerating Loop Stutter Roll
+      if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+        scheduleLoopStutter(this.deckStrips[0], mixStart + transitionDur * 0.35, transitionDur * 0.63, safeTempo);
+        this.deckStrips[1].eqLow.gain.setValueAtTime(-40, mixStart);
+        this.deckStrips[1].eqLow.gain.setTargetAtTime(0, mixStart + transitionDur * 0.98, 0.02);
+      }
+
+      // 5. Auxiliary acoustic FX layer for audition preview
+      this.stopAuxiliaryTransitionFX();
+      this.activeAuxFX = triggerAuxiliaryTransitionFX(
+        this.audioContext,
+        config.preset,
+        transitionDur,
+        safeTempo,
+        1.0,
+        mixStart
+      );
+    }
+
     this.auditionInterval = window.setInterval(() => {
       if (!this.isAuditioning) {
         this.stopTransitionAudition();
@@ -770,11 +959,24 @@ class AudioEngine {
     return true;
   }
 
+  private stopAuxiliaryTransitionFX(): void {
+    if (this.activeAuxFX) {
+      stopAuxiliaryTransitionFX(this.activeAuxFX);
+      this.activeAuxFX = null;
+    }
+  }
+
   public stopTransitionAudition(): void {
     this.isAuditioning = false;
     if (this.auditionInterval !== null) {
       clearInterval(this.auditionInterval);
       this.auditionInterval = null;
+    }
+    this.stopAuxiliaryTransitionFX();
+    if (this.audioContext) {
+      const now = this.audioContext.currentTime;
+      if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+      if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
     }
     for (const p of this.ytPlayers) {
       if (p) {
@@ -1208,48 +1410,78 @@ class AudioEngine {
   }
 
   private initAudioContext() {
-    if (this.audioContext) return;
+    if (typeof window === 'undefined') return;
     try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      this.audioContext = new AudioCtx();
+      if (!this.audioContext) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioCtx) return;
+        this.audioContext = new AudioCtx();
+      }
 
-      this.sourceNode = this.audioContext.createMediaElementSource(this.audio);
+      if (this.audioContext.state === 'suspended') {
+        this.audioContext.resume().catch(() => {});
+      }
 
-      let savedBands: number[] = [0, 0, 0, 0, 0, 0];
-      try {
-        const raw = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_eq_bands') : null;
-        if (raw) savedBands = JSON.parse(raw);
-      } catch {}
+      // 1. Initialize Master Output Bus: masterGain -> graphic EQ filters -> compressorNode -> destination
+      if (!this.masterGain) {
+        this.masterGain = this.audioContext.createGain();
+        this.masterGain.gain.value = 1.0;
 
-      let lastNode: AudioNode = this.sourceNode;
-      this.filterNodes = this.eqFrequencies.map((freq, idx) => {
-        const filter = this.audioContext!.createBiquadFilter();
-        if (idx === 0) {
-          filter.type = 'lowshelf';
-        } else if (idx === this.eqFrequencies.length - 1) {
-          filter.type = 'highshelf';
-        } else {
-          filter.type = 'peaking';
-          filter.Q.value = 1.0;
+        let savedBands: number[] = [0, 0, 0, 0, 0, 0];
+        try {
+          const raw = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_eq_bands') : null;
+          if (raw) savedBands = JSON.parse(raw);
+        } catch {}
+
+        let lastNode: AudioNode = this.masterGain;
+        this.filterNodes = this.eqFrequencies.map((freq, idx) => {
+          const filter = this.audioContext!.createBiquadFilter();
+          if (idx === 0) {
+            filter.type = 'lowshelf';
+          } else if (idx === this.eqFrequencies.length - 1) {
+            filter.type = 'highshelf';
+          } else {
+            filter.type = 'peaking';
+            filter.Q.value = 1.0;
+          }
+          filter.frequency.value = freq;
+          filter.gain.value = savedBands[idx] ?? 0;
+
+          lastNode.connect(filter);
+          lastNode = filter;
+          return filter;
+        });
+
+        this.compressorNode = this.audioContext.createDynamicsCompressor();
+        const normalizeSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_normalize_volume') : null;
+        const isNorm = normalizeSaved !== 'false';
+        this.compressorNode.threshold.value = isNorm ? -24 : 0;
+        this.compressorNode.ratio.value = isNorm ? 12 : 1;
+        lastNode.connect(this.compressorNode);
+        this.compressorNode.connect(this.audioContext.destination);
+      }
+
+      // 2. Instantiate Dual DJ Channel Strips connected to Master Gain Bus
+      for (let i = 0; i < 2; i++) {
+        if (!this.deckStrips[i]) {
+          this.deckStrips[i] = createDJChannelStrip(this.audioContext);
+          this.deckStrips[i]!.outputNode.connect(this.masterGain);
         }
-        filter.frequency.value = freq;
-        filter.gain.value = savedBands[idx] ?? 0;
+      }
 
-        lastNode.connect(filter);
-        lastNode = filter;
-        return filter;
-      });
-
-      this.compressorNode = this.audioContext.createDynamicsCompressor();
-      const normalizeSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_normalize_volume') : null;
-      const isNorm = normalizeSaved !== 'false';
-      this.compressorNode.threshold.value = isNorm ? -24 : 0;
-      this.compressorNode.ratio.value = isNorm ? 12 : 1;
-      lastNode.connect(this.compressorNode);
-      this.compressorNode.connect(this.audioContext.destination);
+      // 3. Connect HTMLMediaElements to their respective channel strips (guarded, at most once per element)
+      for (let i = 0; i < 2; i++) {
+        if (!this.sourceNodes[i] && this.audios[i] && this.deckStrips[i]) {
+          try {
+            this.sourceNodes[i] = this.audioContext.createMediaElementSource(this.audios[i]);
+            this.sourceNodes[i]!.connect(this.deckStrips[i]!.inputNode);
+          } catch (e) {
+            console.warn(`[AudioEngine] Failed to connect MediaElementSource ${i}:`, e);
+          }
+        }
+      }
     } catch (e) {
-      console.warn('[AudioEngine] Web Audio EQ not initialized:', e);
+      console.warn('[AudioEngine] Web Audio DSP initialization failed:', e);
     }
   }
 
@@ -1418,6 +1650,12 @@ class AudioEngine {
     }
     this.isCrossfading = false;
     this.preloadedNext = null;
+    this.stopAuxiliaryTransitionFX();
+    if (this.audioContext) {
+      const now = this.audioContext.currentTime;
+      if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+      if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
+    }
 
     // Stop secondary player
     const secYt = this.secondaryYtPlayer;
@@ -1622,6 +1860,12 @@ class AudioEngine {
   public pause() {
     this.isExplicitlyPaused = true;
     this.stopCarrier();
+    this.stopAuxiliaryTransitionFX();
+    if (this.audioContext) {
+      const now = this.audioContext.currentTime;
+      if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+      if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
+    }
     if (this.activeEngine === 'youtube') {
       if (this.ytPlayers[0] && typeof this.ytPlayers[0].pauseVideo === 'function') {
         try { this.ytPlayers[0].pauseVideo(); } catch {}
@@ -1705,6 +1949,12 @@ class AudioEngine {
         this.crossfadeInterval = null;
       }
       this.isCrossfading = false;
+      this.stopAuxiliaryTransitionFX();
+      if (this.audioContext) {
+        const now = this.audioContext.currentTime;
+        if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+        if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
+      }
       const secYt = this.secondaryYtPlayer;
       if (secYt && typeof secYt.stopVideo === 'function') {
         try { secYt.stopVideo(); } catch {}
