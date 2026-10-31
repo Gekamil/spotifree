@@ -92,6 +92,8 @@ class AudioEngine {
   private crossfadeInterval: number | null = null;
   private auditionInterval: number | null = null;
   private isAuditioning = false;
+  private lastEndedTimestamp = 0;
+  private consecutiveEndedCount = 0;
 
   public get ytPlayer(): any {
     return this.ytPlayers[this.activeYtIndex];
@@ -233,23 +235,30 @@ class AudioEngine {
         query,
       };
 
-      // In YouTube mode, pre-warm secondary player at volume 0 so it's pre-buffered in RAM
-      const secPlayer = this.secondaryYtPlayer;
-      if (videoId && secPlayer && typeof secPlayer.loadVideoById === 'function') {
-        try {
-          if (typeof secPlayer.unMute === 'function') secPlayer.unMute();
-          if (typeof secPlayer.setVolume === 'function') secPlayer.setVolume(0);
-          secPlayer.loadVideoById({ videoId, startSeconds: 0 });
-          secPlayer.playVideo();
-          // Pause after 350ms of silent buffering
-          setTimeout(() => {
-            try {
-              if (secPlayer.getPlayerState() === 1) {
-                secPlayer.pauseVideo();
-              }
-            } catch {}
-          }, 350);
-        } catch {}
+      // On mobile devices, playing a secondary player interrupts the primary active playback!
+      // Therefore, pre-warm secondary player with silent audio on desktop ONLY.
+      const isMobileDevice =
+        typeof window !== 'undefined' &&
+        (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768);
+
+      if (!isMobileDevice) {
+        const secPlayer = this.secondaryYtPlayer;
+        if (videoId && secPlayer && typeof secPlayer.loadVideoById === 'function') {
+          try {
+            if (typeof secPlayer.unMute === 'function') secPlayer.unMute();
+            if (typeof secPlayer.setVolume === 'function') secPlayer.setVolume(0);
+            secPlayer.loadVideoById({ videoId, startSeconds: 0 });
+            secPlayer.playVideo();
+            // Pause after 350ms of silent buffering
+            setTimeout(() => {
+              try {
+                if (secPlayer.getPlayerState() === 1) {
+                  secPlayer.pauseVideo();
+                }
+              } catch {}
+            }, 350);
+          } catch {}
+        }
       }
     } catch (e) {
       console.warn('[AudioEngine] Preload upcoming track error:', e);
@@ -303,9 +312,59 @@ class AudioEngine {
     }
 
     const masterVolume = state.isMuted ? 0 : state.volume;
+
+    // Mobile Single-Deck Continuity: On mobile devices, operating systems kill audio focus when a second iframe starts!
+    // Perform in-place transition on Deck 0 without invoking secondary player playVideo()
+    if (this.isMobileOrPWA()) {
+      const primaryYt = this.ytPlayers[0];
+      const strip0 = this.deckStrips[0];
+      const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
+
+      if (this.audioContext && strip0) {
+        const now = this.audioContext.currentTime;
+        cancelScheduledAutomations(strip0, now);
+        scheduleResonantHPFSweep(strip0, now, 0.25, 40, 8000, 2.0);
+        strip0.outputNode.gain.setValueAtTime(masterVolume, now);
+        strip0.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.25);
+      } else if (primaryYt && typeof primaryYt.setVolume === 'function') {
+        try { primaryYt.setVolume(Math.round(masterVolume * 20)); } catch {}
+      }
+
+      if (this.audioContext && djConfig) {
+        this.stopAuxiliaryTransitionFX();
+        this.activeAuxFX = triggerAuxiliaryTransitionFX(
+          this.audioContext,
+          djConfig.preset,
+          Math.min(crossfadeSec, 2),
+          safeTempo,
+          masterVolume
+        );
+      }
+
+      setTimeout(() => {
+        if (primaryYt && nextVideoId) {
+          try {
+            if (typeof primaryYt.setVolume === 'function') primaryYt.setVolume(0);
+            primaryYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+          } catch {}
+        }
+        this.finishCrossfade(crossfadeSec);
+        if (primaryYt && typeof primaryYt.setVolume === 'function') {
+          try { primaryYt.setVolume(Math.round(masterVolume * 100)); } catch {}
+        }
+        if (this.audioContext && strip0) {
+          const now = this.audioContext.currentTime;
+          cancelScheduledAutomations(strip0, now);
+          strip0.outputNode.gain.setValueAtTime(0.001, now);
+          strip0.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.2);
+        }
+      }, 250);
+      return;
+    }
+
     const secYt = this.secondaryYtPlayer;
 
-    // Start secondary player at volume 0
+    // Start secondary player at volume 0 (Desktop only)
     if (this.activeEngine === 'youtube' && secYt && nextVideoId) {
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
@@ -429,9 +488,9 @@ class AudioEngine {
         }
 
         if (!ready) {
-          // Safety timeout: If secondary player takes > 4000ms to buffer, proceed with fallback
-          if (now - crossfadeStartTime > 4000) {
-            console.warn('[AudioEngine] Secondary player buffering timeout (4000ms), advancing fallback');
+          // Safety timeout: If secondary player takes > 1500ms to buffer, proceed with fallback
+          if (now - crossfadeStartTime > 1500) {
+            console.warn('[AudioEngine] Secondary player buffering timeout (1500ms), advancing fallback');
             isDeckBReady = true;
             lastTick = now;
           } else {
@@ -631,23 +690,30 @@ class AudioEngine {
       return;
     }
 
+    const isMobile = this.isMobileOrPWA();
     const masterVolume = state.isMuted ? 0 : state.volume;
     const oldYtIndex = this.activeYtIndex;
-    const newYtIndex: 0 | 1 = oldYtIndex === 0 ? 1 : 0;
     const oldAudioIndex = this.activeAudioIndex;
-    const newAudioIndex: 0 | 1 = oldAudioIndex === 0 ? 1 : 0;
 
-    // 1. ATOMICALLY SWAP ACTIVE PLAYER INDICES FIRST!
-    this.activeYtIndex = newYtIndex;
-    this.activeAudioIndex = newAudioIndex;
+    // On mobile, pin active deck strictly to Deck 0 without alternating indices to preserve unlocked Deck 0
+    if (isMobile) {
+      this.activeYtIndex = 0;
+      this.activeAudioIndex = 0;
+    } else {
+      this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
+      this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
+    }
+
     this.currentTrackId = nextTrack.id;
     this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
-    this.isTransitioning = false;
+    // Shield incoming track from spurious pauses, unstarted state drops, or premature ad-skips
+    this.isTransitioning = true;
+    setTimeout(() => {
+      this.isTransitioning = false;
+    }, 3500);
 
-    // 2. NOW silence and gently pause outgoing old player
-    // Because activeYtIndex is ALREADY newYtIndex, handleYtStateChange will safely ignore
-    // the pause event from oldYtIndex!
-    if (this.activeEngine === 'youtube') {
+    // 2. NOW silence and gently pause outgoing old player if we swapped decks
+    if (oldYtIndex !== this.activeYtIndex && this.activeEngine === 'youtube') {
       const oldPlayer = this.ytPlayers[oldYtIndex];
       if (oldPlayer) {
         try {
@@ -656,7 +722,7 @@ class AudioEngine {
           if (typeof oldPlayer.setPlaybackRate === 'function') oldPlayer.setPlaybackRate(1);
         } catch {}
       }
-    } else {
+    } else if (oldAudioIndex !== this.activeAudioIndex) {
       const oldAudio = this.audios[oldAudioIndex];
       if (oldAudio) {
         try {
@@ -672,12 +738,20 @@ class AudioEngine {
     let elapsedSeconds = crossfadeSec > 0 ? crossfadeSec : 0;
 
     if (this.activeEngine === 'youtube') {
-      const newPlayer = this.ytPlayers[newYtIndex];
+      const newPlayer = this.ytPlayers[this.activeYtIndex];
       if (newPlayer) {
         try {
           if (typeof newPlayer.unMute === 'function') newPlayer.unMute();
           if (typeof newPlayer.setVolume === 'function') newPlayer.setVolume(Math.round(masterVolume * 100));
           if (typeof newPlayer.setPlaybackRate === 'function') newPlayer.setPlaybackRate(1);
+
+          // Force load on mobile or unbuffered secondary player to ensure immediate seamless playback
+          if (nextVideoId && typeof newPlayer.loadVideoById === 'function') {
+            const pState = typeof newPlayer.getPlayerState === 'function' ? newPlayer.getPlayerState() : -1;
+            if (pState !== 1 && pState !== 3) {
+              newPlayer.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+            }
+          }
           if (typeof newPlayer.playVideo === 'function') newPlayer.playVideo();
 
           const data = typeof newPlayer.getVideoData === 'function' ? newPlayer.getVideoData() : null;
@@ -694,7 +768,7 @@ class AudioEngine {
         } catch {}
       }
     } else {
-      const newAudio = this.audios[newAudioIndex];
+      const newAudio = this.audios[this.activeAudioIndex];
       if (newAudio) {
         try {
           newAudio.volume = Math.max(0, Math.min(1, masterVolume));
@@ -714,6 +788,86 @@ class AudioEngine {
 
     // 5. Resume progress ticker on new active player
     this.startProgressTicker();
+  }
+
+  /**
+   * Smooth manual skip transition for continuous audio continuity.
+   * Performs an accelerated downbeat transition rather than an instant cold cut.
+   */
+  public async transitionToNextTrack(nextTrack: Track): Promise<void> {
+    if (!nextTrack) return;
+
+    if (this.isCrossfading) {
+      this.finishCrossfade();
+    }
+
+    const state = usePlayerStore.getState();
+    const curTrack = state.currentTrack;
+    const masterVolume = state.isMuted ? 0 : state.volume;
+    const artistName = nextTrack.artists?.[0]?.name || '';
+    const query = `${nextTrack.name} ${artistName}`.trim();
+
+    this.isTransitioning = true;
+
+    // Resolve or retrieve videoId for next track
+    let videoId: string | null = null;
+    if (nextTrack.id && nextTrack.id.startsWith('yt-')) {
+      videoId = nextTrack.id.replace('yt-', '');
+    } else {
+      videoId = await this.resolveVideoId(query);
+    }
+
+    if (!videoId) {
+      state.playTrack(nextTrack);
+      return;
+    }
+
+    this.initAudioContext();
+    const isMobile = this.isMobileOrPWA();
+
+    if (isMobile) {
+      // Mobile Single-Deck in-place smooth transition:
+      const player = this.ytPlayers[0];
+      const strip = this.deckStrips[0];
+
+      if (this.audioContext && strip) {
+        const now = this.audioContext.currentTime;
+        cancelScheduledAutomations(strip, now);
+        scheduleResonantHPFSweep(strip, now, 0.35, 40, 8000, 2.0);
+        strip.outputNode.gain.setValueAtTime(masterVolume, now);
+        strip.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.35);
+      } else if (player && typeof player.setVolume === 'function') {
+        try { player.setVolume(Math.round(masterVolume * 25)); } catch {}
+      }
+
+      this.preloadedNext = { track: nextTrack, videoId, query };
+
+      setTimeout(() => {
+        if (player) {
+          try {
+            if (typeof player.setVolume === 'function') player.setVolume(0);
+            player.loadVideoById({ videoId, startSeconds: 0 });
+          } catch {}
+        }
+        this.finishCrossfade();
+        if (player && typeof player.setVolume === 'function') {
+          try { player.setVolume(Math.round(masterVolume * 100)); } catch {}
+        }
+        if (this.audioContext && strip) {
+          const now = this.audioContext.currentTime;
+          cancelScheduledAutomations(strip, now);
+          strip.outputNode.gain.setValueAtTime(0.001, now);
+          strip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.2);
+        }
+      }, 350);
+    } else {
+      // Desktop dual-deck transition
+      this.preloadedNext = { track: nextTrack, videoId, query };
+      const djConfig = curTrack
+        ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
+        : null;
+      await this.executeCrossfade(2, djConfig);
+    }
   }
 
   /**
@@ -1120,13 +1274,25 @@ class AudioEngine {
     }
   }
 
-  /** Detect mobile devices or PWA standalone mode */
-  public isMobileOrPWA(): boolean {
-    if (typeof window === 'undefined') return false;
+  /** Detect mobile devices or mobile viewports */
+  public isMobileOrPWA(win?: any): boolean {
+    if (win && typeof win === 'object') {
+      const nav = win.navigator || {};
+      const ua = nav.userAgent || '';
+      const platform = nav.platform || '';
+      const maxTouchPoints = nav.maxTouchPoints || 0;
+      const innerWidth = typeof win.innerWidth === 'number' ? win.innerWidth : 1024;
+      return (
+        /Android|iPhone|iPad|iPod/i.test(ua) ||
+        (platform === 'MacIntel' && maxTouchPoints > 1) ||
+        innerWidth < 768
+      );
+    }
     return (
-      window.matchMedia('(display-mode: standalone)').matches ||
-      /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-      (window as any).navigator?.standalone === true
+      typeof window !== 'undefined' &&
+      (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ||
+        window.innerWidth < 768)
     );
   }
 
@@ -1263,6 +1429,10 @@ class AudioEngine {
   private checkAndSkipAd() {
     if (!this.ytPlayer || this.isCrossfading || this.isTransitioning || this.isSeeking) return;
     try {
+      const curSec = typeof this.ytPlayer.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0;
+      // Do not attempt ad skipping within the first 3 seconds of a track, or while video is initializing
+      if (curSec < 3) return;
+
       const duration = typeof this.ytPlayer.getDuration === 'function' ? this.ytPlayer.getDuration() : 0;
       const expectedTrackMs = usePlayerStore.getState().currentTrack?.duration_ms || 0;
 
@@ -1283,20 +1453,21 @@ class AudioEngine {
       }
 
       // Pre-roll advertisement (< 45s while real song is > 60s) — mute and fast-forward past it
+      // ONLY if duration is established (>= 3s) and expected track is genuinely long
       const data = typeof this.ytPlayer.getVideoData === 'function' ? this.ytPlayer.getVideoData() : null;
-      if (data && data.video_id && this.currentVideoId && data.video_id !== this.currentVideoId && duration > 0 && duration <= 45 && expectedTrackMs > 60000) {
+      if (data && data.video_id && this.currentVideoId && data.video_id !== this.currentVideoId && duration >= 3 && duration <= 45 && expectedTrackMs > 60000) {
         if (typeof this.ytPlayer.mute === 'function') this.ytPlayer.mute();
         this.ytPlayer.seekTo(duration, true);
       }
     } catch {}
   }
 
-  private handleYtStateChange(event: any, playerIndex: 0 | 1 = 0) {
+  public handleYtStateChange(event: any, playerIndex: 0 | 1 = 0) {
     if (this.isAuditioning) {
       // Standard player listeners (progress ticker, crossfade trigger, next track) MUST NOT run during audition
       return;
     }
-    const code = event.data;
+    const code = typeof event === 'number' ? event : (event?.data ?? event);
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (playerIndex !== this.activeYtIndex) {
       // Secondary player state change during crossfade
@@ -1304,6 +1475,7 @@ class AudioEngine {
     }
 
     if (code === 1) {
+      this.consecutiveEndedCount = 0;
       this.isTransitioning = false;
       this.isExplicitlyPaused = false;
       this.startCarrier();
@@ -1354,6 +1526,37 @@ class AudioEngine {
         // Complete crossfade cleanly if primary track naturally reached end during transition
         this.finishCrossfade();
         return;
+      }
+
+      // If playback is halted by circuit breaker or stopped, do not trigger auto-skips
+      if (!usePlayerStore.getState().isPlaying) {
+        return;
+      }
+
+      // Debounce false-positive immediate ends:
+      // If current track duration > 10s and currentTime < 3s, ignore as premature / ad event
+      const curTime = typeof this.ytPlayer?.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : (event?.currentTime ?? 0);
+      const durTime = typeof this.ytPlayer?.getDuration === 'function' ? this.ytPlayer.getDuration() : (event?.duration ?? 0);
+      if (durTime > 10 && curTime < 3) {
+        console.warn('[AudioEngine] Ignored premature track end (<3s)', { curTime, durTime });
+        return;
+      }
+
+      // Circuit Breaker: If 2 or more consecutive rapid ENDED events occur (<1500ms),
+      // halt automatic skipping to protect the mobile user from an infinite 0/1 loop!
+      const now = Date.now();
+      if (now - this.lastEndedTimestamp < 1500) {
+        this.consecutiveEndedCount++;
+        if (this.consecutiveEndedCount >= 2) {
+          console.warn('[AudioEngine] Circuit breaker triggered: halting rapid skip loop');
+          this.consecutiveEndedCount = 2; // Stay tripped until code === 1 (PLAYING)
+          this.stopCarrier();
+          usePlayerStore.setState({ isPlaying: false });
+          return;
+        }
+      } else {
+        this.consecutiveEndedCount = 1;
+        this.lastEndedTimestamp = now;
       }
 
       const state = usePlayerStore.getState();

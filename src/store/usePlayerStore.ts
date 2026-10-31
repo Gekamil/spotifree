@@ -233,7 +233,14 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   nextTrack: () => {
-    const { queue, currentTrack, repeatMode } = get();
+    // Debounce and lock against rapid manual button spamming to prevent concurrent track resolution collisions
+    if ((usePlayerStore as any).isSkippingLock) return;
+    (usePlayerStore as any).isSkippingLock = true;
+    setTimeout(() => {
+      (usePlayerStore as any).isSkippingLock = false;
+    }, 120);
+
+    const { queue, currentTrack, repeatMode, isPlaying } = get();
     if (queue.length === 0) return;
 
     if (repeatMode === 'one' && currentTrack) {
@@ -276,6 +283,20 @@ const store = create<PlayerState>((set, get) => ({
       }
 
       set({ isPlaying: false, progressMs: 0 });
+      return;
+    }
+
+    const isDjMode =
+      typeof window !== 'undefined' &&
+      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
+    const isCrossfade =
+      typeof window !== 'undefined' &&
+      window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
+    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+
+    if (isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
+      engine.transitionToNextTrack(nextTrackCandidate);
       return;
     }
 

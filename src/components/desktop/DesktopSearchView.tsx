@@ -1,10 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
+import { PlayNativeIcon, PauseNativeIcon, CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
+import {
+  getRecentSearches,
+  addRecentSearch,
+  removeRecentSearch,
+  clearRecentSearches,
+  type RecentSearchItem,
+} from '../../utils/recentSearches';
 
 const CATEGORY_HUBS: Record<
   string,
@@ -643,6 +650,17 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   });
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setRecentSearches(getRecentSearches());
+    };
+    window.addEventListener('spotifree_recent_searches_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('spotifree_recent_searches_updated', handleUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     if (searchQuery.trim() && selectedCategory) {
@@ -689,10 +707,79 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   }, [searchQuery]);
 
   const handleTrackClick = (track: any) => {
+    addRecentSearch({
+      id: track.id,
+      type: 'track',
+      title: track.name,
+      subtitle: `Canción • ${track.artists?.map((a: any) => a.name).join(', ') || 'Artista'}`,
+      image: track.album?.images?.[0]?.url,
+      data: track,
+    });
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
       playTrack(track, searchResults.tracks);
+    }
+  };
+
+  const handleArtistClick = (artist: any) => {
+    addRecentSearch({
+      id: artist.id,
+      type: 'artist',
+      title: artist.name,
+      subtitle: 'Artista',
+      image: artist.images?.[0]?.url,
+      data: artist,
+    });
+    if (onSelectPlaylistById) {
+      onSelectPlaylistById(artist.id, artist.name, artist.images?.[0]?.url);
+    }
+  };
+
+  const handleAlbumClick = (album: any) => {
+    addRecentSearch({
+      id: album.id,
+      type: 'album',
+      title: album.name,
+      subtitle: `Álbum • ${album.artists?.[0]?.name || ''}`,
+      image: album.images?.[0]?.url,
+      data: album,
+    });
+    if (onSelectPlaylistById) {
+      onSelectPlaylistById(album.id, album.name, album.images?.[0]?.url);
+    }
+  };
+
+  const handlePlaylistClick = (playlist: any) => {
+    addRecentSearch({
+      id: playlist.id,
+      type: 'playlist',
+      title: playlist.name,
+      subtitle: 'Playlist',
+      image: playlist.images?.[0]?.url,
+      data: playlist,
+    });
+    if (onSelectPlaylistById) {
+      onSelectPlaylistById(playlist.id, playlist.name, playlist.images?.[0]?.url);
+    }
+  };
+
+  const handleRecentItemClick = (item: RecentSearchItem) => {
+    if (item.type === 'track') {
+      const trackData = item.data || {
+        id: item.id,
+        name: item.title,
+        artists: [{ name: item.subtitle.replace('Canción • ', '') }],
+        album: { images: item.image ? [{ url: item.image }] : [] },
+        duration_ms: 210000,
+      };
+      playTrack(trackData, [trackData]);
+    } else if (item.type === 'artist' || item.type === 'album' || item.type === 'playlist') {
+      if (onSelectPlaylistById) {
+        onSelectPlaylistById(item.id, item.title, item.image);
+      }
+    } else if (item.type === 'query') {
+      useUIStore.getState().setSearchQuery(item.title);
     }
   };
 
@@ -754,6 +841,53 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
           </div>
         ) : (
           <>
+            {recentSearches.length > 0 && (
+              <div className="mb-8">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-2xl font-black text-white tracking-tight font-['SpotifyMixUITitle']">
+                    Búsquedas recientes
+                  </h2>
+                  <button
+                    onClick={() => clearRecentSearches()}
+                    className="text-xs font-bold text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
+                  >
+                    Borrar todo
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+                  {recentSearches.slice(0, 8).map((item) => (
+                    <div
+                      key={item.id}
+                      onClick={() => handleRecentItemClick(item)}
+                      className="group relative bg-[#181818] hover:bg-[#282828] p-3 rounded-md transition-colors cursor-pointer flex flex-col"
+                    >
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removeRecentSearch(item.id);
+                        }}
+                        className="absolute top-2 right-2 w-6 h-6 rounded-full bg-black/60 hover:bg-black/90 text-[#b3b3b3] hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                        title="Eliminar de búsquedas recientes"
+                      >
+                        <CloseNativeIcon size={12} className="text-[#b3b3b3] group-hover:text-white" />
+                      </button>
+                      <div className={`w-full aspect-square mb-3 overflow-hidden shadow-lg bg-[#282828] ${item.type === 'artist' ? 'rounded-full' : 'rounded-md'}`}>
+                        {item.image ? (
+                          <img src={item.image} alt={item.title} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#727272]">
+                            {item.type === 'query' ? <SearchNativeIcon size={28} className="text-[#a7a7a7]" /> : '♪'}
+                          </div>
+                        )}
+                      </div>
+                      <p className="text-sm font-bold text-white truncate font-['SpotifyMixUI']">{item.title}</p>
+                      <p className="text-xs text-[#b3b3b3] truncate mt-0.5">{item.subtitle}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <h2 className="text-2xl font-black text-white tracking-tight font-['SpotifyMixUITitle']">
               Explorar todo
             </h2>
@@ -802,20 +936,27 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     {/* Top Result */}
                     {(() => {
                       const topArtist = searchResults.artists[0];
+                      const topTrack = searchResults.tracks[0];
+                      const trimmedQuery = searchQuery.toLowerCase().trim();
+
+                      // If search query matches both track and artist, prioritize the song if title matches
+                      const isTrackMatch =
+                        topTrack &&
+                        (topTrack.name.toLowerCase().trim() === trimmedQuery ||
+                          topTrack.name.toLowerCase().includes(trimmedQuery) ||
+                          trimmedQuery.includes(topTrack.name.toLowerCase().trim()));
+
                       const isArtistTop =
+                        !isTrackMatch &&
                         topArtist &&
-                        (searchQuery.toLowerCase().trim() === topArtist.name.toLowerCase().trim() ||
-                          topArtist.name.toLowerCase().includes(searchQuery.toLowerCase().trim()) ||
-                          searchQuery.toLowerCase().trim().includes(topArtist.name.toLowerCase()));
+                        (trimmedQuery === topArtist.name.toLowerCase().trim() ||
+                          topArtist.name.toLowerCase().includes(trimmedQuery) ||
+                          trimmedQuery.includes(topArtist.name.toLowerCase()));
 
                       if (isArtistTop) {
                         return (
                           <div
-                            onClick={() => {
-                              if (onSelectPlaylistById) {
-                                onSelectPlaylistById(topArtist.id, topArtist.name, topArtist.images?.[0]?.url);
-                              }
-                            }}
+                            onClick={() => handleArtistClick(topArtist)}
                             className="lg:col-span-5 bg-[#181818] hover:bg-[#282828] p-5 rounded-lg cursor-pointer transition-colors group relative flex flex-col justify-between"
                           >
                             <div>
@@ -836,9 +977,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (onSelectPlaylistById) {
-                                  onSelectPlaylistById(topArtist.id, topArtist.name, topArtist.images?.[0]?.url);
-                                }
+                                handleArtistClick(topArtist);
                               }}
                               className="absolute bottom-5 right-5 w-12 h-12 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-lg flex items-center justify-center opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all"
                               title={`Reproducir ${topArtist.name}`}
@@ -849,7 +988,6 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                         );
                       }
 
-                      const topTrack = searchResults.tracks[0];
                       if (!topTrack) return null;
 
                       return (
@@ -948,11 +1086,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           <ArtistSearchCard
                             key={artist.id}
                             artist={artist}
-                            onClick={() => {
-                              if (onSelectPlaylistById) {
-                                onSelectPlaylistById(artist.id, artist.name, artist.images?.[0]?.url);
-                              }
-                            }}
+                            onClick={() => handleArtistClick(artist)}
                           />
                         ))}
                       </div>
@@ -970,11 +1104,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           <AlbumSearchCard
                             key={album.id}
                             album={album}
-                            onClick={() => {
-                              if (onSelectPlaylistById) {
-                                onSelectPlaylistById(album.id, album.name, album.images?.[0]?.url);
-                              }
-                            }}
+                            onClick={() => handleAlbumClick(album)}
                           />
                         ))}
                       </div>
@@ -993,11 +1123,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           return (
                             <div
                               key={pl.id}
-                              onClick={() => {
-                                if (onSelectPlaylistById) {
-                                  onSelectPlaylistById(pl.id, pl.name, cover);
-                                }
-                              }}
+                              onClick={() => handlePlaylistClick(pl)}
                               className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-xl relative"
                             >
                               <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
@@ -1084,11 +1210,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     <ArtistSearchCard
                       key={artist.id}
                       artist={artist}
-                      onClick={() => {
-                        if (onSelectPlaylistById) {
-                          onSelectPlaylistById(artist.id, artist.name, artist.images?.[0]?.url);
-                        }
-                      }}
+                      onClick={() => handleArtistClick(artist)}
                     />
                   ))}
                 </div>
@@ -1101,11 +1223,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     <AlbumSearchCard
                       key={album.id}
                       album={album}
-                      onClick={() => {
-                        if (onSelectPlaylistById) {
-                          onSelectPlaylistById(album.id, album.name, album.images?.[0]?.url);
-                        }
-                      }}
+                      onClick={() => handleAlbumClick(album)}
                     />
                   ))}
                 </div>
@@ -1119,11 +1237,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     return (
                       <div
                         key={pl.id}
-                        onClick={() => {
-                          if (onSelectPlaylistById) {
-                            onSelectPlaylistById(pl.id, pl.name, cover);
-                          }
-                        }}
+                        onClick={() => handlePlaylistClick(pl)}
                         className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-xl relative"
                       >
                         <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">

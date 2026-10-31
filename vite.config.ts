@@ -1047,68 +1047,106 @@ function dynamicSpotifyPlugin(): Plugin {
 
         if (!q) {
           res.statusCode = 200;
-          return res.end(JSON.stringify({ tracks: { items: [] } }));
+          return res.end(JSON.stringify({ tracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
         }
 
         try {
-          // 1. Search local library first
-          const localResults: any[] = [];
-          const allTracksFile = path.resolve('src/data/allRealPlaylistTracks.json');
-          if (fs.existsSync(allTracksFile)) {
-            try {
-              const allTracksData = JSON.parse(fs.readFileSync(allTracksFile, 'utf8'));
-              const qLower = q.toLowerCase();
-              for (const plKey of Object.keys(allTracksData)) {
-                const pl = allTracksData[plKey];
-                for (const t of pl.tracks || []) {
-                  const matchName = t.name?.toLowerCase().includes(qLower);
-                  const matchArtist = t.artists?.some((a: any) => a.name?.toLowerCase().includes(qLower));
-                  if ((matchName || matchArtist) && !localResults.some((ex) => ex.name.toLowerCase() === t.name.toLowerCase())) {
-                    localResults.push(t);
-                  }
-                }
-              }
-            } catch {}
-          }
+          const cleanQ = q.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
 
-          // 2. Query iTunes music search API for instant global song search
-          const itunesItems: any[] = [];
-          try {
-            const itunesUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=25`;
-            const itunesRes = await fetch(itunesUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          // Query Deezer Studio API + iTunes + Local simultaneously
+          const [deezerTracksRes, deezerArtistsRes, deezerAlbumsRes, itunesRes] = await Promise.all<any>([
+            fetch(`https://api.deezer.com/search?q=${encodeURIComponent(cleanQ || q)}&limit=25`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+            fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+            fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+            fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+          ]);
+
+          const deezerTracks = (deezerTracksRes.data || []).map((t: any) => {
+            const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+            return {
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: `alb-${t.album?.id || 'unknown'}`,
+                name: t.album?.title || t.title,
+                images: cover ? [{ url: cover }] : [],
               },
-            });
+            };
+          });
 
-            if (itunesRes.ok) {
-              const itunesData: any = await itunesRes.json();
-              for (const t of itunesData.results || []) {
-                const trackId = `itunes-${t.trackId}`;
-                const hdImage = (t.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-                if (!localResults.some((lr) => lr.name.toLowerCase() === t.trackName.toLowerCase())) {
-                  itunesItems.push({
-                    id: trackId,
-                    name: t.trackName,
-                    duration_ms: t.trackTimeMillis || 210000,
-                    preview_url: t.previewUrl || null,
-                    artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
-                    album: {
-                      id: `alb-${t.collectionId}`,
-                      name: t.collectionName || t.trackName,
-                      images: [{ url: hdImage }],
-                    },
-                  });
-                }
-              }
+          const itunesItems = (itunesRes.results || []).map((t: any) => ({
+            id: `itunes-${t.trackId}`,
+            name: t.trackName,
+            duration_ms: t.trackTimeMillis || 210000,
+            preview_url: null,
+            artists: [{ id: `art-${t.artistId}`, name: t.artistName }],
+            album: {
+              id: `alb-${t.collectionId}`,
+              name: t.collectionName || t.trackName,
+              images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+            },
+          }));
+
+          const seenTitles = new Set<string>();
+          const combined: any[] = [];
+
+          for (const t of [...deezerTracks, ...itunesItems]) {
+            const key = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+            if (key && !seenTitles.has(key)) {
+              seenTitles.add(key);
+              combined.push(t);
             }
-          } catch (itunesErr) {
-            console.warn('External iTunes search unreachable, falling back to local dataset:', itunesErr);
           }
 
-          const combined = [...localResults.slice(0, 5), ...itunesItems];
+          const artists = (deezerArtistsRes.data || []).map((a: any) => ({
+            id: `art-${a.id}`,
+            name: a.name,
+            images: [{ url: a.picture_xl || a.picture_big || a.picture_medium || '' }],
+          }));
+
+          const albums = (deezerAlbumsRes.data || []).map((a: any) => ({
+            id: `alb-${a.id}`,
+            name: a.title,
+            artists: [{ name: a.artist?.name || 'Artista' }],
+            images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
+            release_date: '2026',
+          }));
+
+          const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
+          const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
+          const playlists = [
+            {
+              id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+              name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+              images: [{ url: topCover }],
+              owner: { display_name: 'Spotify' },
+            },
+            {
+              id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+              name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+              images: [{ url: secondCover }],
+              owner: { display_name: 'Spotify' },
+            },
+          ];
+
           res.statusCode = 200;
-          return res.end(JSON.stringify({ tracks: { items: combined } }));
+          return res.end(JSON.stringify({
+            tracks: { items: combined },
+            artists: { items: artists },
+            albums: { items: albums },
+            playlists: { items: playlists },
+          }));
         } catch (err: any) {
           res.statusCode = 500;
           return res.end(JSON.stringify({ error: err.message, tracks: { items: [] } }));

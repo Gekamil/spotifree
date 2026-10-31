@@ -15,6 +15,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { syncChromeSession } from '../../services/sessionSync';
 import { ProfileDropdown } from './ProfileDropdown';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
+import { addRecentSearch } from '../../utils/recentSearches';
 
 interface DesktopTopNavProps {
   onNavigateHome: () => void;
@@ -112,6 +113,16 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
             value={searchQuery}
             onFocus={() => setActiveMainTab('search')}
             onChange={handleSearchChange}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim()) {
+                addRecentSearch({
+                  id: 'query-' + searchQuery.trim().toLowerCase(),
+                  type: 'query',
+                  title: searchQuery.trim(),
+                  subtitle: 'Búsqueda',
+                });
+              }
+            }}
             placeholder="¿Qué quieres reproducir?"
             className="w-full h-full bg-transparent text-white text-[15px] placeholder:text-[#a7a7a7] outline-none font-normal font-['SpotifyMixUI',-apple-system,BlinkMacSystemFont,system-ui,sans-serif] leading-[48px]"
           />

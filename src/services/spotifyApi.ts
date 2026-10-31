@@ -173,14 +173,14 @@ export async function searchSpotify(query: string): Promise<any | null> {
     }
   } catch {}
 
-  // 2. Query Backend Search API (/api/spotify/search) which accesses official Spotify Web API
+  // 2. Query Backend Search API (/api/spotify/search) which accesses Deezer, YouTube Music & Spotify
   try {
     const searchUrl = `/api/spotify/search?q=${encodeURIComponent(cleanQ)}`;
     const res = await fetch(searchUrl, { signal: AbortSignal.timeout?.(4500) });
     if (res.ok) {
       const data = await res.json();
       if (data.tracks?.items?.length) {
-        // Put official Spotify search results at the forefront
+        // Put official search results at the forefront
         const newSpotifyTracks: Track[] = [];
         for (const item of data.tracks.items) {
           if (!tracks.some((t) => t.id === item.id || (t.name.toLowerCase() === item.name.toLowerCase() && t.artists?.[0]?.name.toLowerCase() === item.artists?.[0]?.name.toLowerCase()))) {
@@ -192,6 +192,59 @@ export async function searchSpotify(query: string): Promise<any | null> {
       if (data.artists?.items?.length && artists.length === 0) artists = data.artists.items;
       if (data.albums?.items?.length && albums.length === 0) albums = data.albums.items;
       if (data.playlists?.items?.length && playlists.length === 0) playlists = data.playlists.items;
+    }
+  } catch {}
+
+  // 2b. Direct Deezer Global Music Catalog Query (Finds brand-new releases with 1000x1000 studio covers)
+  try {
+    const queryForDeezer = normalizedQ || cleanQ;
+    const [dzTracksRes, dzArtistsRes, dzAlbumsRes] = await Promise.all([
+      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(queryForDeezer)}&limit=25`, { signal: AbortSignal.timeout?.(3500) })
+        .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(queryForDeezer)}&limit=6`, { signal: AbortSignal.timeout?.(3500) })
+        .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(queryForDeezer)}&limit=6`, { signal: AbortSignal.timeout?.(3500) })
+        .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+    ]);
+
+    const dzTracks: Track[] = (dzTracksRes.data || []).map((t: any) => {
+      const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+      return {
+        id: `dz-${t.id}`,
+        name: t.title || t.title_short,
+        duration_ms: (t.duration || 210) * 1000,
+        preview_url: null,
+        artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+        album: {
+          id: `alb-${t.album?.id || 'unknown'}`,
+          name: t.album?.title || t.title,
+          images: cover ? [{ url: cover }] : [],
+        },
+      };
+    });
+
+    for (const t of dzTracks) {
+      if (!tracks.some((existing) => existing.id === t.id || (existing.name.toLowerCase() === t.name.toLowerCase() && existing.artists?.[0]?.name.toLowerCase() === t.artists?.[0]?.name.toLowerCase()))) {
+        tracks.push(t);
+      }
+    }
+
+    if (artists.length === 0 && dzArtistsRes.data?.length) {
+      artists = dzArtistsRes.data.map((a: any) => ({
+        id: `art-${a.id}`,
+        name: a.name,
+        images: [{ url: a.picture_xl || a.picture_big || a.picture_medium || '' }],
+      }));
+    }
+
+    if (albums.length === 0 && dzAlbumsRes.data?.length) {
+      albums = dzAlbumsRes.data.map((a: any) => ({
+        id: `alb-${a.id}`,
+        name: a.title,
+        artists: [{ name: a.artist?.name || 'Artista' }],
+        images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
+        release_date: '2026',
+      }));
     }
   } catch {}
 

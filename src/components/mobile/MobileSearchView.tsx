@@ -3,6 +3,14 @@ import { searchSpotify } from '../../services/spotifyApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { formatDuration } from '../../utils/formatters';
 import { handleImageError } from '../../utils/imageFallback';
+import {
+  getRecentSearches,
+  addRecentSearch,
+  removeRecentSearch,
+  clearRecentSearches,
+  type RecentSearchItem,
+} from '../../utils/recentSearches';
+import { CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 
 interface MobileSearchViewProps {
   onSelectPlaylistById: (id: string, name?: string, image?: string) => void;
@@ -104,8 +112,39 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
   });
   const [filter, setFilter] = useState<'todo' | 'canciones' | 'artistas' | 'playlists'>('todo');
   const [isSearching, setIsSearching] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
 
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
+
+  useEffect(() => {
+    const handleRecentUpdate = () => {
+      setRecentSearches(getRecentSearches());
+    };
+    window.addEventListener('spotifree_recent_searches_updated', handleRecentUpdate);
+    return () => {
+      window.removeEventListener('spotifree_recent_searches_updated', handleRecentUpdate);
+    };
+  }, []);
+
+  const handleRecentItemClick = (item: RecentSearchItem) => {
+    if (item.type === 'query') {
+      setQuery(item.title);
+    } else if (item.type === 'track') {
+      const trackData = item.data || {
+        id: item.id,
+        name: item.title,
+        artists: [{ name: item.subtitle.replace('Canción • ', '') }],
+        duration_ms: 200000,
+        album: { id: item.id, name: item.title, images: item.image ? [{ url: item.image }] : [] },
+      };
+      playTrack(trackData, [trackData]);
+    } else if (item.type === 'artist') {
+      const artistId = item.id.startsWith('art-') ? item.id : `art-${item.title.toLowerCase().replace(/[\s&]+/g, '-')}`;
+      onSelectPlaylistById(artistId, item.title, item.image);
+    } else if (item.type === 'playlist' || item.type === 'album') {
+      onSelectPlaylistById(item.id, item.title, item.image);
+    }
+  };
 
   useEffect(() => {
     if (!query.trim()) {
@@ -150,15 +189,26 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && query.trim()) {
+                addRecentSearch({
+                  id: 'query-' + query.trim().toLowerCase(),
+                  type: 'query',
+                  title: query.trim(),
+                  subtitle: 'Búsqueda',
+                });
+              }
+            }}
             placeholder="¿Qué te apetece escuchar?"
             className="w-full h-full bg-transparent text-black text-sm font-semibold outline-none placeholder:text-[#535353]"
           />
           {query && (
             <button
               onClick={() => setQuery('')}
-              className="text-[#535353] hover:text-black p-1 shrink-0"
+              className="text-[#535353] hover:text-black p-1 shrink-0 flex items-center justify-center"
+              title="Borrar búsqueda"
             >
-              ✕
+              <CloseNativeIcon size={16} />
             </button>
           )}
         </div>
@@ -203,6 +253,14 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                   <div
                     key={trk.id}
                     onClick={() => {
+                      addRecentSearch({
+                        id: trk.id,
+                        type: 'track',
+                        title: trk.name,
+                        subtitle: `Canción • ${trk.artists?.map((a: any) => a.name).join(', ') || ''}`,
+                        image: cover,
+                        data: trk,
+                      });
                       if (currentTrack?.id === trk.id) {
                         togglePlay();
                       } else {
@@ -251,9 +309,16 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
               {results.artists.slice(0, filter === 'todo' ? 4 : 12).map((art) => (
                 <div
                   key={art.id}
-                  onClick={() =>
-                    onSelectPlaylistById(`art-${art.name.toLowerCase().replace(/\s+/g, '-')}`, art.name, art.images?.[0]?.url)
-                  }
+                  onClick={() => {
+                    addRecentSearch({
+                      id: `art-${art.name.toLowerCase().replace(/\s+/g, '-')}`,
+                      type: 'artist',
+                      title: art.name,
+                      subtitle: 'Artista',
+                      image: art.images?.[0]?.url,
+                    });
+                    onSelectPlaylistById(`art-${art.name.toLowerCase().replace(/\s+/g, '-')}`, art.name, art.images?.[0]?.url);
+                  }}
                   className="flex items-center gap-3 p-2 rounded-lg active:bg-white/10 cursor-pointer"
                 >
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-[#242424] shrink-0 shadow">
@@ -288,7 +353,16 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
               {results.playlists.slice(0, filter === 'todo' ? 4 : 12).map((pl) => (
                 <div
                   key={pl.id}
-                  onClick={() => onSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url)}
+                  onClick={() => {
+                    addRecentSearch({
+                      id: pl.id,
+                      type: 'playlist',
+                      title: pl.name,
+                      subtitle: `Playlist • ${pl.owner?.display_name || 'Spotify'}`,
+                      image: pl.images?.[0]?.url,
+                    });
+                    onSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
+                  }}
                   className="flex items-center gap-3 p-2 rounded-lg active:bg-white/10 cursor-pointer"
                 >
                   <div className="w-12 h-12 rounded-md overflow-hidden bg-[#242424] shrink-0 shadow">
@@ -315,31 +389,84 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           )}
         </div>
       ) : (
-        /* Empty Query: 2-Column "Explorar todo" Genre Cards Grid matching Spotify Mobile 02_mobile_search.png */
-        <div className="space-y-3">
-          <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-            Explorar todo
-          </h2>
-
-          <div className="grid grid-cols-2 gap-3">
-            {MOBILE_CATEGORIES.map((cat) => (
-              <div
-                key={cat.id}
-                onClick={() => onSelectPlaylistById(cat.playlistId, cat.title, cat.imgSrc)}
-                style={{ backgroundColor: cat.bgColor }}
-                className="relative h-24 rounded-lg p-3 overflow-hidden cursor-pointer active:scale-98 transition-transform shadow-md"
-              >
-                <h3 className="text-base font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle']">
-                  {cat.title}
-                </h3>
-                <img
-                  src={cat.imgSrc}
-                  alt={cat.title}
-                  onError={handleImageError}
-                  className="absolute -bottom-2 -right-3 w-16 h-16 rounded shadow-lg transform rotate-[25deg] object-cover pointer-events-none"
-                />
+        <div className="space-y-6">
+          {recentSearches.length > 0 && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+                  Búsquedas recientes
+                </h2>
+                <button
+                  onClick={() => clearRecentSearches()}
+                  className="text-xs font-semibold text-[#b3b3b3] active:text-white transition-colors"
+                >
+                  Borrar todo
+                </button>
               </div>
-            ))}
+              <div className="space-y-1">
+                {recentSearches.slice(0, 10).map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => handleRecentItemClick(item)}
+                    className="flex items-center justify-between p-2 rounded-lg active:bg-white/10 cursor-pointer transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                      <div className={`w-12 h-12 overflow-hidden bg-[#242424] shrink-0 shadow ${item.type === 'artist' ? 'rounded-full' : 'rounded-md'}`}>
+                        {item.image ? (
+                          <img src={item.image} alt={item.title} className="w-full h-full object-cover" onError={handleImageError} />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[#727272]">
+                            {item.type === 'query' ? <SearchNativeIcon size={24} className="text-[#a7a7a7]" /> : '♪'}
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-white truncate leading-snug">{item.title}</p>
+                        <p className="text-xs text-[#b3b3b3] truncate mt-0.5">{item.subtitle}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeRecentSearch(item.id);
+                      }}
+                      className="text-[#b3b3b3] active:text-white p-2 shrink-0 text-sm"
+                      title="Eliminar de búsquedas recientes"
+                    >
+                      <CloseNativeIcon size={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 2-Column "Explorar todo" Genre Cards Grid matching Spotify Mobile 02_mobile_search.png */}
+          <div className="space-y-3">
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle'] px-1">
+              Explorar todo
+            </h2>
+
+            <div className="grid grid-cols-2 gap-3">
+              {MOBILE_CATEGORIES.map((cat) => (
+                <div
+                  key={cat.id}
+                  onClick={() => onSelectPlaylistById(cat.playlistId, cat.title, cat.imgSrc)}
+                  style={{ backgroundColor: cat.bgColor }}
+                  className="relative h-24 rounded-lg p-3 overflow-hidden cursor-pointer active:scale-98 transition-transform shadow-md"
+                >
+                  <h3 className="text-base font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle']">
+                    {cat.title}
+                  </h3>
+                  <img
+                    src={cat.imgSrc}
+                    alt={cat.title}
+                    onError={handleImageError}
+                    className="absolute -bottom-2 -right-3 w-16 h-16 rounded shadow-lg transform rotate-[25deg] object-cover pointer-events-none"
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

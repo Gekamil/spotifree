@@ -97,7 +97,7 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
 
 export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
   const result: DynamicShelf[] = [];
-  const feed = liveExtractedFeed as any[];
+  const feed = (Array.isArray(liveExtractedFeed) ? liveExtractedFeed : (liveExtractedFeed as any).shelves || []) as any[];
 
   feed.forEach((shelf, idx) => {
     // Exclude podcast / episodes per user request

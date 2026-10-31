@@ -617,6 +617,7 @@ const server = http.createServer(async (req, res) => {
   }
 
   // 7. Search API (/api/spotify/search) - Official Spotify API + iTunes + YouTube Music
+  // YouTube Music Innertube search engine: 'https://music.youtube.com/youtubei/v1/search' (clientName: 'WEB_REMIX')
   if (pathname === '/api/spotify/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
     res.setHeader('Content-Type', 'application/json');
@@ -665,13 +666,38 @@ const server = http.createServer(async (req, res) => {
         return res.end(JSON.stringify(spotifyData));
       }
 
-      // Secondary Fallback: iTunes + YouTube
-      const [itunesRes, ytTracks] = await Promise.all([
+      // Secondary Fallback: Deezer Studio API + YouTube Music + iTunes
+      const [deezerTracksRes, deezerArtistsRes, deezerAlbumsRes, itunesRes, ytTracks] = await Promise.all([
+        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(cleanQ || q)}&limit=25`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
-        searchYouTubeTracks(q, 15).catch(() => []),
+        searchYouTubeTracks(cleanQ || q, 15).catch(() => []),
       ]);
+
+      const deezerTracks = (deezerTracksRes.data || []).map(t => {
+        const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+        return {
+          id: `dz-${t.id}`,
+          name: t.title || t.title_short,
+          duration_ms: (t.duration || 210) * 1000,
+          preview_url: null,
+          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+          album: {
+            id: `alb-${t.album?.id || 'unknown'}`,
+            name: t.album?.title || t.title,
+            images: cover ? [{ url: cover }] : [],
+          },
+        };
+      });
 
       const itunesItems = (itunesRes.results || []).map(t => ({
         id: `itunes-${t.trackId}`,
@@ -689,16 +715,53 @@ const server = http.createServer(async (req, res) => {
       const seenTitles = new Set();
       const combined = [];
 
-      for (const t of [...itunesItems, ...ytTracks]) {
-        const key = (t.name || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      // Prioritize Deezer official releases, then YouTube Music, then iTunes
+      for (const t of [...deezerTracks, ...ytTracks, ...itunesItems]) {
+        const key = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
         if (key && !seenTitles.has(key)) {
           seenTitles.add(key);
           combined.push(t);
         }
       }
 
+      const artists = (deezerArtistsRes.data || []).map(a => ({
+        id: `art-${a.id}`,
+        name: a.name,
+        images: [{ url: a.picture_xl || a.picture_big || a.picture_medium || '' }],
+      }));
+
+      const albums = (deezerAlbumsRes.data || []).map(a => ({
+        id: `alb-${a.id}`,
+        name: a.title,
+        artists: [{ name: a.artist?.name || 'Artista' }],
+        images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
+        release_date: '2026',
+      }));
+
+      const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
+      const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
+      const playlists = [
+        {
+          id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+          images: [{ url: topCover }],
+          owner: { display_name: 'Spotify' },
+        },
+        {
+          id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+          name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+          images: [{ url: secondCover }],
+          owner: { display_name: 'Spotify' },
+        },
+      ];
+
       res.statusCode = 200;
-      return res.end(JSON.stringify({ tracks: { items: combined }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+      return res.end(JSON.stringify({
+        tracks: { items: combined },
+        artists: { items: artists },
+        albums: { items: albums },
+        playlists: { items: playlists },
+      }));
     } catch (e) {
       console.error('[Search error]:', e);
       res.statusCode = 200;
