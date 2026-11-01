@@ -21,8 +21,10 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
+import { useRotatingDJMessage } from '../../utils/djMessages';
 
 export const MobileLayout: React.FC = () => {
+  const rotatingDJMessage = useRotatingDJMessage(6500);
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums' | 'downloaded'>('all');
@@ -365,8 +367,8 @@ export const MobileLayout: React.FC = () => {
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-10 pt-4">
-                      <p className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm">
-                        Holi, soy tu DJ y te estoy esperando con toda esa música que te encanta.
+                      <p className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm min-h-[54px] flex items-center transition-opacity duration-300">
+                        {rotatingDJMessage}
                       </p>
 
                       <button
@@ -771,7 +773,11 @@ export const MobileLayout: React.FC = () => {
         {/* TAB 7: DEDICATED SPOTIFY AI DJ VIEW */}
         {mobileTab === 'dj' && (
           <div className="animate-cascade-down min-h-full">
-            <AIDJView isMobile onBack={() => setMobileTab('home')} />
+            <AIDJView
+              isMobile
+              onBack={() => setMobileTab('home')}
+              onOpenPlayer={() => setIsFullPlayerOpen(true)}
+            />
           </div>
         )}
       </div>

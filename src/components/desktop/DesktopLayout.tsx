@@ -243,7 +243,12 @@ export const DesktopLayout: React.FC = () => {
 
             {activeMainTab === 'profile' && <DesktopProfileView onSelectPlaylist={handleSelectPlaylist} />}
 
-            {activeMainTab === 'dj' && <AIDJView onBack={() => setActiveMainTab('home')} />}
+            {activeMainTab === 'dj' && (
+              <AIDJView
+                onBack={() => setActiveMainTab('home')}
+                onOpenPlayer={() => toggleRightSidebar('now-playing')}
+              />
+            )}
           </div>
 
           {/* Expand Right Sidebar Toggle Handle ("<") matching image 4 */}

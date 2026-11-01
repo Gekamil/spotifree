@@ -222,6 +222,7 @@ class AIDJVoiceService {
 
       const audio = new Audio(audioUrl);
       audio.preload = 'auto';
+      audio.playbackRate = 1.05;
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {
@@ -312,8 +313,8 @@ class AIDJVoiceService {
         utterance.voice = voice;
       }
       utterance.lang = voice ? voice.lang : 'es-ES';
-      utterance.rate = options.rate || 1.02;
-      utterance.pitch = options.pitch || 0.98;
+      utterance.rate = options.rate || 1.16;
+      utterance.pitch = options.pitch || 1.0;
 
       let phase = 0;
       this.voiceLevelInterval = setInterval(() => {
@@ -325,7 +326,7 @@ class AIDJVoiceService {
 
       let wordIdx = 0;
       const words = text.split(/\s+/);
-      const delayPerWord = Math.max(160, Math.min(280, 220 / (options.rate || 1.0)));
+      const delayPerWord = Math.max(140, Math.min(240, 190 / (options.rate || 1.16)));
 
       const wordInterval = setInterval(() => {
         if (wordIdx < words.length) {

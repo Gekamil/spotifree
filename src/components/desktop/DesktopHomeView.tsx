@@ -8,6 +8,7 @@ import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
+import { useRotatingDJMessage } from '../../utils/djMessages';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -26,6 +27,7 @@ interface DesktopHomeViewProps {
 }
 
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
+  const rotatingDJMessage = useRotatingDJMessage(6500);
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
   const [expandedShelf, setExpandedShelf] = useState<{
     id: string;
@@ -509,8 +511,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
               <div className="flex items-end justify-between relative z-10 pt-4">
-                <p className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm">
-                  Holi, soy tu DJ y te estoy esperando con toda esa música que te encanta.
+                <p className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm min-h-[60px] flex items-center transition-opacity duration-300">
+                  {rotatingDJMessage}
                 </p>
 
                 <button
