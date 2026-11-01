@@ -136,18 +136,21 @@ class AudioEngine {
     const crossfadeEnabledSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_enabled') : null;
     if (crossfadeEnabledSaved === 'false') return;
 
-    let crossfadeSec = 0;
+    let crossfadeSec = 4;
     try {
-      const saved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_sec') : null;
+      const saved = typeof window !== 'undefined'
+        ? (window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade'))
+        : null;
       if (saved !== null) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
-      else crossfadeSec = 5;
+      else crossfadeSec = 4;
     } catch {}
 
     // DJ Mode Check: When DJ Mode is active, bypass simple flat fade and use beat-aligned transition duration & custom transition config
     const isDjMode =
       typeof window !== 'undefined' &&
       (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
+        crossfadeEnabledSaved !== 'false');
 
     const state = usePlayerStore.getState();
     const curTrack = state.currentTrack;
@@ -183,7 +186,7 @@ class AudioEngine {
     // 5-25 seconds of outro cards, silent credits, or sponsors after the music ends.
     const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 ? curTrack.duration_ms / 1000 : durSec;
     const effectiveTrackEndSec =
-      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 1.5
+      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 40
         ? spotifyDurationSec
         : durSec;
 
@@ -314,20 +317,23 @@ class AudioEngine {
     const masterVolume = state.isMuted ? 0 : state.volume;
 
     // Mobile Single-Deck Continuity: On mobile devices, operating systems kill audio focus when a second iframe starts!
-    // Perform in-place transition on Deck 0 without invoking secondary player playVideo()
+    // Perform in-place musical transition on Deck 0 without invoking secondary player playVideo()
     if (this.isMobileOrPWA()) {
       const primaryYt = this.ytPlayers[0];
       const strip0 = this.deckStrips[0];
       const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
+      const transitionTimeSec = Math.max(2.5, Math.min(6.0, crossfadeSec));
+      const phase1Sec = Math.max(1.2, transitionTimeSec * 0.5);
+      const phase2Sec = transitionTimeSec - phase1Sec;
 
       if (this.audioContext && strip0) {
         const now = this.audioContext.currentTime;
         cancelScheduledAutomations(strip0, now);
-        scheduleResonantHPFSweep(strip0, now, 0.25, 40, 8000, 2.0);
+        scheduleResonantHPFSweep(strip0, now, phase1Sec, 40, 8000, 2.0);
         strip0.outputNode.gain.setValueAtTime(masterVolume, now);
-        strip0.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.25);
+        strip0.outputNode.gain.linearRampToValueAtTime(0.001, now + phase1Sec);
       } else if (primaryYt && typeof primaryYt.setVolume === 'function') {
-        try { primaryYt.setVolume(Math.round(masterVolume * 20)); } catch {}
+        try { primaryYt.setVolume(Math.round(masterVolume * 40)); } catch {}
       }
 
       if (this.audioContext && djConfig) {
@@ -335,10 +341,21 @@ class AudioEngine {
         this.activeAuxFX = triggerAuxiliaryTransitionFX(
           this.audioContext,
           djConfig.preset,
-          Math.min(crossfadeSec, 2),
+          transitionTimeSec,
           safeTempo,
           masterVolume
         );
+      }
+
+      // Smooth volume ramp down during Phase 1
+      const p1Steps = 6;
+      for (let s = 1; s <= p1Steps; s++) {
+        setTimeout(() => {
+          if (this.isCrossfading && primaryYt && typeof primaryYt.setVolume === 'function') {
+            const frac = 1.0 - (s / p1Steps);
+            try { primaryYt.setVolume(Math.round(masterVolume * frac * 100)); } catch {}
+          }
+        }, Math.round((phase1Sec * 1000 * s) / p1Steps));
       }
 
       setTimeout(() => {
@@ -346,19 +363,34 @@ class AudioEngine {
           try {
             if (typeof primaryYt.setVolume === 'function') primaryYt.setVolume(0);
             primaryYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+            if (typeof primaryYt.playVideo === 'function') primaryYt.playVideo();
           } catch {}
         }
-        this.finishCrossfade(crossfadeSec);
-        if (primaryYt && typeof primaryYt.setVolume === 'function') {
-          try { primaryYt.setVolume(Math.round(masterVolume * 100)); } catch {}
+
+        // Smooth volume ramp up during Phase 2
+        const p2Steps = 6;
+        for (let s = 1; s <= p2Steps; s++) {
+          setTimeout(() => {
+            if (this.isCrossfading && primaryYt && typeof primaryYt.setVolume === 'function') {
+              const frac = s / p2Steps;
+              try { primaryYt.setVolume(Math.round(masterVolume * frac * 100)); } catch {}
+            }
+          }, Math.round((phase2Sec * 1000 * s) / p2Steps));
         }
-        if (this.audioContext && strip0) {
-          const now = this.audioContext.currentTime;
-          cancelScheduledAutomations(strip0, now);
-          strip0.outputNode.gain.setValueAtTime(0.001, now);
-          strip0.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.2);
-        }
-      }, 250);
+
+        setTimeout(() => {
+          this.finishCrossfade(transitionTimeSec);
+          if (primaryYt && typeof primaryYt.setVolume === 'function') {
+            try { primaryYt.setVolume(Math.round(masterVolume * 100)); } catch {}
+          }
+          if (this.audioContext && strip0) {
+            const now = this.audioContext.currentTime;
+            cancelScheduledAutomations(strip0, now);
+            strip0.outputNode.gain.setValueAtTime(0.001, now);
+            strip0.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.3);
+          }
+        }, Math.round(phase2Sec * 1000));
+      }, Math.round(phase1Sec * 1000));
       return;
     }
 
@@ -369,7 +401,12 @@ class AudioEngine {
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
         if (typeof secYt.unMute === 'function') secYt.unMute();
-        secYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+        const currentData = typeof secYt.getVideoData === 'function' ? secYt.getVideoData() : null;
+        if (currentData && currentData.video_id === nextVideoId) {
+          secYt.seekTo(0, true);
+        } else {
+          secYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+        }
         secYt.playVideo();
       } catch {}
     } else if (this.activeEngine === 'html5') {
@@ -599,7 +636,7 @@ class AudioEngine {
           }
         }
 
-        // 2. Beat Roll & Rhythm Repetition / Stutter: Real audio volume rhythmic gating on the beat grid
+        // 2. Beat Roll & Rhythm Repetition / Stutter: Real audio rhythmic modulation on the beat grid
         if (
           djConfig.preset === 'beat_roll' ||
           djConfig.preset === 'repeticion_ritmo' ||
@@ -612,9 +649,8 @@ class AudioEngine {
             if (progress >= 0.82) division = 4; // 1/16 note roll
             const stepDur = beatSec / division;
             const cycle = ((accumulatedCrossfadeMs / 1000) % stepDur) / stepDur;
-            if (cycle > 0.55) {
-              outVol = outVol * 0.10; // rhythmic chop
-            }
+            const groovePulse = 0.60 + 0.40 * Math.sin(cycle * Math.PI * 2);
+            outVol = outVol * groovePulse;
           } else if (progress >= 0.98) {
             outVol = 0;
             inVol = masterVolume;
@@ -826,16 +862,16 @@ class AudioEngine {
     const isMobile = this.isMobileOrPWA();
 
     if (isMobile) {
-      // Mobile Single-Deck in-place smooth transition:
+      // Mobile Single-Deck in-place smooth musical transition:
       const player = this.ytPlayers[0];
       const strip = this.deckStrips[0];
 
       if (this.audioContext && strip) {
         const now = this.audioContext.currentTime;
         cancelScheduledAutomations(strip, now);
-        scheduleResonantHPFSweep(strip, now, 0.35, 40, 8000, 2.0);
+        scheduleResonantHPFSweep(strip, now, 0.7, 40, 8000, 2.0);
         strip.outputNode.gain.setValueAtTime(masterVolume, now);
-        strip.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.35);
+        strip.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.7);
       } else if (player && typeof player.setVolume === 'function') {
         try { player.setVolume(Math.round(masterVolume * 25)); } catch {}
       }
@@ -847,19 +883,22 @@ class AudioEngine {
           try {
             if (typeof player.setVolume === 'function') player.setVolume(0);
             player.loadVideoById({ videoId, startSeconds: 0 });
+            if (typeof player.playVideo === 'function') player.playVideo();
           } catch {}
         }
-        this.finishCrossfade();
-        if (player && typeof player.setVolume === 'function') {
-          try { player.setVolume(Math.round(masterVolume * 100)); } catch {}
-        }
-        if (this.audioContext && strip) {
-          const now = this.audioContext.currentTime;
-          cancelScheduledAutomations(strip, now);
-          strip.outputNode.gain.setValueAtTime(0.001, now);
-          strip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.2);
-        }
-      }, 350);
+        setTimeout(() => {
+          this.finishCrossfade();
+          if (player && typeof player.setVolume === 'function') {
+            try { player.setVolume(Math.round(masterVolume * 100)); } catch {}
+          }
+          if (this.audioContext && strip) {
+            const now = this.audioContext.currentTime;
+            cancelScheduledAutomations(strip, now);
+            strip.outputNode.gain.setValueAtTime(0.001, now);
+            strip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.3);
+          }
+        }, 500);
+      }, 700);
     } else {
       // Desktop dual-deck transition
       this.preloadedNext = { track: nextTrack, videoId, query };
@@ -868,6 +907,110 @@ class AudioEngine {
         : null;
       await this.executeCrossfade(2, djConfig);
     }
+  }
+
+  /**
+   * Acoustic DJ Audition Engine.
+   * Synthesizes studio preview audio via Web Audio API oscillators, filters & noise envelopes
+   * with exact beat-matching, harmonic chords, and DJ transition FX presets.
+   */
+  public startAcousticAudition(
+    config: DJTransitionConfig,
+    onProgress: (progress: number) => void,
+    onEnded: () => void
+  ): boolean {
+    this.stopTransitionAudition();
+    this.isAuditioning = true;
+    this.initAudioContext();
+    if (!this.audioContext) return false;
+
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+
+    const safeTempo = config.tempoA && config.tempoA > 40 && config.tempoA < 240 ? config.tempoA : 128;
+    const barSec = (4 * 60) / safeTempo;
+    const transitionDur = Math.max(2.0, Math.min(16.0, barSec * (config.compases || 2)));
+    const leadInSec = 1.5;
+    const leadOutSec = 2.0;
+    const totalSec = leadInSec + transitionDur + leadOutSec;
+    const totalDurationMs = totalSec * 1000;
+    const startTime = Date.now();
+    const ctx = this.audioContext;
+    const now = ctx.currentTime;
+
+    // Master bus
+    const masterGain = ctx.createGain();
+    masterGain.gain.setValueAtTime(0.18, now);
+    masterGain.connect(ctx.destination);
+
+    // Rhythm groove generator (kick + snare)
+    const beatSec = 60 / safeTempo;
+    const totalBeats = Math.ceil(totalSec / beatSec);
+
+    for (let b = 0; b < totalBeats; b++) {
+      const beatTime = now + b * beatSec;
+      const isDownbeat = b % 4 === 0;
+      const isSnare = b % 2 === 1;
+
+      // Kick on beats 1 and 3
+      if (isDownbeat || b % 4 === 2) {
+        const osc = ctx.createOscillator();
+        const kickGain = ctx.createGain();
+        osc.frequency.setValueAtTime(130, beatTime);
+        osc.frequency.exponentialRampToValueAtTime(45, beatTime + 0.08);
+        kickGain.gain.setValueAtTime(0.35, beatTime);
+        kickGain.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.18);
+        osc.connect(kickGain);
+        kickGain.connect(masterGain);
+        osc.start(beatTime);
+        osc.stop(beatTime + 0.2);
+      }
+
+      // Snare on beats 2 and 4
+      if (isSnare) {
+        const osc = ctx.createOscillator();
+        const snareGain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, beatTime);
+        snareGain.gain.setValueAtTime(0.2, beatTime);
+        snareGain.gain.exponentialRampToValueAtTime(0.001, beatTime + 0.12);
+        osc.connect(snareGain);
+        snareGain.connect(masterGain);
+        osc.start(beatTime);
+        osc.stop(beatTime + 0.14);
+      }
+    }
+
+    // Trigger auxiliary DJ preset effect during the mix window
+    this.stopAuxiliaryTransitionFX();
+    this.activeAuxFX = triggerAuxiliaryTransitionFX(
+      ctx,
+      config.preset,
+      transitionDur,
+      safeTempo,
+      1.0,
+      now + leadInSec
+    );
+
+    this.auditionInterval = window.setInterval(() => {
+      if (!this.isAuditioning) {
+        this.stopTransitionAudition();
+        try { masterGain.disconnect(); } catch {}
+        return;
+      }
+      const elapsedMs = Date.now() - startTime;
+      const progress = Math.min(1.0, Math.max(0.0, elapsedMs / totalDurationMs));
+      onProgress(progress);
+
+      if (elapsedMs >= totalDurationMs) {
+        this.stopTransitionAudition();
+        try { masterGain.disconnect(); } catch {}
+        onEnded();
+      }
+    }, 40);
+
+    return true;
   }
 
   /**
@@ -917,8 +1060,7 @@ class AudioEngine {
     let videoIdB = await this.resolveVideoId(queryB, trackB.id);
 
     if (!videoIdA || !videoIdB) {
-      this.isAuditioning = false;
-      return false; // Fallback to acoustic synthesis
+      return this.startAcousticAudition(config, onProgress, onEnded);
     }
 
     // Compute DJ timing parameters
@@ -940,8 +1082,7 @@ class AudioEngine {
     const p1 = this.ytPlayers[1];
 
     if (!p0 || !p1) {
-      this.isAuditioning = false;
-      return false;
+      return this.startAcousticAudition(config, onProgress, onEnded);
     }
 
     // Reset playback rates
@@ -980,6 +1121,10 @@ class AudioEngine {
         }
       } catch {}
       await new Promise((r) => setTimeout(r, 50));
+    }
+
+    if (!isP0Playing) {
+      return this.startAcousticAudition(config, onProgress, onEnded);
     }
 
     const startTime = Date.now();

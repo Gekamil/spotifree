@@ -168,6 +168,12 @@ const store = create<PlayerState>((set, get) => ({
       if (unplayed.length > 0) {
         const rnd = Math.floor(Math.random() * unplayed.length);
         nextPreselectedId = unplayed[rnd].id;
+      } else {
+        const candidates = activeQueue.filter((t) => t.id !== track.id);
+        if (candidates.length > 0) {
+          const rnd = Math.floor(Math.random() * candidates.length);
+          nextPreselectedId = candidates[rnd].id;
+        }
       }
     }
 
@@ -400,12 +406,21 @@ const store = create<PlayerState>((set, get) => ({
         const found = queue.find((t) => t.id === preselectedNextTrackId);
         if (found) return found;
       }
-      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id));
+      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id) && t.id !== currentTrack?.id);
       if (unplayed.length > 0) {
-        return unplayed[0];
+        const rnd = Math.floor(Math.random() * unplayed.length);
+        const rndTrack = unplayed[rnd];
+        set({ preselectedNextTrackId: rndTrack.id });
+        return rndTrack;
       }
       const candidates = queue.filter((t) => t.id !== currentTrack?.id);
-      return candidates[0] || queue[0];
+      if (candidates.length > 0) {
+        const rnd = Math.floor(Math.random() * candidates.length);
+        const rndTrack = candidates[rnd];
+        set({ preselectedNextTrackId: rndTrack.id });
+        return rndTrack;
+      }
+      return queue[0] || null;
     } else {
       const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
       if (currentIndex === queue.length - 1 && repeatMode === 'off') {
@@ -433,6 +448,12 @@ const store = create<PlayerState>((set, get) => ({
       if (unplayed.length > 0) {
         const rnd = Math.floor(Math.random() * unplayed.length);
         nextPreselectedId = unplayed[rnd].id;
+      } else {
+        const candidates = state.queue.filter((t) => t.id !== track.id);
+        if (candidates.length > 0) {
+          const rnd = Math.floor(Math.random() * candidates.length);
+          nextPreselectedId = candidates[rnd].id;
+        }
       }
     }
 
@@ -554,13 +575,24 @@ const store = create<PlayerState>((set, get) => ({
           shuffleMode: nextShuffle,
           isShuffle,
           playedInShuffle: [],
+          preselectedNextTrackId: null,
           queue: state.queue.filter((t: any) => !t.isSmartRecommendation),
         };
+      }
+      const played = state.currentTrack && isShuffle ? [state.currentTrack.id] : [];
+      let preselectedId: string | null = null;
+      if (state.queue.length > 1) {
+        const unplayed = state.queue.filter((t) => t.id !== state.currentTrack?.id);
+        if (unplayed.length > 0) {
+          const rnd = Math.floor(Math.random() * unplayed.length);
+          preselectedId = unplayed[rnd].id;
+        }
       }
       return {
         shuffleMode: nextShuffle,
         isShuffle,
-        playedInShuffle: state.currentTrack && isShuffle ? [state.currentTrack.id] : [],
+        playedInShuffle: played,
+        preselectedNextTrackId: preselectedId,
       };
     });
     if (get().shuffleMode === 'smart' && get().currentTrack) {

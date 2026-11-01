@@ -1021,10 +1021,10 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   if (!isOpen || !trackA || !trackB) return null;
 
   return (
-    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 animate-fade-in font-['SpotifyMixUI'] overflow-hidden">
-      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-[#121212] rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[92vh] sm:max-h-[90vh]">
+    <div className="fixed inset-0 z-[9999] bg-black/85 backdrop-blur-md flex items-start sm:items-center justify-center p-2.5 sm:p-4 pt-14 sm:pt-6 pb-4 overflow-y-auto animate-fade-in font-['SpotifyMixUI']">
+      <div className="w-full max-w-md md:max-w-2xl lg:max-w-3xl bg-[#121212] rounded-2xl border border-white/10 shadow-2xl flex flex-col overflow-hidden max-h-[88vh] sm:max-h-[90vh] my-auto shrink-0">
         {/* Top Header Row matching Spotify Screenshot */}
-        <div className="px-4 py-3 sm:px-5 flex items-center justify-between border-b border-white/10 shrink-0 bg-[#121212] sticky top-0 z-40">
+        <div className="px-4 py-3 sm:px-5 flex items-center justify-between border-b border-white/10 shrink-0 bg-[#121212] sticky top-0 z-50">
           {/* Close button (✕ Cerrar) */}
           <button
             onClick={onClose}

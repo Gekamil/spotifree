@@ -1032,6 +1032,8 @@ function dynamicSpotifyPlugin(): Plugin {
         return res.end(JSON.stringify({ success: true, decoupled: true }));
       });
 
+      const searchCache = new Map<string, any>();
+
       // 3b. Dynamic Music Search (/api/spotify/search)
       server.middlewares.use('/api/spotify/search', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -1052,9 +1054,19 @@ function dynamicSpotifyPlugin(): Plugin {
 
         try {
           const cleanQ = q.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+          const cacheKey = cleanQ.toLowerCase();
+          if (searchCache.has(cacheKey)) {
+            res.statusCode = 200;
+            return res.end(JSON.stringify(searchCache.get(cacheKey)));
+          }
+
+          const words = cleanQ.toLowerCase().split(/\s+/).filter(Boolean);
+          const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat']);
+          const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
+          const firstWord = significantWords[0] || words[0] || cleanQ;
 
           // Query Deezer Studio API + iTunes + Local simultaneously
-          const [deezerTracksRes, deezerArtistsRes, deezerAlbumsRes, itunesRes] = await Promise.all<any>([
+          const fetchPromises: Promise<any>[] = [
             fetch(`https://api.deezer.com/search?q=${encodeURIComponent(cleanQ || q)}&limit=25`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -1067,9 +1079,33 @@ function dynamicSpotifyPlugin(): Plugin {
             fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
-          ]);
+          ];
 
-          const deezerTracks = (deezerTracksRes.data || []).map((t: any) => {
+          if (significantWords.length > 1) {
+            for (const sw of [significantWords[0], significantWords[significantWords.length - 1]]) {
+              fetchPromises.push(
+                fetch(`https://api.deezer.com/search?q=${encodeURIComponent(sw)}&limit=15`, {
+                  headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+                }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
+              );
+            }
+          } else if (words.length > 1) {
+            fetchPromises.push(
+              fetch(`https://api.deezer.com/search?q=${encodeURIComponent(firstWord)}&limit=15`, {
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
+            );
+          }
+
+          const results = await Promise.all(fetchPromises);
+          const deezerTracksRes = results[0];
+          const deezerArtistsRes = results[1];
+          const deezerAlbumsRes = results[2];
+          const itunesRes = results[3];
+          const deezerExtraRes = results[4] || { data: [] };
+
+          const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
+          const deezerTracks = allDeezerRaw.map((t: any) => {
             const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
             return {
               id: `dz-${t.id}`,
@@ -1101,6 +1137,31 @@ function dynamicSpotifyPlugin(): Plugin {
           const seenTitles = new Set<string>();
           const combined: any[] = [];
 
+          // If multi-word search, enrich candidate tracks matching title words with Deezer contributors
+          if (words.length > 1) {
+            const candidates = deezerTracks.filter((t: any) =>
+              words.some(w => (t.name || '').toLowerCase().includes(w))
+            ).slice(0, 4);
+
+            await Promise.all(
+              candidates.map(async (t: any) => {
+                const trackId = t.id.replace('dz-', '');
+                try {
+                  const detail: any = await fetch(`https://api.deezer.com/track/${trackId}`, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    signal: AbortSignal.timeout(1500),
+                  }).then(r => r.ok ? r.json() : null);
+                  if (detail && detail.contributors && detail.contributors.length > 0) {
+                    t.artists = detail.contributors.map((c: any) => ({
+                      id: `art-${c.id}`,
+                      name: c.name,
+                    }));
+                  }
+                } catch {}
+              })
+            );
+          }
+
           for (const t of [...deezerTracks, ...itunesItems]) {
             const key = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
             if (key && !seenTitles.has(key)) {
@@ -1108,6 +1169,24 @@ function dynamicSpotifyPlugin(): Plugin {
               combined.push(t);
             }
           }
+
+          // Relevance scoring to put exact and multi-word title matches at top
+          combined.sort((a, b) => {
+            const scoreTrack = (t: any) => {
+              const tName = (t.name || '').toLowerCase();
+              const artistNames = (t.artists || []).map((art: any) => (art.name || '').toLowerCase()).join(' ');
+              const full = `${tName} ${artistNames}`;
+              let score = 0;
+              if (tName === cleanQ.toLowerCase()) score += 160;
+              if (full === cleanQ.toLowerCase()) score += 150;
+              if (words.some(w => tName === w)) score += 100;
+              if (words.every(w => full.includes(w))) score += 80;
+              if (words.some(w => tName.includes(w))) score += 50;
+              if (words.some(w => artistNames.includes(w))) score += 20;
+              return score;
+            };
+            return scoreTrack(b) - scoreTrack(a);
+          });
 
           const artists = (deezerArtistsRes.data || []).map((a: any) => ({
             id: `art-${a.id}`,
@@ -1140,13 +1219,15 @@ function dynamicSpotifyPlugin(): Plugin {
             },
           ];
 
-          res.statusCode = 200;
-          return res.end(JSON.stringify({
+          const payload = {
             tracks: { items: combined },
             artists: { items: artists },
             albums: { items: albums },
             playlists: { items: playlists },
-          }));
+          };
+          searchCache.set(cacheKey, payload);
+          res.statusCode = 200;
+          return res.end(JSON.stringify(payload));
         } catch (err: any) {
           res.statusCode = 500;
           return res.end(JSON.stringify({ error: err.message, tracks: { items: [] } }));

@@ -667,7 +667,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Secondary Fallback: Deezer Studio API + YouTube Music + iTunes
-      const [deezerTracksRes, deezerArtistsRes, deezerAlbumsRes, itunesRes, ytTracks] = await Promise.all([
+      const words = cleanQ.toLowerCase().split(/\s+/).filter(Boolean);
+      const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat']);
+      const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
+      const firstWord = significantWords[0] || words[0] || cleanQ;
+
+      const fetchPromises = [
         fetch(`https://api.deezer.com/search?q=${encodeURIComponent(cleanQ || q)}&limit=25`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -681,9 +686,34 @@ const server = http.createServer(async (req, res) => {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
         searchYouTubeTracks(cleanQ || q, 15).catch(() => []),
-      ]);
+      ];
 
-      const deezerTracks = (deezerTracksRes.data || []).map(t => {
+      if (significantWords.length > 1) {
+        for (const sw of [significantWords[0], significantWords[significantWords.length - 1]]) {
+          fetchPromises.push(
+            fetch(`https://api.deezer.com/search?q=${encodeURIComponent(sw)}&limit=15`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
+          );
+        }
+      } else if (words.length > 1) {
+        fetchPromises.push(
+          fetch(`https://api.deezer.com/search?q=${encodeURIComponent(firstWord)}&limit=15`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
+        );
+      }
+
+      const results = await Promise.all(fetchPromises);
+      const deezerTracksRes = results[0];
+      const deezerArtistsRes = results[1];
+      const deezerAlbumsRes = results[2];
+      const itunesRes = results[3];
+      const ytTracks = results[4] || [];
+      const deezerExtraRes = results[5] || { data: [] };
+
+      const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
+      const deezerTracks = allDeezerRaw.map(t => {
         const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
         return {
           id: `dz-${t.id}`,
@@ -715,6 +745,31 @@ const server = http.createServer(async (req, res) => {
       const seenTitles = new Set();
       const combined = [];
 
+      // If multi-word search, enrich candidate tracks matching title words with Deezer contributors
+      if (words.length > 1) {
+        const candidates = deezerTracks.filter(t =>
+          words.some(w => (t.name || '').toLowerCase().includes(w))
+        ).slice(0, 4);
+
+        await Promise.all(
+          candidates.map(async t => {
+            const trackId = t.id.replace('dz-', '');
+            try {
+              const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+                headers: { 'User-Agent': 'Mozilla/5.0' },
+                signal: AbortSignal.timeout(1500),
+              }).then(r => r.ok ? r.json() : null);
+              if (detail && detail.contributors && detail.contributors.length > 0) {
+                t.artists = detail.contributors.map(c => ({
+                  id: `art-${c.id}`,
+                  name: c.name,
+                }));
+              }
+            } catch {}
+          })
+        );
+      }
+
       // Prioritize Deezer official releases, then YouTube Music, then iTunes
       for (const t of [...deezerTracks, ...ytTracks, ...itunesItems]) {
         const key = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
@@ -723,6 +778,24 @@ const server = http.createServer(async (req, res) => {
           combined.push(t);
         }
       }
+
+      // Relevance scoring to put exact and multi-word title matches at top
+      combined.sort((a, b) => {
+        const scoreTrack = (t) => {
+          const tName = (t.name || '').toLowerCase();
+          const artistNames = (t.artists || []).map(art => (art.name || '').toLowerCase()).join(' ');
+          const full = `${tName} ${artistNames}`;
+          let score = 0;
+          if (tName === cleanQ.toLowerCase()) score += 160;
+          if (full === cleanQ.toLowerCase()) score += 150;
+          if (words.some(w => tName === w)) score += 100;
+          if (words.every(w => full.includes(w))) score += 80;
+          if (words.some(w => tName.includes(w))) score += 50;
+          if (words.some(w => artistNames.includes(w))) score += 20;
+          return score;
+        };
+        return scoreTrack(b) - scoreTrack(a);
+      });
 
       const artists = (deezerArtistsRes.data || []).map(a => ({
         id: `art-${a.id}`,
