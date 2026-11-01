@@ -652,6 +652,12 @@ const server = http.createServer(async (req, res) => {
 
       // If Spotify Web API returned tracks, enrich HD images and return primary!
       if (spotifyData && spotifyData.tracks?.items?.length > 0) {
+        // Enrich public playlists if not present in Web API response
+        if (!spotifyData.playlists?.items?.length) {
+          const spotifyPlaylists = await searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []);
+          spotifyData.playlists = { items: spotifyPlaylists };
+        }
+
         // Ensure image URLs are HD 640x640
         if (spotifyData.tracks?.items) {
           spotifyData.tracks.items = spotifyData.tracks.items.map(t => ({

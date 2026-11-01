@@ -241,7 +241,11 @@ export async function searchSpotify(query: string): Promise<any | null> {
       }
       if (data.artists?.items?.length && artists.length === 0) artists = data.artists.items;
       if (data.albums?.items?.length && albums.length === 0) albums = data.albums.items;
-      if (data.playlists?.items?.length && playlists.length === 0) playlists = data.playlists.items;
+      if (data.playlists?.items?.length) {
+        for (const pl of data.playlists.items) {
+          if (!playlists.some(p => p.id === pl.id)) playlists.push(pl);
+        }
+      }
     }
   } catch {}
 
