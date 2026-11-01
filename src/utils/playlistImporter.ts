@@ -1,5 +1,6 @@
 import type { Playlist, Track } from '../types/spotify';
 import { saveSharedPlaylist } from './userStorage';
+import { stripHtml } from './formatters';
 
 export interface ImportResult {
   success: boolean;
@@ -30,7 +31,7 @@ export async function importExternalPlaylist(
         const pl: Playlist = {
           id: `imported-sp-${playlistId}`,
           name: data.name || 'Playlist de Spotify Importada',
-          description: data.description || `Importada desde Spotify por ${userName}`,
+          description: stripHtml(data.description) || `Importada desde Spotify por ${userName}`,
           images: data.images || [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
           owner: { display_name: userName, id: userId },
           tracks: {
@@ -45,7 +46,7 @@ export async function importExternalPlaylist(
         saveSharedPlaylist({
           id: pl.id,
           name: pl.name,
-          description: pl.description,
+          description: stripHtml(pl.description),
           coverUrl: pl.images?.[0]?.url,
           ownerId: userId,
           ownerName: userName,

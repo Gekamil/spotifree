@@ -210,7 +210,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         }}
       />
 
-      {/* Top Header matching Photo 2 */}
+      {/* Top Header matching Photo 2 (Clean header without lines) */}
       <header className="flex items-center justify-between px-2 py-1.5 z-20 shrink-0">
         <button
           onClick={onBack}
@@ -231,16 +231,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </span>
         </div>
 
-        {/* Queue / Tracks List Toggle */}
-        <button
-          onClick={() => setShowQueueDrawer(!showQueueDrawer)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md ${
-            showQueueDrawer ? 'bg-[#1ed760] text-black shadow-md' : 'text-white/80 hover:text-white bg-black/25 hover:bg-black/45'
-          }`}
-          title="Ver cola y canciones del DJ"
-        >
-          <QueueNativeIcon size={18} />
-        </button>
+        {/* Clean spacer on right to keep DJ perfectly centered without any lines */}
+        <div className="w-10 h-10" />
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
@@ -376,8 +368,18 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </div>
             </div>
 
-            {/* Right: Like Button */}
+            {/* Right: Actions (Cola + Like) */}
             <div className="flex items-center gap-1 shrink-0 mr-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => setShowQueueDrawer(true)}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+                  showQueueDrawer ? 'text-[#1ed760] bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/10'
+                }`}
+                title="Ver cola del DJ"
+              >
+                <QueueNativeIcon size={18} />
+              </button>
+
               <button
                 onClick={() => toggleLike(currentTrack.id)}
                 className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
@@ -396,7 +398,18 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
       {/* Bottom Playback Controls matching Photo 2 */}
       <footer className="relative z-20 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between shrink-0">
-        <div className="w-12 sm:w-14" />
+        {/* Bottom Left: Toggle Cola del DJ */}
+        <button
+          onClick={() => setShowQueueDrawer(!showQueueDrawer)}
+          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md border border-white/10 ${
+            showQueueDrawer
+              ? 'bg-[#1ed760] text-black shadow-lg shadow-[#1ed760]/30'
+              : 'bg-black/35 hover:bg-black/55 text-white/80 hover:text-white'
+          }`}
+          title="Ver cola de canciones del DJ"
+        >
+          <QueueNativeIcon size={20} />
+        </button>
 
         {/* Controls: Prev, Play/Pause, Next */}
         <div className="flex items-center gap-6 sm:gap-8 mx-auto">
@@ -440,21 +453,35 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         </button>
       </footer>
 
-      {/* Queue Drawer (Slides up when Queue button is tapped) */}
+      {/* Queue Drawer (Slides up smoothly from bottom like native Spotify bottom-sheet) */}
       {showQueueDrawer && (
-        <div className="absolute inset-0 z-40 bg-black/85 backdrop-blur-md flex flex-col justify-end animate-in fade-in duration-200">
-          <div className="bg-[#181818] rounded-t-2xl max-h-[75vh] flex flex-col border-t border-white/10 shadow-2xl p-6">
-            <div className="flex items-center justify-between pb-4 border-b border-white/10">
+        <div
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-300 select-none"
+          onClick={() => setShowQueueDrawer(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#121212] rounded-t-3xl max-h-[76vh] flex flex-col border-t border-white/15 shadow-[0_-16px_50px_rgba(0,0,0,0.85)] p-5 pb-8 animate-in slide-in-from-bottom duration-300 ease-out"
+          >
+            {/* Top Drag Indicator Pill */}
+            <div
+              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-pointer active:scale-95 transition-all"
+              onClick={() => setShowQueueDrawer(false)}
+              title="Cerrar cola"
+            />
+
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
               <div>
-                <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+                <h3 className="text-base font-black text-white font-['SpotifyMixUITitle']">
                   Cola del DJ • {tracksToDisplay.length} canciones
                 </h3>
                 <p className="text-xs text-[#a7a7a7] mt-0.5">{currentSetTitle || 'Sesión en vivo'}</p>
               </div>
               <button
                 onClick={() => setShowQueueDrawer(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
-                title="Cerrar"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer active:scale-90 transition-transform"
+                title="Cerrar cola"
               >
                 <CloseNativeIcon size={16} />
               </button>

@@ -1,6 +1,18 @@
 const MEMORY_PLAYLIST_CACHE = new Map();
 import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './_lib/extract-session.js';
 
+function stripHtml(text) {
+  if (!text) return '';
+  return text
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
 function parseEmbedHtml(html, cleanId) {
   const scriptMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
   if (!scriptMatch) {
@@ -49,7 +61,7 @@ function parseEmbedHtml(html, cleanId) {
   return {
     id: cleanId,
     name: entity.name,
-    description: entity.description || '',
+    description: stripHtml(entity.description || ''),
     type: entity.type || 'playlist',
     images: [{ url: coverUrl }],
     owner: {
@@ -117,7 +129,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
           const mapped = {
             id: cleanId,
             name: data.title,
-            description: data.description || `Playlist de ${data.creator?.name || 'Usuario'}`,
+            description: stripHtml(data.description) || `Playlist de ${data.creator?.name || 'Usuario'}`,
             type: 'playlist',
             images: cover ? [{ url: cover }] : [],
             owner: {
@@ -414,7 +426,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             return {
               id: cleanId,
               name: pl.name,
-              description: pl.description || '',
+              description: stripHtml(pl.description || ''),
               type: 'playlist',
               images: coverUrl ? [{ url: coverUrl }] : [],
               owner: {

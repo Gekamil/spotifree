@@ -207,16 +207,27 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         });
       }
 
-      // Fetch Spotify Canvas video loop
-      setCanvasUrl(currentTrack.canvasUrl || null);
-      fetchTrackCanvas(currentTrack.id).then((cUrl) => {
-        if (!cancelled && cUrl) {
-          setCanvasUrl(cUrl);
-          if (!initial || initial.includes('liked-songs')) {
-            setIsCanvasMode(true);
+      // Reset canvas state immediately on track change to prevent state leakage
+      setIsCanvasMode(false);
+      setCanvasUrl(null);
+
+      // Fetch Spotify Canvas video loop ONLY for valid Spotify track IDs
+      const cleanSpotifyId = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      if (/^[0-9a-zA-Z]{22}$/.test(cleanSpotifyId)) {
+        fetchTrackCanvas(cleanSpotifyId).then((cUrl) => {
+          if (!cancelled) {
+            if (cUrl) {
+              setCanvasUrl(cUrl);
+            } else {
+              setCanvasUrl(null);
+              setIsCanvasMode(false);
+            }
           }
-        }
-      });
+        });
+      } else {
+        setCanvasUrl(null);
+        setIsCanvasMode(false);
+      }
 
       // Search official music video / videoclip for Video mode
       const clipQuery = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''} video oficial videoclip`;

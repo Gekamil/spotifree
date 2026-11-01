@@ -260,7 +260,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore();
   const playlists = useSpotifyDataStore((s) => s.playlists);
   const [isFollowing, setIsFollowing] = useState(true);
-  const [isCanvasMode, setIsCanvasMode] = useState(true);
+  const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
@@ -280,16 +280,27 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   useEffect(() => {
     let cancelled = false;
     if (currentTrack) {
-      // Fetch Spotify Canvas
-      setCanvasUrl(currentTrack.canvasUrl || null);
-      fetchTrackCanvas(currentTrack.id).then((cUrl) => {
-        if (!cancelled && cUrl) {
-          setCanvasUrl(cUrl);
-          if (!hdCover || hdCover.includes('liked-songs')) {
-            setIsCanvasMode(true);
+      // Reset canvas state immediately on track change to prevent state leakage
+      setIsCanvasMode(false);
+      setCanvasUrl(null);
+
+      // Fetch Spotify Canvas video loop ONLY for valid Spotify track IDs
+      const cleanSpotifyId = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      if (/^[0-9a-zA-Z]{22}$/.test(cleanSpotifyId)) {
+        fetchTrackCanvas(cleanSpotifyId).then((cUrl) => {
+          if (!cancelled) {
+            if (cUrl) {
+              setCanvasUrl(cUrl);
+            } else {
+              setCanvasUrl(null);
+              setIsCanvasMode(false);
+            }
           }
-        }
-      });
+        });
+      } else {
+        setCanvasUrl(null);
+        setIsCanvasMode(false);
+      }
 
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
       const cachedVid = audioEngine.getCurrentVideoId();

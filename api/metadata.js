@@ -60,6 +60,13 @@ async function handleCanvas(req, res, url) {
   const cleanId = (trackId || trackUri || url.searchParams.get('trackId') || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
   if (!cleanId) return res.status(200).json({ canvasUrl: null });
+  // Spotify track IDs are 22-character alphanumeric strings.
+  // Immediately reject non-Spotify IDs (e.g. Deezer 'dz-*', iTunes, YouTube) to avoid false canvas URLs
+  if (!/^[0-9a-zA-Z]{22}$/.test(cleanId)) {
+    CANVAS_CACHE.set(cleanId, null);
+    return res.status(200).json({ canvasUrl: null });
+  }
+
   if (CANVAS_CACHE.has(cleanId)) return res.status(200).json({ canvasUrl: CANVAS_CACHE.get(cleanId) });
 
   const cookie = req.headers['x-spotify-cookie'] || req.query?.cookie || '';

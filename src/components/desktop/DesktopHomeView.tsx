@@ -160,7 +160,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             .map((p) => ({
               id: p.id,
               title: p.name,
-              subtitle: p.description || 'Lanzamiento recomendado',
+              subtitle: stripHtml(p.description) || 'Lanzamiento recomendado',
               image: p.images?.[0]?.url || '',
             })),
           hasSeeAll: true,

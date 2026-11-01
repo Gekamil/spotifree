@@ -14,7 +14,7 @@ import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
-import { formatDuration } from '../../utils/formatters';
+import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
@@ -810,7 +810,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
             {dynamicPlaylist.description && (
               <p className="text-sm text-[#b3b3b3] font-normal mt-1 line-clamp-2">
-                {dynamicPlaylist.description}
+                {stripHtml(dynamicPlaylist.description)}
               </p>
             )}
 

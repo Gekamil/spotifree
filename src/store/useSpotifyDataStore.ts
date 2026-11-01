@@ -19,6 +19,7 @@ import {
   fetchUserProfileFromServer,
 } from '../utils/userAccounts';
 import { useStatsStore } from './useStatsStore';
+import { stripHtml } from '../utils/formatters';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -197,7 +198,7 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
     const cards: DynamicShelfCard[] = shelf.cards.map((c: any) => ({
       id: c.id,
       title: c.title,
-      subtitle: c.subtitle || '',
+      subtitle: stripHtml(c.subtitle || ''),
       image: c.image || '',
       isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
     }));
@@ -311,7 +312,7 @@ export function buildDynamicShelves(
       cards: userLists.map((p) => ({
         id: p.id,
         title: p.name,
-        subtitle: p.description || `De ${displayName}`,
+        subtitle: stripHtml(p.description) || `De ${displayName}`,
         image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
       })),
     };

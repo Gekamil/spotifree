@@ -200,7 +200,7 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
           </h2>
           {subtitle && (
             <p className="text-xs text-[#b3b3b3] mt-0.5 font-normal">
-              {subtitle}
+              {cleanSubtitle(subtitle)}
             </p>
           )}
         </div>

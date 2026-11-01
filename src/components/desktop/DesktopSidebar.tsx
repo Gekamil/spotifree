@@ -11,6 +11,7 @@ import {
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
+import { stripHtml } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
 import { SortMenuDropdown } from './SortMenuDropdown';
 
@@ -346,7 +347,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   </div>
                   {viewMode === 'cuadricula' && (
                     <p className="text-[12px] text-[#b3b3b3] truncate mt-0.5 font-['SpotifyMixUI',sans-serif]">
-                      {isLikedSongs ? 'Lista • Canciones guardadas' : playlist.description}
+                      {isLikedSongs ? 'Lista • Canciones guardadas' : stripHtml(playlist.description)}
                     </p>
                   )}
                 </div>
@@ -467,7 +468,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                           ? 'Lista • 23 canciones'
                           : playlist.owner?.display_name
                           ? `Lista • ${playlist.owner.display_name}`
-                          : playlist.description || 'Lista'}
+                          : stripHtml(playlist.description) || 'Lista'}
                       </span>
                     </div>
                   </div>
