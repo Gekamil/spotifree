@@ -11,6 +11,20 @@ export interface DJVoiceOptions {
   pitch?: number;
 }
 
+export interface AIDJConfig {
+  voice: string;
+  provider: 'edge' | 'openai' | 'elevenlabs' | 'cartesia';
+  apiKey?: string;
+  voiceId?: string;
+}
+
+const DEFAULT_CONFIG: AIDJConfig = {
+  voice: 'es-MX-DaliaNeural', // Official Spotify DJ Livi persona
+  provider: 'edge',
+  apiKey: '',
+  voiceId: '',
+};
+
 class AIDJVoiceService {
   private isSpeaking: boolean = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -19,13 +33,37 @@ class AIDJVoiceService {
   private voiceLevelInterval: any = null;
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
+  private config: AIDJConfig = DEFAULT_CONFIG;
 
   constructor() {
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.onvoiceschanged = () => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('spotifree_ai_dj_config');
+        if (saved) {
+          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+        }
+      } catch {}
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.onvoiceschanged = () => {
+          this.resolveSpanishVoice();
+        };
         this.resolveSpanishVoice();
-      };
-      this.resolveSpanishVoice();
+      }
+    }
+  }
+
+  public getConfig(): AIDJConfig {
+    return { ...this.config };
+  }
+
+  public setConfig(newConfig: Partial<AIDJConfig>) {
+    this.config = { ...this.config, ...newConfig };
+    this.ttsCache.clear();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('spotifree_ai_dj_config', JSON.stringify(this.config));
+      } catch {}
     }
   }
 
@@ -141,7 +179,15 @@ class AIDJVoiceService {
 
       let audioUrl = this.ttsCache.get(text);
       if (!audioUrl) {
-        const res = await fetch(`/api/tts?text=${encodeURIComponent(text)}&voice=es-ES-AlvaroNeural`, {
+        const params = new URLSearchParams({
+          text,
+          voice: this.config.voice || 'es-MX-DaliaNeural',
+          provider: this.config.provider || 'edge',
+        });
+        if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
+        if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
+
+        const res = await fetch(`/api/tts?${params.toString()}`, {
           signal,
         });
         if (!res.ok) {

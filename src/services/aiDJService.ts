@@ -29,13 +29,15 @@ export interface AIDJState {
   triggerManualTransition: () => Promise<void>;
 }
 
-// Preset vibes for quick clean chips
+// Preset vibes for clean Spotify chips (NO EMOJIS, pure Spotify aesthetic)
 export const DJ_VIBE_PRESETS = [
-  { id: 'fiesta', label: '🔥 Fiesta & Perreo', query: 'fiesta perreo reggaeton para bailar' },
-  { id: 'gym', label: '🏋️ Energía Gym', query: 'gym motivacion a tope para entrenar duro' },
-  { id: 'focus', label: '🧠 Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
-  { id: 'chill', label: '🌙 Chill & Relax', query: 'chill relax tranquilo para desconectar' },
-  { id: 'surprise', label: '⚡ Sorpréndeme', query: 'sorprendeme con algo bueno que no espere' },
+  { id: 'descubrimiento', label: 'Descubrimiento', query: 'descubrimiento novedades recomendaciones' },
+  { id: 'pop', label: 'Pop actual', query: 'pop exitos pop en espanol' },
+  { id: 'urbano', label: 'Urbano latino', query: 'reggaeton trap urbano latino para bailar' },
+  { id: 'entreno', label: 'Para entrenar', query: 'gym motivacion entrenamiento a tope' },
+  { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
+  { id: 'chill', label: 'Chill out', query: 'chill relax acustico suave para desconectar' },
+  { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos de siempre' },
 ];
 
 let speechRecognitionInstance: any = null;
@@ -53,7 +55,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 1. Sad / Bad Day / Need to cry / Heartbreak / Emotional
   if (/mal d[ií]a|triste|baj[oó]n|llorar|depre|desanimo|desamor|pena|despecho|tristeza|solo|sola|duro|agobiad/i.test(p)) {
     return {
-      speech: `Vaya${namePhrase}... sé de sobra lo que es tener uno de esos días pesados en los que todo se hace cuesta arriba. La música siempre ayuda a soltar tensiones y sanar. He preparado una selección acústica y reconfortante para desconectar del mundo. Respira hondo, ponte cómodo... y déjate llevar.`,
+      speech: `Sé que has tenido un día difícil${namePhrase}. Te preparé algo tranquilo para bajar revoluciones y desconectar.`,
       query: 'baladas acustico chill triste guitarra piano',
       vibeTitle: 'Sesión: Calma y Desconexión',
     };
@@ -62,7 +64,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 2. Gym / Workout / High Energy / Motivation / Training
   if (/gym|entrenar|entrenamiento|pesas|fuerza|duro|drill|a tope|correr|cardio|crossfit|mancuerna|hype|motiva|romperla/i.test(p)) {
     return {
-      speech: `¡Esa es la energía que me gusta${namePhrase}! Hoy no se viene a especular, hoy se viene a dar el cien por cien. Te he armado un set con ritmos pesados y agresivos que te van a inyectar adrenalina pura en cada repetición. ¡A reventarlo con todo!`,
+      speech: `¡A romperla en el entreno${namePhrase}! Te dejo este set con pura energía pesada. ¡Dale con todo!`,
       query: 'gym workout phonk trap drill motivacion pesas',
       vibeTitle: 'Sesión: Máxima Adrenalina Gym',
     };
@@ -71,7 +73,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 3. Party / Reggaeton / Dancing / Weekend / Club
   if (/fiesta|perreo|bailar|discoteca|farra|desmadre|viernes|s[aá]bado|marcha|reggaeton|perrear|bellakeo|dembow|rumba/i.test(p)) {
     return {
-      speech: `¡Modo fiesta encendido${namePhrase}! Si hay ganas de bailar, aquí no nos vamos a guardar nada. Arrancamos con puro fuego de discoteca para que no pares de moverte ni un segundo. ¡Dale caña a esos altavoces!`,
+      speech: `¡Modo fiesta activado! Arrancamos con este perreo para que no pares de moverte. Súbele.`,
       query: 'reggaeton exitos perreo 2024 fiesta',
       vibeTitle: 'Sesión: Perreo y Fiesta',
     };
@@ -80,7 +82,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 4. Study / Focus / Deep Work / Reading / Coding
   if (/estudiar|concentra|trabajar|lectura|estudio|lofi|piano|trabajo|examen|tarea|oficina|programar|enfoque/i.test(p)) {
     return {
-      speech: `Entendido${namePhrase}, modo concentración activado. Fuera distracciones y ruidos del mundo: te he preparado melodías limpias y envolventes que te van a mantener en la zona para que rindas al máximo. ¡A por ello!`,
+      speech: `Momento de enfoque${namePhrase}. Aquí tienes ritmos limpios para concentrarte y rendir al cien.`,
       query: 'lofi hip hop study beats chill instrumental piano',
       vibeTitle: 'Sesión: Enfoque Profundo',
     };
@@ -89,7 +91,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 5. Chill / Relax / Unwind / Peaceful
   if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres/i.test(p)) {
     return {
-      speech: `Totalmente de acuerdo${namePhrase}. A veces lo único que necesitamos es bajar revoluciones. He preparado un ambiente suave y envolvente, ideal para desconectar la mente y disfrutar del momento. Relájate...`,
+      speech: `Buena elección. Vamos a bajar el ritmo con una vibra suave y tranquila. Disfrútala.`,
       query: 'chill relax acustico suave indie pop',
       vibeTitle: 'Sesión: Relax Acústico',
     };
@@ -98,7 +100,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 6. Sleep / Night / Bedtime
   if (/dormir|noche|cama|sue[nñ]o|descansar|acostarse/i.test(p)) {
     return {
-      speech: `Apaga las luces y cierra los ojos. Te dejo una selección íntima y pausada para acompañar la noche y que descanses como te mereces. Que tengas muy buenas noches...`,
+      speech: `Buenas noches. Te dejo esta selección íntima y calmada para que descanses como toca.`,
       query: 'sleep ambient lofi night piano calm',
       vibeTitle: 'Sesión: Calma Nocturna',
     };
@@ -107,7 +109,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 7. Road trip / Driving / Car
   if (/coche|viaje|conducir|carretera|viajar|ruta|auto/i.test(p)) {
     return {
-      speech: `¡El viaje perfecto necesita una banda sonora a la altura! He preparado una mezcla de himnos y temazos irresistibles para cantar en el camino con las ventanillas bajadas. ¡Buen viaje!`,
+      speech: `¡Música para la carretera! Sube el volumen y disfruta del camino con estos temazos.`,
       query: 'road trip hits pop rock clasicos viaje coche',
       vibeTitle: 'Sesión: Carretera y Viento',
     };
@@ -117,7 +119,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/2000|noventa|ochenta|80|90|clasic|retro|nostalg|recuerdo|antigu|viej/i.test(p)) {
     const era = /80/i.test(p) ? 'los ochenta' : /90/i.test(p) ? 'los noventa' : 'los dos mil';
     return {
-      speech: `¡Uff, viajazo en el tiempo directo a ${era}! Esos himnos que marcaron época nunca pasan de moda. Prepárate para cantar de principio a fin...`,
+      speech: `¡Viajazo a ${era}! Esos himnos que nunca pasan de moda. A cantar a pleno pulmón.`,
       query: `exitos clasicos ${era} pop rock hits`,
       vibeTitle: `Sesión: Clásicos de ${era.toUpperCase()}`,
     };
@@ -151,7 +153,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   if (detectedArtist) {
     return {
-      speech: `¡Qué temazos tiene ${detectedArtist}! Tienen ese rollo inconfundible que siempre pega fuerte. Te he preparado sus mejores temas combinados con otras canciones de esa misma esencia que te van a encantar. ¡Dale volumen!`,
+      speech: `¡Qué temazos tiene ${detectedArtist}! Te armé una selección con sus mejores temas. Dale play.`,
       query: `${detectedArtist} exitos`,
       vibeTitle: `Sesión: ${detectedArtist.toUpperCase()}`,
     };
@@ -159,9 +161,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 10. General / Surprise / Catch-all
   return {
-    speech: `¡Me parece un planazo! He analizado lo que me has dicho y he preparado una selección perfecta que encaja justo con lo que buscas. Arrancamos con este temazo... ¡A disfrutarlo!`,
-    query: `${p} exitos`,
-    vibeTitle: `Sesión: ${prompt.toUpperCase().slice(0, 30)}`,
+    speech: `Cambiando de onda${namePhrase}. Aquí tienes una mezcla fresca pensada para ti. A disfrutarla.`,
+    query: `${p} exitos canciones`,
+    vibeTitle: `Sesión: ${prompt.slice(0, 20)}`,
   };
 }
 
@@ -194,14 +196,14 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       hour >= 6 && hour < 13
         ? '¡Buenos días'
         : hour >= 13 && hour < 21
-        ? '¡Qué pasa'
+        ? '¡Qué onda'
         : '¡Buenas noches';
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
-    const introText = `${greeting}${namePart}! Aquí tu DJ. He estado mirando lo que has estado escuchando últimamente y tengo buena música preparada. Cuéntame... ¿qué vibra te apetece escuchar hoy?`;
+    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé buena música. ¿Qué vibra te apetece hoy?`;
 
     set({ currentMessage: introText, displayedTranscript: '' });
 
@@ -444,9 +446,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     });
 
     const transitionPhrases = [
-      `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. Ahora vamos a cambiar de ritmo: aquí tienes una nueva vibra para seguir con la energía alta.`,
-      `¡Qué temazo acabamos de escuchar! Para mantener el ambiente arriba, vamos con esta otra joya que sé que te va a encantar.`,
-      `Cambiando de onda... aquí tienes otro tema imprescindible para tu sesión. ¡A disfrutarlo!`,
+      `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. Cambiemos de rollo con esto otro. ¡Súbele!`,
+      `¡Qué temazo acabamos de escuchar! Para mantener el ambiente arriba, vamos con esto.`,
+      `Cambiando de onda... aquí tienes otro tema que te va a encantar. ¡Dale play!`,
     ];
     const transitionText = transitionPhrases[Math.floor(Math.random() * transitionPhrases.length)];
 
