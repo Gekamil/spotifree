@@ -15,6 +15,7 @@ import { MobileAddLibraryItemsModal, type LibraryCandidateItem } from './MobileA
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
@@ -247,7 +248,7 @@ export const MobileLayout: React.FC = () => {
   return (
     <div className="h-screen w-screen flex flex-col bg-[#121212] text-white overflow-hidden font-['SpotifyMixUI'] select-none relative">
       {/* Scrollable Center Content */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pb-32">
+      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${mobileTab === 'dj' ? 'pb-0' : 'pb-32'}`}>
         {/* TAB 1: HOME */}
         {mobileTab === 'home' && (
           <div
@@ -333,6 +334,57 @@ export const MobileLayout: React.FC = () => {
                     </div>
                   </div>
                 )}
+
+                {/* YOUR OWN PERSONAL DJ CARD (Photo 3) */}
+                <div className="px-4 mb-6">
+                  <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2.5">
+                    Your own personal DJ
+                  </h2>
+                  <div
+                    onClick={() => handleSelectPlaylistById('spotify-dj')}
+                    className="relative w-full rounded-2xl bg-[#0c52cc] p-5 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[175px]"
+                  >
+                    {/* Top Bar: Beta pill & 3 dots */}
+                    <div className="flex items-center justify-between relative z-10">
+                      <span className="text-[11px] font-bold bg-black/40 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        Beta
+                      </span>
+                      <div className="text-white/80 p-1">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                          <circle cx="12" cy="5" r="2" />
+                          <circle cx="12" cy="12" r="2" />
+                          <circle cx="12" cy="19" r="2" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {/* Center Loop Graphic (Photo 3) */}
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-85">
+                      <SpotifyDJVisualizer size={140} state="idle" />
+                    </div>
+
+                    {/* Bottom Row: Text on left, White circular arrow on right */}
+                    <div className="flex items-end justify-between relative z-10 pt-4">
+                      <p className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm">
+                        Holi, soy tu DJ y te estoy esperando con toda esa música que te encanta.
+                      </p>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectPlaylistById('spotify-dj');
+                        }}
+                        className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-90 transition-all shrink-0 cursor-pointer ml-2"
+                        title="Abrir DJ"
+                      >
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                          <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Shelves: Horizontal Carousels or Full-width Release Spotlight for single items */}
                 <div className="space-y-6 px-4">
@@ -724,8 +776,10 @@ export const MobileLayout: React.FC = () => {
         )}
       </div>
 
-      {/* Docked Mini Player right above Bottom Navigation */}
-      <MobileMiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
+      {/* Docked Mini Player right above Bottom Navigation (hidden during full DJ mode) */}
+      {mobileTab !== 'dj' && (
+        <MobileMiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
+      )}
 
       {/* Full-screen Now Playing Modal */}
       {isFullPlayerOpen && (
@@ -736,22 +790,24 @@ export const MobileLayout: React.FC = () => {
         />
       )}
 
-      {/* Exact Spotify Mobile 4-Tab Bottom Navigation Bar */}
-      <MobileBottomNav
-        activeTab={
-          mobileTab === 'search'
-            ? 'search'
-            : mobileTab === 'library'
-            ? 'library'
-            : 'home'
-        }
-        onTabChange={(tab) => {
-          setSelectedPlaylist(null);
-          setMobileTab(tab);
-        }}
-        onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
-        isCreateOpen={isCreateOpen}
-      />
+      {/* Exact Spotify Mobile 4-Tab Bottom Navigation Bar (hidden during full DJ mode) */}
+      {mobileTab !== 'dj' && (
+        <MobileBottomNav
+          activeTab={
+            mobileTab === 'search'
+              ? 'search'
+              : mobileTab === 'library'
+              ? 'library'
+              : 'home'
+          }
+          onTabChange={(tab) => {
+            setSelectedPlaylist(null);
+            setMobileTab(tab);
+          }}
+          onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
+          isCreateOpen={isCreateOpen}
+        />
+      )}
 
       {/* Spotify Mobile Add Items to Library Modal */}
       <MobileAddLibraryItemsModal

@@ -35,7 +35,7 @@ export interface AIDJState {
   setVoiceLevel: (level: number) => void;
   setTranscript: (text: string) => void;
   setDJTracks: (tracks: Track[]) => void;
-  startDJSession: () => Promise<void>;
+  startDJSession: (forceReset?: boolean) => Promise<void>;
   stopDJSession: () => void;
   handleUserPrompt: (promptText: string) => Promise<void>;
   startVoiceListening: () => void;
@@ -201,9 +201,16 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   setDJTracks: (djTracks) => set({ djTracks }),
 
   /**
-   * Start DJ session: gathers tracks, plays set with ducking, and greets user warmly
+   * Start DJ session: gathers tracks, plays set with ducking, and greets user warmly.
+   * If already active and tracks exist, does not wipe or reset current session unless forceReset=true.
    */
-  startDJSession: async () => {
+  startDJSession: async (forceReset = false) => {
+    const currentState = get();
+    if (!forceReset && currentState.isDJModeActive && currentState.djTracks.length > 0) {
+      // Session already active! Keep current track and playlist intact!
+      return;
+    }
+
     set({
       isDJModeActive: true,
       visualizerState: 'speaking',

@@ -4,6 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
@@ -472,6 +473,62 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               );
             })}
           </div>
+        )}
+
+        {/* Your Own Personal DJ Banner Card (Photo 3) */}
+        {activeTab === 'todo' && (
+          <section className="space-y-3 pt-2">
+            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+              Your own personal DJ
+            </h2>
+            <div
+              onClick={() => onSelectPlaylistById('spotify-dj')}
+              className="relative w-full rounded-2xl bg-[#0c52cc] hover:bg-[#0e58db] p-6 overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[175px]"
+            >
+              {/* Background Glow */}
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#0052cc]/30 to-[#1ed760]/10 pointer-events-none" />
+
+              {/* Top Bar with Beta Pill and Menu dots */}
+              <div className="flex items-center justify-between relative z-10">
+                <span className="text-[11px] font-bold bg-black/40 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider backdrop-blur-sm">
+                  Beta
+                </span>
+                <div className="text-white/80 p-1">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="12" cy="19" r="2" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Center Graphic: Morphing Green-Cyan DJ Loop (Photo 3) */}
+              <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none opacity-85 group-hover:scale-105 transition-transform duration-500">
+                <SpotifyDJVisualizer size={160} state="idle" />
+              </div>
+
+              {/* Bottom Row: Text on left, White circular Arrow Button on right */}
+              <div className="flex items-end justify-between relative z-10 pt-4">
+                <p className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm">
+                  Holi, soy tu DJ y te estoy esperando con toda esa música que te encanta.
+                </p>
+
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectPlaylistById('spotify-dj');
+                  }}
+                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-xl group-hover:scale-110 active:scale-95 transition-all shrink-0 ml-4 cursor-pointer"
+                  title="Abrir DJ"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </section>
         )}
 
         {/* Dynamic Section Shelves for Current Active Tab */}

@@ -124,8 +124,13 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
 }
 
 export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
-  const result: DynamicShelf[] = [];
   const feed = (Array.isArray(liveExtractedFeed) ? liveExtractedFeed : (liveExtractedFeed as any).shelves || []) as any[];
+
+  const now = new Date();
+  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, 5 = Friday, 6 = Saturday
+  const dateNum = now.getDate();
+
+  const processedShelves: DynamicShelf[] = [];
 
   feed.forEach((shelf, idx) => {
     // Exclude podcast / episodes per user request
@@ -141,13 +146,31 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
 
     if (title === 'Jorgeperezvk' || title.toLowerCase().includes('jorge')) {
       title = userName;
-      prefix = 'Hecho para';
+      prefix = dayOfWeek === 0
+        ? 'Tu domingo con'
+        : dayOfWeek === 5 || dayOfWeek === 6
+        ? 'Fin de semana con'
+        : dayOfWeek === 1
+        ? 'Empieza la semana con'
+        : 'Hecho para';
       type = 'made_for';
     } else if (title.toLowerCase().includes('romeo')) {
       prefix = 'Más como';
       type = 'artist';
     } else if (title.toLowerCase().includes('reciente') || title.toLowerCase().includes('sumérgete')) {
+      title = dayOfWeek === 0
+        ? 'Lo que has escuchado este finde'
+        : dayOfWeek === 1
+        ? 'Para arrancar el lunes'
+        : 'Recientes';
       type = 'recent';
+    } else if (title.toLowerCase().includes('novedades populares')) {
+      title = dayOfWeek === 0
+        ? 'Éxitos de tu domingo'
+        : dayOfWeek === 5
+        ? 'Novedades de viernes'
+        : 'Novedades populares';
+      type = 'featured';
     } else if (title.toLowerCase().includes('emisora') || title.toLowerCase().includes('petando') || title.toLowerCase().includes('urbano')) {
       type = 'featured';
     }
@@ -161,7 +184,7 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
     }));
 
     if (cards.length > 0) {
-      result.push({
+      processedShelves.push({
         id: `extracted-shelf-${idx}`,
         title,
         prefix,
@@ -172,7 +195,19 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
     }
   });
 
-  return result;
+  // Dynamic daily rotation: on Sunday, weekend & chill shelves take priority;
+  // on weekdays, fresh mixes rotate so the home feed feels alive and changes every day
+  if (processedShelves.length > 1) {
+    // Determine rotation offset from day of year / day of week
+    const rotateOffset = dayOfWeek === 0 ? 0 : (dayOfWeek + (dateNum % 3)) % processedShelves.length;
+    const rotated = [
+      ...processedShelves.slice(rotateOffset),
+      ...processedShelves.slice(0, rotateOffset),
+    ];
+    return rotated;
+  }
+
+  return processedShelves;
 }
 
 export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = buildExtractedShelves();
@@ -723,18 +758,32 @@ const store = create<SpotifyDataState>((set, get) => ({
             try { useStatsStore.getState().loadStatsForUser(session.user.id); } catch {}
           }
 
-          // In background, refresh session data if playlists were empty
-          if (!session.playlists || session.playlists.length === 0) {
+          // Daily automatic background sync when cookie is present:
+          // If the cached session is from a previous calendar day, re-fetch fresh shelves and recommendations in background
+          const todayDateStr = new Date().toISOString().slice(0, 10);
+          const isStaleDailySession = !session._extractedDate || session._extractedDate !== todayDateStr;
+
+          if (!session.playlists || session.playlists.length === 0 || isStaleDailySession) {
             extractSpotifySessionFromCookie(userCookie).then((fresh) => {
               if (fresh && fresh.user) {
-                window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...fresh, _cookie: userCookie }));
+                window.localStorage.setItem('spotify_extracted_session', JSON.stringify({
+                  ...fresh,
+                  _cookie: userCookie,
+                  _extractedDate: todayDateStr,
+                }));
+                const freshCombined = deduplicateUserPlaylists([...(fresh.playlists || []), ...importedPlaylists]);
                 set({
-                  playlists: fresh.playlists || [],
-                  dynamicShelves: fresh.shelves || [],
+                  playlists: freshCombined,
+                  dynamicShelves: fresh.shelves && fresh.shelves.length > 0 ? fresh.shelves : buildExtractedShelves(fresh.user.display_name),
                   quickAccessCards: fresh.quickAccess || [],
                 });
               }
-            }).catch(() => {});
+            }).catch(() => {
+              // Fallback to dynamic daily rotation if network fails
+              set({
+                dynamicShelves: buildExtractedShelves(activeUser.display_name),
+              });
+            });
           }
           return;
         }
@@ -743,7 +792,11 @@ const store = create<SpotifyDataState>((set, get) => ({
         try {
           session = await extractSpotifySessionFromCookie(userCookie);
           if (typeof window !== 'undefined' && session) {
-            window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: userCookie }));
+            window.localStorage.setItem('spotify_extracted_session', JSON.stringify({
+              ...session,
+              _cookie: userCookie,
+              _extractedDate: new Date().toISOString().slice(0, 10),
+            }));
             if (session.user?.id) {
               window.localStorage.setItem('spotifree_active_user_id', session.user.id);
             }

@@ -8,32 +8,16 @@ interface SpotifyDJVisualizerProps {
   size?: number; // width/height in px
   onClick?: () => void;
   className?: string;
-}
-
-interface Particle {
-  x: number;
-  y: number;
-  size: number;
-  alpha: number;
-  speedX: number;
-  speedY: number;
-  color: string;
-}
-
-interface RippleRing {
-  radius: number;
-  maxRadius: number;
-  alpha: number;
-  color: string;
-  speed: number;
+  mini?: boolean; // For floating button icon
 }
 
 export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   state = 'idle',
   voiceLevel = 0,
-  size = 280,
+  size = 260,
   onClick,
   className = '',
+  mini = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
@@ -64,156 +48,43 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    const baseRadius = size * 0.28;
-
-    // Ambient floating stardust particles
-    const particleColors = ['#1ed760', '#00f2fe', '#3b82f6', '#8b5cf6', '#ffffff'];
-    const particles: Particle[] = Array.from({ length: 24 }).map(() => ({
-      x: centerX + (Math.random() - 0.5) * size * 0.8,
-      y: centerY + (Math.random() - 0.5) * size * 0.8,
-      size: Math.random() * 2 + 1,
-      alpha: Math.random() * 0.6 + 0.2,
-      speedX: (Math.random() - 0.5) * 0.4,
-      speedY: (Math.random() - 0.5) * 0.4,
-      color: particleColors[Math.floor(Math.random() * particleColors.length)],
-    }));
-
-    // Dynamic wave ripples (expanding shockwaves)
-    const ripples: RippleRing[] = [];
-    let lastRippleTime = 0;
+    const baseRadius = size * (mini ? 0.35 : 0.32);
+    const strokeWidth = Math.max(3, size * (mini ? 0.12 : 0.075));
+    const numPoints = mini ? 60 : 120;
 
     const render = () => {
-      time += 0.035;
+      time += mini ? 0.02 : 0.038;
       const currentState = stateRef.current;
       const currentVoice = voiceLevelRef.current;
 
       ctx.clearRect(0, 0, size, size);
 
-      // 1. Spawning dynamic acoustic ripples when speaking or listening
-      const now = performance.now();
-      const rippleInterval = currentState === 'speaking' ? 260 : currentState === 'listening' ? 450 : 800;
-
-      if ((currentState === 'speaking' || (currentState === 'listening' && currentVoice > 0.15)) && now - lastRippleTime > rippleInterval) {
-        lastRippleTime = now;
-        const color = currentState === 'speaking' ? '#1ed760' : '#00f2fe';
-        ripples.push({
-          radius: baseRadius,
-          maxRadius: size * 0.48,
-          alpha: 0.85,
-          color,
-          speed: 1.6 + (currentState === 'speaking' ? currentVoice * 1.5 : 0.8),
-        });
-      }
-
-      // 2. Render and expand ripple shockwaves
-      for (let i = ripples.length - 1; i >= 0; i--) {
-        const rip = ripples[i];
-        rip.radius += rip.speed;
-        rip.alpha -= 0.015;
-
-        if (rip.alpha <= 0 || rip.radius >= rip.maxRadius) {
-          ripples.splice(i, 1);
-          continue;
-        }
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, rip.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = rip.color;
-        ctx.globalAlpha = rip.alpha * 0.7;
-        ctx.lineWidth = 2.2;
-        ctx.stroke();
-
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, rip.radius * 0.92, 0, Math.PI * 2);
-        ctx.strokeStyle = '#00f2fe';
-        ctx.globalAlpha = rip.alpha * 0.35;
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
-        ctx.restore();
-      }
-
-      // 3. Render floating stardust particles
-      particles.forEach((p) => {
-        p.x += p.speedX;
-        p.y += p.speedY;
-
-        if (p.x < centerX - size * 0.45) p.x = centerX + size * 0.45;
-        if (p.x > centerX + size * 0.45) p.x = centerX - size * 0.45;
-        if (p.y < centerY - size * 0.45) p.y = centerY + size * 0.45;
-        if (p.y > centerY + size * 0.45) p.y = centerY - size * 0.45;
-
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = p.color;
-        ctx.globalAlpha = p.alpha * (0.6 + Math.sin(time + p.x) * 0.3);
-        ctx.fill();
-        ctx.restore();
-      });
-
-      // 4. Outer Aura Halo
-      const auraGradient = ctx.createRadialGradient(
-        centerX,
-        centerY,
-        baseRadius * 0.7,
-        centerX,
-        centerY,
-        baseRadius * 1.6
-      );
-
-      if (currentState === 'speaking') {
-        auraGradient.addColorStop(0, 'rgba(30, 215, 96, 0.45)');
-        auraGradient.addColorStop(0.5, 'rgba(0, 242, 254, 0.3)');
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (currentState === 'listening') {
-        auraGradient.addColorStop(0, 'rgba(0, 242, 254, 0.5)');
-        auraGradient.addColorStop(0.5, 'rgba(46, 119, 208, 0.3)');
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else if (currentState === 'playing') {
-        auraGradient.addColorStop(0, 'rgba(46, 119, 208, 0.3)');
-        auraGradient.addColorStop(0.5, 'rgba(30, 215, 96, 0.2)');
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      } else {
-        auraGradient.addColorStop(0, 'rgba(30, 215, 96, 0.2)');
-        auraGradient.addColorStop(0.5, 'rgba(46, 119, 208, 0.15)');
-        auraGradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
-      }
-
-      ctx.save();
-      ctx.fillStyle = auraGradient;
-      ctx.beginPath();
-      ctx.arc(centerX, centerY, baseRadius * 1.6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-
-      // 5. Morphing Organic Fluid Core (Sine & Cosine waves)
-      const numPoints = 120;
-      let deformationMagnitude = 8;
+      // Deformation dynamics matching real Spotify DJ ring (Photo 2)
+      let deformationMagnitude = 6 * (size / 260);
       let pulseScale = 1;
 
-      if (currentState === 'speaking') {
-        deformationMagnitude = 16 + currentVoice * 22;
-        pulseScale = 1 + Math.sin(time * 6) * 0.05 + currentVoice * 0.12;
-      } else if (currentState === 'listening') {
-        deformationMagnitude = 11 + currentVoice * 14;
-        pulseScale = 1 + Math.sin(time * 3) * 0.04;
-      } else if (currentState === 'playing') {
-        deformationMagnitude = 10;
-        pulseScale = 1 + Math.sin(time * 4) * 0.035;
-      } else {
-        deformationMagnitude = 6;
-        pulseScale = 1 + Math.sin(time * 1.8) * 0.02;
+      if (!mini) {
+        if (currentState === 'speaking') {
+          deformationMagnitude = (12 + currentVoice * 22) * (size / 260);
+          pulseScale = 1 + Math.sin(time * 5) * 0.04 + currentVoice * 0.1;
+        } else if (currentState === 'listening') {
+          deformationMagnitude = (10 + currentVoice * 14) * (size / 260);
+          pulseScale = 1 + Math.sin(time * 3) * 0.03;
+        } else if (currentState === 'playing') {
+          deformationMagnitude = 7 * (size / 260);
+          pulseScale = 1 + Math.sin(time * 2.2) * 0.025;
+        }
       }
 
       ctx.save();
       ctx.beginPath();
 
+      // Compute smooth organic morphing loop points
       for (let i = 0; i <= numPoints; i++) {
         const theta = (i / numPoints) * Math.PI * 2;
-        const wave1 = Math.sin(theta * 3 + time * 1.4) * 0.5;
-        const wave2 = Math.cos(theta * 5 - time * 2.1) * 0.3;
-        const wave3 = Math.sin(theta * 7 + time * 0.9) * 0.2;
+        const wave1 = Math.sin(theta * 2 + time * 1.3) * 0.55;
+        const wave2 = Math.cos(theta * 3 - time * 1.8) * 0.35;
+        const wave3 = Math.sin(theta * 5 + time * 0.8) * 0.15;
         const offset = (wave1 + wave2 + wave3) * deformationMagnitude;
         const r = (baseRadius + offset) * pulseScale;
 
@@ -229,61 +100,35 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       ctx.closePath();
 
-      // Fluid Iridescent Gradient inside the orb
-      const gradCenterX = centerX + Math.cos(time * 0.8) * 25;
-      const gradCenterY = centerY + Math.sin(time * 0.6) * 25;
-
-      const orbGradient = ctx.createRadialGradient(
-        gradCenterX,
-        gradCenterY,
-        baseRadius * 0.15,
-        centerX,
-        centerY,
-        baseRadius * 1.15
-      );
-
-      if (currentState === 'speaking') {
-        orbGradient.addColorStop(0.0, '#ffffff'); // Inner bright core
-        orbGradient.addColorStop(0.25, '#1ed760'); // Spotify green
-        orbGradient.addColorStop(0.55, '#00f2fe'); // Electric cyan
-        orbGradient.addColorStop(0.85, '#2e77d0'); // Cobalt blue
-        orbGradient.addColorStop(1.0, '#8b5cf6'); // Violet edge
-      } else if (currentState === 'listening') {
-        orbGradient.addColorStop(0.0, '#ffffff');
-        orbGradient.addColorStop(0.3, '#00f2fe');
-        orbGradient.addColorStop(0.65, '#3b82f6');
-        orbGradient.addColorStop(0.9, '#a855f7');
-        orbGradient.addColorStop(1.0, '#1ed760');
-      } else if (currentState === 'playing') {
-        orbGradient.addColorStop(0.0, '#ffffff');
-        orbGradient.addColorStop(0.28, '#2e77d0');
-        orbGradient.addColorStop(0.6, '#1ed760');
-        orbGradient.addColorStop(0.88, '#00f2fe');
-        orbGradient.addColorStop(1.0, '#4c1d95');
-      } else {
-        orbGradient.addColorStop(0.0, '#ffffff');
-        orbGradient.addColorStop(0.3, '#1ed760');
-        orbGradient.addColorStop(0.65, '#2e77d0');
-        orbGradient.addColorStop(1.0, '#1030a0');
-      }
-
-      ctx.fillStyle = orbGradient;
-      ctx.fill();
-
-      // Inner fluid refraction highlight
-      ctx.globalCompositeOperation = 'overlay';
-      const highlight = ctx.createLinearGradient(
+      // Authentic Spotify DJ Neon Green -> Electric Cyan gradient (Photo 2)
+      const grad = ctx.createLinearGradient(
         centerX - baseRadius,
         centerY - baseRadius,
         centerX + baseRadius,
         centerY + baseRadius
       );
-      highlight.addColorStop(0, 'rgba(255, 255, 255, 0.45)');
-      highlight.addColorStop(0.5, 'rgba(255, 255, 255, 0.05)');
-      highlight.addColorStop(1, 'rgba(0, 0, 0, 0.35)');
-      ctx.fillStyle = highlight;
-      ctx.fill();
 
+      if (currentState === 'listening') {
+        grad.addColorStop(0, '#00f2fe');
+        grad.addColorStop(0.5, '#3b82f6');
+        grad.addColorStop(1, '#00f2fe');
+      } else {
+        grad.addColorStop(0, '#1ed760');
+        grad.addColorStop(0.5, '#00f2fe');
+        grad.addColorStop(1, '#1ed760');
+      }
+
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Soft neon glow
+      ctx.shadowColor = currentState === 'listening' ? 'rgba(0, 242, 254, 0.7)' : 'rgba(30, 215, 96, 0.55)';
+      ctx.shadowBlur = mini ? 4 : 18;
+
+      // Stroke ONLY (Hollow center matching Photo 2)
+      ctx.stroke();
       ctx.restore();
 
       animId = requestAnimationFrame(render);
@@ -294,33 +139,18 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
     return () => {
       cancelAnimationFrame(animId);
     };
-  }, [size]);
+  }, [size, mini]);
 
   return (
     <div
       onClick={onClick}
-      className={`relative flex items-center justify-center select-none cursor-pointer group transition-transform active:scale-95 ${className}`}
       style={{ width: size, height: size }}
-      title="Spotify AI DJ"
+      className={`relative inline-flex items-center justify-center select-none ${className}`}
     >
-      {/* Dynamic Ambient Background Glow */}
-      <div
-        className={`absolute rounded-full transition-all duration-700 pointer-events-none ${
-          state === 'speaking'
-            ? 'w-[85%] h-[85%] bg-[#1ed760]/35 blur-[65px] animate-pulse'
-            : state === 'listening'
-            ? 'w-[90%] h-[90%] bg-[#00f2fe]/40 blur-[70px] animate-pulse'
-            : state === 'playing'
-            ? 'w-[75%] h-[75%] bg-[#2e77d0]/30 blur-[60px]'
-            : 'w-[70%] h-[70%] bg-[#1ed760]/20 blur-[50px]'
-        }`}
-      />
-
-      {/* Main Fluid Canvas */}
       <canvas
         ref={canvasRef}
         style={{ width: size, height: size }}
-        className="relative z-10 drop-shadow-[0_0_35px_rgba(30,215,96,0.5)] transition-all duration-300 group-hover:scale-102"
+        className="block transition-transform duration-200"
       />
     </div>
   );
