@@ -1,10 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { useAIDJStore, DJ_VIBE_PRESETS } from '../../services/aiDJService';
-import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { PlayNativeIcon, PauseNativeIcon, NextNativeIcon } from '../icons/SpotifyNativeIcons';
-import { AIDJSettingsModal } from './AIDJSettingsModal';
 
 interface AIDJViewProps {
   onBack: () => void;
@@ -28,19 +26,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
 
   const { currentTrack, isPlaying, togglePlay, nextTrack, previousTrack } = usePlayerStore();
   const [inputText, setInputText] = useState('');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const hasInitializedRef = useRef(false);
-
-  const activeConfig = aiDJVoiceService.getConfig();
-  const voiceLabel = activeConfig.voice.includes('Dalia')
-    ? 'LIVI • EN ESPAÑOL'
-    : activeConfig.voice.includes('Alvaro')
-    ? 'ÁLVARO • EN ESPAÑOL'
-    : activeConfig.voice.includes('Elvira')
-    ? 'ELVIRA • EN ESPAÑOL'
-    : activeConfig.voice.includes('Salome')
-    ? 'SALOMÉ • EN ESPAÑOL'
-    : 'X • IN ENGLISH';
 
   useEffect(() => {
     if (!hasInitializedRef.current) {
@@ -91,34 +77,37 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
         </button>
 
         {/* Clean Spotify DJ Header Badge */}
-        <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10">
+        <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 shadow-sm">
           <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
           <h1 className="text-xs font-black tracking-widest uppercase text-white font-['SpotifyMixUITitle']">
-            DJ • {voiceLabel}
+            DJ • SESIÓN PERSONALIZADA
           </h1>
         </div>
 
-        {/* Actions: Voice & Engine Settings */}
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsSettingsOpen(true)}
-            className="w-9 h-9 rounded-full bg-white/5 hover:bg-white/15 text-[#b3b3b3] hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-95"
-            title="Configuración de voz e IA"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"></circle>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-            </svg>
-          </button>
-        </div>
+        {/* Mic Indicator / Action */}
+        <button
+          onClick={toggleMic}
+          className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+            isMicListening
+              ? 'bg-[#00f2fe] text-black shadow-[0_0_12px_rgba(0,242,254,0.7)] animate-pulse'
+              : 'text-[#b3b3b3] hover:text-white hover:bg-white/10'
+          }`}
+          title={isMicListening ? 'Detener micrófono' : 'Hablar con el DJ'}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+          </svg>
+        </button>
       </header>
 
-      {/* 2. Central Section: Official Spotify Liquid Visualizer & Subtitles */}
+      {/* 2. Central Section: Spotify DJ Deck & Equalizer Spectrum */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-2 text-center max-w-2xl mx-auto w-full">
-        {/* The Official Liquid Morphing DJ Orb */}
+        {/* The Spotify DJ Deck Disc Visualizer */}
         <div className="my-1 flex items-center justify-center">
           <SpotifyDJVisualizer
-            size={isMobile ? 240 : 310}
+            size={isMobile ? 240 : 300}
             state={visualizerState}
             voiceLevel={voiceLevel}
             onClick={toggleMic}
@@ -126,7 +115,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
         </div>
 
         {/* Dynamic Spoken Text & Subtitles in Pure Spotify Typography */}
-        <div className="min-h-[70px] max-w-xl flex items-center justify-center px-4 mt-1">
+        <div className="min-h-[70px] max-w-xl flex items-center justify-center px-4 mt-2">
           <p className="text-xl md:text-2xl font-bold tracking-tight text-white leading-snug drop-shadow font-['SpotifyMixUITitle'] transition-all">
             {subtitleToShow ? (
               <span>{subtitleToShow}</span>
@@ -280,12 +269,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
           </button>
         </div>
       </footer>
-
-      {/* Voice & AI Configuration Modal */}
-      <AIDJSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-      />
     </div>
   );
 };

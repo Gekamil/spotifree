@@ -17,140 +17,144 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   onClick,
   className = '',
 }) => {
-  // Compute acoustic scale and glow based on state & real voice level
-  const acousticScale = state === 'speaking'
-    ? 1 + Math.min(voiceLevel, 1) * 0.18
-    : state === 'listening'
-    ? 1.05
-    : state === 'playing'
-    ? 1.02
-    : 1;
+  const isSpeaking = state === 'speaking';
+  const isListening = state === 'listening';
+  const isPlaying = state === 'playing';
 
-  const glowOpacity = state === 'speaking'
-    ? 0.75 + Math.min(voiceLevel, 1) * 0.25
-    : state === 'listening'
-    ? 0.8
-    : state === 'playing'
-    ? 0.55
-    : 0.35;
+  // Dynamic bar height multipliers for the 9-bar spectrum equalizer
+  const barMultipliers = [0.45, 0.7, 0.9, 1.15, 1.3, 1.15, 0.9, 0.7, 0.45];
 
   return (
     <div
       onClick={onClick}
-      className={`relative flex items-center justify-center select-none cursor-pointer transition-transform duration-300 ${className}`}
+      className={`relative flex items-center justify-center select-none cursor-pointer group transition-all duration-300 ${className}`}
       style={{ width: size, height: size }}
     >
-      {/* 1. Deep Ambient Aura Glow */}
+      {/* 1. Spotify Neon Ambient Glow Backdrop */}
       <div
-        className="absolute inset-0 rounded-full blur-[55px] pointer-events-none transition-all duration-500"
+        className="absolute inset-0 rounded-full blur-[60px] pointer-events-none transition-all duration-500"
         style={{
-          background: state === 'listening'
+          background: isListening
             ? 'radial-gradient(circle, rgba(0,242,254,0.65) 0%, rgba(13,114,234,0.3) 60%, transparent 80%)'
-            : state === 'speaking'
-            ? 'radial-gradient(circle, rgba(0,242,254,0.55) 0%, rgba(30,215,96,0.45) 50%, rgba(13,114,234,0.2) 80%, transparent 100%)'
-            : 'radial-gradient(circle, rgba(0,210,196,0.35) 0%, rgba(30,215,96,0.25) 50%, transparent 80%)',
-          opacity: glowOpacity,
-          transform: `scale(${acousticScale * 1.2})`,
+            : isSpeaking
+            ? 'radial-gradient(circle, rgba(30,215,96,0.6) 0%, rgba(0,242,254,0.5) 45%, rgba(13,114,234,0.2) 80%, transparent 100%)'
+            : isPlaying
+            ? 'radial-gradient(circle, rgba(30,215,96,0.35) 0%, rgba(0,210,196,0.2) 55%, transparent 80%)'
+            : 'radial-gradient(circle, rgba(0,242,254,0.25) 0%, rgba(30,215,96,0.15) 50%, transparent 80%)',
+          opacity: isSpeaking ? 0.9 : 0.6,
+          transform: `scale(${1 + voiceLevel * 0.25})`,
         }}
       />
 
-      {/* 2. Concentric Acoustic Rings (Active when speaking, listening, or playing) */}
-      {(state === 'speaking' || state === 'listening' || state === 'playing') && (
+      {/* 2. Concentric Acoustic Wave Shockwaves */}
+      {(isSpeaking || isListening) && (
         <>
           <div
-            className="absolute rounded-full border border-[#00f2fe]/20 pointer-events-none transition-all duration-300"
+            className="absolute rounded-full border border-[#1ed760]/25 pointer-events-none animate-ping"
             style={{
-              width: size * 1.15,
-              height: size * 1.15,
-              transform: `scale(${acousticScale})`,
-              opacity: state === 'speaking' ? 0.6 + voiceLevel * 0.4 : 0.4,
+              width: size * 0.92,
+              height: size * 0.92,
+              animationDuration: isSpeaking ? '1.8s' : '2.4s',
             }}
           />
           <div
-            className="absolute rounded-full border border-[#1ed760]/15 pointer-events-none transition-all duration-500"
+            className="absolute rounded-full border border-[#00f2fe]/20 pointer-events-none animate-pulse"
             style={{
-              width: size * 1.32,
-              height: size * 1.32,
-              transform: `scale(${acousticScale * 1.04})`,
-              opacity: state === 'speaking' ? 0.4 + voiceLevel * 0.3 : 0.2,
+              width: size * 1.1,
+              height: size * 1.1,
             }}
           />
         </>
       )}
 
-      {/* 3. The Official Spotify Liquid DJ Morphing Orb */}
+      {/* 3. Sleek Spotify DJ Deck Disc with Vinyl Texture & Metallic Ring */}
       <div
-        className="relative rounded-full transition-transform duration-150 ease-out flex items-center justify-center overflow-hidden"
+        className="relative rounded-full flex flex-col items-center justify-center border border-white/10 shadow-[0_15px_40px_rgba(0,0,0,0.85)] overflow-hidden transition-all duration-300 group-hover:scale-105"
         style={{
-          width: size * 0.72,
-          height: size * 0.72,
-          transform: `scale(${acousticScale})`,
-          boxShadow: state === 'listening'
-            ? '0 0 35px rgba(0,242,254,0.7), inset 0 0 25px rgba(255,255,255,0.4)'
-            : state === 'speaking'
-            ? '0 0 45px rgba(0,242,254,0.5), 0 0 25px rgba(30,215,96,0.4), inset 0 0 20px rgba(255,255,255,0.35)'
-            : '0 0 25px rgba(0,210,196,0.3), inset 0 0 15px rgba(255,255,255,0.2)',
+          width: size * 0.78,
+          height: size * 0.78,
+          background: 'radial-gradient(circle at 50% 50%, #121820 0%, #0d1117 55%, #05070a 100%)',
+          boxShadow: isSpeaking
+            ? '0 0 35px rgba(30,215,96,0.35), 0 0 20px rgba(0,242,254,0.25), inset 0 0 25px rgba(255,255,255,0.06)'
+            : isListening
+            ? '0 0 30px rgba(0,242,254,0.5), inset 0 0 20px rgba(255,255,255,0.08)'
+            : '0 10px 30px rgba(0,0,0,0.6), inset 0 0 15px rgba(255,255,255,0.04)',
         }}
       >
-        {/* Organic Morphing Gradient Blob */}
-        <div
-          className="absolute inset-0 transition-all duration-1000"
-          style={{
-            background: 'linear-gradient(135deg, #00f2fe 0%, #0d72ea 40%, #1ed760 75%, #059669 100%)',
-            borderRadius: '43% 57% 65% 35% / 48% 45% 55% 52%',
-            animation: state === 'speaking'
-              ? 'djMorph 4s ease-in-out infinite alternate, djSpin 12s linear infinite'
-              : 'djMorph 8s ease-in-out infinite alternate, djSpin 24s linear infinite',
-          }}
-        />
+        {/* Vinyl Groove Rings */}
+        <div className="absolute inset-2 rounded-full border border-white/[0.04] pointer-events-none" />
+        <div className="absolute inset-6 rounded-full border border-white/[0.03] pointer-events-none" />
+        <div className="absolute inset-10 rounded-full border border-white/[0.02] pointer-events-none" />
 
-        {/* 3D Specular Highlight / Glossy Glass Layer */}
+        {/* 3D Specular Light Sweep */}
         <div
           className="absolute inset-0 pointer-events-none rounded-full"
           style={{
-            background: 'radial-gradient(circle at 32% 28%, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.1) 40%, transparent 65%)',
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.02) 40%, transparent 60%)',
           }}
         />
 
-        {/* Dynamic Center Graphic: DJ Icon Monogram */}
-        <div className="relative z-10 flex flex-col items-center justify-center text-black pointer-events-none">
-          <span className="text-xl md:text-2xl font-black tracking-wider uppercase drop-shadow-sm font-['SpotifyMixUITitle']">
+        {/* DJ Monogram Badge */}
+        <div className="relative z-10 flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.08] border border-white/10 mb-3 shadow-inner">
+          <span
+            className="w-2 h-2 rounded-full transition-colors duration-300"
+            style={{
+              backgroundColor: isListening ? '#00f2fe' : isSpeaking ? '#1ed760' : '#1ed760',
+              boxShadow: isSpeaking ? '0 0 8px #1ed760' : 'none',
+            }}
+          />
+          <span className="text-xs font-black tracking-widest text-white uppercase font-['SpotifyMixUITitle']">
             DJ
           </span>
-          {state === 'speaking' && (
-            <div className="flex items-center gap-1 mt-1">
-              <span className="w-1 h-3 bg-black rounded-full animate-pulse" />
-              <span className="w-1 h-4 bg-black rounded-full animate-pulse delay-75" />
-              <span className="w-1 h-2 bg-black rounded-full animate-pulse delay-150" />
-            </div>
-          )}
         </div>
-      </div>
 
-      <style>{`
-        @keyframes djMorph {
-          0% {
-            border-radius: 43% 57% 65% 35% / 48% 45% 55% 52%;
-          }
-          33% {
-            border-radius: 58% 42% 40% 60% / 55% 35% 65% 45%;
-          }
-          66% {
-            border-radius: 35% 65% 58% 42% / 42% 62% 38% 58%;
-          }
-          100% {
-            border-radius: 52% 48% 35% 65% / 60% 40% 60% 40%;
-          }
-        }
-        @keyframes djSpin {
-          from {
-            transform: rotate(0deg);
-          }
-          to {
-            transform: rotate(360deg);
-          }
-        }
-      `}</style>
+        {/* 4. Live Reactive Audio Equalizer Spectrum (9 Bars) */}
+        <div className="relative z-10 flex items-center justify-center gap-1.5 h-12 w-full px-8">
+          {barMultipliers.map((mult, idx) => {
+            // Compute animated height based on voiceLevel, state and index
+            let height = 8;
+            if (isSpeaking) {
+              const pulse = Math.sin((idx + 1) * 1.5 + performance.now() * 0.008) * 0.5 + 0.5;
+              height = Math.max(8, Math.min(42, (12 + voiceLevel * 32 * mult) * (0.6 + pulse * 0.4)));
+            } else if (isListening) {
+              height = 14 + Math.sin(idx * 0.8 + performance.now() * 0.005) * 8;
+            } else if (isPlaying) {
+              height = 10 + Math.sin(idx * 1.2 + performance.now() * 0.003) * 6;
+            }
+
+            return (
+              <div
+                key={idx}
+                className="w-1.5 rounded-full transition-all duration-75"
+                style={{
+                  height: `${height}px`,
+                  background: isListening
+                    ? 'linear-gradient(to top, #00f2fe, #0d72ea)'
+                    : isSpeaking
+                    ? 'linear-gradient(to top, #1ed760, #00f2fe)'
+                    : 'linear-gradient(to top, #555, #888)',
+                  boxShadow: isSpeaking
+                    ? '0 0 8px rgba(30,215,96,0.6)'
+                    : isListening
+                    ? '0 0 8px rgba(0,242,254,0.6)'
+                    : 'none',
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Status Prompt */}
+        <span className="relative z-10 text-[10px] font-bold tracking-wider text-[#a7a7a7] mt-3 uppercase">
+          {isListening
+            ? 'Escuchando...'
+            : isSpeaking
+            ? 'DJ Hablando'
+            : isPlaying
+            ? 'En reproducción'
+            : 'Toca para hablar'}
+        </span>
+      </div>
     </div>
   );
 };

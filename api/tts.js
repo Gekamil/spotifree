@@ -1,4 +1,47 @@
 import { MsEdgeTTS, OUTPUT_FORMAT } from 'msedge-tts';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Helper to load .env.local in dev if not already in process.env
+function getGeminiApiKey() {
+  if (process.env.GEMINI_API_KEY) return process.env.GEMINI_API_KEY;
+  try {
+    const envPath = path.resolve(process.cwd(), '.env.local');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf8');
+      const match = content.match(/GEMINI_API_KEY\s*=\s*(.+)/);
+      if (match && match[1]) {
+        process.env.GEMINI_API_KEY = match[1].trim();
+        return process.env.GEMINI_API_KEY;
+      }
+    }
+  } catch {}
+  return '';
+}
+
+function pcmToWav(pcmBuffer, sampleRate = 24000, numChannels = 1, bitDepth = 16) {
+  const wavHeader = Buffer.alloc(44);
+  const dataSize = pcmBuffer.length;
+  const fileSize = dataSize + 36;
+  const byteRate = sampleRate * numChannels * (bitDepth / 8);
+  const blockAlign = numChannels * (bitDepth / 8);
+
+  wavHeader.write('RIFF', 0);
+  wavHeader.writeUInt32LE(fileSize, 4);
+  wavHeader.write('WAVE', 8);
+  wavHeader.write('fmt ', 12);
+  wavHeader.writeUInt32LE(16, 16);
+  wavHeader.writeUInt16LE(1, 20);
+  wavHeader.writeUInt16LE(numChannels, 22);
+  wavHeader.writeUInt32LE(sampleRate, 24);
+  wavHeader.writeUInt32LE(byteRate, 28);
+  wavHeader.writeUInt16LE(blockAlign, 32);
+  wavHeader.writeUInt16LE(bitDepth, 34);
+  wavHeader.write('data', 36);
+  wavHeader.writeUInt32LE(dataSize, 40);
+
+  return Buffer.concat([wavHeader, pcmBuffer]);
+}
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,125 +64,64 @@ export default async function handler(req, res) {
   }
 
   const text = (query.text || body.text || '').trim();
-  const voice = query.voice || body.voice || 'es-MX-DaliaNeural'; // Default: Spotify DJ Livi persona
-  const provider = (query.provider || body.provider || 'edge').toLowerCase();
-  const apiKey = query.apiKey || body.apiKey || req.headers['x-api-key'] || process.env.TTS_API_KEY || '';
-
   if (!text) {
     res.statusCode = 400;
     res.setHeader('Content-Type', 'application/json');
     return res.end(JSON.stringify({ error: 'Text parameter is required' }));
   }
 
-  // 1. OpenAI TTS integration (if provider === 'openai' and key present)
-  if (provider === 'openai' && apiKey) {
+  const geminiKey = getGeminiApiKey();
+
+  // 1. Google Gemini Studio-Grade 24kHz TTS
+  if (geminiKey) {
     try {
-      const openAiRes = await fetch('https://api.openai.com/v1/audio/speech', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'tts-1',
-          input: text,
-          voice: query.voice || body.voice || 'alloy',
-          response_format: 'mp3',
-        }),
-      });
+      const geminiRes = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text }] }],
+            generationConfig: {
+              responseModalities: ['AUDIO'],
+              speechConfig: {
+                voiceConfig: {
+                  prebuiltVoiceConfig: {
+                    voiceName: 'Puck', // Natural, youthful, broadcast radio DJ voice
+                  },
+                },
+              },
+            },
+          }),
+        }
+      );
 
-      if (!openAiRes.ok) {
-        throw new Error(`OpenAI TTS returned ${openAiRes.status}`);
+      if (geminiRes.ok) {
+        const data = await geminiRes.json();
+        const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+        if (base64Audio) {
+          const pcm = Buffer.from(base64Audio, 'base64');
+          const wav = pcmToWav(pcm, 24000, 1, 16);
+
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'audio/wav');
+          res.setHeader('Content-Length', wav.length);
+          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+          return res.end(wav);
+        }
+      } else {
+        console.warn('[Gemini TTS Notice]: Status', geminiRes.status);
       }
-
-      const buffer = Buffer.from(await openAiRes.arrayBuffer());
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Length', buffer.length);
-      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-      return res.end(buffer);
-    } catch (err) {
-      console.warn('[OpenAI TTS Failed, falling back to Edge]:', err);
+    } catch (geminiErr) {
+      console.warn('[Gemini TTS Fallback]:', geminiErr);
     }
   }
 
-  // 2. ElevenLabs integration (if provider === 'elevenlabs' and key present)
-  if (provider === 'elevenlabs' && apiKey) {
-    try {
-      const voiceId = query.voiceId || body.voiceId || '21m00Tcm4TlvDq8ikWAM';
-      const elRes = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
-        method: 'POST',
-        headers: {
-          'xi-api-key': apiKey,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          text,
-          model_id: 'eleven_multilingual_v2',
-        }),
-      });
-
-      if (!elRes.ok) {
-        throw new Error(`ElevenLabs TTS returned ${elRes.status}`);
-      }
-
-      const buffer = Buffer.from(await elRes.arrayBuffer());
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Length', buffer.length);
-      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-      return res.end(buffer);
-    } catch (err) {
-      console.warn('[ElevenLabs TTS Failed, falling back to Edge]:', err);
-    }
-  }
-
-  // 3. Cartesia Sonic integration (if provider === 'cartesia' and key present)
-  if (provider === 'cartesia' && apiKey) {
-    try {
-      const cartesiaRes = await fetch('https://api.cartesia.ai/tts/bytes', {
-        method: 'POST',
-        headers: {
-          'X-API-Key': apiKey,
-          'Cartesia-Version': '2024-06-10',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model_id: 'sonic-multilingual',
-          transcript: text,
-          voice: {
-            mode: 'id',
-            id: query.voiceId || body.voiceId || 'fb35c138-04f8-47bc-ad9f-f3c5ad7ad186',
-          },
-          output_format: {
-            container: 'mp3',
-            encoding: 'mp3',
-            sample_rate: 24000,
-          },
-        }),
-      });
-
-      if (!cartesiaRes.ok) {
-        throw new Error(`Cartesia TTS returned ${cartesiaRes.status}`);
-      }
-
-      const buffer = Buffer.from(await cartesiaRes.arrayBuffer());
-      res.statusCode = 200;
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Length', buffer.length);
-      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-      return res.end(buffer);
-    } catch (err) {
-      console.warn('[Cartesia TTS Failed, falling back to Edge]:', err);
-    }
-  }
-
-  // 4. Default High-Fidelity Edge Neural Voice with Prosody Optimization
+  // 2. High-Quality Fallback: Colombian Voice (Salome - the one the user liked!)
   try {
     const tts = new MsEdgeTTS();
-    await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+    await tts.setMetadata('es-CO-SalomeNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
-    // Natural human radio pacing: +2% rate, +0Hz pitch for fluid speech
     const { audioStream } = tts.toStream(text, {
       rate: '+2%',
       pitch: '+0Hz',

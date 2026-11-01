@@ -2391,14 +2391,43 @@ class AudioEngine {
     }, 300);
   }
 
+  private previousDuckedVolume: number | null = null;
+
+  public setDuckedVolume(fraction: number = 0.15) {
+    if (this.previousDuckedVolume !== null) return;
+    const cur = usePlayerStore.getState().volume;
+    this.previousDuckedVolume = cur;
+    this.setVolume(Math.max(0.05, cur * fraction));
+  }
+
+  public restoreDuckedVolume() {
+    if (this.previousDuckedVolume !== null) {
+      this.setVolume(this.previousDuckedVolume);
+      this.previousDuckedVolume = null;
+    }
+  }
+
   public setVolume(val: number) {
     const clamped = Math.max(0, Math.min(1, val));
+    const ytVol = Math.round(clamped * 100);
     if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
       try {
-        this.ytPlayer.setVolume(Math.round(clamped * 100));
+        this.ytPlayer.setVolume(ytVol);
       } catch {}
     }
+    if (Array.isArray(this.ytPlayers)) {
+      this.ytPlayers.forEach((p) => {
+        if (p && typeof p.setVolume === 'function') {
+          try {
+            p.setVolume(ytVol);
+          } catch {}
+        }
+      });
+    }
     this.audio.volume = clamped;
+    if (this.secondaryAudio) {
+      this.secondaryAudio.volume = clamped;
+    }
   }
 
   public setMuted(muted: boolean) {
