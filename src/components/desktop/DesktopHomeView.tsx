@@ -10,6 +10,7 @@ import { stripHtml } from '../../utils/formatters';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
+  { id: 'spotify-dj', name: 'DJ', image: 'https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898', color: '#0055ff' },
   { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
   { id: 'my-top-tracks-playlist', name: 'My top tracks playlist', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59', color: '#5E3D82' },
   { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
@@ -173,6 +174,12 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     card: { id: string; name: string; image: string }
   ) => {
     if (e && e.stopPropagation) e.stopPropagation();
+
+    if (card.id === 'spotify-dj' || card.name.toLowerCase().trim() === 'dj') {
+      useUIStore.getState().setActiveMainTab('dj');
+      return;
+    }
+
     const isPlayingThisCard =
       isPlaying &&
       ((currentTrack as any)?.playlistId === card.id || currentTrack?.id === card.id);
@@ -375,15 +382,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               className="px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all duration-200 cursor-pointer bg-white/10 text-white hover:bg-white/20"
             >
               Música
-            </button>
-
-            <button
-              onClick={() => useUIStore.getState().setActiveMainTab('dj')}
-              className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer bg-gradient-to-r from-[#1ed760]/20 via-[#00f2fe]/20 to-[#2e77d0]/20 text-[#00f2fe] hover:text-white border border-[#00f2fe]/30 hover:border-[#1ed760] flex items-center gap-1.5 shadow-sm active:scale-95"
-              title="Abrir Spotify AI DJ"
-            >
-              <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-              <span>✦ Tu DJ con IA</span>
             </button>
           </>
         ) : (

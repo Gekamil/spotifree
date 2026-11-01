@@ -26,6 +26,15 @@ export const DesktopLayout: React.FC = () => {
   const activePlaylist = selectedPlaylist || playlists[0] || null;
 
   const handleSelectPlaylist = (playlist: Playlist) => {
+    if (
+      playlist.id === 'spotify-dj' ||
+      playlist.id === 'dj' ||
+      playlist.name?.toLowerCase().trim() === 'dj' ||
+      (playlist as any).is_dj
+    ) {
+      setActiveMainTab('dj');
+      return;
+    }
     setSelectedPlaylist(playlist);
     setActiveMainTab('playlist');
     if (mainScrollRef.current) {
@@ -39,6 +48,15 @@ export const DesktopLayout: React.FC = () => {
       .replace(/^spotify:album:/, '')
       .replace(/^spotify:collection:/, '')
       .split('?')[0];
+
+    if (
+      cleanId === 'spotify-dj' ||
+      cleanId === 'dj' ||
+      customName?.toLowerCase().trim() === 'dj'
+    ) {
+      setActiveMainTab('dj');
+      return;
+    }
 
     // If artist or album id is passed, load directly with formatted name
     if (cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('alb-')) {

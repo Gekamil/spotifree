@@ -24,21 +24,15 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
     triggerManualTransition,
   } = useAIDJStore();
 
-  const { currentTrack, isPlaying, togglePlay } = usePlayerStore();
+  const { currentTrack, isPlaying, togglePlay, nextTrack } = usePlayerStore();
   const [inputText, setInputText] = useState('');
   const hasInitializedRef = useRef(false);
 
-  // Initialize DJ session speech on first mount
   useEffect(() => {
     if (!hasInitializedRef.current) {
       hasInitializedRef.current = true;
       startDJSession();
     }
-
-    return () => {
-      // Don't kill audio when unmounting, but stop DJ speech
-      useAIDJStore.getState().stopDJSession();
-    };
   }, [startDJSession]);
 
   const handleSendPrompt = (e?: React.FormEvent) => {
@@ -63,41 +57,40 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
   const subtitleToShow = displayedTranscript || currentMessage;
 
   return (
-    <div className="relative w-full h-full min-h-screen bg-[#08080c] text-white flex flex-col justify-between overflow-x-hidden overflow-y-auto select-none font-['SpotifyMixUI']">
-      {/* Dynamic Background Mesh Gradients */}
+    <div className="relative w-full h-full min-h-screen bg-[#070709] text-white flex flex-col justify-between overflow-x-hidden overflow-y-auto select-none font-['SpotifyMixUI']">
+      {/* Background Soft Aura Glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[550px] h-[550px] bg-gradient-to-tr from-[#1ed760]/15 via-[#00f2fe]/15 to-[#2e77d0]/20 rounded-full blur-[120px] opacity-75" />
-        <div className="absolute bottom-10 right-10 w-[350px] h-[350px] bg-[#8b5cf6]/10 rounded-full blur-[100px]" />
+        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-gradient-to-tr from-[#1ed760]/12 via-[#00f2fe]/15 to-[#2e77d0]/12 rounded-full blur-[130px] opacity-70" />
       </div>
 
-      {/* 1. Header Bar */}
-      <header className="relative z-20 flex items-center justify-between px-6 py-5 shrink-0">
+      {/* 1. Minimal Spotify Top Bar */}
+      <header className="relative z-20 flex items-center justify-between px-6 py-4 shrink-0">
         <button
           onClick={onBack}
-          className="flex items-center gap-2 text-[#b3b3b3] hover:text-white transition-colors bg-[#181818]/60 hover:bg-[#282828] px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-semibold backdrop-blur-md cursor-pointer active:scale-95"
+          className="flex items-center gap-1.5 text-[#b3b3b3] hover:text-white transition-colors cursor-pointer text-sm font-semibold active:scale-95"
+          title="Volver"
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="19" y1="12" x2="5" y2="12"></line>
-            <polyline points="12 19 5 12 12 5"></polyline>
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.56 8l6.47 6.47a.75.75 0 1 1-1.06 1.06L2.44 8 9.97.47a.75.75 0 0 1 1.06 0" />
           </svg>
-          Salir del DJ
+          <span>Volver</span>
         </button>
 
-        {/* DJ Badge */}
-        <div className="flex items-center gap-2 bg-gradient-to-r from-[#1ed760]/20 via-[#00f2fe]/20 to-[#2e77d0]/20 px-3 py-1 rounded-full border border-[#00f2fe]/30 backdrop-blur-md">
-          <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-ping" />
-          <span className="text-[11px] font-black tracking-widest text-[#00f2fe] uppercase">
-            ✦ Spotify AI DJ
-          </span>
+        {/* Clean Spotify DJ Header Title */}
+        <div className="flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+          <h1 className="text-sm font-bold tracking-wider uppercase text-white font-['SpotifyMixUITitle']">
+            DJ
+          </h1>
         </div>
 
-        {/* Microphone Quick Toggle */}
+        {/* Microphone Toggle */}
         <button
           onClick={toggleMic}
           className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
             isMicListening
-              ? 'bg-[#00f2fe] text-black shadow-[0_0_15px_rgba(0,242,254,0.6)] animate-pulse'
-              : 'bg-[#181818]/80 text-[#b3b3b3] hover:text-white hover:bg-[#282828] border border-white/10'
+              ? 'bg-[#00f2fe] text-black shadow-[0_0_15px_rgba(0,242,254,0.7)] animate-pulse'
+              : 'text-[#b3b3b3] hover:text-white hover:bg-white/10'
           }`}
           title={isMicListening ? 'Detener micrófono' : 'Hablar con el DJ'}
         >
@@ -110,96 +103,99 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
         </button>
       </header>
 
-      {/* 2. Central Area: Orb & Dynamic Subtitles */}
-      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-2 text-center max-w-3xl mx-auto w-full">
-        {/* Set Title Pill */}
-        <div className="mb-4 inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-white/5 border border-white/10 text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider backdrop-blur-sm">
-          <span>{currentSetTitle}</span>
-        </div>
-
-        {/* The Fluid Spotify AI DJ Orb */}
+      {/* 2. Central Section: Visualizer & Subtitles */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center px-4 py-3 text-center max-w-2xl mx-auto w-full">
+        {/* Visualizer Orb */}
         <div className="my-2 flex items-center justify-center">
           <SpotifyDJVisualizer
-            size={isMobile ? 270 : 360}
+            size={isMobile ? 260 : 340}
             state={visualizerState}
             voiceLevel={voiceLevel}
             onClick={toggleMic}
           />
         </div>
 
-        {/* Subtitle / DJ Transcription Box */}
-        <div className="min-h-[70px] max-w-xl flex items-center justify-center px-4 mt-2">
-          <p className="text-base md:text-xl font-bold tracking-tight text-white leading-relaxed drop-shadow-md transition-all">
+        {/* DJ Speech Subtitle */}
+        <div className="min-h-[75px] max-w-xl flex items-center justify-center px-4 mt-2">
+          <p className="text-lg md:text-2xl font-bold tracking-tight text-white leading-snug drop-shadow-md font-['SpotifyMixUITitle'] transition-all">
             {subtitleToShow ? (
               <span>"{subtitleToShow}"</span>
             ) : (
-              <span className="text-[#b3b3b3] italic font-normal text-sm">
-                Pulsa el círculo o el micrófono para hablar con tu DJ...
+              <span className="text-[#a7a7a7] text-sm md:text-base font-normal">
+                Toca el círculo o escribe abajo para hablar con tu DJ...
               </span>
             )}
           </p>
         </div>
 
-        {/* 3. Vibe Suggestion Pills */}
-        <div className="w-full max-w-2xl mt-5 px-2">
-          <div className="flex flex-wrap items-center justify-center gap-2">
+        {/* Current Set / Vibe Tag */}
+        {currentSetTitle && (
+          <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/[0.07] border border-white/10 text-[11px] font-semibold text-[#b3b3b3] uppercase tracking-wider">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#00f2fe]" />
+            <span>{currentSetTitle}</span>
+          </div>
+        )}
+
+        {/* 3. Simple Conversational Input Bar */}
+        <div className="w-full max-w-lg mt-6 px-2">
+          <form
+            onSubmit={handleSendPrompt}
+            className="flex items-center gap-2 bg-[#181818] border border-white/15 focus-within:border-white/40 rounded-full px-4 py-1.5 shadow-xl transition-all"
+          >
+            <button
+              type="button"
+              onClick={toggleMic}
+              className={`p-1.5 rounded-full transition-colors cursor-pointer shrink-0 ${
+                isMicListening ? 'text-[#00f2fe]' : 'text-[#b3b3b3] hover:text-white'
+              }`}
+              title="Hablar por micrófono"
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+              </svg>
+            </button>
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Dile a tu DJ qué te apetece o cómo te sientes..."
+              className="flex-1 bg-transparent text-sm text-white placeholder-[#727272] focus:outline-none py-1"
+            />
+            <button
+              type="submit"
+              disabled={!inputText.trim()}
+              className="px-3.5 py-1.5 rounded-full bg-white text-black font-bold text-xs uppercase tracking-wider hover:scale-104 active:scale-96 transition-all disabled:opacity-20 disabled:hover:scale-100 cursor-pointer shrink-0"
+            >
+              Pedir
+            </button>
+          </form>
+
+          {/* Quick Clean Vibe Pills */}
+          <div className="flex flex-wrap items-center justify-center gap-2 mt-3">
             {DJ_VIBE_PRESETS.map((vibe) => (
               <button
                 key={vibe.id}
                 onClick={() => handleVibeClick(vibe.query)}
-                className="px-3.5 py-1.5 rounded-full bg-[#181818]/90 hover:bg-[#282828] text-xs font-semibold text-[#e0e0e0] hover:text-white border border-white/10 hover:border-[#1ed760]/40 transition-all cursor-pointer active:scale-95 shadow-sm"
+                className="px-3 py-1 rounded-full bg-white/[0.06] hover:bg-white/[0.15] text-xs font-medium text-[#b3b3b3] hover:text-white border border-white/5 transition-all cursor-pointer active:scale-95"
               >
                 {vibe.label}
               </button>
             ))}
           </div>
         </div>
-
-        {/* 4. Text input for custom prompts */}
-        <form
-          onSubmit={handleSendPrompt}
-          className="w-full max-w-md mt-4 flex items-center gap-2 bg-[#181818]/90 border border-white/15 focus-within:border-[#1ed760] rounded-full px-4 py-1.5 shadow-lg backdrop-blur-md transition-all"
-        >
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="Pide una vibra, artista o género..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-[#727272] focus:outline-none"
-          />
-          <button
-            type="button"
-            onClick={toggleMic}
-            className={`p-1.5 rounded-full transition-colors cursor-pointer ${
-              isMicListening ? 'text-[#00f2fe]' : 'text-[#b3b3b3] hover:text-white'
-            }`}
-            title="Hablar por micrófono"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-            </svg>
-          </button>
-          <button
-            type="submit"
-            disabled={!inputText.trim()}
-            className="px-3 py-1 rounded-full bg-[#1ed760] text-black font-bold text-xs uppercase tracking-wider hover:scale-104 active:scale-96 transition-all disabled:opacity-30 disabled:hover:scale-100 cursor-pointer"
-          >
-            Pedir
-          </button>
-        </form>
       </main>
 
-      {/* 5. Bottom Playback Dock */}
+      {/* 4. Sleek Spotify Playback Dock */}
       {currentTrack && (
         <footer className="relative z-20 w-full max-w-xl mx-auto px-4 pb-6 pt-2 shrink-0">
-          <div className="bg-[#181818]/90 border border-white/10 rounded-2xl p-3 flex items-center justify-between shadow-2xl backdrop-blur-lg">
+          <div className="bg-[#181818]/95 border border-white/10 rounded-2xl p-3 flex items-center justify-between shadow-2xl backdrop-blur-lg">
             {/* Track Info */}
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <img
                 src={currentTrack.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                 alt={currentTrack.name}
-                className="w-11 h-11 rounded-lg object-cover shadow-md shrink-0"
+                className="w-12 h-12 rounded-[6px] object-cover shadow-md shrink-0"
               />
               <div className="min-w-0 flex-1 pr-2">
                 <p className="text-sm font-bold text-white truncate">{currentTrack.name}</p>
@@ -209,7 +205,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
               </div>
             </div>
 
-            {/* Playback Controls & DJ Next Vibe */}
+            {/* Controls */}
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={togglePlay}
@@ -220,12 +216,20 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false }) 
               </button>
 
               <button
+                onClick={nextTrack}
+                className="w-9 h-9 rounded-full text-[#b3b3b3] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Siguiente canción"
+              >
+                <NextNativeIcon size={18} />
+              </button>
+
+              {/* Iconic Spotify DJ Action Button */}
+              <button
                 onClick={triggerManualTransition}
-                className="px-3 py-2 rounded-full bg-gradient-to-r from-[#1ed760] to-[#00f2fe] text-black font-bold text-xs flex items-center gap-1.5 hover:scale-104 active:scale-95 transition-all shadow-md cursor-pointer"
+                className="px-3.5 py-2 rounded-full bg-gradient-to-r from-[#1ed760] via-[#00f2fe] to-[#2e77d0] text-black font-bold text-xs flex items-center gap-1.5 hover:scale-104 active:scale-95 transition-all shadow-lg cursor-pointer"
                 title="Pedir al DJ que cambie de vibra"
               >
-                <span>✦ Cambiar vibra</span>
-                <NextNativeIcon size={14} />
+                <span>✦ Cambiar de rollo</span>
               </button>
             </div>
           </div>

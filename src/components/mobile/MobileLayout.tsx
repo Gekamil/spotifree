@@ -167,6 +167,10 @@ export const MobileLayout: React.FC = () => {
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
+    if (cleanId === 'spotify-dj' || cleanId === 'dj' || customName?.toLowerCase().trim() === 'dj') {
+      setMobileTab('dj');
+      return;
+    }
     const color = resolveVibrantColor(cleanId, customName || cleanId);
     setLastVibrantColor(color);
 
@@ -258,7 +262,6 @@ export const MobileLayout: React.FC = () => {
               onOpenProfile={() => setMobileTab('profile')}
               onOpenSettings={() => setMobileTab('settings')}
               onOpenNotifications={() => setIsNotificationsOpen(true)}
-              onOpenDJ={() => setMobileTab('dj')}
             />
 
             {!isAuthenticated ? (
@@ -572,6 +575,30 @@ export const MobileLayout: React.FC = () => {
                       </span>
                       <span className="text-xs text-[#b3b3b3] mt-0.5">
                         Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || 0} canciones
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Spotify Official DJ Playlist Card */}
+                {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
+                  <div
+                    onClick={() => setMobileTab('dj')}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                  >
+                    <img
+                      src="https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898"
+                      alt="DJ"
+                      onError={handleImageError}
+                      className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
+                    />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-white text-sm truncate flex items-center gap-1.5">
+                        <span>DJ</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                      </span>
+                      <span className="text-xs text-[#b3b3b3] mt-0.5">
+                        Playlist • Hecho para ti
                       </span>
                     </div>
                   </div>

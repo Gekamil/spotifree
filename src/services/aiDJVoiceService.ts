@@ -25,7 +25,7 @@ class AIDJVoiceService {
     }
   }
 
-  private resolveSpanishVoice(): SpeechSynthesisVoice | null {
+  public resolveSpanishVoice(): SpeechSynthesisVoice | null {
     if (typeof window === 'undefined' || !window.speechSynthesis) return null;
     const voices = window.speechSynthesis.getVoices();
     if (!voices || voices.length === 0) return null;
@@ -33,34 +33,43 @@ class AIDJVoiceService {
     const spanishVoices = voices.filter((v) => v.lang.startsWith('es'));
     if (spanishVoices.length === 0) return null;
 
-    // Prioritized high-quality Spanish natural voices
-    const preferredNames = [
-      'google español',
-      'google spanish',
-      'jorge',
-      'pablo',
-      'diego',
-      'carlos',
-      'alvaro',
-      'enrique',
-      'helena',
-      'monica',
-      'paulina',
-      'es-es',
-      'es-mx',
-      'es-us',
-    ];
+    // 1. Modern High-Fidelity Neural / Cloud voices (Google español, Microsoft Natural/Neural)
+    const googleSpain = spanishVoices.find(
+      (v) => v.name.toLowerCase().includes('google español') && !v.name.toLowerCase().includes('estados unidos')
+    );
+    if (googleSpain) {
+      this.cachedSpanishVoice = googleSpain;
+      return googleSpain;
+    }
 
-    for (const pref of preferredNames) {
-      const match = spanishVoices.find(
-        (v) =>
-          v.name.toLowerCase().includes(pref) ||
-          v.lang.toLowerCase().includes(pref)
-      );
-      if (match) {
-        this.cachedSpanishVoice = match;
-        return match;
-      }
+    const naturalOnline = spanishVoices.find(
+      (v) => v.name.toLowerCase().includes('natural') || v.name.toLowerCase().includes('neural')
+    );
+    if (naturalOnline) {
+      this.cachedSpanishVoice = naturalOnline;
+      return naturalOnline;
+    }
+
+    const anyGoogle = spanishVoices.find((v) => v.name.toLowerCase().includes('google'));
+    if (anyGoogle) {
+      this.cachedSpanishVoice = anyGoogle;
+      return anyGoogle;
+    }
+
+    // 2. Charismatic male radio-host voices
+    const maleVoice = spanishVoices.find((v) => /pablo|jorge|diego|alvaro|carlos/i.test(v.name));
+    if (maleVoice) {
+      this.cachedSpanishVoice = maleVoice;
+      return maleVoice;
+    }
+
+    // 3. Any Spanish voice avoiding legacy robotic Windows SAPI voices if possible
+    const modernOther = spanishVoices.find(
+      (v) => !/helena|laura|sabina/i.test(v.name.toLowerCase())
+    );
+    if (modernOther) {
+      this.cachedSpanishVoice = modernOther;
+      return modernOther;
     }
 
     this.cachedSpanishVoice = spanishVoices[0];
@@ -68,8 +77,8 @@ class AIDJVoiceService {
   }
 
   public getSpanishVoice(): SpeechSynthesisVoice | null {
-    if (this.cachedSpanishVoice) return this.cachedSpanishVoice;
-    return this.resolveSpanishVoice();
+    const voice = this.resolveSpanishVoice();
+    return voice || this.cachedSpanishVoice;
   }
 
   /**

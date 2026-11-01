@@ -31,6 +31,7 @@ import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
 import { audioEngine } from '../../services/audioEngine';
+import { AIDJView } from '../dj/AIDJView';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -498,6 +499,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }, [isShuffle, shuffleMode, shuffleVersion, cleanId, tracks.length]);
 
   const displayTracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : tracks;
+
+  if (
+    playlist.id === 'spotify-dj' ||
+    playlist.id === 'dj' ||
+    playlist.name?.toLowerCase().trim() === 'dj' ||
+    (playlist as any).is_dj
+  ) {
+    return <AIDJView isMobile onBack={() => onBack?.()} />;
+  }
 
   const handleTrackClick = (track: Track) => {
     if (currentTrack?.id === track.id) {

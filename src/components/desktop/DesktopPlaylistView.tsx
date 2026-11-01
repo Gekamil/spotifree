@@ -22,6 +22,7 @@ import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
 import { djTransitionService } from '../../services/djTransitionService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
+import { AIDJView } from '../dj/AIDJView';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -596,6 +597,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   }, [isShuffle, shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
 
   const tracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : dynamicTracks;
+
+  if (
+    dynamicPlaylist.id === 'spotify-dj' ||
+    dynamicPlaylist.id === 'dj' ||
+    dynamicPlaylist.name?.toLowerCase().trim() === 'dj' ||
+    (dynamicPlaylist as any).is_dj
+  ) {
+    return <AIDJView onBack={() => useUIStore.getState().setActiveMainTab('home')} />;
+  }
+
   const isLikedPlaylist =
     dynamicPlaylist.id === 'liked-songs' ||
     dynamicPlaylist.id === 'tracks' ||

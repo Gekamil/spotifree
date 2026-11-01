@@ -61,6 +61,16 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
+export const SPOTIFY_DJ_PLAYLIST: Playlist = {
+  id: 'spotify-dj',
+  name: 'DJ',
+  description: 'Tu DJ personal con IA • Hecho para ti',
+  type: 'playlist',
+  images: [{ url: 'https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898' }],
+  owner: { display_name: 'Spotify', id: 'spotify' },
+  tracks: { total: 1, items: [] },
+} as any;
+
 export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
   let seenLiked = false;
   const result: Playlist[] = [];
@@ -92,6 +102,13 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
     seenIds.add(pl.id);
     result.push(pl);
   }
+
+  // Ensure DJ playlist is always present in library right after Liked Songs
+  if (!seenIds.has('spotify-dj')) {
+    result.splice(seenLiked ? 1 : 0, 0, SPOTIFY_DJ_PLAYLIST);
+    seenIds.add('spotify-dj');
+  }
+
   return result;
 }
 

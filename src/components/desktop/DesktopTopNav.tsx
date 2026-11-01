@@ -155,20 +155,6 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
             </span>
           </button>
         </div>
-
-        {/* Spotify AI DJ Navigation Pill */}
-        <button
-          onClick={() => setActiveMainTab('dj')}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all text-xs font-bold shrink-0 cursor-pointer ml-1 ${
-            activeMainTab === 'dj'
-              ? 'bg-gradient-to-r from-[#1ed760] to-[#00f2fe] text-black shadow-[0_0_15px_rgba(30,215,96,0.5)] scale-104'
-              : 'bg-[#1f1f1f] hover:bg-[#282828] text-white hover:scale-104 border border-white/10'
-          }`}
-          title="Spotify AI DJ"
-        >
-          <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-          <span>DJ</span>
-        </button>
       </div>
 
       {/* Right: Descubrir Premium / Conectar, Instalar app, Bell, Friends, Avatar J */}
