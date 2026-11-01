@@ -376,6 +376,15 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             >
               Música
             </button>
+
+            <button
+              onClick={() => useUIStore.getState().setActiveMainTab('dj')}
+              className="ml-auto px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer bg-gradient-to-r from-[#1ed760]/20 via-[#00f2fe]/20 to-[#2e77d0]/20 text-[#00f2fe] hover:text-white border border-[#00f2fe]/30 hover:border-[#1ed760] flex items-center gap-1.5 shadow-sm active:scale-95"
+              title="Abrir Spotify AI DJ"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+              <span>✦ Tu DJ con IA</span>
+            </button>
           </>
         ) : (
           /* Filtered state: "Música" with clear button + attached "Siguiendo" sub-filter */

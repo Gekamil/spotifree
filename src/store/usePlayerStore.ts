@@ -64,6 +64,7 @@ interface PlayerState {
   isMuted: boolean;
   isShuffle: boolean;
   shuffleMode: 'off' | 'all' | 'smart';
+  shuffleVersion: number;
   repeatMode: 'off' | 'all' | 'one';
   queue: Track[];
   history: Track[];
@@ -117,6 +118,7 @@ const store = create<PlayerState>((set, get) => ({
   isMuted: false,
   isShuffle: false,
   shuffleMode: 'off',
+  shuffleVersion: 0,
   repeatMode: 'off',
   queue: [],
   history: [],
@@ -574,6 +576,7 @@ const store = create<PlayerState>((set, get) => ({
         return {
           shuffleMode: nextShuffle,
           isShuffle,
+          shuffleVersion: state.shuffleVersion + 1,
           playedInShuffle: [],
           preselectedNextTrackId: null,
           queue: state.queue.filter((t: any) => !t.isSmartRecommendation),
@@ -591,6 +594,7 @@ const store = create<PlayerState>((set, get) => ({
       return {
         shuffleMode: nextShuffle,
         isShuffle,
+        shuffleVersion: state.shuffleVersion + 1,
         playedInShuffle: played,
         preselectedNextTrackId: preselectedId,
       };

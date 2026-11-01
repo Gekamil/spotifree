@@ -9,6 +9,7 @@ interface MobileHeaderProps {
   onOpenProfile: () => void;
   onOpenSettings?: () => void;
   onOpenNotifications?: () => void;
+  onOpenDJ?: () => void;
 }
 
 export const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -17,6 +18,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   onOpenProfile,
   onOpenSettings,
   onOpenNotifications,
+  onOpenDJ,
 }) => {
   const { user, isAuthenticated } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
@@ -83,6 +85,17 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         >
           Música
         </button>
+
+        {onOpenDJ && (
+          <button
+            onClick={onOpenDJ}
+            className="h-8 px-3 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer bg-gradient-to-r from-[#1ed760]/20 to-[#00f2fe]/20 text-[#00f2fe] hover:text-white border border-[#00f2fe]/30 flex items-center gap-1 active:scale-95"
+            title="Abrir Spotify AI DJ"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+            <span>✦ DJ</span>
+          </button>
+        )}
       </div>
 
       {/* Right: Connect and Settings */}

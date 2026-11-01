@@ -86,6 +86,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     toggleLike,
     isShuffle,
     shuffleMode,
+    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
 
@@ -570,7 +571,31 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setHeroCoverError(false);
   }, [dynamicPlaylist.id]);
 
-  const tracks = dynamicTracks;
+  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
+  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
+
+  useEffect(() => {
+    if (!isShuffle || shuffleMode === 'off' || dynamicTracks.length <= 1) {
+      setShuffledTracks([]);
+      return;
+    }
+    const list = [...dynamicTracks];
+    const currentId = usePlayerStore.getState().currentTrack?.id;
+    let head: Track[] = [];
+    let rest: Track[] = list;
+    if (currentId && list.some(t => t.id === currentId)) {
+      head = list.filter(t => t.id === currentId);
+      rest = list.filter(t => t.id !== currentId);
+    }
+    // Fisher-Yates shuffle
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    setShuffledTracks([...head, ...rest]);
+  }, [isShuffle, shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
+
+  const tracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : dynamicTracks;
   const isLikedPlaylist =
     dynamicPlaylist.id === 'liked-songs' ||
     dynamicPlaylist.id === 'tracks' ||
@@ -626,12 +651,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
-      if (isShuffle || shuffleMode !== 'off') {
-        const randomIndex = Math.floor(Math.random() * tracks.length);
-        playTrack({ ...tracks[randomIndex], playlistId: playlist.id }, tracksWithPlaylistId);
-      } else {
-        playTrack({ ...tracks[0], playlistId: playlist.id }, tracksWithPlaylistId);
-      }
+      playTrack({ ...tracks[0], playlistId: playlist.id }, tracksWithPlaylistId);
     }
   };
 

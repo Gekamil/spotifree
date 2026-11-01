@@ -81,6 +81,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     likedTrackIds,
     isShuffle,
     shuffleMode,
+    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
   const isTrackLiked = (id: string) => Array.isArray(likedTrackIds) ? likedTrackIds.includes(id) : Boolean((likedTrackIds as any)?.has?.(id));
@@ -473,25 +474,45 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   };
 
+  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
+  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
+
+  useEffect(() => {
+    if (!isShuffle || shuffleMode === 'off' || tracks.length <= 1) {
+      setShuffledTracks([]);
+      return;
+    }
+    const list = [...tracks];
+    const currentId = usePlayerStore.getState().currentTrack?.id;
+    let head: Track[] = [];
+    let rest: Track[] = list;
+    if (currentId && list.some((t) => t.id === currentId)) {
+      head = list.filter((t) => t.id === currentId);
+      rest = list.filter((t) => t.id !== currentId);
+    }
+    for (let i = rest.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [rest[i], rest[j]] = [rest[j], rest[i]];
+    }
+    setShuffledTracks([...head, ...rest]);
+  }, [isShuffle, shuffleMode, shuffleVersion, cleanId, tracks.length]);
+
+  const displayTracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : tracks;
+
   const handleTrackClick = (track: Track) => {
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      playTrack(track, tracks);
+      playTrack(track, displayTracks);
     }
   };
 
   const handlePlayAll = () => {
-    if (tracks.length === 0) return;
-    if (isPlaying && tracks.some((t) => t.id === currentTrack?.id)) {
+    if (displayTracks.length === 0) return;
+    if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
-      if (isShuffle || shuffleMode !== 'off') {
-        const randomIndex = Math.floor(Math.random() * tracks.length);
-        playTrack(tracks[randomIndex], tracks);
-      } else {
-        playTrack(tracks[0], tracks);
-      }
+      playTrack(displayTracks[0], displayTracks);
     }
   };
 
@@ -1110,7 +1131,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </div>
         ) : (
           <>
-            {tracks.map((track, idx) => {
+            {displayTracks.map((track, idx) => {
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
               const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
               const isLiked = likedTrackIds.includes(track.id);
@@ -1227,8 +1248,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   </div>
 
                   {/* DJ Mode Transition Indicator between tracks */}
-                  {isAutomixActive && idx < tracks.length - 1 && (() => {
-                    const nextTrack = tracks[idx + 1];
+                  {isAutomixActive && idx < displayTracks.length - 1 && (() => {
+                    const nextTrack = displayTracks[idx + 1];
                     const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
                     const nextFeat: AudioFeature =
                       audioFeatures[nextCleanId] ||

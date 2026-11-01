@@ -12,6 +12,7 @@ import { LoginModal } from './LoginModal';
 import { DesktopSettingsView } from './DesktopSettingsView';
 import { DesktopGuideView } from './DesktopGuideView';
 import { DesktopProfileView } from './DesktopProfileView';
+import { AIDJView } from '../dj/AIDJView';
 import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -223,6 +224,8 @@ export const DesktopLayout: React.FC = () => {
             {activeMainTab === 'guide' && <DesktopGuideView />}
 
             {activeMainTab === 'profile' && <DesktopProfileView onSelectPlaylist={handleSelectPlaylist} />}
+
+            {activeMainTab === 'dj' && <AIDJView onBack={() => setActiveMainTab('home')} />}
           </div>
 
           {/* Expand Right Sidebar Toggle Handle ("<") matching image 4 */}

@@ -37,6 +37,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     openContextMenu,
     sortOrder,
     viewMode,
+    setActiveMainTab,
   } = useUIStore();
 
   let processedPlaylists = [...playlists];
@@ -164,6 +165,15 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           }`}
         >
           Artistas
+        </button>
+
+        <button
+          onClick={() => setActiveMainTab('dj')}
+          className="ml-auto px-2.5 py-1 rounded-full text-xs font-bold transition-all bg-gradient-to-r from-[#1ed760]/20 via-[#00f2fe]/20 to-[#2e77d0]/20 text-[#00f2fe] hover:text-white hover:from-[#1ed760]/40 hover:to-[#00f2fe]/40 border border-[#00f2fe]/30 flex items-center gap-1.5 cursor-pointer active:scale-95"
+          title="Abrir Spotify AI DJ"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+          <span>✦ DJ</span>
         </button>
       </div>
 

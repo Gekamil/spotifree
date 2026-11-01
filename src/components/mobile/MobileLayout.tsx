@@ -14,6 +14,7 @@ import { MobileSettingsView } from './MobileSettingsView';
 import { MobileAddLibraryItemsModal, type LibraryCandidateItem } from './MobileAddLibraryItemsModal';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { LoginModal } from '../desktop/LoginModal';
+import { AIDJView } from '../dj/AIDJView';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
@@ -21,7 +22,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
 
 export const MobileLayout: React.FC = () => {
-  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings'>('home');
+  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
@@ -257,6 +258,7 @@ export const MobileLayout: React.FC = () => {
               onOpenProfile={() => setMobileTab('profile')}
               onOpenSettings={() => setMobileTab('settings')}
               onOpenNotifications={() => setIsNotificationsOpen(true)}
+              onOpenDJ={() => setMobileTab('dj')}
             />
 
             {!isAuthenticated ? (
@@ -684,6 +686,13 @@ export const MobileLayout: React.FC = () => {
               onBack={() => setMobileTab('home')}
               onOpenProfile={() => setMobileTab('profile')}
             />
+          </div>
+        )}
+
+        {/* TAB 7: DEDICATED SPOTIFY AI DJ VIEW */}
+        {mobileTab === 'dj' && (
+          <div className="animate-cascade-down min-h-full">
+            <AIDJView isMobile onBack={() => setMobileTab('home')} />
           </div>
         )}
       </div>
