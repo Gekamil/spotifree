@@ -211,7 +211,17 @@ class AIDJVoiceService {
 
       if (!this.isSpeaking) return true;
 
+      // Ensure any previous audio instance is stopped immediately
+      if (this.currentAudio) {
+        try {
+          this.currentAudio.pause();
+          this.currentAudio.currentTime = 0;
+          this.currentAudio.src = '';
+        } catch {}
+      }
+
       const audio = new Audio(audioUrl);
+      audio.preload = 'auto';
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {
@@ -281,9 +291,9 @@ class AIDJVoiceService {
   }
 
   /**
-   * Browser SpeechSynthesis fallback
+   * Browser SpeechSynthesis (available as manual test utility)
    */
-  private async speakViaSpeechSynthesis(text: string, options: DJVoiceOptions = {}): Promise<void> {
+  public async speakViaSpeechSynthesis(text: string, options: DJVoiceOptions = {}): Promise<void> {
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       console.warn('[AIDJVoice] Speech synthesis not supported, simulating speech');
       await this.simulateSpeech(text, options);
@@ -385,16 +395,12 @@ class AIDJVoiceService {
     this.isSpeaking = true;
     this.duckAudio();
 
-    // 1. Prioritize high-fidelity Neural Edge-TTS (es-ES-AlvaroNeural)
+    // High-fidelity Neural Studio TTS (Consistent Colombian persona - es-CO-SalomeNeural)
     const success = await this.speakViaNeuralTTS(text, options);
-    if (success) {
-      return;
-    }
-
-    // 2. Fallback to browser SpeechSynthesis if Neural TTS failed or is offline
-    if (this.isSpeaking) {
-      console.info('[AIDJVoice] Fallback to browser SpeechSynthesis');
-      return this.speakViaSpeechSynthesis(text, options);
+    if (!success && this.isSpeaking) {
+      this.restoreAudio();
+      this.isSpeaking = false;
+      options.onEnd?.();
     }
   }
 

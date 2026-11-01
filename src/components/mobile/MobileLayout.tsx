@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
+import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -16,7 +16,6 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
-import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
@@ -640,7 +639,7 @@ export const MobileLayout: React.FC = () => {
                     className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
                   >
                     <img
-                      src="https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898"
+                      src={SPOTIFY_DJ_COVER_IMAGE}
                       alt="DJ"
                       onError={handleImageError}
                       className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
@@ -781,12 +780,7 @@ export const MobileLayout: React.FC = () => {
       {mobileTab !== 'dj' && (
         <MobileMiniPlayer
           onOpenFullPlayer={() => {
-            const isDJActive = useAIDJStore.getState().isDJModeActive || usePlayerStore.getState().currentContextId === 'dj-session';
-            if (isDJActive) {
-              setMobileTab('dj');
-            } else {
-              setIsFullPlayerOpen(true);
-            }
+            setIsFullPlayerOpen(true);
           }}
         />
       )}

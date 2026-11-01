@@ -61,12 +61,15 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
+export const SPOTIFY_DJ_COVER_IMAGE =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="djgrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231ed760"/><stop offset="50%" stop-color="%2300f2fe"/><stop offset="100%" stop-color="%231ed760"/></linearGradient></defs><rect width="300" height="300" fill="%230c52cc"/><circle cx="150" cy="150" r="80" fill="none" stroke="url(%23djgrad)" stroke-width="22" stroke-linecap="round"/><text x="150" y="270" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="900" font-size="26" letter-spacing="4">DJ</text></svg>';
+
 export const SPOTIFY_DJ_PLAYLIST: Playlist = {
   id: 'spotify-dj',
   name: 'DJ',
   description: 'Tu DJ personal con IA • Hecho para ti',
   type: 'playlist',
-  images: [{ url: 'https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898' }],
+  images: [{ url: SPOTIFY_DJ_COVER_IMAGE }],
   owner: { display_name: 'Spotify', id: 'spotify' },
   tracks: { total: 15, items: [] },
 } as any;
@@ -932,14 +935,30 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      // 4. Default: User has no active session -> Unauthenticated clean state
+      // 4. Default: User has no active cookie/OAuth session
+      if (isLoggedOut) {
+        set({
+          isAuthenticated: false,
+          user: null,
+          playlists: [],
+          dynamicShelves: [],
+          quickAccessCards: [],
+          playlistDetailsCache: {},
+          isLoading: false,
+        });
+        return;
+      }
+
+      // Default active session for all new accounts & visitors (includes AI DJ, shelves & playlists)
+      const defaultUser = DEFAULT_SESSION_USER;
+      const shelves = buildDynamicShelves(defaultUser, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti');
       set({
-        isAuthenticated: false,
-        user: null,
-        playlists: [],
-        dynamicShelves: [],
-        quickAccessCards: [],
-        playlistDetailsCache: {},
+        isAuthenticated: true,
+        user: defaultUser,
+        playlists: DEFAULT_SESSION_PLAYLISTS,
+        dynamicShelves: shelves,
+        quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
+        playlistDetailsCache: DEFAULT_SESSION_CACHE,
         isLoading: false,
       });
     } finally {

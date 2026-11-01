@@ -2,6 +2,7 @@ import React from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { SettingsNativeIcon } from '../icons/SpotifyNativeIcons';
+import { handleImageError } from '../../utils/imageFallback';
 
 interface MobileHeaderProps {
   activeTab: 'todo' | 'musica';
@@ -48,6 +49,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           <img
             src={avatarUrl}
             alt={user?.display_name || 'Usuario'}
+            onError={handleImageError}
+            referrerPolicy="no-referrer"
             className="w-full h-full object-cover"
           />
         ) : (

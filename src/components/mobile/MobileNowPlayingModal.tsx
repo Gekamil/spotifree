@@ -20,9 +20,9 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { handleImageError } from '../../utils/imageFallback';
+import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
-import { fetchLyricsUnified } from '../../utils/lyricsService';
+import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
@@ -32,91 +32,6 @@ interface MobileNowPlayingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelectPlaylistById?: (id: string, name?: string, img?: string) => void;
-}
-
-interface LyricWord {
-  timeMs: number;
-  text: string;
-}
-
-interface SyncedLine {
-  timeMs: number;
-  endTimeMs: number;
-  text: string;
-  words: LyricWord[];
-}
-
-function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
-  const rawLines = lrcText.split('\n');
-  const tempLines: Array<{ timeMs: number; text: string; rawContent: string }> = [];
-
-  for (const raw of rawLines) {
-    const lineMatch = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
-    if (lineMatch) {
-      const min = parseInt(lineMatch[1], 10);
-      const sec = parseFloat(`${lineMatch[2]}.${lineMatch[3]}`);
-      const timeMs = Math.round((min * 60 + sec) * 1000);
-      const content = lineMatch[4].trim();
-      if (content) {
-        tempLines.push({
-          timeMs,
-          text: content.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').trim(),
-          rawContent: content,
-        });
-      }
-    }
-  }
-
-  tempLines.sort((a, b) => a.timeMs - b.timeMs);
-
-  const parsedLines: SyncedLine[] = [];
-  const wordTokenRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>([^<]*)/g;
-
-  for (let i = 0; i < tempLines.length; i++) {
-    const item = tempLines[i];
-    const nextItem = tempLines[i + 1];
-    const endTimeMs = nextItem ? nextItem.timeMs : item.timeMs + 4500;
-    const words: LyricWord[] = [];
-
-    wordTokenRegex.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = wordTokenRegex.exec(item.rawContent)) !== null) {
-      const wMin = parseInt(match[1], 10);
-      const wSec = parseFloat(`${match[2]}.${match[3]}`);
-      const wTimeMs = Math.round((wMin * 60 + wSec) * 1000);
-      const wText = match[4];
-      if (wText) {
-        words.push({ timeMs: wTimeMs, text: wText });
-      }
-    }
-
-    if (words.length === 0) {
-      const tokens = item.text.split(/(\s+)/).filter(Boolean);
-      const totalChars = tokens.reduce((acc, t) => acc + (t.trim().length > 0 ? t.length : 0), 0);
-      const rawGap = Math.max(800, endTimeMs - item.timeMs);
-      const lineDuration = Math.max(600, Math.min(rawGap * 0.78, 4800));
-      let elapsedMs = 0;
-
-      for (let j = 0; j < tokens.length; j++) {
-        const token = tokens[j];
-        const isSpace = token.trim().length === 0;
-        const charWeight = isSpace ? 0.2 : token.length;
-        const fraction = totalChars > 0 ? charWeight / (totalChars + 0.2 * tokens.length) : 1 / tokens.length;
-        const wTimeMs = item.timeMs + Math.round(elapsedMs);
-        words.push({ timeMs: wTimeMs, text: token });
-        elapsedMs += fraction * lineDuration;
-      }
-    }
-
-    parsedLines.push({
-      timeMs: item.timeMs,
-      endTimeMs,
-      text: item.text,
-      words,
-    });
-  }
-
-  return parsedLines;
 }
 
 export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
@@ -145,12 +60,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   } = usePlayerStore();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const isDJActive = useAIDJStore((s) => s.isDJModeActive) || currentContextId === 'dj-session';
+  const currentSetTitle = useAIDJStore((s) => s.currentSetTitle);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
-  const [isCanvasMode, setIsCanvasMode] = useState(true);
+  const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
@@ -230,9 +147,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         }
       }
     } catch {}
-    // If cover artwork cannot be resolved and canvas exists, switch to canvas mode
-    setDisplayCover(null);
-    setIsCanvasMode(true);
+    // Fallback to reliable default cover
+    setDisplayCover(DEFAULT_FALLBACK_COVER);
   };
 
   useEffect(() => {
@@ -410,12 +326,25 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         </button>
 
         <div className="flex flex-col items-center max-w-[210px]">
-          <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
-            REPRODUCIENDO DE LA LISTA
-          </span>
-          <span className="text-xs font-bold text-white truncate w-full text-center">
-            {currentTrack.album?.name || 'Spotify'}
-          </span>
+          {isDJActive ? (
+            <>
+              <span className="text-[10px] uppercase font-black text-white/90 tracking-widest font-['SpotifyMixUITitle']">
+                DJ
+              </span>
+              <span className="text-xs font-bold text-white truncate w-full text-center mt-0.5">
+                {currentSetTitle || 'Lo que has estado escuchando'}
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
+                REPRODUCIENDO DE LA LISTA
+              </span>
+              <span className="text-xs font-bold text-white truncate w-full text-center">
+                {currentTrack.album?.name || 'Spotify'}
+              </span>
+            </>
+          )}
         </div>
 
         <button
@@ -430,10 +359,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       </div>
 
       {/* Scrollable Player Body */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden px-6 pt-2 pb-12 space-y-4 relative z-10">
+      <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-1 pb-10 space-y-3.5 relative z-10">
         {/* Large Artwork or Spotify Canvas Spacer with smooth crossfade */}
-        <div className="flex items-center justify-center pt-2 pb-1 relative min-h-[340px]">
-          <div className={`w-full max-w-[340px] aspect-square rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.75)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
+        <div className="flex items-center justify-center py-1 relative">
+          <div className={`w-full max-w-[min(74vw,300px)] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_16px_45px_rgba(0,0,0,0.7)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
             isCanvasMode && canvasUrl
               ? 'opacity-0 scale-95 pointer-events-none'
               : 'opacity-100 scale-100'
@@ -780,7 +709,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           <div className="w-full aspect-video rounded-xl overflow-hidden bg-black relative shadow-inner">
             {officialVideoId || videoId ? (
               <iframe
-                src={`https://www.youtube-nocookie.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
+                src={`https://www.youtube.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
                 title={`${currentTrack.name} - Videoclip oficial`}
                 className="w-full h-full border-0"
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"

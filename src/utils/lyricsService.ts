@@ -140,3 +140,89 @@ export async function fetchLyricsUnified(
 
   return { syncedLyrics: null, plainLyrics: null };
 }
+
+export interface LyricWord {
+  timeMs: number;
+  text: string;
+}
+
+export interface SyncedLine {
+  timeMs: number;
+  endTimeMs: number;
+  text: string;
+  words: LyricWord[];
+}
+
+export function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
+  if (!lrcText) return [];
+  const rawLines = lrcText.split('\n');
+  const tempLines: Array<{ timeMs: number; text: string; rawContent: string }> = [];
+
+  for (const raw of rawLines) {
+    const lineMatch = raw.match(/^\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)$/);
+    if (lineMatch) {
+      const min = parseInt(lineMatch[1], 10);
+      const sec = parseFloat(`${lineMatch[2]}.${lineMatch[3]}`);
+      const timeMs = Math.round((min * 60 + sec) * 1000);
+      const content = lineMatch[4].trim();
+      if (content) {
+        tempLines.push({
+          timeMs,
+          text: content.replace(/<\d{2}:\d{2}\.\d{2,3}>/g, '').trim(),
+          rawContent: content,
+        });
+      }
+    }
+  }
+
+  tempLines.sort((a, b) => a.timeMs - b.timeMs);
+
+  const parsedLines: SyncedLine[] = [];
+  const wordTokenRegex = /<(\d{2}):(\d{2})\.(\d{2,3})>([^<]*)/g;
+
+  for (let i = 0; i < tempLines.length; i++) {
+    const item = tempLines[i];
+    const nextItem = tempLines[i + 1];
+    const endTimeMs = nextItem ? nextItem.timeMs : item.timeMs + 4500;
+    const words: LyricWord[] = [];
+
+    wordTokenRegex.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = wordTokenRegex.exec(item.rawContent)) !== null) {
+      const wMin = parseInt(match[1], 10);
+      const wSec = parseFloat(`${match[2]}.${match[3]}`);
+      const wTimeMs = Math.round((wMin * 60 + wSec) * 1000);
+      const wText = match[4];
+      if (wText) {
+        words.push({ timeMs: wTimeMs, text: wText });
+      }
+    }
+
+    if (words.length === 0) {
+      const tokens = item.text.split(/(\s+)/).filter(Boolean);
+      const totalChars = tokens.reduce((acc, t) => acc + (t.trim().length > 0 ? t.length : 0), 0);
+      const rawGap = Math.max(800, endTimeMs - item.timeMs);
+      const lineDuration = Math.max(600, Math.min(rawGap * 0.78, 4800));
+      let elapsedMs = 0;
+
+      for (let j = 0; j < tokens.length; j++) {
+        const token = tokens[j];
+        const isSpace = token.trim().length === 0;
+        const charWeight = isSpace ? 0.2 : token.length;
+        const fraction = totalChars > 0 ? charWeight / (totalChars + 0.2 * tokens.length) : 1 / tokens.length;
+        const wTimeMs = item.timeMs + Math.round(elapsedMs);
+        words.push({ timeMs: wTimeMs, text: token });
+        elapsedMs += fraction * lineDuration;
+      }
+    }
+
+    parsedLines.push({
+      timeMs: item.timeMs,
+      endTimeMs,
+      text: item.text,
+      words,
+    });
+  }
+
+  return parsedLines;
+}
