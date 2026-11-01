@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
+import { searchSpotifyPublicPlaylists } from './api/extract-session.js';
 
 const PORT = process.env.PORT || 10000;
 let currentPlayingTrackId = null;
@@ -688,11 +689,13 @@ const server = http.createServer(async (req, res) => {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
         searchYouTubeTracks(trackSearchQuery, 15).catch(() => []),
-        // 5. Deezer Real Community & Curated Playlists (by query)
+        // 5. Spotify Public Playlists (direct Pathfinder GraphQL)
+        searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []),
+        // 6. Deezer Real Community & Curated Playlists (by query)
         fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-        // 6. Deezer Real Playlists (without 'playlist' keyword)
+        // 7. Deezer Real Playlists (without 'playlist' keyword)
         fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -720,9 +723,10 @@ const server = http.createServer(async (req, res) => {
       const deezerAlbumsRes = results[2];
       const itunesRes = results[3];
       const ytTracks = results[4] || [];
-      const deezerPlaylistsRes1 = results[5] || { data: [] };
-      const deezerPlaylistsRes2 = results[6] || { data: [] };
-      const deezerExtraRes = results[7] || { data: [] };
+      const spotifyPlaylistsRes = results[5] || [];
+      const deezerPlaylistsRes1 = results[6] || { data: [] };
+      const deezerPlaylistsRes2 = results[7] || { data: [] };
+      const deezerExtraRes = results[8] || { data: [] };
 
       const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
       const deezerTracks = allDeezerRaw.map(t => {
@@ -824,13 +828,24 @@ const server = http.createServer(async (req, res) => {
       }));
 
       // Real Community & Curated Playlists from Deezer
-      const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
-      const seenPlaylistIds = new Set();
+      // Playlists: prioritize genuine Spotify user-created & public playlists
       const playlists = [];
+      const seenPlaylistIds = new Set();
+
+      if (Array.isArray(spotifyPlaylistsRes) && spotifyPlaylistsRes.length > 0) {
+        for (const sp of spotifyPlaylistsRes) {
+          if (!sp || !sp.id || seenPlaylistIds.has(sp.id)) continue;
+          seenPlaylistIds.add(sp.id);
+          playlists.push(sp);
+        }
+      }
+
+      // Real Community & Curated Playlists from Deezer
+      const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
 
       for (const p of rawPlaylists) {
-        if (!p || !p.id || seenPlaylistIds.has(p.id)) continue;
-        seenPlaylistIds.add(p.id);
+        if (!p || !p.id || seenPlaylistIds.has(`dz-pl-${p.id}`)) continue;
+        seenPlaylistIds.add(`dz-pl-${p.id}`);
 
         const cover = p.picture_xl || p.picture_big || p.picture_medium || p.picture || '';
         playlists.push({

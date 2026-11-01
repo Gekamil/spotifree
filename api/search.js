@@ -1,4 +1,4 @@
-import { toHDImage } from './extract-session.js';
+import { toHDImage, searchSpotifyPublicPlaylists } from './extract-session.js';
 
 const searchCache = new Map();
 
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat', 'playlist', 'playlists']);
     const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
     const firstWord = significantWords[0] || words[0] || cleanQ;
+    const cookie = req.headers['x-spotify-cookie'] || '';
 
     // Track search uses withoutPlaylist to avoid searching songs called "playlist"
     const trackSearchQuery = withoutPlaylist;
@@ -56,17 +57,20 @@ export default async function handler(req, res) {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
-      // 3. Deezer Playlist Search (exact query)
+      // 3. Real Spotify Public Playlists (Internal Pathfinder GraphQL search)
+      searchSpotifyPublicPlaylists(cleanQ, 20, cookie).catch(() => []),
+
+      // 4. Deezer Playlist Search (exact query)
       fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
-      // 4. Deezer Playlist Search (without "playlist" keyword to find topic playlists)
+      // 5. Deezer Playlist Search (without "playlist" keyword to find topic playlists)
       fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
-      // 5. iTunes tracks
+      // 6. iTunes tracks
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
@@ -86,10 +90,11 @@ export default async function handler(req, res) {
     const deezerTracksRes = results[0];
     const deezerArtistsRes = results[1];
     const deezerAlbumsRes = results[2];
-    const deezerPlaylistsRes1 = results[3];
-    const deezerPlaylistsRes2 = results[4];
-    const itunesRes = results[5];
-    const deezerExtraRes = results[6] || { data: [] };
+    const spotifyPlaylistsRes = results[3] || [];
+    const deezerPlaylistsRes1 = results[4];
+    const deezerPlaylistsRes2 = results[5];
+    const itunesRes = results[6];
+    const deezerExtraRes = results[7] || { data: [] };
 
     const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
     const deezerTracks = allDeezerRaw.map(t => {
@@ -188,14 +193,23 @@ export default async function handler(req, res) {
       release_date: '2026',
     }));
 
-    // Real Community & Curated Playlists from Deezer
-    const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
-    const seenPlaylistIds = new Set();
+    // Playlists: prioritize genuine Spotify user-created & public playlists
     const playlists = [];
+    const seenPlaylistIds = new Set();
 
+    if (Array.isArray(spotifyPlaylistsRes) && spotifyPlaylistsRes.length > 0) {
+      for (const sp of spotifyPlaylistsRes) {
+        if (!sp || !sp.id || seenPlaylistIds.has(sp.id)) continue;
+        seenPlaylistIds.add(sp.id);
+        playlists.push(sp);
+      }
+    }
+
+    // Supplement with Deezer public & curated playlists
+    const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
     for (const p of rawPlaylists) {
-      if (!p || !p.id || seenPlaylistIds.has(p.id)) continue;
-      seenPlaylistIds.add(p.id);
+      if (!p || !p.id || seenPlaylistIds.has(`dz-pl-${p.id}`)) continue;
+      seenPlaylistIds.add(`dz-pl-${p.id}`);
 
       const cover = p.picture_xl || p.picture_big || p.picture_medium || p.picture || '';
       playlists.push({

@@ -9,7 +9,7 @@ import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
 // @ts-ignore
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 // @ts-ignore
-import { extractSpotifySession } from './api/extract-session.js';
+import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/extract-session.js';
 // @ts-ignore
 import canvasHandler from './api/canvas.js';
 // @ts-ignore
@@ -1130,11 +1130,13 @@ function dynamicSpotifyPlugin(): Plugin {
             fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
-            // 4. Deezer Real Playlists (with query)
+            // 4. Spotify Public Playlists (direct Pathfinder GraphQL)
+            searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []),
+            // 5. Deezer Real Playlists (with query)
             fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-            // 5. Deezer Real Playlists (without 'playlist' keyword)
+            // 6. Deezer Real Playlists (without 'playlist' keyword)
             fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
             }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -1161,9 +1163,10 @@ function dynamicSpotifyPlugin(): Plugin {
           const deezerArtistsRes = results[1];
           const deezerAlbumsRes = results[2];
           const itunesRes = results[3];
-          const deezerPlaylistsRes1 = results[4] || { data: [] };
-          const deezerPlaylistsRes2 = results[5] || { data: [] };
-          const deezerExtraRes = results[6] || { data: [] };
+          const spotifyPlaylistsRes = results[4] || [];
+          const deezerPlaylistsRes1 = results[5] || { data: [] };
+          const deezerPlaylistsRes2 = results[6] || { data: [] };
+          const deezerExtraRes = results[7] || { data: [] };
 
           const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
           const deezerTracks = allDeezerRaw.map((t: any) => {
@@ -1265,14 +1268,25 @@ function dynamicSpotifyPlugin(): Plugin {
 
           const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
           const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
+
+          // Playlists: prioritize genuine Spotify user-created & public playlists
+          const playlists: any[] = [];
+          const seenPlaylistIds = new Set<string>();
+
+          if (Array.isArray(spotifyPlaylistsRes) && spotifyPlaylistsRes.length > 0) {
+            for (const sp of spotifyPlaylistsRes) {
+              if (!sp || !sp.id || seenPlaylistIds.has(sp.id)) continue;
+              seenPlaylistIds.add(sp.id);
+              playlists.push(sp);
+            }
+          }
+
           // Real Community & Curated Playlists from Deezer
           const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
-          const seenPlaylistIds = new Set();
-          const playlists: any[] = [];
 
           for (const p of rawPlaylists) {
-            if (!p || !p.id || seenPlaylistIds.has(p.id)) continue;
-            seenPlaylistIds.add(p.id);
+            if (!p || !p.id || seenPlaylistIds.has(`dz-pl-${p.id}`)) continue;
+            seenPlaylistIds.add(`dz-pl-${p.id}`);
 
             const cover = p.picture_xl || p.picture_big || p.picture_medium || p.picture || '';
             playlists.push({

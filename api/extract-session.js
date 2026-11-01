@@ -186,6 +186,79 @@ export async function getAccessTokenFromCookie(spDcCookie) {
   return null;
 }
 
+let cachedSpotifySearchToken = null;
+let cachedSpotifySearchTokenExpiry = 0;
+
+export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '') {
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) return [];
+
+  let token = null;
+  if (!cookie && cachedSpotifySearchToken && Date.now() < cachedSpotifySearchTokenExpiry - 60000) {
+    token = cachedSpotifySearchToken;
+  } else {
+    token = await getAccessTokenFromCookie(cookie);
+    if (token && !cookie) {
+      cachedSpotifySearchToken = token;
+      cachedSpotifySearchTokenExpiry = Date.now() + 3500000;
+    }
+  }
+
+  if (!token) return [];
+
+  const variables = { query: cleanQ, limit: Math.min(30, Math.max(5, limit)), offset: 0 };
+  const extensions = {
+    persistedQuery: {
+      version: 1,
+      sha256Hash: '903df2a65d8121e27d73a2be03c01e88ebe6021bb6d4eb82a389e35d87e51d27',
+    },
+  };
+
+  const url = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=findPlaylists&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify(extensions))}`;
+
+  try {
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'App-Platform': 'WebPlayer',
+        'Accept': 'application/json',
+        'Origin': 'https://open.spotify.com',
+        'Referer': 'https://open.spotify.com/',
+      },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      const items = json.data?.searchV2?.playlists?.items || [];
+      return items.map((it) => {
+        const p = it.data || it;
+        const rawCover = p.images?.items?.[0]?.sources?.[0]?.url || '';
+        const cover = toHDImage(rawCover);
+        const ownerName = p.ownerV2?.data?.name || 'Spotify';
+        return {
+          id: p.id || p.uri?.split(':').pop(),
+          name: p.name,
+          description: p.description || `Playlist de ${ownerName}`,
+          images: cover ? [{ url: cover }] : [],
+          owner: {
+            display_name: ownerName,
+            id: p.ownerV2?.data?.uri?.split(':').pop() || 'spotify',
+          },
+          tracks: {
+            total: 0,
+            items: [],
+          },
+        };
+      });
+    }
+  } catch (err) {
+    console.warn('[searchSpotifyPublicPlaylists error]:', err.message);
+  }
+  return [];
+}
+
 export async function getWebPlayerAuth(spDcCookie = '') {
   const cookie = cleanSpDcString(spDcCookie);
   let tokenData = null;

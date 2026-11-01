@@ -105,4 +105,26 @@ test('Playlist Search Gate: Searches real user-created and curated playlists', a
     assert.ok(jsonResult.name.includes('STUDY MUSIC'));
     assert.ok(jsonResult.tracks?.items?.length >= 10, 'Got track items from Deezer playlist');
   });
+
+  await t.test('6. Real Spotify Public Playlists search returns authentic Spotify user playlists', async () => {
+    const { searchSpotifyPublicPlaylists } = await import('../api/extract-session.js');
+    const playlists = await searchSpotifyPublicPlaylists('playlist para jugar', 10);
+    assert.ok(playlists.length >= 3, `Expected at least 3 Spotify playlists, got ${playlists.length}`);
+    const first = playlists[0];
+    assert.ok(first.id && first.id.length === 22, `Expected 22-char Spotify playlist ID, got ${first.id}`);
+    assert.ok(first.name && first.name.length > 0, 'Has title');
+    assert.ok(first.images?.[0]?.url?.includes('scdn.co') || first.images?.[0]?.url?.includes('spotifycdn.com'), 'Has real Spotify CDN cover');
+    assert.ok(first.owner?.display_name && first.owner.display_name.length > 0, 'Has real owner display name');
+  });
+
+  await t.test('7. Spotify public playlist ID resolves tracks via Spotify embed scraper', async () => {
+    const { resolveSpotifyPlaylist } = await import('../api/playlist.js');
+    // Test resolving a public Spotify playlist ID (e.g. 44ktlV6pvyWHx0wlKMEjga or 37i9dQZF1DXcBWIGoYBM5M)
+    const resolved = await resolveSpotifyPlaylist('44ktlV6pvyWHx0wlKMEjga');
+    assert.ok(resolved, 'Got resolved playlist');
+    assert.ok(resolved.name && resolved.name.length > 0, 'Resolved has valid name');
+    assert.ok(resolved.tracks?.items?.length > 0, `Expected tracks, got ${resolved.tracks?.items?.length}`);
+    assert.ok(resolved.tracks.items[0].name, 'Track 0 has name');
+    assert.ok(resolved.tracks.items[0].artists?.[0]?.name, 'Track 0 has artist');
+  });
 });
