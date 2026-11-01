@@ -16,11 +16,13 @@ export interface AIDJState {
   currentSetTitle: string;
   songsPlayedInSet: number;
   isDJModeActive: boolean;
+  djTracks: Track[];
 
   // Actions
   setVisualizerState: (state: AIDJVisualizerMode) => void;
   setVoiceLevel: (level: number) => void;
   setTranscript: (text: string) => void;
+  setDJTracks: (tracks: Track[]) => void;
   startDJSession: () => Promise<void>;
   stopDJSession: () => void;
   handleUserPrompt: (promptText: string) => Promise<void>;
@@ -176,13 +178,15 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   currentSetTitle: 'Sesión Inicial',
   songsPlayedInSet: 0,
   isDJModeActive: false,
+  djTracks: [],
 
   setVisualizerState: (visualizerState) => set({ visualizerState }),
   setVoiceLevel: (voiceLevel) => set({ voiceLevel }),
   setTranscript: (displayedTranscript) => set({ displayedTranscript }),
+  setDJTracks: (djTracks) => set({ djTracks }),
 
   /**
-   * Start DJ session: greets user warmly with natural Spanish radio-DJ cadence
+   * Start DJ session: gathers tracks, plays set with ducking, and greets user warmly
    */
   startDJSession: async () => {
     set({
@@ -190,6 +194,55 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       visualizerState: 'speaking',
       songsPlayedInSet: 0,
     });
+
+    // 1. Gather tracks from user library, cache, and search
+    const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
+    const allTracks: Track[] = [];
+    const seen = new Set<string>();
+
+    const addT = (t: Track) => {
+      if (t && t.id && !seen.has(t.id)) {
+        seen.add(t.id);
+        allTracks.push(t);
+      }
+    };
+
+    Object.values(playlistDetailsCache).forEach((pl: any) => {
+      pl?.tracks?.items?.forEach(addT);
+    });
+    playlists.forEach((p) => {
+      p.tracks?.items?.forEach(addT);
+    });
+
+    if (typeof window !== 'undefined') {
+      try {
+        const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
+        local.forEach((p: any) => p?.tracks?.items?.forEach(addT));
+        const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+        liked.forEach(addT);
+      } catch {}
+    }
+
+    // Enrich if needed
+    if (allTracks.length < 10) {
+      try {
+        const res = await searchSpotify('top exitos 2024');
+        res?.tracks?.items?.forEach(addT);
+      } catch {}
+    }
+
+    // Shuffle and curate an authentic 15-track set
+    for (let i = allTracks.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allTracks[i], allTracks[j]] = [allTracks[j], allTracks[i]];
+    }
+    const initialSet = allTracks.slice(0, 15);
+    set({ djTracks: initialSet });
+
+    // 2. Play track 1 immediately through global player
+    if (initialSet.length > 0) {
+      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
+    }
 
     const hour = new Date().getHours();
     const greeting =
@@ -203,7 +256,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
-    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé buena música. ¿Qué vibra te apetece hoy?`;
+    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¡Dale play y que empiece la música!`;
 
     set({ currentMessage: introText, displayedTranscript: '' });
 
@@ -394,18 +447,19 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       matchedTracks = [...allUserTracks];
     }
 
-    // Shuffle matched tracks to make a fresh 5-track mini-set
+    // Shuffle matched tracks to make a fresh 15-track playlist set
     for (let i = matchedTracks.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [matchedTracks[i], matchedTracks[j]] = [matchedTracks[j], matchedTracks[i]];
     }
-    const finalSet = matchedTracks.slice(0, 5);
+    const finalSet = matchedTracks.slice(0, 15);
 
     set({
       currentMessage: analysis.speech,
       displayedTranscript: '',
       currentSetTitle: analysis.vibeTitle,
       songsPlayedInSet: 0,
+      djTracks: finalSet,
     });
 
     // 4. Play track 1 immediately in background with ducked volume
