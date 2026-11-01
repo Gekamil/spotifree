@@ -12,6 +12,8 @@ import { resolveSpotifyPlaylist } from './api/playlist.js';
 import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
 import metadataHandler from './api/metadata.js';
+// @ts-ignore
+import ttsHandler from './api/tts.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -925,6 +927,18 @@ function dynamicSpotifyPlugin(): Plugin {
 
         res.statusCode = 200;
         return res.end(JSON.stringify({ syncedLyrics: null, plainLyrics: null }));
+      });
+
+      // 2e-bis. Neural Text-To-Speech (Edge TTS - es-ES-AlvaroNeural)
+      server.middlewares.use('/api/tts', async (req, res) => {
+        try {
+          const url = new URL(req.url || '', 'http://localhost');
+          (req as any).query = Object.fromEntries(url.searchParams.entries());
+          await ttsHandler(req, res);
+        } catch (e: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: e?.message }));
+        }
       });
 
       // 2f. Spotify Canvas Video API (/api/canvas)
