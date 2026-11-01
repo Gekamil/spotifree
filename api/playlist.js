@@ -1,5 +1,5 @@
 const MEMORY_PLAYLIST_CACHE = new Map();
-import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './extract-session.js';
+import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './_lib/extract-session.js';
 
 function parseEmbedHtml(html, cleanId) {
   const scriptMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);

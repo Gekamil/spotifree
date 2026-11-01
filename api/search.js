@@ -1,4 +1,4 @@
-import { toHDImage, searchSpotifyPublicPlaylists } from './extract-session.js';
+import { toHDImage, searchSpotifyPublicPlaylists } from './_lib/extract-session.js';
 
 const searchCache = new Map();
 

@@ -1,11 +1,6 @@
 /**
- * Spotifree Audio Resolve API
- * Resolves a real YouTube videoId for a Spotify track.
- *
- * Strategies:
- *  1. YouTube Music Innertube API (Instant ~600-800ms official audio track resolution)
- *  2. YouTube web search fallback (High resilience)
- *  Zero iTunes 30-second clips — always resolves full-length songs.
+ * Consolidated Spotifree Audio API: Resolve & Stream
+ * Serves /api/audio/resolve and /api/audio/stream
  */
 
 const RESOLVE_CACHE = new Map();
@@ -29,7 +24,13 @@ function fetchWithTimeout(url, opts, ms = 3500) {
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
-/** Strategy 1: YouTube Music Innertube Search (fastest & high-fidelity) */
+const INVIDIOUS_INSTANCES = [
+  'https://invidious.privacyredirect.com',
+  'https://inv.nadeko.net',
+  'https://invidious.nerdvpn.de',
+  'https://yt.drgnz.club',
+];
+
 async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
   const res = await fetchWithTimeout(
     'https://music.youtube.com/youtubei/v1/search',
@@ -50,7 +51,6 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
           },
         },
         query: q,
-        // Music only filter
         params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
       }),
     },
@@ -86,7 +86,6 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
     }
   }
 
-  // Regex match
   const text = JSON.stringify(data);
   const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
   for (const vid of matches) {
@@ -98,7 +97,6 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
   throw new Error('YTM: no videoId found');
 }
 
-/** Strategy 2: YouTube Web Search Scrape */
 async function resolveViaYouTubeSearch(q, excludeSet = new Set()) {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' official video')}`;
   const res = await fetchWithTimeout(
@@ -133,18 +131,61 @@ async function resolveViaYouTubeSearch(q, excludeSet = new Set()) {
   throw new Error('YT search: no videoId found');
 }
 
+async function getInvidiousAudioUrl(videoId) {
+  for (const base of INVIDIOUS_INSTANCES) {
+    try {
+      const res = await fetchWithTimeout(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {}, 5000);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const formats = data.adaptiveFormats || [];
+      const audio = formats
+        .filter(f => f.type?.startsWith('audio/') && f.url)
+        .sort((a, b) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0));
+      if (audio[0]?.url) return audio[0].url;
+    } catch {}
+  }
+  return null;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader(
-    'Cache-Control',
-    'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800'
-  );
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
+
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+  const action = req.query?.action || (url.pathname.includes('/stream') ? 'stream' : 'resolve');
+
+  // 1. STREAM ACTION
+  if (action === 'stream') {
+    const q = (req.query?.q || '').trim();
+    if (!q) return res.status(400).json({ error: 'Missing query q' });
+
+    try {
+      let videoId = null;
+      try {
+        const result = await resolveViaYouTubeMusic(q);
+        videoId = result?.videoId;
+      } catch {
+        const result = await resolveViaYouTubeSearch(q);
+        videoId = result?.videoId;
+      }
+
+      if (!videoId) return res.status(404).json({ error: 'Video not found' });
+      const audioUrl = await getInvidiousAudioUrl(videoId);
+      if (!audioUrl) return res.status(404).json({ error: 'Audio stream not found' });
+
+      return res.redirect(302, audioUrl);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // 2. RESOLVE ACTION (Default)
+  res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
 
   const rawQ = (req.query?.q || req.query?.query || '').trim();
   if (!rawQ) {
@@ -162,15 +203,7 @@ export default async function handler(req, res) {
     return res.status(200).json({ success: true, ...cached, cached: true });
   }
 
-  if (excludeSet.size > 0 && RESOLVE_CACHE.has(cacheKey)) {
-    const cached = RESOLVE_CACHE.get(cacheKey);
-    if (cached?.videoId && excludeSet.has(cached.videoId)) {
-      RESOLVE_CACHE.delete(cacheKey);
-    }
-  }
-
   try {
-    // Run YouTube Music and YouTube Web search in parallel
     const result = await Promise.any([
       resolveViaYouTubeMusic(q, excludeSet),
       resolveViaYouTubeSearch(q, excludeSet),
@@ -183,7 +216,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ success: true, ...result });
     }
   } catch (err) {
-    // Retry once with simplified query (e.g. first 2 words if query is long)
     try {
       const simplified = q.split(' ').slice(0, 4).join(' ');
       if (simplified !== q) {

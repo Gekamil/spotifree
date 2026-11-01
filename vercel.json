@@ -21,15 +21,39 @@
     },
     {
       "source": "/api/spotify/extract-session",
-      "destination": "/api/extract-session"
+      "destination": "/api/login"
     },
     {
       "source": "/api/extract-session",
-      "destination": "/api/extract-session"
+      "destination": "/api/login"
     },
     {
       "source": "/api/lyrics",
       "destination": "/api/lyrics"
+    },
+    {
+      "source": "/api/canvas",
+      "destination": "/api/metadata?action=canvas"
+    },
+    {
+      "source": "/api/audio-features",
+      "destination": "/api/metadata?action=audio-features"
+    },
+    {
+      "source": "/api/artist-image",
+      "destination": "/api/metadata?action=artist-image"
+    },
+    {
+      "source": "/api/audio/stream",
+      "destination": "/api/audio?action=stream"
+    },
+    {
+      "source": "/api/audio/resolve",
+      "destination": "/api/audio?action=resolve"
+    },
+    {
+      "source": "/api/audio/(.*)",
+      "destination": "/api/audio?action=$1"
     },
     {
       "source": "/api/spotify/playlist/(.*)",
@@ -44,8 +68,8 @@
       "destination": "/api/user-profile"
     },
     {
-      "source": "/api/audio/(.*)",
-      "destination": "/api/audio/$1"
+      "source": "/api/auth",
+      "destination": "/api/auth"
     },
     {
       "source": "/api/spotify/search",

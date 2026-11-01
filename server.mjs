@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
-import { searchSpotifyPublicPlaylists } from './api/extract-session.js';
+import { searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 
 const PORT = process.env.PORT || 10000;
 let currentPlayingTrackId = null;

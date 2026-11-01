@@ -107,7 +107,7 @@ test('Playlist Search Gate: Searches real user-created and curated playlists', a
   });
 
   await t.test('6. Real Spotify Public Playlists search returns authentic Spotify user playlists', async () => {
-    const { searchSpotifyPublicPlaylists } = await import('../api/extract-session.js');
+    const { searchSpotifyPublicPlaylists } = await import('../api/_lib/extract-session.js');
     const playlists = await searchSpotifyPublicPlaylists('playlist para jugar', 10);
     assert.ok(playlists.length >= 3, `Expected at least 3 Spotify playlists, got ${playlists.length}`);
     const first = playlists[0];

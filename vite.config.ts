@@ -9,11 +9,9 @@ import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
 // @ts-ignore
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 // @ts-ignore
-import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/extract-session.js';
+import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
-import canvasHandler from './api/canvas.js';
-// @ts-ignore
-import audioFeaturesHandler from './api/audio-features.js';
+import metadataHandler from './api/metadata.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
 const YT_CACHE = new Map<string, string>();
@@ -933,8 +931,8 @@ function dynamicSpotifyPlugin(): Plugin {
       server.middlewares.use('/api/canvas', async (req, res) => {
         try {
           const url = new URL(req.url || '', 'http://localhost');
-          (req as any).query = Object.fromEntries(url.searchParams.entries());
-          await canvasHandler(req, res);
+          (req as any).query = { ...Object.fromEntries(url.searchParams.entries()), action: 'canvas' };
+          await metadataHandler(req, res);
         } catch (e: any) {
           res.statusCode = 500;
           res.end(JSON.stringify({ canvasUrl: null, error: e?.message }));
@@ -945,8 +943,8 @@ function dynamicSpotifyPlugin(): Plugin {
       server.middlewares.use('/api/audio-features', async (req, res) => {
         try {
           const url = new URL(req.url || '', 'http://localhost');
-          (req as any).query = Object.fromEntries(url.searchParams.entries());
-          await audioFeaturesHandler(req, res);
+          (req as any).query = { ...Object.fromEntries(url.searchParams.entries()), action: 'audio-features' };
+          await metadataHandler(req, res);
         } catch (e: any) {
           res.statusCode = 500;
           res.end(JSON.stringify({ audio_features: [], error: e?.message }));

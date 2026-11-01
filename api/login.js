@@ -1,4 +1,4 @@
-import { extractSpotifySession } from './extract-session.js';
+import { extractSpotifySession } from './_lib/extract-session.js';
 import http from 'http';
 
 async function tryExtractFromLocalChrome() {
