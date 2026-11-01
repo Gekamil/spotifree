@@ -247,11 +247,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     };
   }, [currentTrack?.id, currentTrack?.name]);
 
-  if (!isOpen || !currentTrack) return null;
-
-  const isLiked = likedTrackIds.includes(currentTrack.id);
-  const coverUrl = currentTrack.album?.images?.[0]?.url;
-  const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
   const vocalProgressMs = progressMs + 220;
 
   const activeLineIndex = syncedLines.length > 0
@@ -277,6 +272,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       }
     }
   }, [activeLineIndex, isLyricsExpanded]);
+
+  if (!isOpen || !currentTrack) return null;
+
+  const isLiked = likedTrackIds.includes(currentTrack.id);
+  const coverUrl = currentTrack.album?.images?.[0]?.url;
+  const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);

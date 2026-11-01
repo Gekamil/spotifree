@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { MobileLayout } from './components/mobile/MobileLayout';
 import { AudioController } from './components/common/AudioController';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { useIsMobile } from './utils/useIsMobile';
@@ -39,10 +40,10 @@ function App() {
   }, [initializeSpotify]);
 
   return (
-    <>
+    <ErrorBoundary>
       <AudioController />
       {isMobile ? <MobileLayout /> : <DesktopLayout />}
-    </>
+    </ErrorBoundary>
   );
 }
 

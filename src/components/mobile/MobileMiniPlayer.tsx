@@ -39,7 +39,11 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
     durationMs,
     likedTrackIds,
     toggleLike,
+    currentContextId,
   } = usePlayerStore();
+  const isDJModeActive = useAIDJStore((s) => s.isDJModeActive);
+  const isDJActive = isDJModeActive || currentContextId === 'dj-session';
+
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchEndX, setTouchEndX] = useState<number | null>(null);
 
@@ -67,8 +71,6 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
   const vibrantBase = resolveVibrantColor(currentTrack.id, currentTrack.name);
   const cardBgColor = getDarkenedThemeColor(vibrantBase, 0.32);
-  const { currentContextId } = usePlayerStore();
-  const isDJActive = useAIDJStore((s) => s.isDJModeActive) || currentContextId === 'dj-session';
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.targetTouches[0].clientX);
