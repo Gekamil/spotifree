@@ -8,7 +8,7 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
     const validToken = await getValidAccessToken().catch(() => null);
     const activeToken = validToken || storedToken;
 
-    if (activeToken && activeToken !== 'session-bridge-active') {
+    if (activeToken && activeToken !== 'session-bridge-active' && !id.startsWith('dz-')) {
       try {
         const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`, {
           headers: { Authorization: `Bearer ${activeToken}` },
@@ -29,6 +29,49 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
     if (res.ok) {
       return await res.json();
     }
+
+    // Direct client fallback for Deezer playlists if backend route is unavailable
+    if (id.startsWith('dz-') || /^\d+$/.test(id)) {
+      const dzId = id.replace(/^dz-(pl-)?/, '');
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/playlist/${dzId}`);
+        if (dzRes.ok) {
+          const data: any = await dzRes.json();
+          if (data && data.title) {
+            const cover = data.picture_xl || data.picture_big || data.picture_medium || data.picture || '';
+            const tracks = (data.tracks?.data || []).map((t: any, idx: number) => ({
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              artists: [{ id: `art-${t.artist?.id || idx}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: `alb-${t.album?.id || id}`,
+                name: t.album?.title || t.title,
+                images: cover ? [{ url: cover }] : [],
+              },
+            }));
+            return {
+              id,
+              name: data.title,
+              description: data.description || `Playlist creada por ${data.creator?.name || 'Usuario'}`,
+              type: 'playlist',
+              images: cover ? [{ url: cover }] : [],
+              owner: {
+                display_name: data.creator?.name || 'Spotify',
+                id: `user-${data.creator?.id || 'dz'}`,
+              },
+              color: '#303030',
+              tracks: {
+                total: data.nb_tracks || tracks.length,
+                items: tracks,
+              },
+            } as any;
+          }
+        }
+      } catch {}
+    }
+
     return null;
   } catch (err) {
     console.error(`Error fetching playlist details for ${id}:`, err);
@@ -134,7 +177,14 @@ export async function searchSpotify(query: string): Promise<any | null> {
   let tracks: Track[] = [];
   let artists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
   let albums: Array<{ id: string; name: string; images: Array<{ url: string }>; release_date?: string; artists: Array<{ name: string }> }> = [];
-  let playlists: Array<{ id: string; name: string; images: Array<{ url: string }>; owner?: { display_name: string } }> = [];
+  let playlists: Array<{
+    id: string;
+    name: string;
+    images: Array<{ url: string }>;
+    owner?: { display_name: string; id?: string };
+    description?: string;
+    tracks?: { total: number; items?: any[] };
+  }> = [];
 
   // 1. Search in-app loaded playlists, menus, top tracks & library for instant accurate local matching
   try {
@@ -197,13 +247,18 @@ export async function searchSpotify(query: string): Promise<any | null> {
 
   // 2b. Direct Deezer Global Music Catalog Query (Finds brand-new releases with 1000x1000 studio covers)
   try {
-    const queryForDeezer = normalizedQ || cleanQ;
-    const [dzTracksRes, dzArtistsRes, dzAlbumsRes] = await Promise.all([
+    const withoutPlaylist = (normalizedQ || cleanQ).replace(/\bplaylist(s)?\b/gi, '').trim() || (normalizedQ || cleanQ);
+    const queryForDeezer = withoutPlaylist;
+    const [dzTracksRes, dzArtistsRes, dzAlbumsRes, dzPlaylistsRes1, dzPlaylistsRes2] = await Promise.all([
       fetch(`https://api.deezer.com/search?q=${encodeURIComponent(queryForDeezer)}&limit=25`, { signal: AbortSignal.timeout?.(3500) })
         .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(queryForDeezer)}&limit=6`, { signal: AbortSignal.timeout?.(3500) })
         .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(queryForDeezer)}&limit=6`, { signal: AbortSignal.timeout?.(3500) })
+        .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(normalizedQ || cleanQ)}&limit=20`, { signal: AbortSignal.timeout?.(3500) })
+        .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, { signal: AbortSignal.timeout?.(3500) })
         .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
     ]);
 
@@ -245,6 +300,22 @@ export async function searchSpotify(query: string): Promise<any | null> {
         images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
         release_date: '2026',
       }));
+    }
+
+    // Real Community & Curated Playlists from Deezer
+    const rawDzPlaylists = [...(dzPlaylistsRes1.data || []), ...(dzPlaylistsRes2.data || [])];
+    const seenPlIds = new Set(playlists.map(p => p.id));
+    for (const p of rawDzPlaylists) {
+      if (!p || !p.id || seenPlIds.has(`dz-pl-${p.id}`)) continue;
+      seenPlIds.add(`dz-pl-${p.id}`);
+      const cover = p.picture_xl || p.picture_big || p.picture_medium || p.picture || '';
+      playlists.push({
+        id: `dz-pl-${p.id}`,
+        name: p.title,
+        description: `Playlist de ${p.user?.name || 'Usuario'} • ${p.nb_tracks || 0} canciones`,
+        images: cover ? [{ url: cover }] : [],
+        owner: { display_name: p.user?.name || 'Spotify' },
+      });
     }
   } catch {}
 

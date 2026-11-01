@@ -88,6 +88,57 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     }
   }
 
+  // Deezer playlist direct fast-path
+  if (cleanId.startsWith('dz-') || /^\d+$/.test(cleanId)) {
+    const dzId = cleanId.replace(/^dz-(pl-)?/, '');
+    try {
+      const dzRes = await fetch(`https://api.deezer.com/playlist/${dzId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+      });
+      if (dzRes.ok) {
+        const data = await dzRes.json();
+        if (data && data.title) {
+          const cover = toHDImage(data.picture_xl || data.picture_big || data.picture_medium || data.picture);
+          const tracks = (data.tracks?.data || []).map((t, idx) => ({
+            id: `dz-${t.id}`,
+            name: t.title || t.title_short,
+            artists: [{ id: `art-${t.artist?.id || idx}`, name: t.artist?.name || 'Artista' }],
+            album: {
+              id: `alb-${t.album?.id || cleanId}`,
+              name: t.album?.title || t.title,
+              images: [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || cover) }],
+            },
+            duration_ms: (t.duration || 210) * 1000,
+            preview_url: null,
+            added_at: 'Reciente',
+          }));
+
+          const mapped = {
+            id: cleanId,
+            name: data.title,
+            description: data.description || `Playlist de ${data.creator?.name || 'Usuario'}`,
+            type: 'playlist',
+            images: cover ? [{ url: cover }] : [],
+            owner: {
+              display_name: data.creator?.name || 'Deezer',
+              id: `user-${data.creator?.id || 'dz'}`,
+            },
+            color: '#303030',
+            tracks: {
+              total: data.nb_tracks || tracks.length,
+              items: tracks,
+            },
+          };
+          MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
+          return mapped;
+        }
+      }
+    } catch (e) {
+      console.warn('[Playlist API] Deezer fetch error:', e.message);
+    }
+  }
+
   // 0. Check pre-extracted cached playlist details from session feed (instant resolution for recommended cards & shelves)
   try {
     const fs = await import('node:fs');

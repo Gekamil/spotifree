@@ -163,10 +163,10 @@ export const DesktopLayout: React.FC = () => {
 
     const placeholder: Playlist = {
       id: cleanId,
-      name: title || 'Lista de Spotify',
+      name: customName || title || 'Lista de Spotify',
       description: desc,
       type: isArtist ? 'artist' : isAlbum ? 'album' : 'playlist',
-      images: image ? [{ url: image }] : [],
+      images: customImage ? [{ url: customImage }] : (image ? [{ url: image }] : []),
       owner: { display_name: ownerName, id: isUser ? 'user' : 'spotify' },
       tracks: { total: 0, items: [] },
     } as any;

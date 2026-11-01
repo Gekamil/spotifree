@@ -667,25 +667,35 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Secondary Fallback: Deezer Studio API + YouTube Music + iTunes
+      const withoutPlaylist = cleanQ.replace(/\bplaylist(s)?\b/gi, '').trim() || cleanQ;
+      const trackSearchQuery = withoutPlaylist;
       const words = cleanQ.toLowerCase().split(/\s+/).filter(Boolean);
-      const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat']);
+      const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat', 'playlist', 'playlists']);
       const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
       const firstWord = significantWords[0] || words[0] || cleanQ;
 
       const fetchPromises = [
-        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(cleanQ || q)}&limit=25`, {
+        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=25`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-        fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+        fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-        fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(cleanQ || q)}&limit=8`, {
+        fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanQ || q)}&media=music&entity=song&limit=15`, {
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
-        searchYouTubeTracks(cleanQ || q, 15).catch(() => []),
+        searchYouTubeTracks(trackSearchQuery, 15).catch(() => []),
+        // 5. Deezer Real Community & Curated Playlists (by query)
+        fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        // 6. Deezer Real Playlists (without 'playlist' keyword)
+        fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       ];
 
       if (significantWords.length > 1) {
@@ -710,7 +720,9 @@ const server = http.createServer(async (req, res) => {
       const deezerAlbumsRes = results[2];
       const itunesRes = results[3];
       const ytTracks = results[4] || [];
-      const deezerExtraRes = results[5] || { data: [] };
+      const deezerPlaylistsRes1 = results[5] || { data: [] };
+      const deezerPlaylistsRes2 = results[6] || { data: [] };
+      const deezerExtraRes = results[7] || { data: [] };
 
       const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
       const deezerTracks = allDeezerRaw.map(t => {
@@ -811,22 +823,53 @@ const server = http.createServer(async (req, res) => {
         release_date: '2026',
       }));
 
-      const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
-      const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
-      const playlists = [
-        {
-          id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
-          name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
-          images: [{ url: topCover }],
-          owner: { display_name: 'Spotify' },
-        },
-        {
-          id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
-          name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
-          images: [{ url: secondCover }],
-          owner: { display_name: 'Spotify' },
-        },
-      ];
+      // Real Community & Curated Playlists from Deezer
+      const rawPlaylists = [...(deezerPlaylistsRes1.data || []), ...(deezerPlaylistsRes2.data || [])];
+      const seenPlaylistIds = new Set();
+      const playlists = [];
+
+      for (const p of rawPlaylists) {
+        if (!p || !p.id || seenPlaylistIds.has(p.id)) continue;
+        seenPlaylistIds.add(p.id);
+
+        const cover = p.picture_xl || p.picture_big || p.picture_medium || p.picture || '';
+        playlists.push({
+          id: `dz-pl-${p.id}`,
+          name: p.title,
+          description: `Playlist de ${p.user?.name || 'Usuario'} • ${p.nb_tracks || 0} canciones`,
+          images: cover ? [{ url: toHDImage(cover) }] : [],
+          owner: {
+            display_name: p.user?.name || 'Spotify',
+            id: `user-${p.user?.id || 'dz'}`,
+          },
+          tracks: {
+            total: p.nb_tracks || 0,
+            items: [],
+          },
+        });
+      }
+
+      // If no playlists found from Deezer, provide generic fallback
+      if (playlists.length === 0) {
+        const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
+        const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
+        playlists.push(
+          {
+            id: `search-pl-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+            name: `This Is ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+            images: [{ url: topCover }],
+            owner: { display_name: 'Spotify' },
+            tracks: { total: 0, items: [] },
+          },
+          {
+            id: `search-mix-${cleanQ.toLowerCase().replace(/\s+/g, '-')}`,
+            name: `Mix de ${cleanQ.charAt(0).toUpperCase() + cleanQ.slice(1)}`,
+            images: [{ url: secondCover }],
+            owner: { display_name: 'Spotify' },
+            tracks: { total: 0, items: [] },
+          }
+        );
+      }
 
       res.statusCode = 200;
       return res.end(JSON.stringify({
@@ -846,6 +889,55 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/spotify/playlist/')) {
     const rawId = pathname.replace('/api/spotify/playlist/', '').split('/')[0];
     res.setHeader('Content-Type', 'application/json');
+
+    // Deezer Playlist fast-path
+    if (rawId.startsWith('dz-') || /^\d+$/.test(rawId)) {
+      const dzId = rawId.replace(/^dz-(pl-)?/, '');
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/playlist/${dzId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
+        if (dzRes.ok) {
+          const data = await dzRes.json();
+          if (data && data.title) {
+            const cover = toHDImage(data.picture_xl || data.picture_big || data.picture_medium || data.picture);
+            const tracks = (data.tracks?.data || []).map((t, idx) => ({
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              artists: [{ id: `art-${t.artist?.id || idx}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: `alb-${t.album?.id || rawId}`,
+                name: t.album?.title || t.title,
+                images: [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || cover) }],
+              },
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              added_at: 'Reciente',
+            }));
+
+            res.statusCode = 200;
+            return res.end(JSON.stringify({
+              id: rawId,
+              name: data.title,
+              description: data.description || `Playlist creada por ${data.creator?.name || 'Usuario'}`,
+              type: 'playlist',
+              images: cover ? [{ url: cover }] : [],
+              owner: {
+                display_name: data.creator?.name || 'Spotify',
+                id: `user-${data.creator?.id || 'dz'}`,
+              },
+              color: '#303030',
+              tracks: {
+                total: data.nb_tracks || tracks.length,
+                items: tracks,
+              },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn(`Deezer playlist fetch notice ${rawId}:`, err.message);
+      }
+    }
 
     try {
       const embedUrl = `https://open.spotify.com/embed/playlist/${rawId}`;

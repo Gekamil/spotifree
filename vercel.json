@@ -48,6 +48,14 @@
       "destination": "/api/audio/$1"
     },
     {
+      "source": "/api/spotify/search",
+      "destination": "/api/search"
+    },
+    {
+      "source": "/api/search",
+      "destination": "/api/search"
+    },
+    {
       "source": "/api/(.*)",
       "destination": "https://spotifree-backend-o4a7.onrender.com/api/$1"
     },
