@@ -25,6 +25,8 @@ import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified } from '../../utils/lyricsService';
 import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useAIDJStore } from '../../services/aiDJService';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -139,6 +141,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     toggleLike,
     playTrack,
     queue,
+    currentContextId,
   } = usePlayerStore();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -616,6 +619,22 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <path d="M15 15H1v-1.5h14V15zm0-4.5H1V9h14v1.5zm0-4.5H1V4.5h14V6zm0-4.5H1V0h14v1.5z" />
                 </svg>
               </button>
+
+              {/* Floating DJ Button (Photo 1) */}
+              {(useAIDJStore.getState().isDJModeActive || currentContextId === 'dj-session') && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onSelectPlaylistById) {
+                      onSelectPlaylistById('spotify-dj');
+                    }
+                  }}
+                  className="w-10 h-10 rounded-full bg-[#0050d0] hover:bg-[#005eff] border border-white/20 text-[#1ed760] shadow-[0_4px_16px_rgba(0,80,208,0.6)] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all ml-1"
+                  title="Volver a la pantalla del DJ"
+                >
+                  <SpotifyDJVisualizer size={24} mini state="playing" />
+                </button>
+              )}
             </div>
           </div>
         </div>

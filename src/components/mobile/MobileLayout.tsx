@@ -16,6 +16,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
@@ -778,7 +779,16 @@ export const MobileLayout: React.FC = () => {
 
       {/* Docked Mini Player right above Bottom Navigation (hidden during full DJ mode) */}
       {mobileTab !== 'dj' && (
-        <MobileMiniPlayer onOpenFullPlayer={() => setIsFullPlayerOpen(true)} />
+        <MobileMiniPlayer
+          onOpenFullPlayer={() => {
+            const isDJActive = useAIDJStore.getState().isDJModeActive || usePlayerStore.getState().currentContextId === 'dj-session';
+            if (isDJActive) {
+              setMobileTab('dj');
+            } else {
+              setIsFullPlayerOpen(true);
+            }
+          }}
+        />
       )}
 
       {/* Full-screen Now Playing Modal */}

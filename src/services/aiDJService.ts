@@ -225,7 +225,22 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const addT = (t: Track) => {
       if (t && t.id && !seen.has(t.id)) {
         seen.add(t.id);
-        allTracks.push(t);
+        const art =
+          t.album?.images?.[0]?.url ||
+          (t as any).image ||
+          (t as any).album_cover_url ||
+          'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+        const normalized: Track = (!t.album || !t.album.images || t.album.images.length === 0)
+          ? {
+              ...t,
+              album: {
+                id: t.album?.id || `alb-${t.id}`,
+                name: t.album?.name || t.name,
+                images: [{ url: art }],
+              },
+            }
+          : t;
+        allTracks.push(normalized);
       }
     };
 
@@ -441,7 +456,22 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const addTrack = (t: Track) => {
       if (t && t.id && !seenIds.has(t.id)) {
         seenIds.add(t.id);
-        allUserTracks.push(t);
+        const art =
+          t.album?.images?.[0]?.url ||
+          (t as any).image ||
+          (t as any).album_cover_url ||
+          'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+        const normalized: Track = (!t.album || !t.album.images || t.album.images.length === 0)
+          ? {
+              ...t,
+              album: {
+                id: t.album?.id || `alb-${t.id}`,
+                name: t.album?.name || t.name,
+                images: [{ url: art }],
+              },
+            }
+          : t;
+        allUserTracks.push(normalized);
       }
     };
 

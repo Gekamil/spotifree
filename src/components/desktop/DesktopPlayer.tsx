@@ -21,6 +21,8 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useAIDJStore } from '../../services/aiDJService';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -46,6 +48,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     toggleRepeat,
     toggleLike,
     queue,
+    currentContextId,
   } = usePlayerStore();
 
   const { toggleRightSidebar, activeRightSidebar } = useUIStore();
@@ -413,6 +416,17 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
         >
           <QueueNativeIcon size={16} className={activeRightSidebar === 'queue' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'} />
         </button>
+
+        {/* DJ Mode active indicator button */}
+        {(useAIDJStore.getState().isDJModeActive || currentContextId === 'dj-session') && (
+          <button
+            onClick={() => useUIStore.getState().setActiveMainTab('dj')}
+            className="w-7 h-7 rounded-full bg-[#0050d0] hover:bg-[#005eff] flex items-center justify-center text-[#1ed760] transition-transform hover:scale-106 active:scale-95 shadow-md p-0.5"
+            title="Abrir sesión del DJ"
+          >
+            <SpotifyDJVisualizer size={20} mini state="playing" />
+          </button>
+        )}
 
         <button
           onClick={() => {}}

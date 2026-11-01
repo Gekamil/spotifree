@@ -19,7 +19,7 @@ export interface AIDJConfig {
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'es-MX-DaliaNeural', // Official Spotify DJ Livi persona
+  voice: 'es-CO-SalomeNeural', // Official Spotify DJ Colombian persona
   provider: 'edge',
   apiKey: '',
   voiceId: '',
@@ -181,7 +181,7 @@ class AIDJVoiceService {
       if (!audioUrl) {
         const params = new URLSearchParams({
           text,
-          voice: this.config.voice || 'es-MX-DaliaNeural',
+          voice: this.config.voice || 'es-CO-SalomeNeural',
           provider: this.config.provider || 'edge',
         });
         if (this.config.apiKey) params.set('apiKey', this.config.apiKey);

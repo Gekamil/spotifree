@@ -9,6 +9,8 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useAIDJStore } from '../../services/aiDJService';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -65,6 +67,8 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
   const vibrantBase = resolveVibrantColor(currentTrack.id, currentTrack.name);
   const cardBgColor = getDarkenedThemeColor(vibrantBase, 0.32);
+  const { currentContextId } = usePlayerStore();
+  const isDJActive = useAIDJStore((s) => s.isDJModeActive) || currentContextId === 'dj-session';
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.targetTouches[0].clientX);
@@ -174,6 +178,20 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
             <AddTrackNativeIcon size={20} className="text-white/80" />
           )}
         </button>
+
+        {/* DJ Mode active indicator button */}
+        {isDJActive && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenFullPlayer();
+            }}
+            className="w-7 h-7 rounded-full bg-[#0050d0] flex items-center justify-center shadow-md active:scale-95 hover:scale-105 transition-all"
+            title="Volver a la sesión del DJ"
+          >
+            <SpotifyDJVisualizer size={18} mini state="playing" />
+          </button>
+        )}
 
         {/* Play/Pause button */}
         <button

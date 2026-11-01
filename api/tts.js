@@ -70,57 +70,13 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Text parameter is required' }));
   }
 
-  const geminiKey = getGeminiApiKey();
+  // Consistent High-Quality Colombian Voice (Salome - official user choice)
+  // Ensures 100% voice consistency with no intermittent voice flipping
+  const chosenVoice = query.voice || body.voice || 'es-CO-SalomeNeural';
 
-  // 1. Google Gemini Studio-Grade 24kHz TTS
-  if (geminiKey) {
-    try {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text }] }],
-            generationConfig: {
-              responseModalities: ['AUDIO'],
-              speechConfig: {
-                voiceConfig: {
-                  prebuiltVoiceConfig: {
-                    voiceName: 'Puck', // Natural, youthful, broadcast radio DJ voice
-                  },
-                },
-              },
-            },
-          }),
-        }
-      );
-
-      if (geminiRes.ok) {
-        const data = await geminiRes.json();
-        const base64Audio = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-        if (base64Audio) {
-          const pcm = Buffer.from(base64Audio, 'base64');
-          const wav = pcmToWav(pcm, 24000, 1, 16);
-
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'audio/wav');
-          res.setHeader('Content-Length', wav.length);
-          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-          return res.end(wav);
-        }
-      } else {
-        console.warn('[Gemini TTS Notice]: Status', geminiRes.status);
-      }
-    } catch (geminiErr) {
-      console.warn('[Gemini TTS Fallback]:', geminiErr);
-    }
-  }
-
-  // 2. High-Quality Fallback: Colombian Voice (Salome - the one the user liked!)
   try {
     const tts = new MsEdgeTTS();
-    await tts.setMetadata('es-CO-SalomeNeural', OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+    await tts.setMetadata(chosenVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
     const { audioStream } = tts.toStream(text, {
       rate: '+2%',

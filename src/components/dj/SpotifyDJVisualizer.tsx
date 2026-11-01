@@ -22,6 +22,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
   const voiceLevelRef = useRef(voiceLevel);
+  const smoothedVoiceRef = useRef(0);
 
   useEffect(() => {
     stateRef.current = state;
@@ -50,42 +51,51 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
     const centerY = size / 2;
     const baseRadius = size * (mini ? 0.35 : 0.32);
     const strokeWidth = Math.max(3, size * (mini ? 0.12 : 0.075));
-    const numPoints = mini ? 60 : 120;
+    const numPoints = mini ? 70 : 140;
 
     const render = () => {
-      time += mini ? 0.02 : 0.038;
+      // Gentle, smooth time advancement (no erratic jumps or wild bouncing)
+      time += mini ? 0.012 : 0.016;
       const currentState = stateRef.current;
-      const currentVoice = voiceLevelRef.current;
+      const targetVoice = voiceLevelRef.current;
+
+      // Exponential moving average for silky-smooth voice reactivity
+      smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * 0.1;
+      const currentVoice = smoothedVoiceRef.current;
 
       ctx.clearRect(0, 0, size, size);
 
-      // Deformation dynamics matching real Spotify DJ ring (Photo 2)
-      let deformationMagnitude = 6 * (size / 260);
+      // Organic, elegant deformation matching real Spotify DJ ring (Photo 2)
+      let deformationMagnitude = 4.5 * (size / 260);
       let pulseScale = 1;
 
       if (!mini) {
         if (currentState === 'speaking') {
-          deformationMagnitude = (12 + currentVoice * 22) * (size / 260);
-          pulseScale = 1 + Math.sin(time * 5) * 0.04 + currentVoice * 0.1;
+          // Harmonic wave deformation - smooth breathing without bouncing erratically
+          deformationMagnitude = (6.5 + currentVoice * 10) * (size / 260);
+          pulseScale = 1 + Math.sin(time * 1.8) * 0.02 + currentVoice * 0.05;
         } else if (currentState === 'listening') {
-          deformationMagnitude = (10 + currentVoice * 14) * (size / 260);
-          pulseScale = 1 + Math.sin(time * 3) * 0.03;
+          deformationMagnitude = (6 + currentVoice * 8) * (size / 260);
+          pulseScale = 1 + Math.sin(time * 1.5) * 0.018;
         } else if (currentState === 'playing') {
-          deformationMagnitude = 7 * (size / 260);
-          pulseScale = 1 + Math.sin(time * 2.2) * 0.025;
+          deformationMagnitude = 5 * (size / 260);
+          pulseScale = 1 + Math.sin(time * 1.2) * 0.015;
+        } else {
+          deformationMagnitude = 4 * (size / 260);
+          pulseScale = 1 + Math.sin(time * 0.9) * 0.01;
         }
       }
 
       ctx.save();
       ctx.beginPath();
 
-      // Compute smooth organic morphing loop points
+      // Compute smooth organic morphing loop points (single continuous peristaltic wave)
       for (let i = 0; i <= numPoints; i++) {
         const theta = (i / numPoints) * Math.PI * 2;
-        const wave1 = Math.sin(theta * 2 + time * 1.3) * 0.55;
-        const wave2 = Math.cos(theta * 3 - time * 1.8) * 0.35;
-        const wave3 = Math.sin(theta * 5 + time * 0.8) * 0.15;
-        const offset = (wave1 + wave2 + wave3) * deformationMagnitude;
+        // Two gentle low-frequency harmonic waves for fluid liquid appearance
+        const wave1 = Math.sin(theta * 2 + time * 1.1) * 0.65;
+        const wave2 = Math.cos(theta * 3 - time * 0.8) * 0.35;
+        const offset = (wave1 + wave2) * deformationMagnitude;
         const r = (baseRadius + offset) * pulseScale;
 
         const px = centerX + Math.cos(theta) * r;
@@ -125,7 +135,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       // Soft neon glow
       ctx.shadowColor = currentState === 'listening' ? 'rgba(0, 242, 254, 0.7)' : 'rgba(30, 215, 96, 0.55)';
-      ctx.shadowBlur = mini ? 4 : 18;
+      ctx.shadowBlur = mini ? 4 : 16;
 
       // Stroke ONLY (Hollow center matching Photo 2)
       ctx.stroke();
