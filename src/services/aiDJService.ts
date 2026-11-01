@@ -7,6 +7,15 @@ import { searchSpotify } from './spotifyApi';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
+export interface DJChatMessage {
+  id: string;
+  sender: 'dj' | 'user';
+  text: string;
+  timestamp: string;
+  curatedSetTitle?: string;
+  trackCount?: number;
+}
+
 export interface AIDJState {
   visualizerState: AIDJVisualizerMode;
   isMicListening: boolean;
@@ -17,8 +26,11 @@ export interface AIDJState {
   songsPlayedInSet: number;
   isDJModeActive: boolean;
   djTracks: Track[];
+  chatHistory: DJChatMessage[];
+  viewMode: 'chat' | 'playlist';
 
   // Actions
+  setViewMode: (mode: 'chat' | 'playlist') => void;
   setVisualizerState: (state: AIDJVisualizerMode) => void;
   setVoiceLevel: (level: number) => void;
   setTranscript: (text: string) => void;
@@ -179,7 +191,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   songsPlayedInSet: 0,
   isDJModeActive: false,
   djTracks: [],
+  chatHistory: [],
+  viewMode: 'chat',
 
+  setViewMode: (viewMode) => set({ viewMode }),
   setVisualizerState: (visualizerState) => set({ visualizerState }),
   setVoiceLevel: (voiceLevel) => set({ voiceLevel }),
   setTranscript: (displayedTranscript) => set({ displayedTranscript }),
@@ -256,9 +271,23 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
-    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¡Dale play y que empiece la música!`;
+    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
 
-    set({ currentMessage: introText, displayedTranscript: '' });
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    set({
+      currentMessage: introText,
+      displayedTranscript: '',
+      chatHistory: [
+        {
+          id: 'msg-initial',
+          sender: 'dj',
+          text: introText,
+          timestamp: timeStr,
+          curatedSetTitle: 'Tu Mezcla Inicial',
+          trackCount: initialSet.length,
+        },
+      ],
+    });
 
     await aiDJVoiceService.speak(introText, {
       onWord: (_word, partial) => {
@@ -376,12 +405,22 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (!promptText || promptText.trim().length === 0) return;
 
     aiDJVoiceService.stopSpeaking();
-    set({
+
+    const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const userMsg: DJChatMessage = {
+      id: `msg-user-${Date.now()}`,
+      sender: 'user',
+      text: promptText,
+      timestamp: userTime,
+    };
+
+    set((state) => ({
+      chatHistory: [...state.chatHistory, userMsg],
       visualizerState: 'speaking',
       currentMessage: `Entendido... preparando música para "${promptText}"`,
       displayedTranscript: '',
       voiceLevel: 0.3,
-    });
+    }));
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
@@ -454,13 +493,24 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     }
     const finalSet = matchedTracks.slice(0, 15);
 
-    set({
+    const djTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const djMsg: DJChatMessage = {
+      id: `msg-dj-${Date.now()}`,
+      sender: 'dj',
+      text: analysis.speech,
+      timestamp: djTime,
+      curatedSetTitle: analysis.vibeTitle,
+      trackCount: finalSet.length,
+    };
+
+    set((state) => ({
       currentMessage: analysis.speech,
       displayedTranscript: '',
       currentSetTitle: analysis.vibeTitle,
       songsPlayedInSet: 0,
       djTracks: finalSet,
-    });
+      chatHistory: [...state.chatHistory, djMsg],
+    }));
 
     // 4. Play track 1 immediately in background with ducked volume
     const track1 = finalSet[0];

@@ -68,8 +68,19 @@ export const SPOTIFY_DJ_PLAYLIST: Playlist = {
   type: 'playlist',
   images: [{ url: 'https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898' }],
   owner: { display_name: 'Spotify', id: 'spotify' },
-  tracks: { total: 1, items: [] },
+  tracks: { total: 15, items: [] },
 } as any;
+
+// Guarantee DJ playlist exists in default session playlists for all new and guest accounts
+if (!DEFAULT_SESSION_PLAYLISTS.some((p) => p.id === 'spotify-dj' || p.name?.toLowerCase().trim() === 'dj')) {
+  const likedIdx = DEFAULT_SESSION_PLAYLISTS.findIndex((p) => p.id === 'liked-songs');
+  if (likedIdx >= 0) {
+    DEFAULT_SESSION_PLAYLISTS.splice(likedIdx + 1, 0, SPOTIFY_DJ_PLAYLIST);
+  } else {
+    DEFAULT_SESSION_PLAYLISTS.unshift(SPOTIFY_DJ_PLAYLIST);
+  }
+}
+DEFAULT_SESSION_CACHE['spotify-dj'] = SPOTIFY_DJ_PLAYLIST;
 
 export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
   let seenLiked = false;
