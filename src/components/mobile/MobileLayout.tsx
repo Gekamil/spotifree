@@ -22,10 +22,9 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
-import { useRotatingDJMessage } from '../../utils/djMessages';
+import { RotatingDJBannerText } from '../../utils/djMessages';
 
 export const MobileLayout: React.FC = () => {
-  const rotatingDJMessage = useRotatingDJMessage(6500);
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums' | 'downloaded'>('all');
@@ -375,9 +374,7 @@ export const MobileLayout: React.FC = () => {
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-10 pt-4">
-                      <p className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm min-h-[54px] flex items-center transition-opacity duration-300">
-                        {rotatingDJMessage}
-                      </p>
+                      <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm min-h-[54px] flex items-center" />
 
                       <button
                         onClick={(e) => {

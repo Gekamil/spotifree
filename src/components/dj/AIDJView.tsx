@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
@@ -50,8 +50,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const {
     visualizerState,
     voiceLevel,
-    displayedTranscript,
-    currentMessage,
     isMicListening,
     djTracks,
     currentSetTitle,
@@ -82,9 +80,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [ambientColor, setAmbientColor] = useState<string>('#0c52cc');
   const [promptInput, setPromptInput] = useState('');
-  const [textGlowKey, setTextGlowKey] = useState(0);
   const [, setCoversVersion] = useState(0);
-  const prevTextRef = useRef('');
 
   // Resolve album covers for all DJ tracks in background
   useEffect(() => {
@@ -140,15 +136,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   };
 
   const tracksToDisplay: Track[] = djTracks && djTracks.length > 0 ? djTracks : queue;
-  const subtitleToShow = displayedTranscript || currentMessage;
-
-  // Trigger smooth glow & fade whenever the displayed text changes
-  useEffect(() => {
-    if (subtitleToShow && subtitleToShow !== prevTextRef.current) {
-      prevTextRef.current = subtitleToShow;
-      setTextGlowKey((k) => k + 1);
-    }
-  }, [subtitleToShow]);
 
   const handleTrackClick = (track: Track) => {
     if (currentTrack?.id === track.id) {
@@ -243,40 +230,34 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         </button>
       </header>
 
-      {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring (Photo 2) */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 text-center max-w-xl mx-auto w-full z-10 my-auto py-1">
-        <div
-          onClick={toggleMic}
-          className="cursor-pointer transition-transform hover:scale-104 active:scale-95 my-1"
-          title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
-        >
-          <SpotifyDJVisualizer
-            size={isMobile ? 250 : 310}
-            state={visualizerState}
-            voiceLevel={voiceLevel}
-            themeColor={ambientColor}
-          />
-        </div>
-
-        {/* Subtitle / Transcript with Smooth Glow & Fade Transition */}
-        <div className="min-h-[62px] flex items-center justify-center px-4 mt-2">
-          <p
-            key={`glow-txt-${textGlowKey}`}
-            className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-snug drop-shadow-[0_2px_14px_rgba(255,255,255,0.45)] font-['SpotifyMixUITitle'] max-w-lg transition-all duration-400 ease-out animate-in fade-in"
+      {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
+      <main className="flex-1 flex flex-col items-center justify-between px-4 text-center max-w-xl mx-auto w-full z-10 py-2 min-h-0">
+        <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
+          <div
+            onClick={toggleMic}
+            className="cursor-pointer transition-transform hover:scale-104 active:scale-95 flex items-center justify-center"
+            title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
           >
-            {isMicListening ? (
-              <span className="text-[#00f2fe] flex items-center justify-center gap-2 drop-shadow-[0_0_16px_rgba(0,242,254,0.7)]">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#00f2fe] animate-ping" />
-                Te escucho... habla conmigo
+            <SpotifyDJVisualizer
+              size={isMobile ? 260 : 320}
+              state={visualizerState}
+              voiceLevel={voiceLevel}
+              themeColor={ambientColor}
+            />
+          </div>
+
+          {isMicListening && (
+            <div className="mt-3 flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#00f2fe]/15 border border-[#00f2fe]/40 backdrop-blur-md animate-pulse">
+              <span className="w-2 h-2 rounded-full bg-[#00f2fe]" />
+              <span className="text-xs font-bold text-[#00f2fe] font-['SpotifyMixUI']">
+                Te escucho...
               </span>
-            ) : (
-              <span>{subtitleToShow || 'Aquí tu DJ de Spotify...'}</span>
-            )}
-          </p>
+            </div>
+          )}
         </div>
 
         {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
-        <div className="w-full max-w-md mt-3 space-y-2">
+        <div className="w-full max-w-md space-y-2 mt-auto">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -305,7 +286,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               type="text"
               value={promptInput}
               onChange={(e) => setPromptInput(e.target.value)}
-              placeholder="Escribe al DJ (ej. más reggaeton, algo chill)..."
+              placeholder={isMicListening ? "Te escucho... habla conmigo" : "Escribe al DJ (ej. más reggaeton, algo chill)..."}
               className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/50 outline-none font-['SpotifyMixUI'] px-1"
             />
 

@@ -8,16 +8,6 @@ interface InteractiveMusicWavesProps {
   className?: string;
 }
 
-interface AmbientParticle {
-  x: number;
-  y: number;
-  radius: number;
-  alpha: number;
-  speedY: number;
-  driftX: number;
-  phase: number;
-}
-
 export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
   isPlaying,
   isSpeaking,
@@ -31,7 +21,6 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
   const voiceLevelRef = useRef(voiceLevel);
   const themeColorRef = useRef(themeColor);
   const smoothedLevelRef = useRef(0);
-  const particlesRef = useRef<AmbientParticle[]>([]);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -66,24 +55,6 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.scale(dpr, dpr);
-
-      // Initialize or reset particles on resize
-      if (particlesRef.current.length === 0) {
-        const count = 28;
-        const pts: AmbientParticle[] = [];
-        for (let i = 0; i < count; i++) {
-          pts.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            radius: Math.random() * 2.2 + 0.8,
-            alpha: Math.random() * 0.45 + 0.15,
-            speedY: Math.random() * 0.45 + 0.15,
-            driftX: (Math.random() - 0.5) * 0.3,
-            phase: Math.random() * Math.PI * 2,
-          });
-        }
-        particlesRef.current = pts;
-      }
     };
 
     resize();
@@ -164,34 +135,6 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
         grad.addColorStop(1, 'transparent');
 
         ctx.fillStyle = grad;
-        ctx.fill();
-      });
-
-      // 2. Render Floating Ambient Bokeh Particles that drift gently
-      const particles = particlesRef.current;
-      const energyBoost = speaking ? 1 + voice * 0.8 : playing ? 1.2 : 0.8;
-
-      particles.forEach((p) => {
-        p.y -= p.speedY * energyBoost;
-        p.x += Math.sin(time + p.phase) * 0.4 + p.driftX;
-
-        // Wrap around vertically
-        if (p.y < -10) {
-          p.y = height + 10;
-          p.x = Math.random() * width;
-        }
-        if (p.x < -10) p.x = width + 10;
-        if (p.x > width + 10) p.x = -10;
-
-        const pulse = Math.sin(time * 1.5 + p.phase) * 0.2 + 0.8;
-        const currentRadius = p.radius * pulse * (speaking ? 1 + voice * 0.5 : 1);
-        const currentAlpha = Math.min(0.65, p.alpha * pulse * (playing ? 1.2 : 0.9));
-
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, currentRadius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha * 0.6})`;
-        ctx.shadowColor = currentTheme;
-        ctx.shadowBlur = 8;
         ctx.fill();
       });
 

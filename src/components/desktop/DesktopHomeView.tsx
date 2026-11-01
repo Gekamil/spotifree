@@ -8,7 +8,7 @@ import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
-import { useRotatingDJMessage } from '../../utils/djMessages';
+import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
 
 const DEFAULT_SHORTCUTS = [
@@ -28,7 +28,6 @@ interface DesktopHomeViewProps {
 }
 
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
-  const rotatingDJMessage = useRotatingDJMessage(6500);
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
   const [expandedShelf, setExpandedShelf] = useState<{
@@ -519,9 +518,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
               <div className="flex items-end justify-between relative z-10 pt-4">
-                <p className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm min-h-[60px] flex items-center transition-opacity duration-300">
-                  {rotatingDJMessage}
-                </p>
+                <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm min-h-[60px] flex items-center" />
 
                 <button
                   onClick={(e) => {
