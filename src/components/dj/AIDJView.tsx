@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
+import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import {
@@ -10,10 +11,13 @@ import {
   PrevNativeIcon,
   QueueNativeIcon,
   CloseNativeIcon,
+  AddTrackNativeIcon,
+  CheckTrackNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
+import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
 
 interface AIDJViewProps {
   onBack: () => void;
@@ -21,9 +25,13 @@ interface AIDJViewProps {
   onOpenPlayer?: () => void;
 }
 
-const getTrackArtwork = (track: Track | null | undefined): string => {
+const getBestTrackArtwork = (track: Track | null | undefined): string => {
   if (!track) return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
-  if (track.album?.images?.[0]?.url) return track.album.images[0].url;
+  const cached = getTrackCoverUrl(track);
+  if (cached && !cached.includes('liked-songs')) return cached;
+  if (track.album?.images?.[0]?.url && !track.album.images[0].url.includes('liked-songs')) {
+    return track.album.images[0].url;
+  }
   if ((track as any).image) return (track as any).image;
   if ((track as any).album_cover_url) return (track as any).album_cover_url;
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
@@ -58,21 +66,38 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const {
     currentTrack,
     isPlaying,
+    progressMs,
+    durationMs,
     playTrack,
     togglePlay,
     nextTrack,
     previousTrack,
+    likedTrackIds,
+    toggleLike,
     queue,
   } = usePlayerStore();
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [ambientColor, setAmbientColor] = useState<string>('#0c52cc');
   const [promptInput, setPromptInput] = useState('');
+  const [textGlowKey, setTextGlowKey] = useState(0);
+  const [, setCoversVersion] = useState(0);
+  const prevTextRef = useRef('');
+
+  // Resolve album covers for all DJ tracks in background
+  useEffect(() => {
+    const list = djTracks && djTracks.length > 0 ? djTracks : queue;
+    if (list && list.length > 0) {
+      resolveTrackCoversBatch(list).then(() => {
+        setCoversVersion((v) => v + 1);
+      }).catch(() => {});
+    }
+  }, [djTracks, queue]);
 
   // Dynamically extract dominant color from current track artwork
   useEffect(() => {
-    const art = getTrackArtwork(currentTrack);
-    if (art && art !== 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg') {
+    const art = getBestTrackArtwork(currentTrack);
+    if (art && !art.includes('liked-songs')) {
       extractDominantColorFromImage(art).then((hex) => {
         if (hex) {
           setAmbientColor(hex);
@@ -110,6 +135,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const tracksToDisplay: Track[] = djTracks && djTracks.length > 0 ? djTracks : queue;
   const subtitleToShow = displayedTranscript || currentMessage;
 
+  // Trigger smooth glow & fade whenever the displayed text changes
+  useEffect(() => {
+    if (subtitleToShow && subtitleToShow !== prevTextRef.current) {
+      prevTextRef.current = subtitleToShow;
+      setTextGlowKey((k) => k + 1);
+    }
+  }, [subtitleToShow]);
+
   const handleTrackClick = (track: Track) => {
     if (currentTrack?.id === track.id) {
       togglePlay();
@@ -118,28 +151,63 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     }
   };
 
+  const isCurrentLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
+  const currentDuration = durationMs || currentTrack?.duration_ms || 180000;
+  const currentProgress = Math.min(progressMs, currentDuration);
+  const progressPercent = currentDuration > 0 ? (currentProgress / currentDuration) * 100 : 0;
+  const activeArtwork = getBestTrackArtwork(currentTrack);
+
+  const isSpeaking = visualizerState === 'speaking' || visualizerState === 'listening';
+
   return (
     <div
-      className="relative w-full h-full min-h-screen text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-4 sm:p-6"
+      className="relative w-full h-full min-h-screen text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-3 sm:p-5"
       style={{
-        backgroundColor: ambientColor || '#0c52cc',
-        backgroundImage: `radial-gradient(circle at 50% 36%, ${ambientColor || '#0c52cc'}f0 0%, ${ambientColor || '#0c52cc'}c0 42%, #050b18 100%)`,
-        transition: 'background-color 1.2s cubic-bezier(0.2, 0, 0, 1), background-image 1.2s cubic-bezier(0.2, 0, 0, 1)',
+        backgroundColor: '#050b18',
       }}
     >
-      {/* Background Soft Aura Glow */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      {/* =========================================================================
+          BACKGROUND LAYER 1: DEEP BLURRED CANVAS / ALBUM ART OF CURRENT TRACK
+          ========================================================================= */}
+      {activeArtwork && (
         <div
-          className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[580px] h-[580px] rounded-full blur-[140px] opacity-85 transition-colors duration-1000"
-          style={{ backgroundColor: ambientColor || '#0c52cc' }}
+          className="absolute inset-0 pointer-events-none overflow-hidden transition-all duration-1000 ease-out"
+          style={{
+            backgroundImage: `url(${activeArtwork})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(55px) brightness(0.24) saturate(1.4)',
+            transform: 'scale(1.15)',
+          }}
         />
-      </div>
+      )}
+
+      {/* =========================================================================
+          BACKGROUND LAYER 2: INTERACTIVE MUSIC WAVES (Audio frequency glow)
+          ========================================================================= */}
+      <InteractiveMusicWaves
+        isPlaying={isPlaying}
+        isSpeaking={isSpeaking}
+        voiceLevel={voiceLevel}
+        themeColor={ambientColor || '#1ed760'}
+        className="opacity-70"
+      />
+
+      {/* =========================================================================
+          BACKGROUND LAYER 3: RADIAL VIGNETTE & AMBIENT AURA GLOW
+          ========================================================================= */}
+      <div
+        className="absolute inset-0 pointer-events-none transition-colors duration-1000"
+        style={{
+          background: `radial-gradient(circle at 50% 36%, ${ambientColor || '#0c52cc'}99 0%, ${ambientColor || '#0c52cc'}44 48%, #050b18fa 92%)`,
+        }}
+      />
 
       {/* Top Header matching Photo 2 */}
-      <header className="flex items-center justify-between px-3 py-2 z-20 shrink-0">
+      <header className="flex items-center justify-between px-2 py-1.5 z-20 shrink-0">
         <button
           onClick={onBack}
-          className="w-10 h-10 rounded-full bg-black/20 hover:bg-black/40 flex items-center justify-center text-white transition-all cursor-pointer active:scale-95"
+          className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/45 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-95"
           title="Minimizar"
         >
           <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
@@ -159,8 +227,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {/* Queue / Tracks List Toggle */}
         <button
           onClick={() => setShowQueueDrawer(!showQueueDrawer)}
-          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
-            showQueueDrawer ? 'bg-[#1ed760] text-black shadow-md' : 'text-white/80 hover:text-white bg-black/20 hover:bg-black/30'
+          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md ${
+            showQueueDrawer ? 'bg-[#1ed760] text-black shadow-md' : 'text-white/80 hover:text-white bg-black/25 hover:bg-black/45'
           }`}
           title="Ver cola y canciones del DJ"
         >
@@ -169,25 +237,28 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring (Photo 2) */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 text-center max-w-xl mx-auto w-full z-10 my-auto py-2">
+      <main className="flex-1 flex flex-col items-center justify-center px-4 text-center max-w-xl mx-auto w-full z-10 my-auto py-1">
         <div
           onClick={toggleMic}
-          className="cursor-pointer transition-transform hover:scale-104 active:scale-95 my-2"
+          className="cursor-pointer transition-transform hover:scale-104 active:scale-95 my-1"
           title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
         >
           <SpotifyDJVisualizer
-            size={isMobile ? 260 : 320}
+            size={isMobile ? 250 : 310}
             state={visualizerState}
             voiceLevel={voiceLevel}
             themeColor={ambientColor}
           />
         </div>
 
-        {/* Subtitle / Transcript */}
-        <div className="min-h-[58px] flex items-center justify-center px-4 mt-3">
-          <p className="text-xl sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-snug drop-shadow-md font-['SpotifyMixUITitle'] max-w-lg">
+        {/* Subtitle / Transcript with Smooth Glow & Fade Transition */}
+        <div className="min-h-[62px] flex items-center justify-center px-4 mt-2">
+          <p
+            key={`glow-txt-${textGlowKey}`}
+            className="text-lg sm:text-2xl md:text-3xl font-extrabold tracking-tight text-white leading-snug drop-shadow-[0_2px_14px_rgba(255,255,255,0.45)] font-['SpotifyMixUITitle'] max-w-lg transition-all duration-400 ease-out animate-in fade-in"
+          >
             {isMicListening ? (
-              <span className="text-[#00f2fe] flex items-center justify-center gap-2">
+              <span className="text-[#00f2fe] flex items-center justify-center gap-2 drop-shadow-[0_0_16px_rgba(0,242,254,0.7)]">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#00f2fe] animate-ping" />
                 Te escucho... habla conmigo
               </span>
@@ -197,21 +268,21 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </p>
         </div>
 
-        {/* Text Chat / Prompt Input Bar ("Escribirle al DJ") */}
-        <div className="w-full max-w-md mt-4 space-y-2.5">
+        {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
+        <div className="w-full max-w-md mt-3 space-y-2">
           <form
             onSubmit={(e) => {
               e.preventDefault();
               handleSendPrompt();
             }}
-            className="flex items-center gap-2 bg-black/40 hover:bg-black/50 border border-white/15 focus-within:border-white/40 rounded-full px-3 py-1.5 backdrop-blur-md shadow-lg transition-all"
+            className="flex items-center gap-2 bg-white/[0.08] hover:bg-white/[0.12] border border-white/20 focus-within:border-white/45 rounded-full px-3 py-1.5 backdrop-blur-xl shadow-[0_8px_28px_rgba(0,0,0,0.35)] transition-all"
           >
             <button
               type="button"
               onClick={toggleMic}
               className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
                 isMicListening
-                  ? 'bg-[#00f2fe] text-black shadow-[0_0_12px_rgba(0,242,254,0.9)] animate-pulse'
+                  ? 'bg-[#00f2fe] text-black shadow-[0_0_14px_rgba(0,242,254,0.9)] animate-pulse'
                   : 'text-white/70 hover:text-white bg-white/10 hover:bg-white/20'
               }`}
               title={isMicListening ? 'Detener micrófono' : 'Hablar por micrófono'}
@@ -248,14 +319,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </button>
           </form>
 
-          {/* Quick Vibe Chips */}
-          <div className="flex items-center justify-center gap-1.5 flex-wrap overflow-x-auto py-1 scrollbar-none">
+          {/* Quick Vibe Chips in Frosted Glass ("Cristal") */}
+          <div className="flex items-center justify-center gap-1.5 flex-wrap overflow-x-auto py-0.5 scrollbar-none">
             {QUICK_VIBE_CHIPS.map((chip) => (
               <button
                 key={chip}
                 type="button"
                 onClick={() => handleSendPrompt(chip)}
-                className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-[11px] font-bold text-white/90 border border-white/10 transition-all cursor-pointer whitespace-nowrap"
+                className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap"
               >
                 {chip}
               </button>
@@ -263,43 +334,79 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </div>
         </div>
 
-        {/* Currently Playing Track Pill */}
+        {/* =========================================================================
+            CLASSIC SPOTIFY MINI-PLAYER ("El minireproductor de toda la vida")
+            ========================================================================= */}
         {currentTrack && (
           <div
             onClick={() => onOpenPlayer?.()}
-            className="mt-4 flex items-center justify-between gap-3 bg-black/35 hover:bg-black/50 border border-white/10 rounded-full px-3 py-2 max-w-sm w-full cursor-pointer transition-all active:scale-98 shadow-md"
+            className="w-full max-w-md mt-3.5 h-14 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
+            style={{
+              backgroundColor: `${ambientColor || '#181818'}55`,
+            }}
             title="Toca para abrir reproductor completo con letra y detalles"
           >
-            <div className="flex items-center gap-2.5 min-w-0">
-              <img
-                src={getTrackArtwork(currentTrack)}
-                alt={currentTrack.name}
-                onError={handleImageError}
-                referrerPolicy="no-referrer"
-                className="w-8 h-8 rounded-full object-cover shrink-0 bg-[#282828]"
+            {/* 2px Bottom Progress Bar */}
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[8px] overflow-hidden pointer-events-none">
+              <div
+                className="h-full bg-white transition-all duration-200 ease-linear"
+                style={{ width: `${progressPercent}%` }}
               />
-              <div className="text-left truncate">
-                <p className="text-xs font-bold text-white truncate font-['SpotifyMixUITitle']">
+            </div>
+
+            {/* Left: Artwork + Track details */}
+            <div className="flex items-center min-w-0 flex-1 mr-2">
+              <div className="w-10 h-10 rounded-[4px] shrink-0 overflow-hidden bg-[#181818] shadow-md ml-0.5">
+                <img
+                  src={activeArtwork}
+                  alt={currentTrack.name}
+                  onError={handleImageError}
+                  className="w-full h-full object-cover"
+                />
+              </div>
+
+              <div className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1 text-left">
+                <span className="font-bold text-white text-[13px] leading-tight truncate block font-['SpotifyMixUITitle']">
                   {currentTrack.name}
-                </p>
-                <p className="text-[11px] text-[#b3b3b3] truncate">
-                  {currentTrack.artists?.map((a) => a.name).join(', ') || 'DJ'}
-                </p>
+                </span>
+                <span className="text-[11px] text-white/70 truncate leading-tight mt-0.5">
+                  {currentTrack.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                </span>
               </div>
             </div>
 
-            <span className="text-[10px] font-bold uppercase tracking-wider text-[#1ed760] shrink-0 pr-1 flex items-center gap-1">
-              Ver letra
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            </span>
+            {/* Right: Like Button + Play/Pause */}
+            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => toggleLike(currentTrack.id)}
+                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
+                title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
+              >
+                {isCurrentLiked ? (
+                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+                ) : (
+                  <AddTrackNativeIcon size={20} className="text-white/80" />
+                )}
+              </button>
+
+              <button
+                onClick={togglePlay}
+                className="w-9 h-9 flex items-center justify-center text-white active:scale-90 transition-transform cursor-pointer"
+                title={isPlaying ? 'Pausar' : 'Reproducir'}
+              >
+                {isPlaying ? (
+                  <PauseNativeIcon size={20} className="text-white" />
+                ) : (
+                  <PlayNativeIcon size={20} className="text-white ml-0.5" />
+                )}
+              </button>
+            </div>
           </div>
         )}
       </main>
 
       {/* Bottom Playback Controls matching Photo 2 */}
-      <footer className="relative z-20 px-4 py-4 flex items-center justify-between shrink-0">
+      <footer className="relative z-20 px-4 py-3 flex items-center justify-between shrink-0">
         <div className="w-14" />
 
         {/* Controls: Prev, Play/Pause, Next */}
@@ -352,7 +459,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </div>
               <button
                 onClick={() => setShowQueueDrawer(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
                 title="Cerrar"
               >
                 <CloseNativeIcon size={16} />
@@ -362,7 +469,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             <div className="flex-1 overflow-y-auto space-y-1 mt-3 pr-1">
               {tracksToDisplay.map((track, idx) => {
                 const isPlayingThis = isPlaying && currentTrack?.id === track.id;
-                const trackArt = getTrackArtwork(track);
+                const trackArt = getBestTrackArtwork(track);
                 return (
                   <div
                     key={`${track.id}-${idx}`}

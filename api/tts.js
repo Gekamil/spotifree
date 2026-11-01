@@ -81,7 +81,7 @@ export default async function handler(req, res) {
     const { audioStream } = tts.toStream(text, {
       rate: '+22%',
       pitch: '+0Hz',
-      volume: '+0%',
+      volume: '+35%',
     });
 
     const chunks = [];

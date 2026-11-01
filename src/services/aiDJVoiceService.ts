@@ -130,14 +130,14 @@ class AIDJVoiceService {
     try {
       const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
       if (engine && typeof engine.setDuckedVolume === 'function') {
-        engine.setDuckedVolume(0.18);
+        engine.setDuckedVolume(0.08);
       } else {
         const audioElements = document.querySelectorAll('audio, video');
         audioElements.forEach((el: any) => {
           if (!el.dataset.djDucked && el !== this.currentAudio) {
             el.dataset.prevVol = el.volume;
             el.dataset.djDucked = 'true';
-            el.volume = Math.max(0.1, el.volume * 0.2);
+            el.volume = Math.max(0.05, el.volume * 0.12);
           }
         });
       }
@@ -223,6 +223,7 @@ class AIDJVoiceService {
       const audio = new Audio(audioUrl);
       audio.preload = 'auto';
       audio.playbackRate = 1.05;
+      audio.volume = 1.0;
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {

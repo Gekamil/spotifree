@@ -4,6 +4,7 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { aiDJVoiceService } from './aiDJVoiceService';
 import { searchSpotify } from './spotifyApi';
+import { resolveTrackCoversBatch, getTrackCoverUrl } from '../utils/trackCovers';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
@@ -93,6 +94,42 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     };
   }
 
+  // 3b. Bachata / Latino Romántico
+  if (/bachata|romeo|prince royce|aventura|salsa|merengue/i.test(p)) {
+    return {
+      speech: `¡Pura bachata y sentimiento${namePhrase}! Aquí tienes los himnos de Romeo Santos, Prince Royce y más.`,
+      query: 'bachata exitos romeo santos prince royce aventura',
+      vibeTitle: 'Sesión: Bachata y Sentimiento',
+    };
+  }
+
+  // 3c. Trap / Urbano / Drill
+  if (/trap|drill|urbano|calle|duki|eladio|milo j|trueno|c\.r\.o|ysy a/i.test(p)) {
+    return {
+      speech: `Directo a la vibra pesada${namePhrase}. Puras barras y los ritmos urbanos más duros del momento.`,
+      query: 'trap argentino drill urbano latino exitos',
+      vibeTitle: 'Sesión: Trap y Urbano',
+    };
+  }
+
+  // 3d. Electrónica / House / Dance
+  if (/electro|electronic|techno|house|edm|rave|dance|dj set/i.test(p)) {
+    return {
+      speech: `¡Subiendo los BPMs! Te preparé una sesión electrónica limpia para mantener la energía al tope.`,
+      query: 'electronic dance house edm club hits',
+      vibeTitle: 'Sesión: Club Electrónica',
+    };
+  }
+
+  // 3e. Rock / Indie / Clásicos del Rock
+  if (/rock|guitarra|indie|queen|nirvana|coldplay|estopa|melendi/i.test(p)) {
+    return {
+      speech: `¡Suban esas guitarras! Clásicos y temazos de rock que se cantan a pleno pulmón.`,
+      query: 'rock clasicos pop rock hits espanol',
+      vibeTitle: 'Sesión: Clásicos del Rock',
+    };
+  }
+
   // 4. Study / Focus / Deep Work / Reading / Coding
   if (/estudiar|concentra|trabajar|lectura|estudio|lofi|piano|trabajo|examen|tarea|oficina|programar|enfoque/i.test(p)) {
     return {
@@ -142,11 +179,12 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   // 9. Specific Artist Detection
   const knownArtists = [
     'quevedo', 'bad bunny', 'feid', 'romeo santos', 'prince royce', 'duki', 'rauw alejandro',
-    'rosalia', 'rosalía', 'morat', 'bizarrap', 'mora', 'anuel', 'daddy yankee', 'don omar',
+    'paulo londra', 'rosalia', 'rosalía', 'morat', 'bizarrap', 'mora', 'anuel', 'daddy yankee', 'don omar',
     'queen', 'nirvana', 'michael jackson', 'coldplay', 'eminem', 'travis scott', 'drake',
     'taylor swift', 'shakira', 'maluma', 'j balvin', 'myke towers', 'eladio carrion',
     'milo j', 'trueno', 'nicki nicole', 'emilia', 'tini', 'c tangana', 'c. tangana',
-    'melendi', 'estopa', 'alvaro diaz', 'álvaro díaz', 'rory', 'de la rose'
+    'melendi', 'estopa', 'alvaro diaz', 'álvaro díaz', 'rory', 'de la rose',
+    'saiko', 'lia kali', 'cris mj', 'floyy menor', 'jc reyes', 'aventura', 'aitana', 'jhayco'
   ];
 
   let detectedArtist: string | null = null;
@@ -492,9 +530,35 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       } catch {}
     }
 
-    // 2. Score tracks against the user intent
+    // 2. Query Spotify search for top authentic tracks matching the exact intent
+    const curatedList: Track[] = [];
+    try {
+      const searchRes = await searchSpotify(analysis.query);
+      const fetchedItems = searchRes?.tracks?.items || [];
+      fetchedItems.forEach((ft: any) => {
+        if (ft && ft.id && !seenIds.has(ft.id)) {
+          seenIds.add(ft.id);
+          const art = getTrackCoverUrl(ft) || ft.album?.images?.[0]?.url || (ft as any).image;
+          const normalized: Track = (!ft.album || !ft.album.images || ft.album.images.length === 0)
+            ? {
+                ...ft,
+                album: {
+                  id: ft.album?.id || `alb-${ft.id}`,
+                  name: ft.album?.name || ft.name,
+                  images: [{ url: art || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+                },
+              }
+            : ft;
+          curatedList.push(normalized);
+        }
+      });
+    } catch (err) {
+      console.warn('[AIDJ] Spotify search enrichment notice:', err);
+    }
+
+    // 3. Score user's library tracks against the user intent
     const intentWords = analysis.query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-    let matchedTracks = allUserTracks.filter((t) => {
+    const matchedUserTracks = allUserTracks.filter((t) => {
       const title = (t.name || '').toLowerCase();
       const artist = (t.artists?.map((a) => a.name).join(' ') || '').toLowerCase();
       const album = (t.album?.name || '').toLowerCase();
@@ -502,33 +566,23 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       return intentWords.some((w) => full.includes(w));
     });
 
-    // 3. Enrich with authentic Spotify search results
-    if (matchedTracks.length < 5) {
-      try {
-        const searchRes = await searchSpotify(analysis.query);
-        const fetchedItems = searchRes?.tracks?.items || [];
-        fetchedItems.forEach((ft: any) => {
-          if (ft && ft.id && !seenIds.has(ft.id)) {
-            seenIds.add(ft.id);
-            matchedTracks.push(ft);
-          }
-        });
-      } catch (err) {
-        console.warn('[AIDJ] Spotify search enrichment notice:', err);
+    matchedUserTracks.forEach((ut) => {
+      if (!seenIds.has(ut.id)) {
+        seenIds.add(ut.id);
+        curatedList.push(ut);
       }
-    }
+    });
 
     // Fallback if still empty
-    if (matchedTracks.length === 0) {
-      matchedTracks = [...allUserTracks];
+    if (curatedList.length === 0) {
+      curatedList.push(...allUserTracks);
     }
 
-    // Shuffle matched tracks to make a fresh 15-track playlist set
-    for (let i = matchedTracks.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [matchedTracks[i], matchedTracks[j]] = [matchedTracks[j], matchedTracks[i]];
-    }
-    const finalSet = matchedTracks.slice(0, 15);
+    // Curate a cohesive 15-track playlist set
+    const finalSet = curatedList.slice(0, 15);
+
+    // Pre-resolve artwork for all tracks in parallel
+    resolveTrackCoversBatch(finalSet).catch(() => {});
 
     const djTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const djMsg: DJChatMessage = {

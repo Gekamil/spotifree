@@ -56,38 +56,64 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    const baseRadius = size * (mini ? 0.35 : 0.34);
-    const strokeWidth = Math.max(3.5, size * (mini ? 0.12 : 0.082));
+    const baseRadius = size * (mini ? 0.35 : 0.33);
+    const strokeWidth = Math.max(3.5, size * (mini ? 0.13 : 0.082));
     const numPoints = mini ? 70 : 160;
 
     const render = () => {
-      // Smooth, continuous gentle rotation (no sudden direction jumps)
-      time += mini ? 0.012 : 0.014;
       const currentState = stateRef.current;
       const targetVoice = voiceLevelRef.current;
 
+      const isSpeaking = currentState === 'speaking' || currentState === 'listening';
+      const isPlaying = currentState === 'playing';
+
+      // Speed of rotation & wave travel: faster when speaking or playing, gentle when idle
+      const speed = mini
+        ? 0.024
+        : isSpeaking
+        ? 0.038
+        : isPlaying
+        ? 0.026
+        : 0.018;
+      time += speed;
+
       // Exponential moving average damping for voice reactivity
-      smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * 0.08;
+      smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * 0.16;
       const currentVoice = smoothedVoiceRef.current;
 
       ctx.clearRect(0, 0, size, size);
 
-      // Clean, un-distorted Spotify ring: almost a perfect circle with subtle organic oval breathing
-      const pulseScale = mini
-        ? 1
-        : 1 + Math.sin(time * 0.8) * 0.008 + currentVoice * 0.015;
-      const organicBulgeAmp = mini
-        ? 0.3
-        : (0.7 + currentVoice * 0.9) * (size / 260);
+      // Dynamic Pulsing & Organic Plasma Breathing
+      let pulseScale: number;
+      let bulgeBase: number;
+
+      if (mini) {
+        pulseScale = 1 + Math.sin(time * 1.6) * 0.035;
+        bulgeBase = 1.3 * (size / 38);
+      } else if (isSpeaking) {
+        // High reactivity to speech syllables
+        pulseScale = 1 + Math.sin(time * 2.2) * 0.025 + currentVoice * 0.14;
+        bulgeBase = (1.8 + currentVoice * 3.5) * (size / 260);
+      } else if (isPlaying) {
+        // Music beat pulse simulation
+        pulseScale = 1 + Math.sin(time * 1.9) * 0.035 + Math.sin(time * 3.8) * 0.015;
+        bulgeBase = 2.0 * (size / 260);
+      } else {
+        // Calm resting idle breathing
+        pulseScale = 1 + Math.sin(time * 1.2) * 0.018;
+        bulgeBase = 1.2 * (size / 260);
+      }
 
       ctx.save();
       ctx.beginPath();
 
-      // Compute smooth, single-harmonic organic circle (Photo 2 - clean and NOT heavily distorted)
+      // Compute multi-harmonic organic liquid circle (Photo 2 - Spotify DJ ring)
       for (let i = 0; i <= numPoints; i++) {
         const theta = (i / numPoints) * Math.PI * 2;
-        // Smooth peristaltic oval wave (single gentle wave, no ripples or jitter)
-        const offset = Math.sin(theta - time * 0.45) * organicBulgeAmp;
+        // Two smooth waves: main wave + counter-rotating secondary wave for liquid look
+        const wave1 = Math.sin(theta * 2 - time * 0.9) * 0.65;
+        const wave2 = Math.cos(theta * 3 + time * 0.7) * 0.35;
+        const offset = (wave1 + wave2) * bulgeBase;
         const r = (baseRadius + offset) * pulseScale;
 
         const px = centerX + Math.cos(theta) * r;
@@ -102,7 +128,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       ctx.closePath();
 
-      // Dynamic Ring Gradient: Adapts smoothly to the song's theme color!
+      // Dynamic Ring Gradient: Adapts smoothly to the track's theme color or classic Spotify neon
       const currentTheme = themeColorRef.current;
       const grad = ctx.createLinearGradient(
         centerX - baseRadius,
@@ -132,10 +158,10 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       ctx.lineJoin = 'round';
 
       // Soft neon glow in track's theme color
-      ctx.shadowColor = currentTheme || (currentState === 'listening' ? 'rgba(0, 242, 254, 0.7)' : 'rgba(30, 215, 96, 0.55)');
-      ctx.shadowBlur = mini ? 4 : 16;
+      const glowOpacity = isSpeaking ? 0.75 : isPlaying ? 0.6 : 0.45;
+      ctx.shadowColor = currentTheme || (currentState === 'listening' ? 'rgba(0, 242, 254, 0.85)' : `rgba(30, 215, 96, ${glowOpacity})`);
+      ctx.shadowBlur = mini ? 6 : isSpeaking ? 24 : 18;
 
-      // Stroke ONLY (Hollow center matching Photo 2)
       ctx.stroke();
       ctx.restore();
 
@@ -158,7 +184,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       <canvas
         ref={canvasRef}
         style={{ width: size, height: size }}
-        className="block transition-transform duration-200"
+        className="pointer-events-none drop-shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
       />
     </div>
   );
