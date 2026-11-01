@@ -622,6 +622,13 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});
 
+    // Pre-warm audio streams for top tracks so playback is instantaneous
+    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+      try {
+        (window as any).__audioEngine.warmupInitialTracks(finalSet.slice(0, 6));
+      } catch {}
+    }
+
     const djTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const djMsg: DJChatMessage = {
       id: `msg-dj-${Date.now()}`,

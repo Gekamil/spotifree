@@ -9,10 +9,6 @@ export const INLINE_SVG_FALLBACK =
 export function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
   const target = e.currentTarget;
   target.referrerPolicy = 'no-referrer';
-  if (target.src !== DEFAULT_FALLBACK_COVER && !target.src.startsWith('data:image/svg')) {
-    target.src = DEFAULT_FALLBACK_COVER;
-  } else if (target.src === DEFAULT_FALLBACK_COVER) {
-    target.onerror = null;
-    target.src = INLINE_SVG_FALLBACK;
-  }
+  target.onerror = null;
+  target.src = INLINE_SVG_FALLBACK;
 }

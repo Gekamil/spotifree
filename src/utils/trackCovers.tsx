@@ -54,8 +54,27 @@ export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): 
     return albumCover;
   }
 
-  if ((track as any).image && !fallbackPlaylistCover) return (track as any).image;
-  if ((track as any).albumArt && !fallbackPlaylistCover) return (track as any).albumArt;
+  const anyT = track as any;
+  const directCover =
+    anyT.album?.cover_xl ||
+    anyT.album?.cover_big ||
+    anyT.album?.cover_medium ||
+    anyT.cover_xl ||
+    anyT.cover_big ||
+    anyT.cover_medium ||
+    anyT.cover ||
+    anyT.image ||
+    anyT.imageUrl ||
+    anyT.albumArt ||
+    anyT.album_cover_url ||
+    anyT.thumbnail;
+
+  if (directCover && !directCover.includes('liked-songs')) {
+    if (fallbackPlaylistCover && (directCover === fallbackPlaylistCover || directCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
+      return undefined;
+    }
+    return directCover;
+  }
 
   return undefined;
 }
@@ -103,14 +122,26 @@ export async function resolveTrackCoversBatch(
           return { id: t.id, url: TRACK_COVER_CACHE.get(t.id)! };
         }
 
-        const cleanName = t.name.replace(/\s*\(.*?\)/g, '').replace(/\s*\[.*?\]/g, '').trim();
-        const artist = t.artists?.[0]?.name || '';
-        const q = `${cleanName} ${artist}`.trim();
+        // Direct check on track object properties
+        const existingDirect = getTrackCoverUrl(t);
+        if (existingDirect && !existingDirect.includes('liked-songs')) {
+          persistTrackCover(t.id, existingDirect);
+          return { id: t.id, url: existingDirect };
+        }
+
+        const cleanName = t.name
+          .replace(/\s*\(.*?\)/g, '')
+          .replace(/\s*\[.*?\]/g, '')
+          .replace(/\s*-\s*(remaster|remix|version|radio|edit|live).*$/i, '')
+          .trim();
+        const rawArtist = t.artists?.[0]?.name || '';
+        const primaryArtist = rawArtist.split(/[,&]/)[0].replace(/\s*(feat\.|ft\.).*$/i, '').trim();
+        const q1 = `${cleanName} ${primaryArtist}`.trim();
 
         // 1. iTunes Search API (100% browser CORS compatible, 600x600 HD album artwork, ~120ms response)
         try {
           const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`,
+            `https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=1`,
             { signal: AbortSignal.timeout(2500) }
           );
           if (itunesRes.ok) {
@@ -122,6 +153,24 @@ export async function resolveTrackCoversBatch(
             }
           }
         } catch {}
+
+        // 1b. iTunes Search with title only (often finds official single/EP)
+        if (cleanName && cleanName.length > 2) {
+          try {
+            const itunesRes2 = await fetch(
+              `https://itunes.apple.com/search?term=${encodeURIComponent(cleanName)}&media=music&entity=song&limit=1`,
+              { signal: AbortSignal.timeout(2000) }
+            );
+            if (itunesRes2.ok) {
+              const itunesData2 = await itunesRes2.json();
+              if (itunesData2.results?.[0]?.artworkUrl100) {
+                const hd = itunesData2.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
+                persistTrackCover(t.id, hd);
+                return { id: t.id, url: hd };
+              }
+            }
+          } catch {}
+        }
 
         // 2. Spotify oEmbed fallback (official Spotify album cover, CORS enabled)
         const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);

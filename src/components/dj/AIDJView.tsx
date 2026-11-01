@@ -32,8 +32,21 @@ const getBestTrackArtwork = (track: Track | null | undefined): string => {
   if (track.album?.images?.[0]?.url && !track.album.images[0].url.includes('liked-songs')) {
     return track.album.images[0].url;
   }
-  if ((track as any).image) return (track as any).image;
-  if ((track as any).album_cover_url) return (track as any).album_cover_url;
+  const anyT = track as any;
+  const directCover =
+    anyT.album?.cover_xl ||
+    anyT.album?.cover_big ||
+    anyT.album?.cover_medium ||
+    anyT.cover_xl ||
+    anyT.cover_big ||
+    anyT.cover_medium ||
+    anyT.cover ||
+    anyT.image ||
+    anyT.imageUrl ||
+    anyT.albumArt ||
+    anyT.album_cover_url ||
+    anyT.thumbnail;
+  if (directCover && !directCover.includes('liked-songs')) return directCover;
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 };
 
@@ -155,7 +168,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   return (
     <div
-      className="relative w-full h-full min-h-screen text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-3 sm:p-5"
+      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-4"
       style={{
         backgroundColor: '#050b18',
       }}
@@ -239,7 +252,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
           >
             <SpotifyDJVisualizer
-              size={isMobile ? 260 : 320}
+              size={isMobile ? 215 : 290}
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}
@@ -307,14 +320,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </button>
           </form>
 
-          {/* Quick Vibe Chips in Frosted Glass ("Cristal") */}
-          <div className="flex items-center justify-center gap-1.5 flex-wrap overflow-x-auto py-0.5 scrollbar-none">
+          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Single sleek horizontal row */}
+          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto py-1 scrollbar-none justify-start sm:justify-center px-1 max-w-full">
             {QUICK_VIBE_CHIPS.map((chip) => (
               <button
                 key={chip}
                 type="button"
                 onClick={() => handleSendPrompt(chip)}
-                className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap"
+                className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
               >
                 {chip}
               </button>
@@ -328,7 +341,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {currentTrack && (
           <div
             onClick={() => onOpenPlayer?.()}
-            className="w-full max-w-md mt-3.5 h-14 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
+            className="w-full max-w-md mt-2 h-12 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
             style={{
               backgroundColor: `${ambientColor || '#181818'}55`,
             }}
@@ -344,7 +357,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
             {/* Left: Artwork + Track details */}
             <div className="flex items-center min-w-0 flex-1 mr-2">
-              <div className="w-10 h-10 rounded-[4px] shrink-0 overflow-hidden bg-[#181818] shadow-md ml-0.5">
+              <div className="w-9 h-9 rounded-[4px] shrink-0 overflow-hidden bg-[#181818] shadow-md ml-0.5">
                 <img
                   src={activeArtwork}
                   alt={currentTrack.name}
@@ -363,8 +376,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </div>
             </div>
 
-            {/* Right: Like Button + Play/Pause */}
-            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {/* Right: Like Button */}
+            <div className="flex items-center gap-1 shrink-0 mr-1" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => toggleLike(currentTrack.id)}
                 className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
@@ -376,43 +389,31 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                   <AddTrackNativeIcon size={20} className="text-white/80" />
                 )}
               </button>
-
-              <button
-                onClick={togglePlay}
-                className="w-9 h-9 flex items-center justify-center text-white active:scale-90 transition-transform cursor-pointer"
-                title={isPlaying ? 'Pausar' : 'Reproducir'}
-              >
-                {isPlaying ? (
-                  <PauseNativeIcon size={20} className="text-white" />
-                ) : (
-                  <PlayNativeIcon size={20} className="text-white ml-0.5" />
-                )}
-              </button>
             </div>
           </div>
         )}
       </main>
 
       {/* Bottom Playback Controls matching Photo 2 */}
-      <footer className="relative z-20 px-4 py-3 flex items-center justify-between shrink-0">
-        <div className="w-14" />
+      <footer className="relative z-20 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between shrink-0">
+        <div className="w-12 sm:w-14" />
 
         {/* Controls: Prev, Play/Pause, Next */}
-        <div className="flex items-center gap-8 mx-auto">
+        <div className="flex items-center gap-6 sm:gap-8 mx-auto">
           <button
             onClick={() => previousTrack()}
             className="text-white/80 hover:text-white transition-colors cursor-pointer active:scale-95"
             title="Anterior"
           >
-            <PrevNativeIcon size={24} className="text-white" />
+            <PrevNativeIcon size={22} className="text-white" />
           </button>
 
           <button
             onClick={togglePlay}
-            className="w-16 h-16 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-2xl"
+            className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xl"
             title={isPlaying ? 'Pausar' : 'Reproducir'}
           >
-            {isPlaying ? <PauseNativeIcon size={26} /> : <PlayNativeIcon size={26} className="ml-1" />}
+            {isPlaying ? <PauseNativeIcon size={24} /> : <PlayNativeIcon size={24} className="ml-0.5" />}
           </button>
 
           <button
@@ -420,14 +421,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             className="text-white/80 hover:text-white transition-colors cursor-pointer active:scale-95"
             title="Siguiente"
           >
-            <NextNativeIcon size={24} className="text-white" />
+            <NextNativeIcon size={22} className="text-white" />
           </button>
         </div>
 
         {/* Floating DJ Button (Bottom Right) */}
         <button
           onClick={() => triggerManualTransition()}
-          className="w-14 h-14 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all shadow-xl"
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all shadow-xl"
           style={{
             backgroundColor: djThemeColor || ambientColor || '#0042a5',
             boxShadow: `0 4px 24px ${djThemeColor || ambientColor || '#0042a5'}80`,
@@ -435,7 +436,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           }}
           title="Cambiar de rollo con el DJ"
         >
-          <SpotifyDJVisualizer size={38} mini state="playing" themeColor={djThemeColor || ambientColor} />
+          <SpotifyDJVisualizer size={34} mini state="playing" themeColor={djThemeColor || ambientColor} />
         </button>
       </footer>
 

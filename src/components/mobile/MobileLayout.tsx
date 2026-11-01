@@ -777,7 +777,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 7: DEDICATED SPOTIFY AI DJ VIEW */}
         {mobileTab === 'dj' && (
-          <div className="animate-cascade-down min-h-full">
+          <div className="h-full w-full overflow-hidden flex flex-col">
             <AIDJView
               isMobile
               onBack={() => setMobileTab('home')}

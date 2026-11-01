@@ -197,6 +197,18 @@ const store = create<PlayerState>((set, get) => ({
       const artistName = track.artists?.[0]?.name || '';
       const query = `${track.name} ${artistName}`.trim();
       engine.playTrack(track.id, query, 0);
+
+      // Immediately preload the next track in the background for zero-lag instant transitions
+      setTimeout(() => {
+        try {
+          const nextCandidate = get().getNextTrack?.();
+          if (nextCandidate && typeof engine.resolveVideoId === 'function') {
+            const nextArtist = nextCandidate.artists?.[0]?.name || '';
+            const nextQuery = `${nextCandidate.name} ${nextArtist}`.trim();
+            engine.resolveVideoId(nextQuery, nextCandidate.id).catch(() => {});
+          }
+        } catch {}
+      }, 600);
     }
 
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
