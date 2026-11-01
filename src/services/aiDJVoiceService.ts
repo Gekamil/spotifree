@@ -246,8 +246,9 @@ class AIDJVoiceService {
           resolve(true);
         };
 
-        // Realistic speech voice level pulsation for the orb visualizer
+        // Smooth 30ms high-frequency timer for fluid voice level and real-time streaming word subtitles
         let phase = 0;
+        let lastReportedWordIdx = -1;
         this.voiceLevelInterval = setInterval(() => {
           if (!this.isSpeaking || audio.paused) {
             options.onVoiceLevel?.(0.05);
@@ -257,17 +258,20 @@ class AIDJVoiceService {
           const raw = Math.sin(phase) * 0.45 + Math.sin(phase * 2.1) * 0.35 + 0.55;
           const bounded = Math.max(0.18, Math.min(1.0, raw));
           options.onVoiceLevel?.(bounded);
-        }, 50);
 
-        // Word subtitle progression in exact synchronization with playback
-        audio.ontimeupdate = () => {
-          if (!audio.duration || audio.duration === Infinity) return;
-          const progress = Math.max(0, Math.min(1, audio.currentTime / audio.duration));
-          const wordIndex = Math.min(words.length - 1, Math.floor(progress * words.length));
-          const currentWord = words[wordIndex] || '';
-          const partial = words.slice(0, wordIndex + 1).join(' ');
-          options.onWord?.(currentWord, partial);
-        };
+          // Fluid word subtitle progression calculated continuously at 30ms resolution
+          if (audio.duration && audio.duration > 0 && !isNaN(audio.currentTime)) {
+            const effectiveTime = Math.min(audio.duration, audio.currentTime + 0.09);
+            const progress = Math.max(0, Math.min(1, effectiveTime / audio.duration));
+            const wordIndex = Math.min(words.length - 1, Math.floor(progress * words.length));
+            if (wordIndex !== lastReportedWordIdx) {
+              lastReportedWordIdx = wordIndex;
+              const currentWord = words[wordIndex] || '';
+              const partial = words.slice(0, wordIndex + 1).join(' ');
+              options.onWord?.(currentWord, partial);
+            }
+          }
+        }, 30);
 
         audio.onended = () => {
           cleanup();

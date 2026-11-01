@@ -62,6 +62,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const isDJActive = useAIDJStore((s) => s.isDJModeActive) || currentContextId === 'dj-session';
   const currentSetTitle = useAIDJStore((s) => s.currentSetTitle);
+  const djThemeColor = useAIDJStore((s) => s.djThemeColor);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
@@ -551,7 +552,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               </button>
 
               {/* Floating DJ Button (Photo 1) */}
-              {(useAIDJStore.getState().isDJModeActive || currentContextId === 'dj-session') && (
+              {(isDJActive) && (
                 <button
                   onClick={() => {
                     onClose();
@@ -559,10 +560,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                       onSelectPlaylistById('spotify-dj');
                     }
                   }}
-                  className="w-10 h-10 rounded-full bg-[#0050d0] hover:bg-[#005eff] border border-white/20 text-[#1ed760] shadow-[0_4px_16px_rgba(0,80,208,0.6)] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all ml-1"
+                  className="w-10 h-10 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all ml-1 shadow-lg"
+                  style={{
+                    backgroundColor: djThemeColor || '#0050d0',
+                    boxShadow: `0 4px 18px ${djThemeColor || '#0050d0'}80`,
+                    transition: 'background-color 0.8s ease, box-shadow 0.8s ease',
+                  }}
                   title="Volver a la pantalla del DJ"
                 >
-                  <SpotifyDJVisualizer size={24} mini state="playing" />
+                  <SpotifyDJVisualizer size={24} mini state="playing" themeColor={djThemeColor} />
                 </button>
               )}
             </div>

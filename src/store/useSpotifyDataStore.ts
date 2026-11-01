@@ -87,6 +87,7 @@ DEFAULT_SESSION_CACHE['spotify-dj'] = SPOTIFY_DJ_PLAYLIST;
 
 export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
   let seenLiked = false;
+  let seenDJ = false;
   const result: Playlist[] = [];
   const seenIds = new Set<string>();
 
@@ -112,13 +113,28 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
       continue;
     }
 
+    const isDJ =
+      pl.id === 'spotify-dj' ||
+      pl.id === 'dj' ||
+      (pl as any).is_dj === true ||
+      pl.name?.toLowerCase().trim() === 'dj';
+
+    if (isDJ) {
+      if (seenDJ) continue;
+      seenDJ = true;
+      result.push(SPOTIFY_DJ_PLAYLIST);
+      seenIds.add('spotify-dj');
+      seenIds.add(pl.id);
+      continue;
+    }
+
     if (seenIds.has(pl.id)) continue;
     seenIds.add(pl.id);
     result.push(pl);
   }
 
-  // Ensure DJ playlist is always present in library right after Liked Songs
-  if (!seenIds.has('spotify-dj')) {
+  // Ensure single DJ playlist is always present in library right after Liked Songs
+  if (!seenDJ) {
     result.splice(seenLiked ? 1 : 0, 0, SPOTIFY_DJ_PLAYLIST);
     seenIds.add('spotify-dj');
   }

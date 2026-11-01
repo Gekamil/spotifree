@@ -16,6 +16,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists } from '../../utils/offlineStorage';
@@ -38,6 +39,7 @@ export const MobileLayout: React.FC = () => {
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
 
   const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
+  const djThemeColor = useAIDJStore((s) => s.djThemeColor);
 
   const isCardPlaying = (cardId: string, cardName: string) => {
     if (!isPlaying) return false;
@@ -344,7 +346,13 @@ export const MobileLayout: React.FC = () => {
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl bg-[#0c52cc] p-5 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[175px]"
+                    className="relative w-full rounded-2xl p-5 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[175px]"
+                    style={{
+                      backgroundColor: djThemeColor || '#0c52cc',
+                      backgroundImage: `linear-gradient(135deg, ${djThemeColor || '#0c52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
+                      boxShadow: `0 8px 32px ${djThemeColor || '#0c52cc'}55`,
+                      transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
+                    }}
                   >
                     {/* Top Bar: Beta pill & 3 dots */}
                     <div className="flex items-center justify-between relative z-10">
@@ -362,7 +370,7 @@ export const MobileLayout: React.FC = () => {
 
                     {/* Center Loop Graphic (Photo 3) */}
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-85">
-                      <SpotifyDJVisualizer size={140} state="idle" />
+                      <SpotifyDJVisualizer size={140} state="idle" themeColor={djThemeColor} />
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}

@@ -55,6 +55,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     isMicListening,
     djTracks,
     currentSetTitle,
+    djThemeColor,
+    setDJThemeColor,
     isDJModeActive,
     startDJSession,
     startVoiceListening,
@@ -101,14 +103,19 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       extractDominantColorFromImage(art).then((hex) => {
         if (hex) {
           setAmbientColor(hex);
+          setDJThemeColor(hex);
         } else if (currentTrack?.id) {
-          setAmbientColor(resolveVibrantColor(currentTrack.id, currentTrack.name));
+          const col = resolveVibrantColor(currentTrack.id, currentTrack.name);
+          setAmbientColor(col);
+          setDJThemeColor(col);
         }
       });
     } else if (currentTrack?.id) {
-      setAmbientColor(resolveVibrantColor(currentTrack.id, currentTrack.name));
+      const col = resolveVibrantColor(currentTrack.id, currentTrack.name);
+      setAmbientColor(col);
+      setDJThemeColor(col);
     }
-  }, [currentTrack]);
+  }, [currentTrack, setDJThemeColor]);
 
   // Initialize DJ session if not active or empty
   useEffect(() => {
@@ -439,10 +446,15 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {/* Floating DJ Button (Bottom Right) */}
         <button
           onClick={() => triggerManualTransition()}
-          className="w-14 h-14 rounded-full bg-[#0042a5] hover:bg-[#003890] border border-white/20 text-[#1ed760] shadow-[0_4px_24px_rgba(0,0,0,0.4)] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all"
+          className="w-14 h-14 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all shadow-xl"
+          style={{
+            backgroundColor: djThemeColor || ambientColor || '#0042a5',
+            boxShadow: `0 4px 24px ${djThemeColor || ambientColor || '#0042a5'}80`,
+            transition: 'background-color 0.8s ease, box-shadow 0.8s ease',
+          }}
           title="Cambiar de rollo con el DJ"
         >
-          <SpotifyDJVisualizer size={38} mini state="playing" themeColor={ambientColor} />
+          <SpotifyDJVisualizer size={38} mini state="playing" themeColor={djThemeColor || ambientColor} />
         </button>
       </footer>
 

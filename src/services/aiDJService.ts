@@ -24,6 +24,7 @@ export interface AIDJState {
   displayedTranscript: string;
   voiceLevel: number;
   currentSetTitle: string;
+  djThemeColor: string;
   songsPlayedInSet: number;
   isDJModeActive: boolean;
   djTracks: Track[];
@@ -35,6 +36,7 @@ export interface AIDJState {
   setVisualizerState: (state: AIDJVisualizerMode) => void;
   setVoiceLevel: (level: number) => void;
   setTranscript: (text: string) => void;
+  setDJThemeColor: (color: string) => void;
   setDJTracks: (tracks: Track[]) => void;
   startDJSession: (forceReset?: boolean) => Promise<void>;
   stopDJSession: () => void;
@@ -51,7 +53,7 @@ export const DJ_VIBE_PRESETS = [
   { id: 'urbano', label: 'Urbano latino', query: 'reggaeton trap urbano latino para bailar' },
   { id: 'entreno', label: 'Para entrenar', query: 'gym motivacion entrenamiento a tope' },
   { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
-  { id: 'chill', label: 'Chill out', query: 'chill relax acustico suave para desconectar' },
+  { id: 'chill', label: 'Chill out', query: 'morat coldplay ed sheeran vance joy acoustic indie pop' },
   { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos de siempre' },
 ];
 
@@ -61,6 +63,8 @@ interface IntentAnalysis {
   speech: string;
   query: string;
   vibeTitle: string;
+  vibeColor: string;
+  excludeTitles?: string[];
 }
 
 function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
@@ -71,8 +75,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/mal d[ií]a|triste|baj[oó]n|llorar|depre|desanimo|desamor|pena|despecho|tristeza|solo|sola|duro|agobiad/i.test(p)) {
     return {
       speech: `Sé que has tenido un día difícil${namePhrase}. Te preparé algo tranquilo para bajar revoluciones y desconectar.`,
-      query: 'baladas acustico chill triste guitarra piano',
+      query: 'morat beret pablo alboran baladas acustico guitarra suave',
       vibeTitle: 'Sesión: Calma y Desconexión',
+      vibeColor: '#3d4852',
     };
   }
 
@@ -80,8 +85,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/gym|entrenar|entrenamiento|pesas|fuerza|duro|drill|a tope|correr|cardio|crossfit|mancuerna|hype|motiva|romperla/i.test(p)) {
     return {
       speech: `¡A romperla en el entreno${namePhrase}! Te dejo este set con pura energía pesada. ¡Dale con todo!`,
-      query: 'gym workout phonk trap drill motivacion pesas',
+      query: 'duki eladio carrion travis scott drill phonk motivacion',
       vibeTitle: 'Sesión: Máxima Adrenalina Gym',
+      vibeColor: '#e65100',
+      excludeTitles: ['gym', 'workout', 'fitness'],
     };
   }
 
@@ -89,8 +96,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/fiesta|perreo|bailar|discoteca|farra|desmadre|viernes|s[aá]bado|marcha|reggaeton|perrear|bellakeo|dembow|rumba/i.test(p)) {
     return {
       speech: `¡Modo fiesta activado! Arrancamos con este perreo para que no pares de moverte. Súbele.`,
-      query: 'reggaeton exitos perreo 2024 fiesta',
+      query: 'bad bunny feid quevedo mora rauw alejandro reggaeton exitos',
       vibeTitle: 'Sesión: Perreo y Fiesta',
+      vibeColor: '#d32f2f',
+      excludeTitles: ['reggaeton', 'perreo', 'fiesta'],
     };
   }
 
@@ -98,8 +107,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/bachata|romeo|prince royce|aventura|salsa|merengue/i.test(p)) {
     return {
       speech: `¡Pura bachata y sentimiento${namePhrase}! Aquí tienes los himnos de Romeo Santos, Prince Royce y más.`,
-      query: 'bachata exitos romeo santos prince royce aventura',
+      query: 'romeo santos prince royce aventura juan luis guerra bachata exitos',
       vibeTitle: 'Sesión: Bachata y Sentimiento',
+      vibeColor: '#7b1fa2',
+      excludeTitles: ['bachata'],
     };
   }
 
@@ -107,8 +118,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/trap|drill|urbano|calle|duki|eladio|milo j|trueno|c\.r\.o|ysy a/i.test(p)) {
     return {
       speech: `Directo a la vibra pesada${namePhrase}. Puras barras y los ritmos urbanos más duros del momento.`,
-      query: 'trap argentino drill urbano latino exitos',
+      query: 'duki trueno milo j bizarrap eladio carrion trap exitos',
       vibeTitle: 'Sesión: Trap y Urbano',
+      vibeColor: '#ff5722',
+      excludeTitles: ['trap'],
     };
   }
 
@@ -116,8 +129,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/electro|electronic|techno|house|edm|rave|dance|dj set/i.test(p)) {
     return {
       speech: `¡Subiendo los BPMs! Te preparé una sesión electrónica limpia para mantener la energía al tope.`,
-      query: 'electronic dance house edm club hits',
+      query: 'calvin harris david guetta tiesto avicii edm dance hits',
       vibeTitle: 'Sesión: Club Electrónica',
+      vibeColor: '#00acc1',
+      excludeTitles: ['electro', 'electronic', 'house'],
     };
   }
 
@@ -125,8 +140,10 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/rock|guitarra|indie|queen|nirvana|coldplay|estopa|melendi/i.test(p)) {
     return {
       speech: `¡Suban esas guitarras! Clásicos y temazos de rock que se cantan a pleno pulmón.`,
-      query: 'rock clasicos pop rock hits espanol',
+      query: 'queen coldplay estopa melendi fito fitipaldis rock exitos',
       vibeTitle: 'Sesión: Clásicos del Rock',
+      vibeColor: '#c2185b',
+      excludeTitles: ['rock', 'rock n roll'],
     };
   }
 
@@ -134,17 +151,20 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/estudiar|concentra|trabajar|lectura|estudio|lofi|piano|trabajo|examen|tarea|oficina|programar|enfoque/i.test(p)) {
     return {
       speech: `Momento de enfoque${namePhrase}. Aquí tienes ritmos limpios para concentrarte y rendir al cien.`,
-      query: 'lofi hip hop study beats chill instrumental piano',
+      query: 'lofi study beats chill instrumental piano calm',
       vibeTitle: 'Sesión: Enfoque Profundo',
+      vibeColor: '#1976d2',
     };
   }
 
   // 5. Chill / Relax / Unwind / Peaceful
   if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres/i.test(p)) {
     return {
-      speech: `Buena elección. Vamos a bajar el ritmo con una vibra suave y tranquila. Disfrútala.`,
-      query: 'chill relax acustico suave indie pop',
+      speech: `Buena elección. Vamos a bajar el ritmo con una selección suave y acústica para desconectar. Disfrútala.`,
+      query: 'morat coldplay ed sheeran vance joy acoustic indie baladas',
       vibeTitle: 'Sesión: Relax Acústico',
+      vibeColor: '#00897b',
+      excludeTitles: ['chill', 'relax', 'chill out', 'chill beats', 'relaxing'],
     };
   }
 
@@ -152,8 +172,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/dormir|noche|cama|sue[nñ]o|descansar|acostarse/i.test(p)) {
     return {
       speech: `Buenas noches. Te dejo esta selección íntima y calmada para que descanses como toca.`,
-      query: 'sleep ambient lofi night piano calm',
+      query: 'sleep ambient lofi night piano calm ludovico einaudi',
       vibeTitle: 'Sesión: Calma Nocturna',
+      vibeColor: '#283593',
     };
   }
 
@@ -161,8 +182,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/coche|viaje|conducir|carretera|viajar|ruta|auto/i.test(p)) {
     return {
       speech: `¡Música para la carretera! Sube el volumen y disfruta del camino con estos temazos.`,
-      query: 'road trip hits pop rock clasicos viaje coche',
+      query: 'avicii coldplay dua lipa the weeknd road trip hits',
       vibeTitle: 'Sesión: Carretera y Viento',
+      vibeColor: '#f57c00',
     };
   }
 
@@ -171,8 +193,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     const era = /80/i.test(p) ? 'los ochenta' : /90/i.test(p) ? 'los noventa' : 'los dos mil';
     return {
       speech: `¡Viajazo a ${era}! Esos himnos que nunca pasan de moda. A cantar a pleno pulmón.`,
-      query: `exitos clasicos ${era} pop rock hits`,
+      query: `exitos clasicos ${era} pop rock hits radio`,
       vibeTitle: `Sesión: Clásicos de ${era.toUpperCase()}`,
+      vibeColor: '#3949ab',
     };
   }
 
@@ -206,8 +229,9 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (detectedArtist) {
     return {
       speech: `¡Qué temazos tiene ${detectedArtist}! Te armé una selección con sus mejores temas. Dale play.`,
-      query: `${detectedArtist} exitos`,
+      query: `${detectedArtist} exitos populares`,
       vibeTitle: `Sesión: ${detectedArtist.toUpperCase()}`,
+      vibeColor: '#0c52cc',
     };
   }
 
@@ -216,6 +240,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     speech: `Cambiando de onda${namePhrase}. Aquí tienes una mezcla fresca pensada para ti. A disfrutarla.`,
     query: `${p} exitos canciones`,
     vibeTitle: `Sesión: ${prompt.slice(0, 20)}`,
+    vibeColor: '#0050d0',
   };
 }
 
@@ -226,6 +251,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   displayedTranscript: '',
   voiceLevel: 0,
   currentSetTitle: 'Sesión Inicial',
+  djThemeColor: '#0c52cc',
   songsPlayedInSet: 0,
   isDJModeActive: false,
   djTracks: [],
@@ -236,6 +262,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   setVisualizerState: (visualizerState) => set({ visualizerState }),
   setVoiceLevel: (voiceLevel) => set({ voiceLevel }),
   setTranscript: (displayedTranscript) => set({ displayedTranscript }),
+  setDJThemeColor: (djThemeColor) => set({ djThemeColor }),
   setDJTracks: (djTracks) => set({ djTracks }),
 
   /**
@@ -532,11 +559,21 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     // 2. Query Spotify search for top authentic tracks matching the exact intent
     const curatedList: Track[] = [];
+    const genericWordsToFilter = new Set([
+      'chill', 'relax', 'relaxing', 'chill out', 'chill beats', 'rock', 'trap', 'gym', 'workout', 'fitness', 'lofi'
+    ]);
+    const isGenericSpam = (t: any) => {
+      const cleanTitle = (t.name || '').toLowerCase().trim();
+      if (genericWordsToFilter.has(cleanTitle)) return true;
+      if (analysis.excludeTitles && analysis.excludeTitles.some((ex) => cleanTitle.includes(ex))) return true;
+      return false;
+    };
+
     try {
       const searchRes = await searchSpotify(analysis.query);
       const fetchedItems = searchRes?.tracks?.items || [];
       fetchedItems.forEach((ft: any) => {
-        if (ft && ft.id && !seenIds.has(ft.id)) {
+        if (ft && ft.id && !seenIds.has(ft.id) && !isGenericSpam(ft)) {
           seenIds.add(ft.id);
           const art = getTrackCoverUrl(ft) || ft.album?.images?.[0]?.url || (ft as any).image;
           const normalized: Track = (!ft.album || !ft.album.images || ft.album.images.length === 0)
@@ -559,6 +596,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     // 3. Score user's library tracks against the user intent
     const intentWords = analysis.query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
     const matchedUserTracks = allUserTracks.filter((t) => {
+      if (isGenericSpam(t)) return false;
       const title = (t.name || '').toLowerCase();
       const artist = (t.artists?.map((a) => a.name).join(' ') || '').toLowerCase();
       const album = (t.album?.name || '').toLowerCase();
@@ -598,6 +636,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       currentMessage: analysis.speech,
       displayedTranscript: '',
       currentSetTitle: analysis.vibeTitle,
+      djThemeColor: analysis.vibeColor || state.djThemeColor,
       songsPlayedInSet: 0,
       djTracks: finalSet,
       chatHistory: [...state.chatHistory, djMsg],

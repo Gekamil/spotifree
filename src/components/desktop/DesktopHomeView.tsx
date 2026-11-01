@@ -9,6 +9,7 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { handleImageError } from '../../utils/imageFallback';
 import { stripHtml } from '../../utils/formatters';
 import { useRotatingDJMessage } from '../../utils/djMessages';
+import { useAIDJStore } from '../../services/aiDJService';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -28,6 +29,7 @@ interface DesktopHomeViewProps {
 
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
   const rotatingDJMessage = useRotatingDJMessage(6500);
+  const djThemeColor = useAIDJStore((s) => s.djThemeColor);
   const [activeTab, setActiveTab] = useState<'todo' | 'musica' | 'siguiendo'>('todo');
   const [expandedShelf, setExpandedShelf] = useState<{
     id: string;
@@ -485,10 +487,16 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             </h2>
             <div
               onClick={() => onSelectPlaylistById('spotify-dj')}
-              className="relative w-full rounded-2xl bg-[#0c52cc] hover:bg-[#0e58db] p-6 overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[175px]"
+              className="relative w-full rounded-2xl p-6 overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[175px]"
+              style={{
+                backgroundColor: djThemeColor || '#0c52cc',
+                backgroundImage: `linear-gradient(135deg, ${djThemeColor || '#0c52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
+                boxShadow: `0 8px 32px ${djThemeColor || '#0c52cc'}55`,
+                transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
+              }}
             >
               {/* Background Glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-[#0052cc]/30 to-[#1ed760]/10 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-[#1ed760]/10 pointer-events-none" />
 
               {/* Top Bar with Beta Pill and Menu dots */}
               <div className="flex items-center justify-between relative z-10">
@@ -506,7 +514,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
               {/* Center Graphic: Morphing Green-Cyan DJ Loop (Photo 3) */}
               <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none opacity-85 group-hover:scale-105 transition-transform duration-500">
-                <SpotifyDJVisualizer size={160} state="idle" />
+                <SpotifyDJVisualizer size={160} state="idle" themeColor={djThemeColor} />
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
