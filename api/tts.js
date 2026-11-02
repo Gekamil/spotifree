@@ -75,15 +75,12 @@ async function synthesizeWithGemini(text, voice = 'Kore', userApiKey = '') {
   };
 }
 
-async function synthesizeWithEdge(text, voice = 'es-ES-AlvaroNeural') {
+async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural') {
   const tts = new MsEdgeTTS();
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
-  const { audioStream } = tts.toStream(text, {
-    rate: '+0%',
-    pitch: '+0Hz',
-    volume: '+0%',
-  });
+  // Pure natural prosody without SSML distortion options
+  const { audioStream } = tts.toStream(text);
 
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -197,7 +194,7 @@ export default async function handler(req, res) {
     res.statusCode = 200;
     res.setHeader('Content-Type', result.contentType);
     res.setHeader('Content-Length', result.buffer.length);
-    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.end(result.buffer);
   } catch (err) {
     console.error('[TTS Global Error]:', err);

@@ -74,7 +74,6 @@ class AIDJVoiceService {
   private isSpeaking: boolean = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentAudio: HTMLAudioElement | null = null;
-  private persistentMobileAudio: HTMLAudioElement | null = null;
   private abortController: AbortController | null = null;
   private voiceLevelInterval: any = null;
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
@@ -124,16 +123,12 @@ class AIDJVoiceService {
   public unlockAudioForMobile() {
     if (typeof window === 'undefined') return;
     try {
-      if (!this.persistentMobileAudio) {
-        this.persistentMobileAudio = new Audio();
-        this.persistentMobileAudio.preload = 'auto';
-      }
-      this.persistentMobileAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
-      this.persistentMobileAudio.volume = 0.01;
-      const playPromise = this.persistentMobileAudio.play();
+      const dummy = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
+      dummy.volume = 0.01;
+      const playPromise = dummy.play();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.then(() => {
-          this.persistentMobileAudio?.pause();
+          dummy.pause();
         }).catch(() => {});
       }
     } catch {}
@@ -184,6 +179,7 @@ class AIDJVoiceService {
         voice: activeVoice,
         provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
         lang,
+        v: '2',
       });
       fetch(`/api/tts?${params.toString()}`)
         .then((r) => (r.ok ? r.blob() : null))
@@ -323,6 +319,7 @@ class AIDJVoiceService {
           voice: activeVoice,
           provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
           lang,
+          v: '2',
         });
         if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
         if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
@@ -358,14 +355,11 @@ class AIDJVoiceService {
           this.currentAudio.currentTime = 0;
           this.currentAudio.src = '';
         } catch {}
+        this.currentAudio = null;
       }
 
-      // Reuse persistent blessed element on mobile to bypass autoplay restrictions and keep pristine fidelity
-      let audio = this.persistentMobileAudio;
-      if (!audio) {
-        audio = new Audio();
-        this.persistentMobileAudio = audio;
-      }
+      // Always create a clean, untainted native audio element for pristine studio fidelity
+      const audio = new Audio();
       audio.src = audioUrl;
       audio.preload = 'auto';
       audio.playbackRate = 1.0;
