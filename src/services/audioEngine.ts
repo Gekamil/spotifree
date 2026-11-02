@@ -1380,8 +1380,8 @@ class AudioEngine {
                 // Unmute and restore volume first
                 if (typeof this.ytPlayer.unMute === 'function') {
                   this.ytPlayer.unMute();
-                  const { volume, isMuted } = usePlayerStore.getState();
-                  if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+                  const { isMuted } = usePlayerStore.getState();
+                  if (!isMuted) this.ytPlayer.setVolume(Math.round(this.getEffectiveVolume() * 100));
                 }
                 // Check if player is paused/stopped and resume if needed
                 const ytState = typeof this.ytPlayer.getPlayerState === 'function'
@@ -1589,10 +1589,10 @@ class AudioEngine {
           this.currentVideoId = data.video_id;
         }
 
-        const { volume, isMuted } = usePlayerStore.getState();
+        const { isMuted } = usePlayerStore.getState();
         if (typeof this.ytPlayer.unMute === 'function' && !isMuted && typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
           this.ytPlayer.unMute();
-          this.ytPlayer.setVolume(Math.round(volume * 100));
+          this.ytPlayer.setVolume(Math.round(this.getEffectiveVolume() * 100));
         }
         return;
       }
@@ -1724,10 +1724,10 @@ class AudioEngine {
         try {
           this.checkAndSkipAd();
           if (!this.isCrossfading && typeof this.ytPlayer.isMuted === 'function' && this.ytPlayer.isMuted()) {
-            const { volume, isMuted } = usePlayerStore.getState();
+            const { isMuted } = usePlayerStore.getState();
             if (!isMuted) {
               this.ytPlayer.unMute();
-              this.ytPlayer.setVolume(Math.round(volume * 100));
+              this.ytPlayer.setVolume(Math.round(this.getEffectiveVolume() * 100));
             }
           }
           const curSec = this.ytPlayer.getCurrentTime();
@@ -2107,9 +2107,9 @@ class AudioEngine {
         if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
           this.audio.pause();
 
-          const { volume, isMuted } = usePlayerStore.getState();
+          const { isMuted } = usePlayerStore.getState();
           if (typeof this.ytPlayer.setVolume === 'function') {
-            this.ytPlayer.setVolume(isMuted ? 0 : Math.round(volume * 100));
+            this.ytPlayer.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
           }
 
           this.ytPlayer.loadVideoById({ videoId, startSeconds });
@@ -2237,8 +2237,8 @@ class AudioEngine {
       }
       if (this.ytPlayer && typeof this.ytPlayer.unMute === 'function') {
         this.ytPlayer.unMute();
-        const { volume, isMuted } = usePlayerStore.getState();
-        if (!isMuted) this.ytPlayer.setVolume(Math.round(volume * 100));
+        const { isMuted } = usePlayerStore.getState();
+        if (!isMuted) this.ytPlayer.setVolume(Math.round(this.getEffectiveVolume() * 100));
       }
     } catch {}
   }
@@ -2391,23 +2391,59 @@ class AudioEngine {
     }, 300);
   }
 
+  public isAudioDucked: boolean = false;
   private previousDuckedVolume: number | null = null;
+  private duckFraction: number = 0.08;
 
-  public setDuckedVolume(fraction: number = 0.15) {
-    if (this.previousDuckedVolume !== null) return;
-    const cur = usePlayerStore.getState().volume;
-    this.previousDuckedVolume = cur;
-    this.setVolume(Math.max(0.05, cur * fraction));
+  public setDuckedVolume(fraction: number = 0.08) {
+    this.isAudioDucked = true;
+    this.duckFraction = fraction;
+    if (this.previousDuckedVolume === null) {
+      this.previousDuckedVolume = usePlayerStore.getState().volume;
+    }
+    this.applyCurrentVolume();
   }
 
   public restoreDuckedVolume() {
-    if (this.previousDuckedVolume !== null) {
-      this.setVolume(this.previousDuckedVolume);
-      this.previousDuckedVolume = null;
+    this.isAudioDucked = false;
+    const target = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
+    this.previousDuckedVolume = null;
+    this.setVolume(target);
+  }
+
+  public getEffectiveVolume(): number {
+    if (this.isAudioDucked) {
+      const base = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
+      return Math.max(0.04, base * this.duckFraction);
+    }
+    return usePlayerStore.getState().volume;
+  }
+
+  private applyCurrentVolume() {
+    const eff = this.getEffectiveVolume();
+    const ytVol = Math.round(eff * 100);
+    if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+      try { this.ytPlayer.setVolume(ytVol); } catch {}
+    }
+    if (Array.isArray(this.ytPlayers)) {
+      this.ytPlayers.forEach((p) => {
+        if (p && typeof p.setVolume === 'function') {
+          try { p.setVolume(ytVol); } catch {}
+        }
+      });
+    }
+    this.audio.volume = eff;
+    if (this.secondaryAudio) {
+      this.secondaryAudio.volume = eff;
     }
   }
 
   public setVolume(val: number) {
+    if (this.isAudioDucked) {
+      this.previousDuckedVolume = Math.max(0, Math.min(1, val));
+      this.applyCurrentVolume();
+      return;
+    }
     const clamped = Math.max(0, Math.min(1, val));
     const ytVol = Math.round(clamped * 100);
     if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {

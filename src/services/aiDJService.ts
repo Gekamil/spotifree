@@ -5,6 +5,11 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { aiDJVoiceService } from './aiDJVoiceService';
 import { searchSpotify } from './spotifyApi';
 import { resolveTrackCoversBatch, getTrackCoverUrl } from '../utils/trackCovers';
+import {
+  type MusicHashtag,
+  resolveHashtagFromPrompt,
+  getCuratedSetForHashtag,
+} from './musicTaggingService';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
@@ -28,6 +33,7 @@ export interface AIDJState {
   songsPlayedInSet: number;
   isDJModeActive: boolean;
   djTracks: Track[];
+  currentHashtag: MusicHashtag;
   chatHistory: DJChatMessage[];
   viewMode: 'chat' | 'playlist';
 
@@ -41,6 +47,7 @@ export interface AIDJState {
   startDJSession: (forceReset?: boolean) => Promise<void>;
   stopDJSession: () => void;
   handleUserPrompt: (promptText: string) => Promise<void>;
+  handleSetCompletion: () => Promise<void>;
   startVoiceListening: () => void;
   stopVoiceListening: () => void;
   triggerManualTransition: () => Promise<void>;
@@ -255,6 +262,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   songsPlayedInSet: 0,
   isDJModeActive: false,
   djTracks: [],
+  currentHashtag: '#reggaeton',
   chatHistory: [],
   viewMode: 'chat',
 
@@ -280,68 +288,14 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       isDJModeActive: true,
       visualizerState: 'speaking',
       songsPlayedInSet: 0,
+      currentHashtag: '#reggaeton',
     });
 
-    // 1. Gather tracks from user library, cache, and search
-    const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
-    const allTracks: Track[] = [];
-    const seen = new Set<string>();
-
-    const addT = (t: Track) => {
-      if (t && t.id && !seen.has(t.id)) {
-        seen.add(t.id);
-        const art =
-          t.album?.images?.[0]?.url ||
-          (t as any).image ||
-          (t as any).album_cover_url ||
-          'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
-        const normalized: Track = (!t.album || !t.album.images || t.album.images.length === 0)
-          ? {
-              ...t,
-              album: {
-                id: t.album?.id || `alb-${t.id}`,
-                name: t.album?.name || t.name,
-                images: [{ url: art }],
-              },
-            }
-          : t;
-        allTracks.push(normalized);
-      }
-    };
-
-    Object.values(playlistDetailsCache).forEach((pl: any) => {
-      pl?.tracks?.items?.forEach(addT);
-    });
-    playlists.forEach((p) => {
-      p.tracks?.items?.forEach(addT);
-    });
-
-    if (typeof window !== 'undefined') {
-      try {
-        const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
-        local.forEach((p: any) => p?.tracks?.items?.forEach(addT));
-        const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
-        liked.forEach(addT);
-      } catch {}
-    }
-
-    // Enrich if needed
-    if (allTracks.length < 10) {
-      try {
-        const res = await searchSpotify('top exitos 2024');
-        res?.tracks?.items?.forEach(addT);
-      } catch {}
-    }
-
-    // Shuffle and curate an authentic 15-track set
-    for (let i = allTracks.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [allTracks[i], allTracks[j]] = [allTracks[j], allTracks[i]];
-    }
-    const initialSet = allTracks.slice(0, 15);
+    // 1. Curate initial set using internal hashtag analysis of user playlists + related tracks
+    const initialSet = await getCuratedSetForHashtag('#reggaeton', 15);
     set({ djTracks: initialSet });
 
-    // 2. Play track 1 immediately through global player
+    // 2. Play track 1 immediately through global player in background with ducked volume
     if (initialSet.length > 0) {
       usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
     }
@@ -616,8 +570,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       curatedList.push(...allUserTracks);
     }
 
-    // Curate a cohesive 15-track playlist set
-    const finalSet = curatedList.slice(0, 15);
+    const targetTag = resolveHashtagFromPrompt(promptText);
+    set({ currentHashtag: targetTag });
+
+    // Curate a cohesive 15-track playlist set based on internal hashtag analysis of user playlists
+    const hashtagSet = await getCuratedSetForHashtag(targetTag, 15);
+    const finalSet = hashtagSet.length >= 10 ? hashtagSet : (curatedList.length > 0 ? curatedList.slice(0, 15) : hashtagSet);
 
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});
@@ -668,6 +626,77 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
           visualizerState: 'playing',
           voiceLevel: 0,
         });
+      },
+    });
+  },
+
+  /**
+   * Called when the 15-track DJ set finishes or reaches the end of queue.
+   * Speaks to the user: "¿Qué tal si mantenemos este rollo? Te he preparado 15 temazos más..."
+   * Analyzes user playlists and related songs by hashtag, queues 15 new songs, and plays them smoothly.
+   */
+  handleSetCompletion: async () => {
+    const state = get();
+    const currentTag = state.currentHashtag || '#reggaeton';
+    const previousIds = new Set(state.djTracks.map((t) => t.id));
+
+    aiDJVoiceService.stopSpeaking();
+    set({
+      visualizerState: 'speaking',
+      songsPlayedInSet: 0,
+    });
+
+    const nextSet = await getCuratedSetForHashtag(currentTag, 15, previousIds);
+    set({ djTracks: nextSet });
+
+    // Pre-resolve artwork in parallel
+    resolveTrackCoversBatch(nextSet).catch(() => {});
+
+    // Pre-warm audio streams
+    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+      try {
+        (window as any).__audioEngine.warmupInitialTracks(nextSet.slice(0, 6));
+      } catch {}
+    }
+
+    // Play first track of new set in background with ducked volume
+    if (nextSet.length > 0) {
+      usePlayerStore.getState().playTrack(nextSet[0], nextSet, 'dj-session');
+    }
+
+    const completionPhrases = [
+      '¿Qué te parece si mantenemos este rollo? He analizado tus playlists y te preparé 15 temazos más que te van a flipar.',
+      '¡Vaya sesión que llevamos! Mantenemos esta misma vibra con otras 15 canciones seleccionadas para ti. ¡A disfrutarlas!',
+      'Para que la música no pare, seguimos en esta misma onda con 15 canciones de tus listas y novedades.',
+    ];
+    const speech = completionPhrases[Math.floor(Math.random() * completionPhrases.length)];
+
+    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    set((s) => ({
+      currentMessage: speech,
+      displayedTranscript: '',
+      chatHistory: [
+        ...s.chatHistory,
+        {
+          id: `msg-completion-${Date.now()}`,
+          sender: 'dj',
+          text: speech,
+          timestamp: timeStr,
+          curatedSetTitle: s.currentSetTitle || 'Sesión en curso',
+          trackCount: nextSet.length,
+        },
+      ],
+    }));
+
+    await aiDJVoiceService.speak(speech, {
+      onWord: (_word, partial) => {
+        set({ displayedTranscript: partial });
+      },
+      onVoiceLevel: (level) => {
+        set({ voiceLevel: level });
+      },
+      onEnd: () => {
+        set({ visualizerState: 'playing', voiceLevel: 0 });
       },
     });
   },

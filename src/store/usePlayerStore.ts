@@ -277,6 +277,20 @@ const store = create<PlayerState>((set, get) => ({
     const nextTrackCandidate = get().getNextTrack();
 
     if (!nextTrackCandidate) {
+      // 1. If currently in AI DJ mode, trigger DJ set completion with conversational transition & 15 new songs
+      const currentContextId = get().currentContextId;
+      const isDJSession =
+        currentContextId === 'dj-session' ||
+        (typeof window !== 'undefined' && Boolean((window as any).__useAIDJStore?.getState?.()?.isDJModeActive));
+
+      if (isDJSession) {
+        const aiDJStore = typeof window !== 'undefined' ? (window as any).__useAIDJStore?.getState?.() : null;
+        if (aiDJStore && typeof aiDJStore.handleSetCompletion === 'function') {
+          aiDJStore.handleSetCompletion();
+          return;
+        }
+      }
+
       const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
       if (isAutoplay && currentTrack) {
         get().triggerAutoplaySimilar(currentTrack);
@@ -285,7 +299,6 @@ const store = create<PlayerState>((set, get) => ({
 
       // Autoplay is OFF: advance to next user playlist or restart current playlist from track 0
       const playlists = (typeof window !== 'undefined' && (window as any).__useSpotifyDataStore?.getState?.()?.playlists) || [];
-      const currentContextId = get().currentContextId;
       const currentPlaylistIdx = playlists.findIndex((p: any) => p.id === currentContextId);
 
       if (playlists.length > 1 && currentPlaylistIdx >= 0 && currentPlaylistIdx < playlists.length - 1) {

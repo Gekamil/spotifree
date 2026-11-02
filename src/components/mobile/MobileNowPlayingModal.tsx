@@ -25,7 +25,6 @@ import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
-import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useAIDJStore } from '../../services/aiDJService';
 
 interface MobileNowPlayingModalProps {
@@ -611,7 +610,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   }}
                   title="Volver a la pantalla del DJ"
                 >
-                  <SpotifyDJVisualizer size={24} mini state="playing" themeColor={djThemeColor} />
+                  <span className="text-[11px] font-black tracking-wider text-white font-['SpotifyMixUITitle']">
+                    DJ
+                  </span>
                 </button>
               )}
             </div>

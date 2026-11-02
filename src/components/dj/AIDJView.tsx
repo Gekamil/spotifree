@@ -262,7 +262,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         </div>
 
         {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
-        <div className="w-full max-w-md space-y-2 mt-auto">
+        <div className="w-full max-w-md sm:max-w-xl space-y-2 mt-auto">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -312,14 +312,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </button>
           </form>
 
-          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Single sleek horizontal row */}
-          <div className="flex items-center gap-1.5 flex-nowrap overflow-x-auto py-1 scrollbar-none justify-start sm:justify-center px-1 max-w-full">
+          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Direct fit without scrolling */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap justify-center py-1 px-1 max-w-full">
             {QUICK_VIBE_CHIPS.map((chip) => (
               <button
                 key={chip}
                 type="button"
                 onClick={() => handleSendPrompt(chip)}
-                className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+                className="px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[10.5px] sm:text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
               >
                 {chip}
               </button>
@@ -438,18 +438,19 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </button>
         </div>
 
-        {/* Floating DJ Button (Bottom Right) */}
+        {/* Clean Static DJ Transition Button (Bottom Right) */}
         <button
           onClick={() => triggerManualTransition()}
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all shadow-xl"
+          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-xl"
           style={{
-            backgroundColor: djThemeColor || ambientColor || '#0042a5',
-            boxShadow: `0 4px 24px ${djThemeColor || ambientColor || '#0042a5'}80`,
-            transition: 'background-color 0.8s ease, box-shadow 0.8s ease',
+            backgroundColor: `${djThemeColor || ambientColor || '#0042a5'}cc`,
+            boxShadow: `0 4px 20px ${djThemeColor || ambientColor || '#0042a5'}60`,
           }}
           title="Cambiar de rollo con el DJ"
         >
-          <SpotifyDJVisualizer size={34} mini state="playing" themeColor={djThemeColor || ambientColor} />
+          <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider text-white font-['SpotifyMixUITitle']">
+            DJ
+          </span>
         </button>
       </footer>
 

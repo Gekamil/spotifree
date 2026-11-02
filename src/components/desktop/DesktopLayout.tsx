@@ -23,7 +23,7 @@ export const DesktopLayout: React.FC = () => {
   const [selectedPlaylist, setSelectedPlaylist] = React.useState<Playlist | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
-  const activePlaylist = selectedPlaylist || playlists[0] || null;
+  const activePlaylist = (selectedPlaylist ? playlists.find((p) => p.id === selectedPlaylist.id) || selectedPlaylist : playlists[0]) || null;
 
   const handleSelectPlaylist = (playlist: Playlist) => {
     if (

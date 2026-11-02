@@ -535,6 +535,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [playlist.id, playlist.tracks]);
 
+  // Synchronize dynamicPlaylist when props or cover image change from EditPlaylistModal
+  useEffect(() => {
+    setDynamicPlaylist(playlist);
+    setHeroCoverError(false);
+  }, [playlist.id, playlist.images?.[0]?.url, playlist.name, playlist.description]);
+
   // Asynchronously resolve individual album covers for all tracks in parallel
   useEffect(() => {
     if (!dynamicTracks || dynamicTracks.length === 0) return;
