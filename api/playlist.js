@@ -63,7 +63,7 @@ function parseEmbedHtml(html, cleanId) {
     entity.headerImage?.sources?.[0]?.url ||
     entity.header_image?.url ||
     entity.images?.find(i => (i.width || 0) > (i.height || 0))?.url ||
-    (coverUrl && coverUrl.includes('pickasso.spotifycdn.com') ? coverUrl : null) ||
+    (coverUrl && coverUrl.includes('/img/daily/') ? coverUrl : null) ||
     null;
   const bannerUrl = rawBanner ? toHDImage(rawBanner) : undefined;
 
@@ -172,7 +172,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
         const cached = sessionData.cachedPlaylistDetails[cleanId];
         if (cached?.tracks?.items && cached.tracks.items.length > 0) {
           const cover = cached.images?.[0]?.url || '';
-          if (cover.includes('pickasso.spotifycdn.com') && !cached.bannerUrl) {
+          if (cover.includes('/img/daily/') && !cached.bannerUrl) {
             cached.bannerUrl = cover;
           }
           return cached;

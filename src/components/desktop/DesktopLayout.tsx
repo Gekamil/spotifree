@@ -150,6 +150,11 @@ export const DesktopLayout: React.FC = () => {
       image = image || 'https://dailymix-images.scdn.co/v2/img/ab6761610000e5ebc8be3c6e5a824360d1bffc03/1/es/default';
       desc = desc || 'Romeo Santos, Prince Royce, Aventura y más';
       ownerName = `Hecha para ${currentUserDisplayName}`;
+    } else if (cleanId === '37i9dQZF1EQmK1rjZuPGDt' || cleanId === 'tm-4' || cleanId === 'mix-latino') {
+      title = 'Mix latino';
+      image = 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/790FomKkXshlbRYZFtlgla/es';
+      desc = 'KAROL G, Nasa Histoires, LIT killah y más';
+      ownerName = `Hecha para ${currentUserDisplayName}`;
     } else if (cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection-tracks') {
       title = 'Canciones que te gustan';
       image = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';

@@ -9,17 +9,19 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 export function resolvePlaylistBanner(playlist: Playlist | null | undefined): string | null {
   if (!playlist) return null;
 
-  // 1. Explicit bannerUrl from backend / Spotify GraphQL Pathfinder / Embed
+  // 1. Explicit bannerUrl from backend / Spotify GraphQL Pathfinder / Embed (must be landscape or explicit daily banner)
   if (playlist.bannerUrl && typeof playlist.bannerUrl === 'string') {
-    return playlist.bannerUrl;
+    if (playlist.bannerUrl.includes('/img/daily/') || !playlist.bannerUrl.includes('pickasso.spotifycdn.com')) {
+      return playlist.bannerUrl;
+    }
   }
   if ((playlist as any).header_image && typeof (playlist as any).header_image === 'string') {
     return (playlist as any).header_image;
   }
 
-  // 2. Pickasso images are genuine Spotify landscape banners (Daily Mixes, Artist Radios, Discover Weekly, etc.)
+  // 2. Only Daily Mixes (1..6) have official Spotify landscape banners
   const firstImg = playlist.images?.[0]?.url || '';
-  if (firstImg && firstImg.includes('pickasso.spotifycdn.com')) {
+  if (firstImg && firstImg.includes('/img/daily/')) {
     return firstImg;
   }
 
@@ -41,49 +43,23 @@ export function resolvePlaylistBanner(playlist: Playlist | null | undefined): st
     }
   }
 
-  // 4. Check playlistDetailsCache & live Spotify shelves for this EXACT playlist ID or URI
+  // 4. Check cache for explicit landscape bannerUrl
   try {
     const store = useSpotifyDataStore.getState();
     if (store.playlistDetailsCache && store.playlistDetailsCache[playlist.id]) {
       const cached = store.playlistDetailsCache[playlist.id];
-      if (cached?.bannerUrl) return cached.bannerUrl;
-      const cImg = cached?.images?.[0]?.url || '';
-      if (cImg.includes('pickasso.spotifycdn.com')) return cImg;
-    }
-
-    const allShelves = [...(store.dynamicShelves || []), ...((store as any).shelves || [])];
-    for (const s of allShelves) {
-      if (!Array.isArray(s.cards)) continue;
-      const card = s.cards.find(
-        (c: any) =>
-          c.id === playlist.id ||
-          (c as any).uri === `spotify:playlist:${playlist.id}`
-      );
-      if (card && card.image && card.image.includes('pickasso.spotifycdn.com')) {
-        return card.image;
-      }
+      if (cached?.bannerUrl && cached.bannerUrl.includes('/img/daily/')) return cached.bannerUrl;
     }
   } catch {}
 
   // 5. Aspect-ratio detection: if image object has width significantly greater than height
   const firstImageObj = playlist.images?.[0];
   if (firstImageObj && firstImageObj.width && firstImageObj.height) {
-    if (firstImageObj.width > firstImageObj.height * 1.25) {
+    if (firstImageObj.width > firstImageObj.height * 1.3) {
       return firstImageObj.url;
     }
   }
 
-  // 6. Major Spotify Flagship Editorial Playlists (e.g. Éxitos España, Viva Latino, Baila Reggaeton, etc.)
-  const isEditorial =
-    playlist.id?.startsWith('37i9dQZF1') ||
-    playlist.owner?.id === 'spotify' ||
-    playlist.owner?.display_name?.toLowerCase() === 'spotify' ||
-    /(?:éxitos|exitos|viva\s*latino|baila\s*reggaet[oó]n|top\s*hits|pop\s*con\s*ñ|reggaet[oó]n)/i.test(normName);
-
-  if (isEditorial && firstImg) {
-    return firstImg;
-  }
-
-  // Otherwise, no widescreen banner exists for this playlist -> standard square cover
+  // Standard square cover for all other playlists (Mix latino, Éxitos España, etc.)
   return null;
 }

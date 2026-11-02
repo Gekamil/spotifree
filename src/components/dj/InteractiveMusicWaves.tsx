@@ -172,21 +172,18 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       ctx.save();
 
       waveConfigs.forEach((cfg) => {
-        ctx.beginPath();
-        ctx.moveTo(0, height);
-
+        // Compute points along the organic wave
+        const points: Array<{ x: number; y: number }> = [];
         for (let x = 0; x <= width; x += 8) {
           const wave1 = Math.sin(x * cfg.frequency + time + cfg.speedOffset) * cfg.amplitude;
           const wave2 = Math.cos(x * (cfg.frequency * 1.8) - time * 0.8 + cfg.phaseShift) * (cfg.amplitude * 0.45);
-          const y = cfg.yCenter + wave1 + wave2;
-
-          if (x === 0) {
-            ctx.lineTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
+          points.push({ x, y: cfg.yCenter + wave1 + wave2 });
         }
 
+        // 1. Fill gradient path (closed along bottom)
+        ctx.beginPath();
+        ctx.moveTo(0, height);
+        points.forEach((p) => ctx.lineTo(p.x, p.y));
         ctx.lineTo(width, height);
         ctx.closePath();
 
@@ -198,7 +195,12 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
         ctx.fillStyle = grad;
         ctx.fill();
 
-        // Crisp crest stroke for clearly defined waves
+        // 2. Stroke ONLY top crest line (open path, zero side/bottom borders)
+        ctx.beginPath();
+        points.forEach((p, idx) => {
+          if (idx === 0) ctx.moveTo(p.x, p.y);
+          else ctx.lineTo(p.x, p.y);
+        });
         ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(0.85, cfg.opacity * 1.6)})`;
         ctx.lineWidth = 1.8;
         ctx.stroke();

@@ -871,87 +871,47 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </button>
           </div>
 
-          {hasBanner ? (
-            /* Widescreen Full-Bleed Banner Hero for Mobile (matching Spotify Photo 7 1:1) */
-            <>
-              <div
-                className="relative w-full -mt-[52px] h-88 md:h-96 overflow-hidden flex flex-col justify-end p-5 select-none transition-all"
-                style={{
-                  transform: `translateY(-${Math.min(scrollY * 0.25, 40)}px)`,
-                  transition: 'transform 0.1s ease-out',
-                }}
-              >
-                <img
-                  src={toHDImage(bannerImgUrl)}
-                  alt={playlist.name}
-                  onError={handleImageError}
-                  className="absolute inset-0 w-full h-full object-cover object-top pointer-events-none"
-                />
-                {/* Dynamic Gradient darkening towards the bottom for pure contrast */}
-                <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent pointer-events-none" />
+          {/* Full-Bleed Hero for Mobile (matching Spotify Photo 7 1:1) */}
+          <div
+            className="relative w-full -mt-[52px] h-[340px] overflow-hidden flex flex-col justify-end p-5 select-none"
+            style={{
+              transform: `translateY(-${Math.min(scrollY * 0.25, 40)}px)`,
+              transition: 'transform 0.1s ease-out',
+            }}
+          >
+            <img
+              src={toHDImage(bannerImgUrl || coverUrl)}
+              alt={playlist.name}
+              onError={handleImageError}
+              className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            />
+            {/* Dynamic Gradient darkening towards the bottom for pure contrast */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent pointer-events-none" />
 
-                <div className="relative z-10 space-y-1">
-                  <h1 className="text-4xl md:text-5xl font-black text-white font-['SpotifyMixUITitle'] leading-none tracking-tight drop-shadow-lg">
-                    {playlist.name}
-                  </h1>
-                </div>
-              </div>
-
-              {/* Sub-header details under the full bleed photo */}
-              <div className="px-5 pt-3 pb-2 space-y-2">
-                {playlist.description && (
-                  <p className="text-[13px] font-medium text-white/85 leading-relaxed">
-                    {stripHtml(playlist.description)}
-                  </p>
-                )}
-                <div className="flex items-center gap-1.5 text-xs text-white/90 font-bold">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
-                  </svg>
-                  <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
-                </div>
-                <div className="text-xs text-[#b3b3b3] font-medium">
-                  guardada {(tracks.length * 48201 + 120492).toLocaleString('es-ES')} veces • {tracks.length} canciones
-                </div>
-              </div>
-            </>
-          ) : (
-            /* Regular Playlist Hero */
-            <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
-              <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
-                {coverUrl ? (
-                  <img
-                    src={toHDImage(coverUrl)}
-                    alt={playlist.name}
-                    onError={handleImageError}
-                    className="w-full h-full object-cover opacity-100 block"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-white/40">
-                    <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                    </svg>
-                  </div>
-                )}
-              </div>
-
-              <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-1 max-w-[90%]">
+            <div className="relative z-10 space-y-1">
+              <h1 className="text-4xl md:text-5xl font-black text-white font-['SpotifyMixUITitle'] leading-none tracking-tight drop-shadow-lg">
                 {playlist.name}
               </h1>
-
-              {playlist.description && (
-                <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
-                  {stripHtml(playlist.description)}
-                </p>
-              )}
-
-              <div className="flex items-center gap-2 text-xs text-[#b3b3b3] font-medium">
-                <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
-                <span>•</span>
-                <span>{tracks.length} canciones</span>
-              </div>
             </div>
-          )}
+          </div>
+
+          {/* Sub-header details under the full bleed photo */}
+          <div className="px-5 pt-3 pb-2 space-y-2">
+            {playlist.description && (
+              <p className="text-[13px] font-medium text-white/85 leading-relaxed">
+                {stripHtml(playlist.description)}
+              </p>
+            )}
+            <div className="flex items-center gap-1.5 text-xs text-white/90 font-bold">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
+              </svg>
+              <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
+            </div>
+            <div className="text-xs text-[#b3b3b3] font-medium">
+              guardada {(tracks.length * 48201 + 120492).toLocaleString('es-ES')} veces • {tracks.length} canciones
+            </div>
+          </div>
         </>
       )}
 

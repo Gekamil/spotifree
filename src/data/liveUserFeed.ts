@@ -198,10 +198,10 @@ export const liveUserFeed: FeedShelf[] = [
         image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/artistmix/0eet2VBconGGtNYJ0CBgHu/es',
       },
       {
-        id: 'tm-4',
+        id: '37i9dQZF1EQmK1rjZuPGDt',
         title: 'Mix latino',
         subtitle: 'Ritmo, pasión y los éxitos más sonados',
-        image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/2oQX8QiMXOyuqbcZEFsZfm/es',
+        image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/topic/latin/790FomKkXshlbRYZFtlgla/es',
       },
       {
         id: 'tm-5',
