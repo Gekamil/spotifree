@@ -509,20 +509,22 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 </div>
               </div>
 
-              {/* Audio Waves covering the ENTIRE widget background */}
-              <div className="absolute inset-0 pointer-events-none opacity-55 overflow-hidden z-0">
+              {/* Audio Waves covering the ENTIRE widget background softly */}
+              <div className="absolute inset-0 pointer-events-none opacity-45 overflow-hidden z-0">
                 <InteractiveMusicWaves
                   isPlaying={isPlaying}
                   isSpeaking={false}
-                  voiceLevel={isPlaying ? 0.35 : 0.08}
+                  voiceLevel={0.15}
                   themeColor={djThemeColor || '#1ed760'}
-                  className="w-full h-full object-cover scale-105"
+                  className="w-full h-full object-cover"
                 />
               </div>
 
-              {/* Preview Visualizer: Ring/Orb ON TOP of the waves, placed on the right */}
-              <div className="absolute right-6 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10 opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700 animate-spin-slow">
-                <SpotifyDJVisualizer size={145} state="idle" themeColor={djThemeColor} />
+              {/* Preview Visualizer: Ring/Orb centered on the right side, fully visible where it belongs */}
+              <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[140px] h-[140px] z-10">
+                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-85 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
+                  <SpotifyDJVisualizer size={130} state="idle" themeColor={djThemeColor} />
+                </div>
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}

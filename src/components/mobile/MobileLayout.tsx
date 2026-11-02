@@ -514,20 +514,22 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Audio Waves covering the ENTIRE widget background */}
-                    <div className="absolute inset-0 pointer-events-none opacity-50 overflow-hidden z-0">
+                    {/* Audio Waves covering the ENTIRE widget background softly */}
+                    <div className="absolute inset-0 pointer-events-none opacity-45 overflow-hidden z-0">
                       <InteractiveMusicWaves
                         isPlaying={isPlaying}
                         isSpeaking={false}
-                        voiceLevel={isPlaying ? 0.35 : 0.08}
+                        voiceLevel={0.15}
                         themeColor={djThemeColor || '#1ed760'}
-                        className="w-full h-full object-cover scale-110"
+                        className="w-full h-full object-cover"
                       />
                     </div>
 
-                    {/* Preview Visualizer: Ring/Orb ON TOP of the waves, placed on the right */}
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[135px] h-[135px] z-10 opacity-80 transition-all duration-700 animate-spin-slow">
-                      <SpotifyDJVisualizer size={125} state="idle" themeColor={djThemeColor} />
+                    {/* Preview Visualizer: Ring/Orb centered on the right side, fully visible */}
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[120px] h-[120px] z-10">
+                      <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-85 transition-all duration-700">
+                        <SpotifyDJVisualizer size={115} state="idle" themeColor={djThemeColor} />
+                      </div>
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}

@@ -10,6 +10,7 @@ import {
   resolveHashtagFromPrompt,
   getCuratedSetForHashtag,
   getDominantUserHashtag,
+  getInitialDJLibraryRemix,
 } from './musicTaggingService';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
@@ -484,8 +485,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
 
-    // 1. Curate initial set using dynamic hashtag analysis of user playlists + related tracks
-    const initialSet = await getCuratedSetForHashtag(dominantTag, 15);
+    // 1. Curate initial set: 75% directly from user playlists + same library artists
+    const initialSet = await getInitialDJLibraryRemix(15);
     set({ djTracks: initialSet });
 
     // 2. Play track 1 immediately through global player in background

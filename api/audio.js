@@ -36,6 +36,12 @@ const INVIDIOUS_INSTANCES = [
 ];
 
 async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
+  const queryWords = cleanQuery(q)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 2);
+
   const res = await fetchWithTimeout(
     'https://music.youtube.com/youtubei/v1/search',
     {
@@ -55,7 +61,6 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
           },
         },
         query: q,
-        params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
       }),
     },
     3000
@@ -68,43 +73,52 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
     data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
       ?.sectionListRenderer?.contents || [];
 
-  const queryWords = cleanQuery(q).toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-
   for (const sec of sections) {
-    const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
-    if (shelf) {
-      // 1. Inspect responsive list items first (these are the actual songs/tracks!)
-      for (const item of shelf.contents || []) {
+    // 1. Check Top Result Card (official #1 match on YouTube Music, e.g. Quevedo Planteamiento Erróneo)
+    if (sec.musicCardShelfRenderer) {
+      const card = sec.musicCardShelfRenderer;
+      const cardTitle = card.title?.runs?.[0]?.text || '';
+      const cardSub = card.subtitle?.runs?.map((x) => x.text).join('') || '';
+      const cardVid =
+        card.onTap?.watchEndpoint?.videoId ||
+        card.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
+        card.buttons?.[0]?.buttonRenderer?.command?.watchEndpoint?.videoId;
+      if (cardVid && /^[a-zA-Z0-9_-]{11}$/.test(cardVid) && !excludeSet.has(cardVid)) {
+        const combined = `${cardTitle} ${cardSub}`.toLowerCase();
+        if (queryWords.length === 0 || queryWords.some((w) => combined.includes(w))) {
+          return { videoId: cardVid };
+        }
+      }
+    }
+
+    // 2. Check responsive list items in musicShelfRenderer
+    if (sec.musicShelfRenderer) {
+      for (const item of sec.musicShelfRenderer.contents || []) {
         const renderer = item.musicResponsiveListItemRenderer;
         const playNav =
           renderer?.overlay?.musicItemThumbnailOverlayRenderer?.content
             ?.musicPlayButtonRenderer?.playNavigationEndpoint;
         const videoId =
+          renderer?.playlistItemData?.videoId ||
           playNav?.watchEndpoint?.videoId ||
-          renderer?.navigationEndpoint?.watchEndpoint?.videoId;
+          renderer?.navigationEndpoint?.watchEndpoint?.videoId ||
+          renderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
         if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId) && !excludeSet.has(videoId)) {
-          // If we have query keywords, check if the item title or artist contains any of them
-          const itemTitle = renderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.runs?.[0]?.text || '';
-          const itemArtist = renderer?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.runs?.[0]?.text || '';
+          const itemTitle =
+            renderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || '';
+          const itemArtist =
+            renderer?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((x) => x.text).join('') || '';
           const combined = `${itemTitle} ${itemArtist}`.toLowerCase();
-          
+
           if (queryWords.length === 0 || queryWords.some((w) => combined.includes(w))) {
             return { videoId };
           }
         }
       }
-
-      // 2. If no responsive item matched, check shelf top video only if it matches keywords
-      const topVid = shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
-      if (topVid && !excludeSet.has(topVid)) {
-        const shelfText = (shelf.title?.runs?.[0]?.text || '').toLowerCase();
-        if (queryWords.length === 0 || queryWords.some((w) => shelfText.includes(w))) {
-          return { videoId: topVid };
-        }
-      }
     }
   }
 
+  // 3. Fallback: match any videoId in response if not excluded
   const text = JSON.stringify(data);
   const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
   for (const vid of matches) {

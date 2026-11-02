@@ -713,3 +713,79 @@ export function getUserDynamicVibeChips(): string[] {
 
   return ['Más movido', 'Algo chill', ...finalGenres, 'Sorpréndeme'];
 }
+
+/**
+ * Initial DJ Set Remix:
+ * - 70-80% directly from user's own playlists and liked songs
+ * - 20-30% similar tracks by the EXACT SAME artists present in user's library
+ * - 100% personalized, never inserts random foreign tracks or generic charts
+ */
+export async function getInitialDJLibraryRemix(count: number = 15): Promise<Track[]> {
+  const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
+  const allUserTracks: Track[] = [];
+  const seenIds = new Set<string>();
+
+  const collect = (t: Track) => {
+    if (!t || !t.id || seenIds.has(t.id)) return;
+    seenIds.add(t.id);
+    allUserTracks.push(t);
+  };
+
+  Object.values(playlistDetailsCache).forEach((pl: any) => {
+    pl?.tracks?.items?.forEach(collect);
+  });
+  playlists.forEach((p) => {
+    p.tracks?.items?.forEach(collect);
+  });
+
+  if (typeof window !== 'undefined') {
+    try {
+      const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
+      local.forEach((p: any) => p?.tracks?.items?.forEach(collect));
+      const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+      liked.forEach(collect);
+    } catch {}
+  }
+
+  // If user has tracks in their library:
+  if (allUserTracks.length > 0) {
+    const shuffledUser = [...allUserTracks].sort(() => Math.random() - 0.5);
+    const userQuota = Math.min(Math.floor(count * 0.75), shuffledUser.length);
+    const result: Track[] = shuffledUser.slice(0, userQuota);
+    const resultSetIds = new Set(result.map((t) => t.id));
+
+    // Fill remaining slots with songs from the exact same artists
+    const userArtists = Array.from(
+      new Set(allUserTracks.map((t) => t.artists?.[0]?.name).filter(Boolean) as string[])
+    ).sort(() => Math.random() - 0.5);
+
+    for (const artist of userArtists.slice(0, 4)) {
+      if (result.length >= count) break;
+      try {
+        const res = await searchSpotify(`artist:"${artist}"`);
+        for (const t of res?.tracks?.items || []) {
+          if (result.length >= count) break;
+          if (!resultSetIds.has(t.id)) {
+            resultSetIds.add(t.id);
+            result.push(t);
+          }
+        }
+      } catch {}
+    }
+
+    // Safety fill with remaining user tracks if needed
+    for (const t of shuffledUser) {
+      if (result.length >= count) break;
+      if (!resultSetIds.has(t.id)) {
+        resultSetIds.add(t.id);
+        result.push(t);
+      }
+    }
+
+    return result.slice(0, count).sort(() => Math.random() - 0.5);
+  }
+
+  // Fallback to dominant hashtag if library is completely empty
+  const dominantTag = getDominantUserHashtag();
+  return getCuratedSetForHashtag(dominantTag, count);
+}
