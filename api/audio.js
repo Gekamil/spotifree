@@ -15,6 +15,10 @@ function cleanQuery(query) {
     .replace(/\s*-\s*Radio Edit/gi, '')
     .replace(/\s*\(feat\..*?\)/gi, '')
     .replace(/\s*ft\..*$/gi, '')
+    .replace(/\s*video\s*oficial\s*videoclip/gi, '')
+    .replace(/\s*official\s*video/gi, '')
+    .replace(/\s*music\s*video/gi, '')
+    .replace(/\s*videoclip/gi, '')
     .trim();
 }
 

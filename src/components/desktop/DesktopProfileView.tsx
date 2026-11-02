@@ -8,6 +8,7 @@ import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { EditProfileModal } from '../common/EditProfileModal';
 import { syncUserProfileToServer } from '../../utils/userAccounts';
+import { syncSpotifreeAccount } from '../../services/spotifreeAuth';
 
 interface DesktopProfileViewProps {
   onSelectPlaylist?: (playlist: Playlist) => void;
@@ -95,6 +96,12 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
       bannerUrl: data.bannerUrl,
       cookie: currentCookie,
     });
+
+    syncSpotifreeAccount({
+      displayName: data.displayName,
+      avatarUrl: data.avatarUrl,
+      bannerUrl: data.bannerUrl,
+    }).catch(() => {});
 
 
 

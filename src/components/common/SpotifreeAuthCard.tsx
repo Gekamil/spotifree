@@ -102,16 +102,37 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
     setError(null);
 
     try {
-      const playlists = useSpotifyDataStore.getState().playlists.filter((p: any) => p.is_custom || p.id.startsWith('custom-'));
+      const rawImported = typeof window !== 'undefined' ? window.localStorage.getItem('user_imported_playlists') : null;
+      const importedPlaylists = rawImported ? JSON.parse(rawImported) : [];
+      const storeCustom = useSpotifyDataStore.getState().playlists.filter((p: any) => p.is_custom || p.id.startsWith('custom-'));
+      const allPlaylistMap = new Map<string, any>();
+      [...storeCustom, ...importedPlaylists].forEach((p) => {
+        if (p && p.id && !allPlaylistMap.has(p.id)) allPlaylistMap.set(p.id, p);
+      });
+      const playlists = Array.from(allPlaylistMap.values());
       const likedTracks = usePlayerStore.getState().likedTrackIds;
       const user = useSpotifyDataStore.getState().user;
-      const cookie = window.localStorage.getItem('user_spotify_cookie') || '';
+      const cookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+
+      const rawProf = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_custom_profile') : null;
+      let customBanner: string | null = null;
+      let customAvatar: string | null = null;
+      if (rawProf) {
+        try {
+          const p = JSON.parse(rawProf);
+          if (p.bannerUrl) customBanner = p.bannerUrl;
+          if (p.avatarUrl) customAvatar = p.avatarUrl;
+        } catch {}
+      }
+      const banner = customBanner || (user as any)?.bannerUrl || currentAccount.bannerUrl || null;
+      const avatar = customAvatar || user?.images?.[0]?.url || currentAccount.avatarUrl;
 
       const updated = await syncSpotifreeAccount({
         email: currentAccount.email,
         uid: currentAccount.uid,
         displayName: user?.display_name || currentAccount.displayName,
-        avatarUrl: user?.images?.[0]?.url || currentAccount.avatarUrl,
+        avatarUrl: avatar,
+        bannerUrl: banner,
         playlists,
         likedTracks,
         spotifyCookie: cookie,

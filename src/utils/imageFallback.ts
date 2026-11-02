@@ -9,6 +9,30 @@ export const INLINE_SVG_FALLBACK =
 export function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event>) {
   const target = e.currentTarget;
   target.referrerPolicy = 'no-referrer';
-  target.onerror = null;
-  target.src = INLINE_SVG_FALLBACK;
+  if ((target as any)._fallbackAttempted) {
+    target.onerror = null;
+    target.src = INLINE_SVG_FALLBACK;
+    return;
+  }
+  (target as any)._fallbackAttempted = true;
+  const q = target.alt?.trim();
+  if (q && q.length > 2 && !q.includes('Playlist') && !q.includes('Liked Songs') && !q.includes('Álbum') && !q.includes('Banner')) {
+    fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=1`, {
+      signal: AbortSignal.timeout?.(2500),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        const img = data?.results?.[0]?.artworkUrl100?.replace('100x100bb', '600x600bb');
+        if (img) {
+          target.src = img;
+        } else {
+          target.src = INLINE_SVG_FALLBACK;
+        }
+      })
+      .catch(() => {
+        target.src = INLINE_SVG_FALLBACK;
+      });
+  } else {
+    target.src = INLINE_SVG_FALLBACK;
+  }
 }

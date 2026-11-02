@@ -87,7 +87,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       // Speed of rotation & wave travel: faster when speaking or playing, gentle and slow when idle
       const speed = mini
-        ? (isSpeaking ? 0.034 : isPlaying ? 0.022 : 0.012)
+        ? (isSpeaking ? 0.052 : isPlaying ? 0.038 : 0.022)
         : isSpeaking
         ? 0.042
         : isPlaying
@@ -113,8 +113,8 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       let bulgeBase: number;
 
       if (mini) {
-        pulseScale = 1 + Math.sin(time * 1.6) * 0.035;
-        bulgeBase = 1.3 * (size / 38);
+        pulseScale = 1 + Math.sin(time * 2.2) * 0.075;
+        bulgeBase = 2.5 * (size / 38);
       } else if (isSpeaking) {
         // High reactivity to speech syllables
         pulseScale = 1 + Math.sin(time * 2.2) * 0.025 + currentVoice * 0.14;
@@ -136,8 +136,8 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       for (let i = 0; i <= numPoints; i++) {
         const theta = (i / numPoints) * Math.PI * 2;
         // Two smooth waves: main wave + counter-rotating secondary wave for liquid look
-        const wave1 = Math.sin(theta * 2 - time * 0.9) * 0.65;
-        const wave2 = Math.cos(theta * 3 + time * 0.7) * 0.35;
+        const wave1 = Math.sin(theta * 2 - (mini ? time * 1.3 : time * 0.9)) * 0.65;
+        const wave2 = Math.cos(theta * 3 + (mini ? time * 1.0 : time * 0.7)) * 0.35;
         const offset = (wave1 + wave2) * bulgeBase;
         const r = (baseRadius + offset) * pulseScale;
 

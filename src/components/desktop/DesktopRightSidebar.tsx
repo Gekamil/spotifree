@@ -284,6 +284,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   // Resolve videoId & canvas
   useEffect(() => {
     let cancelled = false;
+    let vidPollInterval: any;
     if (currentTrack) {
       // Reset canvas state immediately on track change to prevent state leakage
       setIsCanvasMode(false);
@@ -308,23 +309,37 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
       }
 
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
-      const cachedVid = audioEngine.getCurrentVideoId();
-      if (cachedVid) {
-        setVideoId(cachedVid);
-      } else {
-        audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
-          if (!cancelled && vid) setVideoId(vid);
-        });
-      }
+      const checkAndSetVid = () => {
+        const cVid = audioEngine.getCurrentVideoId();
+        if (cVid && !cancelled) {
+          setVideoId(cVid);
+          setOfficialVideoId((prev) => prev || cVid);
+        }
+      };
+      checkAndSetVid();
+      vidPollInterval = setInterval(checkAndSetVid, 800);
+
+      audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
+        if (!cancelled && vid) {
+          setVideoId(vid);
+          setOfficialVideoId((prev) => prev || vid);
+        }
+      });
 
       // Search official music video / videoclip
-      const clipQuery = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''} video oficial videoclip`;
+      const cleanTitle = currentTrack.name
+        .replace(/\s*\(.*?\)/g, '')
+        .replace(/\s*\[.*?\]/g, '')
+        .trim();
+      const cleanArtist = (currentTrack.artists?.[0]?.name || '').replace(/feat\..*$/i, '').trim();
+      const clipQuery = `${cleanTitle} ${cleanArtist} official music video`;
       audioEngine.resolveVideoIdForTrack(clipQuery, `clip-${currentTrack.id}`).then((clipVid) => {
         if (!cancelled && clipVid) setOfficialVideoId(clipVid);
       });
     }
     return () => {
       cancelled = true;
+      if (typeof vidPollInterval !== 'undefined') clearInterval(vidPollInterval);
     };
   }, [currentTrack?.id, currentTrack?.name]);
 

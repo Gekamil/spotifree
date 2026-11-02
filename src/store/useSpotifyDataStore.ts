@@ -953,7 +953,31 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      // 4. Default: User has no active cookie/OAuth session
+      // 4. If Cloud Account is logged in without Spotify session yet
+      if (cloudAcc) {
+        const cloudUser = {
+          id: cloudAcc.uid || cloudAcc.email,
+          display_name: cloudAcc.displayName || 'Usuario',
+          email: cloudAcc.email,
+          images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : DEFAULT_SESSION_USER.images,
+          bannerUrl: cloudAcc.bannerUrl || null,
+          followers: { total: 0 },
+        };
+        const allPl = Array.isArray(cloudAcc.playlists) && cloudAcc.playlists.length > 0 ? cloudAcc.playlists : importedPlaylists.length > 0 ? importedPlaylists : DEFAULT_SESSION_PLAYLISTS;
+        const uniquePl = deduplicateUserPlaylists(allPl);
+        set({
+          isAuthenticated: true,
+          user: cloudUser as any,
+          playlists: uniquePl,
+          dynamicShelves: buildDynamicShelves(cloudUser, uniquePl, 'Recomendado para ti'),
+          quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
+          playlistDetailsCache: DEFAULT_SESSION_CACHE,
+          isLoading: false,
+        });
+        return;
+      }
+
+      // 5. Default: User has no active cookie/OAuth session
       if (isLoggedOut) {
         set({
           isAuthenticated: false,

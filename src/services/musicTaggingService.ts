@@ -434,7 +434,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-jinsang',
       name: 'Life',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2737a6b107e322ea13fbf6b22c7' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/33/a5/2f/33a52fc2-d77b-9408-6d5b-af389ee28c43/cover_4018939360092.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -446,7 +446,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-potsu',
       name: 'im closing my eyes',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273ce96f7c7ec5be0beec7ea72c' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/f4/1c/40/f41c40ff-730f-e190-ed5c-0049cbf46b4b/053000718956_cover.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -458,7 +458,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-idealism',
       name: 'Hiraeth',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273574c860c490a78627b9c97b8' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/b8/b5/26/b8b526e2-956e-bb51-dd2a-f24961a34820/artwork.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -470,7 +470,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-thedeli',
       name: 'Vibes 2',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273eef076413d5b06691c2fdfbc' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/e2/09/c5/e209c539-b762-951a-ff82-c414537b2d01/180772.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -482,7 +482,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-rain',
       name: 'Rainy Evening',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27367be51ebccb5f0d36b85cb79' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/68/8c/f9/688cf962-6c43-96ec-cc6b-1574e4ce4476/artwork.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -494,7 +494,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-kupla',
       name: 'Melody Mountain',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273ecb15509930f3a67732d8479' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/4b/91/3e/4b913e72-9fd0-5c76-23ed-64ae378b0ed2/850020209125.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -506,7 +506,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-saib',
       name: 'Bebop',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27378fcba5fba7a0d4c98782a21' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/04/e5/01/04e501dd-9ef2-729b-f5d2-d9bb923dd685/881034742674.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -518,7 +518,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-kudasai',
       name: 'Falling',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273e9e30a5ca6e1df7ce35bf94a' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/1c/30/b1/1c30b1ce-6c95-7fd4-cc2a-449101a40b48/artwork.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -530,7 +530,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-wys',
       name: '1 Am. Study Session',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27321e84fcb0a3900994f71a7d6' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/09/42/7c/09427c6d-462f-a256-58af-f710743d4684/859735893612.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -542,7 +542,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-wuntwo',
       name: 'Rio',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2731dcaef58c735d45209da3cf1' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/f5/29/33/f52933c9-8143-b0d2-b180-8d92f9a36922/cover_4062851259545.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -554,7 +554,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-elijah',
       name: 'Gentle Boy',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2737ba773be8003f993d05b58ee' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/cd/05/87/cd0587b2-90df-e1b5-b6a3-b98a557e2d81/7316474914624.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -566,7 +566,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-nagashi',
       name: 'Nagashi Single',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273752e2591d3cb86c2e99dcf5e' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/0e/f3/e9/0ef3e972-5803-2dd5-822f-1e8a01d47225/053000009238_cover.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -578,7 +578,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-sleepy',
       name: 'Beneath the City',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2733d73b062ca13872bbcfce701' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/30/d4/10/30d41084-7548-dafc-1776-a9127b1e5a57/5059449078915.png/600x600bb.jpg' }],
     },
   },
   {
@@ -590,7 +590,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-coffee',
       name: 'Coffee Lofi Sessions',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273f55cf525b68260a927fa8384' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/9a/9e/05/9a9e0570-bee1-20b5-e512-38b5e1168a76/192641174858_Cover.jpg/600x600bb.jpg' }],
     },
   },
   {
@@ -602,7 +602,7 @@ export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
     album: {
       id: 'alb-kina',
       name: 'Can We Kiss Forever?',
-      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2733b00fdf018cbf5e5926ec03b' }],
+      images: [{ url: 'https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/2c/f6/b4/2cf6b4ee-90ba-297f-057a-b85f91e303ed/886448163213.jpg/600x600bb.jpg' }],
     },
   },
 ];

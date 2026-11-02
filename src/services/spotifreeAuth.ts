@@ -74,6 +74,8 @@ function getLocalDataToMerge() {
   let cookie = '';
   let playlists: any[] = [];
   let likedTracks: string[] = [];
+  let avatarUrl: string | null = null;
+  let bannerUrl: string | null = null;
 
   if (typeof window !== 'undefined') {
     try {
@@ -82,10 +84,16 @@ function getLocalDataToMerge() {
       if (rawPl) playlists = JSON.parse(rawPl);
       const rawLikes = window.localStorage.getItem('spotifree_liked_tracks');
       if (rawLikes) likedTracks = JSON.parse(rawLikes);
+      const rawProf = window.localStorage.getItem('spotifree_custom_profile');
+      if (rawProf) {
+        const parsed = JSON.parse(rawProf);
+        if (parsed.avatarUrl) avatarUrl = parsed.avatarUrl;
+        if (parsed.bannerUrl) bannerUrl = parsed.bannerUrl;
+      }
     } catch {}
   }
 
-  return { cookie, playlists, likedTracks };
+  return { cookie, playlists, likedTracks, avatarUrl, bannerUrl };
 }
 
 /**
@@ -112,8 +120,8 @@ export async function registerSpotifreeAccount(
       uid: fbRes.user.uid,
       email: cleanEmail,
       displayName: cleanName,
-      avatarUrl: fbRes.user.photoURL || null,
-      bannerUrl: null,
+      avatarUrl: local.avatarUrl || fbRes.user.photoURL || null,
+      bannerUrl: local.bannerUrl || null,
       spotifyCookie: local.cookie,
       playlists: local.playlists,
       likedTracks: local.likedTracks,
@@ -193,8 +201,8 @@ export async function loginSpotifreeAccount(
       uid,
       email: cleanEmail,
       displayName: cloudData?.displayName || fbRes.user.displayName || cleanEmail.split('@')[0] || 'Usuario',
-      avatarUrl: cloudData?.photoURL || fbRes.user.photoURL || null,
-      bannerUrl: null,
+      avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || fbRes.user.photoURL || local.avatarUrl || null,
+      bannerUrl: cloudData?.bannerUrl || local.bannerUrl || null,
       spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
       playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
       likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
@@ -269,8 +277,8 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
     uid,
     email: fbRes.user.email || '',
     displayName: cloudData?.displayName || fbRes.user.displayName || 'Usuario Google',
-    avatarUrl: cloudData?.photoURL || fbRes.user.photoURL || null,
-    bannerUrl: cloudData?.bannerUrl || null,
+    avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || fbRes.user.photoURL || local.avatarUrl || null,
+    bannerUrl: cloudData?.bannerUrl || local.bannerUrl || null,
     spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
     playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
     likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
@@ -299,6 +307,7 @@ export async function logoutSpotifreeAccount(): Promise<void> {
     window.localStorage.removeItem('spotify_extracted_session');
     window.localStorage.removeItem('spotifree_saved_accounts');
     window.localStorage.removeItem('spotifree_active_user_id');
+    window.localStorage.removeItem('spotifree_custom_profile');
     window.localStorage.setItem('spotify_logged_out', 'true');
   }
   await logoutFirebase();
@@ -339,10 +348,14 @@ export async function syncSpotifreeAccount(
 
 /**
  * Pushes account data into live React stores (Spotify Store, Player Store, Library)
- * and ensures any cloud-synced Spotify cookie is applied to the local session.
+ * and ensures any cloud-synced Spotify cookie and custom profile are applied.
  */
 export function applyAccountToAppStores(acc: SpotifreeAccount): void {
-  // Sync Spotify cookie to localStorage and reinitialize store if new
+  const userId = acc.uid || acc.email || 'spotifree-user';
+  const displayName = acc.displayName || acc.email.split('@')[0] || 'Usuario';
+  const images = acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [];
+
+  // 1. Sync Spotify cookie to localStorage and reinitialize store if new
   if (acc.spotifyCookie && typeof window !== 'undefined') {
     const currentCookie = window.localStorage.getItem('user_spotify_cookie');
     if (currentCookie !== acc.spotifyCookie) {
@@ -351,10 +364,20 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     }
   }
 
-  const userId = acc.uid || acc.email || 'spotifree-user';
-  const displayName = acc.displayName || acc.email.split('@')[0] || 'Usuario';
-  const images = acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [];
+  // 2. Persist custom profile info (avatar, banner, display name) across all local profile keys
+  if (typeof window !== 'undefined') {
+    try {
+      const customProf = {
+        displayName,
+        avatarUrl: acc.avatarUrl || undefined,
+        bannerUrl: acc.bannerUrl || undefined,
+      };
+      window.localStorage.setItem('spotifree_custom_profile', JSON.stringify(customProf));
+      window.localStorage.setItem(`spotifree_custom_profile_${userId}`, JSON.stringify(customProf));
+    } catch {}
+  }
 
+  // 3. Update active user in Spotify Data store
   useSpotifyDataStore.setState((s) => ({
     isAuthenticated: true,
     user: {
@@ -362,11 +385,22 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       display_name: displayName,
       email: acc.email,
       images: images.length > 0 ? images : (s.user?.images || []),
+      bannerUrl: acc.bannerUrl || (s.user as any)?.bannerUrl || null,
       followers: s.user?.followers || { total: 0 },
-    },
+    } as any,
   }));
 
+  // 4. Sync playlists to local storage and store
   if (Array.isArray(acc.playlists) && acc.playlists.length > 0) {
+    if (typeof window !== 'undefined') {
+      try {
+        const rawImported = window.localStorage.getItem('user_imported_playlists');
+        const existing = rawImported ? JSON.parse(rawImported) : [];
+        const existingIds = new Set(existing.map((p: any) => p.id));
+        const merged = [...acc.playlists.filter((p: any) => !existingIds.has(p.id)), ...existing];
+        window.localStorage.setItem('user_imported_playlists', JSON.stringify(merged));
+      } catch {}
+    }
     useSpotifyDataStore.setState((s) => {
       const currentIds = new Set(s.playlists.map((p) => p.id));
       const toAdd = acc.playlists.filter((p) => !currentIds.has(p.id));
@@ -374,7 +408,13 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     });
   }
 
+  // 5. Sync liked tracks to local storage and player store
   if (Array.isArray(acc.likedTracks) && acc.likedTracks.length > 0) {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(acc.likedTracks));
+      } catch {}
+    }
     usePlayerStore.setState((s) => ({
       likedTrackIds: Array.from(new Set([...s.likedTrackIds, ...acc.likedTracks])),
     }));
@@ -393,7 +433,7 @@ export function initAuthListener(): () => void {
         uid: user.uid,
         email: user.email || '',
         displayName: cloudData?.displayName || user.displayName || 'Usuario',
-        avatarUrl: cloudData?.photoURL || user.photoURL || null,
+        avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || user.photoURL || null,
         bannerUrl: cloudData?.bannerUrl || null,
         spotifyCookie: cloudData?.spotifyCookie,
         playlists: cloudData?.playlists || [],

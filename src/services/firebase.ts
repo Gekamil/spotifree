@@ -35,6 +35,7 @@ export interface CloudUserData {
   email: string;
   displayName: string;
   photoURL?: string | null;
+  avatarUrl?: string | null;
   bannerUrl?: string | null;
   spotifyCookie?: string;
   playlists: Playlist[];

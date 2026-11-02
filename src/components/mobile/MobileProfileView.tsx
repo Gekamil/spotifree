@@ -6,7 +6,7 @@ import type { Playlist, Track } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { syncUserProfileToServer } from '../../utils/userAccounts';
-import { logoutSpotifreeAccount } from '../../services/spotifreeAuth';
+import { logoutSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 import { MobileEditProfileModal } from './MobileEditProfileModal';
 
 interface MobileProfileViewProps {
@@ -92,6 +92,12 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
       bannerUrl: data.bannerUrl,
       cookie: currentCookie,
     });
+
+    syncSpotifreeAccount({
+      displayName: data.displayName,
+      avatarUrl: data.avatarUrl,
+      bannerUrl: data.bannerUrl,
+    }).catch(() => {});
 
     if (user) {
       useSpotifyDataStore.setState({
