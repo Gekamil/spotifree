@@ -5,7 +5,9 @@
  * Categorizes songs with internal hashtags (e.g. #reggaeton, #chill, #trap, #rock, etc.)
  * purely for internal DJ organization and AI set curation.
  * 
- * NOTE: These hashtags are strictly internal and NOT rendered in visible user-facing copy.
+ * NOTE: Searches are performed by verified GENRE ROLES and flagship artists,
+ * NEVER by searching literal genre keywords in song titles.
+ * These hashtags are strictly internal and NOT rendered in visible user-facing copy.
  */
 
 import type { Track } from '../types/spotify';
@@ -27,35 +29,27 @@ export type MusicHashtag =
 
 interface HashtagDefinition {
   tag: MusicHashtag;
-  keywords: string[];
+  deezerGenreId?: number;
+  itunesGenreId?: number;
   artists: string[];
-  searchQueries: string[];
 }
 
 export const HASHTAG_DEFINITIONS: Record<MusicHashtag, HashtagDefinition> = {
   '#reggaeton': {
     tag: '#reggaeton',
-    keywords: ['reggaeton', 'perreo', 'dembow', 'bellakeo', 'urbano', 'rumba', 'latino', 'dancehall'],
+    deezerGenreId: 122, // Reggaeton
+    itunesGenreId: 1119, // Latin Urban
     artists: [
       'bad bunny', 'feid', 'quevedo', 'mora', 'rauw alejandro', 'anuel', 'anuel aa',
       'daddy yankee', 'don omar', 'ozuna', 'jhayco', 'jhay cortez', 'myke towers',
       'ryan castro', 'blessd', 'saiko', 'sech', 'chencho corleone', 'zion & lennox',
       'wisin & yandel', 'j balvin', 'maluma', 'cris mj', 'floyy menor', 'el alfa'
     ],
-    searchQueries: [
-      'reggaeton exitos 2024',
-      'bad bunny feid quevedo perreo',
-      'reggaeton clasico de siempre',
-      'rauw mora myke towers exitos',
-    ],
   },
   '#chill': {
     tag: '#chill',
-    keywords: [
-      'chill', 'relax', 'acustico', 'acoustic', 'calma', 'suave', 'paz', 'balada',
-      'desconectar', 'guitarra', 'intimo', 'indie folk', 'dream pop', 'ambient',
-      'lo-fi', 'lofi', 'bedroom pop', 'downtempo', 'slow', 'instrumental', 'fingerstyle'
-    ],
+    deezerGenreId: 466, // Folk / Acoustic Calm
+    itunesGenreId: 10,  // Singer/Songwriter & Acoustic
     artists: [
       'novo amor', 'cigarettes after sex', 'bon iver', 'men i trust', 'mac demarco',
       'boy pablo', 'sufjan stevens', 'kings of convenience', 'iron & wine', 'iron and wine',
@@ -64,133 +58,87 @@ export const HASHTAG_DEFINITIONS: Record<MusicHashtag, HashtagDefinition> = {
       'guitarricadelafuente', 'natalia lafourcade', 'valeria castro', 'depedro',
       'devendra banhart', 'ludovico einaudi', 'chilledcow', 'lofi girl', 'jack johnson'
     ],
-    searchQueries: [
-      'novo amor cigarettes after sex indie chill',
-      'sen senra guitarricadelafuente kevin kaarl acustico indie',
-      'men i trust mac demarco dream pop bedroom chill',
-      'bon iver sufjan stevens kings of convenience indie folk',
-      'ambient acoustic calm peaceful chillout',
-      'lofi beats chillhop instrumental relax study',
-    ],
   },
   '#trap': {
     tag: '#trap',
-    keywords: ['trap', 'drill', 'phonk', 'barras', 'pesado', 'flow', 'calle', 'subgrave'],
+    deezerGenreId: 116, // Rap/Hip Hop
+    itunesGenreId: 18,  // Hip-Hop/Rap
     artists: [
       'duki', 'trueno', 'milo j', 'eladio carrion', 'eladio carrión', 'bizarrap', 'bzrp',
       'c.r.o', 'cro', 'ysy a', 'khea', 'tiago pzk', 'lit killah', 'travis scott',
       'central cee', '21 savage', 'future', 'metro boomin', 'pop smoke'
     ],
-    searchQueries: [
-      'duki eladio carrion trap latino',
-      'trueno milo j bizarrap session',
-      'drill trap espanol exitos',
-      'travis scott metro boomin trap',
-    ],
   },
   '#bachata': {
     tag: '#bachata',
-    keywords: ['bachata', 'sentimiento', 'amargue', 'romance', 'guitarra bachata'],
+    deezerGenreId: 197, // Latino
+    itunesGenreId: 12,  // Latino
     artists: [
       'romeo santos', 'prince royce', 'aventura', 'juan luis guerra', 'anthony santos',
       'frank reyes', 'zacarias ferreira', 'henry santos', 'daniel santacruz'
     ],
-    searchQueries: [
-      'romeo santos prince royce aventura exitos',
-      'bachata clasicos y nuevas',
-      'bachata romántica para bailar',
-    ],
   },
   '#rock': {
     tag: '#rock',
-    keywords: ['rock', 'guitarra', 'electrica', 'bateria', 'himno', 'distorsion', 'indie rock'],
+    deezerGenreId: 152, // Rock
+    itunesGenreId: 21,  // Rock
     artists: [
       'estopa', 'melendi', 'fito & fitipaldis', 'fito y fitipaldis', 'marea', 'extremoduro',
       'leiva', 'pereza', 'los rodriguez', 'jarabe de palo', 'heroes del silencio',
       'queen', 'nirvana', 'guns n roses', 'ac/dc', 'bon jovi', 'red hot chili peppers', 'the killers'
     ],
-    searchQueries: [
-      'estopa fito melendi rock espanol',
-      'clasicos del rock en espanol',
-      'queen nirvana greatest rock hits',
-      'indie rock festival hits',
-    ],
   },
   '#pop': {
     tag: '#pop',
-    keywords: ['pop', 'radio', 'pegadiza', 'estribillo', 'comercial', 'top 40', 'bailable'],
+    deezerGenreId: 132, // Pop
+    itunesGenreId: 14,  // Pop
     artists: [
       'aitana', 'rosalia', 'rosalía', 'tini', 'emilia', 'lola indigo', 'lola índigo',
       'taylor swift', 'dua lipa', 'sabrina carpenter', 'olivia rodrigo', 'ariana grande',
       'shakira', 'manuel turizo', 'enrique iglesias', 'alvaro de luna'
     ],
-    searchQueries: [
-      'pop actual en espanol exitos',
-      'aitana rosalia emilia pop latino',
-      'top pop hits radio 2024',
-    ],
   },
   '#electro': {
     tag: '#electro',
-    keywords: ['techno', 'house', 'electro', 'edm', 'dance', 'rave', 'drop', 'synth', 'club'],
+    deezerGenreId: 113, // Dance
+    itunesGenreId: 17,  // Dance
     artists: [
       'calvin harris', 'david guetta', 'tiesto', 'tiësto', 'avicii', 'martin garrix',
       'marshmello', 'alok', 'fisher', 'fred again', 'skrillex', 'swedish house mafia', 'daft punk'
     ],
-    searchQueries: [
-      'calvin harris david guetta edm festival',
-      'house dance electronic hits',
-      'techno club bangers',
-    ],
   },
   '#lofi': {
     tag: '#lofi',
-    keywords: ['lofi', 'beats', 'study', 'focus', 'concentracion', 'piano', 'instrumental', 'ambient'],
+    deezerGenreId: 85, // Alternativo / Ambient
+    itunesGenreId: 20, // Alternative
     artists: [
       'chilledcow', 'lofi girl', 'ludovico einaudi', 'yiruma', 'idealism', 'jinsang', 'potsu'
-    ],
-    searchQueries: [
-      'lofi hip hop study beats chill',
-      'piano instrumental relax calm',
-      'focus beats ambient study',
     ],
   },
   '#clasicos': {
     tag: '#clasicos',
-    keywords: ['clasicos', 'antiguas', '80s', '90s', '2000s', 'recuerdos', 'nostalgia', 'oro'],
+    deezerGenreId: 152, // Classic Rock & Pop
+    itunesGenreId: 21,  // Classic Rock
     artists: [
-      'michael jackson', 'madonna', 'abba', 'elthon john', 'george michael',
-      'camilo sesto', 'rocio durcal', 'julio iglesias', 'hombres g', 'alaska'
-    ],
-    searchQueries: [
-      'exitos de los 80 y 90 en espanol',
-      'clasicos inolvidables canciones de siempre',
-      '2000s greatest hits radio',
+      'michael jackson', 'madonna', 'abba', 'elton john', 'elthon john', 'george michael',
+      'camilo sesto', 'rocio durcal', 'julio iglesias', 'hombres g', 'alaska', 'queen'
     ],
   },
   '#entreno': {
     tag: '#entreno',
-    keywords: ['gym', 'entreno', 'motivacion', 'fuerza', 'pesas', 'cardio', 'pump', 'adrenalina'],
+    deezerGenreId: 116, // Rap & High energy
+    itunesGenreId: 18,  // Hip-Hop
     artists: [
-      'duki', 'eladio carrion', 'travis scott', 'eminem', 'neffex', 'ghostemane'
-    ],
-    searchQueries: [
-      'gym motivation hard phonk drill',
-      'entrenamiento pesas maxima energia',
-      'workout hip hop pump',
+      'duki', 'eladio carrion', 'travis scott', 'eminem', 'neffex', 'ghostemane', 'bizarrap'
     ],
   },
   '#flamenco': {
     tag: '#flamenco',
-    keywords: ['flamenco', 'urbano flamenco', 'palmas', 'cajon', 'espana', 'calle espanol'],
+    deezerGenreId: 197, // Latino
+    itunesGenreId: 12,  // Latino
     artists: [
       'c. tangana', 'c tangana', 'delaossa', 'jc reyes', 'camin', 'maka',
       'el bobe', 'morad', 'beny jr', 'kaydy cain', 'rosalia', 'rosalía'
-    ],
-    searchQueries: [
-      'c tangana flamenco urbano exitos',
-      'jc reyes camin maka urbano flamenco',
-      'flamenco pop moderno espanol',
     ],
   },
 };
@@ -198,8 +146,38 @@ export const HASHTAG_DEFINITIONS: Record<MusicHashtag, HashtagDefinition> = {
 const TRACK_HASHTAG_CACHE = new Map<string, MusicHashtag[]>();
 
 /**
- * Classifies a track into internal music hashtags by inspecting
- * artist names, track titles and album names.
+ * Filter out any song whose title literally equals or directly starts with the genre word
+ * (e.g. a song titled "Reggaeton", "Pop", "Chill", "Clásicos")
+ */
+function isGenericTitleMatch(title: string, role: MusicHashtag): boolean {
+  if (!title) return false;
+  const t = title.toLowerCase().trim();
+  const rawRole = role.replace('#', '').toLowerCase();
+  if (
+    t === rawRole ||
+    t === `${rawRole} mix` ||
+    t === `${rawRole} exitos` ||
+    t === `${rawRole} hits` ||
+    t.startsWith(`${rawRole} -`) ||
+    t.startsWith(`${rawRole} (`) ||
+    t.startsWith(`${rawRole} :`) ||
+    t.startsWith(`${rawRole} `) ||
+    t === 'chillout' ||
+    t === 'chill out' ||
+    t === 'chill beats' ||
+    t === 'lofi beats' ||
+    t === 'pop music' ||
+    t === 'reggaeton 2024' ||
+    t === 'canciones de siempre'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Classifies a track into internal music hashtags based on artist roles
+ * and genre characteristics, strictly avoiding false keyword matches on titles.
  */
 export function classifyTrackHashtags(track: Track): MusicHashtag[] {
   if (!track || !track.id) return ['#pop'];
@@ -211,39 +189,44 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
 
   const artistsStr = (track.artists || []).map((a) => a.name.toLowerCase()).join(' ');
   const titleStr = (track.name || '').toLowerCase();
-  const albumStr = (track.album?.name || '').toLowerCase();
-  const combined = `${artistsStr} ${titleStr} ${albumStr}`;
-
   const matchedTags = new Set<MusicHashtag>();
 
+  // 1. High-confidence Artist Role Match (The artist determines the musical role)
   for (const [tag, def] of Object.entries(HASHTAG_DEFINITIONS) as [MusicHashtag, HashtagDefinition][]) {
-    // Check artist matches (high confidence)
     for (const art of def.artists) {
       if (artistsStr.includes(art)) {
         matchedTags.add(tag);
         break;
       }
     }
+  }
 
-    // Check keyword matches in title/album
-    for (const kw of def.keywords) {
-      if (titleStr.includes(kw) || albumStr.includes(kw)) {
-        matchedTags.add(tag);
-        break;
-      }
+  // 2. Specific acoustic or rhythmic cues (without matching generic genre names)
+  if (matchedTags.size === 0) {
+    if (/perreo|dembow|bellakeo/i.test(titleStr)) {
+      matchedTags.add('#reggaeton');
+    } else if (/drill|barras|subgrave|phonk/i.test(titleStr)) {
+      matchedTags.add('#trap');
+    } else if (/fingerstyle|piano solo|ambient dream/i.test(titleStr)) {
+      matchedTags.add('#chill');
+    } else if (/bachata/i.test(titleStr)) {
+      matchedTags.add('#bachata');
     }
   }
 
-  // Guard #chill against high-energy / party tracks
+  // 3. Strict guard for #chill against high-energy or dance music
   if (matchedTags.has('#chill')) {
-    if (/reggaeton|perreo|bellakeo|dembow|trap|drill|phonk|techno|edm|rave|hardcore|party|fiesta/i.test(combined)) {
+    if (
+      /reggaeton|perreo|bellakeo|dembow|trap|drill|phonk|techno|edm|rave|hardcore|party|fiesta/i.test(titleStr) ||
+      /bad bunny|feid|anuel|eladio|duki|karol g/i.test(artistsStr)
+    ) {
       matchedTags.delete('#chill');
     }
   }
 
-  // Fallback heuristic if no tag matched
+  // 4. Fallback heuristic
   if (matchedTags.size === 0) {
-    if (combined.includes('feat') || combined.includes('ft.') || combined.includes('remix')) {
+    if (titleStr.includes('remix') || titleStr.includes('feat') || titleStr.includes('ft.')) {
       matchedTags.add('#reggaeton');
     } else {
       matchedTags.add('#pop');
@@ -279,7 +262,6 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
   const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
   const index = new Map<MusicHashtag, Track[]>();
 
-  // Initialize empty array for each tag
   (Object.keys(HASHTAG_DEFINITIONS) as MusicHashtag[]).forEach((tag) => {
     index.set(tag, []);
   });
@@ -347,11 +329,109 @@ export function resolveHashtagFromPrompt(prompt: string): MusicHashtag {
 }
 
 /**
- * Curates exactly 15 songs matching the specified internal hashtag:
+ * Fetches verified genre tracks directly from official editorial charts
+ * (Deezer genre charts & iTunes Spain genre charts) and flagship artists,
+ * completely avoiding naive keyword title searches.
+ */
+export async function fetchRoleChartTracks(targetTag: MusicHashtag): Promise<Track[]> {
+  const def = HASHTAG_DEFINITIONS[targetTag] || HASHTAG_DEFINITIONS['#chill'];
+  const tracks: Track[] = [];
+  const seenIds = new Set<string>();
+
+  const add = (t: Track) => {
+    if (!t || !t.id || seenIds.has(t.id)) return;
+    if (isGenericTitleMatch(t.name, targetTag)) return;
+    seenIds.add(t.id);
+    tracks.push(t);
+  };
+
+  try {
+    const promises: Promise<any>[] = [];
+
+    // 1. Deezer Official Genre Chart (100% verified genre classification)
+    if (def.deezerGenreId !== undefined) {
+      promises.push(
+        fetch(`https://api.deezer.com/chart/${def.deezerGenreId}/tracks?limit=25`, {
+          signal: AbortSignal.timeout?.(4000),
+        })
+          .then((r) => (r.ok ? r.json() : { data: [] }))
+          .then((d) => {
+            (d.data || []).forEach((t: any) => {
+              const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+              add({
+                id: `dz-${t.id}`,
+                name: t.title || t.title_short,
+                duration_ms: (t.duration || 210) * 1000,
+                preview_url: null,
+                artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+                album: {
+                  id: `alb-${t.album?.id || 'unknown'}`,
+                  name: t.album?.title || t.title,
+                  images: cover ? [{ url: cover }] : [],
+                },
+              });
+            });
+          })
+          .catch(() => {})
+      );
+    }
+
+    // 2. iTunes Spain Official Genre Chart
+    if (def.itunesGenreId !== undefined) {
+      promises.push(
+        fetch(`https://itunes.apple.com/es/rss/topsongs/limit=25/genre=${def.itunesGenreId}/json`, {
+          signal: AbortSignal.timeout?.(4000),
+        })
+          .then((r) => (r.ok ? r.json() : { feed: { entry: [] } }))
+          .then((d) => {
+            const entries = d.feed?.entry || [];
+            entries.forEach((e: any, idx: number) => {
+              const images = e['im:image'] || [];
+              const highestImg = images[images.length - 1]?.label || '';
+              const id = e.id?.attributes?.['im:id'] || `it-${idx}-${Date.now()}`;
+              add({
+                id: `it-${id}`,
+                name: e['im:name']?.label || 'Canción',
+                duration_ms: 210000,
+                preview_url: null,
+                artists: [{ id: `art-it-${idx}`, name: e['im:artist']?.label || 'Artista' }],
+                album: {
+                  id: `alb-it-${idx}`,
+                  name: e['im:collection']?.['im:name']?.label || e['im:name']?.label || 'Álbum',
+                  images: highestImg ? [{ url: highestImg.replace(/100x100bb/, '600x600bb') }] : [],
+                },
+              });
+            });
+          })
+          .catch(() => {})
+      );
+    }
+
+    // 3. Search catalog for flagship artists of this role (WITHOUT the genre word!)
+    const shuffledArtists = [...def.artists].sort(() => Math.random() - 0.5);
+    const chosenArtists = shuffledArtists.slice(0, 3);
+    for (const art of chosenArtists) {
+      promises.push(
+        searchSpotify(`artist:"${art}"`)
+          .then((res) => {
+            (res?.tracks?.items || []).forEach(add);
+          })
+          .catch(() => {})
+      );
+    }
+
+    await Promise.all(promises);
+  } catch {}
+
+  return tracks.sort(() => Math.random() - 0.5);
+}
+
+/**
+ * Curates exactly 15 songs matching the specified internal hashtag/role:
  * - Dynamically extracts a balanced mix (5-7 tracks) from the user's own matching playlists
- * - Discovers fresh related tracks matching the hashtag via real-time catalog search
- * - Dynamically rotates queries and variations on each run so the mix is always fresh and different
- * - Strictly prevents off-genre contamination (no generic pop into #chill sets)
+ * - Discovers fresh related tracks from verified genre charts & flagship role artists
+ * - Dynamically rotates on each run so the mix is always fresh and different
+ * - Strictly prevents off-genre contamination or generic title keyword spam
  */
 export async function getCuratedSetForHashtag(
   targetTag: MusicHashtag,
@@ -366,13 +446,16 @@ export async function getCuratedSetForHashtag(
 
   const addTrack = (t: Track) => {
     if (!t || !t.id || seen.has(t.id)) return false;
-    // Strict guard: ensure track does not belong to discordant genres
+    if (isGenericTitleMatch(t.name, targetTag)) return false;
+
+    // Strict guard for #chill
     if (targetTag === '#chill') {
       const lower = `${t.name} ${t.artists?.map((a) => a.name).join(' ')}`.toLowerCase();
       if (/reggaeton|perreo|dembow|bellakeo|trap|drill|phonk|techno|edm|rave|hardcore/i.test(lower)) {
         return false;
       }
     }
+
     seen.add(t.id);
     result.push(t);
     return true;
@@ -385,44 +468,14 @@ export async function getCuratedSetForHashtag(
     addTrack(userShuffled[i]);
   }
 
-  // 2. Discover related fresh tracks and remixes for this hashtag
-  const def = HASHTAG_DEFINITIONS[targetTag] || HASHTAG_DEFINITIONS['#chill'];
-  const queriesShuffled = [...def.searchQueries].sort(() => Math.random() - 0.5);
-
-  // Pick up to 2 distinct search queries with fresh rotation modifiers
-  const modifiers = ['', ' remix', ' acustico', ' sesion', ' version', ' live', ' edit'];
-  const searchPromises = queriesShuffled.slice(0, 2).map((baseQ) => {
-    const mod = modifiers[Math.floor(Math.random() * modifiers.length)];
-    const q = `${baseQ}${mod}`.trim();
-    return searchSpotify(q).catch(() => null);
-  });
-
-  const searchResults = await Promise.all(searchPromises);
-  for (const res of searchResults) {
-    const discovered = (res?.tracks?.items || []).sort(() => Math.random() - 0.5);
-    for (const t of discovered) {
-      if (result.length >= count) break;
-      addTrack(t);
-    }
+  // 2. Fetch fresh tracks from the official genre role charts and flagship artists
+  const roleTracks = await fetchRoleChartTracks(targetTag);
+  for (const t of roleTracks) {
     if (result.length >= count) break;
+    addTrack(t);
   }
 
-  // 3. If still under quota, use remaining genre-specific queries (NEVER generic pop)
-  if (result.length < count) {
-    for (const extraQuery of queriesShuffled.slice(2)) {
-      try {
-        const res = await searchSpotify(extraQuery);
-        const discovered = (res?.tracks?.items || []).sort(() => Math.random() - 0.5);
-        for (const t of discovered) {
-          if (result.length >= count) break;
-          addTrack(t);
-        }
-      } catch {}
-      if (result.length >= count) break;
-    }
-  }
-
-  // 4. Final safety fill: repeat user matching tracks if any, otherwise repeat primary query
+  // 3. Final safety fill: repeat user matching tracks if any, otherwise repeat role pool
   if (result.length < count && userShuffled.length > 0) {
     for (const t of userShuffled) {
       if (result.length >= count) break;
@@ -432,6 +485,6 @@ export async function getCuratedSetForHashtag(
     }
   }
 
-  // 5. Return exactly count tracks shuffled
+  // 4. Return exactly count tracks shuffled
   return result.slice(0, count).sort(() => Math.random() - 0.5);
 }

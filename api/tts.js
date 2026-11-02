@@ -79,9 +79,9 @@ export default async function handler(req, res) {
     await tts.setMetadata(chosenVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
     const { audioStream } = tts.toStream(text, {
-      rate: '+22%',
+      rate: '+6%',
       pitch: '+0Hz',
-      volume: '+35%',
+      volume: '+0%',
     });
 
     const chunks = [];

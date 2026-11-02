@@ -12,6 +12,23 @@ interface SpotifyDJVisualizerProps {
   themeColor?: string; // Dynamic track dominant color
 }
 
+function parseHexToRgb(hex?: string): [number, number, number] {
+  if (!hex || !hex.startsWith('#')) return [30, 215, 96];
+  const clean = hex.replace('#', '');
+  if (clean.length === 3) {
+    return [
+      parseInt(clean[0] + clean[0], 16) || 30,
+      parseInt(clean[1] + clean[1], 16) || 215,
+      parseInt(clean[2] + clean[2], 16) || 96,
+    ];
+  }
+  return [
+    parseInt(clean.slice(0, 2), 16) || 30,
+    parseInt(clean.slice(2, 4), 16) || 215,
+    parseInt(clean.slice(4, 6), 16) || 96,
+  ];
+}
+
 export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   state = 'idle',
   voiceLevel = 0,
@@ -59,6 +76,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
     const baseRadius = size * (mini ? 0.35 : 0.33);
     const strokeWidth = Math.max(3.5, size * (mini ? 0.13 : 0.082));
     const numPoints = mini ? 70 : 160;
+    const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 
     const render = () => {
       const currentState = stateRef.current;
@@ -80,6 +98,13 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       // Exponential moving average damping for voice reactivity
       smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * 0.16;
       const currentVoice = smoothedVoiceRef.current;
+
+      // Frame-by-frame color interpolation for buttery smooth transitions
+      const targetRgb = parseHexToRgb(themeColorRef.current || '#1ed760');
+      currentRgb[0] += (targetRgb[0] - currentRgb[0]) * 0.04;
+      currentRgb[1] += (targetRgb[1] - currentRgb[1]) * 0.04;
+      currentRgb[2] += (targetRgb[2] - currentRgb[2]) * 0.04;
+      const smoothColor = `rgb(${Math.round(currentRgb[0])}, ${Math.round(currentRgb[1])}, ${Math.round(currentRgb[2])})`;
 
       ctx.clearRect(0, 0, size, size);
 
@@ -129,7 +154,6 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       ctx.closePath();
 
       // Dynamic Ring Gradient: Adapts smoothly to the track's theme color or classic Spotify neon
-      const currentTheme = themeColorRef.current;
       const grad = ctx.createLinearGradient(
         centerX - baseRadius,
         centerY - baseRadius,
@@ -139,16 +163,12 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       if (currentState === 'listening') {
         grad.addColorStop(0, '#00f2fe');
-        grad.addColorStop(0.5, currentTheme || '#3b82f6');
+        grad.addColorStop(0.5, smoothColor);
         grad.addColorStop(1, '#00f2fe');
-      } else if (currentTheme && currentTheme !== '#1ed760' && currentTheme !== '#0c52cc') {
-        grad.addColorStop(0, '#1ed760');
-        grad.addColorStop(0.35, currentTheme);
-        grad.addColorStop(0.7, '#00f2fe');
-        grad.addColorStop(1, '#1ed760');
       } else {
         grad.addColorStop(0, '#1ed760');
-        grad.addColorStop(0.5, '#00f2fe');
+        grad.addColorStop(0.35, smoothColor);
+        grad.addColorStop(0.7, '#00f2fe');
         grad.addColorStop(1, '#1ed760');
       }
 
@@ -157,9 +177,9 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
 
-      // Soft neon glow in track's theme color
+      // Soft neon glow in smoothly transitioned color
       const glowOpacity = isSpeaking ? 0.75 : isPlaying ? 0.6 : 0.45;
-      ctx.shadowColor = currentTheme || (currentState === 'listening' ? 'rgba(0, 242, 254, 0.85)' : `rgba(30, 215, 96, ${glowOpacity})`);
+      ctx.shadowColor = `rgba(${Math.round(currentRgb[0])}, ${Math.round(currentRgb[1])}, ${Math.round(currentRgb[2])}, ${glowOpacity})`;
       ctx.shadowBlur = mini ? 6 : isSpeaking ? 24 : 18;
 
       ctx.stroke();

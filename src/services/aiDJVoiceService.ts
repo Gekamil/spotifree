@@ -29,6 +29,7 @@ class AIDJVoiceService {
   private isSpeaking: boolean = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentAudio: HTMLAudioElement | null = null;
+  private persistentMobileAudio: HTMLAudioElement | null = null;
   private abortController: AbortController | null = null;
   private voiceLevelInterval: any = null;
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
@@ -50,7 +51,35 @@ class AIDJVoiceService {
         };
         this.resolveSpanishVoice();
       }
+
+      // Pre-warm and unlock audio context on mobile user gesture
+      const unlock = () => {
+        this.unlockAudioForMobile();
+      };
+      window.addEventListener('click', unlock, { once: true, passive: true });
+      window.addEventListener('touchstart', unlock, { once: true, passive: true });
     }
+  }
+
+  /**
+   * Blesses an audio element during a user touch/click gesture to prevent mobile autoplay blocks
+   */
+  public unlockAudioForMobile() {
+    if (typeof window === 'undefined') return;
+    try {
+      if (!this.persistentMobileAudio) {
+        this.persistentMobileAudio = new Audio();
+        this.persistentMobileAudio.preload = 'auto';
+      }
+      this.persistentMobileAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      this.persistentMobileAudio.volume = 0.01;
+      const playPromise = this.persistentMobileAudio.play();
+      if (playPromise && typeof playPromise.then === 'function') {
+        playPromise.then(() => {
+          this.persistentMobileAudio?.pause();
+        }).catch(() => {});
+      }
+    } catch {}
   }
 
   public getConfig(): AIDJConfig {
@@ -228,9 +257,15 @@ class AIDJVoiceService {
         } catch {}
       }
 
-      const audio = new Audio(audioUrl);
+      // Reuse persistent blessed element on mobile to bypass autoplay restrictions and keep pristine fidelity
+      let audio = this.persistentMobileAudio;
+      if (!audio) {
+        audio = new Audio();
+        this.persistentMobileAudio = audio;
+      }
+      audio.src = audioUrl;
       audio.preload = 'auto';
-      audio.playbackRate = 1.05;
+      audio.playbackRate = 1.0;
       audio.volume = 1.0;
       this.currentAudio = audio;
 

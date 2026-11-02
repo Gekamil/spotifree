@@ -202,7 +202,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           BACKGROUND LAYER 3: RADIAL VIGNETTE & AMBIENT AURA GLOW
           ========================================================================= */}
       <div
-        className="absolute inset-0 pointer-events-none transition-colors duration-1000"
+        className="absolute inset-0 pointer-events-none transition-all duration-1000 ease-in-out"
         style={{
           background: `radial-gradient(circle at 50% 36%, ${ambientColor || '#0c52cc'}99 0%, ${ambientColor || '#0c52cc'}44 48%, #050b18fa 92%)`,
         }}
@@ -331,7 +331,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {currentTrack && (
           <div
             onClick={() => onOpenPlayer?.()}
-            className="w-full max-w-md mt-2 h-12 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
+            className="w-full max-w-md mt-2 h-12 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all duration-700 ease-in-out active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
             style={{
               backgroundColor: `${ambientColor || '#181818'}55`,
             }}
