@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -36,6 +36,12 @@ export const MobileLayout: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__setMobileTab = setMobileTab;
+    }
+  }, []);
 
   const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);

@@ -10,6 +10,7 @@ import {
 } from '../../services/spotifyCookieService';
 import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
+import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
 
 interface FrequencyPoint {
   label: string;
@@ -221,6 +222,26 @@ export const DesktopSettingsView: React.FC = () => {
   const [showNowPlayingOnClick, setShowNowPlayingOnClick] = useState(true);
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
+
+  // AI DJ Voice Selector State
+  const [selectedVoice, setSelectedVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
+  const [isTestingVoice, setIsTestingVoice] = useState(false);
+
+  const handleVoiceChange = (voice: DJVoiceId) => {
+    setSelectedVoice(voice);
+    aiDJVoiceService.setSelectedVoice(voice);
+  };
+
+  const handleTestVoice = async () => {
+    if (isTestingVoice) return;
+    setIsTestingVoice(true);
+    try {
+      await aiDJVoiceService.testVoice(selectedVoice);
+    } finally {
+      setIsTestingVoice(false);
+    }
+  };
+
   // Playback & Audio settings
   const [normalizeAudio, setNormalizeAudio] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -603,6 +624,76 @@ export const DesktopSettingsView: React.FC = () => {
                 )}
               </div>
             )}
+          </section>
+        )}
+
+        {/* VOZ DE LA INTELIGENCIA ARTIFICIAL (DJ) */}
+        {matchesSearch('voz dj inteligencia artificial ia hablar locutor alvaro salome gemini tts') && (
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+                  Voz de la Inteligencia Artificial (DJ)
+                </h2>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  Elige la personalidad y el modelo de voz que utilizará tu DJ personal para presentar tus sesiones.
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="test-voice-btn"
+                onClick={handleTestVoice}
+                disabled={isTestingVoice}
+                className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
+                  isTestingVoice
+                    ? 'bg-[#1ed760] text-black animate-pulse'
+                    : 'bg-white/10 hover:bg-white/20 text-white active:scale-95'
+                }`}
+                title="Escuchar prueba de la voz seleccionada"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                </svg>
+                <span>{isTestingVoice ? 'Hablando...' : 'Probar voz'}</span>
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+              {DJ_VOICE_OPTIONS.map((opt) => {
+                const isSelected = selectedVoice === opt.id;
+                return (
+                  <div
+                    key={opt.id}
+                    data-voice-id={opt.id}
+                    onClick={() => handleVoiceChange(opt.id)}
+                    className={`p-4 rounded-xl cursor-pointer transition-all border flex flex-col justify-between ${
+                      isSelected
+                        ? 'bg-white/10 border-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.15)]'
+                        : 'bg-[#181818] hover:bg-white/5 border-white/5'
+                    }`}
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className={`text-sm font-bold ${isSelected ? 'text-[#1ed760]' : 'text-white'}`}>
+                          {opt.name}
+                        </span>
+                        <div
+                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? 'border-[#1ed760] bg-[#1ed760]' : 'border-[#727272]'
+                          }`}
+                        >
+                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
+                        </div>
+                      </div>
+                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider mb-2">
+                        {opt.region}
+                      </span>
+                      <p className="text-xs text-[#a7a7a7] leading-relaxed">{opt.description}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 

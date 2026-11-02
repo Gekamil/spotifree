@@ -19,28 +19,64 @@ function getGeminiApiKey() {
   return '';
 }
 
-function pcmToWav(pcmBuffer, sampleRate = 24000, numChannels = 1, bitDepth = 16) {
-  const wavHeader = Buffer.alloc(44);
-  const dataSize = pcmBuffer.length;
-  const fileSize = dataSize + 36;
-  const byteRate = sampleRate * numChannels * (bitDepth / 8);
-  const blockAlign = numChannels * (bitDepth / 8);
+async function synthesizeWithGemini(text, voice = 'Kore') {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
 
-  wavHeader.write('RIFF', 0);
-  wavHeader.writeUInt32LE(fileSize, 4);
-  wavHeader.write('WAVE', 8);
-  wavHeader.write('fmt ', 12);
-  wavHeader.writeUInt32LE(16, 16);
-  wavHeader.writeUInt16LE(1, 20);
-  wavHeader.writeUInt16LE(numChannels, 22);
-  wavHeader.writeUInt32LE(sampleRate, 24);
-  wavHeader.writeUInt32LE(byteRate, 28);
-  wavHeader.writeUInt16LE(blockAlign, 32);
-  wavHeader.writeUInt16LE(bitDepth, 34);
-  wavHeader.write('data', 36);
-  wavHeader.writeUInt32LE(dataSize, 40);
+  const url = `https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'gemini-3.8-flash-tts',
+      input: text,
+      response_format: { type: 'audio' },
+      generation_config: {
+        speech_config: [{ voice: voice || 'Kore' }]
+      }
+    }),
+    signal: AbortSignal.timeout?.(12000),
+  });
 
-  return Buffer.concat([wavHeader, pcmBuffer]);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Gemini TTS API error ${response.status}: ${errorText}`);
+  }
+
+  const data = await response.json();
+  const step = data?.steps?.[0];
+  const audioItem = step?.content?.find((c) => c.type === 'audio' || c.mime_type?.startsWith('audio') || c.data);
+  if (!audioItem || !audioItem.data) {
+    throw new Error('Gemini TTS response did not contain audio data');
+  }
+
+  return {
+    buffer: Buffer.from(audioItem.data, 'base64'),
+    contentType: audioItem.mime_type || 'audio/wav',
+  };
+}
+
+async function synthesizeWithEdge(text, voice = 'es-ES-AlvaroNeural') {
+  const tts = new MsEdgeTTS();
+  await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+
+  const { audioStream } = tts.toStream(text, {
+    rate: '+6%',
+    pitch: '+0Hz',
+    volume: '+0%',
+  });
+
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    audioStream.on('data', (chunk) => chunks.push(chunk));
+    audioStream.on('end', () => {
+      resolve({
+        buffer: Buffer.concat(chunks),
+        contentType: 'audio/mpeg',
+      });
+    });
+    audioStream.on('error', (err) => reject(err));
+  });
 }
 
 export default async function handler(req, res) {
@@ -70,44 +106,54 @@ export default async function handler(req, res) {
     return res.end(JSON.stringify({ error: 'Text parameter is required' }));
   }
 
-  // Consistent High-Quality Colombian Voice (Salome - official user choice)
-  // Ensures 100% voice consistency with no intermittent voice flipping
-  const chosenVoice = query.voice || body.voice || 'es-CO-SalomeNeural';
+  const rawVoice = (query.voice || body.voice || '').toLowerCase();
+  const rawProvider = (query.provider || body.provider || '').toLowerCase();
 
+  let selectedVoice = 'alvaro';
+  if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
+    selectedVoice = 'gemini';
+  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural') {
+    selectedVoice = 'salome';
+  } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural') {
+    selectedVoice = 'alvaro';
+  }
+
+  let result;
   try {
-    const tts = new MsEdgeTTS();
-    await tts.setMetadata(chosenVoice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+    if (selectedVoice === 'gemini') {
+      try {
+        result = await synthesizeWithGemini(text, 'Kore');
+      } catch (geminiErr) {
+        console.warn('[Gemini TTS Fallback to Alvaro]:', geminiErr?.message || geminiErr);
+        result = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
+      }
+    } else if (selectedVoice === 'salome') {
+      result = await synthesizeWithEdge(text, 'es-CO-SalomeNeural');
+    } else {
+      result = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
+    }
 
-    const { audioStream } = tts.toStream(text, {
-      rate: '+6%',
-      pitch: '+0Hz',
-      volume: '+0%',
-    });
-
-    const chunks = [];
-    audioStream.on('data', (chunk) => chunks.push(chunk));
-    audioStream.on('end', () => {
-      const buffer = Buffer.concat(chunks);
+    res.statusCode = 200;
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Content-Length', result.buffer.length);
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
+    res.end(result.buffer);
+  } catch (err) {
+    console.error('[TTS Global Error]:', err);
+    // Last-ditch emergency fallback to Alvaro if anything failed
+    try {
+      const emergency = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
       res.statusCode = 200;
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Length', buffer.length);
+      res.setHeader('Content-Type', emergency.contentType);
+      res.setHeader('Content-Length', emergency.buffer.length);
       res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
-      res.end(buffer);
-    });
-    audioStream.on('error', (err) => {
-      console.error('[TTS Stream Error]:', err);
+      res.end(emergency.buffer);
+    } catch (finalErr) {
       if (!res.headersSent) {
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Audio stream failed', details: err?.message || String(err) }));
+        res.end(JSON.stringify({ error: 'TTS synthesis error', details: String(finalErr?.message || finalErr) }));
       }
-    });
-  } catch (err) {
-    console.error('[TTS Handler Error]:', err);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.setHeader('Content-Type', 'application/json');
-      res.end(JSON.stringify({ error: 'TTS synthesis error', details: err?.message || String(err) }));
     }
   }
 }

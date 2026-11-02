@@ -3,6 +3,36 @@
  * Powered by Neural Edge-TTS (es-ES-AlvaroNeural) with SpeechSynthesis Fallback
  */
 
+export type DJVoiceId = 'alvaro' | 'salome' | 'gemini';
+
+export interface DJVoiceOptionItem {
+  id: DJVoiceId;
+  name: string;
+  region: string;
+  description: string;
+}
+
+export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
+  {
+    id: 'alvaro',
+    name: 'Álvaro',
+    region: 'España',
+    description: 'Locutor de radio profesional • Tono cálido e inmersivo',
+  },
+  {
+    id: 'salome',
+    name: 'Salomé',
+    region: 'Colombia',
+    description: 'Asistente de audio dinámica • Tono latino enérgico',
+  },
+  {
+    id: 'gemini',
+    name: 'Gemini IA',
+    region: 'Google Cloud',
+    description: 'Modelo generativo multimodal de última generación',
+  },
+];
+
 export interface DJVoiceOptions {
   onWord?: (word: string, currentFullText: string) => void;
   onVoiceLevel?: (level: number) => void;
@@ -13,13 +43,13 @@ export interface DJVoiceOptions {
 
 export interface AIDJConfig {
   voice: string;
-  provider: 'edge' | 'openai' | 'elevenlabs' | 'cartesia';
+  provider: 'edge' | 'openai' | 'elevenlabs' | 'cartesia' | 'gemini';
   apiKey?: string;
   voiceId?: string;
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'es-CO-SalomeNeural', // Official Spotify DJ Colombian persona
+  voice: 'alvaro',
   provider: 'edge',
   apiKey: '',
   voiceId: '',
@@ -35,9 +65,18 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
+  private selectedVoiceId: DJVoiceId = 'alvaro';
+  private testPhraseIndex: number = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
+      try {
+        const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
+        if (savedVoice === 'alvaro' || savedVoice === 'salome' || savedVoice === 'gemini') {
+          this.selectedVoiceId = savedVoice;
+        }
+      } catch {}
+
       try {
         const saved = localStorage.getItem('spotifree_ai_dj_config');
         if (saved) {
@@ -94,6 +133,35 @@ class AIDJVoiceService {
         localStorage.setItem('spotifree_ai_dj_config', JSON.stringify(this.config));
       } catch {}
     }
+  }
+
+  public getSelectedVoice(): DJVoiceId {
+    return this.selectedVoiceId;
+  }
+
+  public setSelectedVoice(voice: DJVoiceId) {
+    if (voice !== 'alvaro' && voice !== 'salome' && voice !== 'gemini') return;
+    this.selectedVoiceId = voice;
+    this.config.voice = voice;
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('spotifree_dj_voice_choice', voice);
+      } catch {}
+    }
+  }
+
+  public async testVoice(voiceId?: DJVoiceId): Promise<void> {
+    if (voiceId) {
+      this.setSelectedVoice(voiceId);
+    }
+    const phrases = [
+      '¡Hola! Soy tu DJ personal de Spotifree, listo para ponerle ritmo a tu día.',
+      'Ajustando los niveles de sonido. Preparando los mejores temas para ti.',
+      'Esta es una prueba de mi voz. Dime qué estilo te apetece y nos ponemos en marcha.',
+    ];
+    const phrase = phrases[this.testPhraseIndex % phrases.length];
+    this.testPhraseIndex++;
+    return this.speak(phrase);
   }
 
   public resolveSpanishVoice(): SpeechSynthesisVoice | null {
@@ -207,19 +275,21 @@ class AIDJVoiceService {
   }
 
   /**
-   * High-fidelity Neural Edge-TTS playback (es-ES-AlvaroNeural)
+   * High-fidelity Neural Edge-TTS / Gemini playback
    */
   private async speakViaNeuralTTS(text: string, options: DJVoiceOptions = {}): Promise<boolean> {
     try {
       this.abortController = new AbortController();
       const signal = this.abortController.signal;
 
-      let audioUrl = this.ttsCache.get(text);
+      const activeVoice = this.getSelectedVoice();
+      const cacheKey = `${activeVoice}:${text}`;
+      let audioUrl = this.ttsCache.get(cacheKey);
       if (!audioUrl) {
         const params = new URLSearchParams({
           text,
-          voice: this.config.voice || 'es-CO-SalomeNeural',
-          provider: this.config.provider || 'edge',
+          voice: activeVoice,
+          provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
         });
         if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
         if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
@@ -243,7 +313,7 @@ class AIDJVoiceService {
             this.ttsCache.delete(firstKey);
           }
         }
-        this.ttsCache.set(text, audioUrl);
+        this.ttsCache.set(cacheKey, audioUrl);
       }
 
       if (!this.isSpeaking) return true;
