@@ -493,30 +493,19 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             </h2>
             <div
               onClick={() => onSelectPlaylistById('spotify-dj')}
-              className="relative w-full rounded-2xl p-6 overflow-hidden cursor-pointer shadow-lg hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[175px]"
+              className="relative w-full rounded-2xl p-5 md:p-6 overflow-hidden cursor-pointer shadow-xl hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[145px] md:min-h-[155px]"
               style={{
-                backgroundColor: djThemeColor || '#0c52cc',
-                backgroundImage: `linear-gradient(135deg, ${djThemeColor || '#0c52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
-                boxShadow: `0 8px 32px ${djThemeColor || '#0c52cc'}55`,
+                backgroundColor: djThemeColor || '#0a52cc',
+                backgroundImage: `linear-gradient(135deg, ${djThemeColor || '#0a52cc'} 0%, #062b70 100%)`,
+                boxShadow: `0 12px 36px ${djThemeColor || '#0a52cc'}44`,
                 transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
               }}
             >
               {/* Background Glow */}
-              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-[#1ed760]/10 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/30 pointer-events-none z-0" />
 
-              {/* Top Bar with Menu dots only (Spotify DJ branding removed as requested) */}
-              <div className="flex items-center justify-end relative z-20">
-                <div className="text-white/80 p-1">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="5" r="2" />
-                    <circle cx="12" cy="12" r="2" />
-                    <circle cx="12" cy="19" r="2" />
-                  </svg>
-                </div>
-              </div>
-
-              {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
-              <div className="absolute inset-0 pointer-events-none opacity-70 overflow-hidden z-0">
+              {/* Audio Waves covering the ENTIRE widget background */}
+              <div className="absolute inset-0 pointer-events-none opacity-50 overflow-hidden z-0">
                 <InteractiveMusicWaves
                   isPlaying={isPlaying}
                   isSpeaking={false}
@@ -526,17 +515,33 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 />
               </div>
 
-              {/* Preview Visualizer: Ring/Orb centered on the right side, with noticeable breathing movement */}
-              <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[140px] h-[140px] z-10">
-                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
-                  <SpotifyDJVisualizer size={130} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
+              {/* Top Bar: Three Dots Menu on right (matching Desktop Spotify Photo 6) */}
+              <div className="flex items-center justify-end relative z-20 w-full mb-1">
+                <div className="text-white/80 p-1 hover:text-white transition-colors cursor-pointer">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <circle cx="12" cy="5" r="2" />
+                    <circle cx="12" cy="12" r="2" />
+                    <circle cx="12" cy="19" r="2" />
+                  </svg>
+                </div>
+              </div>
+
+              {/* Desktop Arch: Glowing Neon Half-Circle rising from the bottom edge next to the arrow button (Photo 6) */}
+              <div className="absolute right-20 md:right-24 -bottom-6 pointer-events-none flex items-center justify-center w-[150px] h-[150px] md:w-[170px] md:h-[170px] z-10 [mask-image:linear-gradient(to_bottom,black_60%,transparent_100%)]">
+                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
+                  <SpotifyDJVisualizer
+                    size={160}
+                    state={isPlaying ? 'playing' : 'idle'}
+                    voiceLevel={isPlaying ? 0.25 : 0.12}
+                    themeColor={djThemeColor}
+                  />
                 </div>
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
-              <div className="flex items-end justify-between relative z-20 pt-4 w-full">
-                <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-68px)] md:max-w-[calc(100%-72px)]">
-                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[56px] break-words whitespace-normal" />
+              <div className="flex items-end justify-between relative z-20 w-full">
+                <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-190px)]">
+                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-md min-h-[48px] break-words whitespace-normal" />
                 </div>
 
                 <button
@@ -544,7 +549,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                     e.stopPropagation();
                     onSelectPlaylistById('spotify-dj');
                   }}
-                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-xl group-hover:scale-110 active:scale-95 transition-all shrink-0 ml-3 cursor-pointer"
+                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl group-hover:scale-105 active:scale-95 transition-all shrink-0 ml-3 cursor-pointer z-20"
                   title="Abrir DJ"
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

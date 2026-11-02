@@ -963,6 +963,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </>
                 )}
               </div>
+              {dynamicPlaylist.name.toLowerCase().includes('mix diario') && (
+                <p className="text-xs text-[#a7a7a7] mt-1 font-['SpotifyMixUI']">
+                  Recomendaciones e impacto de la promoción
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -204,45 +204,49 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         </button>
       </div>
 
-      {/* 1:1 Spotify "Importa tu música desde otras aplicaciones" Card (Photo 2) */}
+      {/* 1:1 Spotify "Importa tu música desde otras aplicaciones" Card (Photo 3) */}
       {showImportCard && (
-        <div className="mx-3 my-1.5 p-3.5 rounded-2xl bg-gradient-to-br from-[#2b0f4a] via-[#3a1569] to-[#160a2b] border border-white/10 shadow-xl relative overflow-hidden text-white select-none animate-in fade-in duration-300">
-          {/* Subtle curved background glow wave */}
-          <div className="absolute -bottom-6 -right-6 w-24 h-24 rounded-full bg-[#1ed760]/20 blur-xl pointer-events-none" />
+        <div className="mx-3 my-2 p-4 rounded-2xl border border-white/10 shadow-xl relative overflow-hidden text-white select-none animate-in fade-in duration-300"
+          style={{
+            background: 'radial-gradient(circle at 85% 65%, #6a249f 0%, #351554 48%, #1a122e 100%)',
+          }}
+        >
+          {/* Curved glowing beam in background */}
+          <div className="absolute top-1/2 -right-4 -translate-y-1/2 w-32 h-32 rounded-full bg-[#822bbd]/30 blur-2xl pointer-events-none" />
 
           {/* Close button X */}
           <button
             onClick={handleDismissImportCard}
-            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer z-10"
+            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full hover:bg-white/10 text-white/70 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer z-20"
             title="Descartar"
           >
             ✕
           </button>
 
-          <div className="flex items-start justify-between gap-2 relative z-10">
-            <div className="space-y-1 pr-6">
-              <h4 className="font-extrabold text-[13px] leading-snug text-white font-['SpotifyMixUITitle']">
+          <div className="flex items-center justify-between gap-2 relative z-10">
+            <div className="space-y-1 pr-2 flex-1 min-w-0">
+              <h4 className="font-extrabold text-[13.5px] leading-snug text-white font-['SpotifyMixUITitle']">
                 Importa tu música desde otras aplicaciones
               </h4>
-              <p className="text-xs text-white/80 leading-tight">
+              <p className="text-xs text-white/85 leading-snug pt-0.5">
                 Trae tus listas, canciones y artistas.
               </p>
+              <div className="pt-3">
+                <button
+                  onClick={() => openImportModal()}
+                  className="px-4 py-1.5 rounded-full bg-white text-black font-extrabold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
+                >
+                  Importar biblioteca
+                </button>
+              </div>
             </div>
-            {/* Tilted Spotify Icon */}
-            <div className="w-10 h-10 rounded-xl bg-black/40 flex items-center justify-center shrink-0 -rotate-12 border border-white/10 shadow-lg text-[#1ed760]">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+
+            {/* Tilted 3D Spotify Tile matching Screenshot 3 */}
+            <div className="w-13 h-13 rounded-2xl bg-[#191919] flex items-center justify-center shrink-0 -rotate-[16deg] border border-white/10 shadow-[0_10px_25px_rgba(0,0,0,0.6)] text-[#1ed760] relative">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
               </svg>
             </div>
-          </div>
-
-          <div className="pt-3 relative z-10">
-            <button
-              onClick={() => openImportModal()}
-              className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md"
-            >
-              Importar biblioteca
-            </button>
           </div>
         </div>
       )}

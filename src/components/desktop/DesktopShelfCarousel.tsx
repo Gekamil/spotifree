@@ -31,15 +31,35 @@ const CarouselCard: React.FC<{
 }> = ({ card, isPlaying = false, onClick, onPlay }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [radioBgColor, setRadioBgColor] = useState<string | null>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
   const isArtist = card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || (card as any).isArtist;
+  const isRadioCard = card.image?.includes('/img/radio/') || card.id.startsWith('rad-') || (card as any).isRadio;
   const hasValidImage = !!card.image && card.image.trim().length > 0 && !imageError;
+
+  const handleImageLoad = () => {
+    setImageLoaded(true);
+    if (isRadioCard && imgRef.current) {
+      try {
+        const img = imgRef.current;
+        const c = document.createElement('canvas');
+        c.width = 1;
+        c.height = 1;
+        const ctx = c.getContext('2d');
+        if (ctx && img.naturalWidth > 10) {
+          ctx.drawImage(img, img.naturalWidth - 4, 4, 1, 1, 0, 0, 1, 1);
+          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+          setRadioBgColor(`rgb(${r}, ${g}, ${b})`);
+        }
+      } catch {}
+    }
+  };
 
   useEffect(() => {
     setImageError(false);
     if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
-      setImageLoaded(true);
+      handleImageLoad();
     }
   }, [card.image]);
 
@@ -75,20 +95,36 @@ const CarouselCard: React.FC<{
             className="w-full h-full object-cover"
           />
         ) : hasValidImage && !imageError ? (
-          <img
-            ref={imgRef}
-            src={card.image}
-            alt={card.title}
-            referrerPolicy="no-referrer"
-            onLoad={() => setImageLoaded(true)}
-            onError={() => {
-              setImageError(true);
-              setImageLoaded(false);
-            }}
-            className={`w-full h-full object-cover transition-opacity duration-300 ${
-              imageLoaded && !imageError ? 'opacity-100' : 'opacity-0'
-            }`}
-          />
+          <>
+            <img
+              ref={imgRef}
+              src={card.image}
+              alt={card.title}
+              crossOrigin="anonymous"
+              referrerPolicy="no-referrer"
+              onLoad={handleImageLoad}
+              onError={() => {
+                setImageError(true);
+                setImageLoaded(false);
+              }}
+              className={`w-full h-full object-cover transition-opacity duration-300 ${
+                imageLoaded && !imageError ? 'opacity-100' : 'opacity-0'
+              }`}
+            />
+            {/* Seamlessly cover Spotify Pickasso "RADIO" top-right badge if present */}
+            {isRadioCard && radioBgColor && (
+              <div
+                className="absolute pointer-events-none rounded-full z-10"
+                style={{
+                  top: '7%',
+                  right: '5%',
+                  width: '32%',
+                  height: '14.5%',
+                  backgroundColor: radioBgColor,
+                }}
+              />
+            )}
+          </>
         ) : null}
 
         {/* Green Play Button on hover (Bottom right of image) */}

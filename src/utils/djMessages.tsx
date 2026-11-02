@@ -2,23 +2,24 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguageStore } from './i18n';
 
 export const DJ_BANNER_MESSAGES_ES = [
-  'Holi, aquí tu DJ. ¿Qué escuchamos?',
+  'Holi, soy tu DJ y te estoy esperando con toda esa buena música.',
+  'Holi, aquí tu DJ. ¿Qué escuchamos hoy?',
   'Música lista para tu momento.',
-  'Tus favoritos y temazos nuevos.',
-  '¿Qué vibra buscas hoy?',
-  'Pídeme el estilo que te apetezca.',
-  'Dale al play y déjamelo a mí.',
-  'Mezclando tus temas preferidos.',
+  'Tus favoritos y temazos nuevos mezclados para ti.',
+  '¿Qué vibra buscas hoy? Pídeme lo que quieras.',
+  'Dale al play y déjame la música a mí.',
+  'Mezclando tus temas preferidos y descubrimientos.',
   'Sintonizando tu ritmo personal.',
 ];
 
 export const DJ_BANNER_MESSAGES_EN = [
-  "Hey! I'm your DJ. What's the vibe?",
-  'Fresh music ready for you.',
-  'Your favorites and new gems.',
-  'Tell me what you want to hear.',
-  'Hit play and leave it to me.',
-  'Mixing your top tracks right now.',
+  "Hey, I'm your DJ, ready when you are with great music.",
+  "Hey! I'm your DJ. What's the vibe today?",
+  'Fresh music lined up just for your moment.',
+  'Your favorites and new gems mixed for you.',
+  'Tell me what vibe you want and leave it to me.',
+  'Hit play and leave the mixing to me.',
+  'Mixing your top tracks and new discoveries.',
   'Tuning in to your personal rhythm.',
 ];
 

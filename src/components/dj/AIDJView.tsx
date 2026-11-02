@@ -608,6 +608,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                       <img
                         src={trackArt}
                         alt={track.name}
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
                         onError={handleImageError}
                         loading="lazy"
                         className="w-10 h-10 rounded-md object-cover shrink-0 bg-[#282828]"
