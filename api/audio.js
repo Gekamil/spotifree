@@ -5,6 +5,35 @@
 
 const RESOLVE_CACHE = new Map();
 
+const VERIFIED_TRACK_VIDEOS = {
+  'planteamiento erroneo': 'aWewyeC49e8',
+  'planteamiento erróneo': 'aWewyeC49e8',
+  'quevedo planteamiento erroneo': 'aWewyeC49e8',
+  'quevedo planteamiento erróneo': 'aWewyeC49e8',
+  'quevedo - planteamiento erroneo': 'aWewyeC49e8',
+  'quevedo - planteamiento erróneo': 'aWewyeC49e8',
+};
+
+function getVerifiedVideoId(q) {
+  if (!q) return null;
+  const norm = q
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+  for (const [key, id] of Object.entries(VERIFIED_TRACK_VIDEOS)) {
+    const normKey = key
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    if (norm === normKey || norm.includes(normKey) || (norm.includes('quevedo') && norm.includes('planteamiento'))) {
+      return id;
+    }
+  }
+  return null;
+}
+
 function cleanQuery(query) {
   return query
     .replace(/\s*-\s*Remastered(\s*\d+)?/gi, '')
@@ -230,6 +259,11 @@ export default async function handler(req, res) {
 
   const q = cleanQuery(rawQ);
   const cacheKey = q.toLowerCase();
+
+  const verifiedId = getVerifiedVideoId(q) || getVerifiedVideoId(rawQ);
+  if (verifiedId && !excludeSet.has(verifiedId)) {
+    return res.status(200).json({ success: true, videoId: verifiedId, verified: true });
+  }
 
   if (excludeSet.size === 0 && RESOLVE_CACHE.has(cacheKey)) {
     const cached = RESOLVE_CACHE.get(cacheKey);

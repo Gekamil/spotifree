@@ -513,8 +513,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               {/* Background Glow */}
               <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/30 pointer-events-none z-0" />
 
-              {/* Audio Waves covering the ENTIRE widget background */}
-              <div className="absolute inset-0 pointer-events-none opacity-50 overflow-hidden z-0">
+              {/* Audio Waves covering the ENTIRE widget background with clear visibility */}
+              <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
                 <InteractiveMusicWaves
                   isPlaying={isPlaying}
                   isSpeaking={false}
@@ -524,8 +524,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 />
               </div>
 
-              {/* Top Bar: Three Dots Menu on right (matching Desktop Spotify Photo 6) */}
-              <div className="flex items-center justify-end relative z-20 w-full mb-1">
+              {/* Top Bar: Beta Badge on left, Three Dots Menu on right (matching Spotify Photo 6) */}
+              <div className="flex items-center justify-between relative z-20 w-full mb-1">
+                <span className="bg-black/40 backdrop-blur-md text-[11px] font-bold text-white px-2.5 py-0.5 rounded-full border border-white/10 uppercase tracking-wider">
+                  Beta
+                </span>
                 <div className="text-white/80 p-1 hover:text-white transition-colors cursor-pointer">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="12" cy="5" r="2" />
@@ -535,9 +538,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 </div>
               </div>
 
-              {/* Desktop Arch: Glowing Neon Half-Circle rising from the bottom edge next to the arrow button (Photo 6) with smooth bottom transparency fade */}
+              {/* DJ Visualizer: Centered in the card, with smooth bottom half transparency fade */}
               <div
-                className="absolute right-20 md:right-24 -bottom-6 pointer-events-none flex items-center justify-center w-[150px] h-[150px] md:w-[170px] md:h-[170px] z-10"
+                className="absolute left-1/2 -translate-x-1/2 -top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] md:w-[250px] md:h-[250px] z-10"
                 style={{
                   WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
                   maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
@@ -545,7 +548,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               >
                 <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
                   <SpotifyDJVisualizer
-                    size={160}
+                    size={220}
                     state={isPlaying ? 'playing' : 'idle'}
                     voiceLevel={isPlaying ? 0.25 : 0.12}
                     themeColor={djThemeColor}
@@ -556,7 +559,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
               <div className="flex items-end justify-between relative z-20 w-full">
                 <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-190px)]">
-                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-md min-h-[48px] break-words whitespace-normal" />
+                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[48px] break-words whitespace-normal tracking-tight" />
                 </div>
 
                 <button

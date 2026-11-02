@@ -52,8 +52,8 @@ export interface AIDJConfig {
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'alvaro',
-  provider: 'edge',
+  voice: 'gemini',
+  provider: 'gemini',
   apiKey: '',
   voiceId: '',
 };
@@ -68,7 +68,7 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
-  private selectedVoiceId: DJVoiceId = 'alvaro';
+  private selectedVoiceId: DJVoiceId = 'gemini';
   private testPhraseIndex: number = 0;
 
   constructor() {
@@ -77,6 +77,9 @@ class AIDJVoiceService {
         const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
         if (savedVoice === 'alvaro' || savedVoice === 'salome' || savedVoice === 'gemini') {
           this.selectedVoiceId = savedVoice;
+        } else {
+          this.selectedVoiceId = 'gemini';
+          localStorage.setItem('spotifree_dj_voice_choice', 'gemini');
         }
       } catch {}
 

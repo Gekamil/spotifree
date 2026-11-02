@@ -87,21 +87,22 @@ export const RotatingDJBannerText: React.FC<RotatingDJBannerTextProps> = ({
 
   return (
     <p
-      className={`${className} flex flex-wrap items-center break-words whitespace-normal transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${
-        isFadingOut
-          ? 'opacity-0 -translate-y-2 filter blur-[3px] scale-[0.98]'
-          : 'opacity-100 translate-y-0 filter blur-0 scale-100'
+      className={`${className} flex flex-wrap items-center break-words whitespace-normal font-['SpotifyMixUITitle',sans-serif] tracking-tight transition-opacity duration-300 ease-out ${
+        isFadingOut ? 'opacity-0' : 'opacity-100'
       }`}
     >
       {words.map((word, idx) => {
         const isSpoken = idx < revealedWordIndex;
+        const isHighlight = /^(dj|música|ritmo|tu|temazos)$/i.test(word.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, ''));
         return (
           <span
             key={`${word}-${idx}`}
-            className={`inline-block mr-1.5 transition-all duration-200 ${
+            className={`inline-block mr-1.5 transition-colors duration-150 ${
               isSpoken
-                ? 'text-white opacity-100 filter drop-shadow-[0_0_10px_rgba(255,255,255,0.45)]'
-                : 'text-white/35 opacity-40'
+                ? isHighlight
+                  ? 'text-[#93c5fd] font-black'
+                  : 'text-white font-black'
+                : 'text-white/40 font-bold'
             }`}
           >
             {word}

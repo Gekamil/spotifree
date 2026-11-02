@@ -23,17 +23,36 @@ async function synthesizeWithGemini(text, voice = 'Kore') {
   const apiKey = getGeminiApiKey();
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/interactions?key=${apiKey}`;
+  const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
     body: JSON.stringify({
       model: 'gemini-3.8-flash-tts',
-      input: text,
+      input: [
+        {
+          type: 'user_input',
+          content: [
+            {
+              type: 'text',
+              text: text,
+              annotations: [
+                {
+                  type: 'speech_metadata',
+                  style: 'enthusiastic radio host',
+                },
+              ],
+            },
+          ],
+        },
+      ],
       response_format: { type: 'audio' },
       generation_config: {
-        speech_config: [{ voice: voice || 'Kore' }]
-      }
+        speech_config: [{ voice: voice || 'Kore' }],
+      },
     }),
     signal: AbortSignal.timeout?.(12000),
   });
@@ -111,13 +130,13 @@ export default async function handler(req, res) {
   const rawLang = (query.lang || body.lang || 'es').toLowerCase();
   const isEnglish = rawLang.startsWith('en');
 
-  let selectedVoice = 'alvaro';
-  if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
-    selectedVoice = 'gemini';
-  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
+  let selectedVoice = 'gemini';
+  if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
     selectedVoice = 'salome';
   } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural' || rawVoice.includes('guy')) {
     selectedVoice = 'alvaro';
+  } else if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
+    selectedVoice = 'gemini';
   }
 
   // Voice mapping based on language

@@ -141,30 +141,30 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
 
       ctx.clearRect(0, 0, width, height);
 
-      // Layered Organic Waves with subtle heights
+      // Layered Organic Waves with noticeable, aesthetic presence
       const waveConfigs = [
         {
           frequency: 0.007,
           speedOffset: 0,
-          amplitude: (speaking ? 24 : playing ? 18 : 12) * ampScale,
-          yCenter: height * 0.40,
-          opacity: speaking ? 0.28 : playing ? 0.22 : 0.14,
+          amplitude: (speaking ? 28 : playing ? 22 : 16) * ampScale,
+          yCenter: height * 0.38,
+          opacity: speaking ? 0.48 : playing ? 0.38 : 0.28,
           phaseShift: 0,
         },
         {
           frequency: 0.010,
           speedOffset: 1.2,
-          amplitude: (speaking ? 28 : playing ? 22 : 14) * ampScale,
-          yCenter: height * 0.44,
-          opacity: speaking ? 0.32 : playing ? 0.26 : 0.16,
+          amplitude: (speaking ? 32 : playing ? 26 : 18) * ampScale,
+          yCenter: height * 0.43,
+          opacity: speaking ? 0.52 : playing ? 0.44 : 0.32,
           phaseShift: 1.5,
         },
         {
           frequency: 0.008,
           speedOffset: 2.1,
-          amplitude: (speaking ? 20 : playing ? 16 : 10) * ampScale,
+          amplitude: (speaking ? 24 : playing ? 20 : 14) * ampScale,
           yCenter: height * 0.48,
-          opacity: speaking ? 0.22 : playing ? 0.18 : 0.12,
+          opacity: speaking ? 0.40 : playing ? 0.34 : 0.24,
           phaseShift: 3.0,
         },
       ];
@@ -192,11 +192,16 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
 
         const grad = ctx.createLinearGradient(0, cfg.yCenter - cfg.amplitude, 0, height);
         grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${cfg.opacity})`);
-        grad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${cfg.opacity * 0.4})`);
+        grad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${cfg.opacity * 0.5})`);
         grad.addColorStop(1, 'rgba(0, 0, 0, 0)');
 
         ctx.fillStyle = grad;
         ctx.fill();
+
+        // Crisp crest stroke for clearly defined waves
+        ctx.strokeStyle = `rgba(${r}, ${g}, ${b}, ${Math.min(0.85, cfg.opacity * 1.6)})`;
+        ctx.lineWidth = 1.8;
+        ctx.stroke();
       });
 
       ctx.restore();

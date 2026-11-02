@@ -73,6 +73,17 @@ export function resolvePlaylistBanner(playlist: Playlist | null | undefined): st
     }
   }
 
+  // 6. Major Spotify Flagship Editorial Playlists (e.g. Éxitos España, Viva Latino, Baila Reggaeton, etc.)
+  const isEditorial =
+    playlist.id?.startsWith('37i9dQZF1') ||
+    playlist.owner?.id === 'spotify' ||
+    playlist.owner?.display_name?.toLowerCase() === 'spotify' ||
+    /(?:éxitos|exitos|viva\s*latino|baila\s*reggaet[oó]n|top\s*hits|pop\s*con\s*ñ|reggaet[oó]n)/i.test(normName);
+
+  if (isEditorial && firstImg) {
+    return firstImg;
+  }
+
   // Otherwise, no widescreen banner exists for this playlist -> standard square cover
   return null;
 }

@@ -48,7 +48,9 @@ const CarouselCard: React.FC<{
         c.height = 1;
         const ctx = c.getContext('2d');
         if (ctx && img.naturalWidth > 10) {
-          ctx.drawImage(img, img.naturalWidth - 4, 4, 1, 1, 0, 0, 1, 1);
+          const sampleX = Math.floor(img.naturalWidth / 2);
+          const sampleY = Math.max(2, Math.floor(img.naturalHeight * 0.04));
+          ctx.drawImage(img, sampleX, sampleY, 1, 1, 0, 0, 1, 1);
           const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
           setRadioBgColor(`rgb(${r}, ${g}, ${b})`);
         }
@@ -108,18 +110,18 @@ const CarouselCard: React.FC<{
                 setImageLoaded(false);
               }}
               className={`w-full h-full object-cover transition-opacity duration-300 ${
-                imageLoaded && !imageError ? 'opacity-100' : 'opacity-0'
-              }`}
+                isRadioCard ? 'scale-[1.10] origin-bottom' : ''
+              } ${imageLoaded && !imageError ? 'opacity-100' : 'opacity-0'}`}
             />
             {/* Seamlessly cover Spotify Pickasso "RADIO" top-right badge if present */}
             {isRadioCard && radioBgColor && (
               <div
                 className="absolute pointer-events-none rounded-full z-10"
                 style={{
-                  top: '7%',
-                  right: '5%',
-                  width: '32%',
-                  height: '14.5%',
+                  top: '4.5%',
+                  right: '4.5%',
+                  width: '35%',
+                  height: '16%',
                   backgroundColor: radioBgColor,
                 }}
               />

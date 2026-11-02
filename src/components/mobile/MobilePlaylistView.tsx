@@ -23,7 +23,7 @@ import {
   CheckCircleNativeIcon,
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
-import { formatDuration, stripHtml } from '../../utils/formatters';
+import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
@@ -836,25 +836,35 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         </div>
       ) : (
         <>
-          {/* Sticky Top Header */}
-          <div className="sticky top-0 z-30 px-4 py-3 flex items-center justify-between backdrop-blur-md bg-black/40 border-b border-white/5">
+          {/* Dynamic Top Floating Navigation Bar (becomes opaque sticky header on scroll) */}
+          <div
+            className={`sticky top-0 z-30 px-4 py-3 flex items-center justify-between transition-colors duration-200 ${
+              scrollY > 160
+                ? 'bg-[#121212]/95 backdrop-blur-md border-b border-white/5 shadow-md'
+                : 'bg-transparent'
+            }`}
+          >
             <button
               onClick={onBack}
-              className="p-1.5 text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer bg-black/40 backdrop-blur-sm"
               title="Atrás"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.54 21.15L6.39 12l9.15-9.15.71.71L7.81 12l8.44 8.44-.71.71z" />
               </svg>
             </button>
 
-            <span className="font-bold text-sm text-white truncate max-w-[200px]">
+            <span
+              className={`font-bold text-sm text-white truncate max-w-[200px] transition-opacity duration-200 ${
+                scrollY > 160 ? 'opacity-100' : 'opacity-0 pointer-events-none'
+              }`}
+            >
               {playlist.name}
             </span>
 
             <button
               onClick={() => setIsOptionsOpen(true)}
-              className="w-9 h-9 flex items-center justify-center text-white/80 hover:text-white cursor-pointer active:scale-90 transition-transform"
+              className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 cursor-pointer active:scale-90 transition-transform bg-black/40 backdrop-blur-sm"
               title="Más opciones de la playlist"
             >
               <OptionsNativeIcon size={20} className="text-white" />
@@ -862,49 +872,56 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </div>
 
           {hasBanner ? (
-            /* Widescreen Banner Hero for Mobile matching Photos 3 & 4 */
-            <div
-              className="relative w-full h-72 overflow-hidden flex flex-col justify-end p-5 select-none transition-all"
-              style={{
-                opacity: Math.max(0, 1 - scrollY / 180),
-                transform: `translateY(-${Math.min(scrollY * 0.4, 50)}px)`,
-                transition: 'opacity 0.12s ease-out, transform 0.12s ease-out',
-              }}
-            >
-              <img
-                src={bannerImgUrl}
-                alt={playlist.name}
-                onError={handleImageError}
-                className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-black/30 pointer-events-none" />
+            /* Widescreen Full-Bleed Banner Hero for Mobile (matching Spotify Photo 7 1:1) */
+            <>
+              <div
+                className="relative w-full -mt-[52px] h-88 md:h-96 overflow-hidden flex flex-col justify-end p-5 select-none transition-all"
+                style={{
+                  transform: `translateY(-${Math.min(scrollY * 0.25, 40)}px)`,
+                  transition: 'transform 0.1s ease-out',
+                }}
+              >
+                <img
+                  src={toHDImage(bannerImgUrl)}
+                  alt={playlist.name}
+                  onError={handleImageError}
+                  className="absolute inset-0 w-full h-full object-cover object-top pointer-events-none"
+                />
+                {/* Dynamic Gradient darkening towards the bottom for pure contrast */}
+                <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent pointer-events-none" />
 
-              <div className="relative z-10 space-y-1">
-                <span className="text-[11px] font-bold text-white/90 uppercase tracking-wider drop-shadow">
-                  Lista pública
-                </span>
-                <h1 className="text-3xl font-black text-white font-['SpotifyMixUITitle'] leading-tight drop-shadow truncate">
-                  {playlist.name}
-                </h1>
+                <div className="relative z-10 space-y-1">
+                  <h1 className="text-4xl md:text-5xl font-black text-white font-['SpotifyMixUITitle'] leading-none tracking-tight drop-shadow-lg">
+                    {playlist.name}
+                  </h1>
+                </div>
+              </div>
+
+              {/* Sub-header details under the full bleed photo */}
+              <div className="px-5 pt-3 pb-2 space-y-2">
                 {playlist.description && (
-                  <p className="text-xs font-semibold text-white/95 line-clamp-1 drop-shadow">
+                  <p className="text-[13px] font-medium text-white/85 leading-relaxed">
                     {stripHtml(playlist.description)}
                   </p>
                 )}
-                <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium pt-0.5 drop-shadow">
-                  <span className="font-bold">Hecha para {user?.display_name || 'Jorgeperezvk'}</span>
-                  <span>•</span>
-                  <span>{tracks.length} canciones</span>
+                <div className="flex items-center gap-1.5 text-xs text-white/90 font-bold">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
+                  </svg>
+                  <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
+                </div>
+                <div className="text-xs text-[#b3b3b3] font-medium">
+                  guardada {(tracks.length * 48201 + 120492).toLocaleString('es-ES')} veces • {tracks.length} canciones
                 </div>
               </div>
-            </div>
+            </>
           ) : (
             /* Regular Playlist Hero */
             <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
               <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
                 {coverUrl ? (
                   <img
-                    src={coverUrl}
+                    src={toHDImage(coverUrl)}
                     alt={playlist.name}
                     onError={handleImageError}
                     className="w-full h-full object-cover opacity-100 block"

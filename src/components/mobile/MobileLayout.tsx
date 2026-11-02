@@ -523,7 +523,7 @@ export const MobileLayout: React.FC = () => {
                     </div>
 
                     {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
-                    <div className="absolute inset-0 pointer-events-none opacity-60 overflow-hidden z-0">
+                    <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
                       <InteractiveMusicWaves
                         isPlaying={isPlaying}
                         isSpeaking={false}
@@ -549,7 +549,7 @@ export const MobileLayout: React.FC = () => {
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-20 pt-4 w-full">
                       <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
-                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[50px] break-words whitespace-normal" />
+                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[50px] break-words whitespace-normal tracking-tight" />
                       </div>
 
                       <button
@@ -656,7 +656,11 @@ export const MobileLayout: React.FC = () => {
                                     alt={card.title}
                                     onError={handleImageError}
                                     referrerPolicy="no-referrer"
-                                    className="w-full h-full object-cover"
+                                    className={`w-full h-full object-cover ${
+                                      card.image?.includes('/img/radio/') || card.id?.startsWith('rad-')
+                                        ? 'scale-[1.10] origin-bottom'
+                                        : ''
+                                    }`}
                                   />
                                 </div>
                                 <div className="space-y-0.5">
