@@ -19,8 +19,8 @@ function getGeminiApiKey() {
   return '';
 }
 
-async function synthesizeWithGemini(text, voice = 'Kore') {
-  const apiKey = getGeminiApiKey();
+async function synthesizeWithGemini(text, voice = 'Kore', userApiKey = '') {
+  const apiKey = (userApiKey || '').trim() || getGeminiApiKey();
   if (!apiKey) throw new Error('GEMINI_API_KEY is not configured');
 
   const url = 'https://generativelanguage.googleapis.com/v1beta/interactions';
@@ -80,7 +80,7 @@ async function synthesizeWithEdge(text, voice = 'es-ES-AlvaroNeural') {
   await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
 
   const { audioStream } = tts.toStream(text, {
-    rate: '+6%',
+    rate: '+0%',
     pitch: '+0Hz',
     volume: '+0%',
   });
@@ -144,19 +144,26 @@ export default async function handler(req, res) {
     ? (selectedVoice === 'salome' ? 'en-US-JennyNeural' : 'en-US-GuyNeural')
     : (selectedVoice === 'salome' ? 'es-CO-SalomeNeural' : 'es-ES-AlvaroNeural');
 
+  const userApiKey = (query.apiKey || body.apiKey || '').trim();
   const geminiVoiceName = isEnglish ? 'Puck' : 'Kore';
 
   let result;
   try {
     if (selectedVoice === 'gemini') {
       try {
-        result = await synthesizeWithGemini(text, geminiVoiceName);
+        result = await synthesizeWithGemini(text, geminiVoiceName, userApiKey);
+        res.setHeader('x-tts-provider', 'gemini');
       } catch (geminiErr) {
         console.warn(`[Gemini TTS Fallback to Edge (${edgeVoiceName})]:`, geminiErr?.message || geminiErr);
         result = await synthesizeWithEdge(text, edgeVoiceName);
+        res.setHeader('x-tts-provider', 'edge-fallback');
+        if (String(geminiErr?.message || '').includes('429') || String(geminiErr?.message || '').includes('Rate limit')) {
+          res.setHeader('x-gemini-quota-exceeded', 'true');
+        }
       }
     } else {
       result = await synthesizeWithEdge(text, edgeVoiceName);
+      res.setHeader('x-tts-provider', 'edge');
     }
 
     res.statusCode = 200;

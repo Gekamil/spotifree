@@ -149,7 +149,7 @@ const SpotifyCustomSelect: React.FC<{
 
 export const DesktopSettingsView: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
-  const { setActiveMainTab, viewMode, setViewMode } = useUIStore();
+  const { setActiveMainTab, viewMode, setViewMode, convertPhotosToBanners, setConvertPhotosToBanners } = useUIStore();
   const { user } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
@@ -773,7 +773,7 @@ export const DesktopSettingsView: React.FC = () => {
         )}
 
         {/* 5. VISUALIZACIÓN */}
-        {matchesSearch('visualización sonando panel reproducir') && (
+        {matchesSearch('visualización sonando panel reproducir banners fotos carátulas') && (
           <section className="space-y-3">
             <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Visualización</h2>
             <div className="flex items-center justify-between py-3 border-b border-white/5">
@@ -787,6 +787,22 @@ export const DesktopSettingsView: React.FC = () => {
                 checked={showNowPlayingOnClick}
                 onChange={setShowNowPlayingOnClick}
                 ariaLabel="Mostrar el panel Sonando al hacer clic a reproducir"
+              />
+            </div>
+
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <span className="text-sm font-medium text-white">
+                  Convertir fotos a banners
+                </span>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  Muestra las carátulas de las playlists como banners panorámicos a pantalla completa en lugar del cuadro clásico.
+                </p>
+              </div>
+              <SpotifyToggle
+                checked={convertPhotosToBanners}
+                onChange={setConvertPhotosToBanners}
+                ariaLabel="Convertir fotos a banners"
               />
             </div>
           </section>

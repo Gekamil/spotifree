@@ -17,22 +17,22 @@ export interface DJVoiceOptionItem {
 
 export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
   {
+    id: 'gemini',
+    name: 'Gemini IA',
+    region: 'Google Cloud',
+    description: 'Modelo generativo de Google (10 usos/día gratis en Free Tier)',
+  },
+  {
     id: 'alvaro',
     name: 'Álvaro',
     region: 'España',
-    description: 'Locutor de radio profesional • Tono cálido e inmersivo',
+    description: 'Locutor de radio profesional • Tono cálido de estudio (Ilimitado)',
   },
   {
     id: 'salome',
     name: 'Salomé',
     region: 'Colombia',
-    description: 'Asistente de audio dinámica • Tono latino enérgico',
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini IA',
-    region: 'Google Cloud',
-    description: 'Modelo generativo multimodal de última generación',
+    description: 'Asistente de audio dinámica • Tono latino enérgico (Ilimitado)',
   },
 ];
 

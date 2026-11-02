@@ -27,9 +27,11 @@ interface UIState {
   searchQuery: string;
   activeMainTab: 'home' | 'search' | 'playlist' | 'settings' | 'guide' | 'profile' | 'dj';
   theme: 'standard' | 'oled' | 'platinum';
+  convertPhotosToBanners: boolean;
 
   // Actions
   setTheme: (theme: 'standard' | 'oled' | 'platinum') => void;
+  setConvertPhotosToBanners: (val: boolean) => void;
   toggleProfile: () => void;
   closeProfile: () => void;
   toggleCreateMenu: () => void;
@@ -75,6 +77,16 @@ const store = create<UIState>((set) => ({
   searchQuery: '',
   activeMainTab: 'home',
   theme: (typeof window !== 'undefined' ? (window.localStorage.getItem('spotifree_theme') as any) : 'standard') || 'standard',
+  convertPhotosToBanners: typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_convert_photos_to_banners') === 'true' : false,
+
+  setConvertPhotosToBanners: (val: boolean) => {
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('spotifree_convert_photos_to_banners', String(val));
+      } catch {}
+    }
+    set({ convertPhotosToBanners: val });
+  },
 
   setTheme: (theme: 'standard' | 'oled' | 'platinum') => {
     if (typeof window !== 'undefined') {

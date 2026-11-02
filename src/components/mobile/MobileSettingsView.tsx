@@ -49,7 +49,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   onOpenProfile,
 }) => {
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
-  const { openLoginModal } = useUIStore();
+  const { openLoginModal, convertPhotosToBanners, setConvertPhotosToBanners } = useUIStore();
   const { language, setLanguage } = useLanguageStore();
 
   // AI DJ Voice Selector State
@@ -490,6 +490,36 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                 </div>
               );
             })}
+          </div>
+        </div>
+
+        {/* Visualización */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+            Visualización
+          </h3>
+
+          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="pr-3">
+                <p className="text-sm font-bold text-white">Convertir fotos a banners</p>
+                <p className="text-xs text-[#b3b3b3] mt-0.5">
+                  Muestra las carátulas como banners panorámicos a pantalla completa en lugar del cuadro clásico.
+                </p>
+              </div>
+              <button
+                onClick={() => setConvertPhotosToBanners(!convertPhotosToBanners)}
+                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                  convertPhotosToBanners ? 'bg-[#1ed760]' : 'bg-[#535353]'
+                }`}
+              >
+                <div
+                  className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
+                    convertPhotosToBanners ? 'left-5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
           </div>
         </div>
 

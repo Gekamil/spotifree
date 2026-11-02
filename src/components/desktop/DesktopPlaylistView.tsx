@@ -713,7 +713,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return () => scrollParent.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const bannerImgUrl = resolvePlaylistBanner(dynamicPlaylist) || undefined;
+  const convertPhotosToBanners = useUIStore((s) => s.convertPhotosToBanners);
+  const resolvedBanner = resolvePlaylistBanner(dynamicPlaylist) || undefined;
+  const bannerImgUrl = resolvedBanner || (convertPhotosToBanners ? dynamicPlaylist.images?.[0]?.url : undefined);
   const hasBanner = Boolean(bannerImgUrl);
 
   useEffect(() => {
