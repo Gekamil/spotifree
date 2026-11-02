@@ -21,6 +21,8 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
+import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { handleImageError } from '../../utils/imageFallback';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -47,6 +49,29 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     toggleLike,
     queue,
   } = usePlayerStore();
+
+  const [resolvedDesktopCover, setResolvedDesktopCover] = useState<string | undefined>(() => {
+    return currentTrack ? getTrackCoverUrl(currentTrack) : undefined;
+  });
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    const direct = getTrackCoverUrl(currentTrack);
+    if (direct && !direct.includes('liked-songs')) {
+      setResolvedDesktopCover(direct);
+      return;
+    }
+    resolveTrackCoversBatch([currentTrack]).then((updates) => {
+      const fresh = updates.get(currentTrack.id) || getTrackCoverUrl(currentTrack);
+      if (fresh) setResolvedDesktopCover(fresh);
+    }).catch(() => {});
+  }, [currentTrack?.id, currentTrack?.name]);
+
+  const activeArtworkUrl =
+    resolvedDesktopCover ||
+    (currentTrack ? getTrackCoverUrl(currentTrack) : undefined) ||
+    currentTrack?.album?.images?.[0]?.url ||
+    'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 
   const { toggleRightSidebar, activeRightSidebar } = useUIStore();
 
@@ -221,8 +246,9 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
               className="w-14 h-14 rounded overflow-hidden shrink-0 shadow cursor-pointer group"
             >
               <img
-                src={toHDImage(currentTrack.album?.images?.[0]?.url)}
+                src={toHDImage(activeArtworkUrl)}
                 alt={currentTrack.name}
+                onError={handleImageError}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               />
             </div>

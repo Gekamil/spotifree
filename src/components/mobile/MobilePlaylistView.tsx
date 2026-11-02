@@ -32,6 +32,7 @@ import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
 import { audioEngine } from '../../services/audioEngine';
 import { AIDJView } from '../dj/AIDJView';
+import { resolvePlaylistBanner } from '../../utils/playlistBanner';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -586,33 +587,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     return () => scrollParent.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const isDailyMix =
-    activePlaylist.name.toLowerCase().includes('mix diario') ||
-    cleanId.includes('37i9dQZF1E3') ||
-    cleanId.includes('mix-diario');
-
-  const DAILY_MIX_BANNERS: Record<string, string> = {
-    '1': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es',
-    '2': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es',
-    '3': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es',
-    '4': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es',
-    '5': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es',
-    '6': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es',
-  };
-
-  const dailyMixNum = activePlaylist.name.match(/\d+/)?.[0] || '1';
-
-  const hasBanner = Boolean(
-    activePlaylist.bannerUrl ||
-    (activePlaylist as any).header_image ||
-    activePlaylist.images?.[0]?.url?.includes('pickasso') ||
-    isDailyMix
-  );
-
-  const bannerImgUrl =
-    activePlaylist.bannerUrl ||
-    (activePlaylist as any).header_image ||
-    (isDailyMix ? DAILY_MIX_BANNERS[dailyMixNum] || activePlaylist.images?.[0]?.url : activePlaylist.images?.[0]?.url);
+  const bannerImgUrl = resolvePlaylistBanner(activePlaylist) || undefined;
+  const hasBanner = Boolean(bannerImgUrl);
 
   const coverUrl =
     isLikedPlaylist

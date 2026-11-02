@@ -152,6 +152,35 @@ class AIDJVoiceService {
     }
   }
 
+  /**
+   * Prefetches audio for a phrase into memory cache for instantaneous response
+   */
+  public prefetchPhrase(text: string) {
+    if (typeof window === 'undefined' || !text || text.trim().length === 0) return;
+    try {
+      const lang = useLanguageStore.getState().language;
+      const activeVoice = this.getSelectedVoice();
+      const cacheKey = `${lang}:${activeVoice}:${text}`;
+      if (this.ttsCache.has(cacheKey)) return;
+
+      const params = new URLSearchParams({
+        text,
+        voice: activeVoice,
+        provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
+        lang,
+      });
+      fetch(`/api/tts?${params.toString()}`)
+        .then((r) => (r.ok ? r.blob() : null))
+        .then((blob) => {
+          if (blob && blob.size > 500) {
+            const url = URL.createObjectURL(blob);
+            this.ttsCache.set(cacheKey, url);
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }
+
   public async testVoice(voiceId?: DJVoiceId): Promise<void> {
     if (voiceId) {
       this.setSelectedVoice(voiceId);
@@ -237,16 +266,8 @@ class AIDJVoiceService {
     try {
       const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
       if (engine && typeof engine.setDuckedVolume === 'function') {
-        engine.setDuckedVolume(0.08);
+        engine.setDuckedVolume(0.22);
       }
-      const audioElements = document.querySelectorAll('audio, video');
-      audioElements.forEach((el: any) => {
-        if (!el.dataset.djDucked && el !== this.currentAudio) {
-          el.dataset.prevVol = el.volume;
-          el.dataset.djDucked = 'true';
-          el.volume = Math.max(0.04, el.volume * 0.08);
-        }
-      });
     } catch (e) {
       console.warn('[AIDJVoice] Duck audio warning:', e);
     }
@@ -259,26 +280,8 @@ class AIDJVoiceService {
     try {
       const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
       if (engine && typeof engine.restoreDuckedVolume === 'function') {
-        engine.restoreDuckedVolume(1500);
+        engine.restoreDuckedVolume(1000);
       }
-      const audioElements = document.querySelectorAll('audio, video');
-      audioElements.forEach((el: any) => {
-        if (el.dataset.djDucked && el.dataset.prevVol && el !== this.currentAudio) {
-          const targetVol = parseFloat(el.dataset.prevVol);
-          const startVol = el.volume;
-          const steps = 15;
-          let s = 0;
-          const interval = setInterval(() => {
-            s++;
-            el.volume = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * (s / steps)));
-            if (s >= steps) {
-              clearInterval(interval);
-              delete el.dataset.djDucked;
-              delete el.dataset.prevVol;
-            }
-          }, 80);
-        }
-      });
     } catch (e) {
       console.warn('[AIDJVoice] Restore audio warning:', e);
     }
@@ -408,6 +411,8 @@ class AIDJVoiceService {
           resolve(false);
         };
 
+        // Duck music right as speech playback starts
+        this.duckAudio();
         audio.play().catch((err) => {
           console.warn('[AIDJVoice] Play rejected (autoplay block or aborted):', err);
           cleanup();
@@ -503,6 +508,7 @@ class AIDJVoiceService {
 
       try {
         window.speechSynthesis.cancel();
+        this.duckAudio();
         window.speechSynthesis.speak(utterance);
       } catch (e) {
         console.error('[AIDJVoice] Failed to speak:', e);
@@ -524,7 +530,6 @@ class AIDJVoiceService {
     }
 
     this.isSpeaking = true;
-    this.duckAudio();
 
     // High-fidelity Neural Studio TTS (Consistent Colombian persona - es-CO-SalomeNeural)
     const success = await this.speakViaNeuralTTS(text, options);

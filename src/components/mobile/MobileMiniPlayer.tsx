@@ -9,6 +9,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
+import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -58,11 +59,29 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
     }
   }, [currentTrack?.id, currentTrack?.name]);
 
+  const [resolvedCover, setResolvedCover] = useState<string | undefined>(() => {
+    return currentTrack ? getTrackCoverUrl(currentTrack) : undefined;
+  });
+
+  useEffect(() => {
+    if (!currentTrack) return;
+    const direct = getTrackCoverUrl(currentTrack);
+    if (direct && !direct.includes('liked-songs')) {
+      setResolvedCover(direct);
+      return;
+    }
+    // Auto-resolve missing or unindexed DJ track artwork
+    resolveTrackCoversBatch([currentTrack]).then((updates) => {
+      const fresh = updates.get(currentTrack.id) || getTrackCoverUrl(currentTrack);
+      if (fresh) setResolvedCover(fresh);
+    }).catch(() => {});
+  }, [currentTrack?.id, currentTrack?.name]);
+
   if (!currentTrack) return null;
 
   const isLiked = likedTrackIds.includes(currentTrack.id);
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
-  const coverUrl = currentTrack.album?.images?.[0]?.url;
+  const coverUrl = resolvedCover || getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url;
 
   const vibrantBase = resolveVibrantColor(currentTrack.id, currentTrack.name);
   const cardBgColor = getDarkenedThemeColor(vibrantBase, 0.32);

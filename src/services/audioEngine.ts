@@ -2397,7 +2397,7 @@ class AudioEngine {
   private duckFraction: number = 0.08;
   private duckFadeInterval: any = null;
 
-  public setDuckedVolume(fraction: number = 0.08) {
+  public setDuckedVolume(fraction: number = 0.22) {
     if (this.duckFadeInterval !== null) {
       clearInterval(this.duckFadeInterval);
       this.duckFadeInterval = null;
@@ -2406,7 +2406,8 @@ class AudioEngine {
     this.isAudioDucked = true;
     this.duckFraction = fraction;
     if (this.previousDuckedVolume === null) {
-      this.previousDuckedVolume = usePlayerStore.getState().volume;
+      const v = usePlayerStore.getState().volume;
+      this.previousDuckedVolume = v && v > 0.05 ? v : 1.0;
     }
     this.applyCurrentVolume();
   }

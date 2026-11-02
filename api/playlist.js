@@ -58,12 +58,22 @@ function parseEmbedHtml(html, cleanId) {
     };
   });
 
+  const rawBanner =
+    entity.visualIdentity?.image?.[0]?.url ||
+    entity.headerImage?.sources?.[0]?.url ||
+    entity.header_image?.url ||
+    entity.images?.find(i => (i.width || 0) > (i.height || 0))?.url ||
+    (coverUrl && coverUrl.includes('pickasso.spotifycdn.com') ? coverUrl : null) ||
+    null;
+  const bannerUrl = rawBanner ? toHDImage(rawBanner) : undefined;
+
   return {
     id: cleanId,
     name: entity.name,
     description: stripHtml(entity.description || ''),
     type: entity.type || 'playlist',
     images: [{ url: coverUrl }],
+    ...(bannerUrl ? { bannerUrl } : {}),
     owner: {
       display_name: (entity.type === 'album' && entity.subtitle) ? entity.subtitle : (entity.owner?.name || 'Spotify'),
       id: entity.owner?.id || 'spotify',
@@ -161,6 +171,10 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       if (sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
         const cached = sessionData.cachedPlaylistDetails[cleanId];
         if (cached?.tracks?.items && cached.tracks.items.length > 0) {
+          const cover = cached.images?.[0]?.url || '';
+          if (cover.includes('pickasso.spotifycdn.com') && !cached.bannerUrl) {
+            cached.bannerUrl = cover;
+          }
           return cached;
         }
       }

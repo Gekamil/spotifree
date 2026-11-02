@@ -294,15 +294,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       currentHashtag: dominantTag,
     });
 
-    // 1. Curate initial set using dynamic hashtag analysis of user playlists + related tracks
-    const initialSet = await getCuratedSetForHashtag(dominantTag, 15);
-    set({ djTracks: initialSet });
-
-    // 2. Play track 1 immediately through global player in background with ducked volume
-    if (initialSet.length > 0) {
-      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
-    }
-
+    // Compute intro text immediately and prefetch audio concurrently with set curation
     const hour = new Date().getHours();
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
@@ -318,6 +310,17 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const introText = isEn
       ? `${greeting}${namePart}! I'm your DJ. I took a look at what you've been listening to and built a personalized mix of your favorite tracks. What vibe are you feeling today?`
       : `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
+
+    aiDJVoiceService.prefetchPhrase(introText);
+
+    // 1. Curate initial set using dynamic hashtag analysis of user playlists + related tracks
+    const initialSet = await getCuratedSetForHashtag(dominantTag, 15);
+    set({ djTracks: initialSet });
+
+    // 2. Play track 1 immediately through global player in background
+    if (initialSet.length > 0) {
+      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
+    }
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     set({
@@ -471,6 +474,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const analysis = analyzeUserIntent(promptText, cleanName);
+
+    // Immediately prefetch the speech audio concurrently so playback starts with minimal latency
+    aiDJVoiceService.prefetchPhrase(analysis.speech);
 
     // 1. Collect all available tracks from user playlists, details cache, and localStorage
     const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();

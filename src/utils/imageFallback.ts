@@ -11,7 +11,7 @@ export function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event
   target.referrerPolicy = 'no-referrer';
   if ((target as any)._fallbackAttempted) {
     target.onerror = null;
-    target.src = INLINE_SVG_FALLBACK;
+    target.src = DEFAULT_FALLBACK_COVER;
     return;
   }
   (target as any)._fallbackAttempted = true;
@@ -26,13 +26,13 @@ export function handleImageError(e: React.SyntheticEvent<HTMLImageElement, Event
         if (img) {
           target.src = img;
         } else {
-          target.src = INLINE_SVG_FALLBACK;
+          target.src = DEFAULT_FALLBACK_COVER;
         }
       })
       .catch(() => {
-        target.src = INLINE_SVG_FALLBACK;
+        target.src = DEFAULT_FALLBACK_COVER;
       });
   } else {
-    target.src = INLINE_SVG_FALLBACK;
+    target.src = DEFAULT_FALLBACK_COVER;
   }
 }
