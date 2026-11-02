@@ -36,14 +36,24 @@ export const SPOTIFY_DJ_PLAYLIST: Playlist = {
   tracks: { total: 15, items: [] },
 } as any;
 
+export function getDeletedPlaylistIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const raw = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+    if (raw) return new Set(JSON.parse(raw));
+  } catch {}
+  return new Set();
+}
+
 export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
+  const deletedIds = getDeletedPlaylistIds();
   let seenLiked = false;
   let seenDJ = false;
   const result: Playlist[] = [];
   const seenIds = new Set<string>();
 
   for (const pl of list) {
-    if (!pl || !pl.id) continue;
+    if (!pl || !pl.id || deletedIds.has(pl.id)) continue;
     const isLiked =
       pl.id === 'liked-songs' ||
       pl.id.includes('collection:tracks') ||
@@ -184,13 +194,16 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
       type = 'featured';
     }
 
-    const cards: DynamicShelfCard[] = shelf.cards.map((c: any) => ({
-      id: c.id,
-      title: c.title,
-      subtitle: stripHtml(c.subtitle || ''),
-      image: c.image || '',
-      isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
-    }));
+    const deletedIds = getDeletedPlaylistIds();
+    const cards: DynamicShelfCard[] = shelf.cards
+      .filter((c: any) => !deletedIds.has(c.id))
+      .map((c: any) => ({
+        id: c.id,
+        title: c.title,
+        subtitle: stripHtml(c.subtitle || ''),
+        image: c.image || '',
+        isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
+      }));
 
     if (cards.length > 0) {
       processedShelves.push({
@@ -286,9 +299,10 @@ export function buildDynamicShelves(
   const displayName = user?.display_name || 'Jorgeperezvk';
   const extracted = buildExtractedShelves(displayName);
 
+  const deletedIds = getDeletedPlaylistIds();
   // If user has custom playlists, include them at the top
   const userLists = playlists.filter(
-    (p) => !p.id.includes('collection:tracks') && p.type !== 'folder' && (p as any).is_custom
+    (p) => !deletedIds.has(p.id) && !p.id.includes('collection:tracks') && p.type !== 'folder' && (p as any).is_custom
   );
 
   if (userLists.length > 0) {
@@ -525,6 +539,14 @@ const store = create<SpotifyDataState>((set, get) => ({
 
       if (typeof window !== 'undefined') {
         try {
+          // 0. Permanent blacklist of deleted playlist IDs
+          const rawDeleted = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+          const deletedList: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
+          if (!deletedList.includes(id)) {
+            deletedList.push(id);
+            window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(deletedList));
+          }
+
           // 1. Remove from user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           if (rawImported) {
@@ -569,7 +591,7 @@ const store = create<SpotifyDataState>((set, get) => ({
 
           // 5. Cloud sync to Spotifree account if logged in
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
-            syncSpotifreeAccount({ playlists: remainingPlaylists }).catch(() => {});
+            syncSpotifreeAccount({ playlists: remainingPlaylists, deletedPlaylistIds: deletedList }).catch(() => {});
           });
         } catch (e) {
           console.error('Error deleting playlist from storage:', e);

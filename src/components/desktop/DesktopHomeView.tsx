@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSpotifyDataStore, buildDynamicShelves } from '../../store/useSpotifyDataStore';
+import { useSpotifyDataStore, buildDynamicShelves, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
@@ -168,10 +168,16 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         },
       ];
     }
+    const deletedIds = getDeletedPlaylistIds();
     const base = dynamicShelves && dynamicShelves.length > 0
       ? dynamicShelves
       : buildDynamicShelves(user, playlists, featuredMessage);
-    return base.filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'));
+    return base
+      .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
+      .map((shelf) => ({
+        ...shelf,
+        cards: shelf.cards.filter((c) => !deletedIds.has(c.id)),
+      }));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
   const handleQuickPlay = async (
@@ -509,28 +515,28 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 </div>
               </div>
 
-              {/* Audio Waves covering the ENTIRE widget background softly */}
-              <div className="absolute inset-0 pointer-events-none opacity-45 overflow-hidden z-0">
+              {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
+              <div className="absolute inset-0 pointer-events-none opacity-70 overflow-hidden z-0">
                 <InteractiveMusicWaves
                   isPlaying={isPlaying}
                   isSpeaking={false}
-                  voiceLevel={0.15}
+                  voiceLevel={0.25}
                   themeColor={djThemeColor || '#1ed760'}
                   className="w-full h-full object-cover"
                 />
               </div>
 
-              {/* Preview Visualizer: Ring/Orb centered on the right side, fully visible where it belongs */}
+              {/* Preview Visualizer: Ring/Orb centered on the right side, with noticeable breathing movement */}
               <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[140px] h-[140px] z-10">
-                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-85 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
-                  <SpotifyDJVisualizer size={130} state="idle" themeColor={djThemeColor} />
+                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-90 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
+                  <SpotifyDJVisualizer size={130} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
                 </div>
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
               <div className="flex items-end justify-between relative z-20 pt-4 w-full">
-                <div className="max-w-[calc(100%-72px)] md:max-w-[62%] pr-2">
-                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[60px] flex items-center" />
+                <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-68px)] md:max-w-[calc(100%-72px)]">
+                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[56px] break-words whitespace-normal" />
                 </div>
 
                 <button

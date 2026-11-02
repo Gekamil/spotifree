@@ -86,7 +86,7 @@ export const RotatingDJBannerText: React.FC<RotatingDJBannerTextProps> = ({
 
   return (
     <p
-      className={`${className} transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${
+      className={`${className} flex flex-wrap items-center break-words whitespace-normal transition-all duration-400 ease-[cubic-bezier(0.25,1,0.5,1)] ${
         isFadingOut
           ? 'opacity-0 -translate-y-2 filter blur-[3px] scale-[0.98]'
           : 'opacity-100 translate-y-0 filter blur-0 scale-100'

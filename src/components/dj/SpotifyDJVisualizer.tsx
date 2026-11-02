@@ -85,14 +85,14 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       const isSpeaking = currentState === 'speaking' || currentState === 'listening';
       const isPlaying = currentState === 'playing';
 
-      // Speed of rotation & wave travel: faster when speaking or playing, gentle and slow when idle
+      // Speed of rotation & wave travel: faster when speaking or playing, gentle and visible when idle
       const speed = mini
-        ? (isSpeaking ? 0.052 : isPlaying ? 0.038 : 0.022)
+        ? (isSpeaking ? 0.052 : isPlaying ? 0.038 : 0.024)
         : isSpeaking
         ? 0.042
         : isPlaying
-        ? 0.026
-        : 0.012;
+        ? 0.028
+        : 0.019;
       time += speed;
 
       // Exponential moving average damping for voice reactivity
@@ -123,11 +123,11 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       } else if (isPlaying) {
         // Music beat pulse simulation
         pulseScale = 1 + Math.sin(time * 1.8) * 0.025 + Math.sin(time * 3.6) * 0.01;
-        bulgeBase = 1.1 * (size / 260);
+        bulgeBase = 1.4 * (size / 260);
       } else {
-        // Calm resting idle breathing
-        pulseScale = 1 + Math.sin(time * 1.2) * 0.015;
-        bulgeBase = 0.6 * (size / 260);
+        // Noticeable but elegant calm resting idle breathing
+        pulseScale = 1 + Math.sin(time * 1.4) * 0.024;
+        bulgeBase = 1.9 * (size / 260);
       }
 
       ctx.save();

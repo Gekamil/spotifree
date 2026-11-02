@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
+import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
@@ -274,9 +274,11 @@ export const MobileLayout: React.FC = () => {
       cards: Array<{ id: string; title: string; subtitle: string; image: string }>;
     }> = [];
 
+    const deletedIds = getDeletedPlaylistIds();
+
     // 1. User's Playlists from current session ("nuestra sesión")
     const userLists = playlists.filter(
-      (p) => !p.id.includes('collection:tracks') && p.type !== 'folder'
+      (p) => !deletedIds.has(p.id) && !p.id.includes('collection:tracks') && p.type !== 'folder'
     );
     if (userLists.length > 0) {
       list.push({
@@ -299,17 +301,20 @@ export const MobileLayout: React.FC = () => {
     base
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .forEach((s) => {
-        list.push({
-          id: s.id,
-          title: s.title,
-          prefix: s.prefix,
-          cards: s.cards.map((c) => ({
-            id: c.id,
-            title: c.title,
-            subtitle: stripHtml(c.subtitle),
-            image: c.image,
-          })),
-        });
+        const filteredCards = s.cards.filter((c) => !deletedIds.has(c.id));
+        if (filteredCards.length > 0) {
+          list.push({
+            id: s.id,
+            title: s.title,
+            prefix: s.prefix,
+            cards: filteredCards.map((c) => ({
+              id: c.id,
+              title: c.title,
+              subtitle: stripHtml(c.subtitle),
+              image: c.image,
+            })),
+          });
+        }
       });
 
     if (homeFilter === 'musica') {
@@ -514,28 +519,28 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Audio Waves covering the ENTIRE widget background softly */}
-                    <div className="absolute inset-0 pointer-events-none opacity-45 overflow-hidden z-0">
+                    {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
+                    <div className="absolute inset-0 pointer-events-none opacity-70 overflow-hidden z-0">
                       <InteractiveMusicWaves
                         isPlaying={isPlaying}
                         isSpeaking={false}
-                        voiceLevel={0.15}
+                        voiceLevel={0.25}
                         themeColor={djThemeColor || '#1ed760'}
                         className="w-full h-full object-cover"
                       />
                     </div>
 
-                    {/* Preview Visualizer: Ring/Orb centered on the right side, fully visible */}
+                    {/* Preview Visualizer: Ring/Orb centered on the right side, with noticeable breathing movement */}
                     <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[120px] h-[120px] z-10">
-                      <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-85 transition-all duration-700">
-                        <SpotifyDJVisualizer size={115} state="idle" themeColor={djThemeColor} />
+                      <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-90 transition-all duration-700">
+                        <SpotifyDJVisualizer size={115} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
                       </div>
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-20 pt-4 w-full">
-                      <div className="max-w-[calc(100%-60px)] pr-2">
-                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[54px] flex items-center" />
+                      <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
+                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[50px] break-words whitespace-normal" />
                       </div>
 
                       <button
@@ -834,7 +839,8 @@ export const MobileLayout: React.FC = () => {
 
                 {/* All user playlists and artists strictly filtered */}
                 {(() => {
-                  let list = playlists;
+                  const deletedIds = getDeletedPlaylistIds();
+                  let list = playlists.filter((p) => !deletedIds.has(p.id));
                   if (libraryFilter === 'downloaded') {
                     const downloaded = getDownloadedPlaylists();
                     const existingIds = new Set(list.map((p) => p.id));
@@ -844,6 +850,7 @@ export const MobileLayout: React.FC = () => {
                   return list
                     .filter(
                       (p) =>
+                        !deletedIds.has(p.id) &&
                         !p.id.includes('collection:tracks') &&
                         p.id !== 'liked-songs' &&
                         p.id !== 'spotify-dj' &&

@@ -338,23 +338,17 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
       setIsCanvasMode(false);
       setCanvasUrl(null);
 
-      // Fetch Spotify Canvas video loop ONLY for valid Spotify track IDs
-      const cleanSpotifyId = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-      if (/^[0-9a-zA-Z]{22}$/.test(cleanSpotifyId)) {
-        fetchTrackCanvas(cleanSpotifyId).then((cUrl) => {
-          if (!cancelled) {
-            if (cUrl) {
-              setCanvasUrl(cUrl);
-            } else {
-              setCanvasUrl(null);
-              setIsCanvasMode(false);
-            }
+      // Fetch Spotify Canvas video loop dynamically for any track (including searched Deezer/iTunes tracks)
+      fetchTrackCanvas(currentTrack.id, currentTrack.name, currentTrack.artists?.[0]?.name).then((cUrl) => {
+        if (!cancelled) {
+          if (cUrl) {
+            setCanvasUrl(cUrl);
+          } else {
+            setCanvasUrl(null);
+            setIsCanvasMode(false);
           }
-        });
-      } else {
-        setCanvasUrl(null);
-        setIsCanvasMode(false);
-      }
+        }
+      });
 
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
       const checkAndSetVid = () => {

@@ -9,7 +9,7 @@ import {
   PinNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST } from '../../store/useSpotifyDataStore';
+import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { stripHtml } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
@@ -65,7 +65,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     viewMode,
   } = useUIStore();
 
-  let processedPlaylists = [...playlists];
+  const deletedIds = getDeletedPlaylistIds();
+  let processedPlaylists = playlists.filter((p) => !deletedIds.has(p.id));
 
   // Helper to determine if an item is strictly an Artist
   const checkIsArtist = (p: any): boolean => {

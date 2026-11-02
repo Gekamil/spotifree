@@ -55,21 +55,108 @@ function encodeCanvasRequest(trackId) {
   return Buffer.concat([Buffer.from([0x0A, inner.length]), inner]);
 }
 
-async function handleCanvas(req, res, url) {
-  const { trackId = '', trackUri = '' } = req.query || {};
-  const cleanId = (trackId || trackUri || url.searchParams.get('trackId') || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+/**
+ * Dynamically resolves any searched track (Deezer ID, iTunes, or track name + artist)
+ * to its official 22-character Spotify track ID using Spotify's Pathfinder findTracks query.
+ */
+async function resolveSpotifyTrackId(trackId = '', name = '', artist = '', cookie = '') {
+  let cleanId = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+  if (/^[0-9a-zA-Z]{22}$/.test(cleanId)) return cleanId;
 
-  if (!cleanId) return res.status(200).json({ canvasUrl: null });
-  // Spotify track IDs are 22-character alphanumeric strings.
-  // Immediately reject non-Spotify IDs (e.g. Deezer 'dz-*', iTunes, YouTube) to avoid false canvas URLs
-  if (!/^[0-9a-zA-Z]{22}$/.test(cleanId)) {
-    CANVAS_CACHE.set(cleanId, null);
-    return res.status(200).json({ canvasUrl: null });
+  let searchTitle = (name || '').trim();
+  let searchArtist = (artist || '').trim();
+
+  // If Deezer track ID (e.g. 'dz-580851082' or digits) and missing name/artist, resolve from Deezer API
+  if ((!searchTitle || !searchArtist) && (cleanId.startsWith('dz-') || /^\d+$/.test(cleanId))) {
+    const dzId = cleanId.replace(/^dz-/, '');
+    try {
+      const dRes = await fetch(`https://api.deezer.com/track/${dzId}`, {
+        headers: { 'User-Agent': 'Spotifree/1.0' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+      });
+      if (dRes.ok) {
+        const dJson = await dRes.json();
+        if (dJson.title) searchTitle = dJson.title;
+        if (dJson.artist?.name) searchArtist = dJson.artist.name;
+      }
+    } catch {}
   }
 
-  if (CANVAS_CACHE.has(cleanId)) return res.status(200).json({ canvasUrl: CANVAS_CACHE.get(cleanId) });
+  if (!searchTitle && !searchArtist) return null;
 
+  try {
+    const auth = await getWebPlayerAuth(cookie);
+    if (auth.accessToken) {
+      const queryStr = `${searchArtist} ${searchTitle}`.trim();
+      const variables = { query: queryStr, offset: 0, limit: 3 };
+      const extensions = {
+        persistedQuery: {
+          version: 1,
+          sha256Hash: '903df2a65d8121e27d73a2be03c01e88ebe6021bb6d4eb82a389e35d87e51d27',
+        },
+      };
+      const pfUrl = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=findTracks&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify(extensions))}`;
+      const pfRes = await fetch(pfUrl, {
+        headers: {
+          'Authorization': 'Bearer ' + auth.accessToken,
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'App-Platform': 'WebPlayer',
+          'Accept': 'application/json',
+          'Origin': 'https://open.spotify.com',
+          'Referer': 'https://open.spotify.com/',
+        },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
+      });
+      if (pfRes.ok) {
+        const pfJson = await pfRes.json();
+        const items = pfJson.data?.searchV2?.tracksV2?.items || [];
+        if (items.length > 0) {
+          const firstUri = items[0].item?.data?.uri || '';
+          const spId = firstUri.replace(/^spotify:track:/i, '').trim();
+          if (/^[0-9a-zA-Z]{22}$/.test(spId)) {
+            return spId;
+          }
+        }
+      }
+    }
+  } catch {}
+
+  return null;
+}
+
+async function handleCanvas(req, res, url) {
+  const { trackId = '', trackUri = '', name = '', artist = '' } = req.query || {};
+  const rawId = (trackId || trackUri || url.searchParams.get('trackId') || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+  const trackName = (name || url.searchParams.get('name') || '').trim();
+  const artistName = (artist || url.searchParams.get('artist') || '').trim();
   const cookie = req.headers['x-spotify-cookie'] || req.query?.cookie || '';
+
+  if (!rawId && !trackName) return res.status(200).json({ canvasUrl: null });
+
+  const cacheKey = `${rawId}_${trackName}_${artistName}`;
+  if (CANVAS_CACHE.has(cacheKey)) return res.status(200).json({ canvasUrl: CANVAS_CACHE.get(cacheKey) });
+  if (rawId && CANVAS_CACHE.has(rawId)) return res.status(200).json({ canvasUrl: CANVAS_CACHE.get(rawId) });
+
+  let cleanId = rawId;
+
+  // If not already a 22-character Spotify track ID, resolve dynamically using Spotify search
+  if (!/^[0-9a-zA-Z]{22}$/.test(cleanId)) {
+    const resolvedSpId = await resolveSpotifyTrackId(cleanId, trackName, artistName, cookie);
+    if (resolvedSpId) {
+      cleanId = resolvedSpId;
+      if (CANVAS_CACHE.has(cleanId)) {
+        const cached = CANVAS_CACHE.get(cleanId);
+        if (rawId) CANVAS_CACHE.set(rawId, cached);
+        CANVAS_CACHE.set(cacheKey, cached);
+        return res.status(200).json({ canvasUrl: cached });
+      }
+    } else {
+      CANVAS_CACHE.set(cacheKey, null);
+      if (rawId) CANVAS_CACHE.set(rawId, null);
+      return res.status(200).json({ canvasUrl: null });
+    }
+  }
+
   const uri = `spotify:track:${cleanId}`;
 
   try {
@@ -94,12 +181,16 @@ async function handleCanvas(req, res, url) {
               'client-token': auth.clientToken,
             },
             body: JSON.stringify(body),
+            signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
           });
           if (pathfinderRes.ok) {
             const json = await pathfinderRes.json();
             const canvas = json.data?.trackUnion?.canvas;
             if (canvas?.url) {
               CANVAS_CACHE.set(cleanId, canvas.url);
+              if (rawId) CANVAS_CACHE.set(rawId, canvas.url);
+              CANVAS_CACHE.set(cacheKey, canvas.url);
+              res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
               return res.status(200).json({ canvasUrl: canvas.url });
             }
           }
@@ -117,6 +208,7 @@ async function handleCanvas(req, res, url) {
             'User-Agent': 'Spotify/8.8.0 iOS/16.0 (iPhone14,2)',
           },
           body: protoBody,
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
         });
         if (spRes.ok) {
           const buf = await spRes.arrayBuffer();
@@ -124,6 +216,9 @@ async function handleCanvas(req, res, url) {
           const urlMatch = str.match(/https:\/\/[a-zA-Z0-9.\-_/]+\.mp4/);
           if (urlMatch) {
             CANVAS_CACHE.set(cleanId, urlMatch[0]);
+            if (rawId) CANVAS_CACHE.set(rawId, urlMatch[0]);
+            CANVAS_CACHE.set(cacheKey, urlMatch[0]);
+            res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
             return res.status(200).json({ canvasUrl: urlMatch[0] });
           }
         }
@@ -132,6 +227,8 @@ async function handleCanvas(req, res, url) {
   } catch {}
 
   CANVAS_CACHE.set(cleanId, null);
+  if (rawId) CANVAS_CACHE.set(rawId, null);
+  CANVAS_CACHE.set(cacheKey, null);
   return res.status(200).json({ canvasUrl: null });
 }
 

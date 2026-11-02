@@ -22,6 +22,7 @@ export interface SpotifreeAccount {
   bannerUrl: string | null;
   spotifyCookie?: string;
   playlists: Playlist[];
+  deletedPlaylistIds?: string[];
   likedTracks: string[];
   history?: Track[];
   stats?: any;
@@ -362,6 +363,16 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       window.localStorage.setItem('user_spotify_cookie', acc.spotifyCookie);
       useSpotifyDataStore.getState().initialize?.();
     }
+  }
+
+  // 1b. Sync deleted playlist IDs if present in cloud account
+  if (Array.isArray(acc.deletedPlaylistIds) && typeof window !== 'undefined') {
+    try {
+      const rawD = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+      const localD: string[] = rawD ? JSON.parse(rawD) : [];
+      const mergedSet = new Set([...localD, ...acc.deletedPlaylistIds]);
+      window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(Array.from(mergedSet)));
+    } catch {}
   }
 
   // 2. Persist custom profile info (avatar, banner, display name) across all local profile keys
