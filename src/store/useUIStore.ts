@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Playlist } from '../types/spotify';
+import type { Playlist, Track } from '../types/spotify';
 
 interface ContextMenuState {
   isOpen: boolean;
@@ -18,6 +18,8 @@ interface UIState {
   isSettingsModalOpen: boolean;
   isLoginModalOpen: boolean;
   isImportModalOpen: boolean;
+  isAddToPlaylistModalOpen: boolean;
+  trackForAddToPlaylist: Track | null;
   contextMenu: ContextMenuState;
   activeRightSidebar: 'none' | 'queue' | 'lyrics' | 'now-playing' | 'friends';
   sortOrder: 'recientes' | 'anadidos' | 'alfabetico' | 'creador';
@@ -44,6 +46,8 @@ interface UIState {
   closeLoginModal: () => void;
   openImportModal: () => void;
   closeImportModal: () => void;
+  openAddToPlaylistModal: (track: Track) => void;
+  closeAddToPlaylistModal: () => void;
   toggleRightSidebar: (sidebar: 'queue' | 'lyrics' | 'now-playing' | 'friends') => void;
   closeRightSidebar: () => void;
   setSortOrder: (order: 'recientes' | 'anadidos' | 'alfabetico' | 'creador') => void;
@@ -62,6 +66,8 @@ const store = create<UIState>((set) => ({
   isSettingsModalOpen: false,
   isLoginModalOpen: false,
   isImportModalOpen: false,
+  isAddToPlaylistModalOpen: false,
+  trackForAddToPlaylist: null,
   contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
   activeRightSidebar: 'none',
   sortOrder: 'recientes',
@@ -144,6 +150,8 @@ const store = create<UIState>((set) => ({
 
   openImportModal: () => set({ isImportModalOpen: true, isProfileOpen: false }),
   closeImportModal: () => set({ isImportModalOpen: false }),
+  openAddToPlaylistModal: (track: Track) => set({ isAddToPlaylistModalOpen: true, trackForAddToPlaylist: track }),
+  closeAddToPlaylistModal: () => set({ isAddToPlaylistModalOpen: false, trackForAddToPlaylist: null }),
 
   toggleRightSidebar: (sidebar) =>
     set((s) => ({
@@ -165,6 +173,8 @@ const store = create<UIState>((set) => ({
       isSettingsModalOpen: false,
       isLoginModalOpen: false,
       isImportModalOpen: false,
+      isAddToPlaylistModalOpen: false,
+      trackForAddToPlaylist: null,
       contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
     }),
 }));

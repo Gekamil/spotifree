@@ -58,6 +58,11 @@ export const TRANSLATIONS = {
     queue: 'Cola',
     lyrics: 'Letras',
     officialVideo: 'Vídeo oficial',
+    addToPlaylist: 'Añadir a playlist',
+    newPlaylist: 'Nueva playlist',
+    done: 'Hecho',
+    savedToPlaylists: 'Guardado en tus playlists',
+    removedFromPlaylists: 'Eliminado de tus playlists',
 
     // Settings
     languageTitle: 'Idioma',
@@ -131,6 +136,11 @@ export const TRANSLATIONS = {
     queue: 'Queue',
     lyrics: 'Lyrics',
     officialVideo: 'Official video',
+    addToPlaylist: 'Add to playlist',
+    newPlaylist: 'New playlist',
+    done: 'Done',
+    savedToPlaylists: 'Saved to your playlists',
+    removedFromPlaylists: 'Removed from your playlists',
 
     // Settings
     languageTitle: 'Language',
@@ -189,4 +199,18 @@ export function t(key: TranslationKey, params?: Record<string, string | number>)
     });
   }
   return text;
+}
+
+export function useTranslation() {
+  const language = useLanguageStore((s) => s.language);
+  const translate = (key: TranslationKey, params?: Record<string, string | number>) => {
+    let text: string = (TRANSLATIONS[language] as any)?.[key] || (TRANSLATIONS.es as any)[key] || key;
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v));
+      });
+    }
+    return text;
+  };
+  return { t: translate, language };
 }

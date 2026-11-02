@@ -3,10 +3,15 @@ import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { MobileLayout } from './components/mobile/MobileLayout';
 import { AudioController } from './components/common/AudioController';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
+import { AddToPlaylistModal } from './components/modals/AddToPlaylistModal';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
+
+if (typeof window !== 'undefined') {
+  (window as any).__useUIStore = useUIStore;
+}
 
 function App() {
   const initializeSpotify = useSpotifyDataStore((s) => s.initialize);
@@ -43,6 +48,7 @@ function App() {
     <ErrorBoundary>
       <AudioController />
       {isMobile ? <MobileLayout /> : <DesktopLayout />}
+      <AddToPlaylistModal />
     </ErrorBoundary>
   );
 }

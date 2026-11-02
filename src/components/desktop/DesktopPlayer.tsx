@@ -277,11 +277,18 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
 
             {/* Official Modern Spotify Add Track button (+) or Checked circle */}
             <button
-              onClick={() => toggleLike(currentTrack.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!currentTrack) return;
+                if (!isLiked) {
+                  toggleLike(currentTrack.id, currentTrack);
+                }
+                useUIStore.getState().openAddToPlaylistModal(currentTrack);
+              }}
               className={`transition-transform active:scale-90 p-1 shrink-0 ${
                 isLiked ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
               }`}
-              title={isLiked ? "Añadida a Canciones que te gustan" : "Añadir a Canciones que te gustan"}
+              title={isLiked ? "Añadida a tus playlists" : "Añadir a playlist"}
             >
               {isLiked ? (
                 <CheckTrackNativeIcon size={16} className="text-[#1ed760]" />

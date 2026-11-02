@@ -10,6 +10,7 @@ import {
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { useUIStore } from '../../store/useUIStore';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -184,9 +185,16 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
 
         {/* Favorite / Meter en la playlist / Guardar button */}
         <button
-          onClick={() => toggleLike(currentTrack.id)}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (!currentTrack) return;
+            if (!isLiked) {
+              toggleLike(currentTrack.id, currentTrack);
+            }
+            useUIStore.getState().openAddToPlaylistModal(currentTrack);
+          }}
           className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
-          title={isLiked ? 'Guardado en tus canciones favoritas' : 'Añadir a tus canciones favoritas'}
+          title={isLiked ? 'Añadida a tus playlists' : 'Añadir a playlist'}
         >
           {isLiked ? (
             <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />

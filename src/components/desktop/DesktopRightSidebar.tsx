@@ -647,11 +647,17 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
               {currentTrack && (
                 <button
-                  onClick={() => toggleLike(currentTrack.id)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!isLiked) {
+                      toggleLike(currentTrack.id, currentTrack);
+                    }
+                    useUIStore.getState().openAddToPlaylistModal(currentTrack);
+                  }}
                   className={`p-1.5 transition-transform active:scale-90 shrink-0 ${
                     isLiked ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
                   }`}
-                  title={isLiked ? 'Guardada en Tu biblioteca' : 'Añadir a Tu biblioteca'}
+                  title={isLiked ? 'Añadida a tus playlists' : 'Añadir a playlist'}
                 >
                   {isLiked ? (
                     <CheckTrackNativeIcon size={22} className="text-[#1ed760]" />

@@ -64,7 +64,11 @@ if ('serviceWorker' in navigator) {
                 if (typeof engine.ytPlayer.unMute === 'function') {
                   engine.ytPlayer.unMute();
                   const { volume, isMuted } = usePlayerStore.getState();
-                  if (!isMuted) engine.ytPlayer.setVolume(Math.round(volume * 100));
+                  if (typeof engine.applyCurrentVolume === 'function') {
+                    engine.applyCurrentVolume();
+                  } else if (!isMuted) {
+                    engine.ytPlayer.setVolume(Math.round(volume * 100));
+                  }
                 }
                 // Re-signal MediaSession
                 if ('mediaSession' in navigator) {

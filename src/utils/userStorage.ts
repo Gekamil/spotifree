@@ -155,6 +155,22 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
   } catch {}
 }
 
+export function removeCustomTrackFromStorage(playlistId: string, trackId: string, userId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const targetId = userId || getActiveUserId();
+    const key = targetId && targetId !== 'spotify-user'
+      ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
+      : `spotifree_playlist_tracks_${playlistId}`;
+    const raw = window.localStorage.getItem(key);
+    if (raw) {
+      const list: Track[] = JSON.parse(raw);
+      const filtered = list.filter((t) => t.id !== trackId);
+      window.localStorage.setItem(key, JSON.stringify(filtered));
+    }
+  } catch {}
+}
+
 export const SHARED_PLAYLISTS_KEY = 'spotifree_shared_playlists';
 
 export interface SharedPlaylistMetadata {

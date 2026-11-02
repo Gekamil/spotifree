@@ -4,6 +4,7 @@
  */
 
 import { useLanguageStore } from '../utils/i18n';
+import { audioEngine } from './audioEngine';
 
 export type DJVoiceId = 'alvaro' | 'salome' | 'gemini';
 
@@ -264,9 +265,10 @@ class AIDJVoiceService {
    */
   private duckAudio() {
     try {
-      const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-      if (engine && typeof engine.setDuckedVolume === 'function') {
-        engine.setDuckedVolume(0.22);
+      if (audioEngine && typeof audioEngine.setDuckedVolume === 'function') {
+        audioEngine.setDuckedVolume(0.10);
+      } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+        (window as any).__audioEngine.setDuckedVolume(0.10);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Duck audio warning:', e);
@@ -278,9 +280,10 @@ class AIDJVoiceService {
    */
   private restoreAudio() {
     try {
-      const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-      if (engine && typeof engine.restoreDuckedVolume === 'function') {
-        engine.restoreDuckedVolume(1000);
+      if (audioEngine && typeof audioEngine.restoreDuckedVolume === 'function') {
+        audioEngine.restoreDuckedVolume(1000);
+      } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+        (window as any).__audioEngine.restoreDuckedVolume(1000);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Restore audio warning:', e);

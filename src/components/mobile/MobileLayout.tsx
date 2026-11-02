@@ -16,6 +16,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -502,11 +503,14 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Top Bar: Beta pill & 3 dots */}
+                    {/* Top Bar: DJ branding & 3 dots (Beta removed) */}
                     <div className="flex items-center justify-between relative z-10">
-                      <span className="text-[11px] font-bold bg-black/40 text-white px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                        Beta
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+                        <span className="text-[12px] font-black text-white/90 uppercase tracking-widest font-['SpotifyMixUI']">
+                          Spotify DJ
+                        </span>
+                      </div>
                       <div className="text-white/80 p-1">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                           <circle cx="12" cy="5" r="2" />
@@ -516,9 +520,23 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Center Loop Graphic (Photo 3) */}
-                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-85">
-                      <SpotifyDJVisualizer size={140} state="idle" themeColor={djThemeColor} />
+                    {/* Preview Visualizer: Ring/Orb in the BACKGROUND, Waves gently moving in FRONT */}
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[140px] h-[140px]">
+                      {/* Layer 1: Glowing DJ Ring / Orb in the BACKGROUND with subtle slow ambient rotation */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-70 transition-all duration-700 animate-spin-slow">
+                        <SpotifyDJVisualizer size={130} state="idle" themeColor={djThemeColor} />
+                      </div>
+
+                      {/* Layer 2: Audio Waves floating gently in front of the ring */}
+                      <div className="absolute inset-0 flex items-center justify-center opacity-85 z-10 pointer-events-none">
+                        <InteractiveMusicWaves
+                          isPlaying={true}
+                          isSpeaking={false}
+                          voiceLevel={0.3}
+                          themeColor={djThemeColor || '#1ed760'}
+                          className="w-full h-full scale-90"
+                        />
+                      </div>
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}

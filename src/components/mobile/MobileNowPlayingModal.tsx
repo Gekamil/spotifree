@@ -27,6 +27,7 @@ import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { useUIStore } from '../../store/useUIStore';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -499,8 +500,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               </div>
             </div>
             <button
-              onClick={() => toggleLike(currentTrack.id)}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (!currentTrack) return;
+                if (!isLiked) {
+                  toggleLike(currentTrack.id, currentTrack);
+                }
+                useUIStore.getState().openAddToPlaylistModal(currentTrack);
+              }}
               className="w-10 h-10 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-transform shrink-0"
+              title={isLiked ? 'Añadida a tus playlists' : 'Añadir a playlist'}
             >
               {isLiked ? (
                 <CheckTrackNativeIcon size={26} className="text-[#1ed760]" />

@@ -75,37 +75,82 @@ interface IntentAnalysis {
   excludeTitles?: string[];
 }
 
+const lastUsedSpeechMap = new Map<string, string>();
+
+function pickDynamicSpeech(categoryKey: string, options: string[]): string {
+  const lastUsed = lastUsedSpeechMap.get(categoryKey);
+  const candidates = options.length > 1 ? options.filter((s) => s !== lastUsed) : options;
+  const picked = candidates[Math.floor(Math.random() * candidates.length)] || options[0];
+  lastUsedSpeechMap.set(categoryKey, picked);
+  return picked;
+}
+
 function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   const p = prompt.toLowerCase().trim();
   const namePhrase = userName ? `, ${userName}` : '';
+  const isEn = useLanguageStore.getState().language === 'en';
 
   // 1. Sad / Bad Day / Need to cry / Heartbreak / Emotional
   if (/mal d[ií]a|triste|baj[oó]n|llorar|depre|desanimo|desamor|pena|despecho|tristeza|solo|sola|duro|agobiad/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('sad', [
+          `I know it has been a tough day${namePhrase}. I put together something gentle to help you unwind and let go.`,
+          `Taking a breather${namePhrase}. Here are some quiet, soothing acoustic melodies for your space.`,
+          `Sending good energy your way. Lean back and let these warm harmonies comfort you.`,
+        ])
+      : pickDynamicSpeech('sad', [
+          `Sé que has tenido un día difícil${namePhrase}. Te preparé algo tranquilo para bajar revoluciones y desconectar.`,
+          `Momento de desahogarse${namePhrase}. Aquí tienes melodías acústicas y suaves para que respires hondo.`,
+          `Mucho ánimo. Ponte cómodo y deja que estas canciones te acompañen en calma.`,
+        ]);
     return {
-      speech: `Sé que has tenido un día difícil${namePhrase}. Te preparé algo tranquilo para bajar revoluciones y desconectar.`,
+      speech,
       query: 'morat beret pablo alboran baladas acustico guitarra suave',
-      vibeTitle: 'Sesión: Calma y Desconexión',
+      vibeTitle: isEn ? 'Session: Calm & Reset' : 'Sesión: Calma y Desconexión',
       vibeColor: '#3d4852',
     };
   }
 
-  // 2. Gym / Workout / High Energy / Motivation / Training
-  if (/gym|entrenar|entrenamiento|pesas|fuerza|duro|drill|a tope|correr|cardio|crossfit|mancuerna|hype|motiva|romperla/i.test(p)) {
+  // 2. Gym / Workout / High Energy / Motivation / Training / "Más movido"
+  if (/m[aá]s movido|gym|entrenar|entrenamiento|pesas|fuerza|duro|drill|a tope|correr|cardio|crossfit|mancuerna|hype|motiva|romperla/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('gym', [
+          `Maximum energy incoming${namePhrase}! Here's a high-octane set to keep you hyped and pushing limits.`,
+          `Turning up the tempo! Heavy bass, unstoppable momentum, and pure adrenaline.`,
+          `No holding back now! Crank the volume and power through with these bangers.`,
+        ])
+      : pickDynamicSpeech('gym', [
+          `¡A romperla en el entreno${namePhrase}! Te dejo este set con pura energía pesada. ¡Dale con todo!`,
+          `¡Subiendo los decibelios! Ritmos rápidos y mucha adrenalina para no parar.`,
+          `¡Aquí no hay descansos! Dale caña con esta dosis de pura potencia.`,
+        ]);
     return {
-      speech: `¡A romperla en el entreno${namePhrase}! Te dejo este set con pura energía pesada. ¡Dale con todo!`,
+      speech,
       query: 'duki eladio carrion travis scott drill phonk motivacion',
-      vibeTitle: 'Sesión: Máxima Adrenalina Gym',
+      vibeTitle: isEn ? 'Session: Maximum Adrenaline' : 'Sesión: Máxima Adrenalina',
       vibeColor: '#e65100',
       excludeTitles: ['gym', 'workout', 'fitness'],
     };
   }
 
-  // 3. Party / Reggaeton / Dancing / Weekend / Club
-  if (/fiesta|perreo|bailar|discoteca|farra|desmadre|viernes|s[aá]bado|marcha|reggaeton|perrear|bellakeo|dembow|rumba/i.test(p)) {
+  // 3. Party / Reggaeton / Dancing / Weekend / Club / "Reggaetón"
+  if (/reggaet[oó]n|fiesta|perreo|bailar|discoteca|farra|desmadre|viernes|s[aá]bado|marcha|perrear|bellakeo|dembow|rumba/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('reggaeton', [
+          `Party mode activated! Let's turn up the heat with these infectious reggaeton bangers.`,
+          `Pumping up the energy${namePhrase}! Get ready to move with the hottest urban beats right now.`,
+          `Turn that volume up! Pure rhythm and high-energy fiesta anthems coming right at you.`,
+        ])
+      : pickDynamicSpeech('reggaeton', [
+          `¡Modo fiesta activado! Arrancamos con este perreo para que no pares de moverte. Súbele.`,
+          `¡Subiendo la temperatura en cabina! Puro ritmo latino y reggaetón del bueno para bailar.`,
+          `¡A romper la pista${namePhrase}! Te armé un set bien pegado con los mejores himnos urbanos.`,
+          `¡Sube ese volumen! Aquí llega la mejor energía de fiesta directa a tus auriculares.`,
+        ]);
     return {
-      speech: `¡Modo fiesta activado! Arrancamos con este perreo para que no pares de moverte. Súbele.`,
+      speech,
       query: 'bad bunny feid quevedo mora rauw alejandro reggaeton exitos',
-      vibeTitle: 'Sesión: Perreo y Fiesta',
+      vibeTitle: isEn ? 'Session: Party & Perreo' : 'Sesión: Perreo y Fiesta',
       vibeColor: '#d32f2f',
       excludeTitles: ['reggaeton', 'perreo', 'fiesta'],
     };
@@ -113,10 +158,19 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 3b. Bachata / Latino Romántico
   if (/bachata|romeo|prince royce|aventura|salsa|merengue/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('bachata', [
+          `Pure romance and rhythm${namePhrase}! Here are the greatest hits from Romeo Santos, Prince Royce, and more.`,
+          `Classic Latin romantic groove coming through. Turn up the feeling.`,
+        ])
+      : pickDynamicSpeech('bachata', [
+          `¡Pura bachata y sentimiento${namePhrase}! Aquí tienes los himnos de Romeo Santos, Prince Royce y más.`,
+          `Romance y ritmo a fuego lento. Disfruta de esta selección de bachata de primer nivel.`,
+        ]);
     return {
-      speech: `¡Pura bachata y sentimiento${namePhrase}! Aquí tienes los himnos de Romeo Santos, Prince Royce y más.`,
+      speech,
       query: 'romeo santos prince royce aventura juan luis guerra bachata exitos',
-      vibeTitle: 'Sesión: Bachata y Sentimiento',
+      vibeTitle: isEn ? 'Session: Bachata & Romance' : 'Sesión: Bachata y Sentimiento',
       vibeColor: '#7b1fa2',
       excludeTitles: ['bachata'],
     };
@@ -124,10 +178,20 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 3c. Trap / Urbano / Drill
   if (/trap|drill|urbano|calle|duki|eladio|milo j|trueno|c\.r\.o|ysy a/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('trap', [
+          `Heavy urban vibes incoming${namePhrase}. Sharp bars and the hardest trap beats on the block.`,
+          `Dialing into the streets. Deep 808s and the freshest flow in the scene.`,
+        ])
+      : pickDynamicSpeech('trap', [
+          `Directo a la vibra pesada${namePhrase}. Puras barras y los ritmos urbanos más duros del momento.`,
+          `Flow callejero en cabina. Bajos contundentes y el mejor trap de la escena.`,
+          `Sonido urbano pesado. Aquí tienes la crema del drill y el trap.`,
+        ]);
     return {
-      speech: `Directo a la vibra pesada${namePhrase}. Puras barras y los ritmos urbanos más duros del momento.`,
+      speech,
       query: 'duki trueno milo j bizarrap eladio carrion trap exitos',
-      vibeTitle: 'Sesión: Trap y Urbano',
+      vibeTitle: isEn ? 'Session: Trap & Urban' : 'Sesión: Trap y Urbano',
       vibeColor: '#ff5722',
       excludeTitles: ['trap'],
     };
@@ -135,10 +199,19 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 3d. Electrónica / House / Dance
   if (/electro|electronic|techno|house|edm|rave|dance|dj set/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('electronic', [
+          `Pumping up the BPM! Here's a crisp electronic set to keep the dancefloor alive.`,
+          `Club mode engaged. Pulsing beats and immersive synth waves.`,
+        ])
+      : pickDynamicSpeech('electronic', [
+          `¡Subiendo los BPMs! Te preparé una sesión electrónica limpia para mantener la energía al tope.`,
+          `Modo club activado. Bajos sintetizados y ritmos envolventes para perderse en la música.`,
+        ]);
     return {
-      speech: `¡Subiendo los BPMs! Te preparé una sesión electrónica limpia para mantener la energía al tope.`,
+      speech,
       query: 'calvin harris david guetta tiesto avicii edm dance hits',
-      vibeTitle: 'Sesión: Club Electrónica',
+      vibeTitle: isEn ? 'Session: Club Electronic' : 'Sesión: Club Electrónica',
       vibeColor: '#00acc1',
       excludeTitles: ['electro', 'electronic', 'house'],
     };
@@ -146,31 +219,62 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 3e. Rock / Indie / Clásicos del Rock
   if (/rock|guitarra|indie|queen|nirvana|coldplay|estopa|melendi/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('rock', [
+          `Turn up those guitars! Timeless rock anthems you can sing along to at the top of your lungs.`,
+          `Pure rock and roll spirit! Crank up the volume and feel the distortion.`,
+        ])
+      : pickDynamicSpeech('rock', [
+          `¡Suban esas guitarras! Clásicos y temazos de rock que se cantan a pleno pulmón.`,
+          `Puro espíritu de rock and roll. Dale gas al amplificador y siente el ritmo.`,
+        ]);
     return {
-      speech: `¡Suban esas guitarras! Clásicos y temazos de rock que se cantan a pleno pulmón.`,
+      speech,
       query: 'queen coldplay estopa melendi fito fitipaldis rock exitos',
-      vibeTitle: 'Sesión: Clásicos del Rock',
+      vibeTitle: isEn ? 'Session: Rock Classics' : 'Sesión: Clásicos del Rock',
       vibeColor: '#c2185b',
       excludeTitles: ['rock', 'rock n roll'],
     };
   }
 
   // 4. Study / Focus / Deep Work / Reading / Coding
-  if (/estudiar|concentra|trabajar|lectura|estudio|lofi|piano|trabajo|examen|tarea|oficina|programar|enfoque/i.test(p)) {
+  if (/estudiar|concentra|trabajar|lectura|estudio|piano|trabajo|examen|tarea|oficina|programar|enfoque/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('focus', [
+          `Focus time${namePhrase}. Here are clean, steady beats to help you stay in the zone.`,
+          `Deep work atmosphere ready. Smooth textures to power through your tasks.`,
+        ])
+      : pickDynamicSpeech('focus', [
+          `Momento de enfoque${namePhrase}. Aquí tienes ritmos limpios para concentrarte y rendir al cien.`,
+          `Zona de concentración activa. Sonidos constantes y fluidos para que nada te distraiga.`,
+        ]);
     return {
-      speech: `Momento de enfoque${namePhrase}. Aquí tienes ritmos limpios para concentrarte y rendir al cien.`,
+      speech,
       query: 'lofi study beats chill instrumental piano calm',
-      vibeTitle: 'Sesión: Enfoque Profundo',
+      vibeTitle: isEn ? 'Session: Deep Focus' : 'Sesión: Enfoque Profundo',
       vibeColor: '#1976d2',
     };
   }
 
-  // 5. Chill / Lo-Fi / Relaxed Rhythm
+  // 5. Chill / Lo-Fi / Relaxed Rhythm / "Algo chill"
   if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres|lofi|lo-fi/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('chill', [
+          `Time to unwind${namePhrase}. Here's a curated lo-fi chill session to disconnect and clear your head.`,
+          `Slowing down the tempo. Sit back, take a breath, and let these smooth beats flow.`,
+          `Pure chill vibes. Warm melodies, gentle beats, and zero stress.`,
+          `A quiet moment for you. Put your headphones on and drift away with this peaceful soundscape.`,
+        ])
+      : pickDynamicSpeech('chill', [
+          `Relájate${namePhrase}. Te preparé una sesión lo-fi con ritmos suaves y tranquilos para desconectar del mundo.`,
+          `Bajamos las revoluciones${namePhrase}. Aquí tienes una selección relajada para desconectar y respirar hondo.`,
+          `Vibra tranquila en cabina. Ritmos lentos, texturas suaves y cero preocupaciones.`,
+          `Momento de paz. Ponte cómodo y déjate llevar por esta atmósfera relajante.`,
+        ]);
     return {
-      speech: `Relájate${namePhrase}. Te preparé una sesión lo-fi con ritmos suaves y tranquilos para desconectar del mundo.`,
+      speech,
       query: 'lofi hip hop beats chill study instrumental',
-      vibeTitle: 'Sesión: Lo-Fi Chill Beats',
+      vibeTitle: isEn ? 'Session: Lo-Fi Chill Beats' : 'Sesión: Lo-Fi Chill Beats',
       vibeColor: '#00897b',
       excludeTitles: ['chill', 'relax', 'chill out', 'reggaeton', 'techno'],
     };
@@ -178,31 +282,60 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
 
   // 6. Sleep / Night / Bedtime
   if (/dormir|noche|cama|sue[nñ]o|descansar|acostarse/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('sleep', [
+          `Good night${namePhrase}. Here's an intimate, soothing soundtrack to help you drift off peacefully.`,
+          `Soft bedtime melodies to quiet your thoughts and rest deep.`,
+        ])
+      : pickDynamicSpeech('sleep', [
+          `Buenas noches${namePhrase}. Te dejo esta selección íntima y calmada para que descanses como toca.`,
+          `Sonidos suaves y envolventes para despejar la mente y conciliar el sueño.`,
+        ]);
     return {
-      speech: `Buenas noches. Te dejo esta selección íntima y calmada para que descanses como toca.`,
+      speech,
       query: 'sleep ambient lofi night piano calm ludovico einaudi',
-      vibeTitle: 'Sesión: Calma Nocturna',
+      vibeTitle: isEn ? 'Session: Night Calm' : 'Sesión: Calma Nocturna',
       vibeColor: '#283593',
     };
   }
 
   // 7. Road trip / Driving / Car
   if (/coche|viaje|conducir|carretera|viajar|ruta|auto/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('roadtrip', [
+          `Music for the open road! Turn up the volume and enjoy the ride with these anthems.`,
+          `Hit the highway! Great travel companions to make every mile fly by.`,
+        ])
+      : pickDynamicSpeech('roadtrip', [
+          `¡Música para la carretera! Sube el volumen y disfruta del camino con estos temazos.`,
+          `¡Rumbo al destino! Buenas canciones para que cada kilómetro sea una fiesta.`,
+        ]);
     return {
-      speech: `¡Música para la carretera! Sube el volumen y disfruta del camino con estos temazos.`,
+      speech,
       query: 'avicii coldplay dua lipa the weeknd road trip hits',
-      vibeTitle: 'Sesión: Carretera y Viento',
+      vibeTitle: isEn ? 'Session: Open Road' : 'Sesión: Carretera y Viento',
       vibeColor: '#f57c00',
     };
   }
 
-  // 8. Nostalgia / Decades (2000s, 90s, 80s, classic)
-  if (/2000|noventa|ochenta|80|90|clasic|retro|nostalg|recuerdo|antigu|viej/i.test(p)) {
-    const era = /80/i.test(p) ? 'los ochenta' : /90/i.test(p) ? 'los noventa' : 'los dos mil';
+  // 8. Nostalgia / Decades (2000s, 90s, 80s, classic) / "Clásicos"
+  if (/2000|noventa|ochenta|80|90|clasic|cl[aá]sico|retro|nostalg|recuerdo|antigu|viej/i.test(p)) {
+    const era = /80/i.test(p) ? 'los 80' : /90/i.test(p) ? 'los 90' : 'los 2000';
+    const speech = isEn
+      ? pickDynamicSpeech('classics', [
+          `Taking a trip back in time! Timeless anthems that never get old. Sing along!`,
+          `Pure nostalgia! Classic hits that defined eras and still sound incredible today.`,
+          `Golden anthems coming right through. Enjoy this unforgettable vintage throwback.`,
+        ])
+      : pickDynamicSpeech('classics', [
+          `¡Viajazo en el tiempo! Esos himnos legendarios que nunca pasan de moda. A cantar a pleno pulmón.`,
+          `¡Puros recuerdos! Canciones inolvidables que marcaron época y siguen sonando brutales.`,
+          `Nostalgia de la buena. Dale play a estos himnos de oro de ${era}.`,
+        ]);
     return {
-      speech: `¡Viajazo a ${era}! Esos himnos que nunca pasan de moda. A cantar a pleno pulmón.`,
+      speech,
       query: `exitos clasicos ${era} pop rock hits radio`,
-      vibeTitle: `Sesión: Clásicos de ${era.toUpperCase()}`,
+      vibeTitle: isEn ? 'Session: Timeless Classics' : `Sesión: Clásicos de ${era.toUpperCase()}`,
       vibeColor: '#3949ab',
     };
   }
@@ -226,7 +359,6 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     }
   }
 
-  // Regex artist extraction if user says e.g. "ponme canciones de X" or "algo de X"
   if (!detectedArtist) {
     const match = p.match(/(?:ponme|algo de|canciones de|musica de|escuchar a|parecido a|tipo)\s+([a-zA-Z0-9\s]+)/i);
     if (match && match[1] && match[1].trim().length > 2 && match[1].trim().length < 30) {
@@ -235,21 +367,59 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   }
 
   if (detectedArtist) {
+    const speech = isEn
+      ? `Nothing beats ${detectedArtist}! Here's a handpicked selection with their finest tracks.`
+      : `¡Qué temazos tiene ${detectedArtist}! Te armé una selección con sus mejores temas. Dale play.`;
     return {
-      speech: `¡Qué temazos tiene ${detectedArtist}! Te armé una selección con sus mejores temas. Dale play.`,
+      speech,
       query: `${detectedArtist} exitos populares`,
       vibeTitle: `Sesión: ${detectedArtist.toUpperCase()}`,
       vibeColor: '#0c52cc',
     };
   }
 
-  // 10. General / Surprise / Catch-all
+  // 10. General / Surprise / "Sorpréndeme" / Catch-all
+  const isSurprise = /sorpr[eé]ndeme|sorpresa|aleatorio|random|mezcla|otra cosa/i.test(p);
+  const speech = isEn
+    ? pickDynamicSpeech('surprise', [
+        `Switching up the script${namePhrase}! Let me take the wheel with this unexpected, fresh mix.`,
+        `Time for a surprise! I dug deep into your tastes to bring an exciting mashup.`,
+        `Curating a brand new groove for you. Sit back and enjoy the discovery.`,
+      ])
+    : pickDynamicSpeech('surprise', [
+        `¡Venga esa sorpresa${namePhrase}! Rebusqué en tus listas y encontré combinaciones que te van a volar la cabeza.`,
+        `¡Cambiamos el guión! Déjame llevar el volante con esta mezcla inesperada.`,
+        `Modo aleatorio premium. Temas que te encantan junto a descubrimientos frescos.`,
+        `Cambiando de onda${namePhrase}. Aquí tienes una mezcla fresca pensada para ti. A disfrutarla.`,
+      ]);
+
   return {
-    speech: `Cambiando de onda${namePhrase}. Aquí tienes una mezcla fresca pensada para ti. A disfrutarla.`,
-    query: `${p} exitos canciones`,
-    vibeTitle: `Sesión: ${prompt.slice(0, 20)}`,
+    speech,
+    query: isSurprise ? 'exitos pop latino urbano indie radio hits' : `${p} exitos canciones`,
+    vibeTitle: isSurprise ? (isEn ? 'Session: Surprise Mashup' : 'Sesión: Mezcla Sorpresa') : `Sesión: ${prompt.slice(0, 20)}`,
     vibeColor: '#0050d0',
   };
+}
+
+/**
+ * Pre-warms neural TTS audio for all primary quick vibe chips so that
+ * tapping any button starts voice playback with 0ms network latency.
+ */
+export function prefetchQuickVibeVoices(userName?: string): void {
+  const prompts = [
+    'Algo chill',
+    'Más movido',
+    'Reggaetón',
+    'Clásicos',
+    'Trap / Urbano',
+    'Sorpréndeme',
+  ];
+  prompts.forEach((promptText) => {
+    try {
+      const analysis = analyzeUserIntent(promptText, userName || '');
+      aiDJVoiceService.prefetchPhrase(analysis.speech);
+    } catch {}
+  });
 }
 
 export const useAIDJStore = create<AIDJState>((set, get) => ({
@@ -312,6 +482,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       : `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
 
     aiDJVoiceService.prefetchPhrase(introText);
+    prefetchQuickVibeVoices(cleanName);
 
     // 1. Curate initial set using dynamic hashtag analysis of user playlists + related tracks
     const initialSet = await getCuratedSetForHashtag(dominantTag, 15);

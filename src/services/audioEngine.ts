@@ -2397,7 +2397,7 @@ class AudioEngine {
   private duckFraction: number = 0.08;
   private duckFadeInterval: any = null;
 
-  public setDuckedVolume(fraction: number = 0.22) {
+  public setDuckedVolume(fraction: number = 0.10) {
     if (this.duckFadeInterval !== null) {
       clearInterval(this.duckFadeInterval);
       this.duckFadeInterval = null;
@@ -2456,6 +2456,9 @@ class AudioEngine {
       if (this.secondaryAudio) {
         this.secondaryAudio.volume = Math.max(0, Math.min(1, curVol));
       }
+      if (this.masterGain && this.audioContext) {
+        try { this.masterGain.gain.setValueAtTime(curVol, this.audioContext.currentTime); } catch {}
+      }
 
       if (currentStep >= steps) {
         clearInterval(this.duckFadeInterval);
@@ -2474,7 +2477,7 @@ class AudioEngine {
     }
     if (this.isAudioDucked) {
       const base = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
-      return Math.max(0.04, base * this.duckFraction);
+      return Math.max(0.02, base * this.duckFraction);
     }
     return usePlayerStore.getState().volume;
   }
@@ -2495,6 +2498,9 @@ class AudioEngine {
     this.audio.volume = eff;
     if (this.secondaryAudio) {
       this.secondaryAudio.volume = eff;
+    }
+    if (this.masterGain && this.audioContext) {
+      try { this.masterGain.gain.setValueAtTime(eff, this.audioContext.currentTime); } catch {}
     }
   }
 

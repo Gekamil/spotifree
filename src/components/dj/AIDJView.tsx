@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
-import { useAIDJStore } from '../../services/aiDJService';
+import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useUIStore } from '../../store/useUIStore';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
@@ -89,6 +90,30 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   } = usePlayerStore();
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
+  const [isQueueRendered, setIsQueueRendered] = useState(false);
+  const [isQueueAnimated, setIsQueueAnimated] = useState(false);
+
+  // Pre-cache all quick vibe voices for instant playback
+  useEffect(() => {
+    prefetchQuickVibeVoices();
+  }, []);
+
+  // Smooth bottom sheet glide transition for the queue
+  useEffect(() => {
+    if (showQueueDrawer) {
+      setIsQueueRendered(true);
+      const raf = requestAnimationFrame(() => {
+        setIsQueueAnimated(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setIsQueueAnimated(false);
+      const timer = setTimeout(() => {
+        setIsQueueRendered(false);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [showQueueDrawer]);
   const [ambientColor, setAmbientColor] = useState<string>('#0c52cc');
   const [gradientLayers, setGradientLayers] = useState<{ colorA: string; colorB: string; activeLayer: 'A' | 'B' }>({
     colorA: '#0c52cc',
@@ -440,9 +465,16 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </button>
 
               <button
-                onClick={() => toggleLike(currentTrack.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!currentTrack) return;
+                  if (!isCurrentLiked) {
+                    toggleLike(currentTrack.id, currentTrack);
+                  }
+                  useUIStore.getState().openAddToPlaylistModal(currentTrack);
+                }}
                 className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
-                title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
+                title={isCurrentLiked ? 'Añadida a tus playlists' : 'Añadir a playlist'}
               >
                 {isCurrentLiked ? (
                   <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
@@ -501,15 +533,21 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         <div className="w-12 h-12 sm:w-14 sm:h-14 opacity-0 pointer-events-none" />
       </footer>
 
-      {/* Queue Drawer: On mobile it is a bottom-sheet; on desktop it opens as an upward tab where the button is */}
-      {showQueueDrawer && (
+      {/* Queue Drawer: On mobile it is a smooth bottom-sheet; on desktop it opens as an upward tab where the button is */}
+      {isQueueRendered && (
         <div
-          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm sm:backdrop-blur-none sm:bg-black/20 flex flex-col justify-end sm:block select-none animate-in fade-in duration-200"
+          className={`fixed inset-0 z-50 bg-black/65 backdrop-blur-sm sm:backdrop-blur-none sm:bg-black/20 flex flex-col justify-end sm:block select-none transition-opacity duration-350 ease-out ${
+            isQueueAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
           onClick={() => setShowQueueDrawer(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[76vh] sm:max-h-[520px] sm:w-[420px] sm:absolute sm:bottom-20 sm:left-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-8 sm:pb-5 animate-in slide-in-from-bottom duration-300 ease-out"
+            className={`bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[76vh] sm:max-h-[520px] sm:w-[420px] sm:absolute sm:bottom-20 sm:left-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-8 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+              isQueueAnimated
+                ? 'translate-y-0 opacity-100 scale-100'
+                : 'translate-y-full opacity-50 scale-[0.98] sm:translate-y-4 sm:opacity-0 sm:scale-95'
+            }`}
           >
             {/* Top Drag Indicator Pill (Mobile only) */}
             <div
