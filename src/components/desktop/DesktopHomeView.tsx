@@ -14,7 +14,7 @@ import { useAIDJStore } from '../../services/aiDJService';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
-  { id: 'spotify-dj', name: 'DJ', image: 'https://i.scdn.co/image/ab67706f000000021b0dc3d4891823ebce25c898', color: '#0055ff' },
+  { id: 'mix-diario-1', name: 'Mix diario 1', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es', color: '#C45028' },
   { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
   { id: 'my-top-tracks-playlist', name: 'My top tracks playlist', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59', color: '#5E3D82' },
   { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
@@ -172,11 +172,20 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     const base = dynamicShelves && dynamicShelves.length > 0
       ? dynamicShelves
       : buildDynamicShelves(user, playlists, featuredMessage);
+    const isDJCard = (c: { id: string; title?: string }) =>
+      c.id === 'spotify-dj' ||
+      c.id === 'dj' ||
+      c.id === 'ai-dj' ||
+      (c.title || '').toLowerCase().trim() === 'dj' ||
+      (c.title || '').toLowerCase().includes('spotify dj') ||
+      (c.title || '').toLowerCase() === 'tu dj' ||
+      (c.title || '').toLowerCase().includes('personal dj');
+
     return base
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .map((shelf) => ({
         ...shelf,
-        cards: shelf.cards.filter((c) => !deletedIds.has(c.id)),
+        cards: shelf.cards.filter((c) => !deletedIds.has(c.id) && !isDJCard(c)),
       }));
   }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
 
@@ -526,8 +535,14 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 </div>
               </div>
 
-              {/* Desktop Arch: Glowing Neon Half-Circle rising from the bottom edge next to the arrow button (Photo 6) */}
-              <div className="absolute right-20 md:right-24 -bottom-6 pointer-events-none flex items-center justify-center w-[150px] h-[150px] md:w-[170px] md:h-[170px] z-10 [mask-image:linear-gradient(to_bottom,black_60%,transparent_100%)]">
+              {/* Desktop Arch: Glowing Neon Half-Circle rising from the bottom edge next to the arrow button (Photo 6) with smooth bottom transparency fade */}
+              <div
+                className="absolute right-20 md:right-24 -bottom-6 pointer-events-none flex items-center justify-center w-[150px] h-[150px] md:w-[170px] md:h-[170px] z-10"
+                style={{
+                  WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
+                  maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
+                }}
+              >
                 <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
                   <SpotifyDJVisualizer
                     size={160}

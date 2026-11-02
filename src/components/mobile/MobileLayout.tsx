@@ -533,8 +533,14 @@ export const MobileLayout: React.FC = () => {
                       />
                     </div>
 
-                    {/* Center Visualizer: Large Orb centered in the middle, showing upper arch (Photo 7) */}
-                    <div className="absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] z-10 [mask-image:linear-gradient(to_bottom,black_65%,transparent_98%)]">
+                    {/* Center Visualizer: Large Orb centered in the middle, fading smoothly to transparent in the lower half (Photo 7) */}
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] z-10"
+                      style={{
+                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
+                        maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
+                      }}
+                    >
                       <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700">
                         <SpotifyDJVisualizer size={210} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
                       </div>
@@ -563,9 +569,27 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Shelves: Horizontal Carousels or Full-width Release Spotlight for single items */}
+                {/* Shelves: Horizontal Carousels or Full-width Release Spotlight for single items (DJ card excluded as requested) */}
                 <div className="space-y-6 px-4">
-                  {shelves.map((shelf) => {
+                  {shelves
+                    .map((shelf) => ({
+                      ...shelf,
+                      cards: shelf.cards.filter((c: any) => {
+                        const id = c.id || '';
+                        const title = (c.title || '').toLowerCase().trim();
+                        return (
+                          id !== 'spotify-dj' &&
+                          id !== 'dj' &&
+                          id !== 'ai-dj' &&
+                          title !== 'dj' &&
+                          !title.includes('spotify dj') &&
+                          title !== 'tu dj' &&
+                          !title.includes('personal dj')
+                        );
+                      }),
+                    }))
+                    .filter((shelf) => shelf.cards.length > 0)
+                    .map((shelf) => {
                     const isSingleCard = shelf.cards.length === 1;
                     const single = shelf.cards[0];
 

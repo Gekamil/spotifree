@@ -248,6 +248,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         if (!cancelled && currentTrackIdRef.current === trackId) {
           if (cUrl) {
             setCanvasUrl(cUrl);
+            setIsCanvasMode(true);
           } else {
             setCanvasUrl(null);
             setIsCanvasMode(false);

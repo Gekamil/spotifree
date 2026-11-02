@@ -343,6 +343,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
         if (!cancelled) {
           if (cUrl) {
             setCanvasUrl(cUrl);
+            setIsCanvasMode(true);
           } else {
             setCanvasUrl(null);
             setIsCanvasMode(false);

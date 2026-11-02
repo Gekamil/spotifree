@@ -195,8 +195,17 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
     }
 
     const deletedIds = getDeletedPlaylistIds();
+    const isDJCard = (c: any) =>
+      c.id === 'spotify-dj' ||
+      c.id === 'dj' ||
+      c.id === 'ai-dj' ||
+      (c.title || '').toLowerCase().trim() === 'dj' ||
+      (c.title || '').toLowerCase().includes('spotify dj') ||
+      (c.title || '').toLowerCase() === 'tu dj' ||
+      (c.title || '').toLowerCase().includes('personal dj');
+
     const cards: DynamicShelfCard[] = shelf.cards
-      .filter((c: any) => !deletedIds.has(c.id))
+      .filter((c: any) => !deletedIds.has(c.id) && !isDJCard(c))
       .map((c: any) => ({
         id: c.id,
         title: c.title,
