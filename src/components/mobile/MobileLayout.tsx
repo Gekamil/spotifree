@@ -503,14 +503,8 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Top Bar: DJ branding & 3 dots (Beta removed) */}
-                    <div className="flex items-center justify-between relative z-10">
-                      <div className="flex items-center gap-2">
-                        <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-                        <span className="text-[12px] font-black text-white/90 uppercase tracking-widest font-['SpotifyMixUI']">
-                          Spotify DJ
-                        </span>
-                      </div>
+                    {/* Top Bar: Menu dots only (Spotify DJ branding removed as requested) */}
+                    <div className="flex items-center justify-end relative z-20">
                       <div className="text-white/80 p-1">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                           <circle cx="12" cy="5" r="2" />
@@ -520,28 +514,27 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Preview Visualizer: Ring/Orb in the BACKGROUND, Waves gently moving in FRONT */}
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[140px] h-[140px]">
-                      {/* Layer 1: Glowing DJ Ring / Orb in the BACKGROUND with subtle slow ambient rotation */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-70 transition-all duration-700 animate-spin-slow">
-                        <SpotifyDJVisualizer size={130} state="idle" themeColor={djThemeColor} />
-                      </div>
+                    {/* Audio Waves covering the ENTIRE widget background */}
+                    <div className="absolute inset-0 pointer-events-none opacity-50 overflow-hidden z-0">
+                      <InteractiveMusicWaves
+                        isPlaying={isPlaying}
+                        isSpeaking={false}
+                        voiceLevel={isPlaying ? 0.35 : 0.08}
+                        themeColor={djThemeColor || '#1ed760'}
+                        className="w-full h-full object-cover scale-110"
+                      />
+                    </div>
 
-                      {/* Layer 2: Audio Waves floating gently in front of the ring */}
-                      <div className="absolute inset-0 flex items-center justify-center opacity-85 z-10 pointer-events-none">
-                        <InteractiveMusicWaves
-                          isPlaying={true}
-                          isSpeaking={false}
-                          voiceLevel={0.3}
-                          themeColor={djThemeColor || '#1ed760'}
-                          className="w-full h-full scale-90"
-                        />
-                      </div>
+                    {/* Preview Visualizer: Ring/Orb ON TOP of the waves, placed on the right */}
+                    <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[135px] h-[135px] z-10 opacity-80 transition-all duration-700 animate-spin-slow">
+                      <SpotifyDJVisualizer size={125} state="idle" themeColor={djThemeColor} />
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
-                    <div className="flex items-end justify-between relative z-10 pt-4">
-                      <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] max-w-[210px] leading-snug drop-shadow-sm min-h-[54px] flex items-center" />
+                    <div className="flex items-end justify-between relative z-20 pt-4 w-full">
+                      <div className="max-w-[calc(100%-60px)] pr-2">
+                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[54px] flex items-center" />
+                      </div>
 
                       <button
                         onClick={(e) => {

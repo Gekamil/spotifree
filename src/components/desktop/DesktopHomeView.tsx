@@ -498,14 +498,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               {/* Background Glow */}
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/5 to-[#1ed760]/10 pointer-events-none" />
 
-              {/* Top Bar with Spotify DJ branding and Menu dots (Beta removed) */}
-              <div className="flex items-center justify-between relative z-10">
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-                  <span className="text-[12px] font-black text-white/90 uppercase tracking-widest font-['SpotifyMixUI']">
-                    Spotify DJ
-                  </span>
-                </div>
+              {/* Top Bar with Menu dots only (Spotify DJ branding removed as requested) */}
+              <div className="flex items-center justify-end relative z-20">
                 <div className="text-white/80 p-1">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="12" cy="5" r="2" />
@@ -515,35 +509,34 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 </div>
               </div>
 
-              {/* Preview Visualizer: Ring/Orb in the BACKGROUND, Waves gently moving in FRONT */}
-              <div className="absolute right-8 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[170px] h-[170px]">
-                {/* Layer 1: Glowing DJ Ring / Orb in the BACKGROUND with subtle slow ambient rotation */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-70 group-hover:opacity-90 group-hover:scale-105 transition-all duration-700 animate-spin-slow">
-                  <SpotifyDJVisualizer size={150} state="idle" themeColor={djThemeColor} />
-                </div>
+              {/* Audio Waves covering the ENTIRE widget background */}
+              <div className="absolute inset-0 pointer-events-none opacity-55 overflow-hidden z-0">
+                <InteractiveMusicWaves
+                  isPlaying={isPlaying}
+                  isSpeaking={false}
+                  voiceLevel={isPlaying ? 0.35 : 0.08}
+                  themeColor={djThemeColor || '#1ed760'}
+                  className="w-full h-full object-cover scale-105"
+                />
+              </div>
 
-                {/* Layer 2: Audio Waves floating gently in front of the ring */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-85 z-10 pointer-events-none">
-                  <InteractiveMusicWaves
-                    isPlaying={true}
-                    isSpeaking={false}
-                    voiceLevel={0.3}
-                    themeColor={djThemeColor || '#1ed760'}
-                    className="w-full h-full scale-90"
-                  />
-                </div>
+              {/* Preview Visualizer: Ring/Orb ON TOP of the waves, placed on the right */}
+              <div className="absolute right-6 md:right-16 top-1/2 -translate-y-1/2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10 opacity-80 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700 animate-spin-slow">
+                <SpotifyDJVisualizer size={145} state="idle" themeColor={djThemeColor} />
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
-              <div className="flex items-end justify-between relative z-10 pt-4">
-                <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] max-w-md leading-snug drop-shadow-sm min-h-[60px] flex items-center" />
+              <div className="flex items-end justify-between relative z-20 pt-4 w-full">
+                <div className="max-w-[calc(100%-72px)] md:max-w-[62%] pr-2">
+                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug drop-shadow-sm min-h-[60px] flex items-center" />
+                </div>
 
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectPlaylistById('spotify-dj');
                   }}
-                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-xl group-hover:scale-110 active:scale-95 transition-all shrink-0 ml-4 cursor-pointer"
+                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-xl group-hover:scale-110 active:scale-95 transition-all shrink-0 ml-3 cursor-pointer"
                   title="Abrir DJ"
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

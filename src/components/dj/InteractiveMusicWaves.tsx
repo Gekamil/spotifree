@@ -103,12 +103,35 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       smoothedLevelRef.current += (targetLevel - smoothedLevelRef.current) * 0.16;
       const voice = smoothedLevelRef.current;
 
+      // Extract current music playback volume for dynamic wave responsiveness
+      let musicVol = 0.8;
+      if (typeof window !== 'undefined') {
+        try {
+          const pStore = (window as any).__usePlayerStore?.getState?.();
+          if (pStore) {
+            musicVol = pStore.isMuted ? 0 : (pStore.volume ?? 0.8);
+          }
+        } catch {}
+      }
+
       // Dynamic wave speed:
-      // - Si no hay nada hablando ni sonando: quietas (speed = 0, se quedan completamente quietas)
-      // - Si la música está sonando: ritmo constante como ahora (speed = 0.024)
-      // - Si la IA está hablando: se mueven más rápido y expresivas (speed = 0.048)
-      const speed = speaking ? 0.048 : playing ? 0.024 : 0;
+      // - Si no suena (pausa): se mueve muy lentamente (speed = 0.005)
+      // - Si suena poco: se mueve menos (speed = 0.012 + musicVol * 0.026)
+      // - Si suena más: se mueve más (hasta 0.038)
+      // - Si la IA habla: reacciona directamente al nivel de la voz (hasta 0.075)
+      const speed = speaking
+        ? 0.030 + voice * 0.045
+        : playing
+        ? 0.012 + musicVol * 0.026
+        : 0.005;
       time += speed;
+
+      // Dynamic wave amplitude scaling according to audio intensity
+      const ampScale = speaking
+        ? 1.0 + voice * 1.4
+        : playing
+        ? 0.55 + musicVol * 0.75
+        : 0.35;
 
       // Smooth color morphing interpolation
       const targetRgb = parseHexToRgb(themeColorRef.current || '#1ed760');
@@ -126,25 +149,25 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
         {
           frequency: 0.007,
           speedOffset: 0,
-          amplitude: speaking ? 34 + voice * 55 : playing ? 22 : 8,
+          amplitude: (speaking ? 28 + voice * 45 : playing ? 22 : 12) * ampScale,
           yCenter: height * 0.38,
-          opacity: speaking ? 0.28 : playing ? 0.22 : 0.14,
+          opacity: (speaking ? 0.28 : playing ? 0.22 : 0.12) * Math.min(1.2, ampScale),
           phaseShift: 0,
         },
         {
           frequency: 0.011,
           speedOffset: 1.2,
-          amplitude: speaking ? 44 + voice * 65 : playing ? 26 : 10,
+          amplitude: (speaking ? 36 + voice * 55 : playing ? 26 : 14) * ampScale,
           yCenter: height * 0.42,
-          opacity: speaking ? 0.34 : playing ? 0.28 : 0.16,
+          opacity: (speaking ? 0.34 : playing ? 0.28 : 0.14) * Math.min(1.2, ampScale),
           phaseShift: 1.5,
         },
         {
           frequency: 0.009,
           speedOffset: 2.1,
-          amplitude: speaking ? 30 + voice * 45 : playing ? 18 : 7,
+          amplitude: (speaking ? 25 + voice * 38 : playing ? 18 : 10) * ampScale,
           yCenter: height * 0.46,
-          opacity: speaking ? 0.22 : playing ? 0.18 : 0.12,
+          opacity: (speaking ? 0.22 : playing ? 0.18 : 0.10) * Math.min(1.2, ampScale),
           phaseShift: 3.0,
         },
       ];

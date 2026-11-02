@@ -790,11 +790,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             <h1 className="text-6xl lg:text-7xl font-black text-white tracking-tight leading-none font-['SpotifyMixUITitle'] drop-shadow-lg truncate">
               {dynamicPlaylist.name}
             </h1>
-            {dynamicPlaylist.description && (
-              <p className="text-sm font-semibold text-white/95 mt-1 drop-shadow line-clamp-1">
-                {stripHtml(dynamicPlaylist.description)}
-              </p>
-            )}
+            <p className="text-sm font-semibold text-white/95 mt-1 drop-shadow line-clamp-1">
+              {dynamicPlaylist.description
+                ? stripHtml(dynamicPlaylist.description)
+                : tracks.length > 0
+                ? `${tracks
+                    .slice(0, 5)
+                    .map((t) => t.artists?.[0]?.name)
+                    .filter(Boolean)
+                    .filter((v, i, a) => a.indexOf(v) === i)
+                    .slice(0, 3)
+                    .join(', ')} y más`
+                : ''}
+            </p>
             <div className="flex items-center gap-2 text-sm text-white font-medium mt-1 flex-wrap drop-shadow">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
                 <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.495 17.307c-.215.353-.674.464-1.026.249-2.812-1.718-6.353-2.107-10.524-1.154-.403.092-.803-.16-.895-.562-.092-.403.159-.803.562-.895 4.568-1.044 8.489-.606 11.634 1.336.352.215.464.674.249 1.026zm1.467-3.26c-.27.44-.848.578-1.287.308-3.22-1.979-8.128-2.55-11.936-1.393-.497.151-1.025-.134-1.176-.63-.151-.496.134-1.025.63-1.176 4.358-1.323 9.775-.688 13.461 1.574.44.27.578.847.308 1.287zm.126-3.41c-3.86-2.292-10.228-2.503-13.896-1.39-.59.179-1.218-.16-1.398-.75-.179-.59.16-1.218.75-1.398 4.218-1.281 11.248-1.037 15.69 1.601.53.314.704 1.004.39 1.534-.314.53-1.004.703-1.536.403z" />

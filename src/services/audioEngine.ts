@@ -81,6 +81,7 @@ class AudioEngine {
 
   private ytPlayers: [any, any] = [null, null];
   private activeYtIndex: 0 | 1 = 0;
+  private playSequenceId: number = 0;
   private isYtReady = false;
   private ytReadyPromise: Promise<void> | null = null;
   private progressInterval: number | null = null;
@@ -2039,6 +2040,9 @@ class AudioEngine {
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
+    this.playSequenceId++;
+    const currentSeq = this.playSequenceId;
+
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
       this.crossfadeInterval = null;
@@ -2098,11 +2102,17 @@ class AudioEngine {
 
       // 1. Resolve videoId instantly via unified cache & resolver
       let videoId = await this.resolveVideoId(query, trackId);
+      if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
+        return;
+      }
 
       if (videoId) {
         this.currentVideoId = videoId;
         this.activeEngine = 'youtube';
         await this.ensureYouTubeReady();
+        if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
+          return;
+        }
 
         if (this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
           this.audio.pause();

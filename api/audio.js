@@ -68,13 +68,12 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
     data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
       ?.sectionListRenderer?.contents || [];
 
+  const queryWords = cleanQuery(q).toLowerCase().split(/\s+/).filter((w) => w.length > 2);
+
   for (const sec of sections) {
     const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
     if (shelf) {
-      const topVid = shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
-      if (topVid && !excludeSet.has(topVid)) {
-        return { videoId: topVid };
-      }
+      // 1. Inspect responsive list items first (these are the actual songs/tracks!)
       for (const item of shelf.contents || []) {
         const renderer = item.musicResponsiveListItemRenderer;
         const playNav =
@@ -84,7 +83,23 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
           playNav?.watchEndpoint?.videoId ||
           renderer?.navigationEndpoint?.watchEndpoint?.videoId;
         if (videoId && /^[a-zA-Z0-9_-]{11}$/.test(videoId) && !excludeSet.has(videoId)) {
-          return { videoId };
+          // If we have query keywords, check if the item title or artist contains any of them
+          const itemTitle = renderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.runs?.[0]?.text || '';
+          const itemArtist = renderer?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.runs?.[0]?.text || '';
+          const combined = `${itemTitle} ${itemArtist}`.toLowerCase();
+          
+          if (queryWords.length === 0 || queryWords.some((w) => combined.includes(w))) {
+            return { videoId };
+          }
+        }
+      }
+
+      // 2. If no responsive item matched, check shelf top video only if it matches keywords
+      const topVid = shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId;
+      if (topVid && !excludeSet.has(topVid)) {
+        const shelfText = (shelf.title?.runs?.[0]?.text || '').toLowerCase();
+        if (queryWords.length === 0 || queryWords.some((w) => shelfText.includes(w))) {
+          return { videoId: topVid };
         }
       }
     }

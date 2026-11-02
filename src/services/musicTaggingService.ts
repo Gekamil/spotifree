@@ -346,35 +346,7 @@ export async function fetchRoleChartTracks(targetTag: MusicHashtag): Promise<Tra
   try {
     const promises: Promise<any>[] = [];
 
-    // 1. Deezer Official Genre Chart (100% verified genre classification)
-    if (def.deezerGenreId !== undefined) {
-      promises.push(
-        fetch(`https://api.deezer.com/chart/${def.deezerGenreId}/tracks?limit=25`, {
-          signal: AbortSignal.timeout?.(4000),
-        })
-          .then((r) => (r.ok ? r.json() : { data: [] }))
-          .then((d) => {
-            (d.data || []).forEach((t: any) => {
-              const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
-              add({
-                id: `dz-${t.id}`,
-                name: t.title || t.title_short,
-                duration_ms: (t.duration || 210) * 1000,
-                preview_url: null,
-                artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
-                album: {
-                  id: `alb-${t.album?.id || 'unknown'}`,
-                  name: t.album?.title || t.title,
-                  images: cover ? [{ url: cover }] : [],
-                },
-              });
-            });
-          })
-          .catch(() => {})
-      );
-    }
-
-    // 2. iTunes Spain Official Genre Chart
+    // 1. iTunes Spain Official Genre Chart (localized strictly to Spanish / Latin tastes, no random foreign charts)
     if (def.itunesGenreId !== undefined) {
       promises.push(
         fetch(`https://itunes.apple.com/es/rss/topsongs/limit=25/genre=${def.itunesGenreId}/json`, {
@@ -405,7 +377,7 @@ export async function fetchRoleChartTracks(targetTag: MusicHashtag): Promise<Tra
       );
     }
 
-    // 3. Search catalog for flagship artists of this role (WITHOUT the genre word!)
+    // 2. Search catalog for flagship artists of this role (WITHOUT the genre word!)
     const shuffledArtists = [...def.artists].sort(() => Math.random() - 0.5);
     const chosenArtists = shuffledArtists.slice(0, 3);
     for (const art of chosenArtists) {
@@ -642,9 +614,9 @@ export async function getCuratedSetForHashtag(
     return true;
   };
 
-  // 1. Take a fresh randomized sample of user tracks from matching playlists (up to 45% of set)
+  // 1. Take a fresh randomized sample of user tracks from matching playlists (up to 75% of set)
   const userShuffled = [...userTracks].sort(() => Math.random() - 0.5);
-  const userQuota = Math.min(Math.floor(count * 0.45), userShuffled.length);
+  const userQuota = Math.min(Math.floor(count * 0.75), userShuffled.length);
   for (let i = 0; i < userQuota; i++) {
     addTrack(userShuffled[i]);
   }
@@ -658,7 +630,25 @@ export async function getCuratedSetForHashtag(
     }
   }
 
-  // 2. Fetch fresh tracks from the official genre role charts and flagship artists if more needed
+  // 2. Add similar songs by the same artists the user listens to in this genre/playlist
+  if (result.length < count && userTracks.length > 0) {
+    const userArtists = Array.from(
+      new Set(userTracks.map((t) => t.artists?.[0]?.name).filter(Boolean) as string[])
+    ).sort(() => Math.random() - 0.5);
+
+    for (const artistName of userArtists.slice(0, 3)) {
+      if (result.length >= count) break;
+      try {
+        const res = await searchSpotify(`artist:"${artistName}"`);
+        for (const t of res?.tracks?.items || []) {
+          if (result.length >= count) break;
+          addTrack(t);
+        }
+      } catch {}
+    }
+  }
+
+  // 3. Fetch fresh tracks from localized genre role charts and flagship artists if more needed
   if (result.length < count) {
     const roleTracks = await fetchRoleChartTracks(targetTag);
     for (const t of roleTracks) {
@@ -667,7 +657,7 @@ export async function getCuratedSetForHashtag(
     }
   }
 
-  // 3. Final safety fill: repeat user matching tracks if any, otherwise repeat role pool
+  // 4. Final safety fill: repeat user matching tracks if any, otherwise repeat role pool
   if (result.length < count && userShuffled.length > 0) {
     for (const t of userShuffled) {
       if (result.length >= count) break;
@@ -677,6 +667,49 @@ export async function getCuratedSetForHashtag(
     }
   }
 
-  // 4. Return exactly count tracks shuffled
+  // 5. Return exactly count tracks shuffled
   return result.slice(0, count).sort(() => Math.random() - 0.5);
+}
+
+/**
+ * Returns dynamic quick vibe buttons based on the user's actual saved playlists & genres.
+ * Adapts to user library (e.g., Bachata / Latino, Reggaetón, Rock, Pop) rather than hardcoded presets.
+ */
+export function getUserDynamicVibeChips(): string[] {
+  const libraryIndex = analyzeUserLibraryByHashtags();
+  const counts: { tag: MusicHashtag; count: number; label: string }[] = [];
+
+  const labelMap: Record<MusicHashtag, string> = {
+    '#reggaeton': 'Reggaetón',
+    '#bachata': 'Bachata / Latino',
+    '#trap': 'Trap / Urbano',
+    '#pop': 'Pop',
+    '#rock': 'Rock',
+    '#clasicos': 'Clásicos',
+    '#chill': 'Algo chill',
+    '#lofi': 'Lo-Fi',
+    '#electro': 'Electrónica',
+    '#entreno': 'Para entrenar',
+    '#flamenco': 'Flamenco',
+  };
+
+  for (const [tag, tracks] of libraryIndex.entries()) {
+    if (tag !== '#chill' && tracks.length > 0) {
+      counts.push({ tag, count: tracks.length, label: labelMap[tag] || tag });
+    }
+  }
+
+  counts.sort((a, b) => b.count - a.count);
+  const topGenreChips = counts.slice(0, 3).map((c) => c.label);
+
+  const defaultGenres = ['Reggaetón', 'Clásicos', 'Trap / Urbano'];
+  const finalGenres: string[] = [];
+  topGenreChips.forEach((g) => {
+    if (!finalGenres.includes(g)) finalGenres.push(g);
+  });
+  defaultGenres.forEach((g) => {
+    if (finalGenres.length < 3 && !finalGenres.includes(g)) finalGenres.push(g);
+  });
+
+  return ['Más movido', 'Algo chill', ...finalGenres, 'Sorpréndeme'];
 }

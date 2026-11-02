@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
+import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import {
@@ -51,7 +52,7 @@ const getBestTrackArtwork = (track: Track | null | undefined): string => {
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 };
 
-const QUICK_VIBE_CHIPS = [
+const DEFAULT_QUICK_CHIPS = [
   'Más movido',
   'Algo chill',
   'Reggaetón',
@@ -61,6 +62,13 @@ const QUICK_VIBE_CHIPS = [
 ];
 
 export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, onOpenPlayer }) => {
+  const vibeChips = useMemo(() => {
+    try {
+      return getUserDynamicVibeChips();
+    } catch {
+      return DEFAULT_QUICK_CHIPS;
+    }
+  }, []);
   const {
     visualizerState,
     voiceLevel,
@@ -230,7 +238,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   return (
     <div
-      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-4"
+      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-y-auto select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3"
       style={{
         backgroundColor: '#050b18',
       }}
@@ -328,7 +336,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
           >
             <SpotifyDJVisualizer
-              size={isMobile ? 215 : 290}
+              size={isMobile ? 210 : 230}
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}
@@ -396,9 +404,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </button>
           </form>
 
-          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Direct fit without scrolling */}
+          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Dynamically curated from user library */}
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap justify-center py-1 px-1 max-w-full">
-            {QUICK_VIBE_CHIPS.map((chip) => (
+            {vibeChips.map((chip) => (
               <button
                 key={chip}
                 type="button"
@@ -601,7 +609,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                         src={trackArt}
                         alt={track.name}
                         onError={handleImageError}
-                        referrerPolicy="no-referrer"
+                        loading="lazy"
                         className="w-10 h-10 rounded-md object-cover shrink-0 bg-[#282828]"
                       />
                       <div className="truncate">

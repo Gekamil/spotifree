@@ -29,11 +29,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Minimal fetch handler – pass through everything (no caching interference).
-// The SW MUST have a fetch handler to qualify as a "service worker controlled page",
-// which is the prerequisite for background audio playback on Android Chrome PWA.
+// Pass through cross-origin requests natively so CDNs, images, and streams are never blocked
 self.addEventListener('fetch', (event) => {
-  // Let the browser handle all requests normally; SW just intercepts to stay "active"
+  // Only handle same-origin requests; never intercept cross-origin image CDNs or audio streams
+  if (!event.request.url.startsWith(self.location.origin)) {
+    return;
+  }
   event.respondWith(
     fetch(event.request).catch(() => new Response('', { status: 503 }))
   );

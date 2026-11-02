@@ -62,7 +62,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const isDJActive =
-    useAIDJStore((s) => s.isDJModeActive) ||
     currentContextId === 'dj-session' ||
     currentContextId === 'spotify-dj' ||
     currentContextId === 'dj';
@@ -132,6 +131,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     } catch {}
   };
 
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+  const [touchDeltaX, setTouchDeltaX] = useState<number>(0);
+  const currentTrackIdRef = useRef<string | null>(currentTrack?.id || null);
+
   const [displayCover, setDisplayCover] = useState<string | null>(() => {
     if (!currentTrack) return null;
     return getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image || null;
@@ -139,6 +142,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   const handleCoverError = async () => {
     if (!currentTrack) return;
+    const targetId = currentTrack.id;
     const direct = getTrackCoverUrl(currentTrack);
     if (direct && !direct.includes('liked-songs')) {
       setDisplayCover(direct);
@@ -157,12 +161,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=1`, { signal: AbortSignal.timeout(2500) });
       if (res.ok) {
         const data = await res.json();
-        if (data.results?.[0]?.artworkUrl100) {
+        if (data.results?.[0]?.artworkUrl100 && currentTrackIdRef.current === targetId) {
           const hd = data.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
-          persistTrackCover(currentTrack.id, hd);
+          persistTrackCover(targetId, hd);
           setDisplayCover(hd);
           extractDominantColorFromImage(hd).then((hex) => {
-            if (hex) setExtractedModalColor(hex);
+            if (hex && currentTrackIdRef.current === targetId) setExtractedModalColor(hex);
           });
           return;
         }
@@ -174,12 +178,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         const res2 = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle)}&media=music&entity=song&limit=1`, { signal: AbortSignal.timeout(2000) });
         if (res2.ok) {
           const data2 = await res2.json();
-          if (data2.results?.[0]?.artworkUrl100) {
+          if (data2.results?.[0]?.artworkUrl100 && currentTrackIdRef.current === targetId) {
             const hd = data2.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
-            persistTrackCover(currentTrack.id, hd);
+            persistTrackCover(targetId, hd);
             setDisplayCover(hd);
             extractDominantColorFromImage(hd).then((hex) => {
-              if (hex) setExtractedModalColor(hex);
+              if (hex && currentTrackIdRef.current === targetId) setExtractedModalColor(hex);
             });
             return;
           }
@@ -188,27 +192,43 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     }
 
     // Fallback to reliable default cover
-    setDisplayCover(DEFAULT_FALLBACK_COVER);
+    if (currentTrackIdRef.current === targetId) {
+      setDisplayCover(DEFAULT_FALLBACK_COVER);
+    }
   };
 
   useEffect(() => {
     let cancelled = false;
     let vidPollInterval: any;
+    const trackId = currentTrack?.id;
+    currentTrackIdRef.current = trackId || null;
+
     if (currentTrack) {
-      const initial = getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image;
-      if (initial && !initial.includes('liked-songs')) {
-        setDisplayCover(initial);
-        extractDominantColorFromImage(initial).then((hex) => {
-          if (!cancelled && hex) setExtractedModalColor(hex);
+      // Instantly synchronize cover, clear stale lyrics, and reset canvas to prevent leakage
+      const immediateCover = getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image;
+      if (immediateCover && !immediateCover.includes('liked-songs')) {
+        setDisplayCover(immediateCover);
+        extractDominantColorFromImage(immediateCover).then((hex) => {
+          if (!cancelled && hex && currentTrackIdRef.current === trackId) {
+            setExtractedModalColor(hex);
+          }
         });
       } else {
         handleCoverError();
       }
 
+      // Reset media/canvas state synchronously
+      setIsCanvasMode(false);
+      setCanvasUrl(null);
+      setLyrics(null);
+      setSyncedLines([]);
+      setVideoId(null);
+      setOfficialVideoId(null);
+
       const q = `${currentTrack.name} ${currentTrack.artists?.[0]?.name || ''}`.trim();
       const checkAndSetVid = () => {
         const cVid = audioEngine.getCurrentVideoId();
-        if (cVid && !cancelled) {
+        if (cVid && !cancelled && currentTrackIdRef.current === trackId) {
           setVideoId(cVid);
           setOfficialVideoId((prev) => prev || cVid);
         }
@@ -217,21 +237,17 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       vidPollInterval = setInterval(checkAndSetVid, 800);
 
       audioEngine.resolveVideoIdForTrack(q, currentTrack.id).then((vid) => {
-        if (!cancelled && vid) {
+        if (!cancelled && vid && currentTrackIdRef.current === trackId) {
           setVideoId(vid);
           setOfficialVideoId((prev) => prev || vid);
         }
       });
 
-      // Reset canvas state immediately on track change to prevent state leakage
-      setIsCanvasMode(false);
-      setCanvasUrl(null);
-
       // Fetch Spotify Canvas video loop ONLY for valid Spotify track IDs
       const cleanSpotifyId = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
       if (/^[0-9a-zA-Z]{22}$/.test(cleanSpotifyId)) {
         fetchTrackCanvas(cleanSpotifyId).then((cUrl) => {
-          if (!cancelled) {
+          if (!cancelled && currentTrackIdRef.current === trackId) {
             if (cUrl) {
               setCanvasUrl(cUrl);
             } else {
@@ -240,9 +256,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             }
           }
         });
-      } else {
-        setCanvasUrl(null);
-        setIsCanvasMode(false);
       }
 
       // Search official music video / videoclip for Video mode
@@ -253,7 +266,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       const cleanArtist = (currentTrack.artists?.[0]?.name || '').replace(/feat\..*$/i, '').trim();
       const clipQuery = `${cleanTitle} ${cleanArtist} official music video`;
       audioEngine.resolveVideoIdForTrack(clipQuery, `clip-${currentTrack.id}`).then((clipVid) => {
-        if (!cancelled && clipVid) setOfficialVideoId(clipVid);
+        if (!cancelled && clipVid && currentTrackIdRef.current === trackId) {
+          setOfficialVideoId(clipVid);
+        }
       });
     }
     return () => {
@@ -427,9 +442,34 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
       {/* Scrollable Player Body */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden px-5 pt-1 pb-10 space-y-3.5 relative z-10">
-        {/* Large Artwork or Spotify Canvas Spacer with smooth crossfade */}
-        <div className="flex items-center justify-center py-1 relative">
-          <div className={`w-full max-w-[min(74vw,300px)] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_16px_45px_rgba(0,0,0,0.7)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
+        {/* Large Artwork or Spotify Canvas Spacer with smooth crossfade and horizontal swipe to skip */}
+        <div
+          onTouchStart={(e) => {
+            setTouchStartX(e.targetTouches[0].clientX);
+            setTouchDeltaX(0);
+          }}
+          onTouchMove={(e) => {
+            if (touchStartX !== null) {
+              setTouchDeltaX(e.targetTouches[0].clientX - touchStartX);
+            }
+          }}
+          onTouchEnd={() => {
+            if (touchDeltaX > 45) {
+              previousTrack();
+            } else if (touchDeltaX < -45) {
+              nextTrack();
+            }
+            setTouchStartX(null);
+            setTouchDeltaX(0);
+          }}
+          className="flex items-center justify-center py-1 relative touch-pan-y cursor-grab active:cursor-grabbing"
+        >
+          <div
+            style={{
+              transform: touchDeltaX !== 0 ? `translateX(${Math.max(-75, Math.min(75, touchDeltaX * 0.45))}px)` : 'none',
+              transition: touchStartX !== null ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
+            }}
+            className={`w-full max-w-[min(74vw,300px)] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_16px_45px_rgba(0,0,0,0.7)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
             isCanvasMode && canvasUrl
               ? 'opacity-0 scale-95 pointer-events-none'
               : 'opacity-100 scale-100'

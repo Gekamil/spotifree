@@ -56,7 +56,7 @@ export const RotatingDJBannerText: React.FC<RotatingDJBannerTextProps> = ({
     setRevealedWordIndex(0);
     setIsFadingOut(false);
 
-    // Progressive speaking pace (~190ms per word)
+    // Relaxed, calm progressive speaking pace (340ms per word)
     let currentWord = 0;
     wordTimer = setInterval(() => {
       currentWord++;
@@ -65,17 +65,17 @@ export const RotatingDJBannerText: React.FC<RotatingDJBannerTextProps> = ({
       if (currentWord >= words.length) {
         clearInterval(wordTimer);
 
-        // Hold fully illuminated sentence for 2.6 seconds so user reads comfortably
+        // Hold fully illuminated sentence for 6.5 seconds so user reads comfortably without rushing
         holdTimer = setTimeout(() => {
           setIsFadingOut(true);
 
           // Transition to next phrase after soft fade
           fadeTimer = setTimeout(() => {
             setCurrentIndex((prev) => (prev + 1) % messages.length);
-          }, 450);
-        }, 2600);
+          }, 650);
+        }, 6500);
       }
-    }, 190);
+    }, 340);
 
     return () => {
       if (wordTimer) clearInterval(wordTimer);
