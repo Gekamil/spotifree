@@ -90,8 +90,47 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [ambientColor, setAmbientColor] = useState<string>('#0c52cc');
+  const [gradientLayers, setGradientLayers] = useState<{ colorA: string; colorB: string; activeLayer: 'A' | 'B' }>({
+    colorA: '#0c52cc',
+    colorB: '#0c52cc',
+    activeLayer: 'A',
+  });
+  const [artLayers, setArtLayers] = useState<{ artA: string; artB: string; activeArt: 'A' | 'B' }>({
+    artA: '',
+    artB: '',
+    activeArt: 'A',
+  });
   const [promptInput, setPromptInput] = useState('');
   const [, setCoversVersion] = useState(0);
+
+  // Smooth Crossfading of ambient gradient when color changes
+  useEffect(() => {
+    if (!ambientColor) return;
+    setGradientLayers((prev) => {
+      if (prev.activeLayer === 'A') {
+        if (prev.colorA === ambientColor) return prev;
+        return { colorA: prev.colorA, colorB: ambientColor, activeLayer: 'B' };
+      } else {
+        if (prev.colorB === ambientColor) return prev;
+        return { colorA: ambientColor, colorB: prev.colorB, activeLayer: 'A' };
+      }
+    });
+  }, [ambientColor]);
+
+  // Smooth Crossfading of artwork background when track changes
+  useEffect(() => {
+    const art = getBestTrackArtwork(currentTrack);
+    if (!art) return;
+    setArtLayers((prev) => {
+      if (prev.activeArt === 'A') {
+        if (prev.artA === art) return prev;
+        return { artA: prev.artA, artB: art, activeArt: 'B' };
+      } else {
+        if (prev.artB === art) return prev;
+        return { artA: art, artB: prev.artB, activeArt: 'A' };
+      }
+    });
+  }, [currentTrack]);
 
   // Resolve album covers for all DJ tracks in background
   useEffect(() => {
@@ -172,17 +211,31 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       }}
     >
       {/* =========================================================================
-          BACKGROUND LAYER 1: DEEP BLURRED CANVAS / ALBUM ART OF CURRENT TRACK
+          BACKGROUND LAYER 1: DUAL CROSSFADING ARTWORK (Butter-smooth transitions)
           ========================================================================= */}
-      {activeArtwork && (
+      {artLayers.artA && (
         <div
-          className="absolute inset-0 pointer-events-none overflow-hidden transition-all duration-1000 ease-out"
+          className="absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-1000 ease-in-out"
           style={{
-            backgroundImage: `url(${activeArtwork})`,
+            backgroundImage: `url(${artLayers.artA})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             filter: 'blur(55px) brightness(0.24) saturate(1.4)',
             transform: 'scale(1.15)',
+            opacity: artLayers.activeArt === 'A' ? 1 : 0,
+          }}
+        />
+      )}
+      {artLayers.artB && (
+        <div
+          className="absolute inset-0 pointer-events-none overflow-hidden transition-opacity duration-1000 ease-in-out"
+          style={{
+            backgroundImage: `url(${artLayers.artB})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            filter: 'blur(55px) brightness(0.24) saturate(1.4)',
+            transform: 'scale(1.15)',
+            opacity: artLayers.activeArt === 'B' ? 1 : 0,
           }}
         />
       )}
@@ -199,12 +252,20 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       />
 
       {/* =========================================================================
-          BACKGROUND LAYER 3: RADIAL VIGNETTE & AMBIENT AURA GLOW
+          BACKGROUND LAYER 3: DUAL CROSSFADING AMBIENT AURA GLOW
           ========================================================================= */}
       <div
-        className="absolute inset-0 pointer-events-none transition-all duration-1000 ease-in-out"
+        className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out"
         style={{
-          background: `radial-gradient(circle at 50% 36%, ${ambientColor || '#0c52cc'}99 0%, ${ambientColor || '#0c52cc'}44 48%, #050b18fa 92%)`,
+          background: `radial-gradient(circle at 50% 36%, ${gradientLayers.colorA}99 0%, ${gradientLayers.colorA}44 48%, #050b18fa 92%)`,
+          opacity: gradientLayers.activeLayer === 'A' ? 1 : 0,
+        }}
+      />
+      <div
+        className="absolute inset-0 pointer-events-none transition-opacity duration-1000 ease-in-out"
+        style={{
+          background: `radial-gradient(circle at 50% 36%, ${gradientLayers.colorB}99 0%, ${gradientLayers.colorB}44 48%, #050b18fa 92%)`,
+          opacity: gradientLayers.activeLayer === 'B' ? 1 : 0,
         }}
       />
 

@@ -23,45 +23,6 @@ import { stripHtml } from '../utils/formatters';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
-export const DEFAULT_SESSION_USER: UserProfile = {
-  id: liveExtractedSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
-  display_name: liveExtractedSession.user?.display_name || 'Jorgeperezvk',
-  images: [],
-  email: 'jorgeperezvk@spotify.com',
-  followers: { total: 0 },
-};
-
-export const DEFAULT_SESSION_PLAYLISTS: Playlist[] = (liveExtractedSession.playlists as any[]) || [];
-export const DEFAULT_SESSION_QUICK_ACCESS = (liveExtractedSession.quickAccessCards as any[]) || [];
-export const DEFAULT_SESSION_CACHE: Record<string, Playlist> = {};
-DEFAULT_SESSION_PLAYLISTS.forEach((p) => {
-  DEFAULT_SESSION_CACHE[p.id] = p;
-});
-if ((liveExtractedSession as any).cachedPlaylistDetails) {
-  Object.assign(DEFAULT_SESSION_CACHE, (liveExtractedSession as any).cachedPlaylistDetails);
-}
-
-export interface DynamicShelfCard {
-  id: string;
-  title: string;
-  subtitle: string;
-  image: string;
-  badge?: string;
-  badgeColor?: string;
-  isRadio?: boolean;
-  video?: string | null;
-}
-
-export interface DynamicShelf {
-  id: string;
-  title: string;
-  prefix?: string;
-  subtitle?: string;
-  type: 'featured' | 'made_for' | 'recent' | 'artist' | 'mixes';
-  cards: DynamicShelfCard[];
-  hasSeeAll?: boolean;
-}
-
 export const SPOTIFY_DJ_COVER_IMAGE =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="djgrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231ed760"/><stop offset="50%" stop-color="%2300f2fe"/><stop offset="100%" stop-color="%231ed760"/></linearGradient></defs><rect width="300" height="300" fill="%230c52cc"/><circle cx="150" cy="150" r="80" fill="none" stroke="url(%23djgrad)" stroke-width="22" stroke-linecap="round"/><text x="150" y="270" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="900" font-size="26" letter-spacing="4">DJ</text></svg>';
 
@@ -74,17 +35,6 @@ export const SPOTIFY_DJ_PLAYLIST: Playlist = {
   owner: { display_name: 'Spotify', id: 'spotify' },
   tracks: { total: 15, items: [] },
 } as any;
-
-// Guarantee DJ playlist exists in default session playlists for all new and guest accounts
-if (!DEFAULT_SESSION_PLAYLISTS.some((p) => p.id === 'spotify-dj' || p.name?.toLowerCase().trim() === 'dj')) {
-  const likedIdx = DEFAULT_SESSION_PLAYLISTS.findIndex((p) => p.id === 'liked-songs');
-  if (likedIdx >= 0) {
-    DEFAULT_SESSION_PLAYLISTS.splice(likedIdx + 1, 0, SPOTIFY_DJ_PLAYLIST);
-  } else {
-    DEFAULT_SESSION_PLAYLISTS.unshift(SPOTIFY_DJ_PLAYLIST);
-  }
-}
-DEFAULT_SESSION_CACHE['spotify-dj'] = SPOTIFY_DJ_PLAYLIST;
 
 export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
   let seenLiked = false;
@@ -141,6 +91,45 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
   }
 
   return result;
+}
+
+export const DEFAULT_SESSION_USER: UserProfile = {
+  id: liveExtractedSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
+  display_name: liveExtractedSession.user?.display_name || 'Jorgeperezvk',
+  images: [],
+  email: 'jorgeperezvk@spotify.com',
+  followers: { total: 0 },
+};
+
+export const DEFAULT_SESSION_PLAYLISTS: Playlist[] = deduplicateUserPlaylists((liveExtractedSession.playlists as any[]) || []);
+export const DEFAULT_SESSION_QUICK_ACCESS = (liveExtractedSession.quickAccessCards as any[]) || [];
+export const DEFAULT_SESSION_CACHE: Record<string, Playlist> = {};
+DEFAULT_SESSION_PLAYLISTS.forEach((p) => {
+  DEFAULT_SESSION_CACHE[p.id] = p;
+});
+if ((liveExtractedSession as any).cachedPlaylistDetails) {
+  Object.assign(DEFAULT_SESSION_CACHE, (liveExtractedSession as any).cachedPlaylistDetails);
+}
+
+export interface DynamicShelfCard {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  badge?: string;
+  badgeColor?: string;
+  isRadio?: boolean;
+  video?: string | null;
+}
+
+export interface DynamicShelf {
+  id: string;
+  title: string;
+  prefix?: string;
+  subtitle?: string;
+  type: 'featured' | 'made_for' | 'recent' | 'artist' | 'mixes';
+  cards: DynamicShelfCard[];
+  hasSeeAll?: boolean;
 }
 
 export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
@@ -736,7 +725,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           } catch {}
 
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
-          const uniquePlaylists = combinedPlaylists.filter(
+          const rawUnique = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
           ).map((p: Playlist) => {
             if (cachedPlaylists[p.id]?.tracks?.items?.length) {
@@ -744,6 +733,17 @@ const store = create<SpotifyDataState>((set, get) => ({
             }
             return p;
           });
+          const uniquePlaylists = deduplicateUserPlaylists(rawUnique);
+
+          // Clean up any extraneous DJ playlists from user_imported_playlists
+          if (typeof window !== 'undefined') {
+            try {
+              const cleanedImported = importedPlaylists.filter(
+                (p) => p && p.id !== 'spotify-dj' && p.id !== 'dj' && p.name?.toLowerCase().trim() !== 'dj'
+              );
+              window.localStorage.setItem('user_imported_playlists', JSON.stringify(cleanedImported));
+            } catch {}
+          }
 
           const activeUser = cloudAcc
             ? {
@@ -873,9 +873,10 @@ const store = create<SpotifyDataState>((set, get) => ({
 
 
           const combinedPlaylists = [...(session.playlists || []), ...importedPlaylists];
-          const uniquePlaylists = combinedPlaylists.filter(
+          const rawUnique = combinedPlaylists.filter(
             (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
           );
+          const uniquePlaylists = deduplicateUserPlaylists(rawUnique);
 
           const activeUser = cloudAcc
             ? {

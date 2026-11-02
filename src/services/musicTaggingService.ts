@@ -48,15 +48,13 @@ export const HASHTAG_DEFINITIONS: Record<MusicHashtag, HashtagDefinition> = {
   },
   '#chill': {
     tag: '#chill',
-    deezerGenreId: 466, // Folk / Acoustic Calm
-    itunesGenreId: 10,  // Singer/Songwriter & Acoustic
+    deezerGenreId: 85, // Alternative / Ambient Chill
+    itunesGenreId: 20, // Alternative / Relaxed
     artists: [
-      'novo amor', 'cigarettes after sex', 'bon iver', 'men i trust', 'mac demarco',
-      'boy pablo', 'sufjan stevens', 'kings of convenience', 'iron & wine', 'iron and wine',
-      'jose gonzalez', 'josé gonzález', 'cuco', 'phoebe bridgers', 'beach house',
-      'leon bridges', 'daniel caesar', 'sen senra', 'silvana estrada', 'kevin kaarl',
-      'guitarricadelafuente', 'natalia lafourcade', 'valeria castro', 'depedro',
-      'devendra banhart', 'ludovico einaudi', 'chilledcow', 'lofi girl', 'jack johnson'
+      'lofi girl', 'chilledcow', 'jinsang', 'idealism', 'potsu', 'saib', 'kupla',
+      'kudasaibeats', 'kudasai', 'the deli', 'tomppabeats', 'wun two', 'sleepy fish',
+      'elijah who', 'swum', 'eevee', 'birocratic', 'shiloh dynasty', 'ludovico einaudi',
+      'purrple cat', 'mell-ø', 'nohidea', 'stan forebee', 'invention_'
     ],
   },
   '#trap': {
@@ -426,6 +424,189 @@ export async function fetchRoleChartTracks(targetTag: MusicHashtag): Promise<Tra
   return tracks.sort(() => Math.random() - 0.5);
 }
 
+export const AUTHENTIC_LOFI_CHILL_TRACKS: Track[] = [
+  {
+    id: 'lofi-1',
+    name: 'Affection',
+    duration_ms: 135000,
+    preview_url: null,
+    artists: [{ id: 'art-jinsang', name: 'Jinsang' }],
+    album: {
+      id: 'alb-jinsang',
+      name: 'Life',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2737a6b107e322ea13fbf6b22c7' }],
+    },
+  },
+  {
+    id: 'lofi-2',
+    name: 'im closing my eyes',
+    duration_ms: 125000,
+    preview_url: null,
+    artists: [{ id: 'art-potsu', name: 'potsu' }, { id: 'art-shiloh', name: 'Shiloh Dynasty' }],
+    album: {
+      id: 'alb-potsu',
+      name: 'im closing my eyes',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273ce96f7c7ec5be0beec7ea72c' }],
+    },
+  },
+  {
+    id: 'lofi-3',
+    name: 'Controlla',
+    duration_ms: 140000,
+    preview_url: null,
+    artists: [{ id: 'art-idealism', name: 'Idealism' }],
+    album: {
+      id: 'alb-idealism',
+      name: 'Hiraeth',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273574c860c490a78627b9c97b8' }],
+    },
+  },
+  {
+    id: 'lofi-4',
+    name: '5:32pm',
+    duration_ms: 118000,
+    preview_url: null,
+    artists: [{ id: 'art-thedeli', name: 'The Deli' }],
+    album: {
+      id: 'alb-thedeli',
+      name: 'Vibes 2',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273eef076413d5b06691c2fdfbc' }],
+    },
+  },
+  {
+    id: 'lofi-5',
+    name: 'Both of Us',
+    duration_ms: 154000,
+    preview_url: null,
+    artists: [{ id: 'art-idealism', name: 'Idealism' }],
+    album: {
+      id: 'alb-rain',
+      name: 'Rainy Evening',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27367be51ebccb5f0d36b85cb79' }],
+    },
+  },
+  {
+    id: 'lofi-6',
+    name: 'Honeymoon',
+    duration_ms: 145000,
+    preview_url: null,
+    artists: [{ id: 'art-kupla', name: 'Kupla' }],
+    album: {
+      id: 'alb-kupla',
+      name: 'Melody Mountain',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273ecb15509930f3a67732d8479' }],
+    },
+  },
+  {
+    id: 'lofi-7',
+    name: 'Dreaming',
+    duration_ms: 132000,
+    preview_url: null,
+    artists: [{ id: 'art-saib', name: 'Saib' }],
+    album: {
+      id: 'alb-saib',
+      name: 'Bebop',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27378fcba5fba7a0d4c98782a21' }],
+    },
+  },
+  {
+    id: 'lofi-8',
+    name: 'A Lonely Begonia',
+    duration_ms: 160000,
+    preview_url: null,
+    artists: [{ id: 'art-kudasai', name: 'Kudasaibeats' }],
+    album: {
+      id: 'alb-kudasai',
+      name: 'Falling',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273e9e30a5ca6e1df7ce35bf94a' }],
+    },
+  },
+  {
+    id: 'lofi-9',
+    name: 'Snowman',
+    duration_ms: 148000,
+    preview_url: null,
+    artists: [{ id: 'art-wys', name: 'WYS' }],
+    album: {
+      id: 'alb-wys',
+      name: '1 Am. Study Session',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b27321e84fcb0a3900994f71a7d6' }],
+    },
+  },
+  {
+    id: 'lofi-10',
+    name: 'Again',
+    duration_ms: 110000,
+    preview_url: null,
+    artists: [{ id: 'art-wuntwo', name: 'Wun Two' }],
+    album: {
+      id: 'alb-wuntwo',
+      name: 'Rio',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2731dcaef58c735d45209da3cf1' }],
+    },
+  },
+  {
+    id: 'lofi-11',
+    name: 'Phantasm',
+    duration_ms: 138000,
+    preview_url: null,
+    artists: [{ id: 'art-elijah', name: 'Elijah Who' }],
+    album: {
+      id: 'alb-elijah',
+      name: 'Gentle Boy',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2737ba773be8003f993d05b58ee' }],
+    },
+  },
+  {
+    id: 'lofi-12',
+    name: 'Nagashi',
+    duration_ms: 144000,
+    preview_url: null,
+    artists: [{ id: 'art-idealism', name: 'Idealism' }],
+    album: {
+      id: 'alb-nagashi',
+      name: 'Nagashi Single',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273752e2591d3cb86c2e99dcf5e' }],
+    },
+  },
+  {
+    id: 'lofi-13',
+    name: 'Tired',
+    duration_ms: 152000,
+    preview_url: null,
+    artists: [{ id: 'art-sleepy', name: 'Sleepy Fish' }, { id: 'art-lofigirl', name: 'Lofi Girl' }],
+    album: {
+      id: 'alb-sleepy',
+      name: 'Beneath the City',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2733d73b062ca13872bbcfce701' }],
+    },
+  },
+  {
+    id: 'lofi-14',
+    name: 'Coffee',
+    duration_ms: 126000,
+    preview_url: null,
+    artists: [{ id: 'art-beabadoobee', name: 'beabadoobee' }],
+    album: {
+      id: 'alb-coffee',
+      name: 'Coffee Lofi Sessions',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273f55cf525b68260a927fa8384' }],
+    },
+  },
+  {
+    id: 'lofi-15',
+    name: 'Can We Kiss Forever?',
+    duration_ms: 187000,
+    preview_url: null,
+    artists: [{ id: 'art-kina', name: 'Kina' }, { id: 'art-adriana', name: 'Adriana Proenza' }],
+    album: {
+      id: 'alb-kina',
+      name: 'Can We Kiss Forever?',
+      images: [{ url: 'https://i.scdn.co/image/ab67616d0000b2733b00fdf018cbf5e5926ec03b' }],
+    },
+  },
+];
+
 /**
  * Curates exactly 15 songs matching the specified internal hashtag/role:
  * - Dynamically extracts a balanced mix (5-7 tracks) from the user's own matching playlists
@@ -468,11 +649,22 @@ export async function getCuratedSetForHashtag(
     addTrack(userShuffled[i]);
   }
 
-  // 2. Fetch fresh tracks from the official genre role charts and flagship artists
-  const roleTracks = await fetchRoleChartTracks(targetTag);
-  for (const t of roleTracks) {
-    if (result.length >= count) break;
-    addTrack(t);
+  // 1b. If #chill requested, immediately add authentic Lo-Fi & relaxed beats pool for instantaneous response
+  if (targetTag === '#chill') {
+    const lofiPool = [...AUTHENTIC_LOFI_CHILL_TRACKS].sort(() => Math.random() - 0.5);
+    for (const t of lofiPool) {
+      if (result.length >= count) break;
+      addTrack(t);
+    }
+  }
+
+  // 2. Fetch fresh tracks from the official genre role charts and flagship artists if more needed
+  if (result.length < count) {
+    const roleTracks = await fetchRoleChartTracks(targetTag);
+    for (const t of roleTracks) {
+      if (result.length >= count) break;
+      addTrack(t);
+    }
   }
 
   // 3. Final safety fill: repeat user matching tracks if any, otherwise repeat role pool

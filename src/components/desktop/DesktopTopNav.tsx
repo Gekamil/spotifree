@@ -16,7 +16,6 @@ import { syncChromeSession } from '../../services/sessionSync';
 import { ProfileDropdown } from './ProfileDropdown';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { addRecentSearch } from '../../utils/recentSearches';
-import { useAIDJStore } from '../../services/aiDJService';
 
 interface DesktopTopNavProps {
   onNavigateHome: () => void;
@@ -35,7 +34,6 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const { isAuthenticated, user } = useSpotifyDataStore();
-  const isDJModeActive = useAIDJStore((s) => s.isDJModeActive);
 
   useEffect(() => {
     // Attempt local Chrome dev session synchronization only when developing locally
@@ -161,29 +159,6 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
       {/* Right: Descubrir Premium / Conectar, Instalar app, Bell, Friends, Avatar J */}
       <div className="flex items-center justify-end gap-2 shrink-0 relative">
-        {/* Animated Moving DJ Badge when active */}
-        {isDJModeActive && (
-          <button
-            onClick={() => setActiveMainTab('dj')}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-all cursor-pointer active:scale-95 shadow-sm ${
-              activeMainTab === 'dj'
-                ? 'bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 shadow-[0_0_12px_rgba(30,215,96,0.2)]'
-                : 'bg-white/5 hover:bg-white/10 text-white border border-white/10 hover:border-white/20'
-            }`}
-            title="DJ en vivo activo • Clic para volver a la sesión"
-          >
-            <div className="flex items-end gap-[2px] h-3 pb-0.5">
-              <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
-              <span className="w-[2.5px] bg-[#00f2fe] rounded-full animate-spotify-eq-2" />
-              <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
-            </div>
-            <span className="text-xs font-black uppercase tracking-wider font-['SpotifyMixUITitle']">
-              DJ
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-          </button>
-        )}
-
         {/* Estado no autenticado: opciones limpias estilo Spotify */}
         {!isAuthenticated && (
           <div className="flex items-center gap-2">

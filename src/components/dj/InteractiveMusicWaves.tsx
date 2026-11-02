@@ -68,19 +68,32 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
 
     const resize = () => {
       const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-      const width = canvas.clientWidth || window.innerWidth;
-      const height = canvas.clientHeight || window.innerHeight;
-      canvas.width = width * dpr;
-      canvas.height = height * dpr;
+      const width = canvas.clientWidth || canvas.parentElement?.clientWidth || window.innerWidth;
+      const height = canvas.clientHeight || canvas.parentElement?.clientHeight || window.innerHeight;
+      if (!width || !height) return;
+      canvas.width = Math.round(width * dpr);
+      canvas.height = Math.round(height * dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
     };
 
     resize();
     window.addEventListener('resize', resize);
 
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => {
+        resize();
+      });
+      ro.observe(canvas);
+      if (canvas.parentElement) {
+        ro.observe(canvas.parentElement);
+      }
+    }
+
     const render = () => {
-      const width = canvas.clientWidth || window.innerWidth;
-      const height = canvas.clientHeight || window.innerHeight;
+      const width = canvas.clientWidth || canvas.parentElement?.clientWidth || window.innerWidth;
+      const height = canvas.clientHeight || canvas.parentElement?.clientHeight || window.innerHeight;
 
       const playing = isPlayingRef.current;
       const speaking = isSpeakingRef.current;
@@ -90,8 +103,11 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       smoothedLevelRef.current += (targetLevel - smoothedLevelRef.current) * 0.16;
       const voice = smoothedLevelRef.current;
 
-      // Dynamic wave speed
-      const speed = speaking ? 0.045 : playing ? 0.028 : 0.015;
+      // Dynamic wave speed:
+      // - Si no hay nada hablando ni sonando: quietas (speed = 0, se quedan completamente quietas)
+      // - Si la música está sonando: ritmo constante como ahora (speed = 0.024)
+      // - Si la IA está hablando: se mueven más rápido y expresivas (speed = 0.048)
+      const speed = speaking ? 0.048 : playing ? 0.024 : 0;
       time += speed;
 
       // Smooth color morphing interpolation
@@ -105,30 +121,30 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
 
       ctx.clearRect(0, 0, width, height);
 
-      // 1. Render Layered Organic Waves across the mid-region
+      // Layered Organic Waves
       const waveConfigs = [
         {
           frequency: 0.007,
           speedOffset: 0,
-          amplitude: (speaking ? 28 + voice * 45 : playing ? 22 : 12),
+          amplitude: speaking ? 34 + voice * 55 : playing ? 22 : 8,
           yCenter: height * 0.38,
-          opacity: 0.22,
+          opacity: speaking ? 0.28 : playing ? 0.22 : 0.14,
           phaseShift: 0,
         },
         {
           frequency: 0.011,
           speedOffset: 1.2,
-          amplitude: (speaking ? 36 + voice * 55 : playing ? 26 : 14),
+          amplitude: speaking ? 44 + voice * 65 : playing ? 26 : 10,
           yCenter: height * 0.42,
-          opacity: 0.28,
+          opacity: speaking ? 0.34 : playing ? 0.28 : 0.16,
           phaseShift: 1.5,
         },
         {
           frequency: 0.009,
           speedOffset: 2.1,
-          amplitude: (speaking ? 24 + voice * 40 : playing ? 18 : 10),
+          amplitude: speaking ? 30 + voice * 45 : playing ? 18 : 7,
           yCenter: height * 0.46,
-          opacity: 0.18,
+          opacity: speaking ? 0.22 : playing ? 0.18 : 0.12,
           phaseShift: 3.0,
         },
       ];
@@ -173,6 +189,7 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
     return () => {
       cancelAnimationFrame(animId);
       window.removeEventListener('resize', resize);
+      if (ro) ro.disconnect();
     };
   }, []);
 

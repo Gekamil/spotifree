@@ -12,6 +12,7 @@ import {
 import { toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
+import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 
 interface LyricWord {
   timeMs: number;
@@ -27,27 +28,6 @@ interface SyncedLine {
 
 interface DesktopRightSidebarProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
-}
-
-function getDynamicArtworkColor(trackId?: string, trackName?: string, artistName?: string): string {
-  if (!trackName && !trackId) return '#5d1f00';
-  const str = `${trackId || ''}-${trackName || ''}-${artistName || ''}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = str.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const PALETTES = [
-    '#6b21a8', // Deep Purple
-    '#1e3a8a', // Midnight Blue
-    '#9a3412', // Warm Amber
-    '#065f46', // Emerald Forest
-    '#831843', // Deep Crimson / Magenta
-    '#1e293b', // Slate Indigo
-    '#b45309', // Golden Ochre
-    '#3b0764', // Electric Violet
-    '#0f766e', // Deep Teal
-  ];
-  return PALETTES[Math.abs(hash) % PALETTES.length];
 }
 
 function parseEnhancedLyrics(lrcText: string): SyncedLine[] {
@@ -270,11 +250,36 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   // Real synchronized lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLine[]>([]);
   const [plainLyrics, setPlainLyrics] = useState<string[]>([]);
+  const [dominantColor, setDominantColor] = useState<string>('#5d1f00');
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
 
   const primaryArtist = currentTrack?.artists?.[0]?.name || '';
   const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
   const artistInfo = getArtistInfo(primaryArtist, hdCover);
+
+  // Extract real dynamic dominant artwork color with seamless gradient
+  useEffect(() => {
+    let cancelled = false;
+    if (!currentTrack) {
+      setDominantColor('#5d1f00');
+      return;
+    }
+    const coverUrl = hdCover || currentTrack.album?.images?.[0]?.url;
+    if (coverUrl && !coverUrl.includes('liked-songs')) {
+      extractDominantColorFromImage(coverUrl).then((hex) => {
+        if (!cancelled && hex) {
+          setDominantColor(hex);
+        } else if (!cancelled) {
+          setDominantColor(resolveVibrantColor(currentTrack.id, currentTrack.name));
+        }
+      });
+    } else {
+      setDominantColor(resolveVibrantColor(currentTrack.id, currentTrack.name));
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id, hdCover]);
 
   // Resolve videoId & canvas
   useEffect(() => {
@@ -584,10 +589,10 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
             {/* 3. Real Synced Lyrics Preview (Dynamically updating with playback and matching artwork color) */}
             <div
               style={{
-                backgroundColor: getDynamicArtworkColor(currentTrack?.id, currentTrack?.name, primaryArtist),
-                transition: 'background-color 0.8s ease',
+                background: `linear-gradient(135deg, ${dominantColor}f0 0%, ${dominantColor}99 65%, rgba(18, 18, 18, 0.9) 100%)`,
+                transition: 'background 0.8s ease-in-out, background-color 0.8s ease-in-out',
               }}
-              className="rounded-xl p-4 text-white space-y-2 relative shadow-lg overflow-hidden transition-all duration-300"
+              className="rounded-xl p-4 text-white space-y-2 relative shadow-lg overflow-hidden transition-all duration-300 border border-white/10"
             >
               <div className="flex items-center justify-between">
                 <span className="font-bold text-sm tracking-tight text-white flex items-center gap-2">
@@ -980,8 +985,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
             <div
               ref={lyricsScrollRef}
               style={{
-                background: `linear-gradient(180deg, ${getDynamicArtworkColor(currentTrack.id, currentTrack.name, primaryArtist)} 0%, rgba(18, 18, 18, 0.95) 55%, #121212 100%)`,
-                transition: 'background 0.8s ease',
+                background: `linear-gradient(180deg, ${dominantColor}f0 0%, ${dominantColor}77 30%, rgba(18, 18, 18, 0.95) 65%, #121212 100%)`,
+                transition: 'background 0.8s ease-in-out',
               }}
               className="flex-1 overflow-y-auto p-5 space-y-6 scroll-smooth select-none"
             >

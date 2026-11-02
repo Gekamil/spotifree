@@ -3,8 +3,7 @@ import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { aiDJVoiceService } from './aiDJVoiceService';
-import { searchSpotify } from './spotifyApi';
-import { resolveTrackCoversBatch, getTrackCoverUrl } from '../utils/trackCovers';
+import { resolveTrackCoversBatch } from '../utils/trackCovers';
 import {
   type MusicHashtag,
   resolveHashtagFromPrompt,
@@ -165,14 +164,14 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     };
   }
 
-  // 5. Chill / Relax / Unwind / Peaceful
-  if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres/i.test(p)) {
+  // 5. Chill / Lo-Fi / Relaxed Rhythm
+  if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres|lofi|lo-fi/i.test(p)) {
     return {
-      speech: `Buena elección. Vamos a bajar el ritmo con una selección suave y acústica para desconectar. Disfrútala.`,
-      query: 'novo amor cigarettes after sex indie folk acustico calma',
-      vibeTitle: 'Sesión: Relax Acústico',
+      speech: `Relájate${namePhrase}. Te preparé una sesión lo-fi con ritmos suaves y tranquilos para desconectar del mundo.`,
+      query: 'lofi hip hop beats chill study instrumental',
+      vibeTitle: 'Sesión: Lo-Fi Chill Beats',
       vibeColor: '#00897b',
-      excludeTitles: ['chill', 'relax', 'chill out', 'chill beats', 'relaxing'],
+      excludeTitles: ['chill', 'relax', 'chill out', 'reggaeton', 'techno'],
     };
   }
 
@@ -514,71 +513,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       } catch {}
     }
 
-    // 2. Query Spotify search for top authentic tracks matching the exact intent
-    const curatedList: Track[] = [];
-    const genericWordsToFilter = new Set([
-      'chill', 'relax', 'relaxing', 'chill out', 'chill beats', 'rock', 'trap', 'gym', 'workout', 'fitness', 'lofi'
-    ]);
-    const isGenericSpam = (t: any) => {
-      const cleanTitle = (t.name || '').toLowerCase().trim();
-      if (genericWordsToFilter.has(cleanTitle)) return true;
-      if (analysis.excludeTitles && analysis.excludeTitles.some((ex) => cleanTitle.includes(ex))) return true;
-      return false;
-    };
-
-    try {
-      const searchRes = await searchSpotify(analysis.query);
-      const fetchedItems = searchRes?.tracks?.items || [];
-      fetchedItems.forEach((ft: any) => {
-        if (ft && ft.id && !seenIds.has(ft.id) && !isGenericSpam(ft)) {
-          seenIds.add(ft.id);
-          const art = getTrackCoverUrl(ft) || ft.album?.images?.[0]?.url || (ft as any).image;
-          const normalized: Track = (!ft.album || !ft.album.images || ft.album.images.length === 0)
-            ? {
-                ...ft,
-                album: {
-                  id: ft.album?.id || `alb-${ft.id}`,
-                  name: ft.album?.name || ft.name,
-                  images: [{ url: art || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-                },
-              }
-            : ft;
-          curatedList.push(normalized);
-        }
-      });
-    } catch (err) {
-      console.warn('[AIDJ] Spotify search enrichment notice:', err);
-    }
-
-    // 3. Score user's library tracks against the user intent
-    const intentWords = analysis.query.toLowerCase().split(/\s+/).filter((w) => w.length > 2);
-    const matchedUserTracks = allUserTracks.filter((t) => {
-      if (isGenericSpam(t)) return false;
-      const title = (t.name || '').toLowerCase();
-      const artist = (t.artists?.map((a) => a.name).join(' ') || '').toLowerCase();
-      const album = (t.album?.name || '').toLowerCase();
-      const full = `${title} ${artist} ${album}`;
-      return intentWords.some((w) => full.includes(w));
-    });
-
-    matchedUserTracks.forEach((ut) => {
-      if (!seenIds.has(ut.id)) {
-        seenIds.add(ut.id);
-        curatedList.push(ut);
-      }
-    });
-
-    // Fallback if still empty
-    if (curatedList.length === 0) {
-      curatedList.push(...allUserTracks);
-    }
-
+    // 2. Resolve hashtag and curate cohesive 15-track playlist set instantaneously
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
 
-    // Curate a cohesive 15-track playlist set based on internal hashtag analysis of user playlists
     const hashtagSet = await getCuratedSetForHashtag(targetTag, 15);
-    const finalSet = hashtagSet.length >= 10 ? hashtagSet : (curatedList.length > 0 ? curatedList.slice(0, 15) : hashtagSet);
+    const finalSet = hashtagSet.length >= 8 ? hashtagSet : (allUserTracks.length > 0 ? allUserTracks.slice(0, 15) : hashtagSet);
 
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});

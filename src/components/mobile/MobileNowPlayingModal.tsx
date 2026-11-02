@@ -26,6 +26,7 @@ import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../
 import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
+import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -62,6 +63,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const isDJActive = useAIDJStore((s) => s.isDJModeActive) || currentContextId === 'dj-session';
   const currentSetTitle = useAIDJStore((s) => s.currentSetTitle);
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);
+  const visualizerState = useAIDJStore((s) => s.visualizerState);
+  const voiceLevel = useAIDJStore((s) => s.voiceLevel);
   const [lyrics, setLyrics] = useState<string | null>(null);
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
@@ -593,8 +596,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 </svg>
               </button>
 
-              {/* Floating DJ Button (Photo 1) */}
-              {(isDJActive) && (
+              {/* Floating DJ Button with spinning orb and dynamic track background color */}
+              {isDJActive && (
                 <button
                   onClick={() => {
                     onClose();
@@ -602,17 +605,21 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                       onSelectPlaylistById('spotify-dj');
                     }
                   }}
-                  className="w-10 h-10 rounded-full border border-white/20 text-[#1ed760] flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all ml-1 shadow-lg"
+                  className="w-10 h-10 rounded-full border border-white/20 flex items-center justify-center cursor-pointer hover:scale-108 active:scale-95 transition-all ml-1 shadow-lg overflow-hidden p-0"
                   style={{
-                    backgroundColor: djThemeColor || '#0050d0',
-                    boxShadow: `0 4px 18px ${djThemeColor || '#0050d0'}80`,
-                    transition: 'background-color 0.8s ease, box-shadow 0.8s ease',
+                    backgroundColor: extractedModalColor || djThemeColor || '#181818',
+                    boxShadow: `0 4px 18px ${extractedModalColor || djThemeColor || '#000000'}80`,
+                    transition: 'background-color 0.8s ease-in-out, box-shadow 0.8s ease-in-out',
                   }}
                   title="Volver a la pantalla del DJ"
                 >
-                  <span className="text-[11px] font-black tracking-wider text-white font-['SpotifyMixUITitle']">
-                    DJ
-                  </span>
+                  <SpotifyDJVisualizer
+                    size={28}
+                    mini
+                    state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
+                    voiceLevel={voiceLevel}
+                    themeColor={extractedModalColor || djThemeColor}
+                  />
                 </button>
               )}
             </div>
