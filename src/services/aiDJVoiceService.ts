@@ -6,7 +6,7 @@
 import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
 
-export type DJVoiceId = 'alvaro' | 'salome' | 'gemini';
+export type DJVoiceId = 'sebastian' | 'dalia' | 'alvaro' | 'salome' | 'gemini';
 
 export interface DJVoiceOptionItem {
   id: DJVoiceId;
@@ -17,6 +17,18 @@ export interface DJVoiceOptionItem {
 
 export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
   {
+    id: 'sebastian',
+    name: 'Sebastián',
+    region: 'Venezuela',
+    description: 'Voz masculina joven y pulida • Tono fresco y profesional (Ilimitado)',
+  },
+  {
+    id: 'dalia',
+    name: 'Dalia Multilingual',
+    region: 'México',
+    description: 'Voz femenina brillante y entusiasta • Gran energía para DJ (Ilimitado)',
+  },
+  {
     id: 'gemini',
     name: 'Gemini IA',
     region: 'Google Cloud',
@@ -26,7 +38,7 @@ export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
     id: 'alvaro',
     name: 'Álvaro',
     region: 'España',
-    description: 'Locutor de radio profesional • Tono cálido de estudio (Ilimitado)',
+    description: 'Locutor de radio tradicional • Tono cálido de estudio (Ilimitado)',
   },
   {
     id: 'salome',
@@ -52,8 +64,8 @@ export interface AIDJConfig {
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'gemini',
-  provider: 'gemini',
+  voice: 'sebastian',
+  provider: 'edge',
   apiKey: '',
   voiceId: '',
 };
@@ -68,18 +80,18 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
-  private selectedVoiceId: DJVoiceId = 'gemini';
+  private selectedVoiceId: DJVoiceId = 'sebastian';
   private testPhraseIndex: number = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
       try {
         const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
-        if (savedVoice === 'alvaro' || savedVoice === 'salome' || savedVoice === 'gemini') {
+        if (savedVoice === 'sebastian' || savedVoice === 'dalia' || savedVoice === 'alvaro' || savedVoice === 'salome' || savedVoice === 'gemini') {
           this.selectedVoiceId = savedVoice;
         } else {
-          this.selectedVoiceId = 'gemini';
-          localStorage.setItem('spotifree_dj_voice_choice', 'gemini');
+          this.selectedVoiceId = 'sebastian';
+          localStorage.setItem('spotifree_dj_voice_choice', 'sebastian');
         }
       } catch {}
 
@@ -146,7 +158,7 @@ class AIDJVoiceService {
   }
 
   public setSelectedVoice(voice: DJVoiceId) {
-    if (voice !== 'alvaro' && voice !== 'salome' && voice !== 'gemini') return;
+    if (voice !== 'sebastian' && voice !== 'dalia' && voice !== 'alvaro' && voice !== 'salome' && voice !== 'gemini') return;
     this.selectedVoiceId = voice;
     this.config.voice = voice;
     if (typeof window !== 'undefined') {

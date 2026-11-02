@@ -130,8 +130,12 @@ export default async function handler(req, res) {
   const rawLang = (query.lang || body.lang || 'es').toLowerCase();
   const isEnglish = rawLang.startsWith('en');
 
-  let selectedVoice = 'gemini';
-  if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
+  let selectedVoice = 'sebastian';
+  if (rawVoice.includes('dalia') || rawVoice.includes('mexico') || rawVoice === 'es-mx-dalianeural') {
+    selectedVoice = 'dalia';
+  } else if (rawVoice.includes('sebastian') || rawVoice.includes('venezuela') || rawVoice === 'es-ve-sebastianneural') {
+    selectedVoice = 'sebastian';
+  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
     selectedVoice = 'salome';
   } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural' || rawVoice.includes('guy')) {
     selectedVoice = 'alvaro';
@@ -140,9 +144,33 @@ export default async function handler(req, res) {
   }
 
   // Voice mapping based on language
-  const edgeVoiceName = isEnglish
-    ? (selectedVoice === 'salome' ? 'en-US-JennyNeural' : 'en-US-GuyNeural')
-    : (selectedVoice === 'salome' ? 'es-CO-SalomeNeural' : 'es-ES-AlvaroNeural');
+  let edgeVoiceName = 'es-VE-SebastianNeural';
+  if (isEnglish) {
+    if (selectedVoice === 'dalia' || selectedVoice === 'salome') {
+      edgeVoiceName = 'en-US-JennyNeural';
+    } else {
+      edgeVoiceName = 'en-US-GuyNeural';
+    }
+  } else {
+    switch (selectedVoice) {
+      case 'dalia':
+        edgeVoiceName = 'es-MX-DaliaNeural';
+        break;
+      case 'sebastian':
+        edgeVoiceName = 'es-VE-SebastianNeural';
+        break;
+      case 'salome':
+        edgeVoiceName = 'es-CO-SalomeNeural';
+        break;
+      case 'alvaro':
+        edgeVoiceName = 'es-ES-AlvaroNeural';
+        break;
+      case 'gemini':
+      default:
+        edgeVoiceName = 'es-VE-SebastianNeural';
+        break;
+    }
+  }
 
   const userApiKey = (query.apiKey || body.apiKey || '').trim();
   const geminiVoiceName = isEnglish ? 'Puck' : 'Kore';
