@@ -113,20 +113,21 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       let bulgeBase: number;
 
       if (mini) {
-        pulseScale = 1 + Math.sin(time * 2.2) * 0.075;
-        bulgeBase = 2.5 * (size / 38);
+        // Subtle energetic breathing keeping the crisp circular shape
+        pulseScale = 1 + Math.sin(time * 1.8) * 0.035;
+        bulgeBase = 0.55 * (size / 38);
       } else if (isSpeaking) {
-        // High reactivity to speech syllables
-        pulseScale = 1 + Math.sin(time * 2.2) * 0.025 + currentVoice * 0.14;
-        bulgeBase = (1.8 + currentVoice * 3.5) * (size / 260);
+        // High reactivity to speech syllables, retaining circular geometry
+        pulseScale = 1 + Math.sin(time * 2.2) * 0.02 + currentVoice * 0.10;
+        bulgeBase = (1.0 + currentVoice * 1.6) * (size / 260);
       } else if (isPlaying) {
         // Music beat pulse simulation
-        pulseScale = 1 + Math.sin(time * 1.9) * 0.035 + Math.sin(time * 3.8) * 0.015;
-        bulgeBase = 2.0 * (size / 260);
+        pulseScale = 1 + Math.sin(time * 1.8) * 0.025 + Math.sin(time * 3.6) * 0.01;
+        bulgeBase = 1.1 * (size / 260);
       } else {
         // Calm resting idle breathing
-        pulseScale = 1 + Math.sin(time * 1.2) * 0.018;
-        bulgeBase = 1.2 * (size / 260);
+        pulseScale = 1 + Math.sin(time * 1.2) * 0.015;
+        bulgeBase = 0.6 * (size / 260);
       }
 
       ctx.save();

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { DesktopTopNav } from './DesktopTopNav';
 import { DesktopSidebar } from './DesktopSidebar';
 import { DesktopPlayer } from './DesktopPlayer';
@@ -9,6 +9,7 @@ import { DesktopRightSidebar } from './DesktopRightSidebar';
 import { ContextMenu } from './ContextMenu';
 import { EditPlaylistModal } from './EditPlaylistModal';
 import { LoginModal } from './LoginModal';
+import { ImportLibraryModal } from '../modals/ImportLibraryModal';
 import { DesktopSettingsView } from './DesktopSettingsView';
 import { DesktopGuideView } from './DesktopGuideView';
 import { DesktopProfileView } from './DesktopProfileView';
@@ -201,6 +202,20 @@ export const DesktopLayout: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const handleOpen = (e: any) => {
+      if (e.detail) {
+        handleSelectPlaylist(e.detail);
+      }
+    };
+    window.addEventListener('spotifree_open_playlist', handleOpen);
+    (window as any).__desktopSelectPlaylist = handleSelectPlaylist;
+    return () => {
+      window.removeEventListener('spotifree_open_playlist', handleOpen);
+      delete (window as any).__desktopSelectPlaylist;
+    };
+  }, []);
+
   return (
     <div className="h-screen w-screen flex flex-col bg-black overflow-hidden font-sans select-none relative">
       {/* 1. Global Top Navigation Bar (Full Width) */}
@@ -281,6 +296,9 @@ export const DesktopLayout: React.FC = () => {
 
       {/* Spotify Multi-Account Login & Cookie Extractor Modal */}
       <LoginModal />
+
+      {/* Import Library Modal */}
+      <ImportLibraryModal />
     </div>
   );
 };

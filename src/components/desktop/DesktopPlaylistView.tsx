@@ -698,11 +698,52 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     )
   );
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const scrollParent = containerRef.current?.closest('.overflow-y-auto') || containerRef.current?.parentElement;
+    if (!scrollParent) return;
+    const handleScroll = () => {
+      setScrollY(scrollParent.scrollTop);
+    };
+    scrollParent.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const isDailyMix =
+    dynamicPlaylist.name.toLowerCase().includes('mix diario') ||
+    dynamicPlaylist.id.includes('37i9dQZF1E3') ||
+    dynamicPlaylist.id.includes('mix-diario');
+
+  const DAILY_MIX_BANNERS: Record<string, string> = {
+    '1': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es',
+    '2': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es',
+    '3': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es',
+    '4': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es',
+    '5': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es',
+    '6': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es',
+  };
+
+  const dailyMixNum = dynamicPlaylist.name.match(/\d+/)?.[0] || '1';
+
+  const hasBanner = Boolean(
+    dynamicPlaylist.bannerUrl ||
+    (dynamicPlaylist as any).header_image ||
+    dynamicPlaylist.images?.[0]?.url?.includes('pickasso') ||
+    isDailyMix
+  );
+
+  const bannerImgUrl =
+    dynamicPlaylist.bannerUrl ||
+    (dynamicPlaylist as any).header_image ||
+    (isDailyMix ? DAILY_MIX_BANNERS[dailyMixNum] || dynamicPlaylist.images?.[0]?.url : dynamicPlaylist.images?.[0]?.url);
+
   useEffect(() => {
     let cancelled = false;
     const imgUrl = isLikedPlaylist
       ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-      : dynamicPlaylist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url;
+      : (hasBanner ? bannerImgUrl : (dynamicPlaylist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url));
     if (imgUrl) {
       extractDominantColorFromImage(imgUrl).then((hex) => {
         if (!cancelled && hex) {
@@ -713,159 +754,249 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return () => {
       cancelled = true;
     };
-  }, [dynamicPlaylist.id, dynamicPlaylist.images, tracks]);
+  }, [dynamicPlaylist.id, dynamicPlaylist.images, tracks, hasBanner, bannerImgUrl]);
 
   const themeColor = extractedThemeColor;
 
   return (
-    <div className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
-      {/* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */}
+    <div ref={containerRef} className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
+      {/* Sticky Compact Header on Scroll */}
       <div
-        className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-700 overflow-hidden"
-        style={{
-          backgroundColor: themeColor,
-          backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(18, 18, 18, 0.82) 70%, #121212 100%)',
-          transition: 'background-color 1s cubic-bezier(0.2, 0, 0, 1)',
-        }}
+        className={`sticky top-0 z-30 px-8 py-3 flex items-center justify-between transition-all duration-200 ${
+          scrollY > 180
+            ? 'opacity-100 backdrop-blur-md border-b border-white/5 pointer-events-auto shadow-xl'
+            : 'opacity-0 pointer-events-none'
+        }`}
+        style={{ backgroundColor: `${themeColor}E6` }}
       >
-        {/* Ambient atmospheric aura & luminous radial glow */}
-        <div
-          className="absolute -top-24 -left-24 w-[600px] h-[600px] rounded-full pointer-events-none blur-[110px] opacity-45 z-0"
-          style={{ backgroundColor: themeColor }}
-        />
-        <div
-          className="absolute top-0 right-1/4 w-[400px] h-[300px] rounded-full pointer-events-none blur-[130px] opacity-30 z-0"
-          style={{ backgroundColor: themeColor }}
-        />
-        {/* Cover Art 232x232 */}
-        <div
-          onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
-          className={`w-56 h-56 shrink-0 shadow-2xl ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden bg-[#282828] relative ${
-            isUserCreatedPlaylist ? 'group cursor-pointer' : ''
-          }`}
-          title={isUserCreatedPlaylist ? "Elegir foto" : undefined}
-        >
-          {isLikedPlaylist ? (
-            <img
-              src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
-              alt="Canciones que te gustan"
-              onError={handleImageError}
-              className="w-full h-full object-cover shadow-2xl"
-            />
-          ) : !heroCoverError && dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
-            <img
-              src={dynamicPlaylist.images[0].url}
-              alt={dynamicPlaylist.name}
-              onError={() => setHeroCoverError(true)}
-              className="w-full h-full object-cover shadow-2xl"
-            />
-          ) : isArtist ? (
-            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
-            </div>
-          ) : isFolder ? (
-            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
-              </svg>
-            </div>
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-            </div>
-          )}
+        <div className="flex items-center gap-4 min-w-0">
+          <button
+            onClick={handlePlayAll}
+            className="w-11 h-11 rounded-full bg-[#1ed760] hover:scale-105 active:scale-95 shadow-md flex items-center justify-center transition-all cursor-pointer shrink-0"
+            title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
+          >
+            {isCurrentPlaylistPlaying ? (
+              <PauseNativeIcon size={20} className="text-black" />
+            ) : (
+              <PlayNativeIcon size={20} className="text-black ml-0.5" />
+            )}
+          </button>
+          <span className="text-xl font-bold text-white font-['SpotifyMixUITitle'] truncate">
+            {dynamicPlaylist.name}
+          </span>
         </div>
+      </div>
 
-        {/* Metadata */}
-        {isArtist ? (
-          <div className="flex flex-col gap-2 min-w-0 justify-end z-10">
-            <div className="flex items-center gap-2 text-white font-bold text-sm">
-              <VerifiedArtistNativeIcon size={24} className="text-[#3d91f4]" />
-              <span>Artista verificado</span>
-            </div>
-            <h1 className="text-6xl lg:text-8xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate">
-              {dynamicPlaylist.name}
-            </h1>
-            <p className="text-base text-white/90 font-medium mt-2">
-              {getArtistMonthlyListeners(dynamicPlaylist.name)}
-            </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-1.5 min-w-0">
-            <span className="text-xs font-bold text-white capitalize">
-              {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas'
-                ? 'Playlist'
-                : isAlbum
-                ? 'Álbum'
-                : isFolder
-                ? 'Carpeta'
-                : 'Lista'}
+      {hasBanner ? (
+        /* Widescreen Banner Hero (Daily Mixes / Playlists with Wide Banner matching Photos 3 & 4) */
+        <div
+          className="w-full h-[320px] lg:h-[350px] relative overflow-hidden flex flex-col justify-end select-none"
+          style={{
+            opacity: Math.max(0, 1 - scrollY / 220),
+            transform: `translateY(-${Math.min(scrollY * 0.45, 90)}px)`,
+            transition: 'opacity 0.1s ease-out, transform 0.1s ease-out',
+          }}
+        >
+          <img
+            src={bannerImgUrl}
+            alt={dynamicPlaylist.name}
+            onError={handleImageError}
+            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/20 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent pointer-events-none" />
+
+          <div className="relative z-10 px-8 pb-6 flex flex-col justify-end gap-1.5 select-none">
+            <span className="text-xs font-bold text-white uppercase tracking-wider drop-shadow">
+              Lista pública
             </span>
-            <h1
-              onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
-              className={`text-5xl lg:text-7xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate ${
-                isUserCreatedPlaylist ? 'cursor-pointer hover:underline' : ''
-              }`}
-            >
+            <h1 className="text-6xl lg:text-7xl font-black text-white tracking-tight leading-none font-['SpotifyMixUITitle'] drop-shadow-lg truncate">
               {dynamicPlaylist.name}
             </h1>
-
             {dynamicPlaylist.description && (
-              <p className="text-sm text-[#b3b3b3] font-normal mt-1 line-clamp-2">
+              <p className="text-sm font-semibold text-white/95 mt-1 drop-shadow line-clamp-1">
                 {stripHtml(dynamicPlaylist.description)}
               </p>
             )}
-
-            {/* Single unified metadata line matching Real Spotify */}
-            <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
-              {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
-                <>
-                  <span className="font-bold text-white hover:underline cursor-pointer">Spotify</span>
-                  <span>•</span>
-                  <span className="text-white/90">guardada 625.055 veces</span>
-                  <span>•</span>
-                  <span className="text-white/90">
-                    {loading
-                      ? 'Cargando canciones...'
-                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                  </span>
-                </>
-              ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
-                <>
-                  <span className="font-bold text-white hover:underline cursor-pointer">Hecha para Jorgeperezvk</span>
-                  <span>•</span>
-                  <span className="text-white/90">
-                    {loading
-                      ? 'Cargando canciones...'
-                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="font-bold text-white hover:underline cursor-pointer">
-                    {dynamicPlaylist.owner?.display_name || 'Spotify'}
-                  </span>
-                  <span>•</span>
-                  <span className="text-white/90">
-                    {loading
-                      ? 'Cargando canciones...'
-                      : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
-                  </span>
-                </>
-              )}
+            <div className="flex items-center gap-2 text-sm text-white font-medium mt-1 flex-wrap drop-shadow">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.495 17.307c-.215.353-.674.464-1.026.249-2.812-1.718-6.353-2.107-10.524-1.154-.403.092-.803-.16-.895-.562-.092-.403.159-.803.562-.895 4.568-1.044 8.489-.606 11.634 1.336.352.215.464.674.249 1.026zm1.467-3.26c-.27.44-.848.578-1.287.308-3.22-1.979-8.128-2.55-11.936-1.393-.497.151-1.025-.134-1.176-.63-.151-.496.134-1.025.63-1.176 4.358-1.323 9.775-.688 13.461 1.574.44.27.578.847.308 1.287zm.126-3.41c-3.86-2.292-10.228-2.503-13.896-1.39-.59.179-1.218-.16-1.398-.75-.179-.59.16-1.218.75-1.398 4.218-1.281 11.248-1.037 15.69 1.601.53.314.704 1.004.39 1.534-.314.53-1.004.703-1.536.403z" />
+              </svg>
+              <span>
+                Hecha para <span className="font-bold">{user?.display_name || 'Jorgeperezvk'}</span>
+              </span>
+              <span>•</span>
+              <span>
+                {tracks.length} {tracks.length === 1 ? 'canción' : 'canciones'}, {formattedDuration}
+              </span>
             </div>
+            <button
+              type="button"
+              className="text-xs text-white/75 hover:text-white underline text-left mt-0.5 cursor-pointer w-fit drop-shadow-sm"
+            >
+              Recomendaciones e impacto de la promoción
+            </button>
           </div>
-        )}
-      </div>
+        </div>
+      ) : (
+        /* Dynamic Reactive Hero Header with smooth gradient and atmospheric aura */
+        <div
+          className="px-8 pt-8 pb-6 flex items-end gap-6 relative transition-colors duration-700 overflow-hidden"
+          style={{
+            backgroundColor: themeColor,
+            backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(18, 18, 18, 0.82) 70%, #121212 100%)',
+            transition: 'background-color 1s cubic-bezier(0.2, 0, 0, 1)',
+          }}
+        >
+          {/* Ambient atmospheric aura & luminous radial glow */}
+          <div
+            className="absolute -top-24 -left-24 w-[600px] h-[600px] rounded-full pointer-events-none blur-[110px] opacity-45 z-0"
+            style={{ backgroundColor: themeColor }}
+          />
+          <div
+            className="absolute top-0 right-1/4 w-[400px] h-[300px] rounded-full pointer-events-none blur-[130px] opacity-30 z-0"
+            style={{ backgroundColor: themeColor }}
+          />
+          {/* Cover Art 232x232 */}
+          <div
+            onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
+            className={`w-56 h-56 shrink-0 shadow-2xl ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden bg-[#282828] relative ${
+              isUserCreatedPlaylist ? 'group cursor-pointer' : ''
+            }`}
+            title={isUserCreatedPlaylist ? "Elegir foto" : undefined}
+          >
+            {isLikedPlaylist ? (
+              <img
+                src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+                alt="Canciones que te gustan"
+                onError={handleImageError}
+                className="w-full h-full object-cover shadow-2xl"
+              />
+            ) : !heroCoverError && dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
+              <img
+                src={dynamicPlaylist.images[0].url}
+                alt={dynamicPlaylist.name}
+                onError={() => setHeroCoverError(true)}
+                className="w-full h-full object-cover shadow-2xl"
+              />
+            ) : isArtist ? (
+              <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                </svg>
+              </div>
+            ) : isFolder ? (
+              <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                </svg>
+              </div>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+              </div>
+            )}
+          </div>
+
+          {/* Metadata */}
+          {isArtist ? (
+            <div className="flex flex-col gap-2 min-w-0 justify-end z-10">
+              <div className="flex items-center gap-2 text-white font-bold text-sm">
+                <VerifiedArtistNativeIcon size={24} className="text-[#3d91f4]" />
+                <span>Artista verificado</span>
+              </div>
+              <h1 className="text-6xl lg:text-8xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate">
+                {dynamicPlaylist.name}
+              </h1>
+              <p className="text-base text-white/90 font-medium mt-2">
+                {getArtistMonthlyListeners(dynamicPlaylist.name)}
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <span className="text-xs font-bold text-white capitalize">
+                {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas'
+                  ? 'Playlist'
+                  : isAlbum
+                  ? 'Álbum'
+                  : isFolder
+                  ? 'Carpeta'
+                  : 'Lista'}
+              </span>
+              <h1
+                onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
+                className={`text-5xl lg:text-7xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate ${
+                  isUserCreatedPlaylist ? 'cursor-pointer hover:underline' : ''
+                }`}
+              >
+                {dynamicPlaylist.name}
+              </h1>
+
+              {dynamicPlaylist.description && (
+                <p className="text-sm text-[#b3b3b3] font-normal mt-1 line-clamp-2">
+                  {stripHtml(dynamicPlaylist.description)}
+                </p>
+              )}
+
+              {/* Single unified metadata line matching Real Spotify */}
+              <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
+                {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
+                  <>
+                    <span className="font-bold text-white hover:underline cursor-pointer">Spotify</span>
+                    <span>•</span>
+                    <span className="text-white/90">guardada 625.055 veces</span>
+                    <span>•</span>
+                    <span className="text-white/90">
+                      {loading
+                        ? 'Cargando canciones...'
+                        : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                    </span>
+                  </>
+                ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
+                  <>
+                    <span className="font-bold text-white hover:underline cursor-pointer">Hecha para Jorgeperezvk</span>
+                    <span>•</span>
+                    <span className="text-white/90">
+                      {loading
+                        ? 'Cargando canciones...'
+                        : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="font-bold text-white hover:underline cursor-pointer">
+                      {dynamicPlaylist.owner?.display_name || 'Spotify'}
+                    </span>
+                    <span>•</span>
+                    <span className="text-white/90">
+                      {loading
+                        ? 'Cargando canciones...'
+                        : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Action Bar */}
-      <div className="px-8 pt-6 pb-2 flex flex-col gap-4">
+      <div
+        className="px-8 pt-6 pb-2 flex flex-col gap-4 transition-colors duration-500"
+        style={
+          hasBanner
+            ? {
+                backgroundColor: themeColor,
+                backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(18, 18, 18, 0.88) 75%, #121212 100%)',
+              }
+            : undefined
+        }
+      >
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-5">
             {/* Play Button: Turntable Platter (Modo DJ) or Classic Big Green */}
             {isAutomixActive ? (
               <button
@@ -902,7 +1033,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             ) : (
               <button
                 onClick={handlePlayAll}
-                className="w-14 h-14 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 active:scale-96 shadow-lg flex items-center justify-center transition-all duration-200"
+                className="w-14 h-14 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 active:scale-96 shadow-lg flex items-center justify-center transition-all duration-200 cursor-pointer shrink-0"
                 title={isCurrentPlaylistPlaying ? "Pausar" : "Reproducir"}
               >
                 {isCurrentPlaylistPlaying ? (
@@ -911,6 +1042,18 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   <PlayNativeIcon size={24} className="text-black ml-1" />
                 )}
               </button>
+            )}
+
+            {/* Small Track / Playlist Cover Thumbnail if hasBanner (Matching Photos 3 & 4) */}
+            {hasBanner && (
+              <div className="w-10 h-10 rounded-[4px] overflow-hidden shadow-md bg-[#282828] shrink-0 border border-white/10">
+                <img
+                  src={currentTrack?.album?.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url || bannerImgUrl}
+                  alt="Track Cover"
+                  onError={handleImageError}
+                  className="w-full h-full object-cover"
+                />
+              </div>
             )}
 
             {/* Shuffle button */}

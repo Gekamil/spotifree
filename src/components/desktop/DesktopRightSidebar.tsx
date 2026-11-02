@@ -253,6 +253,54 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const [dominantColor, setDominantColor] = useState<string>('#5d1f00');
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
 
+  // Resizable Right Sidebar State (Spotify Desktop Fidelity)
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = window.localStorage.getItem('spotifree_right_sidebar_width');
+        if (saved) {
+          const parsed = parseInt(saved, 10);
+          if (parsed >= 280 && parsed <= 520) return parsed;
+        }
+      } catch {}
+    }
+    return 360;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  const startXRef = useRef<number>(0);
+  const startWidthRef = useRef<number>(360);
+
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizing(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const deltaX = startXRef.current - e.clientX;
+      const nextWidth = Math.min(520, Math.max(280, startWidthRef.current + deltaX));
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      try {
+        window.localStorage.setItem('spotifree_right_sidebar_width', String(sidebarWidth));
+      } catch {}
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, sidebarWidth]);
+
   const primaryArtist = currentTrack?.artists?.[0]?.name || '';
   const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
   const artistInfo = getArtistInfo(primaryArtist, hdCover);
@@ -454,12 +502,25 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     <aside
       aria-label={activeRightSidebar === 'queue' ? 'Cola de reproducción' : 'Vista Sonando'}
       id="Desktop_PanelContainer_Id"
-      className={`h-full bg-[#121212] rounded-lg flex flex-col shrink-0 select-none overflow-hidden transition-[width,margin,opacity,transform] duration-300 ease-[cubic-bezier(0.3,0,0,1)] ${
+      style={{ width: isVisible ? `${sidebarWidth}px` : 0 }}
+      className={`h-full bg-[#121212] rounded-lg flex flex-col shrink-0 select-none overflow-hidden relative ${
+        isResizing ? '' : 'transition-[width,margin,opacity,transform] duration-200 ease-[cubic-bezier(0.3,0,0,1)]'
+      } ${
         isVisible
-          ? 'w-[340px] xl:w-[360px] mr-2 border border-white/5 opacity-100 translate-x-0'
+          ? 'mr-2 border border-white/5 opacity-100 translate-x-0'
           : 'w-0 mr-0 border-0 opacity-0 pointer-events-none translate-x-6'
       }`}
     >
+      {/* Resizable Left Edge Drag Handle */}
+      {isVisible && (
+        <div
+          onMouseDown={handleResizeStart}
+          className="absolute top-0 bottom-0 left-0 w-2.5 -ml-1 cursor-col-resize z-50 hover:bg-[#1ed760]/40 transition-colors group select-none"
+          title="Arrastra para cambiar el tamaño"
+        >
+          <div className="w-[2px] h-full mx-auto bg-transparent group-hover:bg-[#1ed760] transition-colors" />
+        </div>
+      )}
       {/* 1. NOW PLAYING VIEW (NPV) MODE */}
       {activeRightSidebar === 'now-playing' && (
         <div className="flex flex-col h-full overflow-hidden">

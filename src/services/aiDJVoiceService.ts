@@ -3,6 +3,8 @@
  * Powered by Neural Edge-TTS (es-ES-AlvaroNeural) with SpeechSynthesis Fallback
  */
 
+import { useLanguageStore } from '../utils/i18n';
+
 export type DJVoiceId = 'alvaro' | 'salome' | 'gemini';
 
 export interface DJVoiceOptionItem {
@@ -154,11 +156,19 @@ class AIDJVoiceService {
     if (voiceId) {
       this.setSelectedVoice(voiceId);
     }
-    const phrases = [
-      '¡Hola! Soy tu DJ personal de Spotifree, listo para ponerle ritmo a tu día.',
-      'Ajustando los niveles de sonido. Preparando los mejores temas para ti.',
-      'Esta es una prueba de mi voz. Dime qué estilo te apetece y nos ponemos en marcha.',
-    ];
+    const lang = useLanguageStore.getState().language;
+    const isEn = lang === 'en';
+    const phrases = isEn
+      ? [
+          "Hey there! I'm your personal Spotifree DJ, ready to drop some great tracks for you.",
+          "Tuning the audio levels. Getting your personalized mix ready.",
+          "This is a quick voice check. Let me know what vibe you're feeling today.",
+        ]
+      : [
+          '¡Hola! Soy tu DJ personal de Spotifree, listo para ponerle ritmo a tu día.',
+          'Ajustando los niveles de sonido. Preparando los mejores temas para ti.',
+          'Esta es una prueba de mi voz. Dime qué estilo te apetece y nos ponemos en marcha.',
+        ];
     const phrase = phrases[this.testPhraseIndex % phrases.length];
     this.testPhraseIndex++;
     return this.speak(phrase);
@@ -282,14 +292,16 @@ class AIDJVoiceService {
       this.abortController = new AbortController();
       const signal = this.abortController.signal;
 
+      const lang = useLanguageStore.getState().language;
       const activeVoice = this.getSelectedVoice();
-      const cacheKey = `${activeVoice}:${text}`;
+      const cacheKey = `${lang}:${activeVoice}:${text}`;
       let audioUrl = this.ttsCache.get(cacheKey);
       if (!audioUrl) {
         const params = new URLSearchParams({
           text,
           voice: activeVoice,
           provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
+          lang,
         });
         if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
         if (this.config.voiceId) params.set('voiceId', this.config.voiceId);

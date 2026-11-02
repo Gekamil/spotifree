@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -27,7 +27,7 @@ import { RotatingDJBannerText } from '../../utils/djMessages';
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj'>('home');
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
-  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'albums' | 'downloaded'>('all');
+  const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
@@ -36,6 +36,56 @@ export const MobileLayout: React.FC = () => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
   const [lastVibrantColor, setLastVibrantColor] = useState('#452a6d');
+
+  // Long-press playlist deletion state
+  const [longPressedPlaylistId, setLongPressedPlaylistId] = useState<string | null>(null);
+  const [playlistMenuTarget, setPlaylistMenuTarget] = useState<Playlist | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const longPressTimeoutRef = useRef<any>(null);
+
+  useEffect(() => {
+    const handleOpen = (e: any) => {
+      if (e.detail) {
+        setSelectedPlaylist(e.detail);
+        setMobileTab('playlist');
+      }
+    };
+    window.addEventListener('spotifree_open_playlist', handleOpen);
+    (window as any).__mobileSelectPlaylist = (pl: Playlist) => {
+      setSelectedPlaylist(pl);
+      setMobileTab('playlist');
+    };
+    return () => {
+      window.removeEventListener('spotifree_open_playlist', handleOpen);
+      delete (window as any).__mobileSelectPlaylist;
+    };
+  }, []);
+
+  const startLongPress = (pl: Playlist) => {
+    longPressTimeoutRef.current = setTimeout(() => {
+      try {
+        if (navigator && typeof navigator.vibrate === 'function') {
+          navigator.vibrate(40);
+        }
+      } catch {}
+      setLongPressedPlaylistId(pl.id);
+    }, 450);
+  };
+
+  const cancelLongPress = () => {
+    if (longPressTimeoutRef.current) {
+      clearTimeout(longPressTimeoutRef.current);
+      longPressTimeoutRef.current = null;
+    }
+  };
+
+  const handleDeletePlaylist = (id: string) => {
+    useSpotifyDataStore.getState().deletePlaylist(id);
+    setPlaylistMenuTarget(null);
+    setLongPressedPlaylistId(null);
+    setToastMessage('Se ha eliminado de tu biblioteca');
+    setTimeout(() => setToastMessage(null), 2500);
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -575,22 +625,21 @@ export const MobileLayout: React.FC = () => {
               </div>
             )}
 
-            {/* Filter Chips */}
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+            {/* Filter Chips (Fits cleanly on mobile with zero scroll) */}
+            <div className="grid grid-cols-3 gap-2 w-full pb-1">
               {[
                 { id: 'playlists', label: 'Playlists' },
                 { id: 'artists', label: 'Artistas' },
-                { id: 'albums', label: 'Álbumes' },
-                { id: 'downloaded', label: 'Descargado' },
+                { id: 'downloaded', label: 'Descargas' },
               ].map((chip) => {
                 const isSelected = libraryFilter === chip.id;
                 return (
                   <button
                     key={chip.id}
                     onClick={() => setLibraryFilter(isSelected ? 'all' : (chip.id as any))}
-                    className={`h-8 px-4 rounded-full text-xs font-bold shrink-0 transition-colors cursor-pointer ${
+                    className={`h-8 px-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center cursor-pointer ${
                       isSelected
-                        ? 'bg-[#1ed760] text-black font-black'
+                        ? 'bg-[#1ed760] text-black font-black shadow-sm'
                         : 'bg-white/10 text-white hover:bg-white/15'
                     }`}
                   >
@@ -679,7 +728,14 @@ export const MobileLayout: React.FC = () => {
                     list = [...list, ...extra];
                   }
                   return list
-                    .filter((p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs')
+                    .filter(
+                      (p) =>
+                        !p.id.includes('collection:tracks') &&
+                        p.id !== 'liked-songs' &&
+                        p.id !== 'spotify-dj' &&
+                        p.id !== 'dj' &&
+                        p.name?.toLowerCase().trim() !== 'dj'
+                    )
                     .filter((p) => {
                       if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
                         return false;
@@ -693,30 +749,62 @@ export const MobileLayout: React.FC = () => {
                 })()
                   .map((pl) => {
                     const isArt = checkIsMobileArtist(pl);
+                    const isLongPressed = longPressedPlaylistId === pl.id;
+
                     return (
                       <div
                         key={pl.id}
-                        onClick={() =>
-                          handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url)
-                        }
-                        className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                        onTouchStart={() => startLongPress(pl)}
+                        onTouchEnd={cancelLongPress}
+                        onTouchMove={cancelLongPress}
+                        onMouseDown={() => startLongPress(pl)}
+                        onMouseUp={cancelLongPress}
+                        onMouseLeave={cancelLongPress}
+                        onClick={() => {
+                          cancelLongPress();
+                          handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors relative group select-none ${
+                          isLongPressed ? 'bg-white/15' : ''
+                        }`}
                       >
-                        <img
-                          src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
-                          alt={pl.name}
-                          onError={handleImageError}
-                          className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
-                            isArt ? 'rounded-full' : 'rounded-[4px]'
-                          }`}
-                        />
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-bold text-white text-sm truncate">
-                            {pl.name}
-                          </span>
-                          <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                            {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
-                          </span>
+                        <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                          <img
+                            src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                            alt={pl.name}
+                            onError={handleImageError}
+                            className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
+                              isArt ? 'rounded-full' : 'rounded-[4px]'
+                            }`}
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span className="font-bold text-white text-sm truncate">
+                              {pl.name}
+                            </span>
+                            <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                              {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
+                            </span>
+                          </div>
                         </div>
+
+                        {/* Animated 3-Dots on Long Press (Photo/Requirement) */}
+                        {isLongPressed && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPlaylistMenuTarget(pl);
+                            }}
+                            className="w-9 h-9 rounded-full bg-white/20 hover:bg-white/30 active:scale-90 flex items-center justify-center text-white shrink-0 animate-in zoom-in-75 duration-200 transition-all cursor-pointer shadow-lg"
+                            title="Opciones de la lista"
+                          >
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                              <circle cx="5" cy="12" r="2" />
+                              <circle cx="12" cy="12" r="2" />
+                              <circle cx="19" cy="12" r="2" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     );
                   })}
@@ -856,6 +944,65 @@ export const MobileLayout: React.FC = () => {
         isOpen={isNotificationsOpen}
         onClose={() => setIsNotificationsOpen(false)}
       />
+
+      {/* Mobile Playlist Long-Press Actions Bottom Sheet */}
+      {playlistMenuTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 select-none"
+          onClick={() => setPlaylistMenuTarget(null)}
+        >
+          <div
+            className="w-full bg-[#242424] rounded-t-3xl p-5 pb-9 space-y-4 shadow-2xl animate-in slide-in-from-bottom duration-200 border-t border-white/10"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-1 cursor-pointer"
+              onClick={() => setPlaylistMenuTarget(null)}
+            />
+
+            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+              <img
+                src={playlistMenuTarget.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                alt={playlistMenuTarget.name}
+                onError={handleImageError}
+                className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
+              />
+              <div className="truncate">
+                <h4 className="text-sm font-bold text-white truncate font-['SpotifyMixUITitle']">
+                  {playlistMenuTarget.name}
+                </h4>
+                <p className="text-xs text-[#a7a7a7] truncate mt-0.5">
+                  {playlistMenuTarget.owner?.display_name || user?.display_name || 'Spotify'}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => handleDeletePlaylist(playlistMenuTarget.id)}
+              className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 text-red-400 font-bold text-sm cursor-pointer active:scale-98 transition-all"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
+                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+              </svg>
+              <span>Eliminar de tu biblioteca</span>
+            </button>
+
+            <button
+              onClick={() => setPlaylistMenuTarget(null)}
+              className="w-full p-2.5 rounded-full text-xs font-bold text-white/70 hover:text-white text-center cursor-pointer"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-[#282828] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200">
+          {toastMessage}
+        </div>
+      )}
 
       {/* Global Login / Cookie modal */}
       <LoginModal />

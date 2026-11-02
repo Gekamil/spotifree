@@ -17,6 +17,7 @@ interface UIState {
   editingPlaylist: Playlist | null;
   isSettingsModalOpen: boolean;
   isLoginModalOpen: boolean;
+  isImportModalOpen: boolean;
   contextMenu: ContextMenuState;
   activeRightSidebar: 'none' | 'queue' | 'lyrics' | 'now-playing' | 'friends';
   sortOrder: 'recientes' | 'anadidos' | 'alfabetico' | 'creador';
@@ -41,6 +42,8 @@ interface UIState {
   closeSettingsModal: () => void;
   openLoginModal: () => void;
   closeLoginModal: () => void;
+  openImportModal: () => void;
+  closeImportModal: () => void;
   toggleRightSidebar: (sidebar: 'queue' | 'lyrics' | 'now-playing' | 'friends') => void;
   closeRightSidebar: () => void;
   setSortOrder: (order: 'recientes' | 'anadidos' | 'alfabetico' | 'creador') => void;
@@ -58,6 +61,7 @@ const store = create<UIState>((set) => ({
   editingPlaylist: null,
   isSettingsModalOpen: false,
   isLoginModalOpen: false,
+  isImportModalOpen: false,
   contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
   activeRightSidebar: 'none',
   sortOrder: 'recientes',
@@ -138,6 +142,9 @@ const store = create<UIState>((set) => ({
   openLoginModal: () => set({ isLoginModalOpen: true, isProfileOpen: false }),
   closeLoginModal: () => set({ isLoginModalOpen: false }),
 
+  openImportModal: () => set({ isImportModalOpen: true, isProfileOpen: false }),
+  closeImportModal: () => set({ isImportModalOpen: false }),
+
   toggleRightSidebar: (sidebar) =>
     set((s) => ({
       activeRightSidebar: s.activeRightSidebar === sidebar ? 'none' : sidebar,
@@ -156,7 +163,8 @@ const store = create<UIState>((set) => ({
       isSortMenuOpen: false,
       isEditPlaylistModalOpen: false,
       isSettingsModalOpen: false,
-  isLoginModalOpen: false,
+      isLoginModalOpen: false,
+      isImportModalOpen: false,
       contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
     }),
 }));

@@ -11,6 +11,7 @@ import {
 import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
+import { useLanguageStore } from '../../utils/i18n';
 
 interface FrequencyPoint {
   label: string;
@@ -218,7 +219,15 @@ export const DesktopSettingsView: React.FC = () => {
   };
 
 
-  const [language, setLanguage] = useState('es-ES');
+  const { language, setLanguage } = useLanguageStore();
+
+  const handleLanguageSelect = (val: string) => {
+    if (val.startsWith('en')) {
+      setLanguage('en');
+    } else {
+      setLanguage('es');
+    }
+  };
   const [showNowPlayingOnClick, setShowNowPlayingOnClick] = useState(true);
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
@@ -700,16 +709,24 @@ export const DesktopSettingsView: React.FC = () => {
         {/* 2. IDIOMA (Custom Spotify Dropdown) */}
         {matchesSearch('idioma language english español') && (
           <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Idioma</h2>
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+              {language === 'en' ? 'Language' : 'Idioma'}
+            </h2>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
               <div>
-                <p className="text-sm font-medium text-white">Idioma de la aplicación</p>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">Selecciona tu idioma preferido para la interfaz.</p>
+                <p className="text-sm font-medium text-white">
+                  {language === 'en' ? 'App Language' : 'Idioma de la aplicación'}
+                </p>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {language === 'en'
+                    ? 'Select your preferred language for the interface.'
+                    : 'Selecciona tu idioma preferido para la interfaz.'}
+                </p>
               </div>
               <SpotifyCustomSelect
-                value={language}
+                value={language === 'en' ? 'en-US' : 'es-ES'}
                 options={LANGUAGE_OPTIONS}
-                onChange={setLanguage}
+                onChange={handleLanguageSelect}
                 minWidth="250px"
               />
             </div>

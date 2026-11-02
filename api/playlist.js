@@ -423,12 +423,21 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               };
             });
 
+            const rawBanner =
+              pl.visualIdentity?.image?.[0]?.url ||
+              pl.headerImage?.sources?.[0]?.url ||
+              pl.header_image?.url ||
+              pl.images?.items?.find(i => (i.sources?.[0]?.width || 0) > (i.sources?.[0]?.height || 0))?.sources?.[0]?.url ||
+              null;
+            const bannerUrl = rawBanner ? toHDImage(rawBanner) : undefined;
+
             return {
               id: cleanId,
               name: pl.name,
               description: stripHtml(pl.description || ''),
               type: 'playlist',
               images: coverUrl ? [{ url: coverUrl }] : [],
+              ...(bannerUrl ? { bannerUrl } : {}),
               owner: {
                 display_name: pl.ownerV2?.data?.name || 'Spotify',
                 id: pl.ownerV2?.data?.username || 'spotify',

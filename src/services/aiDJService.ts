@@ -3,6 +3,7 @@ import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { aiDJVoiceService } from './aiDJVoiceService';
+import { useLanguageStore } from '../utils/i18n';
 import { resolveTrackCoversBatch } from '../utils/trackCovers';
 import {
   type MusicHashtag,
@@ -303,18 +304,20 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     }
 
     const hour = new Date().getHours();
-    const greeting =
-      hour >= 6 && hour < 13
-        ? '¡Buenos días'
-        : hour >= 13 && hour < 21
-        ? '¡Qué onda'
-        : '¡Buenas noches';
+    const lang = useLanguageStore.getState().language;
+    const isEn = lang === 'en';
+
+    const greeting = isEn
+      ? (hour >= 6 && hour < 13 ? 'Good morning' : hour >= 13 && hour < 21 ? 'Hey what is up' : 'Good evening')
+      : (hour >= 6 && hour < 13 ? '¡Buenos días' : hour >= 13 && hour < 21 ? '¡Qué onda' : '¡Buenas noches');
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
-    const introText = `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
+    const introText = isEn
+      ? `${greeting}${namePart}! I'm your DJ. I took a look at what you've been listening to and built a personalized mix of your favorite tracks. What vibe are you feeling today?`
+      : `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     set({
@@ -607,11 +610,20 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       usePlayerStore.getState().playTrack(nextSet[0], nextSet, 'dj-session');
     }
 
-    const completionPhrases = [
-      '¿Qué te parece si mantenemos este rollo? He analizado tus playlists y te preparé 15 temazos más que te van a flipar.',
-      '¡Vaya sesión que llevamos! Mantenemos esta misma vibra con otras 15 canciones seleccionadas para ti. ¡A disfrutarlas!',
-      'Para que la música no pare, seguimos en esta misma onda con 15 canciones de tus listas y novedades.',
-    ];
+    const lang = useLanguageStore.getState().language;
+    const isEn = lang === 'en';
+
+    const completionPhrases = isEn
+      ? [
+          "How about we keep this vibe going? I checked your playlists and lined up 15 more tracks you're going to love.",
+          "What an amazing session so far! Keeping this momentum with 15 fresh tracks selected just for you. Turn it up!",
+          "Keeping the music flowing without missing a beat. Here are 15 more songs to keep the energy going.",
+        ]
+      : [
+          '¿Qué te parece si mantenemos este rollo? He analizado tus playlists y te preparé 15 temazos más que te van a flipar.',
+          '¡Vaya sesión que llevamos! Mantenemos esta misma vibra con otras 15 canciones seleccionadas para ti. ¡A disfrutarlas!',
+          'Para que la música no pare, seguimos en esta misma onda con 15 canciones de tus listas y novedades.',
+        ];
     const speech = completionPhrases[Math.floor(Math.random() * completionPhrases.length)];
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -658,11 +670,20 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       songsPlayedInSet: 0,
     });
 
-    const transitionPhrases = [
-      `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. Cambiemos de rollo con esto otro. ¡Súbele!`,
-      `¡Qué temazo acabamos de escuchar! Para mantener el ambiente arriba, vamos con esto.`,
-      `Cambiando de onda... aquí tienes otro tema que te va a encantar. ¡Dale play!`,
-    ];
+    const lang = useLanguageStore.getState().language;
+    const isEn = lang === 'en';
+
+    const transitionPhrases = isEn
+      ? [
+          `That was ${curTitle}${curArtist ? ` by ${curArtist}` : ''}. Switching it up with this next track. Turn it up!`,
+          `What a track we just listened to! Keeping the energy high, let's jump into this one.`,
+          `Changing up the vibe... here is another tune you're gonna love. Hit play!`,
+        ]
+      : [
+          `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. Cambiemos de rollo con esto otro. ¡Súbele!`,
+          `¡Qué temazo acabamos de escuchar! Para mantener el ambiente arriba, vamos con esto.`,
+          `Cambiando de onda... aquí tienes otro tema que te va a encantar. ¡Dale play!`,
+        ];
     const transitionText = transitionPhrases[Math.floor(Math.random() * transitionPhrases.length)];
 
     set({ currentMessage: transitionText, displayedTranscript: '' });

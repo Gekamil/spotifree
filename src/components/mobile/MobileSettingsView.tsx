@@ -6,6 +6,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
 import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
+import { useLanguageStore } from '../../utils/i18n';
 
 interface MobileSettingsViewProps {
   onBack: () => void;
@@ -49,6 +50,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
 }) => {
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
   const { openLoginModal } = useUIStore();
+  const { language, setLanguage } = useLanguageStore();
 
   // AI DJ Voice Selector State
   const [selectedVoice, setSelectedVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
@@ -385,6 +387,43 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             </div>
             <div className="px-4 pb-4">
               <SpotifreeAuthCard />
+            </div>
+          </div>
+        </div>
+
+        {/* Idioma / Language */}
+        <div className="space-y-3">
+          <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider px-1">
+            {language === 'en' ? 'Language' : 'Idioma'}
+          </h3>
+          <div className="p-3 sm:p-4 rounded-2xl bg-[#181818] border border-white/[0.04] flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium text-white">
+                {language === 'en' ? 'App Language' : 'Idioma de la aplicación'}
+              </p>
+              <p className="text-xs text-[#a7a7a7] mt-0.5">
+                {language === 'en' ? 'Select interface & DJ voice language' : 'Selecciona el idioma de la app y la voz del DJ'}
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => setLanguage('es')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  language === 'es' ? 'bg-[#1ed760] text-black shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                Español
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage('en')}
+                className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  language === 'en' ? 'bg-[#1ed760] text-black shadow-md' : 'bg-white/10 text-white hover:bg-white/20'
+                }`}
+              >
+                English
+              </button>
             </div>
           </div>
         </div>

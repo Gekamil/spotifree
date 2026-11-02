@@ -91,13 +91,6 @@ const CarouselCard: React.FC<{
           />
         ) : null}
 
-        {/* Radio Pill Badge (as seen in official Spotify radio cards) */}
-        {card.isRadio && (
-          <div className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[9px] font-black tracking-widest text-white/90 uppercase z-10 pointer-events-none">
-            RADIO
-          </div>
-        )}
-
         {/* Green Play Button on hover (Bottom right of image) */}
         <button
           onClick={(e) => {

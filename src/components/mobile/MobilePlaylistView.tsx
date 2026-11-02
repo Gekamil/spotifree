@@ -570,10 +570,54 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const isCurrentPlaylistPlaying =
     isPlaying && tracks.some((t) => t.id === currentTrack?.id);
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const scrollParent = containerRef.current?.closest('.overflow-y-auto') || containerRef.current?.parentElement || window;
+    const handleScroll = () => {
+      if (scrollParent === window) {
+        setScrollY(window.scrollY);
+      } else {
+        setScrollY((scrollParent as HTMLElement).scrollTop);
+      }
+    };
+    scrollParent.addEventListener('scroll', handleScroll, { passive: true });
+    return () => scrollParent.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const isDailyMix =
+    activePlaylist.name.toLowerCase().includes('mix diario') ||
+    cleanId.includes('37i9dQZF1E3') ||
+    cleanId.includes('mix-diario');
+
+  const DAILY_MIX_BANNERS: Record<string, string> = {
+    '1': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es',
+    '2': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/2/ab6761610000e5ebc7688aad1bf03986934d7e26/es',
+    '3': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/3/ab6761610000e5ebc8be3c6e5a824360d1bffc03/es',
+    '4': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/4/ab6761610000e5eb9f6f7c2d12975d2a4b3a0fd8/es',
+    '5': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/5/ab6761610000e5eb3f9c363c3eef1ed52b8043a7/es',
+    '6': 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/6/ab6761610000e5ebce4257ca508a2c7e600192ed/es',
+  };
+
+  const dailyMixNum = activePlaylist.name.match(/\d+/)?.[0] || '1';
+
+  const hasBanner = Boolean(
+    activePlaylist.bannerUrl ||
+    (activePlaylist as any).header_image ||
+    activePlaylist.images?.[0]?.url?.includes('pickasso') ||
+    isDailyMix
+  );
+
+  const bannerImgUrl =
+    activePlaylist.bannerUrl ||
+    (activePlaylist as any).header_image ||
+    (isDailyMix ? DAILY_MIX_BANNERS[dailyMixNum] || activePlaylist.images?.[0]?.url : activePlaylist.images?.[0]?.url);
+
   const coverUrl =
     isLikedPlaylist
       ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-      : playlist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url;
+      : (hasBanner ? bannerImgUrl : (activePlaylist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url));
 
   useEffect(() => {
     let cancelled = false;
@@ -752,6 +796,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   return (
     <div
+      ref={containerRef}
       className="select-none min-h-screen text-white font-['SpotifyMixUI'] pb-36 relative overflow-hidden"
       style={{
         backgroundColor: extractedThemeColor,
@@ -840,41 +885,80 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             </button>
           </div>
 
-          {/* Regular Playlist Hero */}
-          <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
-            <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
-              {coverUrl ? (
-                <img
-                  src={coverUrl}
-                  alt={playlist.name}
-                  onError={handleImageError}
-                  className="w-full h-full object-cover opacity-100 block"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-white/40">
-                  <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                  </svg>
+          {hasBanner ? (
+            /* Widescreen Banner Hero for Mobile matching Photos 3 & 4 */
+            <div
+              className="relative w-full h-72 overflow-hidden flex flex-col justify-end p-5 select-none transition-all"
+              style={{
+                opacity: Math.max(0, 1 - scrollY / 180),
+                transform: `translateY(-${Math.min(scrollY * 0.4, 50)}px)`,
+                transition: 'opacity 0.12s ease-out, transform 0.12s ease-out',
+              }}
+            >
+              <img
+                src={bannerImgUrl}
+                alt={playlist.name}
+                onError={handleImageError}
+                className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-black/30 pointer-events-none" />
+
+              <div className="relative z-10 space-y-1">
+                <span className="text-[11px] font-bold text-white/90 uppercase tracking-wider drop-shadow">
+                  Lista pública
+                </span>
+                <h1 className="text-3xl font-black text-white font-['SpotifyMixUITitle'] leading-tight drop-shadow truncate">
+                  {playlist.name}
+                </h1>
+                {playlist.description && (
+                  <p className="text-xs font-semibold text-white/95 line-clamp-1 drop-shadow">
+                    {stripHtml(playlist.description)}
+                  </p>
+                )}
+                <div className="flex items-center gap-1.5 text-xs text-white/90 font-medium pt-0.5 drop-shadow">
+                  <span className="font-bold">Hecha para {user?.display_name || 'Jorgeperezvk'}</span>
+                  <span>•</span>
+                  <span>{tracks.length} canciones</span>
                 </div>
+              </div>
+            </div>
+          ) : (
+            /* Regular Playlist Hero */
+            <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
+              <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
+                {coverUrl ? (
+                  <img
+                    src={coverUrl}
+                    alt={playlist.name}
+                    onError={handleImageError}
+                    className="w-full h-full object-cover opacity-100 block"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-white/40">
+                    <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                    </svg>
+                  </div>
+                )}
+              </div>
+
+              <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-1 max-w-[90%]">
+                {playlist.name}
+              </h1>
+
+              {playlist.description && (
+                <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
+                  {stripHtml(playlist.description)}
+                </p>
               )}
+
+              <div className="flex items-center gap-2 text-xs text-[#b3b3b3] font-medium">
+                <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
+                <span>•</span>
+                <span>{tracks.length} canciones</span>
+              </div>
             </div>
-
-            <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-1 max-w-[90%]">
-              {playlist.name}
-            </h1>
-
-            {playlist.description && (
-              <p className="text-xs text-[#b3b3b3] line-clamp-2 max-w-[85%] mb-2">
-                {stripHtml(playlist.description)}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 text-xs text-[#b3b3b3] font-medium">
-              <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
-              <span>•</span>
-              <span>{tracks.length} canciones</span>
-            </div>
-          </div>
+          )}
         </>
       )}
 

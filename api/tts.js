@@ -108,29 +108,36 @@ export default async function handler(req, res) {
 
   const rawVoice = (query.voice || body.voice || '').toLowerCase();
   const rawProvider = (query.provider || body.provider || '').toLowerCase();
+  const rawLang = (query.lang || body.lang || 'es').toLowerCase();
+  const isEnglish = rawLang.startsWith('en');
 
   let selectedVoice = 'alvaro';
   if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
     selectedVoice = 'gemini';
-  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural') {
+  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
     selectedVoice = 'salome';
-  } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural') {
+  } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural' || rawVoice.includes('guy')) {
     selectedVoice = 'alvaro';
   }
+
+  // Voice mapping based on language
+  const edgeVoiceName = isEnglish
+    ? (selectedVoice === 'salome' ? 'en-US-JennyNeural' : 'en-US-GuyNeural')
+    : (selectedVoice === 'salome' ? 'es-CO-SalomeNeural' : 'es-ES-AlvaroNeural');
+
+  const geminiVoiceName = isEnglish ? 'Puck' : 'Kore';
 
   let result;
   try {
     if (selectedVoice === 'gemini') {
       try {
-        result = await synthesizeWithGemini(text, 'Kore');
+        result = await synthesizeWithGemini(text, geminiVoiceName);
       } catch (geminiErr) {
-        console.warn('[Gemini TTS Fallback to Alvaro]:', geminiErr?.message || geminiErr);
-        result = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
+        console.warn(`[Gemini TTS Fallback to Edge (${edgeVoiceName})]:`, geminiErr?.message || geminiErr);
+        result = await synthesizeWithEdge(text, edgeVoiceName);
       }
-    } else if (selectedVoice === 'salome') {
-      result = await synthesizeWithEdge(text, 'es-CO-SalomeNeural');
     } else {
-      result = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
+      result = await synthesizeWithEdge(text, edgeVoiceName);
     }
 
     res.statusCode = 200;
@@ -140,9 +147,9 @@ export default async function handler(req, res) {
     res.end(result.buffer);
   } catch (err) {
     console.error('[TTS Global Error]:', err);
-    // Last-ditch emergency fallback to Alvaro if anything failed
+    // Last-ditch emergency fallback
     try {
-      const emergency = await synthesizeWithEdge(text, 'es-ES-AlvaroNeural');
+      const emergency = await synthesizeWithEdge(text, edgeVoiceName);
       res.statusCode = 200;
       res.setHeader('Content-Type', emergency.contentType);
       res.setHeader('Content-Length', emergency.buffer.length);
