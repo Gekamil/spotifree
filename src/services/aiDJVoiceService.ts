@@ -152,14 +152,24 @@ class AIDJVoiceService {
     try {
       const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
       if (engine && typeof engine.restoreDuckedVolume === 'function') {
-        engine.restoreDuckedVolume();
+        engine.restoreDuckedVolume(1500);
       }
       const audioElements = document.querySelectorAll('audio, video');
       audioElements.forEach((el: any) => {
         if (el.dataset.djDucked && el.dataset.prevVol && el !== this.currentAudio) {
-          el.volume = parseFloat(el.dataset.prevVol);
-          delete el.dataset.djDucked;
-          delete el.dataset.prevVol;
+          const targetVol = parseFloat(el.dataset.prevVol);
+          const startVol = el.volume;
+          const steps = 15;
+          let s = 0;
+          const interval = setInterval(() => {
+            s++;
+            el.volume = Math.max(0, Math.min(1, startVol + (targetVol - startVol) * (s / steps)));
+            if (s >= steps) {
+              clearInterval(interval);
+              delete el.dataset.djDucked;
+              delete el.dataset.prevVol;
+            }
+          }, 80);
         }
       });
     } catch (e) {
@@ -251,10 +261,6 @@ class AIDJVoiceService {
           if (!this.isSpeaking || audio.paused) {
             options.onVoiceLevel?.(0.05);
             return;
-          }
-          // Re-enforce ducking periodically in case player just started buffering/playing
-          if (Math.random() < 0.08) {
-            this.duckAudio();
           }
           phase += 0.28;
           const raw = Math.sin(phase) * 0.45 + Math.sin(phase * 2.1) * 0.35 + 0.55;

@@ -51,17 +51,26 @@ export const HASHTAG_DEFINITIONS: Record<MusicHashtag, HashtagDefinition> = {
   },
   '#chill': {
     tag: '#chill',
-    keywords: ['chill', 'relax', 'acustico', 'acoustic', 'calma', 'suave', 'paz', 'balada', 'desconectar', 'guitarra', 'intimo'],
+    keywords: [
+      'chill', 'relax', 'acustico', 'acoustic', 'calma', 'suave', 'paz', 'balada',
+      'desconectar', 'guitarra', 'intimo', 'indie folk', 'dream pop', 'ambient',
+      'lo-fi', 'lofi', 'bedroom pop', 'downtempo', 'slow', 'instrumental', 'fingerstyle'
+    ],
     artists: [
-      'morat', 'coldplay', 'ed sheeran', 'vance joy', 'pablo alboran', 'pablo alborán',
-      'beret', 'sebastian yatra', 'camila', 'reik', 'sin bandera', 'jack johnson',
-      'james arthur', 'lewis capaldi', 'shawn mendes', 'alec benjamin', 'billie eilish'
+      'novo amor', 'cigarettes after sex', 'bon iver', 'men i trust', 'mac demarco',
+      'boy pablo', 'sufjan stevens', 'kings of convenience', 'iron & wine', 'iron and wine',
+      'jose gonzalez', 'josé gonzález', 'cuco', 'phoebe bridgers', 'beach house',
+      'leon bridges', 'daniel caesar', 'sen senra', 'silvana estrada', 'kevin kaarl',
+      'guitarricadelafuente', 'natalia lafourcade', 'valeria castro', 'depedro',
+      'devendra banhart', 'ludovico einaudi', 'chilledcow', 'lofi girl', 'jack johnson'
     ],
     searchQueries: [
-      'morat beret acustico baladas',
-      'coldplay ed sheeran acoustic chill',
-      'musica tranquila suave espanol',
-      'indie folk chill out acoustic',
+      'novo amor cigarettes after sex indie chill',
+      'sen senra guitarricadelafuente kevin kaarl acustico indie',
+      'men i trust mac demarco dream pop bedroom chill',
+      'bon iver sufjan stevens kings of convenience indie folk',
+      'ambient acoustic calm peaceful chillout',
+      'lofi beats chillhop instrumental relax study',
     ],
   },
   '#trap': {
@@ -225,6 +234,13 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
     }
   }
 
+  // Guard #chill against high-energy / party tracks
+  if (matchedTags.has('#chill')) {
+    if (/reggaeton|perreo|bellakeo|dembow|trap|drill|phonk|techno|edm|rave|hardcore|party|fiesta/i.test(combined)) {
+      matchedTags.delete('#chill');
+    }
+  }
+
   // Fallback heuristic if no tag matched
   if (matchedTags.size === 0) {
     if (combined.includes('feat') || combined.includes('ft.') || combined.includes('remix')) {
@@ -237,6 +253,22 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
   const result = Array.from(matchedTags);
   TRACK_HASHTAG_CACHE.set(cacheKey, result);
   return result;
+}
+
+/**
+ * Returns the dominant music hashtag across the user's library
+ */
+export function getDominantUserHashtag(): MusicHashtag {
+  const library = analyzeUserLibraryByHashtags();
+  let maxCount = 0;
+  let dominant: MusicHashtag = '#reggaeton';
+  for (const [tag, tracks] of library.entries()) {
+    if (tracks.length > maxCount) {
+      maxCount = tracks.length;
+      dominant = tag;
+    }
+  }
+  return dominant;
 }
 
 /**
@@ -316,9 +348,10 @@ export function resolveHashtagFromPrompt(prompt: string): MusicHashtag {
 
 /**
  * Curates exactly 15 songs matching the specified internal hashtag:
- * - Extracts up to 7-8 tracks from the user's own playlists
- * - Discovers related tracks matching the hashtag via search
- * - Guarantees pristine track covers and deduplication
+ * - Dynamically extracts a balanced mix (5-7 tracks) from the user's own matching playlists
+ * - Discovers fresh related tracks matching the hashtag via real-time catalog search
+ * - Dynamically rotates queries and variations on each run so the mix is always fresh and different
+ * - Strictly prevents off-genre contamination (no generic pop into #chill sets)
  */
 export async function getCuratedSetForHashtag(
   targetTag: MusicHashtag,
@@ -333,51 +366,72 @@ export async function getCuratedSetForHashtag(
 
   const addTrack = (t: Track) => {
     if (!t || !t.id || seen.has(t.id)) return false;
+    // Strict guard: ensure track does not belong to discordant genres
+    if (targetTag === '#chill') {
+      const lower = `${t.name} ${t.artists?.map((a) => a.name).join(' ')}`.toLowerCase();
+      if (/reggaeton|perreo|dembow|bellakeo|trap|drill|phonk|techno|edm|rave|hardcore/i.test(lower)) {
+        return false;
+      }
+    }
     seen.add(t.id);
     result.push(t);
     return true;
   };
 
-  // 1. Take up to 7-8 tracks from user's matching playlists
+  // 1. Take a fresh randomized sample of user tracks from matching playlists (up to 45% of set)
   const userShuffled = [...userTracks].sort(() => Math.random() - 0.5);
-  const userQuota = Math.min(8, userShuffled.length);
+  const userQuota = Math.min(Math.floor(count * 0.45), userShuffled.length);
   for (let i = 0; i < userQuota; i++) {
     addTrack(userShuffled[i]);
   }
 
-  // 2. Discover related fresh tracks for this hashtag
-  const def = HASHTAG_DEFINITIONS[targetTag];
-  const query = def.searchQueries[Math.floor(Math.random() * def.searchQueries.length)] || `${targetTag.replace('#', '')} exitos`;
+  // 2. Discover related fresh tracks and remixes for this hashtag
+  const def = HASHTAG_DEFINITIONS[targetTag] || HASHTAG_DEFINITIONS['#chill'];
+  const queriesShuffled = [...def.searchQueries].sort(() => Math.random() - 0.5);
 
-  try {
-    const searchRes = await searchSpotify(query);
-    const discovered = searchRes?.tracks?.items || [];
+  // Pick up to 2 distinct search queries with fresh rotation modifiers
+  const modifiers = ['', ' remix', ' acustico', ' sesion', ' version', ' live', ' edit'];
+  const searchPromises = queriesShuffled.slice(0, 2).map((baseQ) => {
+    const mod = modifiers[Math.floor(Math.random() * modifiers.length)];
+    const q = `${baseQ}${mod}`.trim();
+    return searchSpotify(q).catch(() => null);
+  });
+
+  const searchResults = await Promise.all(searchPromises);
+  for (const res of searchResults) {
+    const discovered = (res?.tracks?.items || []).sort(() => Math.random() - 0.5);
     for (const t of discovered) {
       if (result.length >= count) break;
       addTrack(t);
     }
-  } catch {}
+    if (result.length >= count) break;
+  }
 
-  // 3. Fallback: if we still need more tracks, pull from user's other tracks or general search
+  // 3. If still under quota, use remaining genre-specific queries (NEVER generic pop)
   if (result.length < count) {
-    const allUserTracks = Array.from(libraryIndex.values()).flat();
-    for (const t of allUserTracks) {
+    for (const extraQuery of queriesShuffled.slice(2)) {
+      try {
+        const res = await searchSpotify(extraQuery);
+        const discovered = (res?.tracks?.items || []).sort(() => Math.random() - 0.5);
+        for (const t of discovered) {
+          if (result.length >= count) break;
+          addTrack(t);
+        }
+      } catch {}
       if (result.length >= count) break;
-      addTrack(t);
     }
   }
 
-  if (result.length < count) {
-    try {
-      const fallbackRes = await searchSpotify('top exitos espanol 2024');
-      const fallbackTracks = fallbackRes?.tracks?.items || [];
-      for (const t of fallbackTracks) {
-        if (result.length >= count) break;
-        addTrack(t);
+  // 4. Final safety fill: repeat user matching tracks if any, otherwise repeat primary query
+  if (result.length < count && userShuffled.length > 0) {
+    for (const t of userShuffled) {
+      if (result.length >= count) break;
+      if (!result.some((r) => r.id === t.id)) {
+        result.push(t);
       }
-    } catch {}
+    }
   }
 
-  // 4. Return exactly count tracks shuffled
+  // 5. Return exactly count tracks shuffled
   return result.slice(0, count).sort(() => Math.random() - 0.5);
 }

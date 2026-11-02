@@ -314,7 +314,7 @@ class AudioEngine {
       return;
     }
 
-    const masterVolume = state.isMuted ? 0 : state.volume;
+    const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
 
     // Mobile Single-Deck Continuity: On mobile devices, operating systems kill audio focus when a second iframe starts!
     // Perform in-place musical transition on Deck 0 without invoking secondary player playVideo()
@@ -727,7 +727,7 @@ class AudioEngine {
     }
 
     const isMobile = this.isMobileOrPWA();
-    const masterVolume = state.isMuted ? 0 : state.volume;
+    const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
     const oldYtIndex = this.activeYtIndex;
     const oldAudioIndex = this.activeAudioIndex;
 
@@ -839,7 +839,7 @@ class AudioEngine {
 
     const state = usePlayerStore.getState();
     const curTrack = state.currentTrack;
-    const masterVolume = state.isMuted ? 0 : state.volume;
+    const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
     const artistName = nextTrack.artists?.[0]?.name || '';
     const query = `${nextTrack.name} ${artistName}`.trim();
 
@@ -1519,9 +1519,9 @@ class AudioEngine {
                   } catch {}
                   if (index === 0) {
                     clearTimeout(safetyTimeout);
-                    const { volume, isMuted } = usePlayerStore.getState();
+                    const { isMuted } = usePlayerStore.getState();
                     if (this.ytPlayers[0] && typeof this.ytPlayers[0].setVolume === 'function') {
-                      this.ytPlayers[0].setVolume(isMuted ? 0 : Math.round(volume * 100));
+                      this.ytPlayers[0].setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
                     }
                     finish();
                   }
@@ -2393,9 +2393,16 @@ class AudioEngine {
 
   public isAudioDucked: boolean = false;
   private previousDuckedVolume: number | null = null;
+  private currentFadingVolume: number | null = null;
   private duckFraction: number = 0.08;
+  private duckFadeInterval: any = null;
 
   public setDuckedVolume(fraction: number = 0.08) {
+    if (this.duckFadeInterval !== null) {
+      clearInterval(this.duckFadeInterval);
+      this.duckFadeInterval = null;
+    }
+    this.currentFadingVolume = null;
     this.isAudioDucked = true;
     this.duckFraction = fraction;
     if (this.previousDuckedVolume === null) {
@@ -2404,14 +2411,66 @@ class AudioEngine {
     this.applyCurrentVolume();
   }
 
-  public restoreDuckedVolume() {
-    this.isAudioDucked = false;
+  public restoreDuckedVolume(fadeDurationMs: number = 1500) {
+    if (this.duckFadeInterval !== null) {
+      clearInterval(this.duckFadeInterval);
+      this.duckFadeInterval = null;
+    }
+
     const target = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
-    this.previousDuckedVolume = null;
-    this.setVolume(target);
+    const startVol = this.getEffectiveVolume();
+
+    if (fadeDurationMs <= 100 || Math.abs(target - startVol) < 0.02) {
+      this.isAudioDucked = false;
+      this.currentFadingVolume = null;
+      this.previousDuckedVolume = null;
+      this.setVolume(target);
+      return;
+    }
+
+    const steps = 24;
+    const stepTime = Math.max(30, Math.round(fadeDurationMs / steps));
+    let currentStep = 0;
+
+    this.duckFadeInterval = setInterval(() => {
+      currentStep++;
+      const progress = Math.min(1, currentStep / steps);
+      // Smooth sinusoidal crescendo curve
+      const factor = Math.sin(progress * Math.PI * 0.5);
+      const curVol = startVol + (target - startVol) * factor;
+      this.currentFadingVolume = curVol;
+
+      const ytVol = Math.round(Math.max(0, Math.min(1, curVol)) * 100);
+      if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+        try { this.ytPlayer.setVolume(ytVol); } catch {}
+      }
+      if (Array.isArray(this.ytPlayers)) {
+        this.ytPlayers.forEach((p) => {
+          if (p && typeof p.setVolume === 'function') {
+            try { p.setVolume(ytVol); } catch {}
+          }
+        });
+      }
+      this.audio.volume = Math.max(0, Math.min(1, curVol));
+      if (this.secondaryAudio) {
+        this.secondaryAudio.volume = Math.max(0, Math.min(1, curVol));
+      }
+
+      if (currentStep >= steps) {
+        clearInterval(this.duckFadeInterval);
+        this.duckFadeInterval = null;
+        this.currentFadingVolume = null;
+        this.isAudioDucked = false;
+        this.previousDuckedVolume = null;
+        this.setVolume(target);
+      }
+    }, stepTime);
   }
 
   public getEffectiveVolume(): number {
+    if (this.currentFadingVolume !== null) {
+      return this.currentFadingVolume;
+    }
     if (this.isAudioDucked) {
       const base = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
       return Math.max(0.04, base * this.duckFraction);

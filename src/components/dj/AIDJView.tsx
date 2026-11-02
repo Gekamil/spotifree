@@ -66,13 +66,11 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     isMicListening,
     djTracks,
     currentSetTitle,
-    djThemeColor,
     setDJThemeColor,
     isDJModeActive,
     startDJSession,
     startVoiceListening,
     stopVoiceListening,
-    triggerManualTransition,
     handleUserPrompt,
   } = useAIDJStore();
 
@@ -438,35 +436,23 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </button>
         </div>
 
-        {/* Clean Static DJ Transition Button (Bottom Right) */}
-        <button
-          onClick={() => triggerManualTransition()}
-          className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-white flex items-center justify-center cursor-pointer active:scale-95 transition-all shadow-xl"
-          style={{
-            backgroundColor: `${djThemeColor || ambientColor || '#0042a5'}cc`,
-            boxShadow: `0 4px 20px ${djThemeColor || ambientColor || '#0042a5'}60`,
-          }}
-          title="Cambiar de rollo con el DJ"
-        >
-          <span className="text-[12px] sm:text-[13px] font-black uppercase tracking-wider text-white font-['SpotifyMixUITitle']">
-            DJ
-          </span>
-        </button>
+        {/* Balance Spacer (matches left button width so controls remain centered) */}
+        <div className="w-12 h-12 sm:w-14 sm:h-14 opacity-0 pointer-events-none" />
       </footer>
 
-      {/* Queue Drawer (Slides up smoothly from bottom like native Spotify bottom-sheet) */}
+      {/* Queue Drawer: On mobile it is a bottom-sheet; on desktop it opens as an upward tab where the button is */}
       {showQueueDrawer && (
         <div
-          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-300 select-none"
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm sm:backdrop-blur-none sm:bg-black/20 flex flex-col justify-end sm:block select-none animate-in fade-in duration-200"
           onClick={() => setShowQueueDrawer(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#121212] rounded-t-3xl max-h-[76vh] flex flex-col border-t border-white/15 shadow-[0_-16px_50px_rgba(0,0,0,0.85)] p-5 pb-8 animate-in slide-in-from-bottom duration-300 ease-out"
+            className="bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[76vh] sm:max-h-[520px] sm:w-[420px] sm:absolute sm:bottom-20 sm:left-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-8 sm:pb-5 animate-in slide-in-from-bottom duration-300 ease-out"
           >
-            {/* Top Drag Indicator Pill */}
+            {/* Top Drag Indicator Pill (Mobile only) */}
             <div
-              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-pointer active:scale-95 transition-all"
+              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-pointer active:scale-95 transition-all sm:hidden"
               onClick={() => setShowQueueDrawer(false)}
               title="Cerrar cola"
             />

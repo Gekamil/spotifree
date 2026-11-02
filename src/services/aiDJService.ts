@@ -9,6 +9,7 @@ import {
   type MusicHashtag,
   resolveHashtagFromPrompt,
   getCuratedSetForHashtag,
+  getDominantUserHashtag,
 } from './musicTaggingService';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
@@ -60,7 +61,7 @@ export const DJ_VIBE_PRESETS = [
   { id: 'urbano', label: 'Urbano latino', query: 'reggaeton trap urbano latino para bailar' },
   { id: 'entreno', label: 'Para entrenar', query: 'gym motivacion entrenamiento a tope' },
   { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
-  { id: 'chill', label: 'Chill out', query: 'morat coldplay ed sheeran vance joy acoustic indie pop' },
+  { id: 'chill', label: 'Chill out', query: 'novo amor cigarettes after sex indie folk acustico calma' },
   { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos de siempre' },
 ];
 
@@ -168,7 +169,7 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   if (/chill|relax|tranquil|calma|suave|paz|sof[aá]|desconectar|descanso|desestres/i.test(p)) {
     return {
       speech: `Buena elección. Vamos a bajar el ritmo con una selección suave y acústica para desconectar. Disfrútala.`,
-      query: 'morat coldplay ed sheeran vance joy acoustic indie baladas',
+      query: 'novo amor cigarettes after sex indie folk acustico calma',
       vibeTitle: 'Sesión: Relax Acústico',
       vibeColor: '#00897b',
       excludeTitles: ['chill', 'relax', 'chill out', 'chill beats', 'relaxing'],
@@ -284,15 +285,17 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       return;
     }
 
+    const dominantTag = getDominantUserHashtag();
+
     set({
       isDJModeActive: true,
       visualizerState: 'speaking',
       songsPlayedInSet: 0,
-      currentHashtag: '#reggaeton',
+      currentHashtag: dominantTag,
     });
 
-    // 1. Curate initial set using internal hashtag analysis of user playlists + related tracks
-    const initialSet = await getCuratedSetForHashtag('#reggaeton', 15);
+    // 1. Curate initial set using dynamic hashtag analysis of user playlists + related tracks
+    const initialSet = await getCuratedSetForHashtag(dominantTag, 15);
     set({ djTracks: initialSet });
 
     // 2. Play track 1 immediately through global player in background with ducked volume
@@ -637,7 +640,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
    */
   handleSetCompletion: async () => {
     const state = get();
-    const currentTag = state.currentHashtag || '#reggaeton';
+    const currentTag = state.currentHashtag || getDominantUserHashtag();
     const previousIds = new Set(state.djTracks.map((t) => t.id));
 
     aiDJVoiceService.stopSpeaking();
@@ -724,6 +727,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
+    // Begin background transition to the next track at ducked volume while the DJ introduces it
+    usePlayerStore.getState().nextTrack();
+
     await aiDJVoiceService.speak(transitionText, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -735,8 +741,6 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ visualizerState: 'playing', voiceLevel: 0 });
       },
     });
-
-    usePlayerStore.getState().nextTrack();
   },
 }));
 
