@@ -575,6 +575,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       ],
     });
 
+    get().stopVoiceListening();
     await aiDJVoiceService.speak(introText, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -633,6 +634,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
       const rec = new SpeechRec();
       speechRecognitionInstance = rec;
+      if (typeof window !== 'undefined') {
+        (window as any).speechRecognitionInstance = rec;
+      }
       rec.lang = 'es-ES';
       rec.continuous = false;
       rec.interimResults = true;
@@ -681,8 +685,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (speechRecognitionInstance) {
       try {
         speechRecognitionInstance.stop();
+        speechRecognitionInstance.abort();
       } catch {}
       speechRecognitionInstance = null;
+    }
+    if (typeof window !== 'undefined') {
+      (window as any).speechRecognitionInstance = null;
     }
     set({ isMicListening: false });
   },
@@ -722,6 +730,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         visualizerState: 'playing',
         voiceLevel: 0,
       }));
+      get().stopVoiceListening();
       aiDJVoiceService.speak(sp, {
         onWord: (_w, partial) => set({ displayedTranscript: partial }),
         onVoiceLevel: (level) => set({ voiceLevel: level }),
@@ -845,6 +854,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     }
 
     // 5. Speak the personalized charismatic DJ intro cleanly
+    get().stopVoiceListening();
     await aiDJVoiceService.speak(analysis.speech, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -932,6 +942,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       ],
     }));
 
+    get().stopVoiceListening();
     await aiDJVoiceService.speak(speech, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -977,6 +988,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
+    get().stopVoiceListening();
     await aiDJVoiceService.speak(transitionText, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });

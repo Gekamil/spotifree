@@ -264,6 +264,11 @@ class AIDJVoiceService {
         typeof window !== 'undefined' &&
         (window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
 
+      // Always stop carrierAudio during speech on mobile/desktop so no secondary carrier stream interferes with TTS fidelity
+      if (audioEngine && typeof audioEngine.stopCarrier === 'function') {
+        audioEngine.stopCarrier();
+      }
+
       // On mobile devices, because mobile browsers ignore programmatic volume reduction on video/iframe streams
       // and cause severe speaker clipping when two media elements play at 100%, pause the background track cleanly:
       if (isMobile && playerState.isPlaying) {
@@ -294,6 +299,11 @@ class AIDJVoiceService {
         usePlayerStore.setState({ isPlaying: true });
         if (audioEngine && typeof audioEngine.resume === 'function') {
           audioEngine.resume();
+        }
+      } else {
+        const { isPlaying } = usePlayerStore.getState();
+        if (isPlaying && audioEngine && typeof audioEngine.startCarrier === 'function') {
+          audioEngine.startCarrier();
         }
       }
       if (audioEngine && typeof audioEngine.restoreDuckedVolume === 'function') {

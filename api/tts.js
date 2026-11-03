@@ -290,9 +290,9 @@ export default async function handler(req, res) {
       getEnvKey('ELEVENLABS_API_KEY')
     );
 
-    if (!result && (selectedVoice === 'elevenlabs' || rawProvider === 'elevenlabs' || hasElevenLabsConfig)) {
+    if (!result && (selectedVoice === 'elevenlabs' || rawProvider === 'elevenlabs')) {
       try {
-        const elevenVoiceId = userVoiceId || (selectedVoice === 'dalia' ? '21m00Tcm4TlvDq8ikWAM' : 'pNInz6obpgDQGcFmaJgB');
+        const elevenVoiceId = userVoiceId || 'pNInz6obpgDQGcFmaJgB';
         result = await synthesizeWithElevenLabs(text, elevenVoiceId, userApiKey);
         res.setHeader('x-tts-provider', 'elevenlabs-studio');
       } catch (elevenErr) {

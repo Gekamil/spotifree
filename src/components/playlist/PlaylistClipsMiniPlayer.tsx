@@ -347,25 +347,9 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
         />
       </div>
 
-      {/* Main Centered Content Wrapper with Flanking Lateral Info & Desktop Arrow Buttons */}
+      {/* Main Centered Content Wrapper with Desktop Arrow Buttons */}
       <div className="relative z-10 flex flex-col items-center justify-center gap-4">
         <div className="flex items-center gap-4 md:gap-6 lg:gap-8">
-          {/* Left Lateral Info Card (Desktop) */}
-          <div className="hidden lg:flex flex-col gap-2 max-w-[200px] text-left p-4 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/5 shadow-2xl animate-in fade-in slide-in-from-left-4 duration-300">
-            <div className="flex items-center gap-1.5 text-[#1ed760] font-bold text-xs uppercase tracking-wider">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-              </svg>
-              <span>Recopilación</span>
-            </div>
-            <h4 className="text-sm font-bold text-white line-clamp-2 font-['SpotifyMixUITitle']">
-              {playlistTitle}
-            </h4>
-            <p className="text-xs text-white/60 leading-relaxed">
-              Avances aleatorios de 15 segundos para descubrir las canciones de esta playlist.
-            </p>
-          </div>
-
           {/* Desktop Left Navigation Button */}
           <button
             onClick={(e) => {
@@ -417,22 +401,17 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
                 })}
               </div>
 
-              {/* Clean Spotify-style Header (Green dot removed, clear subtitle added) */}
+              {/* Clean Spotify-style Header */}
               <div className="flex items-center justify-between pointer-events-auto">
-                <div className="flex flex-col min-w-0 pr-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-[12px] font-bold text-white tracking-tight truncate drop-shadow-md">
-                      {playlistTitle}
-                    </p>
-                    {canvasUrl && (
-                      <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-semibold text-white/80 shrink-0">
-                        Canvas
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-white/70 font-medium truncate">
-                    Recopilación de canciones de la playlist
+                <div className="flex items-center gap-2 min-w-0 pr-2">
+                  <p className="text-[12px] font-bold text-white tracking-tight truncate drop-shadow-md">
+                    {playlistTitle}
                   </p>
+                  {canvasUrl && (
+                    <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-semibold text-white/80 shrink-0">
+                      Canvas
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0">
@@ -578,19 +557,6 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
               <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
             </svg>
           </button>
-
-          {/* Right Lateral Info Card (Desktop) */}
-          <div className="hidden lg:flex flex-col gap-2 max-w-[200px] text-left p-4 rounded-2xl bg-white/[0.04] backdrop-blur-xl border border-white/5 shadow-2xl animate-in fade-in slide-in-from-right-4 duration-300">
-            <div className="flex items-center gap-1.5 text-white/80 font-bold text-xs uppercase tracking-wider">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z" />
-              </svg>
-              <span>Descubrimiento</span>
-            </div>
-            <p className="text-xs text-white/60 leading-relaxed">
-              Navega con las flechas o tocando los laterales. Si te gusta un tema, pulsa en reproducir para escuchar la canción completa.
-            </p>
-          </div>
         </div>
       </div>
     </div>
