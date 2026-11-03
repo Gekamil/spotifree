@@ -663,12 +663,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!tracks || tracks.length <= 1) return;
+    if (!tracks || tracks.length <= 1 || isClipsModalOpen) return;
     const interval = setInterval(() => {
       setRotatingTrackIndex((prev) => (prev + 1) % tracks.length);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(interval);
-  }, [tracks]);
+  }, [tracks, isClipsModalOpen]);
 
   const handlePlayAll = () => {
     if (tracks.length === 0) return;

@@ -545,12 +545,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
 
   useEffect(() => {
-    if (!displayTracks || displayTracks.length <= 1) return;
+    if (!displayTracks || displayTracks.length <= 1 || isClipsModalOpen) return;
     const interval = setInterval(() => {
       setRotatingTrackIndex((prev) => (prev + 1) % displayTracks.length);
-    }, 3500);
+    }, 4000);
     return () => clearInterval(interval);
-  }, [displayTracks]);
+  }, [displayTracks, isClipsModalOpen]);
 
   const handleAddTrack = (track: Track) => {
     const trackWithMeta: Track = {

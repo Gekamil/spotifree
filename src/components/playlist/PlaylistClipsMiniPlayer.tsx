@@ -89,15 +89,18 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   const touchStartXRef = useRef<number | null>(null);
   const touchDeltaXRef = useRef<number>(0);
   const isHoldingRef = useRef<boolean>(false);
+  const prevIsOpenRef = useRef<boolean>(false);
 
-  // Sync index if initialTrackIndex changes on reopen
+  // Sync index ONLY on initial open transition (never reset mid-playback!)
   useEffect(() => {
-    if (isOpen) {
-      setCurrentIndex(Math.max(0, Math.min(initialTrackIndex, tracks.length - 1)));
+    if (isOpen && !prevIsOpenRef.current) {
+      const safeIndex = Math.max(0, Math.min(initialTrackIndex, tracks.length - 1));
+      setCurrentIndex(safeIndex);
       setSecondsElapsed(0);
       setIsPaused(false);
     }
-  }, [isOpen, initialTrackIndex, tracks.length]);
+    prevIsOpenRef.current = isOpen;
+  }, [isOpen]);
 
   const currentTrack = tracks[currentIndex] || tracks[0];
 
@@ -149,12 +152,11 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
     const artistName = currentTrack.artists?.[0]?.name || '';
 
     // 1. Fetch Spotify Canvas MP4
-    fetchTrackCanvas(currentTrack.id, currentTrack.name, artistName)
-      .then((cUrl) => {
-        if (!cancelled) {
-          setCanvasUrl(cUrl);
-        }
-      });
+    fetchTrackCanvas(currentTrack.id, currentTrack.name, artistName).then((cUrl) => {
+      if (!cancelled) {
+        setCanvasUrl(cUrl);
+      }
+    });
 
     // 2. Fetch 30-second studio audio preview
     fetchTrackPreviewAudio(currentTrack).then((audioUrl) => {
@@ -300,12 +302,12 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
 
   const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 select-none font-['SpotifyMixUI']"
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200 select-none font-['SpotifyMixUI']"
       onClick={handleClose}
     >
-      {/* Floating Glassmorphic Stories Container */}
+      {/* Sleek Stories Card (Borders removed for authentic Spotify look) */}
       <div
-        className="relative w-full max-w-[350px] sm:max-w-[360px] h-[580px] max-h-[88vh] rounded-[32px] overflow-hidden bg-[#121212]/95 border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.95)] flex flex-col justify-between backdrop-blur-2xl animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-[340px] sm:max-w-[360px] h-[580px] max-h-[88vh] rounded-[28px] overflow-hidden bg-[#121212] shadow-[0_25px_70px_rgba(0,0,0,0.95)] flex flex-col justify-between select-none animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -319,8 +321,8 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
           setIsPaused(false);
         }}
       >
-        {/* Top Story Progress Bars & Header (Clean, NO 15s badge) */}
-        <div className="absolute top-0 inset-x-0 z-40 p-3 pt-3.5 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-none">
+        {/* Top Story Progress Bars & Minimal Header */}
+        <div className="absolute top-0 inset-x-0 z-40 p-3 pt-3.5 bg-gradient-to-b from-black/90 via-black/40 to-transparent pointer-events-none">
           {/* Story Pill Indicators */}
           <div className="flex items-center gap-1 w-full mb-2.5">
             {visibleTracks.map((_, i) => {
@@ -340,18 +342,15 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             })}
           </div>
 
-          {/* Minimal Header: Playlist Name & Controls */}
+          {/* Clean Spotify-style Header */}
           <div className="flex items-center justify-between pointer-events-auto">
             <div className="flex items-center gap-2 min-w-0 pr-2">
               <span className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760] animate-pulse shrink-0" />
-              <p className="text-[12px] font-bold text-white tracking-wide truncate drop-shadow-md">
+              <p className="text-[12px] font-bold text-white tracking-tight truncate drop-shadow-md">
                 {playlistTitle}
               </p>
               {canvasUrl && (
-                <span className="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-black uppercase text-white/90 tracking-wider shrink-0 flex items-center gap-1 backdrop-blur-sm border border-white/10">
-                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v8h16V8H4zm2 2h3v4H6v-4zm5 0h7v4h-7v-4z" />
-                  </svg>
+                <span className="px-1.5 py-0.5 rounded-full bg-white/10 text-[9px] font-semibold text-white/80 shrink-0">
                   Canvas
                 </span>
               )}
@@ -364,7 +363,7 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
                   e.stopPropagation();
                   setIsMuted(!isMuted);
                 }}
-                className="w-7 h-7 rounded-full bg-black/50 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 backdrop-blur-md"
+                className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 active:scale-95 text-white/80 hover:text-white flex items-center justify-center transition-all cursor-pointer backdrop-blur-md"
                 title={isMuted ? 'Activar sonido (M)' : 'Silenciar sonido (M)'}
               >
                 {isMuted ? (
@@ -384,7 +383,7 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
                   e.stopPropagation();
                   handleClose();
                 }}
-                className="w-7 h-7 rounded-full bg-black/50 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 backdrop-blur-md"
+                className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 active:scale-95 text-white/80 hover:text-white flex items-center justify-center transition-all cursor-pointer backdrop-blur-md"
                 title="Cerrar clips"
               >
                 <CloseNativeIcon size={14} />
@@ -393,7 +392,7 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
           </div>
         </div>
 
-        {/* Visual Stage: Spotify Canvas Video Loop OR Atmospheric Animated Cover */}
+        {/* Visual Stage: Spotify Canvas Video Loop OR Minimal Album Cover */}
         <div className="relative flex-1 w-full overflow-hidden bg-black flex items-center justify-center">
           {canvasUrl ? (
             <video
@@ -407,17 +406,17 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             />
           ) : (
             <div className="relative w-full h-full flex flex-col items-center justify-center p-6 overflow-hidden">
-              {/* Pulsing Ambient Backdrop */}
+              {/* Soft Ambient Backdrop */}
               <img
                 src={coverUrl}
                 alt={currentTrack.name}
                 onError={handleImageError}
-                className="absolute inset-0 w-full h-full object-cover filter blur-3xl scale-150 opacity-45 pointer-events-none transition-all duration-700"
+                className="absolute inset-0 w-full h-full object-cover filter blur-3xl scale-125 opacity-40 pointer-events-none transition-all duration-700"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-black/60 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-black/60 pointer-events-none" />
 
-              {/* 3D Floating Album Art */}
-              <div className="relative z-10 w-44 h-44 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/20 mb-5 animate-in fade-in zoom-in-95 duration-300">
+              {/* Clean Floating Album Art without borders */}
+              <div className="relative z-10 w-48 h-48 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.9)] animate-in fade-in zoom-in-95 duration-300">
                 <img
                   src={coverUrl}
                   alt={currentTrack.name}
@@ -425,21 +424,12 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
                   className="w-full h-full object-cover"
                 />
               </div>
-
-              {/* Rhythmic Animated Equalizer Bars */}
-              <div className="flex items-end gap-1.5 h-6 z-10">
-                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.6s_infinite] h-3.5" />
-                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.9s_infinite_0.15s] h-5" />
-                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.7s_infinite_0.3s] h-6" />
-                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.8s_infinite_0.1s] h-4" />
-                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_1.0s_infinite_0.25s] h-5.5" />
-              </div>
             </div>
           )}
 
-          {/* Pause Overlay indicator */}
+          {/* Pause Indicator */}
           {isPaused && (
-            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-bold text-white/90 animate-in fade-in duration-150 pointer-events-none">
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-full bg-black/70 backdrop-blur-md text-[11px] font-bold text-white/90 animate-in fade-in duration-150 pointer-events-none">
               Pausado
             </div>
           )}
@@ -471,27 +461,27 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
           </div>
         </div>
 
-        {/* Bottom Metadata & "Escuchar la canción completa" Button */}
-        <div className="relative z-40 p-4 pt-6 bg-gradient-to-t from-black via-black/95 to-transparent space-y-3.5 border-t border-white/5">
+        {/* Bottom Metadata & Authentic Spotify "Escuchar canción completa" Button */}
+        <div className="relative z-40 p-4 pt-6 bg-gradient-to-t from-black via-black/90 to-transparent space-y-3.5">
           <div className="min-w-0 pr-1">
-            <h3 className="text-base font-black text-white font-['SpotifyMixUITitle'] truncate drop-shadow-md">
+            <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle'] truncate drop-shadow-md">
               {currentTrack.name}
             </h3>
-            <p className="text-xs font-semibold text-[#b3b3b3] truncate mt-0.5">
+            <p className="text-xs font-medium text-[#b3b3b3] truncate mt-0.5">
               {currentTrack.artists?.map((a) => a.name).join(', ') || 'Artista desconocido'}
             </p>
           </div>
 
-          {/* Full Song CTA Button */}
+          {/* Clean Spotify-native CTA Button (Sentence case, rounded pill, natural) */}
           <button
             onClick={(e) => {
               e.stopPropagation();
               handlePlayFull();
             }}
-            className="w-full py-3 px-4 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-[1.02] active:scale-[0.98] text-black font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(30,215,96,0.35)] transition-all cursor-pointer"
+            className="w-full py-3.5 px-6 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-[1.02] active:scale-[0.98] text-black font-bold text-sm flex items-center justify-center gap-2.5 shadow-lg shadow-[#1ed760]/20 transition-all cursor-pointer"
           >
             <PlayNativeIcon size={16} className="text-black fill-current" />
-            <span>Escuchar la canción completa</span>
+            <span>Escuchar canción completa</span>
           </button>
         </div>
       </div>
