@@ -7,10 +7,6 @@ import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import {
-  PlayNativeIcon,
-  PauseNativeIcon,
-  NextNativeIcon,
-  PrevNativeIcon,
   QueueNativeIcon,
   CloseNativeIcon,
   AddTrackNativeIcon,
@@ -90,8 +86,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     durationMs,
     playTrack,
     togglePlay,
-    nextTrack,
-    previousTrack,
     likedTrackIds,
     toggleLike,
     queue,
@@ -238,7 +232,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   return (
     <div
-      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-y-auto select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3"
+      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3"
       style={{
         backgroundColor: '#050b18',
       }}
@@ -495,53 +489,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         )}
       </main>
 
-      {/* Bottom Playback Controls matching Photo 2 */}
-      <footer className="relative z-20 px-3 sm:px-4 py-2 sm:py-2.5 flex items-center justify-between shrink-0">
-        {/* Bottom Left: Toggle Cola del DJ */}
-        <button
-          onClick={() => setShowQueueDrawer(!showQueueDrawer)}
-          className={`w-12 h-12 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 backdrop-blur-md border border-white/10 ${
-            showQueueDrawer
-              ? 'bg-[#1ed760] text-black shadow-lg shadow-[#1ed760]/30'
-              : 'bg-black/35 hover:bg-black/55 text-white/80 hover:text-white'
-          }`}
-          title="Ver cola de canciones del DJ"
-        >
-          <QueueNativeIcon size={20} />
-        </button>
-
-        {/* Controls: Prev, Play/Pause, Next */}
-        <div className="flex items-center gap-6 sm:gap-8 mx-auto">
-          <button
-            onClick={() => previousTrack()}
-            className="text-white/80 hover:text-white transition-colors cursor-pointer active:scale-95"
-            title="Anterior"
-          >
-            <PrevNativeIcon size={22} className="text-white" />
-          </button>
-
-          <button
-            onClick={togglePlay}
-            className="w-13 h-13 sm:w-14 sm:h-14 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-xl"
-            title={isPlaying ? 'Pausar' : 'Reproducir'}
-          >
-            {isPlaying ? <PauseNativeIcon size={24} /> : <PlayNativeIcon size={24} className="ml-0.5" />}
-          </button>
-
-          <button
-            onClick={() => nextTrack()}
-            className="text-white/80 hover:text-white transition-colors cursor-pointer active:scale-95"
-            title="Siguiente"
-          >
-            <NextNativeIcon size={22} className="text-white" />
-          </button>
-        </div>
-
-        {/* Balance Spacer (matches left button width so controls remain centered) */}
-        <div className="w-12 h-12 sm:w-14 sm:h-14 opacity-0 pointer-events-none" />
-      </footer>
-
-      {/* Queue Drawer: On mobile it is a smooth bottom-sheet; on desktop it opens as an upward tab where the button is */}
+      {/* Queue Drawer */}
       {isQueueRendered && (
         <div
           className={`fixed inset-0 z-50 bg-black/65 backdrop-blur-sm sm:backdrop-blur-none sm:bg-black/20 flex flex-col justify-end sm:block select-none transition-opacity duration-350 ease-out ${

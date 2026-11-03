@@ -1087,17 +1087,22 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       <p
                         key={`full-lyric-${idx}-${line.timeMs}`}
                         data-line-index={idx}
-                        onClick={() => {
-                          if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-                            (window as any).__audioEngine.seek(line.timeMs / 1000);
-                          }
-                        }}
-                        className={`transition-all duration-300 cursor-pointer flex flex-wrap items-baseline gap-x-1.5 ${
+                        className={`transition-all duration-300 flex flex-wrap items-baseline gap-x-1.5 ${
                           isCurrent
                             ? 'scale-102 text-2xl font-black py-1'
                             : 'text-white/40 text-xl font-bold hover:text-white/80 py-0.5'
                         }`}
                       >
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+                              (window as any).__audioEngine.seek(line.timeMs / 1000);
+                            }
+                          }}
+                          className="cursor-pointer inline-flex flex-wrap items-baseline gap-x-1.5"
+                          title="Ir a este momento"
+                        >
                         {isCurrent && line.words.length > 0
                           ? line.words.map((w, wIdx) => {
                               const vocalMs = progressMs + 220;
@@ -1121,6 +1126,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                           : (
                             <span>{line.text}</span>
                           )}
+                        </span>
                       </p>
                     );
                   })

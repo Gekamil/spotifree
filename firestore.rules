@@ -27,6 +27,30 @@ rules_version = '2';
 //   - createdAt: number (optional, immutable, positive) - Creation timestamp in ms
 //   - updatedAt: number (optional, positive) - Last update timestamp in ms
 //
+// Collection: shared_sessions
+// Document ID: {sessionId} (Session code string, 4-32 characters, e.g. 6-char alphanumeric)
+// Fields:
+//   - id: string (required, immutable, must equal sessionId) - Session code identifier
+//   - hostUid: string (required, immutable, 1-128 chars) - Identifier of the session host
+//   - hostName: string (required, immutable, 1-100 chars) - Display name of the session host
+//   - isActive: bool (required) - Whether session is active for multiplayer co-listening
+//   - createdAt: number (required, immutable, positive) - Creation timestamp in ms
+//   - updatedAt: number (required, positive) - Last state update timestamp in ms
+//   - playback: map (required) - Playback state map:
+//       * track: map | null (optional/nullable) - Track object metadata
+//       * isPlaying: bool (required) - Play/pause synchronization state
+//       * progressMs: number (required, >= 0) - Playback progress in milliseconds
+//       * updatedAt: number (required, positive) - Timestamp of playback change
+//       * actionOrigin: string (required, 1-128 chars) - Participant ID who originated playback action
+//       * queue: list (optional, max 100 items) - Shared playback queue tracks
+//   - participants: map (required, max 100 entries) - Map of participant objects keyed by participant ID:
+//       * id: string (required, 1-128 chars) - Participant identifier
+//       * name: string (required, 1-100 chars) - Participant display name
+//       * color: string (required, max 32 chars) - Participant avatar/cursor hex color
+//       * isHost: bool (required) - Host role flag
+//       * lastSeen: number (required, positive) - Heartbeat timestamp in ms
+//       * cursor: map (optional) - Real-time cursor coordinates { pctX: number, pctY: number, updatedAt: number }
+//
 // Default Deny:
 //   - All other collections and paths are denied by default.
 //
@@ -56,7 +80,7 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Domain Validators
+    // Domain Validators: Users
     // ===============================================================
 
     // Validate complete user document structure, schema, types, and limits
@@ -105,6 +129,84 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Domain Validators: Shared Sessions
+    // ===============================================================
+
+    // Validate cursor map coordinates and timestamp
+    function isValidCursor(cursor) {
+      return cursor is map &&
+        cursor.keys().hasOnly(['pctX', 'pctY', 'updatedAt']) &&
+        cursor.keys().hasAll(['pctX', 'pctY', 'updatedAt']) &&
+        cursor.pctX is number &&
+        cursor.pctY is number &&
+        cursor.updatedAt is number && cursor.updatedAt > 0;
+    }
+
+    // Validate participant object structure
+    function isValidParticipant(p) {
+      return p is map &&
+        p.keys().hasOnly(['id', 'name', 'color', 'isHost', 'lastSeen', 'cursor']) &&
+        p.keys().hasAll(['id', 'name', 'color', 'isHost', 'lastSeen']) &&
+        p.id is string && p.id.size() >= 1 && p.id.size() <= 128 &&
+        p.name is string && p.name.size() >= 1 && p.name.size() <= 100 &&
+        p.color is string && p.color.size() <= 32 &&
+        p.isHost is bool &&
+        p.lastSeen is number && p.lastSeen > 0 &&
+        (!('cursor' in p) || isValidCursor(p.cursor));
+    }
+
+    // Validate shared session playback state map
+    function isValidPlayback(playback) {
+      return playback is map &&
+        playback.keys().hasOnly(['track', 'isPlaying', 'progressMs', 'updatedAt', 'actionOrigin', 'queue']) &&
+        playback.keys().hasAll(['isPlaying', 'progressMs', 'updatedAt', 'actionOrigin']) &&
+        playback.isPlaying is bool &&
+        playback.progressMs is number && playback.progressMs >= 0 &&
+        playback.updatedAt is number && playback.updatedAt > 0 &&
+        playback.actionOrigin is string &&
+        playback.actionOrigin.size() >= 1 && playback.actionOrigin.size() <= 128 &&
+        (!('track' in playback) || playback.track == null || playback.track is map) &&
+        (!('queue' in playback) || (playback.queue is list && playback.queue.size() <= 100));
+    }
+
+    // Validate complete shared session document structure, schema, types, and limits
+    // Used in BOTH create and update rules (Validator Function Pattern)
+    function isValidSharedSession(data, sessionId) {
+      return data.keys().hasOnly([
+          'id', 'hostUid', 'hostName', 'isActive',
+          'createdAt', 'updatedAt', 'playback', 'participants'
+        ]) &&
+        data.keys().hasAll([
+          'id', 'hostUid', 'hostName', 'isActive',
+          'createdAt', 'updatedAt', 'playback', 'participants'
+        ]) &&
+        data.id is string &&
+        data.id == sessionId &&
+        data.id.size() >= 4 &&
+        data.id.size() <= 32 &&
+        data.hostUid is string &&
+        data.hostUid.size() >= 1 &&
+        data.hostUid.size() <= 128 &&
+        data.hostName is string &&
+        data.hostName.size() >= 1 &&
+        data.hostName.size() <= 100 &&
+        data.isActive is bool &&
+        data.createdAt is number && data.createdAt > 0 &&
+        data.updatedAt is number && data.updatedAt > 0 &&
+        isValidPlayback(data.playback) &&
+        data.participants is map &&
+        data.participants.size() <= 100;
+    }
+
+    // Ensure immutable fields (id, hostUid, hostName, createdAt) cannot be tampered with on update
+    function areSharedSessionImmutableFieldsUnchanged() {
+      return request.resource.data.id == resource.data.id &&
+             request.resource.data.hostUid == resource.data.hostUid &&
+             request.resource.data.hostName == resource.data.hostName &&
+             request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    // ===============================================================
     // Collection Rules
     // ===============================================================
 
@@ -123,6 +225,27 @@ service cloud.firestore {
 
       // Delete: Owner-only
       allow delete: if isOwner(userId);
+    }
+
+    // Multiplayer co-listening sessions: shared_sessions/{sessionId}
+    match /shared_sessions/{sessionId} {
+      // Any participant with the session link can read the shared session document
+      allow read: if true;
+
+      // Creation: Anyone can create a new session with valid schema, active status, and host participant
+      allow create: if isValidSharedSession(request.resource.data, sessionId) &&
+                       request.resource.data.isActive == true &&
+                       request.resource.data.hostUid in request.resource.data.participants &&
+                       isValidParticipant(request.resource.data.participants[request.resource.data.hostUid]);
+
+      // Update: Anyone can join, broadcast playback, update cursor, or terminate an active session
+      allow update: if resource.data.isActive == true &&
+                       isValidSharedSession(request.resource.data, sessionId) &&
+                       areSharedSessionImmutableFieldsUnchanged();
+
+      // Deletion: Allowed if the session is inactive, or if performed by the authenticated host
+      allow delete: if resource.data.isActive == false ||
+                       (isAuthenticated() && request.auth.uid == resource.data.hostUid);
     }
 
     // ===============================================================

@@ -319,6 +319,7 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
+    const isMobile = typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent));
     const isDjMode =
       typeof window !== 'undefined' &&
       (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
@@ -328,11 +329,13 @@ const store = create<PlayerState>((set, get) => ({
       window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
 
-    if (isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
+    // Desktop dual-deck crossfade only when not in background mobile lockscreen mode
+    if (!isMobile && isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
       engine.transitionToNextTrack(nextTrackCandidate);
       return;
     }
 
+    // Direct, instant, high-reliability track playback (car controls / mobile / standard)
     get().playTrack(nextTrackCandidate);
     if (get().shuffleMode === 'smart') {
       get().triggerSmartShuffleRecommendation(nextTrackCandidate);
@@ -518,7 +521,7 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   previousTrack: () => {
-    const { queue, currentTrack, progressMs } = get();
+    const { queue, currentTrack, progressMs, isShuffle, history, playedInShuffle } = get();
     if (progressMs > 3000) {
       set({ progressMs: 0 });
       if (typeof window !== 'undefined' && (window as any).__audioEngine) {
@@ -527,6 +530,25 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
     if (queue.length === 0) return;
+
+    // In shuffle mode: Going backward navigates through the actual history of songs that already played
+    if (isShuffle) {
+      if (history.length > 0) {
+        const prevTrackFromHistory = history.find((t) => t.id !== currentTrack?.id);
+        if (prevTrackFromHistory) {
+          const remainingShuffle = currentTrack ? playedInShuffle.filter((id) => id !== currentTrack.id) : playedInShuffle;
+          const remainingHistory = history.filter((t) => t.id !== prevTrackFromHistory.id);
+          set({
+            playedInShuffle: remainingShuffle,
+            history: remainingHistory,
+          });
+          get().playTrack(prevTrackFromHistory);
+          return;
+        }
+      }
+    }
+
+    // Normal sequential playback previous track
     const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : 0;
     const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
     const prev = queue[prevIndex];
@@ -693,10 +715,22 @@ export function registerMediaSessionHandlers() {
 
     navigator.mediaSession.setActionHandler('previoustrack', () => {
       usePlayerStore.getState().previousTrack();
+      const engine = getEngine();
+      if (engine) {
+        engine.unlockAudio?.();
+        if (typeof engine.resume === 'function') engine.resume();
+      }
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     });
 
     navigator.mediaSession.setActionHandler('nexttrack', () => {
       usePlayerStore.getState().nextTrack();
+      const engine = getEngine();
+      if (engine) {
+        engine.unlockAudio?.();
+        if (typeof engine.resume === 'function') engine.resume();
+      }
+      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     });
 
     navigator.mediaSession.setActionHandler('seekto', (details) => {

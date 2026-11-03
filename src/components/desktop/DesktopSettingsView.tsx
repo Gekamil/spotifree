@@ -12,6 +12,7 @@ import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
 import { useLanguageStore } from '../../utils/i18n';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 interface FrequencyPoint {
   label: string;
@@ -474,6 +475,29 @@ export const DesktopSettingsView: React.FC = () => {
     value: k,
     label: PRESET_LABELS[k],
   }));
+
+  const isGuestInSession = useSharedSessionStore((s) => s.isInSession && !s.isHost);
+  if (isGuestInSession) {
+    return (
+      <div className="min-h-full flex flex-col items-center justify-center p-12 text-center select-none font-['SpotifyMixUI']">
+        <div className="w-18 h-18 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-4xl mb-4 shadow-xl">
+          🔒
+        </div>
+        <h2 className="text-2xl font-black text-white mb-2 font-['SpotifyMixUITitle']">
+          Configuración protegida
+        </h2>
+        <p className="text-sm text-[#b3b3b3] max-w-md leading-relaxed mb-6">
+          Estás participando en una sesión compartida como invitado. Por motivos de seguridad y privacidad del anfitrión, el panel de configuración está bloqueado.
+        </p>
+        <button
+          onClick={() => useSharedSessionStore.getState().setModalOpen(true)}
+          className="px-6 py-2.5 rounded-full bg-[#1ed760] text-black font-black text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg shadow-[#1ed760]/20"
+        >
+          Ver participantes de la sesión
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-4xl mx-auto pb-24 font-['SpotifyMixUI',sans-serif]">

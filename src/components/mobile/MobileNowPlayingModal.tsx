@@ -732,12 +732,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <p
                     key={`m-lyric-${idx}-${line.timeMs}`}
                     data-line-index={idx}
-                    onClick={() => {
-                      if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-                        (window as any).__audioEngine.seek(line.timeMs / 1000);
-                      }
-                    }}
-                    className={`transition-all duration-200 leading-snug cursor-pointer block origin-left text-xl font-bold ${
+                    className={`transition-all duration-200 leading-snug block origin-left text-xl font-bold ${
                       isCurrent
                         ? 'text-white scale-[1.03] drop-shadow-[0_2px_14px_rgba(255,255,255,0.65)]'
                         : Math.abs(idx - activeLineIndex) === 1
@@ -745,26 +740,37 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                         : 'text-black/50 hover:text-white/80'
                     }`}
                   >
-                    {isCurrent && line.words.length > 0 ? (
-                      line.words.map((w, wIdx) => {
-                        const vocalMs = progressMs + 220;
-                        const isWordSung = vocalMs >= w.timeMs;
-                        return (
-                          <span
-                            key={`mw-${idx}-${wIdx}`}
-                            className={`transition-colors duration-150 inline ${
-                              isWordSung
-                                ? 'text-white'
-                                : 'text-white/45'
-                            }`}
-                          >
-                            {w.text}{wIdx < line.words.length - 1 ? ' ' : ''}
-                          </span>
-                        );
-                      })
-                    ) : (
-                      <span>{line.text}</span>
-                    )}
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+                          (window as any).__audioEngine.seek(line.timeMs / 1000);
+                        }
+                      }}
+                      className="cursor-pointer inline-block active:opacity-75 transition-opacity"
+                      title="Ir a este momento"
+                    >
+                      {isCurrent && line.words.length > 0 ? (
+                        line.words.map((w, wIdx) => {
+                          const vocalMs = progressMs + 220;
+                          const isWordSung = vocalMs >= w.timeMs;
+                          return (
+                            <span
+                              key={`mw-${idx}-${wIdx}`}
+                              className={`transition-colors duration-150 inline ${
+                                isWordSung
+                                  ? 'text-white'
+                                  : 'text-white/45'
+                              }`}
+                            >
+                              {w.text}{wIdx < line.words.length - 1 ? ' ' : ''}
+                            </span>
+                          );
+                        })
+                      ) : (
+                        <span>{line.text}</span>
+                      )}
+                    </span>
                   </p>
                 );
               })}

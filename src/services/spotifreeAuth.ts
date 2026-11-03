@@ -198,6 +198,10 @@ export async function loginSpotifreeAccount(
     const uid = fbRes.user.uid;
     const cloudData = await getUserDataFromFirestore(uid);
 
+    // If cloud data exists, it is authoritative! Only use local data as fallback if cloud has no record
+    const hasCloudPlaylists = Array.isArray(cloudData?.playlists);
+    const hasCloudLikes = Array.isArray(cloudData?.likedTracks);
+
     const mergedAcc: SpotifreeAccount = {
       uid,
       email: cleanEmail,
@@ -205,24 +209,17 @@ export async function loginSpotifreeAccount(
       avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || fbRes.user.photoURL || local.avatarUrl || null,
       bannerUrl: cloudData?.bannerUrl || local.bannerUrl || null,
       spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
-      playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
-      likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
+      playlists: hasCloudPlaylists ? (cloudData!.playlists || []) : local.playlists,
+      deletedPlaylistIds: cloudData?.deletedPlaylistIds || [],
+      likedTracks: hasCloudLikes ? (cloudData!.likedTracks || []) : local.likedTracks,
       updatedAt: Date.now(),
     };
-
-    // Update Firestore if local had items not yet in cloud
-    await saveUserDataToFirestore(uid, mergedAcc);
 
     // Save locally
     saveCurrentSpotifreeAccount(mergedAcc);
 
     // Sync stores
     applyAccountToAppStores(mergedAcc);
-
-    // Listen to real-time changes
-    subscribeToUserDataFirestore(uid, (updated) => {
-      applyAccountToAppStores({ ...mergedAcc, ...updated });
-    });
 
     return { success: true, account: mergedAcc };
   }
@@ -401,63 +398,99 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     } as any,
   }));
 
-  // 4. Sync playlists to local storage and store
-  if (Array.isArray(acc.playlists) && acc.playlists.length > 0) {
+  // 4. Sync playlists to local storage and store (authoritative from cloud, filtering deleted IDs)
+  if (Array.isArray(acc.playlists)) {
+    const deletedSet = new Set(Array.isArray(acc.deletedPlaylistIds) ? acc.deletedPlaylistIds : []);
     if (typeof window !== 'undefined') {
       try {
-        const rawImported = window.localStorage.getItem('user_imported_playlists');
-        const existing = rawImported ? JSON.parse(rawImported) : [];
-        const existingIds = new Set(existing.map((p: any) => p.id));
-        const merged = [...acc.playlists.filter((p: any) => !existingIds.has(p.id)), ...existing];
-        window.localStorage.setItem('user_imported_playlists', JSON.stringify(merged));
+        const rawD = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+        if (rawD) {
+          const localD: string[] = JSON.parse(rawD);
+          localD.forEach((id) => deletedSet.add(id));
+        }
+      } catch {}
+    }
+
+    // Filter out any deleted playlists
+    const cleanPlaylists = acc.playlists.filter((p) => p && p.id && !deletedSet.has(p.id));
+
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem('user_imported_playlists', JSON.stringify(cleanPlaylists));
       } catch {}
     }
     useSpotifyDataStore.setState((s) => {
-      const currentIds = new Set(s.playlists.map((p) => p.id));
-      const toAdd = acc.playlists.filter((p) => !currentIds.has(p.id));
-      return { playlists: [...toAdd, ...s.playlists] };
+      const systemPlaylists = s.playlists.filter((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
+      const cleanIds = new Set(cleanPlaylists.map((p) => p.id));
+      const remainingSystem = systemPlaylists.filter((p) => !cleanIds.has(p.id));
+      return { playlists: [...cleanPlaylists, ...remainingSystem] };
     });
   }
 
   // 5. Sync liked tracks to local storage and player store
-  if (Array.isArray(acc.likedTracks) && acc.likedTracks.length > 0) {
+  if (Array.isArray(acc.likedTracks)) {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(acc.likedTracks));
       } catch {}
     }
-    usePlayerStore.setState((s) => ({
-      likedTrackIds: Array.from(new Set([...s.likedTrackIds, ...acc.likedTracks])),
-    }));
+    usePlayerStore.setState({
+      likedTrackIds: acc.likedTracks,
+    });
   }
 }
 
 /**
  * Initializes automatic background authentication session restoration
- * so users stay logged in across app restarts, reloads, and mobile PWA launches.
+ * so users stay logged in across app restarts, reloads, and mobile PWA launches,
+ * and maintains real-time bidirectional synchronization with Cloud Firestore.
  */
 export function initAuthListener(): () => void {
+  let unsubscribeFirestore: (() => void) | null = null;
+
   return onFirebaseAuthStateChanged(async (user) => {
+    if (unsubscribeFirestore) {
+      unsubscribeFirestore();
+      unsubscribeFirestore = null;
+    }
+
     if (user) {
       const cloudData = await getUserDataFromFirestore(user.uid);
       const acc: SpotifreeAccount = {
         uid: user.uid,
-        email: user.email || '',
+        email: user.email || cloudData?.email || '',
         displayName: cloudData?.displayName || user.displayName || 'Usuario',
         avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || user.photoURL || null,
         bannerUrl: cloudData?.bannerUrl || null,
         spotifyCookie: cloudData?.spotifyCookie,
         playlists: cloudData?.playlists || [],
+        deletedPlaylistIds: cloudData?.deletedPlaylistIds || [],
         likedTracks: cloudData?.likedTracks || [],
         updatedAt: cloudData?.updatedAt || Date.now(),
       };
       saveCurrentSpotifreeAccount(acc);
       applyAccountToAppStores(acc);
 
-      // Listen to real-time updates from other devices
-      subscribeToUserDataFirestore(user.uid, (updated) => {
-        applyAccountToAppStores({ ...acc, ...updated });
+      // Realtime listener for cross-device updates (PC <-> Mobile)
+      unsubscribeFirestore = subscribeToUserDataFirestore(user.uid, (fresh) => {
+        if (!fresh) return;
+        const freshAcc: SpotifreeAccount = {
+          uid: user.uid,
+          email: fresh.email || user.email || '',
+          displayName: fresh.displayName || user.displayName || 'Usuario',
+          avatarUrl: fresh.avatarUrl || fresh.photoURL || user.photoURL || null,
+          bannerUrl: fresh.bannerUrl || null,
+          spotifyCookie: fresh.spotifyCookie,
+          playlists: fresh.playlists || [],
+          deletedPlaylistIds: fresh.deletedPlaylistIds || [],
+          likedTracks: fresh.likedTracks || [],
+          updatedAt: fresh.updatedAt || Date.now(),
+        };
+        saveCurrentSpotifreeAccount(freshAcc);
+        applyAccountToAppStores(freshAcc);
       });
+    } else {
+      saveCurrentSpotifreeAccount(null);
     }
   });
 }

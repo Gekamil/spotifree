@@ -39,6 +39,7 @@ export interface CloudUserData {
   bannerUrl?: string | null;
   spotifyCookie?: string;
   playlists: Playlist[];
+  deletedPlaylistIds?: string[];
   likedTracks: string[];
   history?: Track[];
   customTransitions?: Record<string, any>;

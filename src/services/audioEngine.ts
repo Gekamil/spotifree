@@ -878,6 +878,7 @@ class AudioEngine {
     const query = `${nextTrack.name} ${artistName}`.trim();
 
     this.isTransitioning = true;
+    this.isCrossfading = true;
 
     // Resolve or retrieve videoId for next track
     let videoId: string | null = null;
@@ -888,6 +889,7 @@ class AudioEngine {
     }
 
     if (!videoId) {
+      this.isCrossfading = false;
       state.playTrack(nextTrack);
       return;
     }
@@ -911,6 +913,7 @@ class AudioEngine {
       }
 
       this.preloadedNext = { track: nextTrack, videoId, query };
+      state.completeCrossfadeTrack(nextTrack);
 
       setTimeout(() => {
         if (player) {
@@ -1748,11 +1751,38 @@ class AudioEngine {
     }
   }
 
+  private desyncTicks = 0;
+  private checkAudioUiSync() {
+    if (this.isTransitioning || this.isCrossfading || this.isSeeking || this.isAuditioning) {
+      this.desyncTicks = 0;
+      return;
+    }
+    const state = usePlayerStore.getState();
+    if (!state.isPlaying || !state.currentTrack) {
+      this.desyncTicks = 0;
+      return;
+    }
+
+    if (this.currentTrackId && this.currentTrackId !== state.currentTrack.id) {
+      this.desyncTicks++;
+      if (this.desyncTicks >= 15) { // ~1.5s sustained desync
+        console.warn(`[AudioWatchdog] Desync detected: UI shows "${state.currentTrack.name}" (${state.currentTrack.id}) but audio engine playing (${this.currentTrackId}). Resyncing audio immediately...`);
+        this.desyncTicks = 0;
+        const artist = state.currentTrack.artists?.[0]?.name || '';
+        const query = `${state.currentTrack.name} ${artist}`.trim();
+        this.playTrack(state.currentTrack.id, query, Math.floor(state.progressMs / 1000));
+      }
+    } else {
+      this.desyncTicks = 0;
+    }
+  }
+
   private startProgressTicker() {
     this.stopProgressTicker();
     if (this.isAuditioning) return;
     this.progressInterval = window.setInterval(() => {
       if (this.isSeeking || this.isAuditioning) return;
+      this.checkAudioUiSync();
 
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
         try {

@@ -7,6 +7,7 @@ import { audioEngine } from '../../services/audioEngine';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
 import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
 import { useLanguageStore } from '../../utils/i18n';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 interface MobileSettingsViewProps {
   onBack: () => void;
@@ -286,6 +287,37 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
 
       eqCurvePath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
     }
+  }
+
+  const isGuestInSession = useSharedSessionStore((s) => s.isInSession && !s.isHost);
+  if (isGuestInSession) {
+    return (
+      <div className="select-none min-h-full flex flex-col items-center justify-center p-8 text-center bg-[#121212] font-['SpotifyMixUI'] text-white">
+        <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-3xl mb-4 shadow-xl">
+          🔒
+        </div>
+        <h2 className="text-xl font-black text-white mb-2 font-['SpotifyMixUITitle']">
+          Configuración protegida
+        </h2>
+        <p className="text-xs text-[#b3b3b3] max-w-xs leading-relaxed mb-6">
+          Estás participando en una sesión compartida como invitado. Por motivos de seguridad y privacidad del anfitrión, el panel de configuración está bloqueado.
+        </p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={() => useSharedSessionStore.getState().setModalOpen(true)}
+            className="w-full py-2.5 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg shadow-[#1ed760]/20"
+          >
+            Ver sesión compartida
+          </button>
+          <button
+            onClick={onBack}
+            className="w-full py-2.5 rounded-full bg-white/10 text-white font-bold text-xs hover:bg-white/20 active:scale-95 transition-all cursor-pointer"
+          >
+            Volver a la música
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (

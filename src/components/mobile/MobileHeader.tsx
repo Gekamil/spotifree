@@ -3,6 +3,7 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { SettingsNativeIcon } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 interface MobileHeaderProps {
   activeTab: 'todo' | 'musica';
@@ -109,11 +110,42 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
           </button>
         )}
 
+        {/* Sesión Compartida (3 humanitos) */}
+        <button
+          onClick={() => useSharedSessionStore.getState().setModalOpen(true)}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-90 relative ${
+            useSharedSessionStore((s) => s.isInSession)
+              ? 'bg-[#1ed760] text-black shadow shadow-[#1ed760]/30'
+              : 'text-[#b3b3b3] hover:text-white'
+          }`}
+          title="Sesión compartida"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            <path d="M4.5 10c1.38 0 2.5-1.12 2.5-2.5S5.88 5 4.5 5 2 6.12 2 7.5 3.12 10 4.5 10zm-1.5 3.5C1.84 14.16 0 15.33 0 17v2h6v-2c0-1.67-1.84-2.84-3-3.5z"/>
+            <path d="M19.5 10c1.38 0 2.5-1.12 2.5-2.5S20.88 5 19.5 5 17 6.12 17 7.5s1.12 2.5 2.5 2.5zm1.5 3.5c1.16.66 3 1.83 3 3.5v2h-6v-2c0-1.67 1.84-2.84 3-3.5z"/>
+          </svg>
+          {useSharedSessionStore((s) => s.isInSession) && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#1ed760] border-2 border-black animate-pulse" />
+          )}
+        </button>
+
         {onOpenSettings && (
           <button
-            onClick={onOpenSettings}
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90 transition-transform"
-            title="Configuración"
+            onClick={() => {
+              const { isInSession, isHost } = useSharedSessionStore.getState();
+              if (isInSession && !isHost) {
+                alert('Acceso protegido: Los invitados en la sesión compartida no pueden acceder a la configuración.');
+                return;
+              }
+              onOpenSettings();
+            }}
+            className={`w-8 h-8 rounded-full flex items-center justify-center transition-transform ${
+              useSharedSessionStore((s) => s.isInSession && !s.isHost)
+                ? 'opacity-35 cursor-not-allowed'
+                : 'text-[#b3b3b3] hover:text-white cursor-pointer active:scale-90'
+            }`}
+            title={useSharedSessionStore((s) => s.isInSession && !s.isHost) ? 'Configuración bloqueada para invitados' : 'Configuración'}
           >
             <SettingsNativeIcon size={20} className="text-[#b3b3b3] hover:text-white" />
           </button>
