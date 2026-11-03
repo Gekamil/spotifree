@@ -550,9 +550,13 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const initialSet = await getInitialDJLibraryRemix(15);
     set({ djTracks: initialSet });
 
-    // 2. Play track 1 immediately through global player in background
+    // 2. Stage track 1 in the player without playing audio yet (prevents volume collision while DJ speaks)
     if (initialSet.length > 0) {
-      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
+      usePlayerStore.setState({
+        queue: initialSet,
+        currentTrack: initialSet[0],
+        isPlaying: false,
+      });
     }
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -579,9 +583,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: level });
       },
       onEnd: () => {
-        const currentlyPlaying = usePlayerStore.getState().isPlaying;
+        // Drop the beat cleanly right as the DJ intro concludes!
+        if (initialSet.length > 0) {
+          usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
+        }
         set({
-          visualizerState: currentlyPlaying ? 'playing' : 'idle',
+          visualizerState: 'playing',
           voiceLevel: 0,
         });
       },
@@ -827,13 +834,17 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       chatHistory: [...state.chatHistory, djMsg],
     }));
 
-    // 4. Play track 1 immediately in background with ducked volume
+    // 4. Stage track 1 in the player without un-ducked audio overlap
     const track1 = finalSet[0];
     if (track1) {
-      usePlayerStore.getState().playTrack(track1, finalSet, 'dj-session');
+      usePlayerStore.setState({
+        queue: finalSet,
+        currentTrack: track1,
+        isPlaying: false,
+      });
     }
 
-    // 5. Speak the personalized charismatic DJ intro
+    // 5. Speak the personalized charismatic DJ intro cleanly
     await aiDJVoiceService.speak(analysis.speech, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -842,6 +853,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: level });
       },
       onEnd: () => {
+        // Drop the beat cleanly right as speech concludes!
+        if (track1) {
+          usePlayerStore.getState().playTrack(track1, finalSet, 'dj-session');
+        }
         set({
           visualizerState: 'playing',
           voiceLevel: 0,
@@ -962,9 +977,6 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
-    // Begin background transition to the next track at ducked volume while the DJ introduces it
-    usePlayerStore.getState().nextTrack();
-
     await aiDJVoiceService.speak(transitionText, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -973,6 +985,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: lvl });
       },
       onEnd: () => {
+        // Drop the next track cleanly as the DJ finishes introducing it
+        usePlayerStore.getState().nextTrack();
         set({ visualizerState: 'playing', voiceLevel: 0 });
       },
     });

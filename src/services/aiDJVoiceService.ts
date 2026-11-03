@@ -5,6 +5,7 @@
 
 import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
+import { usePlayerStore } from '../store/usePlayerStore';
 
 export type DJVoiceId = 'sebastian' | 'dalia' | 'alvaro' | 'salome' | 'gemini';
 
@@ -66,7 +67,7 @@ export interface AIDJConfig {
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'sebastian',
+  voice: 'alvaro',
   provider: 'edge',
   apiKey: '',
   voiceId: '',
@@ -83,8 +84,9 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
-  private selectedVoiceId: DJVoiceId = 'sebastian';
+  private selectedVoiceId: DJVoiceId = 'alvaro';
   private testPhraseIndex: number = 0;
+  private wasPlayingBeforeSpeech: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -93,8 +95,8 @@ class AIDJVoiceService {
         if (['sebastian', 'dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
           this.selectedVoiceId = savedVoice;
         } else {
-          this.selectedVoiceId = 'sebastian';
-          localStorage.setItem('spotifree_dj_voice_choice', 'sebastian');
+          this.selectedVoiceId = 'alvaro';
+          localStorage.setItem('spotifree_dj_voice_choice', 'alvaro');
         }
       } catch {}
 
@@ -290,10 +292,25 @@ class AIDJVoiceService {
    */
   private duckAudio() {
     try {
+      const playerState = usePlayerStore.getState();
+      const isMobile =
+        typeof window !== 'undefined' &&
+        (window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
+
+      // On mobile devices, because mobile browsers ignore programmatic volume reduction on video/iframe streams
+      // and cause severe speaker clipping when two media elements play at 100%, pause the background track cleanly:
+      if (isMobile && playerState.isPlaying) {
+        this.wasPlayingBeforeSpeech = true;
+        usePlayerStore.setState({ isPlaying: false });
+        if (audioEngine && typeof audioEngine.pause === 'function') {
+          audioEngine.pause();
+        }
+      }
+
       if (audioEngine && typeof audioEngine.setDuckedVolume === 'function') {
-        audioEngine.setDuckedVolume(0.10);
+        audioEngine.setDuckedVolume(0.08);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.setDuckedVolume(0.10);
+        (window as any).__audioEngine.setDuckedVolume(0.08);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Duck audio warning:', e);
@@ -305,6 +322,13 @@ class AIDJVoiceService {
    */
   private restoreAudio() {
     try {
+      if (this.wasPlayingBeforeSpeech) {
+        this.wasPlayingBeforeSpeech = false;
+        usePlayerStore.setState({ isPlaying: true });
+        if (audioEngine && typeof audioEngine.resume === 'function') {
+          audioEngine.resume();
+        }
+      }
       if (audioEngine && typeof audioEngine.restoreDuckedVolume === 'function') {
         audioEngine.restoreDuckedVolume(1000);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
@@ -381,7 +405,7 @@ class AIDJVoiceService {
       audio.src = audioUrl;
       audio.preload = 'auto';
       audio.playbackRate = 1.0;
-      audio.volume = 1.0;
+      audio.volume = 0.88; // 1.1dB headroom prevents mobile DAC/speaker saturation
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {
