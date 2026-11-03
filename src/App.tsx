@@ -11,7 +11,7 @@ import { useUIStore } from './store/useUIStore';
 import { usePlayerStore } from './store/usePlayerStore';
 import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
-import { useSharedSessionStore } from './services/sharedSessionService';
+import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
 
 if (typeof window !== 'undefined') {
   (window as any).__useUIStore = useUIStore;
@@ -33,24 +33,26 @@ function App() {
         const urlParams = new URLSearchParams(window.location.search);
         const inviteSessionId = urlParams.get('session');
         if (inviteSessionId) {
-          const user = useSpotifyDataStore.getState().user;
-          const guestName = user?.display_name || 'Invitado';
-          useSharedSessionStore.getState().joinSession(inviteSessionId, guestName);
+          const currentStore = useSharedSessionStore.getState();
+          if (currentStore.sessionId && currentStore.sessionId !== inviteSessionId) {
+            currentStore.leaveSession();
+          }
+          currentStore.joinSession(inviteSessionId);
           useUIStore.setState({ activeRightSidebar: 'friends' });
         }
       } catch {}
     }
 
-    // Synchronize local playback changes to active shared session
+    // Synchronize local playback changes to active shared session (preventing echo loops)
     const unsubscribePlayer = usePlayerStore.subscribe((state, prevState) => {
       const { isInSession, broadcastPlayback } = useSharedSessionStore.getState();
-      if (!isInSession) return;
+      if (!isInSession || getIsApplyingRemoteSync()) return;
 
       const trackChanged = state.currentTrack?.id !== prevState.currentTrack?.id;
       const playStateChanged = state.isPlaying !== prevState.isPlaying;
-      const significantSeek = Math.abs(state.progressMs - prevState.progressMs) > 4000;
+      const significantSeek = Math.abs(state.progressMs - prevState.progressMs) > 6000;
 
-      if (trackChanged || playStateChanged || significantSeek) {
+      if ((trackChanged || playStateChanged || significantSeek) && state.currentTrack) {
         broadcastPlayback(state.currentTrack, state.isPlaying, state.progressMs);
       }
     });

@@ -243,6 +243,8 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
     sessionId,
     sessionLink,
     participants,
+    myParticipantId,
+    updateMyName,
     createSession,
     joinSession,
     leaveSession,
@@ -254,6 +256,8 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newNameInput, setNewNameInput] = useState('');
 
   const handleCopyLink = () => {
     if (!sessionLink) return;
@@ -416,13 +420,66 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                     key={p.id}
                     className="flex items-center justify-between p-2 rounded-lg bg-black/35 border border-white/5 text-xs"
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="w-3 h-3 rounded-full shrink-0 shadow-sm"
-                        style={{ backgroundColor: p.color }}
-                      />
-                      <span className="font-bold text-white truncate">{p.name}</span>
-                    </div>
+                    {p.id === myParticipantId && editingName ? (
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <input
+                          type="text"
+                          value={newNameInput}
+                          onChange={(e) => setNewNameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              updateMyName(newNameInput);
+                              setEditingName(false);
+                            } else if (e.key === 'Escape') {
+                              setEditingName(false);
+                            }
+                          }}
+                          autoFocus
+                          maxLength={24}
+                          className="px-2 py-0.5 rounded bg-white/10 border border-[#1ed760] text-xs text-white outline-none w-28"
+                        />
+                        <button
+                          onClick={() => {
+                            updateMyName(newNameInput);
+                            setEditingName(false);
+                          }}
+                          className="text-[#1ed760] hover:text-white px-1 font-bold cursor-pointer"
+                          title="Guardar nombre"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => setEditingName(false)}
+                          className="text-[#b3b3b3] hover:text-white px-1 cursor-pointer"
+                          title="Cancelar"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                          style={{ backgroundColor: p.color }}
+                        />
+                        <span className="font-bold text-white truncate">{p.name}</span>
+                        {p.id === myParticipantId && (
+                          <button
+                            onClick={() => {
+                              setNewNameInput(p.name);
+                              setEditingName(true);
+                            }}
+                            className="p-0.5 text-[#b3b3b3] hover:text-[#1ed760] transition-colors cursor-pointer"
+                            title="Cambiar mi nombre"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <span className="text-[10px] text-[#b3b3b3] shrink-0 font-medium ml-2">
                       {p.isHost ? 'Anfitrión' : 'Invitado'}
                     </span>

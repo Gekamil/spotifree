@@ -10,6 +10,8 @@ export const SharedSessionModal: React.FC = () => {
     sessionId,
     sessionLink,
     participants,
+    myParticipantId,
+    updateMyName,
     isModalOpen,
     setModalOpen,
     createSession,
@@ -23,6 +25,8 @@ export const SharedSessionModal: React.FC = () => {
   const [joinCodeInput, setJoinCodeInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [newNameInput, setNewNameInput] = useState('');
 
   const handleCopyLink = () => {
     if (!sessionLink) return;
@@ -216,10 +220,61 @@ export const SharedSessionModal: React.FC = () => {
                     key={p.id}
                     style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '10px', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)' }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: p.color, flexShrink: 0 }} />
-                      <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.name}</span>
-                    </div>
+                    {p.id === myParticipantId && editingName ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flex: 1 }}>
+                        <input
+                          type="text"
+                          value={newNameInput}
+                          onChange={(e) => setNewNameInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              updateMyName(newNameInput);
+                              setEditingName(false);
+                            } else if (e.key === 'Escape') {
+                              setEditingName(false);
+                            }
+                          }}
+                          autoFocus
+                          maxLength={24}
+                          style={{ padding: '2px 8px', borderRadius: '6px', background: 'rgba(255,255,255,0.1)', border: '1px solid #1ed760', color: 'white', fontSize: '12px', outline: 'none', width: '110px' }}
+                        />
+                        <button
+                          onClick={() => {
+                            updateMyName(newNameInput);
+                            setEditingName(false);
+                          }}
+                          style={{ color: '#1ed760', background: 'none', border: 'none', fontWeight: 900, cursor: 'pointer', padding: '2px 6px' }}
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() => setEditingName(false)}
+                          style={{ color: '#b3b3b3', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 6px' }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.name}</span>
+                        {p.id === myParticipantId && (
+                          <button
+                            onClick={() => {
+                              setNewNameInput(p.name);
+                              setEditingName(true);
+                            }}
+                            style={{ background: 'none', border: 'none', color: '#b3b3b3', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                            title="Cambiar mi nombre"
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '2px 8px', borderRadius: '999px', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: '#b3b3b3' }}>
                       {p.isHost ? 'Anfitrión' : 'Invitado'}
                     </span>

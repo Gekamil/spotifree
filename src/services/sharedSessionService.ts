@@ -65,6 +65,7 @@ export interface SharedSessionStore {
   participants: SessionParticipant[];
   isModalOpen: boolean;
   setModalOpen: (open: boolean) => void;
+  updateMyName: (newName: string) => Promise<void>;
   createSession: (userName?: string) => Promise<string | null>;
   joinSession: (sessionId: string, userName?: string) => Promise<boolean>;
   leaveSession: () => Promise<void>;
@@ -101,6 +102,11 @@ let sessionDocUnsubscribe: Unsubscribe | null = null;
 let lastCursorBroadcast = 0;
 let lastFirestoreCursorWrite = 0;
 let lastPlaybackOrigin = '';
+let isApplyingRemoteSync = false;
+
+export function getIsApplyingRemoteSync(): boolean {
+  return isApplyingRemoteSync;
+}
 
 // WebRTC P2P mesh references
 let peerInstance: any = null;
@@ -285,6 +291,21 @@ function handleIncomingP2PAsHost(data: any, senderConn: any) {
       }
     });
   }
+
+  // 4. Guest renamed themselves
+  if (data.type === 'rename' && data.participantId && data.name) {
+    useSharedSessionStore.setState((s) => ({
+      participants: s.participants.map((p) =>
+        p.id === data.participantId ? { ...p, name: data.name } : p
+      ),
+    }));
+    // Forward rename to other guests
+    guestConnections.forEach((c) => {
+      if (c !== senderConn && c.open) {
+        c.send(data);
+      }
+    });
+  }
 }
 
 async function initP2PGuest(sessionId: string, guestParticipant: SessionParticipant) {
@@ -414,7 +435,16 @@ function handleIncomingP2PAsGuest(data: any) {
     applySynchronizedPlayback(data);
   }
 
-  // 5. Host ended session
+  // 5. Another participant renamed themselves
+  if (data.type === 'rename' && data.participantId && data.name) {
+    useSharedSessionStore.setState((s) => ({
+      participants: s.participants.map((p) =>
+        p.id === data.participantId ? { ...p, name: data.name } : p
+      ),
+    }));
+  }
+
+  // 6. Host ended session
   if (data.type === 'terminate') {
     alert('La sesión compartida ha sido finalizada por el anfitrión.');
     useSharedSessionStore.getState().leaveSession();
@@ -428,32 +458,45 @@ function applySynchronizedPlayback(pb: any) {
 
   if (pb.actionOrigin === myId) return;
 
-  // Track change
-  if (pb.track && pb.track.id !== player.currentTrack?.id) {
-    player.playTrack(pb.track, pb.queue);
-  }
+  isApplyingRemoteSync = true;
+  try {
+    const elapsed = pb.isPlaying && pb.updatedAt ? Math.max(0, Date.now() - pb.updatedAt) : 0;
+    const expectedProgress = (pb.progressMs || 0) + elapsed;
 
-  // Play / Pause state
-  if (typeof pb.isPlaying === 'boolean' && pb.isPlaying !== player.isPlaying) {
-    usePlayerStore.setState({ isPlaying: pb.isPlaying });
-    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-    if (engine) {
-      if (pb.isPlaying) {
-        engine.unlockAudio?.();
-        engine.resume?.();
-      } else {
-        engine.pause?.();
+    // Track change
+    if (pb.track && pb.track.id !== player.currentTrack?.id) {
+      player.playTrack(pb.track, pb.queue);
+    }
+
+    // Play / Pause state
+    if (typeof pb.isPlaying === 'boolean' && pb.isPlaying !== player.isPlaying) {
+      usePlayerStore.setState({ isPlaying: pb.isPlaying });
+      const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+      if (engine) {
+        if (pb.isPlaying) {
+          engine.unlockAudio?.();
+          engine.resume?.();
+        } else {
+          engine.pause?.();
+        }
       }
     }
-  }
 
-  // Seek synchronization (>3s drift)
-  if (typeof pb.progressMs === 'number' && Math.abs(player.progressMs - pb.progressMs) > 3000) {
-    player.setProgress(pb.progressMs);
-    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-    if (engine) {
-      engine.seek?.(pb.progressMs / 1000);
+    // Seek synchronization (>7s drift while playing, or >2s when paused)
+    const drift = Math.abs(player.progressMs - expectedProgress);
+    const shouldSeek = (!pb.isPlaying && drift > 2000) || (pb.isPlaying && drift > 7000);
+
+    if (typeof pb.progressMs === 'number' && shouldSeek) {
+      player.setProgress(expectedProgress);
+      const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+      if (engine) {
+        engine.seek?.(expectedProgress / 1000);
+      }
     }
+  } finally {
+    setTimeout(() => {
+      isApplyingRemoteSync = false;
+    }, 600);
   }
 }
 
@@ -468,6 +511,42 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
   isModalOpen: false,
 
   setModalOpen: (open: boolean) => set({ isModalOpen: open }),
+
+  updateMyName: async (newName: string) => {
+    const cleanName = newName.trim();
+    if (!cleanName) return;
+    const { myParticipantId, sessionId, isHost } = get();
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_session_name', cleanName);
+    }
+
+    set((s) => ({
+      hostName: isHost ? cleanName : s.hostName,
+      participants: s.participants.map((p) =>
+        p.id === myParticipantId ? { ...p, name: cleanName } : p
+      ),
+    }));
+
+    broadcastToAllP2P({
+      type: 'rename',
+      participantId: myParticipantId,
+      name: cleanName,
+    });
+
+    if (db && isFirebaseConfigured() && sessionId) {
+      try {
+        const sessionRef = doc(db, 'shared_sessions', sessionId);
+        const updates: any = {
+          [`participants.${myParticipantId}.name`]: cleanName,
+          updatedAt: Date.now(),
+        };
+        if (isHost) {
+          updates.hostName = cleanName;
+        }
+        await updateDoc(sessionRef, updates);
+      } catch {}
+    }
+  },
 
   createSession: async (userName = 'Anfitrión') => {
     const { myParticipantId } = get();
@@ -534,7 +613,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     return sessionId;
   },
 
-  joinSession: async (sessionId: string, userName = 'Invitado') => {
+  joinSession: async (sessionId: string, userName?: string) => {
     if (!sessionId || !sessionId.trim()) return false;
     const cleanId = sessionId.trim().toUpperCase();
     const { myParticipantId } = get();
@@ -542,9 +621,19 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const sessionLink = `${origin}/?session=${cleanId}`;
 
+    // Clean up any old session
+    cleanupP2P();
+    if (sessionDocUnsubscribe) {
+      sessionDocUnsubscribe();
+      sessionDocUnsubscribe = null;
+    }
+
+    const savedName = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_session_name') : null;
+    let initialName = savedName || userName || 'Invitado 1';
+
     const guestParticipant: SessionParticipant = {
       id: myParticipantId,
-      name: userName || 'Invitado',
+      name: initialName,
       color,
       isHost: false,
       lastSeen: Date.now(),
@@ -563,10 +652,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     // Auto-open right sidebar on desktop
     useUIStore.setState({ activeRightSidebar: 'friends' });
 
-    // 1. Connect via WebRTC P2P DataChannel directly to Host
-    initP2PGuest(cleanId, guestParticipant);
-
-    // 2. Connect via Firestore if accessible
+    // 1. Fetch from Firestore first to adopt host's current track and guest count
     if (isFirebaseConfigured() && db) {
       try {
         const sessionRef = doc(db, 'shared_sessions', cleanId);
@@ -575,13 +661,24 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
         if (snap.exists()) {
           const data = snap.data() as SharedSessionData;
           if (data.isActive) {
-            await updateDoc(sessionRef, {
-              [`participants.${myParticipantId}`]: guestParticipant,
-              updatedAt: Date.now(),
-            });
+            // Determine guest number if no saved nickname
+            if (!savedName && (!userName || userName === 'Invitado')) {
+              const existingGuests = Object.values(data.participants || {}).filter((p) => !p.isHost).length;
+              initialName = `Invitado ${existingGuests + 1}`;
+              guestParticipant.name = initialName;
+            }
+
+            const currentParticipants = Object.values(data.participants || {});
+            const updatedList = [...currentParticipants.filter((p) => p.id !== myParticipantId), guestParticipant];
 
             set({
               hostName: data.hostName || 'Anfitrión',
+              participants: updatedList,
+            });
+
+            await updateDoc(sessionRef, {
+              [`participants.${myParticipantId}`]: guestParticipant,
+              updatedAt: Date.now(),
             });
 
             if (data.playback && data.playback.track) {
@@ -589,13 +686,15 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
             }
 
             get()._subscribeToSessionDoc(cleanId);
-            return true;
           }
         }
       } catch (e) {
         console.warn('[SharedSession] Firestore join notice (P2P active):', e);
       }
     }
+
+    // 2. Connect via WebRTC P2P DataChannel directly to Host
+    initP2PGuest(cleanId, guestParticipant);
 
     return true;
   },
@@ -685,7 +784,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     if (!isInSession || !sessionId) return;
 
     const now = Date.now();
-    if (now - lastCursorBroadcast < 33) return; // ~30fps for ultra-smooth fluid cursor motion
+    if (now - lastCursorBroadcast < 16) return; // 60fps for instant fluid response
     lastCursorBroadcast = now;
 
     const cursorPayload = {

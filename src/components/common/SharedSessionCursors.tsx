@@ -1,8 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 export const SharedSessionCursors: React.FC = () => {
   const { isInSession, participants, myParticipantId, broadcastCursor } = useSharedSessionStore();
+  const rafRef = useRef<number | null>(null);
+  const posRef = useRef<{ pctX: number; pctY: number } | null>(null);
 
   useEffect(() => {
     if (!isInSession) return;
@@ -23,16 +25,26 @@ export const SharedSessionCursors: React.FC = () => {
 
       const w = window.innerWidth || 1;
       const h = window.innerHeight || 1;
-      const pctX = (clientX / w) * 100;
-      const pctY = (clientY / h) * 100;
+      posRef.current = {
+        pctX: (clientX / w) * 100,
+        pctY: (clientY / h) * 100,
+      };
 
-      broadcastCursor(pctX, pctY);
+      if (!rafRef.current) {
+        rafRef.current = requestAnimationFrame(() => {
+          rafRef.current = null;
+          if (posRef.current) {
+            broadcastCursor(posRef.current.pctX, posRef.current.pctY);
+          }
+        });
+      }
     };
 
     window.addEventListener('mousemove', handlePointerMove, { passive: true });
     window.addEventListener('touchmove', handlePointerMove, { passive: true });
 
     return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
       window.removeEventListener('mousemove', handlePointerMove);
       window.removeEventListener('touchmove', handlePointerMove);
     };
@@ -52,11 +64,12 @@ export const SharedSessionCursors: React.FC = () => {
         return (
           <div
             key={p.id}
-            className="absolute transition-all duration-75 ease-out pointer-events-none"
+            className="absolute pointer-events-none will-change-transform"
             style={{
-              left: `${pctX}%`,
-              top: `${pctY}%`,
-              transform: 'translate(-2px, -2px)',
+              left: 0,
+              top: 0,
+              transform: `translate3d(calc(${pctX}vw - 2px), calc(${pctY}vh - 2px), 0)`,
+              transition: 'transform 20ms linear',
             }}
           >
             {/* SVG Mouse Pointer Cursor */}
