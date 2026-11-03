@@ -5,7 +5,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
-import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { useLanguageStore } from '../../utils/i18n';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 
@@ -54,19 +54,13 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const { language, setLanguage } = useLanguageStore();
 
   // AI DJ Voice Selector State
-  const [selectedVoice, setSelectedVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
   const [isTestingVoice, setIsTestingVoice] = useState(false);
-
-  const handleVoiceChange = (voice: DJVoiceId) => {
-    setSelectedVoice(voice);
-    aiDJVoiceService.setSelectedVoice(voice);
-  };
 
   const handleTestVoice = async () => {
     if (isTestingVoice) return;
     setIsTestingVoice(true);
     try {
-      await aiDJVoiceService.testVoice(selectedVoice);
+      await aiDJVoiceService.testVoice('dalia');
     } finally {
       setIsTestingVoice(false);
     }
@@ -478,7 +472,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                   ? 'bg-[#1ed760] text-black animate-pulse'
                   : 'bg-white/10 hover:bg-white/20 text-white active:scale-95'
               }`}
-              title="Escuchar prueba de la voz seleccionada"
+              title="Escuchar prueba de la voz oficial de Dalia"
             >
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
@@ -487,43 +481,21 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             </button>
           </div>
 
-          <div className="p-3 sm:p-4 rounded-2xl bg-[#181818] border border-white/[0.04] space-y-2.5">
-            {DJ_VOICE_OPTIONS.map((opt) => {
-              const isSelected = selectedVoice === opt.id;
-              return (
-                <div
-                  key={opt.id}
-                  data-voice-id={opt.id}
-                  onClick={() => handleVoiceChange(opt.id)}
-                  className={`flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all border ${
-                    isSelected
-                      ? 'bg-white/10 border-[#1ed760]/60 shadow-[0_0_15px_rgba(30,215,96,0.15)]'
-                      : 'bg-black/20 hover:bg-white/5 border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 pr-2">
-                    <div
-                      className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                        isSelected ? 'border-[#1ed760] bg-[#1ed760]' : 'border-[#727272]'
-                      }`}
-                    >
-                      {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
-                    </div>
-                    <div className="truncate">
-                      <div className="flex items-center gap-2">
-                        <span className={`text-sm font-bold truncate ${isSelected ? 'text-[#1ed760]' : 'text-white'}`}>
-                          {opt.name}
-                        </span>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider">
-                          {opt.region}
-                        </span>
-                      </div>
-                      <p className="text-xs text-[#a7a7a7] truncate mt-0.5">{opt.description}</p>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#181818] border border-[#1ed760]/30 space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-[#1ed760]">Dalia Multilingual</span>
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider">
+                  México
+                </span>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] uppercase tracking-wider">
+                Voz Oficial
+              </span>
+            </div>
+            <p className="text-xs text-[#a7a7a7] leading-relaxed">
+              Voz femenina brillante, entusiasta y ultra-natural para presentaciones y transiciones del DJ.
+            </p>
           </div>
         </div>
 

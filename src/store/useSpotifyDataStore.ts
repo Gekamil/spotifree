@@ -690,7 +690,7 @@ const store = create<SpotifyDataState>((set, get) => ({
 
       if (userCookie && validateSpotifyCookie(userCookie).valid) {
         const cleanCookie = cleanSpDc(userCookie);
-        let session = null;
+        let session: any = null;
         const savedSessionRaw = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_extracted_session') : null;
         if (savedSessionRaw) {
           try {
@@ -817,12 +817,19 @@ const store = create<SpotifyDataState>((set, get) => ({
           if (!session.playlists || session.playlists.length === 0 || isStaleDailySession) {
             extractSpotifySessionFromCookie(userCookie).then((fresh) => {
               if (fresh && fresh.user) {
+                // Preserve existing session playlists if fresh scrape returned empty or failed
+                const basePlaylists = (fresh.playlists && fresh.playlists.length > 0)
+                  ? fresh.playlists
+                  : (session.playlists && session.playlists.length > 0 ? session.playlists : []);
+
                 window.localStorage.setItem('spotify_extracted_session', JSON.stringify({
+                  ...session,
                   ...fresh,
+                  playlists: basePlaylists,
                   _cookie: userCookie,
                   _extractedDate: todayDateStr,
                 }));
-                const freshCombined = deduplicateUserPlaylists([...(fresh.playlists || []), ...importedPlaylists]);
+                const freshCombined = deduplicateUserPlaylists([...basePlaylists, ...importedPlaylists]);
                 set({
                   playlists: freshCombined,
                   dynamicShelves: fresh.shelves && fresh.shelves.length > 0 ? fresh.shelves : buildExtractedShelves(fresh.user.display_name),

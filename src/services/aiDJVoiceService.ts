@@ -7,7 +7,7 @@ import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
 import { usePlayerStore } from '../store/usePlayerStore';
 
-export type DJVoiceId = 'elevenlabs' | 'sebastian' | 'dalia' | 'alvaro' | 'salome' | 'gemini';
+export type DJVoiceId = 'dalia' | 'elevenlabs' | 'sebastian' | 'alvaro' | 'salome' | 'gemini';
 
 export interface DJVoiceOptionItem {
   id: DJVoiceId;
@@ -18,40 +18,10 @@ export interface DJVoiceOptionItem {
 
 export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
   {
-    id: 'elevenlabs',
-    name: 'ElevenLabs Studio (IA Realista)',
-    region: 'Ultra Hi-Fi',
-    description: 'Voz hiperrealista de radio con Multilingual v2 (tu clave Vercel)',
-  },
-  {
-    id: 'sebastian',
-    name: 'Sebastián',
-    region: 'Venezuela',
-    description: 'Voz masculina joven y pulida • Tono fresco y profesional (Ilimitado)',
-  },
-  {
-    id: 'alvaro',
-    name: 'Álvaro',
-    region: 'España',
-    description: 'Locutor de radio tradicional • Tono cálido de estudio (Ilimitado)',
-  },
-  {
     id: 'dalia',
     name: 'Dalia Multilingual',
     region: 'México',
-    description: 'Voz femenina brillante y entusiasta • Gran energía para DJ (Ilimitado)',
-  },
-  {
-    id: 'salome',
-    name: 'Salomé',
-    region: 'Colombia',
-    description: 'Asistente de audio dinámica • Tono latino enérgico (Ilimitado)',
-  },
-  {
-    id: 'gemini',
-    name: 'Gemini IA',
-    region: 'Google Cloud',
-    description: 'Modelo generativo de Google Cloud (Free tier)',
+    description: 'Voz oficial de Spotifree DJ • Entusiasta, brillante y ultra-natural',
   },
 ];
 
@@ -73,7 +43,7 @@ export interface AIDJConfig {
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
-  voice: 'alvaro',
+  voice: 'dalia',
   provider: 'edge',
   apiKey: '',
   voiceId: '',
@@ -90,26 +60,21 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
-  private selectedVoiceId: DJVoiceId = 'alvaro';
+  private selectedVoiceId: DJVoiceId = 'dalia';
   private testPhraseIndex: number = 0;
   private wasPlayingBeforeSpeech: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
+      this.selectedVoiceId = 'dalia';
       try {
-        const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
-        if (savedVoice && ['elevenlabs', 'sebastian', 'dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
-          this.selectedVoiceId = savedVoice;
-        } else {
-          this.selectedVoiceId = 'elevenlabs';
-          localStorage.setItem('spotifree_dj_voice_choice', 'elevenlabs');
-        }
+        localStorage.setItem('spotifree_dj_voice_choice', 'dalia');
       } catch {}
 
       try {
         const saved = localStorage.getItem('spotifree_ai_dj_config');
         if (saved) {
-          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved) };
+          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved), voice: 'dalia', provider: 'edge' };
         }
       } catch {}
 
@@ -164,19 +129,13 @@ class AIDJVoiceService {
     return this.selectedVoiceId;
   }
 
-  public setSelectedVoice(voice: DJVoiceId) {
-    this.selectedVoiceId = voice;
-    this.config.voice = voice;
-    if (voice === 'gemini') {
-      this.config.provider = 'gemini';
-    } else if (voice === 'elevenlabs') {
-      this.config.provider = 'elevenlabs';
-    } else {
-      this.config.provider = 'edge';
-    }
+  public setSelectedVoice(_voice?: DJVoiceId) {
+    this.selectedVoiceId = 'dalia';
+    this.config.voice = 'dalia';
+    this.config.provider = 'edge';
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('spotifree_dj_voice_choice', voice);
+        localStorage.setItem('spotifree_dj_voice_choice', 'dalia');
       } catch {}
     }
   }

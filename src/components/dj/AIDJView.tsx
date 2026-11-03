@@ -3,7 +3,6 @@ import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
-import { aiDJVoiceService, type DJVoiceId } from '../../services/aiDJVoiceService';
 import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import {
@@ -133,16 +132,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       setShowQueueDrawer(false);
     }
     setQueueDragY(0);
-  };
-
-  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
-  const [currentVoice, setCurrentVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
-
-  const handleSelectVoice = (v: DJVoiceId) => {
-    aiDJVoiceService.setSelectedVoice(v);
-    setCurrentVoice(v);
-    setShowVoiceMenu(false);
-    aiDJVoiceService.testVoice(v);
   };
 
   // Pre-cache all quick vibe voices for instant playback
@@ -375,76 +364,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </span>
         </div>
 
-        {/* Voice Selector in Header */}
-        <div className="relative">
-          <button
-            onClick={() => setShowVoiceMenu(!showVoiceMenu)}
-            className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/45 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-95"
-            title="Cambiar voz del DJ"
-          >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          </button>
-
-          {showVoiceMenu && (
-            <div
-              className="absolute right-0 top-12 z-50 w-56 rounded-xl bg-[#181818] border border-white/15 shadow-2xl p-2 text-left animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="px-3 py-1.5 text-[11px] font-bold text-white/50 uppercase tracking-wider">
-                Voz del DJ
-              </div>
-              <button
-                onClick={() => handleSelectVoice('elevenlabs')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  currentVoice === 'elevenlabs' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span>ElevenLabs (Ultra Realista)</span>
-                {currentVoice === 'elevenlabs' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
-              </button>
-              <button
-                onClick={() => handleSelectVoice('alvaro')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  currentVoice === 'alvaro' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span>Álvaro (España)</span>
-                {currentVoice === 'alvaro' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
-              </button>
-              <button
-                onClick={() => handleSelectVoice('dalia')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  currentVoice === 'dalia' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span>Dalia (México)</span>
-                {currentVoice === 'dalia' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
-              </button>
-              <button
-                onClick={() => handleSelectVoice('salome')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  currentVoice === 'salome' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span>Salomé (Colombia)</span>
-                {currentVoice === 'salome' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
-              </button>
-              <button
-                onClick={() => handleSelectVoice('sebastian')}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
-                  currentVoice === 'sebastian' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
-                }`}
-              >
-                <span>Sebastián (Venezuela)</span>
-                {currentVoice === 'sebastian' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
-              </button>
-            </div>
-          )}
-        </div>
+        {/* Balance spacer */}
+        <div className="w-10 h-10" />
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}

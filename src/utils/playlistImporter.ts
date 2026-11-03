@@ -25,14 +25,14 @@ export async function importExternalPlaylist(
     const spotifyMatch = input.match(/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/i);
     if (spotifyMatch) {
       const playlistId = spotifyMatch[1];
-      const res = await fetch(`/api/spotify/playlist/${playlistId}`);
+      const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistId)}`);
       if (res.ok) {
         const data = await res.json();
         const pl: Playlist = {
           id: `imported-sp-${playlistId}`,
           name: data.name || 'Playlist de Spotify Importada',
           description: stripHtml(data.description) || `Importada desde Spotify por ${userName}`,
-          images: data.images || [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+          images: data.images?.length > 0 ? data.images : [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
           owner: { display_name: userName, id: userId },
           tracks: {
             total: data.tracks?.items?.length || 0,
@@ -61,11 +61,50 @@ export async function importExternalPlaylist(
     // 2. YouTube playlist or mix URL: youtube.com/playlist?list=... or youtu.be/...
     const isYouTube = input.includes('youtube.com') || input.includes('youtu.be');
     if (isYouTube) {
-      let playlistTitle = 'Playlist de YouTube';
       const listMatch = input.match(/[?&]list=([a-zA-Z0-9_-]+)/i);
-      const listId = listMatch ? listMatch[1] : `yt-${Date.now()}`;
+      const listId = listMatch ? listMatch[1] : '';
 
-      // Resolve query or title from URL
+      if (listId) {
+        try {
+          const ytRes = await fetch(`/api/playlist?id=${encodeURIComponent(listId)}&type=youtube`);
+          if (ytRes.ok) {
+            const ytData = await ytRes.json();
+            if (ytData && ytData.tracks?.items?.length > 0) {
+              const pl: Playlist = {
+                id: `imported-yt-${listId}`,
+                name: ytData.name || 'Playlist de YouTube',
+                description: `Importada desde YouTube (${ytData.tracks.items.length} canciones)`,
+                images: ytData.images?.length > 0 ? ytData.images : [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+                owner: { display_name: userName, id: userId },
+                tracks: {
+                  total: ytData.tracks.items.length,
+                  items: ytData.tracks.items.map((t: Track) => ({
+                    ...t,
+                    added_by: userName,
+                    added_at: 'Hoy',
+                  })),
+                },
+              };
+              saveSharedPlaylist({
+                id: pl.id,
+                name: pl.name,
+                description: pl.description,
+                coverUrl: pl.images?.[0]?.url,
+                ownerId: userId,
+                ownerName: userName,
+                tracks: pl.tracks?.items || [],
+                isCollaborative: true,
+                updatedAt: Date.now(),
+              });
+              return { success: true, playlist: pl };
+            }
+          }
+        } catch (ytErr) {
+          console.warn('[PlaylistImporter] YouTube extraction error:', ytErr);
+        }
+      }
+
+      let playlistTitle = 'Playlist de YouTube';
       try {
         const oembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(input)}`);
         if (oembedRes.ok) {
@@ -74,22 +113,22 @@ export async function importExternalPlaylist(
         }
       } catch {}
 
-      // Search matching tracks for the imported playlist
-      const searchRes = await fetch(`/api/audio/search?q=${encodeURIComponent(playlistTitle)}&limit=15`).catch(() => null);
+      const searchRes = await fetch(`/api/search?q=${encodeURIComponent(playlistTitle)}&type=track&limit=25`).catch(() => null);
       let tracks: Track[] = [];
 
       if (searchRes && searchRes.ok) {
         const searchData = await searchRes.json();
-        if (Array.isArray(searchData) && searchData.length > 0) {
-          tracks = searchData.map((item: any, idx: number) => ({
+        const items = searchData.tracks?.items || (Array.isArray(searchData) ? searchData : []);
+        if (Array.isArray(items) && items.length > 0) {
+          tracks = items.map((item: any, idx: number) => ({
             id: `yt-trk-${item.id || idx}`,
-            name: item.title || item.name || `Tema ${idx + 1}`,
-            duration_ms: (item.duration || 210) * 1000,
-            artists: [{ id: `art-${idx}`, name: item.author || item.artist || 'YouTube Music' }],
+            name: item.name || item.title || `Tema ${idx + 1}`,
+            duration_ms: item.duration_ms || (item.duration || 210) * 1000,
+            artists: item.artists || [{ id: `art-${idx}`, name: item.author || item.artist || 'YouTube Music' }],
             album: {
               id: `alb-${idx}`,
               name: playlistTitle,
-              images: [{ url: item.thumbnail || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+              images: item.album?.images || [{ url: item.thumbnail || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
             },
             added_by: userName,
             added_at: 'Hoy',

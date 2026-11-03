@@ -24,10 +24,18 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cookieInput, setCookieInput] = useState('');
+  const [showCookie, setShowCookie] = useState(false);
+  const [copiedCookie, setCopiedCookie] = useState(false);
 
   useEffect(() => {
     const acc = getSavedSpotifreeAccount();
     setCurrentAccount(acc);
+    if (acc?.spotifyCookie) {
+      setCookieInput(acc.spotifyCookie);
+    } else if (typeof window !== 'undefined') {
+      const local = window.localStorage.getItem('user_spotify_cookie');
+      if (local) setCookieInput(local);
+    }
   }, []);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -168,7 +176,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
       if (updated) {
         setCurrentAccount(updated);
         setMessage('✓ Cookie vinculada y guardada en tu cuenta.');
-        setCookieInput('');
+        setCookieInput(cleanCookie);
         setTimeout(() => setMessage(null), 3500);
       }
     } catch {
@@ -228,18 +236,50 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
             <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
               Pega aquí tu cookie para vincular tus playlists privadas de Spotify. Se sincronizará automáticamente en todos tus dispositivos.
             </p>
-            <div className="flex gap-2">
-              <input
-                type="password"
-                placeholder={currentAccount.spotifyCookie ? "•••••••••••••••• (Guardada)" : "Pega tu cookie sp_dc..."}
-                value={cookieInput}
-                onChange={(e) => setCookieInput(e.target.value)}
-                className="flex-1 bg-[#121212] border border-white/20 rounded-lg px-3 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760]"
-              />
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1 flex items-center">
+                <input
+                  type={showCookie ? "text" : "password"}
+                  placeholder={currentAccount.spotifyCookie ? "Cookie guardada" : "Pega tu cookie sp_dc..."}
+                  value={cookieInput}
+                  onChange={(e) => setCookieInput(e.target.value)}
+                  className="w-full bg-[#121212] border border-white/20 rounded-lg pl-3 pr-8 py-2 text-xs text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760] font-mono"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCookie(!showCookie)}
+                  className="absolute right-2.5 text-[#b3b3b3] hover:text-white cursor-pointer transition-colors"
+                  title={showCookie ? "Ocultar cookie" : "Mostrar cookie"}
+                >
+                  {showCookie ? (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                  ) : (
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                  )}
+                </button>
+              </div>
+
+              {(cookieInput || currentAccount.spotifyCookie) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const toCopy = cookieInput || currentAccount.spotifyCookie || '';
+                    if (!toCopy) return;
+                    navigator.clipboard.writeText(toCopy);
+                    setCopiedCookie(true);
+                    setTimeout(() => setCopiedCookie(false), 2000);
+                  }}
+                  className="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs active:scale-95 transition-all cursor-pointer shadow shrink-0"
+                  title="Copiar cookie sp_dc"
+                >
+                  {copiedCookie ? '✓ Copiada' : 'Copiar'}
+                </button>
+              )}
+
               <button
                 onClick={handleSaveCookie}
                 disabled={isLoading || !cookieInput.trim()}
-                className="px-4 py-2 rounded-lg bg-white hover:bg-white/90 text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer shadow"
+                className="px-4 py-2 rounded-lg bg-white hover:bg-white/90 text-black font-bold text-xs disabled:opacity-40 active:scale-95 transition-all cursor-pointer shadow shrink-0"
               >
                 Guardar
               </button>

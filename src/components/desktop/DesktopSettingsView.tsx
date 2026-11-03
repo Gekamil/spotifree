@@ -10,7 +10,7 @@ import {
 } from '../../services/spotifyCookieService';
 import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
-import { aiDJVoiceService, DJ_VOICE_OPTIONS, type DJVoiceId } from '../../services/aiDJVoiceService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { useLanguageStore } from '../../utils/i18n';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 
@@ -154,15 +154,27 @@ export const DesktopSettingsView: React.FC = () => {
   const { user } = useSpotifyDataStore();
 
   const [spotifyCookie, setSpotifyCookie] = useState<string>(() => {
-    return typeof window !== 'undefined'
-      ? window.localStorage.getItem('user_spotify_cookie') || ''
-      : '';
+    if (typeof window !== 'undefined') {
+      const local = window.localStorage.getItem('user_spotify_cookie');
+      if (local) return local;
+    }
+    const acc = getSavedSpotifreeAccount();
+    return acc?.spotifyCookie || '';
   });
+  const [showCookieText, setShowCookieText] = useState(false);
+  const [copiedCookie, setCopiedCookie] = useState(false);
   const [savedSpotifyCookieSuccess, setSavedSpotifyCookieSuccess] = useState(false);
   const [cookieError, setCookieError] = useState<string | null>(null);
   const [isExtractingCookie, setIsExtractingCookie] = useState(false);
   const [showMobileQr, setShowMobileQr] = useState(false);
   const [copiedMobileLink, setCopiedMobileLink] = useState(false);
+
+  const handleCopyCookie = () => {
+    if (!spotifyCookie) return;
+    navigator.clipboard.writeText(spotifyCookie);
+    setCopiedCookie(true);
+    setTimeout(() => setCopiedCookie(false), 2000);
+  };
 
   const handleSaveSpotifyCookie = async () => {
     setCookieError(null);
@@ -234,20 +246,13 @@ export const DesktopSettingsView: React.FC = () => {
   const [canvasEnabled, setCanvasEnabled] = useState(true);
 
   // AI DJ Voice Selector State
-  const [selectedVoice, setSelectedVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
   const [isTestingVoice, setIsTestingVoice] = useState(false);
-
-
-  const handleVoiceChange = (voice: DJVoiceId) => {
-    setSelectedVoice(voice);
-    aiDJVoiceService.setSelectedVoice(voice);
-  };
 
   const handleTestVoice = async () => {
     if (isTestingVoice) return;
     setIsTestingVoice(true);
     try {
-      await aiDJVoiceService.testVoice(selectedVoice);
+      await aiDJVoiceService.testVoice('dalia');
     } finally {
       setIsTestingVoice(false);
     }
@@ -557,20 +562,44 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                <input
-                  type="password"
-                  value={spotifyCookie}
-                  onChange={(e) => {
-                    setSpotifyCookie(e.target.value);
-                    if (cookieError) setCookieError(null);
-                  }}
-                  placeholder="Pega aquí tu cookie sp_dc"
-                  className="w-full sm:w-64 bg-[#242424] border border-[#727272] focus:border-white rounded-full px-4 py-2 text-xs text-white outline-none transition-colors font-mono"
-                />
+                <div className="relative flex items-center">
+                  <input
+                    type={showCookieText ? 'text' : 'password'}
+                    value={spotifyCookie}
+                    onChange={(e) => {
+                      setSpotifyCookie(e.target.value);
+                      if (cookieError) setCookieError(null);
+                    }}
+                    placeholder="Pega aquí tu cookie sp_dc"
+                    className="w-full sm:w-64 bg-[#242424] border border-[#727272] focus:border-white rounded-full pl-4 pr-9 py-2 text-xs text-white outline-none transition-colors font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCookieText(!showCookieText)}
+                    className="absolute right-3 text-[#b3b3b3] hover:text-white cursor-pointer transition-colors"
+                    title={showCookieText ? 'Ocultar cookie' : 'Mostrar cookie'}
+                  >
+                    {showCookieText ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    )}
+                  </button>
+                </div>
+                {spotifyCookie && (
+                  <button
+                    type="button"
+                    onClick={handleCopyCookie}
+                    className="px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow active:scale-95 cursor-pointer shrink-0 flex items-center gap-1.5"
+                    title="Copiar cookie sp_dc"
+                  >
+                    <span>{copiedCookie ? '✓ Copiada' : 'Copiar'}</span>
+                  </button>
+                )}
                 <button
                   onClick={handleSaveSpotifyCookie}
                   disabled={isExtractingCookie}
-                  className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 disabled:opacity-50 cursor-pointer"
+                  className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
                 >
                   {isExtractingCookie ? 'Sincronizando...' : 'Guardar'}
                 </button>
@@ -664,7 +693,7 @@ export const DesktopSettingsView: React.FC = () => {
         )}
 
         {/* VOZ DE LA INTELIGENCIA ARTIFICIAL (DJ) */}
-        {matchesSearch('voz dj inteligencia artificial ia hablar locutor alvaro salome gemini tts') && (
+        {matchesSearch('voz dj inteligencia artificial ia hablar locutor dalia mexico tts') && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -672,7 +701,7 @@ export const DesktopSettingsView: React.FC = () => {
                   Voz de la Inteligencia Artificial (DJ)
                 </h2>
                 <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  Elige la personalidad y el modelo de voz que utilizará tu DJ personal para presentar tus sesiones.
+                  Voz oficial de Spotifree DJ configurada con modelo neural de alta fidelidad.
                 </p>
               </div>
               <button
@@ -685,7 +714,7 @@ export const DesktopSettingsView: React.FC = () => {
                     ? 'bg-[#1ed760] text-black animate-pulse'
                     : 'bg-white/10 hover:bg-white/20 text-white active:scale-95'
                 }`}
-                title="Escuchar prueba de la voz seleccionada"
+                title="Escuchar prueba de la voz oficial de Dalia"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
@@ -694,44 +723,23 @@ export const DesktopSettingsView: React.FC = () => {
               </button>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
-              {DJ_VOICE_OPTIONS.map((opt) => {
-                const isSelected = selectedVoice === opt.id;
-                return (
-                  <div
-                    key={opt.id}
-                    data-voice-id={opt.id}
-                    onClick={() => handleVoiceChange(opt.id)}
-                    className={`p-4 rounded-xl cursor-pointer transition-all border flex flex-col justify-between ${
-                      isSelected
-                        ? 'bg-white/10 border-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.15)]'
-                        : 'bg-[#181818] hover:bg-white/5 border-white/5'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`text-sm font-bold ${isSelected ? 'text-[#1ed760]' : 'text-white'}`}>
-                          {opt.name}
-                        </span>
-                        <div
-                          className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
-                            isSelected ? 'border-[#1ed760] bg-[#1ed760]' : 'border-[#727272]'
-                          }`}
-                        >
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-black" />}
-                        </div>
-                      </div>
-                      <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider mb-2">
-                        {opt.region}
-                      </span>
-                      <p className="text-xs text-[#a7a7a7] leading-relaxed">{opt.description}</p>
-                    </div>
-                  </div>
-                );
-              })}
+            <div className="p-4 rounded-xl border bg-white/5 border-[#1ed760]/40 max-w-md">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-sm font-bold text-[#1ed760]">
+                  Dalia Multilingual
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] uppercase tracking-wider">
+                  Voz Oficial
+                </span>
+              </div>
+              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider mb-2">
+                México • Edge Neural
+              </span>
+              <p className="text-xs text-[#a7a7a7] leading-relaxed">
+                Voz femenina brillante, entusiasta y ultra-natural optimizada para transiciones de radio y comentarios del DJ.
+              </p>
             </div>
-
-            </section>
+          </section>
         )}
 
         {/* 2. IDIOMA (Custom Spotify Dropdown) */}

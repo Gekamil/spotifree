@@ -582,6 +582,116 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   };
 }
 
+async function resolveYouTubePlaylist(listId) {
+  const cleanListId = listId.replace(/^VL/, '');
+  const url = 'https://www.youtube.com/youtubei/v1/browse';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    },
+    body: JSON.stringify({
+      context: {
+        client: {
+          clientName: 'WEB',
+          clientVersion: '2.20240101.01.00',
+          hl: 'es',
+        },
+      },
+      browseId: 'VL' + cleanListId,
+    }),
+    signal: AbortSignal.timeout?.(10000),
+  });
+
+  if (!response.ok) {
+    throw new Error(`YouTube API returned ${response.status}`);
+  }
+
+  const data = await response.json();
+  const title =
+    data.sidebar?.playlistSidebarRenderer?.items?.[0]?.playlistSidebarPrimaryInfoRenderer?.title?.runs?.[0]?.text ||
+    data.header?.playlistHeaderRenderer?.title?.simpleText ||
+    'Playlist de YouTube';
+
+  const author =
+    data.sidebar?.playlistSidebarRenderer?.items?.[1]?.playlistSidebarSecondaryInfoRenderer?.videoOwner?.videoOwnerRenderer?.title?.runs?.[0]?.text ||
+    'YouTube';
+
+  const coverUrl =
+    data.sidebar?.playlistSidebarRenderer?.items?.[0]?.playlistSidebarPrimaryInfoRenderer?.thumbnailRenderer?.playlistVideoThumbnailRenderer?.thumbnail?.thumbnails?.pop()?.url ||
+    data.header?.playlistHeaderRenderer?.playlistHeaderBanner?.heroPlaylistThumbnailRenderer?.thumbnail?.thumbnails?.pop()?.url ||
+    'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+
+  const contents =
+    data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents ||
+    [];
+
+  const tracks = [];
+  for (let idx = 0; idx < contents.length; idx++) {
+    const item = contents[idx];
+    const l = item.lockupViewModel || item.playlistVideoRenderer;
+    if (!l) continue;
+
+    let trackTitle =
+      l.metadata?.lockupMetadataViewModel?.title?.content ||
+      l.title?.runs?.[0]?.text ||
+      l.title?.simpleText;
+    if (!trackTitle) continue;
+
+    const thumb =
+      l.contentImage?.thumbnailViewModel?.image?.sources?.[0]?.url ||
+      l.thumbnails?.[0]?.url ||
+      l.thumbnail?.thumbnails?.[0]?.url;
+    const vMatch = (thumb || '').match(/\/vi\/([a-zA-Z0-9_-]{11})\//);
+    const videoId = vMatch ? vMatch[1] : (l.videoId || `yt-${idx}`);
+
+    let artistName = author;
+    const rows = l.metadata?.lockupMetadataViewModel?.metadata?.contentMetadataViewModel?.metadataRows;
+    if (rows && rows[0]?.parts?.[0]?.text?.content) {
+      artistName = rows[0].parts[0].text.content;
+    } else if (l.shortBylineText?.runs?.[0]?.text) {
+      artistName = l.shortBylineText.runs[0].text;
+    }
+
+    if (trackTitle.includes(' - ')) {
+      const parts = trackTitle.split(' - ');
+      artistName = parts[0].trim();
+      trackTitle = parts
+        .slice(1)
+        .join(' - ')
+        .replace(/\s*\((Official|Video|Audio|Videoclip|Music Video).*?\)/gi, '')
+        .replace(/\s*\[(Official|Video|Audio|Videoclip|Music Video).*?\]/gi, '')
+        .trim();
+    }
+
+    tracks.push({
+      id: `yt-${videoId}`,
+      name: trackTitle,
+      duration_ms: (parseInt(l.lengthSeconds, 10) || 210) * 1000,
+      artists: [{ id: `art-yt-${idx}`, name: artistName }],
+      album: {
+        id: `alb-yt-${cleanListId}`,
+        name: title,
+        images: [{ url: thumb || coverUrl }],
+      },
+    });
+  }
+
+  return {
+    id: `imported-yt-${cleanListId}`,
+    name: title,
+    description: `Playlist importada de YouTube (${tracks.length} canciones)`,
+    type: 'playlist',
+    images: [{ url: coverUrl }],
+    owner: { display_name: author, id: 'youtube' },
+    tracks: {
+      total: tracks.length,
+      items: tracks,
+    },
+  };
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -602,6 +712,17 @@ export default async function handler(req, res) {
 
     if (!id) {
       return res.status(400).json({ error: 'Falta el ID de la playlist.' });
+    }
+
+    const reqType = url.searchParams.get('type') || '';
+    if (reqType === 'youtube' || id.startsWith('PL') || id.startsWith('RD') || id.startsWith('OLAK5uy_') || id.startsWith('yt-')) {
+      const cleanListId = id.replace(/^yt-/, '');
+      try {
+        const ytResult = await resolveYouTubePlaylist(cleanListId);
+        return res.status(200).json(ytResult);
+      } catch (ytErr) {
+        console.warn('[api/playlist] YouTube resolve error:', ytErr.message);
+      }
     }
 
     const cookie = req.headers['x-spotify-cookie'] || '';
