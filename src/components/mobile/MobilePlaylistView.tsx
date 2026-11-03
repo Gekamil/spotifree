@@ -1074,13 +1074,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             )}
           </button>
 
-          {/* Clips 15s Preview Trigger Thumbnail */}
+          {/* Clips Preview Trigger Thumbnail */}
           {displayTracks.length > 0 && (
             <button
               type="button"
               onClick={() => setIsClipsModalOpen(true)}
               className="group/thumb relative w-10 h-10 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
-              title="Ver clips y avances de 15 segundos"
+              title="Ver clips y avances de la playlist"
             >
               <img
                 key={displayTracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
@@ -1093,9 +1093,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 onError={handleImageError}
                 className="w-full h-full object-cover transition-all duration-700"
               />
-              <div className="absolute top-0.5 right-0.5 px-1 py-0.2 rounded bg-black/85 text-[8px] font-black font-mono text-[#1ed760] tracking-tighter pointer-events-none">
-                15s
-              </div>
             </button>
           )}
 
@@ -1937,20 +1934,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         </div>
       )}
 
-      {/* 15s Clips Mini-Player Modal */}
-      {typeof document !== 'undefined' && createPortal(
-        <PlaylistClipsMiniPlayer
-          tracks={displayTracks}
-          initialTrackIndex={rotatingTrackIndex}
-          playlistTitle={playlist.name}
-          isOpen={isClipsModalOpen}
-          onClose={() => setIsClipsModalOpen(false)}
-          onPlayFullTrack={(track, allTracks) => {
-            playTrack(track, allTracks);
-          }}
-        />,
-        document.body
-      )}
+      {/* Clips Mini-Player Modal */}
+      <PlaylistClipsMiniPlayer
+        tracks={displayTracks}
+        initialTrackIndex={rotatingTrackIndex}
+        playlistTitle={playlist.name}
+        isOpen={isClipsModalOpen}
+        onClose={() => setIsClipsModalOpen(false)}
+        onPlayFullTrack={(track, allTracks) => {
+          playTrack(track, allTracks);
+        }}
+      />
     </div>
   );
 };

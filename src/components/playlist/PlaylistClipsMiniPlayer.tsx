@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { Track } from '../../types/spotify';
-import { audioEngine } from '../../services/audioEngine';
 import { PlayNativeIcon, CloseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
+import { fetchTrackCanvas } from '../../services/spotifyApi';
 
 interface PlaylistClipsMiniPlayerProps {
   tracks: Track[];
@@ -11,6 +12,62 @@ interface PlaylistClipsMiniPlayerProps {
   isOpen: boolean;
   onClose: () => void;
   onPlayFullTrack: (track: Track, allTracks: Track[]) => void;
+}
+
+const PREVIEW_AUDIO_CACHE = new Map<string, string | null>();
+
+/**
+ * Resolves 30-second studio audio preview URL for any track
+ * querying iTunes and Deezer clean preview APIs.
+ */
+async function fetchTrackPreviewAudio(track: Track): Promise<string | null> {
+  if (track.preview_url) return track.preview_url;
+  const cacheKey = track.id || `${track.name}_${track.artists?.[0]?.name}`;
+  if (PREVIEW_AUDIO_CACHE.has(cacheKey)) {
+    return PREVIEW_AUDIO_CACHE.get(cacheKey) || null;
+  }
+
+  const cleanName = (track.name || '')
+    .replace(/\s*\(.*?\)/g, '')
+    .replace(/\s*\[.*?\]/g, '')
+    .trim();
+  const artistName = (track.artists?.[0]?.name || '').replace(/feat\..*$/i, '').trim();
+  const term = `${cleanName} ${artistName}`.trim();
+
+  // 1. Try iTunes search first (super fast and reliable worldwide)
+  try {
+    const itunesRes = await fetch(
+      `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=1`,
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined }
+    );
+    if (itunesRes.ok) {
+      const itunesData = await itunesRes.json();
+      const pUrl = itunesData.results?.[0]?.previewUrl;
+      if (pUrl) {
+        PREVIEW_AUDIO_CACHE.set(cacheKey, pUrl);
+        return pUrl;
+      }
+    }
+  } catch {}
+
+  // 2. Try Deezer search fallback
+  try {
+    const dzRes = await fetch(
+      `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=1`,
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined }
+    );
+    if (dzRes.ok) {
+      const dzData = await dzRes.json();
+      const pUrl = dzData.data?.[0]?.preview;
+      if (pUrl) {
+        PREVIEW_AUDIO_CACHE.set(cacheKey, pUrl);
+        return pUrl;
+      }
+    }
+  } catch {}
+
+  PREVIEW_AUDIO_CACHE.set(cacheKey, null);
+  return null;
 }
 
 export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = ({
@@ -24,10 +81,14 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   const [currentIndex, setCurrentIndex] = useState(initialTrackIndex);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
-  const [videoId, setVideoId] = useState<string | null>(null);
-  const [isLoadingVideo, setIsLoadingVideo] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
+  const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
+  const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
+
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchDeltaXRef = useRef<number>(0);
+  const isHoldingRef = useRef<boolean>(false);
 
   // Sync index if initialTrackIndex changes on reopen
   useEffect(() => {
@@ -40,45 +101,91 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
 
   const currentTrack = tracks[currentIndex] || tracks[0];
 
-  // Resolve video clip for current track
+  // Initialize and tear down dedicated audio element
+  useEffect(() => {
+    if (!isOpen) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+      return;
+    }
+
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+      audioRef.current.preload = 'auto';
+    }
+
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = '';
+      }
+    };
+  }, [isOpen]);
+
+  // Handle Mute state changes
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.muted = isMuted;
+    }
+  }, [isMuted]);
+
+  // Fetch Canvas Video & Preview Audio when current track changes
   useEffect(() => {
     if (!isOpen || !currentTrack) return;
     let cancelled = false;
-    setVideoId(null);
-    setIsLoadingVideo(true);
 
-    const cleanTitle = currentTrack.name
-      .replace(/\s*\(.*?\)/g, '')
-      .replace(/\s*\[.*?\]/g, '')
-      .trim();
-    const cleanArtist = (currentTrack.artists?.[0]?.name || '').replace(/feat\..*$/i, '').trim();
-    const query = `${cleanTitle} ${cleanArtist} official video`;
+    setCanvasUrl(null);
+    setPreviewAudioUrl(null);
+    setSecondsElapsed(0);
 
-    audioEngine
-      .resolveVideoIdForTrack(query, `clip-${currentTrack.id}`)
-      .then((vid) => {
+    // Stop previous audio immediately
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+
+    const artistName = currentTrack.artists?.[0]?.name || '';
+
+    // 1. Fetch Spotify Canvas MP4
+    fetchTrackCanvas(currentTrack.id, currentTrack.name, artistName)
+      .then((cUrl) => {
         if (!cancelled) {
-          if (vid) {
-            setVideoId(vid);
-          } else {
-            // Fallback to general track audio video
-            return audioEngine.resolveVideoIdForTrack(`${currentTrack.name} ${cleanArtist}`, currentTrack.id);
+          setCanvasUrl(cUrl);
+        }
+      });
+
+    // 2. Fetch 30-second studio audio preview
+    fetchTrackPreviewAudio(currentTrack).then((audioUrl) => {
+      if (!cancelled && audioUrl) {
+        setPreviewAudioUrl(audioUrl);
+        if (audioRef.current) {
+          audioRef.current.src = audioUrl;
+          audioRef.current.currentTime = 0;
+          audioRef.current.muted = isMuted;
+          audioRef.current.volume = 1;
+          if (!isPaused) {
+            audioRef.current.play().catch(() => {});
           }
         }
-      })
-      .then((fallbackVid) => {
-        if (!cancelled && fallbackVid) {
-          setVideoId(fallbackVid);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoadingVideo(false);
-      });
+      }
+    });
 
     return () => {
       cancelled = true;
     };
   }, [isOpen, currentTrack?.id, currentTrack?.name]);
+
+  // Play / Pause synchronization for preview audio
+  useEffect(() => {
+    if (!audioRef.current || !previewAudioUrl) return;
+    if (isPaused) {
+      audioRef.current.pause();
+    } else {
+      audioRef.current.play().catch(() => {});
+    }
+  }, [isPaused, previewAudioUrl]);
 
   // 15-second snippet progress timer
   useEffect(() => {
@@ -87,7 +194,6 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
     const interval = setInterval(() => {
       setSecondsElapsed((prev) => {
         if (prev >= 15) {
-          // Advance to next track
           handleNextTrack();
           return 0;
         }
@@ -110,9 +216,29 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
     setCurrentIndex((prev) => (prev - 1 + tracks.length) % tracks.length);
   };
 
+  const handleClose = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    onClose();
+  };
+
+  const handlePlayFull = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = '';
+    }
+    onPlayFullTrack(currentTrack, tracks);
+    onClose();
+  };
+
+  // Touch Swipe Handlers & Hold to Pause
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartXRef.current = e.touches[0].clientX;
     touchDeltaXRef.current = 0;
+    isHoldingRef.current = true;
+    setIsPaused(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
@@ -122,12 +248,12 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   };
 
   const handleTouchEnd = () => {
+    isHoldingRef.current = false;
+    setIsPaused(false);
     if (touchStartXRef.current !== null) {
       if (touchDeltaXRef.current < -50) {
-        // Swiped left -> next
         handleNextTrack();
       } else if (touchDeltaXRef.current > 50) {
-        // Swiped right -> prev
         handlePrevTrack();
       }
       touchStartXRef.current = null;
@@ -135,23 +261,27 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
     }
   };
 
-  // Close on ESC key
+  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isOpen) return;
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleClose();
       if (e.key === 'ArrowRight') handleNextTrack();
       if (e.key === 'ArrowLeft') handlePrevTrack();
       if (e.key === ' ') {
         e.preventDefault();
         setIsPaused((p) => !p);
       }
+      if (e.key.toLowerCase() === 'm') {
+        setIsMuted((m) => !m);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, tracks.length]);
+  }, [isOpen, tracks.length, isPaused]);
 
   if (!isOpen || !currentTrack) return null;
+  if (typeof document === 'undefined') return null;
 
   const coverUrl =
     currentTrack.album?.images?.[0]?.url ||
@@ -168,22 +298,31 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   }
   const visibleTracks = tracks.slice(startIdx, endIdx);
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200 select-none font-['SpotifyMixUI']"
+      onClick={handleClose}
     >
-      {/* Floating Glassmorphic Mini-Player Container */}
+      {/* Floating Glassmorphic Stories Container */}
       <div
-        className="relative w-full max-w-[340px] sm:max-w-[360px] h-[550px] max-h-[85vh] rounded-[28px] overflow-hidden bg-[#121212]/90 border border-white/20 shadow-[0_25px_60px_rgba(0,0,0,0.9)] flex flex-col justify-between backdrop-blur-2xl select-none animate-in zoom-in-95 duration-200"
+        className="relative w-full max-w-[350px] sm:max-w-[360px] h-[580px] max-h-[88vh] rounded-[32px] overflow-hidden bg-[#121212]/95 border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.95)] flex flex-col justify-between backdrop-blur-2xl animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onMouseDown={() => {
+          isHoldingRef.current = true;
+          setIsPaused(true);
+        }}
+        onMouseUp={() => {
+          isHoldingRef.current = false;
+          setIsPaused(false);
+        }}
       >
-        {/* Top Story Progress Bars */}
-        <div className="absolute top-0 inset-x-0 z-30 p-3 pt-3.5 bg-gradient-to-b from-black/80 via-black/40 to-transparent pointer-events-none">
-          <div className="flex items-center gap-1 w-full mb-2">
+        {/* Top Story Progress Bars & Header (Clean, NO 15s badge) */}
+        <div className="absolute top-0 inset-x-0 z-40 p-3 pt-3.5 bg-gradient-to-b from-black/90 via-black/50 to-transparent pointer-events-none">
+          {/* Story Pill Indicators */}
+          <div className="flex items-center gap-1 w-full mb-2.5">
             {visibleTracks.map((_, i) => {
               const actualIdx = startIdx + i;
               let fillWidth = '0%';
@@ -191,9 +330,9 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
               else if (actualIdx === currentIndex) fillWidth = `${(secondsElapsed / 15) * 100}%`;
 
               return (
-                <div key={actualIdx} className="flex-1 h-1 rounded-full bg-white/25 overflow-hidden">
+                <div key={actualIdx} className="flex-1 h-1 rounded-full bg-white/20 overflow-hidden">
                   <div
-                    className="h-full bg-white transition-all duration-100 ease-linear"
+                    className="h-full bg-white transition-all duration-100 ease-linear shadow-[0_0_6px_rgba(255,255,255,0.7)]"
                     style={{ width: fillWidth }}
                   />
                 </div>
@@ -201,26 +340,51 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             })}
           </div>
 
-          {/* Header Info: Playlist name & Close button */}
+          {/* Minimal Header: Playlist Name & Controls */}
           <div className="flex items-center justify-between pointer-events-auto">
             <div className="flex items-center gap-2 min-w-0 pr-2">
-              <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse shrink-0" />
-              <p className="text-[11px] font-bold text-white uppercase tracking-wider truncate drop-shadow">
-                Clip 15s • {playlistTitle}
+              <span className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760] animate-pulse shrink-0" />
+              <p className="text-[12px] font-bold text-white tracking-wide truncate drop-shadow-md">
+                {playlistTitle}
               </p>
-              {isLoadingVideo && (
-                <span className="text-[9px] text-[#1ed760] font-bold animate-pulse shrink-0">
-                  • HD
+              {canvasUrl && (
+                <span className="px-1.5 py-0.5 rounded-full bg-white/15 text-[9px] font-black uppercase text-white/90 tracking-wider shrink-0 flex items-center gap-1 backdrop-blur-sm border border-white/10">
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm0 4v8h16V8H4zm2 2h3v4H6v-4zm5 0h7v4h-7v-4z" />
+                  </svg>
+                  Canvas
                 </span>
               )}
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-mono text-white/70 font-semibold">
-                {Math.floor(15 - secondsElapsed)}s
-              </span>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Mute / Unmute Button */}
               <button
-                onClick={onClose}
-                className="w-7 h-7 rounded-full bg-black/40 hover:bg-black/70 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer shadow"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsMuted(!isMuted);
+                }}
+                className="w-7 h-7 rounded-full bg-black/50 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 backdrop-blur-md"
+                title={isMuted ? 'Activar sonido (M)' : 'Silenciar sonido (M)'}
+              >
+                {isMuted ? (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
+                  </svg>
+                ) : (
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                  </svg>
+                )}
+              </button>
+
+              {/* Close Button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClose();
+                }}
+                className="w-7 h-7 rounded-full bg-black/50 hover:bg-white/20 active:scale-95 text-white/90 hover:text-white flex items-center justify-center transition-all cursor-pointer border border-white/10 backdrop-blur-md"
                 title="Cerrar clips"
               >
                 <CloseNativeIcon size={14} />
@@ -229,29 +393,31 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
           </div>
         </div>
 
-        {/* Video / Visual Content Stage */}
+        {/* Visual Stage: Spotify Canvas Video Loop OR Atmospheric Animated Cover */}
         <div className="relative flex-1 w-full overflow-hidden bg-black flex items-center justify-center">
-          {videoId ? (
-            <div className="w-full h-full relative overflow-hidden pointer-events-none">
-              <iframe
-                src={`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=0&controls=0&playsinline=1&rel=0&start=32&end=47&disablekb=1&fs=0&loop=1`}
-                title={`${currentTrack.name} Preview Clip`}
-                className="w-[140%] h-[140%] -ml-[20%] -mt-[20%] border-0 pointer-events-none object-cover"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            </div>
+          {canvasUrl ? (
+            <video
+              key={canvasUrl}
+              src={canvasUrl}
+              autoPlay
+              loop
+              muted
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            />
           ) : (
-            /* Atmospheric Cover with animated visualizer if video is loading/fallback */
             <div className="relative w-full h-full flex flex-col items-center justify-center p-6 overflow-hidden">
+              {/* Pulsing Ambient Backdrop */}
               <img
                 src={coverUrl}
                 alt={currentTrack.name}
                 onError={handleImageError}
-                className="absolute inset-0 w-full h-full object-cover filter blur-xl scale-125 opacity-50 pointer-events-none"
+                className="absolute inset-0 w-full h-full object-cover filter blur-3xl scale-150 opacity-45 pointer-events-none transition-all duration-700"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/30 to-black/60 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/25 to-black/60 pointer-events-none" />
 
-              <div className="relative z-10 w-44 h-44 rounded-2xl overflow-hidden shadow-2xl border border-white/20 mb-4 animate-in fade-in">
+              {/* 3D Floating Album Art */}
+              <div className="relative z-10 w-44 h-44 rounded-2xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.85)] border border-white/20 mb-5 animate-in fade-in zoom-in-95 duration-300">
                 <img
                   src={coverUrl}
                   alt={currentTrack.name}
@@ -260,21 +426,31 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
                 />
               </div>
 
-              {/* Soundwaves indicator */}
-              <div className="flex items-center gap-1 h-5 z-10">
-                <div className="w-1 bg-[#1ed760] rounded-full animate-[bounce_0.8s_infinite] h-4" />
-                <div className="w-1 bg-[#1ed760] rounded-full animate-[bounce_1.1s_infinite_0.2s] h-5" />
-                <div className="w-1 bg-[#1ed760] rounded-full animate-[bounce_0.7s_infinite_0.4s] h-3" />
-                <div className="w-1 bg-[#1ed760] rounded-full animate-[bounce_1.2s_infinite_0.1s] h-5" />
-                <div className="w-1 bg-[#1ed760] rounded-full animate-[bounce_0.9s_infinite_0.3s] h-4" />
+              {/* Rhythmic Animated Equalizer Bars */}
+              <div className="flex items-end gap-1.5 h-6 z-10">
+                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.6s_infinite] h-3.5" />
+                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.9s_infinite_0.15s] h-5" />
+                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.7s_infinite_0.3s] h-6" />
+                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_0.8s_infinite_0.1s] h-4" />
+                <div className="w-1.5 bg-[#1ed760] rounded-full animate-[pulse_1.0s_infinite_0.25s] h-5.5" />
               </div>
+            </div>
+          )}
+
+          {/* Pause Overlay indicator */}
+          {isPaused && (
+            <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30 px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-[11px] font-bold text-white/90 animate-in fade-in duration-150 pointer-events-none">
+              Pausado
             </div>
           )}
 
           {/* Left / Right Tap zones for navigation */}
           <div
-            onClick={handlePrevTrack}
-            className="absolute inset-y-16 left-0 w-1/4 cursor-pointer z-20 group flex items-center justify-start pl-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePrevTrack();
+            }}
+            className="absolute inset-y-16 left-0 w-1/4 cursor-pointer z-30 group flex items-center justify-start pl-2"
             title="Anterior (o pulsa ←)"
           >
             <div className="w-8 h-8 rounded-full bg-black/40 text-white/70 group-hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md">
@@ -282,8 +458,11 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             </div>
           </div>
           <div
-            onClick={handleNextTrack}
-            className="absolute inset-y-16 right-0 w-1/4 cursor-pointer z-20 group flex items-center justify-end pr-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleNextTrack();
+            }}
+            className="absolute inset-y-16 right-0 w-1/4 cursor-pointer z-30 group flex items-center justify-end pr-2"
             title="Siguiente (o pulsa →)"
           >
             <div className="w-8 h-8 rounded-full bg-black/40 text-white/70 group-hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-md">
@@ -293,9 +472,9 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
         </div>
 
         {/* Bottom Metadata & "Escuchar la canción completa" Button */}
-        <div className="relative z-30 p-4 bg-gradient-to-t from-black via-black/90 to-transparent space-y-3 pt-6 border-t border-white/5">
-          <div className="min-w-0">
-            <h3 className="text-base font-black text-white font-['SpotifyMixUITitle'] truncate drop-shadow">
+        <div className="relative z-40 p-4 pt-6 bg-gradient-to-t from-black via-black/95 to-transparent space-y-3.5 border-t border-white/5">
+          <div className="min-w-0 pr-1">
+            <h3 className="text-base font-black text-white font-['SpotifyMixUITitle'] truncate drop-shadow-md">
               {currentTrack.name}
             </h3>
             <p className="text-xs font-semibold text-[#b3b3b3] truncate mt-0.5">
@@ -303,13 +482,13 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             </p>
           </div>
 
-          {/* Full Song Button */}
+          {/* Full Song CTA Button */}
           <button
-            onClick={() => {
-              onPlayFullTrack(currentTrack, tracks);
-              onClose();
+            onClick={(e) => {
+              e.stopPropagation();
+              handlePlayFull();
             }}
-            className="w-full py-3 px-4 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-102 active:scale-98 text-black font-extrabold text-xs tracking-wide uppercase flex items-center justify-center gap-2 shadow-xl shadow-[#1ed760]/20 transition-all cursor-pointer"
+            className="w-full py-3 px-4 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-[1.02] active:scale-[0.98] text-black font-extrabold text-xs tracking-wider uppercase flex items-center justify-center gap-2 shadow-[0_8px_25px_rgba(30,215,96,0.35)] transition-all cursor-pointer"
           >
             <PlayNativeIcon size={16} className="text-black fill-current" />
             <span>Escuchar la canción completa</span>
@@ -318,4 +497,6 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 };

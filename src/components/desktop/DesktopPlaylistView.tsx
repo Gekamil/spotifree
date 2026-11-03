@@ -747,11 +747,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       {/* Sticky Compact Header on Scroll */}
       <div
         className={`sticky top-0 z-30 px-8 py-3 flex items-center justify-between transition-all duration-300 ${
-          scrollY > 250
+          scrollY > (hasBanner ? 320 : 250)
             ? 'opacity-100 backdrop-blur-xl border-b border-white/5 pointer-events-auto shadow-2xl'
             : 'opacity-0 pointer-events-none'
         }`}
-        style={{ backgroundColor: `${themeColor}F5` }}
+        style={{ backgroundColor: hasBanner ? '#121212F5' : `${themeColor}F5` }}
       >
         <div className="flex items-center gap-4 min-w-0">
           <button
@@ -782,9 +782,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             onError={handleImageError}
             className="absolute inset-0 w-full h-full object-cover object-[center_12%] pointer-events-none"
             style={{
-              transform: `translateY(${Math.min(scrollY * 0.25, 65)}px) scale(${1 + Math.min(scrollY * 0.0004, 0.06)})`,
-              filter: `brightness(${Math.max(0.65, 1 - scrollY / 450)})`,
-              transition: 'transform 0.05s ease-out',
+              filter: `brightness(${Math.max(0.7, 1 - scrollY / 500)})`,
+              opacity: Math.max(0, 1 - scrollY / 420),
+              transition: 'opacity 0.1s ease-out',
             }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent pointer-events-none" />
@@ -1044,13 +1044,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </button>
             )}
 
-            {/* Small Rotating Track Cover Thumbnail (Clips 15s Preview Trigger) */}
+            {/* Small Rotating Track Cover Thumbnail (Clips Preview Trigger) */}
             {hasBanner && tracks.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsClipsModalOpen(true)}
                 className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/15 hover:border-[#1ed760] transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/10 hover:ring-[#1ed760]/50"
-                title="Ver clips y avances de 15 segundos"
+                title="Ver clips y avances de la playlist"
               >
                 <img
                   key={tracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
@@ -1063,11 +1063,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   onError={handleImageError}
                   className="w-full h-full object-cover transition-all duration-700 group-hover/thumb:scale-110"
                 />
-
-                {/* Badge 15s */}
-                <div className="absolute top-0.5 right-0.5 px-1 py-0.2 rounded bg-black/80 backdrop-blur-xs text-[8px] font-black font-mono text-[#1ed760] tracking-tighter pointer-events-none">
-                  15s
-                </div>
 
                 {/* Hover Play icon overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
