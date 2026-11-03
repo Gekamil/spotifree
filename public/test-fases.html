@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Spotifree - Diagnóstico de Fases de Audio del DJ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    body {
+      background: #121212;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px 16px 80px;
+      line-height: 1.5;
+    }
+    .header { margin-bottom: 24px; text-align: center; }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
+    p.sub { font-size: 13px; color: #a7a7a7; }
+    .card {
+      background: #181818;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 14px;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .tag {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 3px 8px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+    .tag-green { background: rgba(30,215,96,0.15); color: #1ed760; }
+    .tag-blue { background: rgba(56,189,248,0.15); color: #38bdf8; }
+    .tag-amber { background: rgba(251,191,36,0.15); color: #fbbf24; }
+    .tag-red { background: rgba(239,68,68,0.15); color: #f87171; }
+    .title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+    .desc { font-size: 12px; color: #b3b3b3; margin-bottom: 12px; }
+    button {
+      display: block;
+      width: 100%;
+      padding: 12px;
+      border-radius: 500px;
+      border: none;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      margin-top: 8px;
+    }
+    .btn-green { background: #1ed760; color: #000; }
+    .btn-white { background: #ffffff; color: #000; }
+    .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.3); color: #fff; }
+    button:active { transform: scale(0.98); opacity: 0.85; }
+    audio { width: 100%; margin-top: 8px; height: 38px; }
+    .log-box {
+      margin-top: 10px;
+      padding: 8px 12px;
+      background: #000000;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      color: #1ed760;
+      min-height: 24px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Diagnóstico de Fases del DJ</h1>
+    <p class="sub">Prueba cada botón en tu móvil y dime en cuál notas la bajada de calidad.</p>
+  </div>
+
+  <!-- FASE 1 -->
+  <div class="card">
+    <span class="tag tag-green">Fase 1 (Control)</span>
+    <div class="title">Audio Servidor Puro (MP3 directo)</div>
+    <div class="desc">El archivo MP3 que ya escuchaste en el ordenador, reproducido por el reproductor nativo del móvil.</div>
+    <audio controls src="/fase1_alvaro_espana.mp3" preload="metadata"></audio>
+  </div>
+
+  <!-- FASE 2A -->
+  <div class="card">
+    <span class="tag tag-blue">Fase 2A (Pipeline Spotifree)</span>
+    <div class="title">Reproducción Dinámica (Blob + Fetch)</div>
+    <div class="desc">Ejecuta el código idéntico de Spotifree: llama a /api/tts, crea un Blob en memoria y lo reproduce con HTMLAudioElement.</div>
+    <button class="btn-green" onclick="testFase2A()">Reproducir Fase 2A</button>
+    <div class="log-box" id="log2a">Listo para probar</div>
+  </div>
+
+  <!-- FASE 2B -->
+  <div class="card">
+    <span class="tag tag-amber">Fase 2B (Mezcla con música)</span>
+    <div class="title">Voz + Música de fondo con Ducking</div>
+    <div class="desc">Inicia música de fondo y la baja al 10% mientras entra la voz del DJ (para comprobar si el móvil comprime o distorsiona el altavoz).</div>
+    <button class="btn-white" onclick="testFase2B()">Reproducir Fase 2B</button>
+    <div class="log-box" id="log2b">Listo para probar</div>
+  </div>
+
+  <!-- FASE 3 -->
+  <div class="card">
+    <span class="tag tag-red">Fase 3 (Robot de fallback)</span>
+    <div class="title">Sintetizador nativo del teléfono</div>
+    <div class="desc">La voz que usa el móvil si falla el audio de red (SpeechSynthesis). Escucha si este robot es lo que escuchabas antes.</div>
+    <button class="btn-outline" onclick="testFase3()">Reproducir Fase 3 (Robot)</button>
+    <div class="log-box" id="log3">Listo para probar</div>
+  </div>
+
+  <script>
+    const samplePhrase = "¡Qué pasa Jorge! Aquí tienes una selección con tus temas favoritos y lo nuevo que está sonando en Spotifree.";
+
+    // Fase 2A: Spotifree Blob Audio
+    async function testFase2A() {
+      const log = document.getElementById('log2a');
+      log.textContent = 'Descargando audio de /api/tts...';
+      try {
+        const res = await fetch('/api/tts?text=' + encodeURIComponent(samplePhrase) + '&voice=alvaro&format=mp3');
+        if (!res.ok) throw new Error('Error HTTP ' + res.status);
+        const blob = await res.blob();
+        log.textContent = 'Blob recibido: ' + blob.size + ' bytes. Reproduciendo...';
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        audio.volume = 1.0;
+        await audio.play();
+        audio.onended = () => { log.textContent = 'Reproducción finalizada con éxito.'; };
+      } catch (err) {
+        log.textContent = 'Fallo en Fase 2A: ' + err.message;
+      }
+    }
+
+    // Fase 2B: Música con ducking + voz
+    let bgAudio = null;
+    let djAudio = null;
+    async function testFase2B() {
+      const log = document.getElementById('log2b');
+      log.textContent = 'Iniciando música de fondo...';
+      try {
+        if (bgAudio) { bgAudio.pause(); bgAudio = null; }
+        if (djAudio) { djAudio.pause(); djAudio = null; }
+
+        // Tono/acorde de fondo para simular música
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(220, ctx.currentTime);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+
+        log.textContent = 'Música sonando. Bajando música al 10% y entrando voz...';
+        gain.gain.setTargetAtTime(0.04, ctx.currentTime, 0.1);
+
+        djAudio = new Audio('/fase1_alvaro_espana.mp3');
+        await djAudio.play();
+        djAudio.onended = () => {
+          gain.gain.setTargetAtTime(0.3, ctx.currentTime, 0.5);
+          log.textContent = 'Voz terminada. Música restaurada al 100%.';
+          setTimeout(() => { osc.stop(); ctx.close(); }, 2000);
+        };
+      } catch (err) {
+        log.textContent = 'Error en Fase 2B: ' + err.message;
+      }
+    }
+
+    // Fase 3: Robot SpeechSynthesis
+    function testFase3() {
+      const log = document.getElementById('log3');
+      if (!('speechSynthesis' in window)) {
+        log.textContent = 'SpeechSynthesis no soportado en este navegador.';
+        return;
+      }
+      log.textContent = 'Reproduciendo con sintetizador del teléfono...';
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(samplePhrase);
+      u.lang = 'es-ES';
+      u.rate = 1.05;
+      u.onend = () => { log.textContent = 'Robot finalizado.'; };
+      u.onerror = (e) => { log.textContent = 'Error robot: ' + e.error; };
+      window.speechSynthesis.speak(u);
+    }
+  </script>
+</body>
+</html>
