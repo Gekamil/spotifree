@@ -7,7 +7,7 @@ import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
 import { usePlayerStore } from '../store/usePlayerStore';
 
-export type DJVoiceId = 'sebastian' | 'dalia' | 'alvaro' | 'salome' | 'gemini';
+export type DJVoiceId = 'elevenlabs' | 'sebastian' | 'dalia' | 'alvaro' | 'salome' | 'gemini';
 
 export interface DJVoiceOptionItem {
   id: DJVoiceId;
@@ -17,6 +17,12 @@ export interface DJVoiceOptionItem {
 }
 
 export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
+  {
+    id: 'elevenlabs',
+    name: 'ElevenLabs Studio (IA Realista)',
+    region: 'Ultra Hi-Fi',
+    description: 'Voz hiperrealista de radio con Multilingual v2 (tu clave Vercel)',
+  },
   {
     id: 'sebastian',
     name: 'Sebastián',
@@ -92,11 +98,11 @@ class AIDJVoiceService {
     if (typeof window !== 'undefined') {
       try {
         const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
-        if (savedVoice && ['dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
+        if (savedVoice && ['elevenlabs', 'sebastian', 'dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
           this.selectedVoiceId = savedVoice;
         } else {
-          this.selectedVoiceId = 'alvaro';
-          localStorage.setItem('spotifree_dj_voice_choice', 'alvaro');
+          this.selectedVoiceId = 'elevenlabs';
+          localStorage.setItem('spotifree_dj_voice_choice', 'elevenlabs');
         }
       } catch {}
 
@@ -162,7 +168,9 @@ class AIDJVoiceService {
     this.selectedVoiceId = voice;
     this.config.voice = voice;
     if (voice === 'gemini') {
-      this.config.provider = voice;
+      this.config.provider = 'gemini';
+    } else if (voice === 'elevenlabs') {
+      this.config.provider = 'elevenlabs';
     } else {
       this.config.provider = 'edge';
     }
@@ -184,7 +192,7 @@ class AIDJVoiceService {
       const cacheKey = `${lang}:${activeVoice}:${text}`;
       if (this.ttsCache.has(cacheKey)) return;
 
-      const provider = activeVoice === 'gemini' ? 'gemini' : 'edge';
+      const provider = activeVoice === 'gemini' ? 'gemini' : activeVoice === 'elevenlabs' ? 'elevenlabs' : 'edge';
       const params = new URLSearchParams({
         text,
         voice: activeVoice,
@@ -352,7 +360,7 @@ class AIDJVoiceService {
       const cacheKey = `${lang}:${activeVoice}:${text}`;
       let audioUrl = this.ttsCache.get(cacheKey);
       if (!audioUrl) {
-        const provider = activeVoice === 'gemini' ? 'gemini' : 'edge';
+        const provider = activeVoice === 'gemini' ? 'gemini' : activeVoice === 'elevenlabs' ? 'elevenlabs' : 'edge';
         const params = new URLSearchParams({
           text,
           voice: activeVoice,

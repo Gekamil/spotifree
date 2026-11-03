@@ -398,6 +398,15 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 Voz del DJ
               </div>
               <button
+                onClick={() => handleSelectVoice('elevenlabs')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  currentVoice === 'elevenlabs' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>ElevenLabs (Ultra Realista)</span>
+                {currentVoice === 'elevenlabs' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
+              </button>
+              <button
                 onClick={() => handleSelectVoice('alvaro')}
                 className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
                   currentVoice === 'alvaro' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
