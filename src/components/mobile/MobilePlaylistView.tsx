@@ -47,6 +47,7 @@ import {
   saveSharedPlaylist,
   getSharedPlaylistById,
 } from '../../utils/userStorage';
+import { deduplicateTracks } from '../../utils/trackDeduplication';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -326,10 +327,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     // B. REGULAR PLAYLIST: Merge with any saved custom tracks
     const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
     const mergeWithCustom = (baseList: Track[]): Track[] => {
-      if (savedCustom.length === 0) return baseList;
+      if (savedCustom.length === 0) return deduplicateTracks(baseList);
       const baseIds = new Set(baseList.map((t) => t.id));
       const toAdd = savedCustom.filter((t) => !baseIds.has(t.id));
-      return [...toAdd, ...baseList];
+      return deduplicateTracks([...toAdd, ...baseList]);
     };
 
     // 1. Direct items
@@ -485,7 +486,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       setShuffledTracks([]);
       return;
     }
-    const list = [...tracks];
+    const list = deduplicateTracks([...tracks]);
     const currentId = usePlayerStore.getState().currentTrack?.id;
     let head: Track[] = [];
     let rest: Track[] = list;
@@ -497,7 +498,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       const j = Math.floor(Math.random() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    setShuffledTracks([...head, ...rest]);
+    setShuffledTracks(deduplicateTracks([...head, ...rest]));
   }, [isShuffle, shuffleMode, shuffleVersion, cleanId, tracks.length]);
 
   const displayTracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : tracks;
@@ -732,15 +733,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     } catch {}
 
     if (next) {
-      // 1. Save original order before harmonic sorting
-      originalTracksRef.current = [...tracks];
+      // 1. Save original order before harmonic sorting (deduplicated)
+      if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
+        originalTracksRef.current = deduplicateTracks([...tracks]);
+      }
       // 2. Sort tracks along Camelot Wheel & BPM proximity
-      const harmonized = djTransitionService.sortPlaylistHarmonically(tracks, audioFeatures);
+      const harmonized = deduplicateTracks(
+        djTransitionService.sortPlaylistHarmonically(tracks, audioFeatures)
+      );
       setTracks(harmonized);
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {
-        setTracks(originalTracksRef.current);
+        setTracks(deduplicateTracks(originalTracksRef.current));
         originalTracksRef.current = null;
       }
     }
@@ -1275,7 +1280,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
                           <span className="truncate">
                             {isArtist
-                              ? `${Math.max(1200000, 1482910293 - idx * 85000000).toLocaleString('es-ES')} reproducciones`
+                              ? (track as any).playcount
+                                ? `${Number((track as any).playcount).toLocaleString('es-ES')} reproducciones`
+                                : (track as any).plays
+                                ? `${Number((track as any).plays).toLocaleString('es-ES')} reproducciones`
+                                : track.album?.name || track.artists?.map((a) => a.name).join(', ') || 'Artista'
                               : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
                           </span>
                           {track.added_by && (

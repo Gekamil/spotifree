@@ -65,11 +65,20 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [isQueueDragging, setIsQueueDragging] = useState(false);
   const queueStartYRef = useRef(0);
   const queueCurrentYRef = useRef(0);
+  const queueScrollRef = useRef<HTMLDivElement>(null);
 
   const handleQueueTouchStart = (e: React.TouchEvent) => {
     queueStartYRef.current = e.touches[0].clientY;
     queueCurrentYRef.current = e.touches[0].clientY;
     setIsQueueDragging(true);
+  };
+
+  const handleQueueBodyTouchStart = (e: React.TouchEvent) => {
+    if (queueScrollRef.current && queueScrollRef.current.scrollTop <= 5) {
+      queueStartYRef.current = e.touches[0].clientY;
+      queueCurrentYRef.current = e.touches[0].clientY;
+      setIsQueueDragging(true);
+    }
   };
 
   const handleQueueTouchMove = (e: React.TouchEvent) => {
@@ -85,7 +94,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     if (!isQueueDragging) return;
     setIsQueueDragging(false);
     const delta = queueCurrentYRef.current - queueStartYRef.current;
-    if (delta > 90) {
+    if (delta > 80) {
       setQueueDragY(window.innerHeight || 800);
       setTimeout(() => {
         setIsQueueOpen(false);
@@ -873,10 +882,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           <div className="w-full aspect-video rounded-xl overflow-hidden bg-black relative shadow-inner">
             {officialVideoId || videoId ? (
               <iframe
-                src={`https://www.youtube.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
+                src={`https://www.youtube.com/embed/${officialVideoId || videoId}?enablejsapi=1&origin=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : 'https://spotifreeweb.vercel.app')}&widget_referrer=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : 'https://spotifreeweb.vercel.app')}&rel=0&playsinline=1`}
                 title={`${currentTrack.name} - Videoclip oficial`}
                 className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                referrerPolicy="strict-origin-when-cross-origin"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
               />
             ) : (
@@ -1133,7 +1143,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           </div>
 
           {/* Queue Body */}
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6">
+          <div
+            ref={queueScrollRef}
+            onTouchStart={handleQueueBodyTouchStart}
+            onTouchMove={handleQueueTouchMove}
+            onTouchEnd={handleQueueTouchEnd}
+            className="flex-1 overflow-y-auto px-4 py-4 space-y-6"
+          >
             {/* Now Playing Section */}
             {currentTrack && (
               <div>

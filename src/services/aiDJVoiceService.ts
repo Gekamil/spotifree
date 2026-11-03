@@ -467,6 +467,9 @@ class AIDJVoiceService {
 
         // Duck music right as speech playback starts
         this.duckAudio();
+        if (typeof window !== 'undefined' && (window as any).speechRecognitionInstance) {
+          try { (window as any).speechRecognitionInstance.abort(); } catch {}
+        }
         audio.play().catch((err) => {
           console.warn('[AIDJVoice] Play rejected (autoplay block or aborted):', err);
           cleanup();

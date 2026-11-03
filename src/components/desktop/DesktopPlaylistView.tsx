@@ -45,6 +45,7 @@ function getArtistMonthlyListeners(name: string): string {
 import { handleImageError } from '../../utils/imageFallback';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 import { toHDImage } from '../../utils/formatters';
+import { deduplicateTracks } from '../../utils/trackDeduplication';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
 
@@ -91,7 +92,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     ? storePl.tracks.items
     : customSaved;
 
-  const initialTracks = baseTracks.map((t) => {
+  const initialTracks = deduplicateTracks(baseTracks).map((t) => {
     if (TRACK_COVER_CACHE.has(t.id)) {
       return {
         ...t,
@@ -106,7 +107,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return t;
   });
 
-  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
+  const [dynamicTracks, setDynamicTracks] = useState<Track[]>(deduplicateTracks(initialTracks));
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
   const [trackCovers, setTrackCovers] = useState<Record<string, string>>({});
 
@@ -152,15 +153,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
 
     if (next) {
-      // 1. Save original playlist order before harmonic DJ set sorting
-      originalTracksRef.current = [...dynamicTracks];
+      // 1. Save original playlist order before harmonic DJ set sorting (deduplicated)
+      if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
+        originalTracksRef.current = deduplicateTracks([...dynamicTracks]);
+      }
       // 2. Sort tracks along Camelot Wheel & BPM proximity for seamless transitions
-      const harmonized = djTransitionService.sortPlaylistHarmonically(dynamicTracks, audioFeatures);
+      const harmonized = deduplicateTracks(
+        djTransitionService.sortPlaylistHarmonically(dynamicTracks, audioFeatures)
+      );
       setDynamicTracks(harmonized);
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {
-        setDynamicTracks(originalTracksRef.current);
+        setDynamicTracks(deduplicateTracks(originalTracksRef.current));
         originalTracksRef.current = null;
       }
     }
@@ -570,20 +575,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       setShuffledTracks([]);
       return;
     }
-    const list = [...dynamicTracks];
+    const list = deduplicateTracks([...dynamicTracks]);
     const currentId = usePlayerStore.getState().currentTrack?.id;
     let head: Track[] = [];
     let rest: Track[] = list;
-    if (currentId && list.some(t => t.id === currentId)) {
-      head = list.filter(t => t.id === currentId);
-      rest = list.filter(t => t.id !== currentId);
+    if (currentId && list.some((t) => t.id === currentId)) {
+      head = list.filter((t) => t.id === currentId);
+      rest = list.filter((t) => t.id !== currentId);
     }
-    // Fisher-Yates shuffle
+    // Fisher-Yates true random shuffle
     for (let i = rest.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [rest[i], rest[j]] = [rest[j], rest[i]];
     }
-    setShuffledTracks([...head, ...rest]);
+    setShuffledTracks(deduplicateTracks([...head, ...rest]));
   }, [isShuffle, shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
 
   const tracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : dynamicTracks;
@@ -793,8 +798,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 : ''}
             </p>
             <div className="flex items-center gap-2 text-sm text-white font-medium mt-1 flex-wrap drop-shadow">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.495 17.307c-.215.353-.674.464-1.026.249-2.812-1.718-6.353-2.107-10.524-1.154-.403.092-.803-.16-.895-.562-.092-.403.159-.803.562-.895 4.568-1.044 8.489-.606 11.634 1.336.352.215.464.674.249 1.026zm1.467-3.26c-.27.44-.848.578-1.287.308-3.22-1.979-8.128-2.55-11.936-1.393-.497.151-1.025-.134-1.176-.63-.151-.496.134-1.025.63-1.176 4.358-1.323 9.775-.688 13.461 1.574.44.27.578.847.308 1.287zm.126-3.41c-3.86-2.292-10.228-2.503-13.896-1.39-.59.179-1.218-.16-1.398-.75-.179-.59.16-1.218.75-1.398 4.218-1.281 11.248-1.037 15.69 1.601.53.314.704 1.004.39 1.534-.314.53-1.004.703-1.536.403z" />
+              <svg width="20" height="20" viewBox="0 0 24 24" className="shrink-0">
+                <circle cx="12" cy="12" r="12" fill="#1ed760" />
+                <path
+                  d="M17.5 17.3c-.22.35-.67.46-1.03.25-2.81-1.72-6.35-2.11-10.52-1.15-.4.09-.8-.16-.9-.56-.09-.4.16-.8.56-.9 4.57-1.04 8.49-.6 11.64 1.34.35.21.46.67.25 1.02zm1.47-3.26c-.27.44-.85.58-1.29.31-3.22-1.98-8.13-2.55-11.94-1.39-.5.15-1.03-.13-1.18-.63-.15-.5.14-1.03.63-1.18 4.36-1.32 9.78-.69 13.46 1.58.44.27.58.85.31 1.29zm.12-3.41c-3.86-2.29-10.23-2.5-13.9-1.39-.59.18-1.22-.16-1.4-.75-.18-.59.16-1.22.75-1.4 4.22-1.28 11.25-1.04 15.69 1.6.53.32.7.1 1.01.39 1.54-.31.53-1 .7-1.53.4z"
+                  fill="#000000"
+                />
               </svg>
               <span>
                 Hecha para <span className="font-bold">{user?.display_name || 'Jorgeperezvk'}</span>
@@ -918,7 +927,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
                 {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
                   <>
-                    <span className="font-bold text-white hover:underline cursor-pointer">Spotify</span>
+                    <span className="font-bold text-white hover:underline cursor-pointer">Spotifree</span>
                     <span>•</span>
                     <span className="text-white/90">guardada 625.055 veces</span>
                     <span>•</span>
@@ -941,7 +950,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 ) : (
                   <>
                     <span className="font-bold text-white hover:underline cursor-pointer">
-                      {dynamicPlaylist.owner?.display_name || 'Spotify'}
+                      {dynamicPlaylist.owner?.display_name === 'Spotify' ? 'Spotifree' : (dynamicPlaylist.owner?.display_name || 'Spotifree')}
                     </span>
                     <span>•</span>
                     <span className="text-white/90">

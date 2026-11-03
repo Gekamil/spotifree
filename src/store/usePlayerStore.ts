@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
 import { saveCustomLikedSong, removeCustomLikedSong } from '../utils/userStorage';
+import { deduplicateTracks } from '../utils/trackDeduplication';
 
 function resolveTrackCover(track: any): string {
   if (!track) return '';
@@ -131,11 +132,11 @@ const store = create<PlayerState>((set, get) => ({
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
-    set((s) => ({ queue: [...s.queue, ...list] }));
+    set((s) => ({ queue: deduplicateTracks([...s.queue, ...list]) }));
   },
 
   setQueue: (tracks: Track[]) => {
-    set({ queue: tracks });
+    set({ queue: deduplicateTracks(tracks) });
   },
 
   reorderQueue: (fromIndex: number, toIndex: number) => {
@@ -626,7 +627,7 @@ const store = create<PlayerState>((set, get) => ({
           shuffleVersion: state.shuffleVersion + 1,
           playedInShuffle: [],
           preselectedNextTrackId: null,
-          queue: state.queue.filter((t: any) => !t.isSmartRecommendation),
+          queue: deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation)),
         };
       }
       const played = state.currentTrack && isShuffle ? [state.currentTrack.id] : [];
@@ -644,6 +645,7 @@ const store = create<PlayerState>((set, get) => ({
         shuffleVersion: state.shuffleVersion + 1,
         playedInShuffle: played,
         preselectedNextTrackId: preselectedId,
+        queue: deduplicateTracks(state.queue),
       };
     });
     if (get().shuffleMode === 'smart' && get().currentTrack) {

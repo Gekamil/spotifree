@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
@@ -96,6 +96,45 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [isQueueRendered, setIsQueueRendered] = useState(false);
   const [isQueueAnimated, setIsQueueAnimated] = useState(false);
+  const [queueDragY, setQueueDragY] = useState(0);
+  const [isQueueDragging, setIsQueueDragging] = useState(false);
+  const djQueueStartYRef = useRef(0);
+  const djQueueCurrentYRef = useRef(0);
+  const djQueueScrollRef = useRef<HTMLDivElement>(null);
+
+  const handleDJQueueTouchStart = (e: React.TouchEvent) => {
+    djQueueStartYRef.current = e.touches[0].clientY;
+    djQueueCurrentYRef.current = e.touches[0].clientY;
+    setIsQueueDragging(true);
+  };
+
+  const handleDJQueueBodyTouchStart = (e: React.TouchEvent) => {
+    if (djQueueScrollRef.current && djQueueScrollRef.current.scrollTop <= 5) {
+      djQueueStartYRef.current = e.touches[0].clientY;
+      djQueueCurrentYRef.current = e.touches[0].clientY;
+      setIsQueueDragging(true);
+    }
+  };
+
+  const handleDJQueueTouchMove = (e: React.TouchEvent) => {
+    if (!isQueueDragging) return;
+    const delta = e.touches[0].clientY - djQueueStartYRef.current;
+    if (delta > 0) {
+      djQueueCurrentYRef.current = e.touches[0].clientY;
+      setQueueDragY(delta);
+    }
+  };
+
+  const handleDJQueueTouchEnd = () => {
+    if (!isQueueDragging) return;
+    setIsQueueDragging(false);
+    const delta = djQueueCurrentYRef.current - djQueueStartYRef.current;
+    if (delta > 75) {
+      setShowQueueDrawer(false);
+    }
+    setQueueDragY(0);
+  };
+
   const [showVoiceMenu, setShowVoiceMenu] = useState(false);
   const [currentVoice, setCurrentVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
 
@@ -402,11 +441,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
       <main className="flex-1 flex flex-col items-center justify-between px-4 text-center max-w-xl mx-auto w-full z-10 py-2 min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
-          <div
-            onClick={toggleMic}
-            className="cursor-pointer transition-transform hover:scale-104 active:scale-95 flex items-center justify-center"
-            title={isMicListening ? 'Escuchando... haz clic para detener' : 'Haz clic para hablar con el DJ'}
-          >
+          <div className="flex items-center justify-center pointer-events-none select-none">
             <SpotifyDJVisualizer
               size={isMobile ? 210 : 230}
               state={visualizerState}
@@ -497,9 +532,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {currentTrack && (
           <div
             onClick={handleOpenPlayer}
-            className="w-full max-w-md sm:max-w-xl mt-3 h-14 rounded-[10px] flex items-center justify-between px-3 overflow-hidden cursor-pointer select-none transition-all duration-300 active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_12px_36px_rgba(0,0,0,0.65)] border border-white/20 backdrop-blur-2xl relative bg-white/[0.08] hover:bg-white/[0.12]"
+            className="w-full max-w-md sm:max-w-xl mt-3 h-14 rounded-[12px] flex items-center justify-between px-3 overflow-hidden cursor-pointer select-none transition-all duration-300 active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/25 backdrop-blur-3xl sticky bottom-1 shrink-0 z-20 bg-white/[0.12] hover:bg-white/[0.16]"
             style={{
-              backgroundColor: `${ambientColor || '#181818'}60`,
+              backgroundColor: `${ambientColor || '#181818'}70`,
             }}
             title="Toca para abrir reproductor completo con letra y detalles"
           >
@@ -582,6 +617,10 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            style={{
+              transform: queueDragY > 0 ? `translateY(${queueDragY}px)` : undefined,
+              transition: isQueueDragging ? 'none' : undefined,
+            }}
             className={`bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[76vh] sm:max-h-[520px] sm:w-[420px] sm:absolute sm:bottom-20 sm:left-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-8 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
               isQueueAnimated
                 ? 'translate-y-0 opacity-100 scale-100'
@@ -590,13 +629,21 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           >
             {/* Top Drag Indicator Pill (Mobile only) */}
             <div
-              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-pointer active:scale-95 transition-all sm:hidden"
+              onTouchStart={handleDJQueueTouchStart}
+              onTouchMove={handleDJQueueTouchMove}
+              onTouchEnd={handleDJQueueTouchEnd}
+              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-grab active:cursor-grabbing active:scale-95 transition-all sm:hidden"
               onClick={() => setShowQueueDrawer(false)}
               title="Cerrar cola"
             />
 
             {/* Header */}
-            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+            <div
+              onTouchStart={handleDJQueueTouchStart}
+              onTouchMove={handleDJQueueTouchMove}
+              onTouchEnd={handleDJQueueTouchEnd}
+              className="flex items-center justify-between pb-3.5 border-b border-white/10"
+            >
               <div>
                 <h3 className="text-base font-black text-white font-['SpotifyMixUITitle']">
                   Cola del DJ • {tracksToDisplay.length} canciones
@@ -612,7 +659,13 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-1 mt-3 pr-1">
+            <div
+              ref={djQueueScrollRef}
+              onTouchStart={handleDJQueueBodyTouchStart}
+              onTouchMove={handleDJQueueTouchMove}
+              onTouchEnd={handleDJQueueTouchEnd}
+              className="flex-1 overflow-y-auto space-y-1 mt-3 pr-1"
+            >
               {tracksToDisplay.map((track, idx) => {
                 const isPlayingThis = isPlaying && currentTrack?.id === track.id;
                 const trackArt = getBestTrackArtwork(track);

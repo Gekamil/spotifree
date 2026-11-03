@@ -129,7 +129,9 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             album: {
               id: `alb-${t.album?.id || cleanId}`,
               name: t.album?.title || t.title,
-              images: [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || cover) }],
+              images: (t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium)
+                ? [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium) }]
+                : [],
             },
             duration_ms: (t.duration || 210) * 1000,
             preview_url: null,

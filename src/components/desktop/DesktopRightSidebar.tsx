@@ -1177,10 +1177,11 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               <div className="w-full aspect-video rounded-lg overflow-hidden bg-black relative shadow-inner">
                 {officialVideoId || videoId ? (
                   <iframe
-                    src={`https://www.youtube-nocookie.com/embed/${officialVideoId || videoId}?rel=0&modestbranding=1&playsinline=1`}
+                    src={`https://www.youtube.com/embed/${officialVideoId || videoId}?enablejsapi=1&origin=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : 'https://spotifreeweb.vercel.app')}&widget_referrer=${encodeURIComponent(typeof window !== 'undefined' ? window.location.origin : 'https://spotifreeweb.vercel.app')}&rel=0&playsinline=1`}
                     title={`${currentTrack?.name} - Videoclip`}
                     className="w-full h-full border-0"
-                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                     allowFullScreen
                   />
                 ) : (
