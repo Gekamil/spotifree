@@ -3,10 +3,12 @@ import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
+import { aiDJVoiceService, type DJVoiceId } from '../../services/aiDJVoiceService';
 import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useUIStore } from '../../store/useUIStore';
 import {
+  PlayNativeIcon,
+  PauseNativeIcon,
   QueueNativeIcon,
   CloseNativeIcon,
   AddTrackNativeIcon,
@@ -94,6 +96,15 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [isQueueRendered, setIsQueueRendered] = useState(false);
   const [isQueueAnimated, setIsQueueAnimated] = useState(false);
+  const [showVoiceMenu, setShowVoiceMenu] = useState(false);
+  const [currentVoice, setCurrentVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
+
+  const handleSelectVoice = (v: DJVoiceId) => {
+    aiDJVoiceService.setSelectedVoice(v);
+    setCurrentVoice(v);
+    setShowVoiceMenu(false);
+    aiDJVoiceService.testVoice(v);
+  };
 
   // Pre-cache all quick vibe voices for instant playback
   useEffect(() => {
@@ -230,9 +241,17 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   const isSpeaking = visualizerState === 'speaking' || visualizerState === 'listening';
 
+  const handleOpenPlayer = () => {
+    if (onOpenPlayer) {
+      onOpenPlayer();
+    } else if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('spotifree_open_full_player'));
+    }
+  };
+
   return (
     <div
-      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3"
+      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-y-auto scrollbar-none select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3 pb-8 sm:pb-4"
       style={{
         backgroundColor: '#050b18',
       }}
@@ -317,8 +336,67 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </span>
         </div>
 
-        {/* Clean spacer on right to keep DJ perfectly centered without any lines */}
-        <div className="w-10 h-10" />
+        {/* Voice Selector in Header */}
+        <div className="relative">
+          <button
+            onClick={() => setShowVoiceMenu(!showVoiceMenu)}
+            className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/45 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-95"
+            title="Cambiar voz del DJ"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+            </svg>
+          </button>
+
+          {showVoiceMenu && (
+            <div
+              className="absolute right-0 top-12 z-50 w-56 rounded-xl bg-[#181818] border border-white/15 shadow-2xl p-2 text-left animate-in fade-in zoom-in-95 duration-150 backdrop-blur-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="px-3 py-1.5 text-[11px] font-bold text-white/50 uppercase tracking-wider">
+                Voz del DJ
+              </div>
+              <button
+                onClick={() => handleSelectVoice('alvaro')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  currentVoice === 'alvaro' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>Álvaro (España)</span>
+                {currentVoice === 'alvaro' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
+              </button>
+              <button
+                onClick={() => handleSelectVoice('dalia')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  currentVoice === 'dalia' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>Dalia (México)</span>
+                {currentVoice === 'dalia' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
+              </button>
+              <button
+                onClick={() => handleSelectVoice('salome')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  currentVoice === 'salome' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>Salomé (Colombia)</span>
+                {currentVoice === 'salome' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
+              </button>
+              <button
+                onClick={() => handleSelectVoice('sebastian')}
+                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${
+                  currentVoice === 'sebastian' ? 'bg-white/15 text-[#1ed760]' : 'text-white/80 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <span>Sebastián (Venezuela)</span>
+                {currentVoice === 'sebastian' && <span className="text-[10px] font-bold uppercase text-[#1ed760]">Activa</span>}
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
@@ -414,19 +492,19 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         </div>
 
         {/* =========================================================================
-            CLASSIC SPOTIFY MINI-PLAYER ("El minireproductor de toda la vida")
+            CLASSIC SPOTIFY MINI-PLAYER ("El minireproductor de toda la vida estilo cristal")
             ========================================================================= */}
         {currentTrack && (
           <div
-            onClick={() => onOpenPlayer?.()}
-            className="w-full max-w-md mt-2 h-12 rounded-[8px] flex items-center justify-between px-2.5 overflow-hidden cursor-pointer select-none transition-all duration-700 ease-in-out active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_8px_24px_rgba(0,0,0,0.6)] border border-white/15 backdrop-blur-2xl relative"
+            onClick={handleOpenPlayer}
+            className="w-full max-w-md sm:max-w-xl mt-3 h-14 rounded-[10px] flex items-center justify-between px-3 overflow-hidden cursor-pointer select-none transition-all duration-300 active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_12px_36px_rgba(0,0,0,0.65)] border border-white/20 backdrop-blur-2xl relative bg-white/[0.08] hover:bg-white/[0.12]"
             style={{
-              backgroundColor: `${ambientColor || '#181818'}55`,
+              backgroundColor: `${ambientColor || '#181818'}60`,
             }}
             title="Toca para abrir reproductor completo con letra y detalles"
           >
             {/* 2px Bottom Progress Bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[8px] overflow-hidden pointer-events-none">
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[10px] overflow-hidden pointer-events-none">
               <div
                 className="h-full bg-white transition-all duration-200 ease-linear"
                 style={{ width: `${progressPercent}%` }}
@@ -435,7 +513,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
             {/* Left: Artwork + Track details */}
             <div className="flex items-center min-w-0 flex-1 mr-2">
-              <div className="w-9 h-9 rounded-[4px] shrink-0 overflow-hidden bg-[#181818] shadow-md ml-0.5">
+              <div className="w-10 h-10 rounded-[6px] shrink-0 overflow-hidden bg-[#181818] shadow-md">
                 <img
                   src={activeArtwork}
                   alt={currentTrack.name}
@@ -444,7 +522,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 />
               </div>
 
-              <div className="flex flex-col justify-center min-w-0 ml-2.5 flex-1 pr-1 text-left">
+              <div className="flex flex-col justify-center min-w-0 ml-3 flex-1 pr-1 text-left">
                 <span className="font-bold text-white text-[13px] leading-tight truncate block font-['SpotifyMixUITitle']">
                   {currentTrack.name}
                 </span>
@@ -454,8 +532,32 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </div>
             </div>
 
-            {/* Right: Actions (Cola + Like) */}
-            <div className="flex items-center gap-1 shrink-0 mr-1" onClick={(e) => e.stopPropagation()}>
+            {/* Right: Actions (Like + Play/Pause + Cola) */}
+            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={() => toggleLike(currentTrack.id, currentTrack)}
+                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
+                title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
+              >
+                {isCurrentLiked ? (
+                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+                ) : (
+                  <AddTrackNativeIcon size={20} className="text-white/80" />
+                )}
+              </button>
+
+              <button
+                onClick={togglePlay}
+                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white active:scale-90 transition-all cursor-pointer"
+                title={isPlaying ? 'Pausar' : 'Reproducir'}
+              >
+                {isPlaying ? (
+                  <PauseNativeIcon size={20} className="text-white" />
+                ) : (
+                  <PlayNativeIcon size={20} className="text-white ml-0.5" />
+                )}
+              </button>
+
               <button
                 onClick={() => setShowQueueDrawer(true)}
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
@@ -464,25 +566,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 title="Ver cola del DJ"
               >
                 <QueueNativeIcon size={18} />
-              </button>
-
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!currentTrack) return;
-                  if (!isCurrentLiked) {
-                    toggleLike(currentTrack.id, currentTrack);
-                  }
-                  useUIStore.getState().openAddToPlaylistModal(currentTrack);
-                }}
-                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
-                title={isCurrentLiked ? 'Añadida a tus playlists' : 'Añadir a playlist'}
-              >
-                {isCurrentLiked ? (
-                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
-                ) : (
-                  <AddTrackNativeIcon size={20} className="text-white/80" />
-                )}
               </button>
             </div>
           </div>

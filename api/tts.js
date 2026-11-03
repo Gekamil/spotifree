@@ -177,21 +177,21 @@ export default async function handler(req, res) {
   const requestedFormat = (query.format || body.format || 'opus').toLowerCase();
   const isEnglish = rawLang.startsWith('en');
 
-  let selectedVoice = 'sebastian';
+  let selectedVoice = 'alvaro';
   if (rawVoice.includes('dalia') || rawVoice.includes('mexico') || rawVoice === 'es-mx-dalianeural') {
     selectedVoice = 'dalia';
-  } else if (rawVoice.includes('sebastian') || rawVoice.includes('venezuela') || rawVoice === 'es-ve-sebastianneural') {
-    selectedVoice = 'sebastian';
-  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
-    selectedVoice = 'salome';
   } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural' || rawVoice.includes('guy')) {
     selectedVoice = 'alvaro';
+  } else if (rawVoice.includes('salome') || rawVoice.includes('colombia') || rawVoice === 'es-co-salomeneural' || rawVoice.includes('jenny')) {
+    selectedVoice = 'salome';
+  } else if (rawVoice.includes('sebastian') || rawVoice.includes('venezuela') || rawVoice === 'es-ve-sebastianneural') {
+    selectedVoice = 'sebastian';
   } else if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
     selectedVoice = 'gemini';
   }
 
   // Voice mapping based on language
-  let edgeVoiceName = 'es-VE-SebastianNeural';
+  let edgeVoiceName = 'es-ES-AlvaroNeural';
   if (isEnglish) {
     if (selectedVoice === 'dalia' || selectedVoice === 'salome') {
       edgeVoiceName = 'en-US-JennyNeural';
@@ -200,21 +200,21 @@ export default async function handler(req, res) {
     }
   } else {
     switch (selectedVoice) {
+      case 'alvaro':
+        edgeVoiceName = 'es-ES-AlvaroNeural';
+        break;
       case 'dalia':
         edgeVoiceName = 'es-MX-DaliaNeural';
-        break;
-      case 'sebastian':
-        edgeVoiceName = 'es-VE-SebastianNeural';
         break;
       case 'salome':
         edgeVoiceName = 'es-CO-SalomeNeural';
         break;
-      case 'alvaro':
-        edgeVoiceName = 'es-ES-AlvaroNeural';
+      case 'sebastian':
+        edgeVoiceName = 'es-VE-SebastianNeural';
         break;
       case 'gemini':
       default:
-        edgeVoiceName = 'es-VE-SebastianNeural';
+        edgeVoiceName = 'es-ES-AlvaroNeural';
         break;
     }
   }

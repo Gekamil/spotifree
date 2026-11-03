@@ -594,7 +594,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     dynamicPlaylist.name?.toLowerCase().trim() === 'dj' ||
     (dynamicPlaylist as any).is_dj
   ) {
-    return <AIDJView onBack={() => useUIStore.getState().setActiveMainTab('home')} />;
+    return (
+      <AIDJView
+        onBack={() => useUIStore.getState().setActiveMainTab('home')}
+        onOpenPlayer={() => useUIStore.getState().toggleRightSidebar('now-playing')}
+      />
+    );
   }
 
   const isLikedPlaylist =

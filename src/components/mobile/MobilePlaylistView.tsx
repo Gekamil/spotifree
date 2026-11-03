@@ -508,7 +508,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     playlist.name?.toLowerCase().trim() === 'dj' ||
     (playlist as any).is_dj
   ) {
-    return <AIDJView isMobile onBack={() => onBack?.()} />;
+    return (
+      <AIDJView
+        isMobile
+        onBack={() => onBack?.()}
+        onOpenPlayer={() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('spotifree_open_full_player'));
+          }
+        }}
+      />
+    );
   }
 
   const handleTrackClick = (track: Track) => {

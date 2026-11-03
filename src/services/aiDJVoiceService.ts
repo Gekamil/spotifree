@@ -92,7 +92,7 @@ class AIDJVoiceService {
     if (typeof window !== 'undefined') {
       try {
         const savedVoice = localStorage.getItem('spotifree_dj_voice_choice') as DJVoiceId;
-        if (['sebastian', 'dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
+        if (savedVoice && ['dalia', 'alvaro', 'salome', 'gemini'].includes(savedVoice)) {
           this.selectedVoiceId = savedVoice;
         } else {
           this.selectedVoiceId = 'alvaro';

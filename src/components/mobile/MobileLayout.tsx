@@ -40,6 +40,12 @@ export const MobileLayout: React.FC = () => {
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
   const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [isFullPlayerOpen, setIsFullPlayerOpen] = useState(false);
+
+  useEffect(() => {
+    const handleOpenFull = () => setIsFullPlayerOpen(true);
+    window.addEventListener('spotifree_open_full_player', handleOpenFull);
+    return () => window.removeEventListener('spotifree_open_full_player', handleOpenFull);
+  }, []);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
