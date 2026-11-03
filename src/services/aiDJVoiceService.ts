@@ -61,6 +61,8 @@ export interface AIDJConfig {
   provider: 'edge' | 'openai' | 'elevenlabs' | 'cartesia' | 'gemini';
   apiKey?: string;
   voiceId?: string;
+  azureKey?: string;
+  azureRegion?: string;
 }
 
 const DEFAULT_CONFIG: AIDJConfig = {
@@ -68,6 +70,8 @@ const DEFAULT_CONFIG: AIDJConfig = {
   provider: 'edge',
   apiKey: '',
   voiceId: '',
+  azureKey: '',
+  azureRegion: '',
 };
 
 class AIDJVoiceService {
@@ -178,9 +182,12 @@ class AIDJVoiceService {
         text,
         voice: activeVoice,
         provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
+        format: 'opus',
         lang,
-        v: '2',
+        v: '3',
       });
+      if (this.config.azureKey) params.set('azureKey', this.config.azureKey);
+      if (this.config.azureRegion) params.set('azureRegion', this.config.azureRegion);
       fetch(`/api/tts?${params.toString()}`)
         .then((r) => (r.ok ? r.blob() : null))
         .then((blob) => {
@@ -318,11 +325,14 @@ class AIDJVoiceService {
           text,
           voice: activeVoice,
           provider: activeVoice === 'gemini' ? 'gemini' : 'edge',
+          format: 'opus',
           lang,
-          v: '2',
+          v: '3',
         });
         if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
         if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
+        if (this.config.azureKey) params.set('azureKey', this.config.azureKey);
+        if (this.config.azureRegion) params.set('azureRegion', this.config.azureRegion);
 
         const res = await fetch(`/api/tts?${params.toString()}`, {
           signal,
