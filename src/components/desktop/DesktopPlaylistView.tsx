@@ -1044,8 +1044,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </button>
             )}
 
-            {/* Small Rotating Track Cover Thumbnail (Clips Preview Trigger) */}
-            {hasBanner && tracks.length > 0 && (
+            {/* Small Rotating Track Cover Thumbnail (Clips Preview Trigger - available in both normal & banner mode) */}
+            {tracks.length > 0 && (
               <button
                 type="button"
                 onClick={() => setIsClipsModalOpen(true)}
@@ -1057,7 +1057,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   src={
                     tracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
                     (tracks[rotatingTrackIndex] as any)?.image ||
-                    bannerImgUrl
+                    bannerImgUrl ||
+                    dynamicPlaylist.images?.[0]?.url
                   }
                   alt={tracks[rotatingTrackIndex]?.name || 'Preview clip'}
                   onError={handleImageError}
