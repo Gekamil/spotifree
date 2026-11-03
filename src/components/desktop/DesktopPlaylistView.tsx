@@ -23,6 +23,7 @@ import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeatur
 import { djTransitionService } from '../../services/djTransitionService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { AIDJView } from '../dj/AIDJView';
+import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -658,6 +659,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const isCurrentPlaylistPlaying =
     isPlaying && tracks.some((t) => t.id === currentTrack?.id);
 
+  const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
+  const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!tracks || tracks.length <= 1) return;
+    const interval = setInterval(() => {
+      setRotatingTrackIndex((prev) => (prev + 1) % tracks.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [tracks]);
+
   const handlePlayAll = () => {
     if (tracks.length === 0) return;
     if (isCurrentPlaylistPlaying) {
@@ -734,12 +746,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     <div ref={containerRef} className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
       {/* Sticky Compact Header on Scroll */}
       <div
-        className={`sticky top-0 z-30 px-8 py-3 flex items-center justify-between transition-all duration-200 ${
-          scrollY > 180
-            ? 'opacity-100 backdrop-blur-md border-b border-white/5 pointer-events-auto shadow-xl'
+        className={`sticky top-0 z-30 px-8 py-3 flex items-center justify-between transition-all duration-300 ${
+          scrollY > 250
+            ? 'opacity-100 backdrop-blur-xl border-b border-white/5 pointer-events-auto shadow-2xl'
             : 'opacity-0 pointer-events-none'
         }`}
-        style={{ backgroundColor: `${themeColor}E6` }}
+        style={{ backgroundColor: `${themeColor}F5` }}
       >
         <div className="flex items-center gap-4 min-w-0">
           <button
@@ -763,20 +775,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         /* Widescreen Banner Hero (Daily Mixes / Playlists with Wide Banner matching Photos 3 & 4) */
         <div
           className="w-full h-[340px] lg:h-[380px] relative overflow-hidden flex flex-col justify-end select-none"
-          style={{
-            opacity: Math.max(0, 1 - scrollY / 220),
-            transform: `translateY(-${Math.min(scrollY * 0.45, 90)}px)`,
-            transition: 'opacity 0.1s ease-out, transform 0.1s ease-out',
-          }}
         >
           <img
             src={bannerImgUrl}
             alt={dynamicPlaylist.name}
             onError={handleImageError}
             className="absolute inset-0 w-full h-full object-cover object-[center_12%] pointer-events-none"
+            style={{
+              transform: `translateY(${Math.min(scrollY * 0.25, 65)}px) scale(${1 + Math.min(scrollY * 0.0004, 0.06)})`,
+              filter: `brightness(${Math.max(0.65, 1 - scrollY / 450)})`,
+              transition: 'transform 0.05s ease-out',
+            }}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/20 pointer-events-none" />
-          <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/40 to-transparent pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent pointer-events-none" />
 
           <div className="relative z-10 px-8 pb-6 flex flex-col justify-end gap-1.5 select-none">
             <span className="text-xs font-bold text-white uppercase tracking-wider drop-shadow">
@@ -974,12 +986,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
       {/* Action Bar */}
       <div
-        className="px-8 pt-6 pb-2 flex flex-col gap-4 transition-colors duration-500"
+        className="px-8 pt-6 pb-2 flex flex-col gap-4 transition-colors duration-500 relative z-10"
         style={
           hasBanner
             ? {
-                backgroundColor: themeColor,
-                backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.25) 0%, rgba(18, 18, 18, 0.88) 75%, #121212 100%)',
+                background: 'linear-gradient(180deg, rgba(18, 18, 18, 0.4) 0%, #121212 100%)',
               }
             : undefined
         }
@@ -1033,16 +1044,36 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </button>
             )}
 
-            {/* Small Track / Playlist Cover Thumbnail if hasBanner (Matching Photos 3 & 4) */}
-            {hasBanner && (
-              <div className="w-10 h-10 rounded-[4px] overflow-hidden shadow-md bg-[#282828] shrink-0 border border-white/10">
+            {/* Small Rotating Track Cover Thumbnail (Clips 15s Preview Trigger) */}
+            {hasBanner && tracks.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsClipsModalOpen(true)}
+                className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/15 hover:border-[#1ed760] transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/10 hover:ring-[#1ed760]/50"
+                title="Ver clips y avances de 15 segundos"
+              >
                 <img
-                  src={currentTrack?.album?.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url || bannerImgUrl}
-                  alt="Track Cover"
+                  key={tracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
+                  src={
+                    tracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
+                    (tracks[rotatingTrackIndex] as any)?.image ||
+                    bannerImgUrl
+                  }
+                  alt={tracks[rotatingTrackIndex]?.name || 'Preview clip'}
                   onError={handleImageError}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-all duration-700 group-hover/thumb:scale-110"
                 />
-              </div>
+
+                {/* Badge 15s */}
+                <div className="absolute top-0.5 right-0.5 px-1 py-0.2 rounded bg-black/80 backdrop-blur-xs text-[8px] font-black font-mono text-[#1ed760] tracking-tighter pointer-events-none">
+                  15s
+                </div>
+
+                {/* Hover Play icon overlay */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
+                  <PlayNativeIcon size={14} className="text-white ml-0.5 drop-shadow" />
+                </div>
+              </button>
             )}
 
             {/* Shuffle button */}
@@ -1581,6 +1612,21 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           onSaved={() => {}}
         />
       )}
+
+      {/* 15s Clips Mini-Player Modal */}
+      <PlaylistClipsMiniPlayer
+        tracks={tracks}
+        initialTrackIndex={rotatingTrackIndex}
+        playlistTitle={dynamicPlaylist.name}
+        isOpen={isClipsModalOpen}
+        onClose={() => setIsClipsModalOpen(false)}
+        onPlayFullTrack={(track, allTracks) => {
+          playTrack(
+            { ...track, playlistId: dynamicPlaylist.id },
+            allTracks.map((t) => ({ ...t, playlistId: dynamicPlaylist.id }))
+          );
+        }}
+      />
     </div>
   );
 };

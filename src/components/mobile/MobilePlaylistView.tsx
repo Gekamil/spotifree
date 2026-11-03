@@ -28,6 +28,7 @@ import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
+import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
@@ -539,6 +540,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       playTrack(displayTracks[0], displayTracks);
     }
   };
+
+  const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
+  const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (!displayTracks || displayTracks.length <= 1) return;
+    const interval = setInterval(() => {
+      setRotatingTrackIndex((prev) => (prev + 1) % displayTracks.length);
+    }, 3500);
+    return () => clearInterval(interval);
+  }, [displayTracks]);
 
   const handleAddTrack = (track: Track) => {
     const trackWithMeta: Track = {
@@ -1061,6 +1073,31 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               <ShuffleNativeIcon size={24} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-white/70'} />
             )}
           </button>
+
+          {/* Clips 15s Preview Trigger Thumbnail */}
+          {displayTracks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setIsClipsModalOpen(true)}
+              className="group/thumb relative w-10 h-10 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
+              title="Ver clips y avances de 15 segundos"
+            >
+              <img
+                key={displayTracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
+                src={
+                  displayTracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
+                  (displayTracks[rotatingTrackIndex] as any)?.image ||
+                  coverUrl
+                }
+                alt={displayTracks[rotatingTrackIndex]?.name || 'Preview clip'}
+                onError={handleImageError}
+                className="w-full h-full object-cover transition-all duration-700"
+              />
+              <div className="absolute top-0.5 right-0.5 px-1 py-0.2 rounded bg-black/85 text-[8px] font-black font-mono text-[#1ed760] tracking-tighter pointer-events-none">
+                15s
+              </div>
+            </button>
+          )}
 
           {/* 6. Play Button: Authentic Vinyl Turntable (Modo DJ) or Classic Green */}
           {isAutomixActive ? (
@@ -1898,6 +1935,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[120] max-w-[90vw] text-center px-5 py-2.5 rounded-full bg-white text-black font-bold text-xs shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200">
           {toastMessage}
         </div>
+      )}
+
+      {/* 15s Clips Mini-Player Modal */}
+      {typeof document !== 'undefined' && createPortal(
+        <PlaylistClipsMiniPlayer
+          tracks={displayTracks}
+          initialTrackIndex={rotatingTrackIndex}
+          playlistTitle={playlist.name}
+          isOpen={isClipsModalOpen}
+          onClose={() => setIsClipsModalOpen(false)}
+          onPlayFullTrack={(track, allTracks) => {
+            playTrack(track, allTracks);
+          }}
+        />,
+        document.body
       )}
     </div>
   );

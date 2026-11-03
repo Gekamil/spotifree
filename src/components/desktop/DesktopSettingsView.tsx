@@ -10,7 +10,6 @@ import {
 } from '../../services/spotifyCookieService';
 import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
-import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { useLanguageStore } from '../../utils/i18n';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 
@@ -244,19 +243,6 @@ export const DesktopSettingsView: React.FC = () => {
   const [showNowPlayingOnClick, setShowNowPlayingOnClick] = useState(true);
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
-
-  // AI DJ Voice Selector State
-  const [isTestingVoice, setIsTestingVoice] = useState(false);
-
-  const handleTestVoice = async () => {
-    if (isTestingVoice) return;
-    setIsTestingVoice(true);
-    try {
-      await aiDJVoiceService.testVoice('dalia');
-    } finally {
-      setIsTestingVoice(false);
-    }
-  };
 
   // Playback & Audio settings
   const [normalizeAudio, setNormalizeAudio] = useState(() => {
@@ -692,55 +678,7 @@ export const DesktopSettingsView: React.FC = () => {
           </section>
         )}
 
-        {/* VOZ DE LA INTELIGENCIA ARTIFICIAL (DJ) */}
-        {matchesSearch('voz dj inteligencia artificial ia hablar locutor dalia mexico tts') && (
-          <section className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-                  Voz de la Inteligencia Artificial (DJ)
-                </h2>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  Voz oficial de Spotifree DJ configurada con modelo neural de alta fidelidad.
-                </p>
-              </div>
-              <button
-                type="button"
-                data-testid="test-voice-btn"
-                onClick={handleTestVoice}
-                disabled={isTestingVoice}
-                className={`px-4 py-2 rounded-full text-xs font-bold flex items-center gap-2 transition-all cursor-pointer ${
-                  isTestingVoice
-                    ? 'bg-[#1ed760] text-black animate-pulse'
-                    : 'bg-white/10 hover:bg-white/20 text-white active:scale-95'
-                }`}
-                title="Escuchar prueba de la voz oficial de Dalia"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                </svg>
-                <span>{isTestingVoice ? 'Hablando...' : 'Probar voz'}</span>
-              </button>
-            </div>
 
-            <div className="p-4 rounded-xl border bg-white/5 border-[#1ed760]/40 max-w-md">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-sm font-bold text-[#1ed760]">
-                  Dalia Multilingual
-                </span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] uppercase tracking-wider">
-                  Voz Oficial
-                </span>
-              </div>
-              <span className="inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] uppercase tracking-wider mb-2">
-                México • Edge Neural
-              </span>
-              <p className="text-xs text-[#a7a7a7] leading-relaxed">
-                Voz femenina brillante, entusiasta y ultra-natural optimizada para transiciones de radio y comentarios del DJ.
-              </p>
-            </div>
-          </section>
-        )}
 
         {/* 2. IDIOMA (Custom Spotify Dropdown) */}
         {matchesSearch('idioma language english español') && (
