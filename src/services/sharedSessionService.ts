@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import type { Track } from '../types/spotify';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { useUIStore } from '../store/useUIStore';
 
 export interface SessionParticipant {
   id: string;
@@ -98,15 +99,39 @@ function generateSessionCode(): string {
 
 let sessionDocUnsubscribe: Unsubscribe | null = null;
 let lastCursorBroadcast = 0;
+let lastFirestoreCursorWrite = 0;
 let lastPlaybackOrigin = '';
 
 // WebRTC P2P mesh references
 let peerInstance: any = null;
 let guestConnections: any[] = [];
 let hostConnection: any = null;
+let p2pHeartbeatInterval: any = null;
+
+const GLOBAL_ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.services.mozilla.com' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+];
+
+const PEER_BASE_CONFIG = {
+  debug: 0,
+  config: {
+    iceServers: GLOBAL_ICE_SERVERS,
+    iceCandidatePoolSize: 10,
+  },
+};
 
 function cleanupP2P() {
   try {
+    if (p2pHeartbeatInterval) {
+      clearInterval(p2pHeartbeatInterval);
+      p2pHeartbeatInterval = null;
+    }
     if (guestConnections.length > 0) {
       guestConnections.forEach((c) => {
         try { c.close(); } catch {}
@@ -151,13 +176,16 @@ async function initP2PHost(sessionId: string, _hostParticipant: SessionParticipa
     const PeerClass = (PeerModule as any).default?.Peer || (PeerModule as any).Peer || (PeerModule as any).default;
     const hostPeerId = `spotifree-jam-${sessionId.toLowerCase().trim()}`;
 
-    const peer = new PeerClass(hostPeerId, {
-      debug: 0,
-    });
+    const peer = new PeerClass(hostPeerId, PEER_BASE_CONFIG);
     peerInstance = peer;
 
     peer.on('open', (id: string) => {
       console.log('[SharedSession P2P] Host live on WebRTC room ID:', id);
+      // Keep-alive heartbeat every 3.5s across router NATs
+      if (p2pHeartbeatInterval) clearInterval(p2pHeartbeatInterval);
+      p2pHeartbeatInterval = setInterval(() => {
+        broadcastToAllP2P({ type: 'ping' });
+      }, 3500);
     });
 
     peer.on('connection', (conn: any) => {
@@ -187,6 +215,9 @@ async function initP2PHost(sessionId: string, _hostParticipant: SessionParticipa
 
 function handleIncomingP2PAsHost(data: any, senderConn: any) {
   if (!data || !data.type) return;
+
+  // Keep-alive ping
+  if (data.type === 'ping') return;
 
   const store = useSharedSessionStore.getState();
 
@@ -265,39 +296,78 @@ async function initP2PGuest(sessionId: string, guestParticipant: SessionParticip
     const PeerClass = (PeerModule as any).default?.Peer || (PeerModule as any).Peer || (PeerModule as any).default;
     const hostPeerId = `spotifree-jam-${sessionId.toLowerCase().trim()}`;
 
-    const peer = new PeerClass({
-      debug: 0,
-    });
+    const peer = new PeerClass(PEER_BASE_CONFIG);
     peerInstance = peer;
 
-    peer.on('open', () => {
-      console.log('[SharedSession P2P] Guest peer ready, connecting to host:', hostPeerId);
-      const conn = peer.connect(hostPeerId, { reliable: true });
-      hostConnection = conn;
+    let attempts = 0;
+    let isConnected = false;
+    let retryTimer: any = null;
 
-      conn.on('open', () => {
-        console.log('[SharedSession P2P] Connected to host DataChannel!');
-        conn.send({
-          type: 'join',
-          participant: guestParticipant,
+    const tryConnect = () => {
+      if (isConnected || !peerInstance || peerInstance.destroyed) return;
+      attempts++;
+      console.log(`[SharedSession P2P] Guest connecting to host (${attempts}/6):`, hostPeerId);
+
+      try {
+        const conn = peer.connect(hostPeerId, { reliable: true });
+        hostConnection = conn;
+
+        conn.on('open', () => {
+          console.log('[SharedSession P2P] Connected to host DataChannel!');
+          isConnected = true;
+          if (retryTimer) {
+            clearTimeout(retryTimer);
+            retryTimer = null;
+          }
+
+          conn.send({
+            type: 'join',
+            participant: guestParticipant,
+          });
+
+          // Keep-alive heartbeat every 3.5s across NAT routers
+          if (p2pHeartbeatInterval) clearInterval(p2pHeartbeatInterval);
+          p2pHeartbeatInterval = setInterval(() => {
+            if (hostConnection && hostConnection.open) {
+              hostConnection.send({ type: 'ping' });
+            }
+          }, 3500);
         });
-      });
 
-      conn.on('data', (data: any) => {
-        handleIncomingP2PAsGuest(data);
-      });
+        conn.on('data', (data: any) => {
+          handleIncomingP2PAsGuest(data);
+        });
 
-      conn.on('close', () => {
-        console.log('[SharedSession P2P] Host closed connection');
-      });
+        conn.on('close', () => {
+          console.log('[SharedSession P2P] Host closed connection');
+          isConnected = false;
+        });
 
-      conn.on('error', (e: any) => {
-        console.warn('[SharedSession P2P] Connection error:', e);
-      });
+        conn.on('error', (e: any) => {
+          console.warn('[SharedSession P2P] DataChannel attempt error:', e);
+          if (!isConnected && attempts < 6) {
+            retryTimer = setTimeout(tryConnect, 2000);
+          }
+        });
+      } catch (err) {
+        console.warn('[SharedSession P2P] Connect exception:', err);
+        if (!isConnected && attempts < 6) {
+          retryTimer = setTimeout(tryConnect, 2000);
+        }
+      }
+    };
+
+    peer.on('open', () => {
+      console.log('[SharedSession P2P] Guest peer ready');
+      tryConnect();
     });
 
     peer.on('error', (err: any) => {
       console.warn('[SharedSession P2P] Guest peer notice:', err?.type || err);
+      if (err?.type === 'peer-unavailable' && !isConnected && attempts < 6) {
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(tryConnect, 2500);
+      }
     });
   } catch (err) {
     console.warn('[SharedSession P2P] Could not start P2P guest:', err);
@@ -306,6 +376,9 @@ async function initP2PGuest(sessionId: string, guestParticipant: SessionParticip
 
 function handleIncomingP2PAsGuest(data: any) {
   if (!data || !data.type) return;
+
+  // Keep-alive ping
+  if (data.type === 'ping') return;
 
   // 1. Initial full state sync
   if (data.type === 'sync') {
@@ -487,6 +560,9 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       isModalOpen: true,
     });
 
+    // Auto-open right sidebar on desktop
+    useUIStore.setState({ activeRightSidebar: 'friends' });
+
     // 1. Connect via WebRTC P2P DataChannel directly to Host
     initP2PGuest(cleanId, guestParticipant);
 
@@ -632,8 +708,9 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       ),
     }));
 
-    // 2. Throttle Firestore cursor writes to once every 2 seconds to respect write quotas
-    if (db && isFirebaseConfigured() && now % 2000 < 40) {
+    // 2. Throttle Firestore cursor writes to once every 1.5 seconds to respect write quotas
+    if (db && isFirebaseConfigured() && (now - lastFirestoreCursorWrite > 1500)) {
+      lastFirestoreCursorWrite = now;
       try {
         const sessionRef = doc(db, 'shared_sessions', sessionId);
         updateDoc(sessionRef, {

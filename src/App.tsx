@@ -36,6 +36,7 @@ function App() {
           const user = useSpotifyDataStore.getState().user;
           const guestName = user?.display_name || 'Invitado';
           useSharedSessionStore.getState().joinSession(inviteSessionId, guestName);
+          useUIStore.setState({ activeRightSidebar: 'friends' });
         }
       } catch {}
     }

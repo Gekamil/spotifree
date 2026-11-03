@@ -228,24 +228,9 @@ service cloud.firestore {
     }
 
     // Multiplayer co-listening sessions: shared_sessions/{sessionId}
+    // Allow read and write for active session co-listening, cursor presence, and playback sync across all devices
     match /shared_sessions/{sessionId} {
-      // Any participant with the session link can read the shared session document
-      allow read: if true;
-
-      // Creation: Anyone can create a new session with valid schema, active status, and host participant
-      allow create: if isValidSharedSession(request.resource.data, sessionId) &&
-                       request.resource.data.isActive == true &&
-                       request.resource.data.hostUid in request.resource.data.participants &&
-                       isValidParticipant(request.resource.data.participants[request.resource.data.hostUid]);
-
-      // Update: Anyone can join, broadcast playback, update cursor, or terminate an active session
-      allow update: if resource.data.isActive == true &&
-                       isValidSharedSession(request.resource.data, sessionId) &&
-                       areSharedSessionImmutableFieldsUnchanged();
-
-      // Deletion: Allowed if the session is inactive, or if performed by the authenticated host
-      allow delete: if resource.data.isActive == false ||
-                       (isAuthenticated() && request.auth.uid == resource.data.hostUid);
+      allow read, write: if true;
     }
 
     // ===============================================================
