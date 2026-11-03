@@ -322,7 +322,7 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
               </p>
             </div>
 
-            <div className="w-full text-left space-y-1">
+            <div className="w-full text-left space-y-1.5">
               <label className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
                 Tu nombre
               </label>
@@ -331,14 +331,14 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
                 placeholder="Nombre para mostrar"
-                className="w-full px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs outline-none focus:border-[#1ed760] transition-colors"
+                className="w-full px-3.5 py-2.5 rounded-full bg-white/5 border border-white/15 text-white text-xs outline-none focus:border-[#1ed760] focus:bg-white/10 transition-all placeholder:text-[#535353]"
               />
             </div>
 
             <button
               onClick={handleStart}
               disabled={isSubmitting}
-              className="w-full py-2.5 rounded-full bg-[#1ed760] text-black font-extrabold text-xs tracking-wide hover:scale-102 active:scale-98 transition-all shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-extrabold text-xs tracking-wide hover:scale-102 active:scale-98 transition-all shadow-md cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? 'Iniciando...' : 'Iniciar sesión compartida'}
             </button>
@@ -352,14 +352,14 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                   type="text"
                   value={joinCodeInput}
                   onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                  placeholder="CÓDIGO"
+                  placeholder="CÓDIGO (EJ. 2SACKT)"
                   maxLength={8}
-                  className="flex-1 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-xs uppercase tracking-widest outline-none focus:border-[#1ed760]"
+                  className="flex-1 px-3.5 py-2.5 rounded-full bg-white/5 border border-white/15 text-white text-xs uppercase tracking-widest font-mono text-center outline-none focus:border-[#1ed760] focus:bg-white/10 transition-all placeholder:text-[#535353]"
                 />
                 <button
                   onClick={handleJoin}
                   disabled={isSubmitting || !joinCodeInput.trim()}
-                  className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs cursor-pointer transition-all disabled:opacity-40"
+                  className="px-5 py-2.5 rounded-full bg-white text-black font-extrabold text-xs cursor-pointer hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-sm"
                 >
                   Unirse
                 </button>
@@ -496,7 +496,7 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z"/>
+                    <path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.1a1 1 0 0 0-1.2.7l-4.2 16a1 1 0 0 0 .7 1.2 1 1 0 0 0 1.2-.7l4.2-16a1 1 0 0 0-.7-1.2zM21 4a1 1 0 0 0-1 1v14a1 1 0 0 0 2 0V5a1 1 0 0 0-1-1z" />
                   </svg>
                   Música y Biblioteca
                 </span>

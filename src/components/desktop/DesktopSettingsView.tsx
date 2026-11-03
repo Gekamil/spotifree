@@ -237,6 +237,7 @@ export const DesktopSettingsView: React.FC = () => {
   const [selectedVoice, setSelectedVoice] = useState<DJVoiceId>(() => aiDJVoiceService.getSelectedVoice());
   const [isTestingVoice, setIsTestingVoice] = useState(false);
 
+
   const handleVoiceChange = (voice: DJVoiceId) => {
     setSelectedVoice(voice);
     aiDJVoiceService.setSelectedVoice(voice);
@@ -729,7 +730,8 @@ export const DesktopSettingsView: React.FC = () => {
                 );
               })}
             </div>
-          </section>
+
+            </section>
         )}
 
         {/* 2. IDIOMA (Custom Spotify Dropdown) */}

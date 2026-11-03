@@ -120,15 +120,13 @@ async function synthesizeWithGemini(text, voice = 'Kore', userApiKey = '') {
   };
 }
 
+
 /**
- * Microsoft Edge Neural TTS with Opus (Lossless vocal presence, no 10kHz lowpass radio muffling)
+ * Microsoft Edge Neural TTS with high-quality 24kHz 96kbps MP3 (Pristine studio voice, reliable on all browsers)
  */
-async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format = 'opus') {
+async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format = 'mp3') {
   const tts = new MsEdgeTTS();
-  const isOpus = format === 'opus' || format === 'webm';
-  const selectedFormat = isOpus
-    ? OUTPUT_FORMAT.WEBM_24KHZ_16BIT_MONO_OPUS
-    : OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3;
+  const selectedFormat = OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3;
 
   await tts.setMetadata(voice, selectedFormat);
   const { audioStream } = tts.toStream(text);
@@ -139,7 +137,7 @@ async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format 
     audioStream.on('end', () => {
       resolve({
         buffer: Buffer.concat(chunks),
-        contentType: isOpus ? 'audio/webm; codecs=opus' : 'audio/mpeg',
+        contentType: 'audio/mpeg',
       });
     });
     audioStream.on('error', (err) => reject(err));
@@ -222,30 +220,31 @@ export default async function handler(req, res) {
   }
 
   const userApiKey = (query.apiKey || body.apiKey || '').trim();
+  const userVoiceId = (query.voiceId || body.voiceId || '').trim();
   const userAzureKey = (query.azureKey || body.azureKey || '').trim();
   const userAzureRegion = (query.azureRegion || body.azureRegion || '').trim();
   const geminiVoiceName = isEnglish ? 'Puck' : 'Kore';
 
   let result;
   try {
-    // 1. Try Azure Cognitive Services directly if key is configured (48kHz / 192kbps studio master)
-    if (userAzureKey || getEnvKey('AZURE_SPEECH_KEY')) {
+    // 1. Azure Cognitive Services directly if key is configured (48kHz / 192kbps studio master)
+    if (!result && (userAzureKey || getEnvKey('AZURE_SPEECH_KEY'))) {
       try {
         result = await synthesizeWithAzureSpeech(text, edgeVoiceName, userAzureKey, userAzureRegion);
         res.setHeader('x-tts-provider', 'azure-speech-studio-48khz');
       } catch (azureErr) {
-        console.warn('[Azure Speech API error, falling back to Edge Opus]:', azureErr?.message || azureErr);
+        console.warn('[Azure Speech API error, falling back to Edge]:', azureErr?.message || azureErr);
       }
     }
 
     // 2. If Gemini is requested
-    if (!result && selectedVoice === 'gemini') {
+    if (!result && (selectedVoice === 'gemini' || rawProvider === 'gemini')) {
       try {
         result = await synthesizeWithGemini(text, geminiVoiceName, userApiKey);
         res.setHeader('x-tts-provider', 'gemini');
       } catch (geminiErr) {
-        console.warn(`[Gemini TTS Fallback to Edge Opus (${edgeVoiceName})]:`, geminiErr?.message || geminiErr);
-        result = await synthesizeWithEdge(text, edgeVoiceName, requestedFormat);
+        console.warn(`[Gemini TTS Fallback to Edge (${edgeVoiceName})]:`, geminiErr?.message || geminiErr);
+        result = await synthesizeWithEdge(text, edgeVoiceName, 'mp3');
         res.setHeader('x-tts-provider', 'edge-fallback');
         if (String(geminiErr?.message || '').includes('429') || String(geminiErr?.message || '').includes('Rate limit')) {
           res.setHeader('x-gemini-quota-exceeded', 'true');
@@ -253,10 +252,10 @@ export default async function handler(req, res) {
       }
     }
 
-    // 3. High-fidelity Edge TTS with Opus (or MP3 if requested)
+    // 3. High-fidelity Edge Neural TTS with MP3 (zero failure rate, instant 24kHz natural voice)
     if (!result) {
-      result = await synthesizeWithEdge(text, edgeVoiceName, requestedFormat);
-      res.setHeader('x-tts-provider', requestedFormat === 'opus' ? 'edge-opus-hd' : 'edge-mp3');
+      result = await synthesizeWithEdge(text, edgeVoiceName, 'mp3');
+      res.setHeader('x-tts-provider', 'edge-mp3-studio');
     }
 
     res.statusCode = 200;

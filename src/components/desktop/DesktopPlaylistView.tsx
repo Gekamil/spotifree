@@ -751,7 +751,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       {hasBanner ? (
         /* Widescreen Banner Hero (Daily Mixes / Playlists with Wide Banner matching Photos 3 & 4) */
         <div
-          className="w-full h-[320px] lg:h-[350px] relative overflow-hidden flex flex-col justify-end select-none"
+          className="w-full h-[340px] lg:h-[380px] relative overflow-hidden flex flex-col justify-end select-none"
           style={{
             opacity: Math.max(0, 1 - scrollY / 220),
             transform: `translateY(-${Math.min(scrollY * 0.45, 90)}px)`,
@@ -762,7 +762,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             src={bannerImgUrl}
             alt={dynamicPlaylist.name}
             onError={handleImageError}
-            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover object-[center_12%] pointer-events-none"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#121212] via-black/30 to-black/20 pointer-events-none" />
           <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent pointer-events-none" />

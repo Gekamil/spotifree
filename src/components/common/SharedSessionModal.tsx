@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -30,7 +30,41 @@ export const SharedSessionModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [editingName, setEditingName] = useState(false);
   const [newNameInput, setNewNameInput] = useState('');
+  // Mobile swipe-to-dismiss gesture
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startYRef = useRef(0);
+  const currentYRef = useRef(0);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startYRef.current = e.touches[0].clientY;
+    currentYRef.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const delta = e.touches[0].clientY - startYRef.current;
+    if (delta > 0) {
+      currentYRef.current = e.touches[0].clientY;
+      setDragY(delta);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const delta = currentYRef.current - startYRef.current;
+    if (delta > 90) {
+      setDragY(500);
+      setTimeout(() => {
+        setModalOpen(false);
+        setDragY(0);
+      }, 200);
+    } else {
+      setDragY(0);
+    }
+  };
   const handleCopyLink = () => {
     if (!sessionLink) return;
     navigator.clipboard.writeText(sessionLink).then(() => {
@@ -88,11 +122,20 @@ export const SharedSessionModal: React.FC = () => {
           boxShadow: '0 -16px 48px rgba(0,0,0,0.85)',
           overflowY: 'auto',
           boxSizing: 'border-box',
+          transform: `translateY(${dragY}px)`,
+          transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Pull Handle */}
-        <div style={{ width: '36px', height: '4px', background: 'rgba(255,255,255,0.25)', borderRadius: '999px', margin: '4px auto 16px auto' }} />
+        {/* Pull Handle with touch drag zone */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          style={{ width: '100%', padding: '4px 0 16px 0', display: 'flex', justifyContent: 'center', cursor: 'grab' }}
+        >
+          <div style={{ width: '36px', height: '4px', background: 'rgba(255,255,255,0.3)', borderRadius: '999px' }} />
+        </div>
 
         {/* Close Button */}
         <button

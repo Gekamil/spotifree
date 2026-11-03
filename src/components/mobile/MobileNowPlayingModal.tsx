@@ -61,6 +61,40 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   } = usePlayerStore();
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [queueDragY, setQueueDragY] = useState(0);
+  const [isQueueDragging, setIsQueueDragging] = useState(false);
+  const queueStartYRef = useRef(0);
+  const queueCurrentYRef = useRef(0);
+
+  const handleQueueTouchStart = (e: React.TouchEvent) => {
+    queueStartYRef.current = e.touches[0].clientY;
+    queueCurrentYRef.current = e.touches[0].clientY;
+    setIsQueueDragging(true);
+  };
+
+  const handleQueueTouchMove = (e: React.TouchEvent) => {
+    if (!isQueueDragging) return;
+    const delta = e.touches[0].clientY - queueStartYRef.current;
+    if (delta > 0) {
+      queueCurrentYRef.current = e.touches[0].clientY;
+      setQueueDragY(delta);
+    }
+  };
+
+  const handleQueueTouchEnd = () => {
+    if (!isQueueDragging) return;
+    setIsQueueDragging(false);
+    const delta = queueCurrentYRef.current - queueStartYRef.current;
+    if (delta > 90) {
+      setQueueDragY(window.innerHeight || 800);
+      setTimeout(() => {
+        setIsQueueOpen(false);
+        setQueueDragY(0);
+      }, 200);
+    } else {
+      setQueueDragY(0);
+    }
+  };
   const isDJActive =
     currentContextId === 'dj-session' ||
     currentContextId === 'spotify-dj' ||
@@ -1057,11 +1091,32 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         </div>
       )}
 
-      {/* Mobile Queue Sheet (1:1 Spotify Mobile Parity) */}
+      {/* Mobile Queue Sheet (1:1 Spotify Mobile Parity with Swipe-to-Dismiss) */}
       {isQueueOpen && (
-        <div className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] animate-slide-up-modal select-none">
+        <div
+          className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] animate-slide-up-modal select-none touch-pan-y"
+          style={{
+            transform: `translateY(${queueDragY}px)`,
+            transition: isQueueDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
+        >
+          {/* Top Pull Handle for Smooth Swipe Down */}
+          <div
+            onTouchStart={handleQueueTouchStart}
+            onTouchMove={handleQueueTouchMove}
+            onTouchEnd={handleQueueTouchEnd}
+            className="w-full pt-3 pb-1 flex items-center justify-center cursor-grab active:cursor-grabbing bg-[#121212]"
+          >
+            <div className="w-10 h-1 rounded-full bg-white/30" />
+          </div>
+
           {/* Header */}
-          <div className="sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[#121212]/95 backdrop-blur-md border-b border-white/5">
+          <div
+            onTouchStart={handleQueueTouchStart}
+            onTouchMove={handleQueueTouchMove}
+            onTouchEnd={handleQueueTouchEnd}
+            className="sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 bg-[#121212]/95 backdrop-blur-md border-b border-white/5"
+          >
             <button
               onClick={() => setIsQueueOpen(false)}
               className="p-2 text-white/80 hover:text-white active:scale-90 transition-transform -ml-1 cursor-pointer"

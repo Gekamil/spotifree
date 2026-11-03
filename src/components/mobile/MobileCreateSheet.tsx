@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { importExternalPlaylist } from '../../utils/playlistImporter';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import type { Playlist } from '../../types/spotify';
@@ -26,6 +26,42 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
   const [importUrl, setImportUrl] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+
+  // Fluid swipe-to-dismiss drag gesture (1:1 Spotify Mobile Sheet)
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const startYRef = useRef(0);
+  const currentYRef = useRef(0);
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    startYRef.current = e.touches[0].clientY;
+    currentYRef.current = e.touches[0].clientY;
+    setIsDragging(true);
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging) return;
+    const delta = e.touches[0].clientY - startYRef.current;
+    if (delta > 0) {
+      currentYRef.current = e.touches[0].clientY;
+      setDragY(delta);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const delta = currentYRef.current - startYRef.current;
+    if (delta > 90) {
+      setDragY(450);
+      setTimeout(() => {
+        onClose();
+        setDragY(0);
+      }, 200);
+    } else {
+      setDragY(0);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -66,11 +102,22 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
       onClick={onClose}
     >
       <div
-        className="w-full bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-5 shadow-2xl animate-in slide-in-from-bottom duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border-t border-white/10"
+        className="w-full bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-5 shadow-2xl animate-in slide-in-from-bottom duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] border-t border-white/10 touch-pan-y"
+        style={{
+          transform: `translateY(${dragY}px)`,
+          transition: isDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Drag handle */}
-        <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1 mb-2" />
+        {/* Drag handle with generous touch target */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+          className="w-full py-2.5 -mt-3 flex items-center justify-center cursor-grab active:cursor-grabbing"
+        >
+          <div className="w-10 h-1 rounded-full bg-white/30" />
+        </div>
 
         {viewMode === 'menu' && (
           <>
