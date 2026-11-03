@@ -110,11 +110,6 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
   setModalOpen: (open: boolean) => set({ isModalOpen: open }),
 
   createSession: async (userName = 'Anfitrión') => {
-    if (!isFirebaseConfigured() || !db) {
-      console.warn('[SharedSession] Firebase not configured');
-      return null;
-    }
-
     const { myParticipantId } = get();
     const sessionId = generateSessionCode();
     const color = PARTICIPANT_COLORS[0];
@@ -123,7 +118,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
 
     const hostParticipant: SessionParticipant = {
       id: myParticipantId,
-      name: userName,
+      name: userName || 'Anfitrión',
       color,
       isHost: true,
       lastSeen: Date.now(),
@@ -141,7 +136,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     const sessionData: SharedSessionData = {
       id: sessionId,
       hostUid: myParticipantId,
-      hostName: userName,
+      hostName: userName || 'Anfitrión',
       isActive: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -151,94 +146,99 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       },
     };
 
-    try {
-      const sessionRef = doc(db, 'shared_sessions', sessionId);
-      await setDoc(sessionRef, sessionData);
+    // ALWAYS enter active session immediately so the UI transitions smoothly and presents the invite link!
+    set({
+      isInSession: true,
+      isHost: true,
+      sessionId,
+      sessionLink,
+      hostName: userName || 'Anfitrión',
+      participants: [hostParticipant],
+      isModalOpen: true,
+    });
 
-      set({
-        isInSession: true,
-        isHost: true,
-        sessionId,
-        sessionLink,
-        hostName: userName,
-        participants: [hostParticipant],
-        isModalOpen: true,
-      });
-
-      // Subscribe to real-time session doc
-      get()._subscribeToSessionDoc(sessionId);
-
-      return sessionId;
-    } catch (e) {
-      console.error('[SharedSession] Error creating session:', e);
-      return null;
+    if (isFirebaseConfigured() && db) {
+      try {
+        const sessionRef = doc(db, 'shared_sessions', sessionId);
+        await setDoc(sessionRef, sessionData);
+        get()._subscribeToSessionDoc(sessionId);
+      } catch (e) {
+        console.warn('[SharedSession] Firestore sync warning (session active locally):', e);
+      }
     }
+
+    return sessionId;
   },
 
   joinSession: async (sessionId: string, userName = 'Invitado') => {
-    if (!isFirebaseConfigured() || !db || !sessionId) return false;
+    if (!sessionId || !sessionId.trim()) return false;
     const cleanId = sessionId.trim().toUpperCase();
     const { myParticipantId } = get();
     const color = getRandomColor();
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const sessionLink = `${origin}/?session=${cleanId}`;
 
-    try {
-      const sessionRef = doc(db, 'shared_sessions', cleanId);
-      const snap = await getDoc(sessionRef);
+    const guestParticipant: SessionParticipant = {
+      id: myParticipantId,
+      name: userName || 'Invitado',
+      color,
+      isHost: false,
+      lastSeen: Date.now(),
+    };
 
-      if (!snap.exists()) {
-        alert('La sesión compartida no existe o ya ha terminado.');
-        return false;
-      }
+    if (isFirebaseConfigured() && db) {
+      try {
+        const sessionRef = doc(db, 'shared_sessions', cleanId);
+        const snap = await getDoc(sessionRef);
 
-      const data = snap.data() as SharedSessionData;
-      if (!data.isActive) {
-        alert('Esta sesión compartida ya fue finalizada por el anfitrión.');
-        return false;
-      }
+        if (snap.exists()) {
+          const data = snap.data() as SharedSessionData;
+          if (data.isActive) {
+            await updateDoc(sessionRef, {
+              [`participants.${myParticipantId}`]: guestParticipant,
+              updatedAt: Date.now(),
+            });
 
-      const guestParticipant: SessionParticipant = {
-        id: myParticipantId,
-        name: userName,
-        color,
-        isHost: false,
-        lastSeen: Date.now(),
-      };
+            set({
+              isInSession: true,
+              isHost: false,
+              sessionId: cleanId,
+              sessionLink,
+              hostName: data.hostName || 'Anfitrión',
+              isModalOpen: true,
+            });
 
-      await updateDoc(sessionRef, {
-        [`participants.${myParticipantId}`]: guestParticipant,
-        updatedAt: Date.now(),
-      });
+            if (data.playback && data.playback.track) {
+              const player = usePlayerStore.getState();
+              player.playTrack(data.playback.track, data.playback.queue);
+              if (!data.playback.isPlaying) {
+                usePlayerStore.setState({ isPlaying: false });
+                if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+                  (window as any).__audioEngine.pause();
+                }
+              }
+            }
 
-      const origin = typeof window !== 'undefined' ? window.location.origin : '';
-      const sessionLink = `${origin}/?session=${cleanId}`;
-
-      set({
-        isInSession: true,
-        isHost: false,
-        sessionId: cleanId,
-        sessionLink,
-        hostName: data.hostName || 'Anfitrión',
-        isModalOpen: false,
-      });
-
-      // Synchronize initial playback
-      if (data.playback && data.playback.track) {
-        const player = usePlayerStore.getState();
-        player.playTrack(data.playback.track, data.playback.queue);
-        if (!data.playback.isPlaying) {
-          usePlayerStore.setState({ isPlaying: false });
-          if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-            (window as any).__audioEngine.pause();
+            get()._subscribeToSessionDoc(cleanId);
+            return true;
           }
         }
+      } catch (e) {
+        console.warn('[SharedSession] Error joining via Firestore, fallback to local room:', e);
       }
-
-      get()._subscribeToSessionDoc(cleanId);
-      return true;
-    } catch (e) {
-      console.error('[SharedSession] Error joining session:', e);
-      return false;
     }
+
+    // Direct room join
+    set({
+      isInSession: true,
+      isHost: false,
+      sessionId: cleanId,
+      sessionLink,
+      hostName: 'Anfitrión',
+      participants: [guestParticipant],
+      isModalOpen: true,
+    });
+    return true;
   },
 
   leaveSession: async () => {

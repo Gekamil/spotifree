@@ -7,6 +7,7 @@ import {
   SearchLibraryNativeIcon,
   SortListNativeIcon,
   PinNativeIcon,
+  SpotifyLogoNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
@@ -225,30 +226,27 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             ✕
           </button>
 
-          <div className="flex items-center justify-between gap-2 relative z-10">
-            <div className="space-y-1 pr-2 flex-1 min-w-0">
-              <h4 className="font-extrabold text-[14px] leading-tight text-white font-['SpotifyMixUITitle'] tracking-tight">
-                Importa tu música desde otras aplicaciones
+          <div className="flex items-center justify-between gap-3 relative z-10">
+            <div className="space-y-1 pr-1 flex-1 min-w-0">
+              <h4 className="font-extrabold text-[13px] leading-tight text-white font-['SpotifyMixUITitle'] tracking-tight">
+                Importa tu música
               </h4>
-              <p className="text-[12px] text-white/90 font-medium leading-snug pt-1">
-                Trae tus listas, canciones y artistas.
+              <p className="text-[11px] text-white/90 font-medium leading-snug pt-0.5">
+                Trae tus listas, canciones y artistas favoritos.
               </p>
-              <div className="pt-3">
+              <div className="pt-2">
                 <button
                   onClick={() => openImportModal()}
-                  className="px-4 py-1.5 rounded-full bg-white text-black font-extrabold text-[12px] hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
+                  className="px-3.5 py-1.5 rounded-full bg-white text-black font-extrabold text-[11px] hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
                 >
                   Importar biblioteca
                 </button>
               </div>
             </div>
 
-            {/* Tilted 3D Spotify Tile — official Spotify green circle badge */}
-            <div className="w-13 h-13 rounded-2xl bg-[#121212] flex items-center justify-center shrink-0 -rotate-[14deg] border border-white/15 shadow-[0_12px_28px_rgba(0,0,0,0.7)] relative group overflow-hidden">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="12" cy="12" r="12" fill="#1ED760"/>
-                <path d="M17.9 10.9C15 9.2 10.3 9 7.5 9.8c-.5.1-1-.2-1.1-.7-.1-.5.2-1 .7-1.1 3.3-.9 8.6-.7 11.9 1.3.4.3.6.8.4 1.3-.3.4-.8.6-1.3.3zm-.1 2.8c-.2.4-.7.5-1.1.3-2.4-1.5-6.1-1.9-9-1.1-.4.1-.8-.1-.9-.5-.1-.4.1-.8.5-.9 3.3-.9 7.4-.5 10.2 1.2.4.3.5.8.3 1zm-1.3 2.7c-.2.3-.6.4-.9.2-2.1-1.3-4.8-1.6-7.9-.9-.3.1-.7-.1-.8-.4-.1-.3.1-.7.4-.8 3.4-.7 6.4-.4 8.8 1 .3.2.5.6.4.9z" fill="#000000"/>
-              </svg>
+            {/* Official Spotify Brand Icon Badge */}
+            <div className="w-11 h-11 rounded-full bg-black/80 border border-white/10 flex items-center justify-center shrink-0 shadow-lg">
+              <SpotifyLogoNativeIcon size={34} className="text-[#1ed760]" />
             </div>
           </div>
         </div>

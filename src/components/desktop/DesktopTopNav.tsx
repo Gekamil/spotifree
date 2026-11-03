@@ -16,6 +16,7 @@ import { syncChromeSession } from '../../services/sessionSync';
 import { ProfileDropdown } from './ProfileDropdown';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { addRecentSearch } from '../../utils/recentSearches';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 interface DesktopTopNavProps {
   onNavigateHome: () => void;
@@ -196,13 +197,23 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
           <BellNativeIcon size={16} />
         </button>
 
-        {/* Actividad de amigos */}
+        {/* Sesión compartida (3 humanitos) */}
         <button
-          onClick={() => toggleRightSidebar('friends')}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 hover:scale-104 transition-all shrink-0"
-          title="Actividad de amigos"
+          onClick={() => {
+            useSharedSessionStore.getState().setModalOpen(true);
+            toggleRightSidebar('friends');
+          }}
+          className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 relative cursor-pointer ${
+            useSharedSessionStore.getState().isInSession
+              ? 'bg-[#1ed760] text-black shadow shadow-[#1ed760]/30 hover:scale-105'
+              : 'text-[#b3b3b3] hover:text-white hover:bg-white/10 hover:scale-104'
+          }`}
+          title="Sesión compartida"
         >
           <FriendsNativeIcon size={16} />
+          {useSharedSessionStore.getState().isInSession && (
+            <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#1ed760] border-2 border-black animate-pulse" />
+          )}
         </button>
 
         {/* User avatar & Profile dropdown (rendered for both authenticated and guest users) */}

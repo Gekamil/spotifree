@@ -13,6 +13,7 @@ import { toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 
 interface LyricWord {
   timeMs: number;
@@ -1149,6 +1150,123 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               <p className="text-sm">Reproduce una canción para ver la letra.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* 4. SHARED SESSION / FRIENDS MODE */}
+      {activeRightSidebar === 'friends' && (
+        <div className="flex flex-col h-full overflow-hidden font-['SpotifyMixUI']">
+          {/* Header */}
+          <div className="px-4 py-3 flex items-center justify-between border-b border-white/5 bg-[#121212] shrink-0 z-10">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-sm text-white font-['SpotifyMixUITitle']">
+                Sesión compartida
+              </span>
+            </div>
+            <button
+              onClick={closeRightSidebar}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              title="Cerrar"
+            >
+              ✕
+            </button>
+          </div>
+
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            {!useSharedSessionStore.getState().isInSession ? (
+              <div className="flex flex-col items-center text-center space-y-4 pt-6">
+                <div className="w-16 h-16 rounded-full bg-[#1ed760]/20 text-[#1ed760] flex items-center justify-center shadow-lg">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    <path d="M4.5 10c1.38 0 2.5-1.12 2.5-2.5S5.88 5 4.5 5 2 6.12 2 7.5 3.12 10 4.5 10zm-1.5 3.5C1.84 14.16 0 15.33 0 17v2h6v-2c0-1.67-1.84-2.84-3-3.5z"/>
+                    <path d="M19.5 10c1.38 0 2.5-1.12 2.5-2.5S20.88 5 19.5 5 17 6.12 17 7.5s1.12 2.5 2.5 2.5zm1.5 3.5c1.16.66 3 1.83 3 3.5v2h-6v-2c0-1.67 1.84-2.84 3-3.5z"/>
+                  </svg>
+                </div>
+
+                <div className="space-y-1">
+                  <h3 className="font-extrabold text-base text-white font-['SpotifyMixUITitle']">
+                    Escucha con tus amigos
+                  </h3>
+                  <p className="text-xs text-[#b3b3b3] leading-relaxed">
+                    Comparte un enlace para escuchar la misma canción al segundo, ver sus cursores en vivo y elegir canciones juntos.
+                  </p>
+                </div>
+
+                <button
+                  onClick={() => useSharedSessionStore.getState().setModalOpen(true)}
+                  className="w-full py-2.5 rounded-full bg-[#1ed760] text-black font-extrabold text-xs tracking-wide hover:scale-104 active:scale-95 transition-all shadow-md cursor-pointer"
+                >
+                  Abrir Sesión Compartida
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-white flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+                      Sala en vivo: {useSharedSessionStore.getState().sessionId}
+                    </span>
+                    <span className="text-[10px] text-[#b3b3b3] uppercase font-bold">
+                      {useSharedSessionStore.getState().isHost ? '👑 Anfitrión' : 'Invitado'}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const link = useSharedSessionStore.getState().sessionLink;
+                      if (link) navigator.clipboard.writeText(link);
+                      useSharedSessionStore.getState().setModalOpen(true);
+                    }}
+                    className="w-full py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    Ver detalles y enlace
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
+                    Participantes en sala
+                  </span>
+                  <div className="space-y-1.5">
+                    {useSharedSessionStore.getState().participants.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center justify-between p-2 rounded-lg bg-black/40 border border-white/5 text-xs"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                            style={{ backgroundColor: p.color }}
+                          />
+                          <span className="font-bold text-white">{p.name}</span>
+                        </div>
+                        <span className="text-[10px] text-[#b3b3b3]">
+                          {p.isHost ? 'Anfitrión' : 'Invitado'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={() => {
+                      if (useSharedSessionStore.getState().isHost) {
+                        useSharedSessionStore.getState().terminateSession();
+                      } else {
+                        useSharedSessionStore.getState().leaveSession();
+                      }
+                    }}
+                    className="w-full py-2 rounded-full bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white font-bold text-xs transition-all cursor-pointer"
+                  >
+                    {useSharedSessionStore.getState().isHost ? 'Finalizar sesión' : 'Salir de la sesión'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </aside>

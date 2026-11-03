@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 
@@ -23,8 +24,6 @@ export const SharedSessionModal: React.FC = () => {
   const [isCopied, setIsCopied] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  if (!isModalOpen) return null;
-
   const handleCopyLink = () => {
     if (!sessionLink) return;
     navigator.clipboard.writeText(sessionLink).then(() => {
@@ -46,27 +45,70 @@ export const SharedSessionModal: React.FC = () => {
     setIsSubmitting(false);
   };
 
-  return (
+  if (!isModalOpen) return null;
+
+  const modal = (
     <div
-      className="fixed inset-0 z-[99999] bg-black/75 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200 select-none font-['SpotifyMixUI']"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 2147483647,
+        background: 'rgba(0,0,0,0.78)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '16px',
+        fontFamily: "'SpotifyMixUI', sans-serif",
+      }}
       onClick={() => setModalOpen(false)}
     >
       <div
-        className="w-full max-w-md bg-[#181818] border border-white/10 rounded-2xl shadow-2xl p-6 text-white relative overflow-hidden"
+        style={{
+          width: '100%',
+          maxWidth: '440px',
+          background: '#181818',
+          border: '1px solid rgba(255,255,255,0.1)',
+          borderRadius: '16px',
+          padding: '24px',
+          color: 'white',
+          position: 'relative',
+          boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         <button
           onClick={() => setModalOpen(false)}
-          className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
-          title="Cerrar"
+          style={{
+            position: 'absolute',
+            top: '16px',
+            right: '16px',
+            width: '32px',
+            height: '32px',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.05)',
+            border: 'none',
+            color: '#b3b3b3',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '16px',
+          }}
+          onMouseOver={(e) => { (e.currentTarget.style.background = 'rgba(255,255,255,0.15)'); (e.currentTarget.style.color = 'white'); }}
+          onMouseOut={(e) => { (e.currentTarget.style.background = 'rgba(255,255,255,0.05)'); (e.currentTarget.style.color = '#b3b3b3'); }}
         >
           ✕
         </button>
 
-        {/* Modal Header */}
-        <div className="flex items-center gap-3 mb-5">
-          <div className="w-11 h-11 rounded-full bg-[#1ed760]/20 text-[#1ed760] flex items-center justify-center shrink-0">
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+          <div style={{ width: '44px', height: '44px', borderRadius: '50%', background: 'rgba(30,215,96,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#1ed760' }}>
             <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
               <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
               <path d="M4.5 10c1.38 0 2.5-1.12 2.5-2.5S5.88 5 4.5 5 2 6.12 2 7.5 3.12 10 4.5 10zm-1.5 3.5C1.84 14.16 0 15.33 0 17v2h6v-2c0-1.67-1.84-2.84-3-3.5z"/>
@@ -74,24 +116,24 @@ export const SharedSessionModal: React.FC = () => {
             </svg>
           </div>
           <div>
-            <h2 className="text-lg font-black tracking-tight font-['SpotifyMixUITitle']">
+            <h2 style={{ margin: 0, fontSize: '18px', fontWeight: 900, letterSpacing: '-0.5px', fontFamily: "'SpotifyMixUITitle', sans-serif" }}>
               Sesión compartida
             </h2>
-            <p className="text-xs text-[#b3b3b3]">
-              {isInSession ? `Sala en vivo • Código ${sessionId}` : 'Escucha y controla música con tus amigos'}
+            <p style={{ margin: '2px 0 0', fontSize: '12px', color: '#b3b3b3' }}>
+              {isInSession ? `Sala en vivo · Código ${sessionId}` : 'Escucha y controla música con tus amigos'}
             </p>
           </div>
         </div>
 
-        {/* Not in Session: Create or Join */}
+        {/* Content */}
         {!isInSession ? (
-          <div className="space-y-4">
-            <p className="text-sm text-[#b3b3b3] leading-relaxed">
-              Inicia una sesión para que tus amigos se conecten. Veréis el ratón del otro en tiempo real, podréis interactuar con las playlists y escuchar las canciones sincronizadas al mismo segundo.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <p style={{ margin: 0, fontSize: '14px', color: '#b3b3b3', lineHeight: 1.6 }}>
+              Inicia una sesión para que tus amigos se conecten. Veréis el ratón del otro en tiempo real y escucharéis la música sincronizada al mismo segundo.
             </p>
 
             <div>
-              <label className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider block mb-1.5">
+              <label style={{ display: 'block', fontSize: '11px', fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '6px' }}>
                 Tu nombre en la sesión
               </label>
               <input
@@ -99,91 +141,86 @@ export const SharedSessionModal: React.FC = () => {
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
                 placeholder="Nombre para mostrar"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white text-sm focus:outline-none focus:border-[#1ed760] transition-colors"
+                style={{ width: '100%', padding: '10px 14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '14px', outline: 'none', boxSizing: 'border-box' }}
+                onFocus={(e) => (e.target.style.borderColor = '#1ed760')}
+                onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
               />
             </div>
 
             <button
               onClick={handleStart}
               disabled={isSubmitting}
-              className="w-full py-3 rounded-full bg-[#1ed760] text-black font-black text-sm tracking-wide hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer shadow-lg shadow-[#1ed760]/20 flex items-center justify-center gap-2"
+              style={{ width: '100%', padding: '13px', borderRadius: '999px', background: '#1ed760', border: 'none', color: '#000', fontWeight: 900, fontSize: '14px', cursor: isSubmitting ? 'wait' : 'pointer', letterSpacing: '0.3px', boxShadow: '0 4px 24px rgba(30,215,96,0.25)', opacity: isSubmitting ? 0.7 : 1 }}
             >
-              <span>{isSubmitting ? 'Iniciando...' : 'Iniciar Sesión Compartida'}</span>
+              {isSubmitting ? 'Iniciando...' : '🎵 Iniciar Sesión Compartida'}
             </button>
 
-            <div className="pt-3 border-t border-white/10 flex items-center gap-2">
+            <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input
                 type="text"
                 value={joinCodeInput}
                 onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
                 placeholder="Pegar código de sesión"
                 maxLength={8}
-                className="flex-1 px-3.5 py-2 rounded-xl bg-white/5 border border-white/10 text-white text-sm uppercase tracking-wider focus:outline-none focus:border-[#1ed760]"
+                style={{ flex: 1, padding: '8px 14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'white', fontSize: '13px', textTransform: 'uppercase', letterSpacing: '2px', outline: 'none' }}
+                onFocus={(e) => (e.target.style.borderColor = '#1ed760')}
+                onBlur={(e) => (e.target.style.borderColor = 'rgba(255,255,255,0.1)')}
               />
               <button
                 onClick={handleJoin}
                 disabled={isSubmitting || !joinCodeInput.trim()}
-                className="px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold text-xs cursor-pointer transition-all disabled:opacity-40"
+                style={{ padding: '8px 16px', borderRadius: '12px', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', fontWeight: 700, fontSize: '12px', cursor: 'pointer', opacity: (!joinCodeInput.trim() || isSubmitting) ? 0.4 : 1 }}
               >
                 Unirse
               </button>
             </div>
           </div>
         ) : (
-          /* Currently in Session */
-          <div className="space-y-5">
-            {/* Share Link Banner */}
-            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Share Link */}
+            <div style={{ padding: '14px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'center' }}>
+                <span style={{ fontSize: '11px', fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '1px' }}>
                   Enlace para tus amigos
                 </span>
-                <span className="text-xs text-[#1ed760] font-bold flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-ping inline-block" />
+                <span style={{ fontSize: '12px', color: '#1ed760', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#1ed760', display: 'inline-block', animation: 'pulse 2s infinite' }} />
                   En vivo
                 </span>
               </div>
-              <div className="flex items-center gap-2">
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <input
                   type="text"
                   readOnly
                   value={sessionLink || ''}
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-black/40 border border-white/5 text-xs text-white/90 font-mono truncate select-all"
+                  style={{ flex: 1, padding: '6px 12px', borderRadius: '8px', background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.9)', fontSize: '11px', fontFamily: 'monospace', outline: 'none' }}
+                  onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button
                   onClick={handleCopyLink}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                    isCopied
-                      ? 'bg-[#1ed760] text-black shadow-md'
-                      : 'bg-white text-black hover:scale-102 active:scale-95'
-                  }`}
+                  style={{ padding: '6px 12px', borderRadius: '8px', background: isCopied ? '#1ed760' : 'white', border: 'none', color: '#000', fontWeight: 700, fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
                 >
                   {isCopied ? '¡Copiado!' : 'Copiar'}
                 </button>
               </div>
             </div>
 
-            {/* Participants List */}
+            {/* Participants */}
             <div>
-              <div className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider mb-2.5">
+              <div style={{ fontSize: '11px', fontWeight: 700, color: '#b3b3b3', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>
                 Participantes ({participants.length})
               </div>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '160px', overflowY: 'auto' }}>
                 {participants.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-black/25 border border-white/5"
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 10px', borderRadius: '10px', background: 'rgba(0,0,0,0.25)', border: '1px solid rgba(255,255,255,0.05)' }}
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div
-                        className="w-3.5 h-3.5 rounded-full shrink-0 shadow-sm"
-                        style={{ backgroundColor: p.color }}
-                      />
-                      <span className="text-xs font-bold text-white">
-                        {p.name}
-                      </span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: p.color, flexShrink: 0 }} />
+                      <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.name}</span>
                     </div>
-                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full font-bold bg-white/5 text-[#b3b3b3]">
+                    <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '2px 8px', borderRadius: '999px', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: '#b3b3b3' }}>
                       {p.isHost ? '👑 Anfitrión' : 'Invitado'}
                     </span>
                   </div>
@@ -191,26 +228,26 @@ export const SharedSessionModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Guest Security Notice */}
+            {/* Guest notice */}
             {!isHost && (
-              <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-[#b3b3b3] leading-relaxed border border-white/5">
-                🔒 Estás en la sesión como invitado. Puedes cambiar de canción y hacer clic en playlists. El acceso a los ajustes de configuración está protegido.
+              <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '12px', color: '#b3b3b3', lineHeight: 1.5 }}>
+                🔒 Estás en la sesión como invitado. Puedes cambiar canciones y abrir playlists. Los ajustes están protegidos.
               </div>
             )}
 
-            {/* Action Buttons */}
-            <div className="pt-2 flex items-center justify-between gap-3">
+            {/* Actions */}
+            <div style={{ paddingTop: '8px' }}>
               {isHost ? (
                 <button
                   onClick={terminateSession}
-                  className="w-full py-2.5 rounded-full bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border border-red-500/30 font-bold text-xs transition-all cursor-pointer"
+                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.3)', color: '#fca5a5', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                 >
                   Finalizar sesión para todos
                 </button>
               ) : (
                 <button
                   onClick={leaveSession}
-                  className="w-full py-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all cursor-pointer"
+                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                 >
                   Salir de la sesión
                 </button>
@@ -221,4 +258,6 @@ export const SharedSessionModal: React.FC = () => {
       </div>
     </div>
   );
+
+  return createPortal(modal, document.body);
 };
