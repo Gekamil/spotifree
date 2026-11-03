@@ -15,6 +15,7 @@
     "clsx": "^2.1.1",
     "firebase": "^13.1.0",
     "msedge-tts": "^2.1.1",
+    "peerjs": "^1.5.5",
     "play-dl": "^1.9.7",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
