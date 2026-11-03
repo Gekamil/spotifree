@@ -2,6 +2,7 @@ import React from 'react';
 import type { UserProfile } from '../../types/spotify';
 import { SearchIconSmall } from '../icons/SpotifyIcons';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
+import { useUIStore } from '../../store/useUIStore';
 
 interface DesktopHeaderProps {
   user: UserProfile;
@@ -11,10 +12,10 @@ interface DesktopHeaderProps {
 
 // Separate reactive sub-component so the hook re-renders on session state change
 const SharedSessionButton: React.FC = () => {
-  const { isInSession, setModalOpen } = useSharedSessionStore();
+  const isInSession = useSharedSessionStore((s) => s.isInSession);
   return (
     <button
-      onClick={() => setModalOpen(true)}
+      onClick={() => useUIStore.getState().toggleRightSidebar('friends')}
       className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer relative ${
         isInSession
           ? 'bg-[#1ed760] text-black shadow-lg shadow-[#1ed760]/30 hover:scale-105'

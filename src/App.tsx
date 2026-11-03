@@ -80,7 +80,7 @@ function App() {
       <AudioController />
       {isMobile ? <MobileLayout /> : <DesktopLayout />}
       <AddToPlaylistModal />
-      <SharedSessionModal />
+      {isMobile && <SharedSessionModal />}
       <SharedSessionCursors />
     </ErrorBoundary>
   );

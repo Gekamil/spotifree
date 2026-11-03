@@ -78,14 +78,18 @@ export const SharedSessionCursors: React.FC = () => {
 
             {/* Name Badge */}
             <div
-              className="ml-4 -mt-2 px-2 py-0.5 rounded-full text-[11px] font-bold text-white shadow-xl whitespace-nowrap flex items-center gap-1 border border-black/20"
+              className="ml-4 -mt-2 px-2.5 py-0.5 rounded-full text-[11px] font-bold text-white shadow-xl whitespace-nowrap flex items-center gap-1.5 border border-black/20"
               style={{
                 backgroundColor: p.color,
                 boxShadow: `0 4px 14px ${p.color}40`,
               }}
             >
-              <span>{p.isHost ? '👑' : '👤'}</span>
               <span>{p.name}</span>
+              {p.isHost && (
+                <span className="text-[9px] bg-black/30 px-1 rounded uppercase tracking-wider font-extrabold">
+                  Anfitrión
+                </span>
+              )}
             </div>
           </div>
         );

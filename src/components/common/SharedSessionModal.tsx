@@ -152,7 +152,7 @@ export const SharedSessionModal: React.FC = () => {
               disabled={isSubmitting}
               style={{ width: '100%', padding: '13px', borderRadius: '999px', background: '#1ed760', border: 'none', color: '#000', fontWeight: 900, fontSize: '14px', cursor: isSubmitting ? 'wait' : 'pointer', letterSpacing: '0.3px', boxShadow: '0 4px 24px rgba(30,215,96,0.25)', opacity: isSubmitting ? 0.7 : 1 }}
             >
-              {isSubmitting ? 'Iniciando...' : '🎵 Iniciar Sesión Compartida'}
+              {isSubmitting ? 'Iniciando...' : 'Iniciar sesión compartida'}
             </button>
 
             <div style={{ paddingTop: '12px', borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -200,7 +200,7 @@ export const SharedSessionModal: React.FC = () => {
                   onClick={handleCopyLink}
                   style={{ padding: '6px 12px', borderRadius: '8px', background: isCopied ? '#1ed760' : 'white', border: 'none', color: '#000', fontWeight: 700, fontSize: '12px', cursor: 'pointer', transition: 'all 0.2s', whiteSpace: 'nowrap' }}
                 >
-                  {isCopied ? '¡Copiado!' : 'Copiar'}
+                  {isCopied ? 'Copiado' : 'Copiar'}
                 </button>
               </div>
             </div>
@@ -221,7 +221,7 @@ export const SharedSessionModal: React.FC = () => {
                       <span style={{ fontSize: '13px', fontWeight: 700 }}>{p.name}</span>
                     </div>
                     <span style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.5px', padding: '2px 8px', borderRadius: '999px', fontWeight: 700, background: 'rgba(255,255,255,0.05)', color: '#b3b3b3' }}>
-                      {p.isHost ? '👑 Anfitrión' : 'Invitado'}
+                      {p.isHost ? 'Anfitrión' : 'Invitado'}
                     </span>
                   </div>
                 ))}
@@ -231,7 +231,7 @@ export const SharedSessionModal: React.FC = () => {
             {/* Guest notice */}
             {!isHost && (
               <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '12px', color: '#b3b3b3', lineHeight: 1.5 }}>
-                🔒 Estás en la sesión como invitado. Puedes cambiar canciones y abrir playlists. Los ajustes están protegidos.
+                Estás en la sesión como invitado. Puedes cambiar canciones y abrir playlists. Los ajustes están protegidos.
               </div>
             )}
 
