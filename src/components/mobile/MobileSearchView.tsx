@@ -10,6 +10,7 @@ import {
   clearRecentSearches,
   type RecentSearchItem,
 } from '../../utils/recentSearches';
+import { parseTrackArtists } from '../../utils/trackArtists';
 import { CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 
 interface MobileSearchViewProps {
@@ -257,7 +258,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         id: trk.id,
                         type: 'track',
                         title: trk.name,
-                        subtitle: `Canción • ${trk.artists?.map((a: any) => a.name).join(', ') || ''}`,
+                        subtitle: `Canción • ${parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ') || ''}`,
                         image: cover,
                         data: trk,
                       });
@@ -289,7 +290,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           {trk.name}
                         </span>
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                          {trk.artists?.map((a: any) => a.name).join(', ')}
+                          {parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ')}
                         </span>
                       </div>
                     </div>

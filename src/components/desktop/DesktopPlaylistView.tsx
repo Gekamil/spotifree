@@ -43,6 +43,7 @@ function getArtistMonthlyListeners(name: string): string {
 
 
 import { handleImageError } from '../../utils/imageFallback';
+import { parseTrackArtists } from '../../utils/trackArtists';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 import { toHDImage } from '../../utils/formatters';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
@@ -798,11 +799,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 : ''}
             </p>
             <div className="flex items-center gap-2 text-sm text-white font-medium mt-1 flex-wrap drop-shadow">
-              <svg width="20" height="20" viewBox="0 0 24 24" className="shrink-0">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="shrink-0">
                 <circle cx="12" cy="12" r="12" fill="#1ed760" />
                 <path
-                  d="M17.5 17.3c-.22.35-.67.46-1.03.25-2.81-1.72-6.35-2.11-10.52-1.15-.4.09-.8-.16-.9-.56-.09-.4.16-.8.56-.9 4.57-1.04 8.49-.6 11.64 1.34.35.21.46.67.25 1.02zm1.47-3.26c-.27.44-.85.58-1.29.31-3.22-1.98-8.13-2.55-11.94-1.39-.5.15-1.03-.13-1.18-.63-.15-.5.14-1.03.63-1.18 4.36-1.32 9.78-.69 13.46 1.58.44.27.58.85.31 1.29zm.12-3.41c-3.86-2.29-10.23-2.5-13.9-1.39-.59.18-1.22-.16-1.4-.75-.18-.59.16-1.22.75-1.4 4.22-1.28 11.25-1.04 15.69 1.6.53.32.7.1 1.01.39 1.54-.31.53-1 .7-1.53.4z"
                   fill="#000000"
+                  d="M17.503 17.308c-.215.353-.676.464-1.029.248-2.818-1.721-6.364-2.111-10.541-1.156-.402.092-.801-.158-.893-.56-.092-.403.158-.802.56-.894 4.571-1.045 8.493-.595 11.655 1.338.353.216.464.677.248 1.024zm1.469-3.268c-.271.44-.847.579-1.287.308-3.226-1.982-8.143-2.557-11.957-1.399-.495.15-1.017-.13-1.168-.623-.15-.495.13-1.017.623-1.168 4.358-1.322 9.776-.682 13.489 1.595.44.271.58.847.31 1.287zm.126-3.402C15.23 8.34 8.85 8.129 5.157 9.25c-.593.18-1.22-.155-1.4-.748-.18-.593.155-1.22.748-1.4C8.75 5.819 15.789 6.068 20.242 8.71c.535.317.71 1.006.393 1.54-.316.533-1.006.71-1.539.394v-.006z"
                 />
               </svg>
               <span>
@@ -1330,24 +1331,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                           {track.name}
                         </p>
                         <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
-                          {track.artists.map((a, aIdx) => (
-                            <span
-                              key={`${track.id}-art-${aIdx}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (onSelectPlaylistById) {
-                                  onSelectPlaylistById(
-                                    `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`,
-                                    a.name
-                                  );
-                                }
-                              }}
-                              className="hover:underline hover:text-white cursor-pointer"
-                            >
-                              {a.name}
-                              {aIdx < track.artists.length - 1 ? ', ' : ''}
-                            </span>
-                          ))}
+                          {(() => {
+                            const parsed = parseTrackArtists(track.artists);
+                            return parsed.map((a, aIdx) => (
+                              <span
+                                key={`${track.id}-art-${aIdx}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (onSelectPlaylistById) {
+                                    onSelectPlaylistById(a.id, a.name);
+                                  }
+                                }}
+                                className="hover:underline hover:text-white cursor-pointer"
+                              >
+                                {a.name}
+                                {aIdx < parsed.length - 1 ? ', ' : ''}
+                              </span>
+                            ));
+                          })()}
                         </p>
                       </div>
                     </div>
@@ -1543,7 +1544,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{tr.name}</p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {tr.artists.map((a) => a.name).join(', ')}
+                      {parseTrackArtists(tr.artists).map((a) => a.name).join(', ')}
                     </p>
                   </div>
                 </div>

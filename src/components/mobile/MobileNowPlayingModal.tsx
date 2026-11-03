@@ -28,6 +28,7 @@ import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
+import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -576,7 +577,22 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   {currentTrack.name}
                 </h1>
                 <p className="text-base text-[#b3b3b3] truncate mt-0.5">
-                  {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
+                  {(() => {
+                    const parsed = parseTrackArtists(currentTrack.artists);
+                    return parsed.map((a, i) => (
+                      <span
+                        key={a.id || i}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onClose();
+                          onSelectPlaylistById?.(a.id, a.name);
+                        }}
+                        className="hover:underline hover:text-white active:text-white"
+                      >
+                        {a.name}{i < parsed.length - 1 ? ', ' : ''}
+                      </span>
+                    ));
+                  })()}
                 </p>
               </div>
             </div>
@@ -1172,7 +1188,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-sm text-[#1ed760] truncate">{currentTrack.name}</p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {currentTrack.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                      {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ') || 'Artista'}
                     </p>
                   </div>
                   <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">
@@ -1225,7 +1241,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-sm text-white truncate">{t.name}</p>
                             <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                              {t.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                              {parseTrackArtists(t.artists).map((a) => a.name).join(', ') || 'Artista'}
                             </p>
                           </div>
                           <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">

@@ -39,6 +39,7 @@ import {
   resolveTrackCoversBatch,
   TrackArtwork,
 } from '../../utils/trackCovers';
+import { parseTrackArtists } from '../../utils/trackArtists';
 import {
   getCustomLikedSongs,
   saveCustomLikedSong,
@@ -1213,7 +1214,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         <div className="flex flex-col min-w-0">
                           <span className="font-bold text-white text-xs truncate">{trk.name}</span>
                           <span className="text-[11px] text-[#b3b3b3] truncate">
-                            {trk.artists?.map((a) => a.name).join(', ')}
+                            {parseTrackArtists(trk.artists).map((a) => a.name).join(', ')}
                           </span>
                         </div>
                       </div>
@@ -1284,8 +1285,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                                 ? `${Number((track as any).playcount).toLocaleString('es-ES')} reproducciones`
                                 : (track as any).plays
                                 ? `${Number((track as any).plays).toLocaleString('es-ES')} reproducciones`
-                                : track.album?.name || track.artists?.map((a) => a.name).join(', ') || 'Artista'
-                              : track.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                                : track.album?.name || parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'
+                              : parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'}
                           </span>
                           {track.added_by && (
                             <span className="text-[10px] text-[#1ed760] font-medium shrink-0">
@@ -1449,7 +1450,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     <div className="flex flex-col min-w-0 pr-2 text-left">
                       <span className="font-bold text-white text-xs truncate">{trk.name}</span>
                       <span className="text-[11px] text-[#b3b3b3] truncate">
-                        {trk.artists?.map((a) => a.name).join(', ')}
+                        {parseTrackArtists(trk.artists).map((a) => a.name).join(', ')}
                       </span>
                     </div>
                     <button
@@ -1636,7 +1637,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               <div className="flex-1 min-w-0">
                 <p className="font-bold text-white text-base truncate">{activeTrackMenu.name}</p>
                 <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                  {activeTrackMenu.artists?.map((a) => a.name).join(', ') || 'Artista'}
+                  {parseTrackArtists(activeTrackMenu.artists).map((a) => a.name).join(', ') || 'Artista'}
                 </p>
               </div>
             </div>

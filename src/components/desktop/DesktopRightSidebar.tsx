@@ -14,6 +14,7 @@ import { audioEngine } from '../../services/audioEngine';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
+import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface LyricWord {
   timeMs: number;
@@ -950,25 +951,19 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                   {currentTrack?.name || 'Selecciona una canción'}
                 </h2>
                 <div className="text-[14px] text-[#b3b3b3] mt-1 truncate">
-                  {currentTrack?.artists && currentTrack.artists.length > 0 ? (
-                    currentTrack.artists.map((artist, idx) => (
+                  {(() => {
+                    const parsed = parseTrackArtists(currentTrack?.artists);
+                    return parsed.map((artist, idx) => (
                       <span
                         key={artist.id || idx}
                         onClick={() => handleArtistClick(artist.name, artist.id)}
                         className="hover:underline hover:text-white cursor-pointer"
                       >
                         {artist.name}
-                        {idx < currentTrack.artists.length - 1 ? ', ' : ''}
+                        {idx < parsed.length - 1 ? ', ' : ''}
                       </span>
-                    ))
-                  ) : (
-                    <span
-                      onClick={() => handleArtistClick(primaryArtist)}
-                      className="hover:underline hover:text-white cursor-pointer"
-                    >
-                      {primaryArtist || 'Artista'}
-                    </span>
-                  )}
+                    ));
+                  })()}
                 </div>
               </div>
 
@@ -1226,7 +1221,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       {upcomingQueue[0].name}
                     </p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {upcomingQueue[0].artists.map((a) => a.name).join(', ')}
+                      {parseTrackArtists(upcomingQueue[0].artists).map((a) => a.name).join(', ')}
                     </p>
                   </div>
                 </div>
@@ -1272,7 +1267,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       {currentTrack.name}
                     </p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {currentTrack.artists.map((a) => a.name).join(', ')}
+                      {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ')}
                     </p>
                   </div>
                 </div>
@@ -1354,7 +1349,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                             {item.name}
                           </p>
                           <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                            {item.artists.map((a) => a.name).join(', ')}
+                            {parseTrackArtists(item.artists).map((a) => a.name).join(', ')}
                           </p>
                         </div>
                       </div>
@@ -1408,7 +1403,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                   onClick={() => handleArtistClick(primaryArtist, currentTrack.artists?.[0]?.id)}
                   className="text-sm font-semibold text-white/80 hover:text-white hover:underline cursor-pointer"
                 >
-                  {currentTrack.artists.map((a) => a.name).join(', ')}
+                  {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ')}
                 </p>
               </div>
 

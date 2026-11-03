@@ -12,6 +12,7 @@ import {
   clearRecentSearches,
   type RecentSearchItem,
 } from '../../utils/recentSearches';
+import { parseTrackArtists } from '../../utils/trackArtists';
 
 const CATEGORY_HUBS: Record<
   string,
@@ -711,7 +712,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       id: track.id,
       type: 'track',
       title: track.name,
-      subtitle: `Canción • ${track.artists?.map((a: any) => a.name).join(', ') || 'Artista'}`,
+      subtitle: `Canción • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || 'Artista'}`,
       image: track.album?.images?.[0]?.url,
       data: track,
     });
@@ -1062,7 +1063,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                   {track.name}
                                 </span>
                                 <span className="text-xs text-[#b3b3b3] truncate">
-                                  {track.artists?.map((a: any) => a.name).join(', ')}
+                                  {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
                                 </span>
                               </div>
                             </div>
@@ -1190,7 +1191,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                               {track.name}
                             </span>
                             <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                              {track.artists?.map((a: any) => a.name).join(', ')} • {track.album?.name}
+                              {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')} • {track.album?.name}
                             </span>
                           </div>
                         </div>

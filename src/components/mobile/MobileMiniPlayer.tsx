@@ -11,6 +11,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
 import { useUIStore } from '../../store/useUIStore';
+import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -168,7 +169,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
             </span>
           </div>
           <span className="text-[11.5px] text-white/70 truncate leading-tight mt-0.5">
-            {currentTrack.artists?.map((a) => a.name).join(', ') || 'Spotify'}
+            {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ') || 'Spotifree'}
           </span>
         </div>
       </div>

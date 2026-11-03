@@ -23,6 +23,7 @@ import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
 import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
 import { handleImageError } from '../../utils/imageFallback';
+import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -263,15 +264,21 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
                 {currentTrack.name}
               </span>
               <span className="text-[#b3b3b3] text-[11px] truncate mt-0.5">
-                {currentTrack.artists?.map((a, i) => (
-                  <span
-                    key={a.id || i}
-                    onClick={() => onSelectPlaylistById?.('art-' + (a.id || a.name.toLowerCase().replace(/[\s&]+/g, '-')), a.name)}
-                    className="hover:underline hover:text-white cursor-pointer"
-                  >
-                    {a.name}{i < currentTrack.artists.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
+                {(() => {
+                  const parsed = parseTrackArtists(currentTrack.artists);
+                  return parsed.map((a, i) => (
+                    <span
+                      key={a.id || i}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectPlaylistById?.(a.id, a.name);
+                      }}
+                      className="hover:underline hover:text-white cursor-pointer"
+                    >
+                      {a.name}{i < parsed.length - 1 ? ', ' : ''}
+                    </span>
+                  ));
+                })()}
               </span>
             </div>
 
