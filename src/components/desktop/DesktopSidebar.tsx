@@ -12,7 +12,7 @@ import {
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
-import { stripHtml } from '../../utils/formatters';
+import { stripHtml, toHDImage } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
 import { SortMenuDropdown } from './SortMenuDropdown';
 
@@ -332,7 +332,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               const isArtist =
                 playlist.type === 'artist' ||
                 playlist.description?.toLowerCase() === 'artista';
-              const coverUrl = playlist.images?.[0]?.url;
+              const coverUrl = toHDImage(playlist.images?.[0]?.url);
 
               const isPlayingThis =
                 isPlaying &&
@@ -446,7 +446,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               const isArtist =
                 playlist.type === 'artist' ||
                 playlist.description?.toLowerCase() === 'artista';
-              const coverUrl = playlist.images?.[0]?.url;
+              const coverUrl = toHDImage(playlist.images?.[0]?.url);
 
               const isPlayingThis =
                 isPlaying &&

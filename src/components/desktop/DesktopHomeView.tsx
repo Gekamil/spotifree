@@ -8,16 +8,16 @@ import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
-import { stripHtml } from '../../utils/formatters';
+import { stripHtml, toHDImage } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
   { id: 'mix-diario-1', name: 'Mix diario 1', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es', color: '#C45028' },
-  { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000d72cfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
+  { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000bebbfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
   { id: 'my-top-tracks-playlist', name: 'My top tracks playlist', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59', color: '#5E3D82' },
-  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
+  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
   { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es', color: '#EAB308' },
   { id: 'tus-canciones-mas-escuchadas-2025', name: 'Your Top Songs 2025', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/wrapped25/yts/en', color: '#E05A36' },
   { id: 'random', name: 'Random', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce', color: '#2D6852' },
@@ -324,7 +324,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
                   {card.image ? (
                     <img
-                      src={card.image}
+                      src={toHDImage(card.image)}
                       alt={card.title}
                       onError={handleImageError}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -453,7 +453,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 >
                   <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">
                     <img
-                      src={item.image}
+                      src={toHDImage(item.image)}
                       alt={item.name}
                       onError={handleImageError}
                       referrerPolicy="no-referrer"

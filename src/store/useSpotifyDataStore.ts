@@ -288,7 +288,7 @@ export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
     id: '7b3MrCWtettvBKlfBSdorn',
     name: 'J+L(2026)',
     description: 'Selección de éxitos contemporáneos.',
-    images: [{ url: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc' }],
+    images: [{ url: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb' }],
     owner: { display_name: 'Spotify', id: 'spotify' },
     tracks: { total: 35, items: [] },
     color: '#5a483a',

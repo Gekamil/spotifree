@@ -44,6 +44,7 @@ function getArtistMonthlyListeners(name: string): string {
 
 import { handleImageError } from '../../utils/imageFallback';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
+import { toHDImage } from '../../utils/formatters';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
 
@@ -842,7 +843,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               />
             ) : !heroCoverError && dynamicPlaylist.images?.[0]?.url && !dynamicPlaylist.images[0].url.includes('liked-songs') ? (
               <img
-                src={dynamicPlaylist.images[0].url}
+                src={toHDImage(dynamicPlaylist.images[0].url)}
                 alt={dynamicPlaylist.name}
                 onError={() => setHeroCoverError(true)}
                 className="w-full h-full object-cover shadow-2xl"

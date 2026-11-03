@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import type { FeedCard } from '../../data/liveUserFeed';
+import { toHDImage } from '../../utils/formatters';
 
 function cleanSubtitle(text?: string): string {
   if (!text) return '';
@@ -100,7 +101,7 @@ const CarouselCard: React.FC<{
           <>
             <img
               ref={imgRef}
-              src={card.image}
+              src={toHDImage(card.image)}
               alt={card.title}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"

@@ -3,11 +3,11 @@ import crypto from 'node:crypto';
 export function toHDImage(url) {
   if (!url) return '';
   return url
-    .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
-    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
-    .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
-    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
-    .replace(/\/ab67706d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706d00000002$1')
+    .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67616d0000b273$1')
+    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706f00000002$1')
+    .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/i, '/ab6761610000e5eb$1')
+    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706c0000bebb$1')
+    .replace(/\/ab67706d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706d00000002$1')
     .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
     .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
     .replace('liked-songs-64.png', 'liked-songs-640.jpg')

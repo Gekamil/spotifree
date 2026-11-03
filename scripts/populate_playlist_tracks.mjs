@@ -18,11 +18,11 @@ function createTrack(id, name, artistName, albumName, coverUrl, durationMs = 215
   };
 }
 
-const romeoCover = 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000dec5fd28fd6f3ec5b7002c5649d7';
+const romeoCover = 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000bebb';
 const princeCover = 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es';
-const jlCover = 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec5804d43e5cc7f6a6d0ac65ffc';
+const jlCover = 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb';
 const spideyCover = 'https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f';
-const amorCover = 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000dec594fb1489122f222f1a57c7c8';
+const amorCover = 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb';
 const miticasCover = 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
 const urbanoCover = 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
 const wrappedCover = 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/wrapped25/yts/en';

@@ -3,20 +3,44 @@ import type { Track } from '../types/spotify';
 
 export const TRACK_COVER_CACHE = new Map<string, string>();
 
+/**
+ * Detects whether a URL is a playlist cover, mosaic, or generic placeholder
+ * instead of an actual song album artwork.
+ */
+export function isPlaylistOrGenericCover(url?: string | null): boolean {
+  if (!url) return true;
+  if (url.includes('liked-songs')) return true;
+  if (url.includes('mosaic.scdn.co')) return true;
+  if (url.includes('pickasso.spotifycdn.com')) return true;
+  // Spotify User & Editorial playlist cover hashes: ab67706c, ab67706f, ab67706d
+  if (url.includes('ab67706c') || url.includes('ab67706f') || url.includes('ab67706d')) return true;
+  return false;
+}
+
 if (typeof window !== 'undefined') {
   try {
     const saved = window.localStorage.getItem('spotifree_track_covers');
     if (saved) {
       const parsed = JSON.parse(saved);
+      let cleaned = false;
       Object.entries(parsed).forEach(([k, v]) => {
-        if (typeof v === 'string') TRACK_COVER_CACHE.set(k, v);
+        if (typeof v === 'string' && !isPlaylistOrGenericCover(v)) {
+          TRACK_COVER_CACHE.set(k, v);
+        } else {
+          cleaned = true;
+          delete parsed[k];
+        }
       });
+      // Purge corrupt playlist covers from localStorage immediately
+      if (cleaned) {
+        window.localStorage.setItem('spotifree_track_covers', JSON.stringify(parsed));
+      }
     }
   } catch {}
 }
 
 export function persistTrackCover(id: string, url: string) {
-  if (!id || !url) return;
+  if (!id || !url || isPlaylistOrGenericCover(url)) return;
   TRACK_COVER_CACHE.set(id, url);
   if (typeof window !== 'undefined') {
     try {
@@ -39,19 +63,18 @@ export function persistTrackCover(id: string, url: string) {
 export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): string | undefined {
   if (!track) return undefined;
   if (TRACK_COVER_CACHE.has(track.id)) {
-    return TRACK_COVER_CACHE.get(track.id);
+    const cached = TRACK_COVER_CACHE.get(track.id);
+    if (cached && !isPlaylistOrGenericCover(cached)) {
+      return cached;
+    }
   }
 
   const albumCover = track.album?.images?.[0]?.url;
-  if (albumCover) {
-    if (albumCover.includes('liked-songs')) {
-      return undefined;
-    }
+  if (albumCover && !isPlaylistOrGenericCover(albumCover)) {
     // If the cover is identical to the playlist cover, do not use it
-    if (fallbackPlaylistCover && (albumCover === fallbackPlaylistCover || albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
-      return undefined;
+    if (!fallbackPlaylistCover || (albumCover !== fallbackPlaylistCover && !albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
+      return albumCover;
     }
-    return albumCover;
   }
 
   const anyT = track as any;
@@ -69,11 +92,10 @@ export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): 
     anyT.album_cover_url ||
     anyT.thumbnail;
 
-  if (directCover && !directCover.includes('liked-songs')) {
-    if (fallbackPlaylistCover && (directCover === fallbackPlaylistCover || directCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
-      return undefined;
+  if (directCover && !isPlaylistOrGenericCover(directCover)) {
+    if (!fallbackPlaylistCover || (directCover !== fallbackPlaylistCover && !directCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
+      return directCover;
     }
-    return directCover;
   }
 
   return undefined;
@@ -98,12 +120,15 @@ export async function resolveTrackCoversBatch(
   const toResolve = tracks.filter((t) => {
     if (!t.id) return false;
     if (TRACK_COVER_CACHE.has(t.id)) {
-      allUpdates.set(t.id, TRACK_COVER_CACHE.get(t.id)!);
-      return false;
+      const cached = TRACK_COVER_CACHE.get(t.id)!;
+      if (!isPlaylistOrGenericCover(cached)) {
+        allUpdates.set(t.id, cached);
+        return false;
+      }
     }
     const currentCover = t.album?.images?.[0]?.url;
     const isSameAsPlaylist = currentCover && playlistCover && (currentCover === playlistCover || currentCover.endsWith(playlistCover.slice(-25)));
-    return !currentCover || isSameAsPlaylist;
+    return !currentCover || isPlaylistOrGenericCover(currentCover) || isSameAsPlaylist;
   });
 
   if (allUpdates.size > 0 && onBatchResolved) {
@@ -122,9 +147,9 @@ export async function resolveTrackCoversBatch(
           return { id: t.id, url: TRACK_COVER_CACHE.get(t.id)! };
         }
 
-        // Direct check on track object properties
-        const existingDirect = getTrackCoverUrl(t);
-        if (existingDirect && !existingDirect.includes('liked-songs')) {
+        // Direct check on track object properties with strict playlist cover rejection
+        const existingDirect = getTrackCoverUrl(t, playlistCover);
+        if (existingDirect && !isPlaylistOrGenericCover(existingDirect)) {
           persistTrackCover(t.id, existingDirect);
           return { id: t.id, url: existingDirect };
         }
@@ -148,7 +173,7 @@ export async function resolveTrackCoversBatch(
             );
             if (res.ok) {
               const data = await res.json();
-              if (data.thumbnail_url) {
+              if (data.thumbnail_url && !isPlaylistOrGenericCover(data.thumbnail_url)) {
                 persistTrackCover(t.id, data.thumbnail_url);
                 return { id: t.id, url: data.thumbnail_url };
               }
@@ -156,7 +181,24 @@ export async function resolveTrackCoversBatch(
           } catch {}
         }
 
-        // 2. iTunes Search API fallback (matches title + artist)
+        // 2. Deezer Search API (fastest, ~120ms response, high quality 500x500 real album cover)
+        try {
+          const deezerRes = await fetch(
+            `https://api.deezer.com/search?q=${encodeURIComponent(q1)}`,
+            { signal: AbortSignal.timeout(2500) }
+          );
+          if (deezerRes.ok) {
+            const deezerData = await deezerRes.json();
+            const topMatch = deezerData.data?.[0];
+            const cover = topMatch?.album?.cover_big || topMatch?.album?.cover_medium;
+            if (cover && !isPlaylistOrGenericCover(cover)) {
+              persistTrackCover(t.id, cover);
+              return { id: t.id, url: cover };
+            }
+          }
+        } catch {}
+
+        // 3. iTunes Search API fallback (matches title + artist, 600x600 HD)
         try {
           const itunesRes = await fetch(
             `https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=3`,
@@ -175,25 +217,27 @@ export async function resolveTrackCoversBatch(
 
             if (matched?.artworkUrl100) {
               const hd = matched.artworkUrl100.replace('100x100bb', '600x600bb');
-              persistTrackCover(t.id, hd);
-              return { id: t.id, url: hd };
+              if (!isPlaylistOrGenericCover(hd)) {
+                persistTrackCover(t.id, hd);
+                return { id: t.id, url: hd };
+              }
             }
           }
         } catch {}
 
-        // 3. iTunes Search with title only (fallback if artist is obscure)
+        // 4. Deezer Search with title only (fallback if artist is missing or generic)
         if (cleanName && cleanName.length > 2 && (!primaryArtist || primaryArtist.toLowerCase() === 'spotify')) {
           try {
-            const itunesRes2 = await fetch(
-              `https://itunes.apple.com/search?term=${encodeURIComponent(cleanName)}&media=music&entity=song&limit=1`,
+            const deezerRes2 = await fetch(
+              `https://api.deezer.com/search?q=${encodeURIComponent(cleanName)}`,
               { signal: AbortSignal.timeout(2000) }
             );
-            if (itunesRes2.ok) {
-              const itunesData2 = await itunesRes2.json();
-              if (itunesData2.results?.[0]?.artworkUrl100) {
-                const hd = itunesData2.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
-                persistTrackCover(t.id, hd);
-                return { id: t.id, url: hd };
+            if (deezerRes2.ok) {
+              const deezerData2 = await deezerRes2.json();
+              const cover2 = deezerData2.data?.[0]?.album?.cover_big;
+              if (cover2 && !isPlaylistOrGenericCover(cover2)) {
+                persistTrackCover(t.id, cover2);
+                return { id: t.id, url: cover2 };
               }
             }
           } catch {}

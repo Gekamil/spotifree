@@ -21,7 +21,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useUIStore } from '../../store/useUIStore';
 import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
-import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
 import { handleImageError } from '../../utils/imageFallback';
 
 interface DesktopPlayerProps {
@@ -57,21 +57,21 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
   useEffect(() => {
     if (!currentTrack) return;
     const direct = getTrackCoverUrl(currentTrack);
-    if (direct && !direct.includes('liked-songs')) {
+    if (direct && !isPlaylistOrGenericCover(direct)) {
       setResolvedDesktopCover(direct);
       return;
     }
     resolveTrackCoversBatch([currentTrack]).then((updates) => {
       const fresh = updates.get(currentTrack.id) || getTrackCoverUrl(currentTrack);
-      if (fresh) setResolvedDesktopCover(fresh);
+      if (fresh && !isPlaylistOrGenericCover(fresh)) setResolvedDesktopCover(fresh);
     }).catch(() => {});
   }, [currentTrack?.id, currentTrack?.name]);
 
   const activeArtworkUrl =
-    resolvedDesktopCover ||
+    (resolvedDesktopCover && !isPlaylistOrGenericCover(resolvedDesktopCover) ? resolvedDesktopCover : undefined) ||
     (currentTrack ? getTrackCoverUrl(currentTrack) : undefined) ||
-    currentTrack?.album?.images?.[0]?.url ||
-    'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+    (!isPlaylistOrGenericCover(currentTrack?.album?.images?.[0]?.url) ? currentTrack?.album?.images?.[0]?.url : undefined) ||
+    'https://i.scdn.co/image/ab67616d0000b273809e5975e533b8fb328325dd';
 
   const { toggleRightSidebar, activeRightSidebar } = useUIStore();
 
