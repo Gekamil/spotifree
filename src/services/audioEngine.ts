@@ -1874,7 +1874,11 @@ class AudioEngine {
       if (!this.audioContext) {
         const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioCtx) return;
-        this.audioContext = new AudioCtx();
+        try {
+          this.audioContext = new AudioCtx({ latencyHint: 'playback' });
+        } catch {
+          this.audioContext = new AudioCtx();
+        }
       }
 
       if (this.audioContext.state === 'suspended') {

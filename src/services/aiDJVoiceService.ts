@@ -413,7 +413,14 @@ class AIDJVoiceService {
       audio.src = audioUrl;
       audio.preload = 'auto';
       audio.playbackRate = 1.0;
-      audio.volume = 0.88; // 1.1dB headroom prevents mobile DAC/speaker saturation
+      audio.volume = 1.0; // Full 100% volume matching music playback
+      audio.setAttribute('playsinline', 'true');
+      audio.setAttribute('webkit-playsinline', 'true');
+      (audio as any).preservesPitch = true;
+      audio.style.display = 'none';
+      if (typeof document !== 'undefined' && document.body) {
+        document.body.appendChild(audio);
+      }
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {
@@ -426,6 +433,9 @@ class AIDJVoiceService {
           if (this.voiceLevelInterval) {
             clearInterval(this.voiceLevelInterval);
             this.voiceLevelInterval = null;
+          }
+          if (audio.parentNode) {
+            try { audio.parentNode.removeChild(audio); } catch {}
           }
           options.onVoiceLevel?.(0);
           options.onWord?.('', text);

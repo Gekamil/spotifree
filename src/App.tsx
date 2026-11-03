@@ -37,8 +37,12 @@ function App() {
           if (currentStore.sessionId && currentStore.sessionId !== inviteSessionId) {
             currentStore.leaveSession();
           }
-          currentStore.joinSession(inviteSessionId);
-          useUIStore.setState({ activeRightSidebar: 'friends' });
+          currentStore.joinSession(inviteSessionId).then((joined) => {
+            if (!joined && typeof window !== 'undefined' && window.location.search.includes('session=')) {
+              const cleanUrl = window.location.pathname + window.location.hash;
+              window.history.replaceState({}, document.title, cleanUrl);
+            }
+          });
         }
       } catch {}
     }

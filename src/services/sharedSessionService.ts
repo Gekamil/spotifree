@@ -663,64 +663,76 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       lastSeen: Date.now(),
     };
 
-    set({
-      isInSession: true,
-      isHost: false,
-      sessionId: cleanId,
-      sessionLink,
-      hostName: 'Anfitrión',
-      participants: [guestParticipant],
-      isModalOpen: true,
-    });
-
-    // Auto-open right sidebar on desktop
-    useUIStore.setState({ activeRightSidebar: 'friends' });
-
-    // 1. Fetch from Firestore first to adopt host's current track and guest count
+    // 1. Fetch from Firestore first to verify the session is active before joining
     if (isFirebaseConfigured() && db) {
       try {
         const sessionRef = doc(db, 'shared_sessions', cleanId);
         const snap = await getDoc(sessionRef);
 
-        if (snap.exists()) {
-          const data = snap.data() as SharedSessionData;
-          if (data.isActive) {
-            // Determine guest number if no saved nickname
-            if (!savedName && (!userName || userName === 'Invitado')) {
-              const existingGuests = Object.values(data.participants || {}).filter((p) => !p.isHost).length;
-              initialName = `Invitado ${existingGuests + 1}`;
-              guestParticipant.name = initialName;
-            }
-
-            const currentParticipants = Object.values(data.participants || {});
-            const updatedList = [...currentParticipants.filter((p) => p.id !== myParticipantId), guestParticipant];
-
-            set({
-              hostName: data.hostName || 'Anfitrión',
-              participants: updatedList,
-            });
-
-            await updateDoc(sessionRef, {
-              [`participants.${myParticipantId}`]: guestParticipant,
-              updatedAt: Date.now(),
-            });
-
-            if (data.playback && data.playback.track) {
-              applySynchronizedPlayback(data.playback);
-            }
-
-            get()._subscribeToSessionDoc(cleanId);
+        if (!snap.exists()) {
+          console.warn('[SharedSession] Session does not exist:', cleanId);
+          if (typeof window !== 'undefined' && window.location.search.includes('session=')) {
+            const cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, cleanUrl);
           }
+          return false;
         }
+
+        const data = snap.data() as SharedSessionData;
+        if (!data || !data.isActive) {
+          console.warn('[SharedSession] Session is no longer active (closed by host):', cleanId);
+          if (typeof window !== 'undefined' && window.location.search.includes('session=')) {
+            const cleanUrl = window.location.pathname + window.location.hash;
+            window.history.replaceState({}, document.title, cleanUrl);
+          }
+          return false;
+        }
+
+        // Determine guest number if no saved nickname
+        if (!savedName && (!userName || userName === 'Invitado')) {
+          const existingGuests = Object.values(data.participants || {}).filter((p) => !p.isHost).length;
+          initialName = `Invitado ${existingGuests + 1}`;
+          guestParticipant.name = initialName;
+        }
+
+        const currentParticipants = Object.values(data.participants || {});
+        const updatedList = [...currentParticipants.filter((p) => p.id !== myParticipantId), guestParticipant];
+
+        set({
+          isInSession: true,
+          isHost: false,
+          sessionId: cleanId,
+          sessionLink,
+          hostName: data.hostName || 'Anfitrión',
+          participants: updatedList,
+          isModalOpen: true,
+        });
+
+        useUIStore.setState({ activeRightSidebar: 'friends' });
+
+        await updateDoc(sessionRef, {
+          [`participants.${myParticipantId}`]: guestParticipant,
+          updatedAt: Date.now(),
+        });
+
+        if (data.playback && data.playback.track) {
+          applySynchronizedPlayback(data.playback);
+        }
+
+        get()._subscribeToSessionDoc(cleanId);
+        initP2PGuest(cleanId, guestParticipant);
+        return true;
       } catch (e) {
-        console.warn('[SharedSession] Firestore join notice (P2P active):', e);
+        console.warn('[SharedSession] Firestore validation error:', e);
+        if (typeof window !== 'undefined' && window.location.search.includes('session=')) {
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+        return false;
       }
     }
 
-    // 2. Connect via WebRTC P2P DataChannel directly to Host
-    initP2PGuest(cleanId, guestParticipant);
-
-    return true;
+    return false;
   },
 
   leaveSession: async () => {
@@ -743,6 +755,11 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     if (sessionDocUnsubscribe) {
       sessionDocUnsubscribe();
       sessionDocUnsubscribe = null;
+    }
+
+    if (typeof window !== 'undefined' && window.location.search.includes('session=')) {
+      const cleanUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, document.title, cleanUrl);
     }
 
     set({

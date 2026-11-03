@@ -29,7 +29,8 @@ async function synthesizeWithElevenLabs(text, voiceId = 'pNInz6obpgDQGcFmaJgB', 
     getEnvKey('elevenlabskey') ||
     getEnvKey('ELEVENLABS_KEY') ||
     getEnvKey('ELEVENLABS_API_KEY') ||
-    getEnvKey('elevenlabs_api_key');
+    getEnvKey('elevenlabs_api_key') ||
+    'sk_debcc33ce4f5b6db483f04131f3c287d01db10031c6c50f8';
 
   if (!apiKey) throw new Error('ElevenLabs API key is not configured');
 
@@ -38,7 +39,7 @@ async function synthesizeWithElevenLabs(text, voiceId = 'pNInz6obpgDQGcFmaJgB', 
   // 21m00Tcm4TlvDq8ikWAM: Rachel (Warm, clear female host)
   // ErXwobaYiN019PkySvjV: Antoni (Energetic modern host)
   const targetVoice = voiceId && voiceId !== 'elevenlabs' ? voiceId : 'pNInz6obpgDQGcFmaJgB';
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}`;
+  const url = `https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}?output_format=mp3_44100_128`;
 
   const response = await fetch(url, {
     method: 'POST',
