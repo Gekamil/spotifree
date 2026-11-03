@@ -52,9 +52,9 @@ export const SharedSessionCursors: React.FC = () => {
 
   if (!isInSession) return null;
 
-  // Render all other participants who have an active cursor updated in the last 15 seconds
+  // Render all other participants who have an active cursor updated in the last 4 seconds
   const otherParticipants = participants.filter(
-    (p) => p.id !== myParticipantId && p.cursor && Date.now() - p.cursor.updatedAt < 15000
+    (p) => p.id !== myParticipantId && p.cursor && Date.now() - p.cursor.updatedAt < 4000
   );
 
   return (

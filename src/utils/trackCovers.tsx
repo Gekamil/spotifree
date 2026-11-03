@@ -138,24 +138,51 @@ export async function resolveTrackCoversBatch(
         const primaryArtist = rawArtist.split(/[,&]/)[0].replace(/\s*(feat\.|ft\.).*$/i, '').trim();
         const q1 = `${cleanName} ${primaryArtist}`.trim();
 
-        // 1. iTunes Search API (100% browser CORS compatible, 600x600 HD album artwork, ~120ms response)
+        // 1. Spotify oEmbed (100% official exact Spotify album cover for this exact track ID)
+        const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
+        if (isSpotifyId) {
+          try {
+            const res = await fetch(
+              `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`,
+              { signal: AbortSignal.timeout(2000) }
+            );
+            if (res.ok) {
+              const data = await res.json();
+              if (data.thumbnail_url) {
+                persistTrackCover(t.id, data.thumbnail_url);
+                return { id: t.id, url: data.thumbnail_url };
+              }
+            }
+          } catch {}
+        }
+
+        // 2. iTunes Search API fallback (matches title + artist)
         try {
           const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=1`,
+            `https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=3`,
             { signal: AbortSignal.timeout(2500) }
           );
           if (itunesRes.ok) {
             const itunesData = await itunesRes.json();
-            if (itunesData.results?.[0]?.artworkUrl100) {
-              const hd = itunesData.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
+            const results = itunesData.results || [];
+            // Match correct artist to prevent wrong artwork
+            const matched = results.find((r: any) => {
+              if (!primaryArtist || primaryArtist.toLowerCase() === 'spotify') return true;
+              const rArtist = (r.artistName || '').toLowerCase();
+              const pArtist = primaryArtist.toLowerCase();
+              return rArtist.includes(pArtist) || pArtist.includes(rArtist);
+            }) || results[0];
+
+            if (matched?.artworkUrl100) {
+              const hd = matched.artworkUrl100.replace('100x100bb', '600x600bb');
               persistTrackCover(t.id, hd);
               return { id: t.id, url: hd };
             }
           }
         } catch {}
 
-        // 1b. iTunes Search with title only (often finds official single/EP)
-        if (cleanName && cleanName.length > 2) {
+        // 3. iTunes Search with title only (fallback if artist is obscure)
+        if (cleanName && cleanName.length > 2 && (!primaryArtist || primaryArtist.toLowerCase() === 'spotify')) {
           try {
             const itunesRes2 = await fetch(
               `https://itunes.apple.com/search?term=${encodeURIComponent(cleanName)}&media=music&entity=song&limit=1`,
@@ -167,24 +194,6 @@ export async function resolveTrackCoversBatch(
                 const hd = itunesData2.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
                 persistTrackCover(t.id, hd);
                 return { id: t.id, url: hd };
-              }
-            }
-          } catch {}
-        }
-
-        // 2. Spotify oEmbed fallback (official Spotify album cover, CORS enabled)
-        const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
-        if (isSpotifyId) {
-          try {
-            const res = await fetch(
-              `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`,
-              { signal: AbortSignal.timeout(2500) }
-            );
-            if (res.ok) {
-              const data = await res.json();
-              if (data.thumbnail_url) {
-                persistTrackCover(t.id, data.thumbnail_url);
-                return { id: t.id, url: data.thumbnail_url };
               }
             }
           } catch {}
@@ -217,6 +226,10 @@ export const TrackArtwork: React.FC<{
   size?: number;
 }> = ({ src, alt, className = 'w-11 h-11 rounded', size = 44 }) => {
   const [error, setError] = useState(false);
+
+  React.useEffect(() => {
+    setError(false);
+  }, [src]);
 
   if (!src || error) {
     return (

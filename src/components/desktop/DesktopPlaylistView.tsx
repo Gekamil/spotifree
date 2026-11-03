@@ -42,35 +42,8 @@ function getArtistMonthlyListeners(name: string): string {
 }
 
 
-const TrackArtwork: React.FC<{
-  src?: string;
-  alt: string;
-}> = ({ src, alt }) => {
-  const [error, setError] = useState(false);
-
-  if (!src || error) {
-    return (
-      <div className="w-10 h-10 rounded shrink-0 bg-[#282828] flex items-center justify-center text-[#727272] shadow">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <img
-      src={src}
-      alt={alt}
-      onError={() => setError(true)}
-      referrerPolicy="no-referrer"
-      className="w-10 h-10 rounded shrink-0 object-cover shadow"
-    />
-  );
-};
-
 import { handleImageError } from '../../utils/imageFallback';
-import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE } from '../../utils/trackCovers';
+import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
 
@@ -134,6 +107,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(initialTracks);
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
+  const [trackCovers, setTrackCovers] = useState<Record<string, string>>({});
 
   // DJ Mode and Transitions State (Desktop)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
@@ -551,6 +525,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     const playlistCover = dynamicPlaylist.images?.[0]?.url;
     resolveTrackCoversBatch(dynamicTracks, playlistCover, (updates) => {
       if (cancelled || updates.size === 0) return;
+      setTrackCovers((prev) => {
+        const next = { ...prev };
+        updates.forEach((url, id) => {
+          next[id] = url;
+        });
+        return next;
+      });
       setDynamicTracks((prev) =>
         prev.map((track) => {
           if (updates.has(track.id)) {
@@ -1320,8 +1301,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     {/* Track Title + Artists */}
                     <div className="flex items-center gap-3 min-w-0 pr-2">
                       <TrackArtwork
-                        src={getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
+                        src={trackCovers[track.id] || getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
                         alt={track.name}
+                        size={40}
+                        className="w-10 h-10 rounded shrink-0 object-cover shadow"
                       />
                       <div className="min-w-0 flex-1">
                         <p

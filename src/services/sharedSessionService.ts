@@ -16,6 +16,7 @@ import {
   getDoc,
   onSnapshot,
   updateDoc,
+  deleteField,
   type Unsubscribe,
 } from 'firebase/firestore';
 import type { Track } from '../types/spotify';
@@ -63,6 +64,8 @@ export interface SharedSessionStore {
   hostName: string;
   myParticipantId: string;
   participants: SessionParticipant[];
+  libraryViewMode: 'host' | 'my';
+  setLibraryViewMode: (mode: 'host' | 'my') => void;
   isModalOpen: boolean;
   setModalOpen: (open: boolean) => void;
   updateMyName: (newName: string) => Promise<void>;
@@ -306,6 +309,18 @@ function handleIncomingP2PAsHost(data: any, senderConn: any) {
       }
     });
   }
+
+  // 5. Guest disconnected or left session
+  if (data.type === 'leave' && data.participantId) {
+    useSharedSessionStore.setState((s) => ({
+      participants: s.participants.filter((p) => p.id !== data.participantId),
+    }));
+    guestConnections.forEach((c) => {
+      if (c !== senderConn && c.open) {
+        c.send(data);
+      }
+    });
+  }
 }
 
 async function initP2PGuest(sessionId: string, guestParticipant: SessionParticipant) {
@@ -444,7 +459,14 @@ function handleIncomingP2PAsGuest(data: any) {
     }));
   }
 
-  // 6. Host ended session
+  // 6. Another participant left or closed tab
+  if (data.type === 'leave' && data.participantId) {
+    useSharedSessionStore.setState((s) => ({
+      participants: s.participants.filter((p) => p.id !== data.participantId),
+    }));
+  }
+
+  // 7. Host ended session
   if (data.type === 'terminate') {
     alert('La sesión compartida ha sido finalizada por el anfitrión.');
     useSharedSessionStore.getState().leaveSession();
@@ -508,6 +530,8 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
   hostName: '',
   myParticipantId: typeof window !== 'undefined' ? (window.localStorage.getItem('spotifree_session_pid') || `p_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`) : 'p_default',
   participants: [],
+  libraryViewMode: 'host',
+  setLibraryViewMode: (mode: 'host' | 'my') => set({ libraryViewMode: mode }),
   isModalOpen: false,
 
   setModalOpen: (open: boolean) => set({ isModalOpen: open }),
@@ -858,3 +882,28 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
     });
   },
 }));
+
+// Automatic cleanup when tab or browser is closed
+if (typeof window !== 'undefined') {
+  const notifyLeaveOnUnload = () => {
+    try {
+      const s = useSharedSessionStore.getState();
+      if (!s.isInSession || !s.sessionId) return;
+      broadcastToAllP2P({ type: 'leave', participantId: s.myParticipantId });
+      if (db && isFirebaseConfigured()) {
+        const sessionRef = doc(db, 'shared_sessions', s.sessionId);
+        if (s.isHost) {
+          updateDoc(sessionRef, { isActive: false, updatedAt: Date.now() }).catch(() => {});
+        } else {
+          updateDoc(sessionRef, {
+            [`participants.${s.myParticipantId}`]: deleteField(),
+            updatedAt: Date.now(),
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+  };
+
+  window.addEventListener('beforeunload', notifyLeaveOnUnload);
+  window.addEventListener('pagehide', notifyLeaveOnUnload);
+}

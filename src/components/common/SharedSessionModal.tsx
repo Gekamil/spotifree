@@ -9,8 +9,11 @@ export const SharedSessionModal: React.FC = () => {
     isHost,
     sessionId,
     sessionLink,
+    hostName,
     participants,
     myParticipantId,
+    libraryViewMode,
+    setLibraryViewMode,
     updateMyName,
     isModalOpen,
     setModalOpen,
@@ -60,13 +63,12 @@ export const SharedSessionModal: React.FC = () => {
         right: 0,
         bottom: 0,
         zIndex: 2147483647,
-        background: 'rgba(0,0,0,0.78)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
+        background: 'rgba(0,0,0,0.65)',
+        backdropFilter: 'blur(8px)',
+        WebkitBackdropFilter: 'blur(8px)',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-end',
         justifyContent: 'center',
-        padding: '16px',
         fontFamily: "'SpotifyMixUI', sans-serif",
       }}
       onClick={() => setModalOpen(false)}
@@ -74,17 +76,24 @@ export const SharedSessionModal: React.FC = () => {
       <div
         style={{
           width: '100%',
-          maxWidth: '440px',
-          background: '#181818',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderRadius: '16px',
-          padding: '24px',
+          maxWidth: '520px',
+          maxHeight: '85vh',
+          background: '#121212',
+          borderTop: '1px solid rgba(255,255,255,0.12)',
+          borderTopLeftRadius: '24px',
+          borderTopRightRadius: '24px',
+          padding: '12px 20px 28px 20px',
           color: 'white',
           position: 'relative',
-          boxShadow: '0 32px 80px rgba(0,0,0,0.8)',
+          boxShadow: '0 -16px 48px rgba(0,0,0,0.85)',
+          overflowY: 'auto',
+          boxSizing: 'border-box',
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {/* Pull Handle */}
+        <div style={{ width: '36px', height: '4px', background: 'rgba(255,255,255,0.25)', borderRadius: '999px', margin: '4px auto 16px auto' }} />
+
         {/* Close Button */}
         <button
           onClick={() => setModalOpen(false)}
@@ -281,6 +290,55 @@ export const SharedSessionModal: React.FC = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Library / Music Switcher */}
+            <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>
+                  Vista de música
+                </span>
+                <span style={{ fontSize: '10px', color: '#1ed760', fontWeight: 800, textTransform: 'uppercase' }}>
+                  {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi biblioteca'}
+                </span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', padding: '4px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
+                <button
+                  onClick={() => setLibraryViewMode('host')}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    background: libraryViewMode === 'host' ? '#1ed760' : 'transparent',
+                    color: libraryViewMode === 'host' ? '#000' : '#b3b3b3',
+                  }}
+                >
+                  Anfitrión
+                </button>
+                <button
+                  onClick={() => setLibraryViewMode('my')}
+                  style={{
+                    padding: '8px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    fontWeight: 800,
+                    fontSize: '12px',
+                    cursor: 'pointer',
+                    background: libraryViewMode === 'my' ? '#ffffff' : 'transparent',
+                    color: libraryViewMode === 'my' ? '#000' : '#b3b3b3',
+                  }}
+                >
+                  Mi biblioteca
+                </button>
+              </div>
+              <p style={{ margin: 0, fontSize: '11px', color: '#b3b3b3', lineHeight: 1.4 }}>
+                {libraryViewMode === 'host'
+                  ? `Viendo la música y cola de ${hostName || 'el anfitrión'}.`
+                  : 'Navega por tus propias canciones. Lo que reproduzcas sonará para ambos.'}
+              </p>
             </div>
 
             {/* Guest notice */}

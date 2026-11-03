@@ -242,8 +242,11 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
     isHost,
     sessionId,
     sessionLink,
+    hostName,
     participants,
     myParticipantId,
+    libraryViewMode,
+    setLibraryViewMode,
     updateMyName,
     createSession,
     joinSession,
@@ -486,6 +489,50 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Library / Desktop Switcher */}
+            <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14H9v-2h2v2zm0-4H9V7h2v5z"/>
+                  </svg>
+                  Música y Biblioteca
+                </span>
+                <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
+                  {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi música'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 p-1 bg-black/40 rounded-lg gap-1 border border-white/5 text-xs font-bold">
+                <button
+                  onClick={() => setLibraryViewMode('host')}
+                  className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
+                    libraryViewMode === 'host'
+                      ? 'bg-[#1ed760] text-black font-extrabold shadow'
+                      : 'text-[#b3b3b3] hover:text-white'
+                  }`}
+                >
+                  Anfitrión
+                </button>
+                <button
+                  onClick={() => setLibraryViewMode('my')}
+                  className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
+                    libraryViewMode === 'my'
+                      ? 'bg-white text-black font-extrabold shadow'
+                      : 'text-[#b3b3b3] hover:text-white'
+                  }`}
+                >
+                  Mi biblioteca
+                </button>
+              </div>
+
+              <p className="text-[11px] text-[#b3b3b3] leading-tight">
+                {libraryViewMode === 'host'
+                  ? `Escuchando la cola y listas de ${hostName || 'el anfitrión'}.`
+                  : 'Navega por tus propias listas y canciones. Lo que elijas sonará para todos en vivo.'}
+              </p>
             </div>
 
             {/* Guest note */}
