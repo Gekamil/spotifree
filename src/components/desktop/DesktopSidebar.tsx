@@ -243,10 +243,11 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               </div>
             </div>
 
-            {/* Tilted 3D Spotify Tile matching Screenshot 2 */}
-            <div className="w-13 h-13 rounded-2xl bg-[#121212] flex items-center justify-center shrink-0 -rotate-[14deg] border border-white/15 shadow-[0_12px_28px_rgba(0,0,0,0.7)] text-[#1ed760] relative group">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
+            {/* Tilted 3D Spotify Tile — official Spotify green circle badge */}
+            <div className="w-13 h-13 rounded-2xl bg-[#121212] flex items-center justify-center shrink-0 -rotate-[14deg] border border-white/15 shadow-[0_12px_28px_rgba(0,0,0,0.7)] relative group overflow-hidden">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="12" cy="12" r="12" fill="#1ED760"/>
+                <path d="M17.9 10.9C15 9.2 10.3 9 7.5 9.8c-.5.1-1-.2-1.1-.7-.1-.5.2-1 .7-1.1 3.3-.9 8.6-.7 11.9 1.3.4.3.6.8.4 1.3-.3.4-.8.6-1.3.3zm-.1 2.8c-.2.4-.7.5-1.1.3-2.4-1.5-6.1-1.9-9-1.1-.4.1-.8-.1-.9-.5-.1-.4.1-.8.5-.9 3.3-.9 7.4-.5 10.2 1.2.4.3.5.8.3 1zm-1.3 2.7c-.2.3-.6.4-.9.2-2.1-1.3-4.8-1.6-7.9-.9-.3.1-.7-.1-.8-.4-.1-.3.1-.7.4-.8 3.4-.7 6.4-.4 8.8 1 .3.2.5.6.4.9z" fill="#000000"/>
               </svg>
             </div>
           </div>

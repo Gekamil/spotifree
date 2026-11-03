@@ -157,8 +157,69 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
     };
   }
 
+  // 3b. Salsa / Merengue (before bachata since it overlaps)
+  if (/\bsalsa\b|merengue|celia cruz|marc anthony|salsa brava|salsa romantica/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('salsa', [
+          `Turning up the tropical heat${namePhrase}! Pure salsa and merengue bangers coming right at you.`,
+          `Dancing shoes on! Here are the hottest salsa anthems to move your feet.`,
+        ])
+      : pickDynamicSpeech('salsa', [
+          `¡A mover los pies${namePhrase}! Te preparé un set de pura salsa y merengue que no te va a dejar quieto.`,
+          `¡Que viva el trópico! Aquí tienes los himnos de salsa más pegados para bailar sin parar.`,
+          `Sabor latino en cabina. Ritmos caribeños de primera para encender la pista.`,
+        ]);
+    return {
+      speech,
+      query: 'marc anthony celia cruz daddy yankee don omar salsa merengue exitos',
+      vibeTitle: isEn ? 'Session: Salsa & Merengue' : 'Sesión: Salsa y Merengue',
+      vibeColor: '#e65100',
+      excludeTitles: ['salsa', 'merengue'],
+    };
+  }
+
+  // 3c. Música en inglés / English music
+  if (/ingl[eé]s|english|en ingl[eé]s|music[a]?\s+en\s+ingl[eé]s|songs?\s+in\s+english/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('english', [
+          `Switching to English mode${namePhrase}! Here are the biggest English-language hits on the charts.`,
+          `English bangers incoming! Top hits from the global charts just for you.`,
+        ])
+      : pickDynamicSpeech('english', [
+          `¡Modo inglés activado${namePhrase}! Te traigo los hits más grandes en inglés del momento.`,
+          `Cambiamos al inglés. Aquí tienes los mayores éxitos internacionales del pop y el urbano.`,
+          `Puro inglés en cabina. Los temazos globales más sonados ahora mismo.`,
+        ]);
+    return {
+      speech,
+      query: 'taylor swift the weeknd drake dua lipa harry styles billie eilish english hits top',
+      vibeTitle: isEn ? 'Session: English Hits' : 'Sesión: Hits en Inglés',
+      vibeColor: '#1565c0',
+      excludeTitles: [],
+    };
+  }
+
+  // 3d. Pop español / música en español
+  if (/espa[nñ]ol|en espa[nñ]ol|pop espa[nñ]ol|castellano|spanish/i.test(p)) {
+    const speech = isEn
+      ? pickDynamicSpeech('spanish', [
+          `Spanish hits coming through${namePhrase}! The best of the Spanish-speaking charts right now.`,
+        ])
+      : pickDynamicSpeech('spanish', [
+          `¡Puro pop en español${namePhrase}! Los mayores temazos de habla hispana del momento.`,
+          `Lo mejor del pop y el urbano en español. Aquí los hits que arrasan en España y Latinoamérica.`,
+        ]);
+    return {
+      speech,
+      query: 'quevedo aitana bad gyal yung beef cruz cafune exitos espana 2024',
+      vibeTitle: isEn ? 'Session: Spanish Hits' : 'Sesión: Hits en Español',
+      vibeColor: '#c62828',
+      excludeTitles: [],
+    };
+  }
+
   // 3b. Bachata / Latino Romántico
-  if (/bachata|romeo|prince royce|aventura|salsa|merengue/i.test(p)) {
+  if (/bachata|romeo|prince royce|aventura|merengue/i.test(p)) {
     const speech = isEn
       ? pickDynamicSpeech('bachata', [
           `Pure romance and rhythm${namePhrase}! Here are the greatest hits from Romeo Santos, Prince Royce, and more.`,
@@ -626,6 +687,41 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (!promptText || promptText.trim().length === 0) return;
 
     aiDJVoiceService.stopSpeaking();
+
+    const pLow = promptText.toLowerCase().trim();
+
+    // ─── FAST-PATH: "siguiente", "siguiente canción", "otra", "skip", "cambia" ───
+    const isSkipCmd = /^(siguiente|sig|skip|otra|cambia(r)?(\s+de\s+canci[oó]n)?|next|salta)$/i.test(pLow)
+      || /\b(siguiente\s+canci[oó]n|otra\s+canci[oó]n|skip\s+this|ponme\s+otra|pass|next\s+track)\b/i.test(pLow);
+
+    if (isSkipCmd) {
+      usePlayerStore.getState().nextTrack();
+      const skipPhrases = [
+        '¡Cambiando de tema!',
+        'Siguiente canción, ¡vamos!',
+        '¡Ale! Aquí viene la siguiente.',
+        'Listo, pasamos a la siguiente.',
+      ];
+      const sp = skipPhrases[Math.floor(Math.random() * skipPhrases.length)];
+      const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      set((state) => ({
+        chatHistory: [
+          ...state.chatHistory,
+          { id: `msg-user-${Date.now()-1}`, sender: 'user', text: promptText, timestamp: t },
+          { id: `msg-dj-${Date.now()}`, sender: 'dj', text: sp, timestamp: t },
+        ],
+        currentMessage: sp,
+        displayedTranscript: '',
+        visualizerState: 'playing',
+        voiceLevel: 0,
+      }));
+      aiDJVoiceService.speak(sp, {
+        onWord: (_w, partial) => set({ displayedTranscript: partial }),
+        onVoiceLevel: (level) => set({ voiceLevel: level }),
+        onEnd: () => set({ visualizerState: 'playing', voiceLevel: 0 }),
+      });
+      return;
+    }
 
     const userTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const userMsg: DJChatMessage = {
