@@ -110,11 +110,15 @@ function scoreCandidate(query, expectedTitle, expectedArtist, candTitle, candArt
   }
 
   // 2. High bonus for genuine official studio releases (Audio / Topic / Vevo)
-  if (/\b(official audio|audio oficial|original mix|video oficial|official video|audio|tema oficial)\b/i.test(candTitle.toLowerCase())) {
-    score += 20;
+  if (/\b(official audio|audio oficial|original mix|audio|tema oficial)\b/i.test(candTitle.toLowerCase())) {
+    score += 45; // Studio audio track gets highest priority to eliminate intro skits & outro dead air
+  } else if (/\b(video oficial|official video|videoclip)\b/i.test(candTitle.toLowerCase())) {
+    score += 15;
   }
-  if (/\b(topic|vevo)\b/i.test(candArtist.toLowerCase()) || candArtist.includes(' - Topic')) {
-    score += 25;
+  if (/\b(topic)\b/i.test(candArtist.toLowerCase()) || candArtist.includes(' - Topic')) {
+    score += 45; // YouTube auto-generated studio release from record label (0s intro skit, exact studio duration)
+  } else if (/\b(vevo)\b/i.test(candArtist.toLowerCase())) {
+    score += 20;
   }
 
   // 3. Title word matching

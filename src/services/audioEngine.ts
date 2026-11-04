@@ -121,6 +121,9 @@ class AudioEngine {
   private lastEndedTimestamp = 0;
   private consecutiveEndedCount = 0;
   public lastCrossfadeFinishTime = 0;
+  private lastObservedSec = -1;
+  private lastObservedAdvanceTime = 0;
+  private stuckRecoveryAttempts = 0;
 
   public get isTransitionActive(): boolean {
     return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
@@ -221,7 +224,7 @@ class AudioEngine {
     // 5-25 seconds of outro cards, silent credits, or sponsors after the music ends.
     const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 ? curTrack.duration_ms / 1000 : durSec;
     const effectiveTrackEndSec =
-      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 40
+      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 120
         ? spotifyDurationSec
         : durSec;
 
@@ -1809,6 +1812,68 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Outro dead air and post-song silence truncation.
+   * If a YouTube video contains trailing credits, end-cards or sponsors beyond the official studio duration,
+   * advance seamlessly to the next track right as the music finishes.
+   */
+  private checkOutroTruncation(curSec: number, durSec: number) {
+    if (this.isCrossfading || this.isTransitioning) return;
+    if (Date.now() - this.lastCrossfadeFinishTime < 5000) return;
+    const state = usePlayerStore.getState();
+    if (!state.isPlaying || state.repeatMode === 'one') return;
+    const curTrack = state.currentTrack;
+    if (!curTrack || !curTrack.duration_ms || curTrack.duration_ms <= 25000) return;
+
+    const spotifyDurationSec = curTrack.duration_ms / 1000;
+    // If YouTube duration has extra dead air (> 3s longer than studio audio, up to 120s)
+    if (durSec > spotifyDurationSec + 3.0 && (durSec - spotifyDurationSec) < 120) {
+      if (curSec >= spotifyDurationSec) {
+        console.log(`[AudioEngine] Truncating dead outro (${curSec.toFixed(1)}s >= ${spotifyDurationSec.toFixed(1)}s), advancing cleanly to next track`);
+        this.lastCrossfadeFinishTime = Date.now();
+        state.nextTrack();
+      }
+    }
+  }
+
+  /**
+   * Stuck audio watchdog: recovers playback automatically if video buffers or freezes for >6s
+   */
+  private checkStuckPlaybackWatchdog(curSec: number) {
+    const now = Date.now();
+    const state = usePlayerStore.getState();
+    if (!state.isPlaying || this.isSeeking || this.isTransitioning || this.isCrossfading || this.isAuditioning) {
+      this.lastObservedSec = curSec;
+      this.lastObservedAdvanceTime = now;
+      this.stuckRecoveryAttempts = 0;
+      return;
+    }
+
+    if (Math.abs(curSec - this.lastObservedSec) > 0.2) {
+      this.lastObservedSec = curSec;
+      this.lastObservedAdvanceTime = now;
+      this.stuckRecoveryAttempts = 0;
+      return;
+    }
+
+    const stuckDurationMs = now - this.lastObservedAdvanceTime;
+    if (stuckDurationMs > 6000 && this.stuckRecoveryAttempts === 0) {
+      this.stuckRecoveryAttempts = 1;
+      console.warn(`[AudioEngine] Playback stuck at ${curSec}s for >6s. Attempting resume kick...`);
+      try {
+        if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+          this.ytPlayer.playVideo();
+        }
+      } catch {}
+    } else if (stuckDurationMs > 10000 && this.stuckRecoveryAttempts === 1) {
+      this.stuckRecoveryAttempts = 2;
+      console.warn(`[AudioEngine] Playback still stuck after 10s. Resolving alternate video / stream...`);
+      if (this.currentTrackQuery) {
+        this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
+      }
+    }
+  }
+
   private startProgressTicker() {
     this.stopProgressTicker();
     if (this.isAuditioning) return;
@@ -1830,10 +1895,14 @@ class AudioEngine {
           const durSec = this.ytPlayer.getDuration();
           if (isFinite(curSec) && curSec >= 0) {
             usePlayerStore.getState().setProgress(curSec * 1000);
+            this.checkStuckPlaybackWatchdog(curSec);
           }
           if (isFinite(durSec) && durSec > 0) {
             usePlayerStore.getState().setDuration(durSec * 1000);
-            if (isFinite(curSec) && !this.isCrossfading) this.checkCrossfade(curSec, durSec);
+            if (isFinite(curSec) && !this.isCrossfading) {
+              this.checkCrossfade(curSec, durSec);
+              this.checkOutroTruncation(curSec, durSec);
+            }
           }
         } catch {}
       }
@@ -2007,7 +2076,7 @@ class AudioEngine {
           query,
           params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
         }),
-        signal: AbortSignal.timeout?.(1500),
+        signal: AbortSignal.timeout?.(3000),
       });
 
       if (res.ok) {
@@ -2025,7 +2094,7 @@ class AudioEngine {
     // Fallback: direct web search
     try {
       const searchRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-        signal: AbortSignal.timeout?.(1500),
+        signal: AbortSignal.timeout?.(2500),
       });
       if (searchRes.ok) {
         const html = await searchRes.text();
@@ -2271,6 +2340,20 @@ class AudioEngine {
           }, 4000);
           return;
         }
+      } else {
+        console.warn('[AudioEngine] No videoId resolved, streaming via HTML5 fallback');
+        this.activeEngine = 'html5';
+        this.audio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
+        this.audio.currentTime = startSeconds;
+        this.audio.volume = this.getEffectiveVolume();
+        await this.audio.play();
+        this.startCarrier();
+        usePlayerStore.setState({ isPlaying: true });
+        this.startProgressTicker();
+        setTimeout(() => {
+          this.isTransitioning = false;
+        }, 3000);
+        return;
       }
     } catch (err: any) {
       console.warn('[AudioEngine] Play error:', err?.message);
@@ -2321,6 +2404,16 @@ class AudioEngine {
         if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
           try { navigator.mediaSession.playbackState = 'playing'; } catch (_) {}
         }
+      } else {
+        console.warn('[AudioEngine] Alternate YouTube resolve failed, streaming via HTML5 fallback');
+        this.activeEngine = 'html5';
+        this.audio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(originalQuery)}`;
+        this.audio.currentTime = 0;
+        this.audio.volume = this.getEffectiveVolume();
+        await this.audio.play();
+        this.startCarrier();
+        usePlayerStore.setState({ isPlaying: true });
+        this.startProgressTicker();
       }
     } catch (e) {
       console.warn('[AudioEngine] Alternate resolve error:', e);
