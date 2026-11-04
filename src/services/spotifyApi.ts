@@ -560,8 +560,8 @@ export async function fetchPlaylistRecommendations(
     });
 
     const artistsList = Array.from(artistSet);
-    const selectedArtists = [...artistsList].sort(() => Math.random() - 0.5).slice(0, 5);
-    const seedTrackIds = existingTracks.slice(0, 15).map((t) => t.id).filter(Boolean);
+    const selectedArtists = [...artistsList].sort(() => Math.random() - 0.5).slice(0, 8);
+    const seedTrackIds = existingTracks.slice(0, 20).map((t) => t.id).filter(Boolean);
 
     const params = new URLSearchParams({
       action: 'recommendations',

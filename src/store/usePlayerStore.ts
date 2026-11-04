@@ -338,6 +338,10 @@ const store = create<PlayerState>((set, get) => ({
 
     // Desktop dual-deck crossfade only when not in background mobile lockscreen mode
     if (!isMobile && isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
+      if (engine.isCrossfading || engine.isTransitioning || (engine.lastCrossfadeFinishTime && Date.now() - engine.lastCrossfadeFinishTime < 4000)) {
+        console.warn('[PlayerStore] Skipping redundant nextTrack transition during active transition window');
+        return;
+      }
       engine.transitionToNextTrack(nextTrackCandidate);
       return;
     }

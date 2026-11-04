@@ -693,6 +693,16 @@ async function resolveYouTubePlaylist(listId) {
 }
 
 /**
+ * Check if a playlist title is generic (e.g., liked songs, generic favorites)
+ * and should not be used as a literal search query term.
+ */
+function isGenericPlaylistTitle(title) {
+  if (!title) return true;
+  const lower = title.trim().toLowerCase();
+  return /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|favoritas|mis canciones|mi playlist|playlist|custom playlist|canciones guardadas|biblioteca|collection:tracks|que te gustan|que me gustan|mis favoritas|favoritos|guardadas|tu biblioteca)$/i.test(lower);
+}
+
+/**
  * Dynamically queries real Spotify recommendations for any playlist
  * using Spotify Pathfinder GraphQL search (backed by Web Player auth) with Deezer fallback.
  */
@@ -702,28 +712,35 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
 
   // Determine smart query terms based on playlist artists and title
   const queryTerms = [];
-  const artistList = (artists || '').split(',').map((a) => a.trim()).filter(Boolean);
-  if (artistList.length > 0) {
-    // Randomize order so every time the user enters or refreshes, they get varied recommendations
-    const shuffledArtists = [...artistList].sort(() => Math.random() - 0.5);
-    queryTerms.push(shuffledArtists.slice(0, 2).join(' '));
-    if (shuffledArtists.length > 2) {
-      queryTerms.push(shuffledArtists.slice(2, 4).join(' '));
+  const artistList = (artists || '')
+    .split(',')
+    .map((a) => a.trim())
+    .filter((a) => a && a.length > 1 && a.toLowerCase() !== 'spotify');
+
+  // Randomize artists on every call so recommendations are fresh and varied on every visit
+  const shuffledArtists = [...artistList].sort(() => Math.random() - 0.5);
+
+  // 1. Query individual artists directly (never join multiple artists into one search phrase)
+  for (const art of shuffledArtists.slice(0, 6)) {
+    queryTerms.push(art);
+  }
+
+  // 2. If the playlist has a real, semantic title (e.g., "Rock Clásico", "Reggaeton 2025", "Techno"), add it
+  if (!isGenericPlaylistTitle(playlistTitle)) {
+    const cleanTitle = (playlistTitle || '')
+      .replace(/[()[\]{}_-]/g, ' ')
+      .replace(/\b(playlist|de|para|mis|las|los|canciones|favoritas|2024|2025|2026)\b/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (cleanTitle.length >= 3 && !isGenericPlaylistTitle(cleanTitle)) {
+      queryTerms.push(cleanTitle);
     }
   }
 
-  const cleanTitle = (playlistTitle || '')
-    .replace(/[()[\]{}_-]/g, ' ')
-    .replace(/\b(playlist|de|para|mis|canciones|favoritas|2024|2025|2026)\b/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (cleanTitle.length >= 3) {
-    queryTerms.push(cleanTitle);
-  }
-
+  // Fallback term only if both artists and title are absent
   if (queryTerms.length === 0) {
-    queryTerms.push('top hits exitos pop urbano');
+    queryTerms.push('top hits', 'pop urbano');
   }
 
   const tracks = [];
@@ -735,7 +752,7 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
       if (tracks.length >= limit) break;
       try {
         const offset = Math.floor(Math.random() * 4);
-        const variables = { query: term, offset, limit: limit * 2 };
+        const variables = { query: term, offset, limit: Math.max(6, Math.ceil(limit / 2)) };
         const extensions = {
           persistedQuery: {
             version: 1,
@@ -793,71 +810,77 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
     }
   }
 
-  // 2. High-quality Deezer fallback with HD album covers
+  // 2. High-quality Deezer fallback querying each artist individually with audio previews
   if (tracks.length < limit) {
-    const fallbackTerm = queryTerms[0] || 'top hits';
-    try {
-      const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(fallbackTerm)}&limit=15`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
-      });
-      if (dzRes.ok) {
-        const dzData = await dzRes.json();
-        for (const t of dzData.data || []) {
-          const tid = `dz-${t.id}`;
-          if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
-          seenIds.add(tid);
-          const cover = toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '');
-          tracks.push({
-            id: tid,
-            name: t.title || t.title_short,
-            artists: [{ id: `art-${t.artist?.id || tid}`, name: t.artist?.name || 'Artista' }],
-            album: {
-              id: `alb-${t.album?.id || tid}`,
-              name: t.album?.title || t.title,
-              images: cover ? [{ url: cover }] : [],
-            },
-            duration_ms: (t.duration || 180) * 1000,
-            preview_url: t.preview || null,
-            added_at: 'Recomendada',
-          });
-          if (tracks.length >= limit) break;
+    const termsToTry = queryTerms.length > 0 ? queryTerms : ['top hits'];
+    for (const term of termsToTry) {
+      if (tracks.length >= limit) break;
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=10`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+        });
+        if (dzRes.ok) {
+          const dzData = await dzRes.json();
+          for (const t of dzData.data || []) {
+            const tid = `dz-${t.id}`;
+            if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+            seenIds.add(tid);
+            const cover = toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '');
+            tracks.push({
+              id: tid,
+              name: t.title || t.title_short,
+              artists: [{ id: `art-${t.artist?.id || tid}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: `alb-${t.album?.id || tid}`,
+                name: t.album?.title || t.title,
+                images: cover ? [{ url: cover }] : [],
+              },
+              duration_ms: (t.duration || 180) * 1000,
+              preview_url: t.preview || null,
+              added_at: 'Recomendada',
+            });
+            if (tracks.length >= limit) break;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   // 3. iTunes search fallback if still below limit
   if (tracks.length < limit) {
-    try {
-      const itunesQuery = queryTerms[0] || 'top hits';
-      const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(itunesQuery)}&media=music&entity=song&limit=15`, {
-        signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
-      });
-      if (itRes.ok) {
-        const itData = await itRes.json();
-        for (const t of itData.results || []) {
-          const tid = `it-${t.trackId}`;
-          if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
-          seenIds.add(tid);
-          const cover = (t.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-          tracks.push({
-            id: tid,
-            name: t.trackName,
-            artists: [{ id: `art-${t.artistId || tid}`, name: t.artistName || 'Artista' }],
-            album: {
-              id: `alb-${t.collectionId || tid}`,
-              name: t.collectionName || t.trackName,
-              images: cover ? [{ url: cover }] : [],
-            },
-            duration_ms: t.trackTimeMillis || 180000,
-            preview_url: t.previewUrl || null,
-            added_at: 'Recomendada',
-          });
-          if (tracks.length >= limit) break;
+    const termsToTry = queryTerms.length > 0 ? queryTerms : ['top hits'];
+    for (const term of termsToTry) {
+      if (tracks.length >= limit) break;
+      try {
+        const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=10`, {
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+        });
+        if (itRes.ok) {
+          const itData = await itRes.json();
+          for (const t of itData.results || []) {
+            const tid = `it-${t.trackId}`;
+            if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+            seenIds.add(tid);
+            const cover = (t.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+            tracks.push({
+              id: tid,
+              name: t.trackName,
+              artists: [{ id: `art-${t.artistId || tid}`, name: t.artistName || 'Artista' }],
+              album: {
+                id: `alb-${t.collectionId || tid}`,
+                name: t.collectionName || t.trackName,
+                images: cover ? [{ url: cover }] : [],
+              },
+              duration_ms: t.trackTimeMillis || 180000,
+              preview_url: t.previewUrl || null,
+              added_at: 'Recomendada',
+            });
+            if (tracks.length >= limit) break;
+          }
         }
-      }
-    } catch {}
+      } catch {}
+    }
   }
 
   // 4. Curated catalog so recommendations NEVER fail or display empty

@@ -120,6 +120,11 @@ class AudioEngine {
   private isAuditioning = false;
   private lastEndedTimestamp = 0;
   private consecutiveEndedCount = 0;
+  public lastCrossfadeFinishTime = 0;
+
+  public get isTransitionActive(): boolean {
+    return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
+  }
 
   public get ytPlayer(): any {
     return this.ytPlayers[this.activeYtIndex];
@@ -181,8 +186,7 @@ class AudioEngine {
     const isDjMode =
       typeof window !== 'undefined' &&
       (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
-        crossfadeEnabledSaved !== 'false');
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
 
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
@@ -736,6 +740,7 @@ class AudioEngine {
   private finishCrossfade(crossfadeSec = 0) {
     if (!this.isCrossfading) return;
     this.isCrossfading = false;
+    this.lastCrossfadeFinishTime = Date.now();
 
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
@@ -939,10 +944,14 @@ class AudioEngine {
     } else {
       // Desktop dual-deck transition
       this.preloadedNext = { track: nextTrack, videoId, query };
-      const djConfig = curTrack
+      const isDjMode =
+        typeof window !== 'undefined' &&
+        (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+          window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
+      const djConfig = isDjMode && curTrack
         ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
         : null;
-      await this.executeCrossfade(2, djConfig);
+      await this.executeCrossfade(isDjMode ? 3.5 : 2, djConfig);
     }
   }
 
@@ -1710,6 +1719,16 @@ class AudioEngine {
         return;
       }
 
+      // CRITICAL SHIELD: If a transition or crossfade finished recently (< 5000ms),
+      // ignore this ENDED event completely! It is a delayed event from the outgoing video or player deck handoff.
+      if (this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 5000)) {
+        console.log('[AudioEngine] Ignored delayed ENDED event shortly after crossfade/transition', {
+          sinceCrossfade: Date.now() - this.lastCrossfadeFinishTime,
+          isTransitioning: this.isTransitioning,
+        });
+        return;
+      }
+
       // If playback is halted by circuit breaker or stopped, do not trigger auto-skips
       if (!usePlayerStore.getState().isPlaying) {
         return;
@@ -1856,6 +1875,9 @@ class AudioEngine {
         if (this.activeEngine !== 'html5' || this.activeAudioIndex !== idx) return;
         if (this.isCrossfading) {
           this.finishCrossfade();
+          return;
+        }
+        if (this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 5000)) {
           return;
         }
         const state = usePlayerStore.getState();

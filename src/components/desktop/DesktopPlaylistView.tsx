@@ -1688,8 +1688,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     title={`Escuchar preview de ${tr.name}`}
                   >
                     <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} size={40} className="w-10 h-10 object-cover" />
-                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
-                      <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-transform">
+                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center group-hover/cover:bg-black/60 transition-colors">
+                      <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-lg opacity-90 group-hover/cover:opacity-100 group-hover/cover:scale-110 active:scale-90 transition-all">
                         <PlayNativeIcon size={12} className="ml-0.5 text-black" />
                       </div>
                     </div>
