@@ -48,6 +48,7 @@ import { parseTrackArtists } from '../../utils/trackArtists';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 import { toHDImage } from '../../utils/formatters';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
+import { fetchPlaylistRecommendations } from '../../services/spotifyApi';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
 
@@ -260,37 +261,31 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [addSearchResults, setAddSearchResults] = useState<Track[]>([]);
   const [isSearchingAdd, setIsSearchingAdd] = useState(false);
   const [popularSuggestions, setPopularSuggestions] = useState<Track[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
 
-  // Load popular suggestion hits for empty state
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSuggestions() {
-      try {
-        const res = await fetch('https://itunes.apple.com/search?term=bad+bunny+feid+quevedo&media=music&entity=song&limit=6');
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled && data.results) {
-            const mapped: Track[] = data.results.map((t: any, idx: number) => ({
-              id: `rec-song-${t.trackId || idx}`,
-              name: t.trackName || 'Canción',
-              duration_ms: t.trackTimeMillis || 210000,
-              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-              album: {
-                id: `alb-${t.collectionId || idx}`,
-                name: t.collectionName || t.trackName,
-                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-              },
-            }));
-            setPopularSuggestions(mapped);
-          }
-        }
-      } catch {}
+  // Load real Spotify recommendations tailored to this playlist on enter or refresh
+  const loadRecommendations = async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const recs = await fetchPlaylistRecommendations(
+        playlist.id,
+        playlist.name,
+        dynamicTracks,
+        8
+      );
+      if (recs && recs.length > 0) {
+        setPopularSuggestions(recs);
+      }
+    } catch (err) {
+      console.warn('[DesktopPlaylistView] loadRecommendations error:', err);
+    } finally {
+      setIsLoadingSuggestions(false);
     }
-    loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  };
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [playlist.id, playlist.name]);
 
   // Debounced search for adding tracks to playlist
   useEffect(() => {
@@ -1544,11 +1539,30 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       <div className="px-8 pt-8 pb-16 mt-4 border-t border-white/10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
-            <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
-              Busquemos algo para tu lista
-            </h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
+                Busquemos algo para tu lista
+              </h3>
+              <button
+                onClick={() => loadRecommendations()}
+                disabled={isLoadingSuggestions}
+                className="px-3 py-1 rounded-full border border-white/20 hover:border-white text-xs font-bold text-[#b3b3b3] hover:text-white transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                title="Actualizar recomendaciones de Spotify"
+              >
+                <svg
+                  width="12"
+                  height="12"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  className={isLoadingSuggestions ? 'animate-spin' : ''}
+                >
+                  <path d="M13.65 2.35a8 8 0 1 0 1.63 8.65.75.75 0 1 0-1.39-.56A6.5 6.5 0 1 1 12.5 3.5H9.75a.75.75 0 0 0 0 1.5H14a.75.75 0 0 0 .75-.75V0a.75.75 0 0 0-1.5 0v2.35z" />
+                </svg>
+                <span>{isLoadingSuggestions ? 'Actualizando...' : 'Actualizar'}</span>
+              </button>
+            </div>
             <p className="text-xs text-[#b3b3b3] mt-0.5">
-              Busca una canción o añade las recomendaciones populares
+              Recomendaciones de Spotify en tiempo real basadas en esta playlist
             </p>
           </div>
           {/* Capsule search input */}

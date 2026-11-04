@@ -533,3 +533,55 @@ export async function fetchRecommendations(options: {
   }
   return [];
 }
+
+/**
+ * Fetches real Spotify recommendations tailored specifically to the opened playlist
+ * using Spotify Pathfinder and Web Player queries based on playlist artists & tracks.
+ */
+export async function fetchPlaylistRecommendations(
+  playlistId: string,
+  playlistTitle: string,
+  existingTracks: Track[] = [],
+  limit = 8
+): Promise<Track[]> {
+  try {
+    const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+    const headers: Record<string, string> = {};
+    if (userCookie) headers['x-spotify-cookie'] = userCookie;
+
+    // Collect unique artist names from existing tracks
+    const artistSet = new Set<string>();
+    existingTracks.forEach((t) => {
+      t.artists?.forEach((a) => {
+        if (a.name && a.name !== 'Spotify' && a.name.length > 1) {
+          artistSet.add(a.name);
+        }
+      });
+    });
+
+    const artistsList = Array.from(artistSet);
+    const selectedArtists = [...artistsList].sort(() => Math.random() - 0.5).slice(0, 5);
+    const seedTrackIds = existingTracks.slice(0, 15).map((t) => t.id).filter(Boolean);
+
+    const params = new URLSearchParams({
+      action: 'recommendations',
+      id: playlistId || '',
+      title: playlistTitle || '',
+      artists: selectedArtists.join(','),
+      seedTracks: seedTrackIds.join(','),
+      limit: String(limit),
+      _t: String(Date.now()),
+    });
+
+    const res = await fetch(`/api/playlist?${params.toString()}`, { headers });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.tracks && Array.isArray(data.tracks)) {
+        return data.tracks;
+      }
+    }
+  } catch (err) {
+    console.warn('[SpotifyApi] fetchPlaylistRecommendations error:', err);
+  }
+  return [];
+}

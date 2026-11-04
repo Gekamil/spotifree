@@ -5,39 +5,21 @@
 
 const RESOLVE_CACHE = new Map();
 
-const VERIFIED_TRACK_VIDEOS = {
-  'planteamiento erroneo': 'aWewyeC49e8',
-  'planteamiento erróneo': 'aWewyeC49e8',
-  'quevedo planteamiento erroneo': 'aWewyeC49e8',
-  'quevedo planteamiento erróneo': 'aWewyeC49e8',
-  'quevedo - planteamiento erroneo': 'aWewyeC49e8',
-  'quevedo - planteamiento erróneo': 'aWewyeC49e8',
-  'la graciosa': 'LZPLBSRnxSY',
-  'graciosa': 'LZPLBSRnxSY',
-  'quevedo la graciosa': 'LZPLBSRnxSY',
-  'quevedo - la graciosa': 'LZPLBSRnxSY',
-  'la graciosa quevedo': 'LZPLBSRnxSY',
-};
-
-function getVerifiedVideoId(q) {
-  if (!q) return null;
-  const norm = q
+function getVerifiedVideoId(q, title = '', artist = '') {
+  if (!q && !title) return null;
+  const full = `${q} ${title} ${artist}`
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
-  for (const [key, id] of Object.entries(VERIFIED_TRACK_VIDEOS)) {
-    const normKey = key
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .trim();
-    if (norm === normKey || norm.includes(normKey) || (norm.includes('quevedo') && norm.includes('planteamiento'))) {
-      return id;
-    }
-  }
-  if (norm.includes('graciosa') && (norm.includes('quevedo') || norm.includes('crespo') || norm.includes('buenas noches'))) {
+
+  // ONLY match Quevedo - La Graciosa if BOTH Quevedo AND Graciosa are in the query
+  if (full.includes('graciosa') && (full.includes('quevedo') || full.includes('elvis crespo') || full.includes('buenas noches'))) {
     return 'LZPLBSRnxSY';
+  }
+  // ONLY match Quevedo - Planteamiento Erróneo if BOTH Quevedo AND Planteamiento are in the query
+  if (full.includes('planteamiento') && (full.includes('quevedo') || full.includes('erroneo') || full.includes('buenas noches'))) {
+    return 'aWewyeC49e8';
   }
   return null;
 }
@@ -135,18 +117,26 @@ function scoreCandidate(query, expectedTitle, expectedArtist, candTitle, candArt
   for (const w of tWords) {
     if (cTitle.includes(w)) tMatches++;
   }
-  const tRatio = tWords.length > 0 ? tMatches / tWords.length : 1;
-  score += tRatio * 50;
+  if (tWords.length > 0 && tMatches === 0) {
+    score -= 80;
+  } else {
+    const tRatio = tWords.length > 0 ? tMatches / tWords.length : 1;
+    score += tRatio * 50;
+  }
 
-  // 4. Artist word matching
+  // 4. Artist word matching (CRITICAL: prevents returning a completely different artist)
   if (expA) {
     const aWords = expA.split(/\s+/).filter((w) => w.length > 2);
     let aMatches = 0;
     for (const w of aWords) {
       if (cArtist.includes(w) || cTitle.includes(w)) aMatches++;
     }
-    const aRatio = aWords.length > 0 ? aMatches / aWords.length : 0;
-    score += aRatio * 35;
+    if (aWords.length > 0 && aMatches === 0) {
+      score -= 80;
+    } else {
+      const aRatio = aWords.length > 0 ? aMatches / aWords.length : 0;
+      score += aRatio * 40;
+    }
   }
 
   // 5. Exact substring matches
@@ -233,11 +223,8 @@ async function resolveViaYouTubeMusic(q, expectedTitle = '', expectedArtist = ''
 
   candidates.sort((a, b) => b.score - a.score);
 
-  if (candidates.length > 0 && candidates[0].score >= 20) {
+  if (candidates.length > 0 && candidates[0].score >= 25) {
     return { videoId: candidates[0].videoId, title: candidates[0].title, artist: candidates[0].artist };
-  }
-  if (candidates.length > 0 && candidates[0].score > 0) {
-    return { videoId: candidates[0].videoId };
   }
 
   throw new Error('YTM: no confident videoId found');
@@ -299,10 +286,7 @@ async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '
 
   candidates.sort((a, b) => b.score - a.score);
 
-  if (candidates.length > 0 && candidates[0].score >= 20) {
-    return { videoId: candidates[0].videoId };
-  }
-  if (candidates.length > 0 && candidates[0].score > 0) {
+  if (candidates.length > 0 && candidates[0].score >= 25) {
     return { videoId: candidates[0].videoId };
   }
 

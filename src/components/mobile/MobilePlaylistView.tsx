@@ -26,7 +26,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
-import { searchSpotify } from '../../services/spotifyApi';
+import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
@@ -203,6 +203,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [addSearchResults, setAddSearchResults] = useState<Track[]>([]);
   const [isSearchingAdd, setIsSearchingAdd] = useState(false);
   const [popularSuggestions, setPopularSuggestions] = useState<Track[]>([]);
+  const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -210,38 +211,29 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     resolveVibrantColor(playlist.id, playlist.name, (playlist as any).color)
   );
 
-  // Load popular suggestions for instant 1-click add
-  useEffect(() => {
-    let cancelled = false;
-    async function loadSuggestions() {
-      try {
-        const res = await fetch(
-          'https://itunes.apple.com/search?term=bad+bunny+feid+quevedo+romeo+santos&media=music&entity=song&limit=6'
-        );
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled && data.results) {
-            const mapped: Track[] = data.results.map((t: any, idx: number) => ({
-              id: `rec-song-${t.trackId || idx}`,
-              name: t.trackName || 'Canción',
-              duration_ms: t.trackTimeMillis || 210000,
-              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
-              album: {
-                id: `alb-${t.collectionId || idx}`,
-                name: t.collectionName || t.trackName,
-                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-              },
-            }));
-            setPopularSuggestions(mapped);
-          }
-        }
-      } catch {}
+  // Load real Spotify recommendations tailored to this playlist on enter or refresh
+  const loadRecommendations = async () => {
+    setIsLoadingSuggestions(true);
+    try {
+      const recs = await fetchPlaylistRecommendations(
+        playlist.id,
+        playlist.name,
+        tracks,
+        8
+      );
+      if (recs && recs.length > 0) {
+        setPopularSuggestions(recs);
+      }
+    } catch (err) {
+      console.warn('[MobilePlaylistView] loadRecommendations error:', err);
+    } finally {
+      setIsLoadingSuggestions(false);
     }
-    loadSuggestions();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  };
+
+  useEffect(() => {
+    loadRecommendations();
+  }, [playlist.id, playlist.name]);
 
   // Debounced search for adding tracks to playlist
   useEffect(() => {
@@ -1253,7 +1245,26 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
               <div className="space-y-1.5 text-left">
                 {!addSearchQuery && (
-                  <p className="text-xs font-bold text-[#b3b3b3] px-1 pt-1">Recomendadas para ti</p>
+                  <div className="flex items-center justify-between px-1 pt-1 pb-1">
+                    <p className="text-xs font-bold text-[#b3b3b3]">Recomendadas para ti</p>
+                    <button
+                      onClick={() => loadRecommendations()}
+                      disabled={isLoadingSuggestions}
+                      className="text-[11px] font-bold text-[#1ed760] active:scale-95 flex items-center gap-1 cursor-pointer"
+                      title="Actualizar recomendaciones"
+                    >
+                      <svg
+                        width="10"
+                        height="10"
+                        viewBox="0 0 16 16"
+                        fill="currentColor"
+                        className={isLoadingSuggestions ? 'animate-spin' : ''}
+                      >
+                        <path d="M13.65 2.35a8 8 0 1 0 1.63 8.65.75.75 0 1 0-1.39-.56A6.5 6.5 0 1 1 12.5 3.5H9.75a.75.75 0 0 0 0 1.5H14a.75.75 0 0 0 .75-.75V0a.75.75 0 0 0-1.5 0v2.35z" />
+                      </svg>
+                      <span>{isLoadingSuggestions ? 'Actualizando...' : 'Actualizar'}</span>
+                    </button>
+                  </div>
                 )}
                 {(addSearchQuery ? addSearchResults : popularSuggestions).map((trk) => {
                   const alreadyInList = tracks.some(

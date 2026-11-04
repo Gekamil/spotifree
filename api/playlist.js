@@ -692,6 +692,144 @@ async function resolveYouTubePlaylist(listId) {
   };
 }
 
+/**
+ * Dynamically queries real Spotify recommendations for any playlist
+ * using Spotify Pathfinder GraphQL search (backed by Web Player auth) with Deezer fallback.
+ */
+async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', artists = '', seedTracks = '', cookie = '', limit = 10 }) {
+  const auth = await getWebPlayerAuth(cookie).catch(() => ({ accessToken: '' }));
+  const existingIdSet = new Set((seedTracks || '').split(',').map((s) => s.trim()).filter(Boolean));
+
+  // Determine smart query terms based on playlist artists and title
+  const queryTerms = [];
+  const artistList = (artists || '').split(',').map((a) => a.trim()).filter(Boolean);
+  if (artistList.length > 0) {
+    // Randomize order so every time the user enters or refreshes, they get varied recommendations
+    const shuffledArtists = [...artistList].sort(() => Math.random() - 0.5);
+    queryTerms.push(shuffledArtists.slice(0, 2).join(' '));
+    if (shuffledArtists.length > 2) {
+      queryTerms.push(shuffledArtists.slice(2, 4).join(' '));
+    }
+  }
+
+  const cleanTitle = (playlistTitle || '')
+    .replace(/[()[\]{}_-]/g, ' ')
+    .replace(/\b(playlist|de|para|mis|canciones|favoritas|2024|2025|2026)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleanTitle.length >= 3) {
+    queryTerms.push(cleanTitle);
+  }
+
+  if (queryTerms.length === 0) {
+    queryTerms.push('top hits exitos pop urbano');
+  }
+
+  const tracks = [];
+  const seenIds = new Set();
+
+  // 1. Query Spotify Pathfinder GraphQL search (Real Spotify Tracks!)
+  if (auth.accessToken) {
+    for (const term of queryTerms) {
+      if (tracks.length >= limit) break;
+      try {
+        const offset = Math.floor(Math.random() * 4);
+        const variables = { query: term, offset, limit: limit * 2 };
+        const extensions = {
+          persistedQuery: {
+            version: 1,
+            sha256Hash: '903df2a65d8121e27d73a2be03c01e88ebe6021bb6d4eb82a389e35d87e51d27',
+          },
+        };
+        const pfUrl = `https://api-partner.spotify.com/pathfinder/v1/query?operationName=findTracks&variables=${encodeURIComponent(JSON.stringify(variables))}&extensions=${encodeURIComponent(JSON.stringify(extensions))}`;
+        const pfRes = await fetch(pfUrl, {
+          headers: {
+            Authorization: `Bearer ${auth.accessToken}`,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(3500) : undefined,
+        });
+
+        if (pfRes.ok) {
+          const pfData = await pfRes.json();
+          const items = pfData.data?.searchV2?.tracksV2?.items || [];
+          for (const it of items) {
+            const d = it.item?.data;
+            if (!d) continue;
+            const rawUri = d.uri || '';
+            const trackId = rawUri.split(':').pop() || d.id;
+            if (!trackId || seenIds.has(trackId) || existingIdSet.has(trackId)) continue;
+            seenIds.add(trackId);
+
+            const cover = toHDImage(
+              d.albumOfTrack?.coverArt?.sources?.[0]?.url ||
+              d.albumOfTrack?.images?.[0]?.url ||
+              ''
+            );
+
+            tracks.push({
+              id: trackId,
+              name: d.name,
+              artists: (d.artists?.items || []).map((a, i) => ({
+                id: a.id || a.uri?.split(':').pop() || `art-${trackId}-${i}`,
+                name: a.profile?.name || a.name || 'Artista',
+              })),
+              album: {
+                id: d.albumOfTrack?.uri?.split(':').pop() || `alb-${trackId}`,
+                name: d.albumOfTrack?.name || d.name,
+                images: cover ? [{ url: cover }] : [],
+              },
+              duration_ms: d.duration?.totalMilliseconds || 195000,
+              preview_url: null,
+              added_at: 'Recomendada',
+            });
+            if (tracks.length >= limit) break;
+          }
+        }
+      } catch (err) {
+        console.warn('[Playlist Recommendations] Pathfinder error:', err.message);
+      }
+    }
+  }
+
+  // 2. High-quality Deezer fallback with HD album covers
+  if (tracks.length < 6) {
+    const fallbackTerm = queryTerms[0] || 'top hits';
+    try {
+      const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(fallbackTerm)}&limit=15`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+      });
+      if (dzRes.ok) {
+        const dzData = await dzRes.json();
+        for (const t of dzData.data || []) {
+          const tid = `dz-${t.id}`;
+          if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+          seenIds.add(tid);
+          const cover = toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '');
+          tracks.push({
+            id: tid,
+            name: t.title || t.title_short,
+            artists: [{ id: `art-${t.artist?.id || tid}`, name: t.artist?.name || 'Artista' }],
+            album: {
+              id: `alb-${t.album?.id || tid}`,
+              name: t.album?.title || t.title,
+              images: cover ? [{ url: cover }] : [],
+            },
+            duration_ms: (t.duration || 180) * 1000,
+            preview_url: t.preview || null,
+            added_at: 'Recomendada',
+          });
+          if (tracks.length >= limit) break;
+        }
+      }
+    } catch {}
+  }
+
+  return tracks;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -703,6 +841,29 @@ export default async function handler(req, res) {
 
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+    const action = url.searchParams.get('action') || '';
+
+    // ACTION: RECOMMENDATIONS FOR PLAYLIST
+    if (action === 'recommendations') {
+      const playlistId = url.searchParams.get('id') || url.searchParams.get('playlistId') || '';
+      const playlistTitle = url.searchParams.get('title') || url.searchParams.get('playlistTitle') || '';
+      const artists = url.searchParams.get('artists') || '';
+      const seedTracks = url.searchParams.get('seedTracks') || url.searchParams.get('seeds') || '';
+      const cookie = req.headers['x-spotify-cookie'] || '';
+      const limit = parseInt(url.searchParams.get('limit') || '8', 10);
+
+      const tracks = await getSpotifyRecommendations({
+        playlistId,
+        playlistTitle,
+        artists,
+        seedTracks,
+        cookie,
+        limit,
+      });
+
+      return res.status(200).json({ success: true, tracks });
+    }
+
     let id = url.searchParams.get('id');
     if (!id) {
       const parts = url.pathname.split('/').filter(Boolean);

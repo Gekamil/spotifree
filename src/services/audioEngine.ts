@@ -26,37 +26,21 @@ import {
 
 const VIDEO_ID_CACHE = new Map<string, string>();
 
-const VERIFIED_TRACK_VIDEOS: Record<string, string> = {
-  'planteamiento erroneo': 'aWewyeC49e8',
-  'planteamiento erróneo': 'aWewyeC49e8',
-  'quevedo planteamiento erroneo': 'aWewyeC49e8',
-  'quevedo planteamiento erróneo': 'aWewyeC49e8',
-  'quevedo - planteamiento erroneo': 'aWewyeC49e8',
-  'quevedo - planteamiento erróneo': 'aWewyeC49e8',
-  'la graciosa': 'LZPLBSRnxSY',
-  'graciosa': 'LZPLBSRnxSY',
-  'quevedo la graciosa': 'LZPLBSRnxSY',
-  'quevedo - la graciosa': 'LZPLBSRnxSY',
-  'la graciosa quevedo': 'LZPLBSRnxSY',
-};
-
-function getVerifiedVideoId(q: string): string | null {
-  if (!q) return null;
-  const norm = q
+function getVerifiedVideoId(q: string, title: string = '', artist: string = ''): string | null {
+  if (!q && !title) return null;
+  const full = `${q} ${title} ${artist}`
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
-  for (const [key, id] of Object.entries(VERIFIED_TRACK_VIDEOS)) {
-    if (norm.includes(key) || norm === key) {
-      return id;
-    }
-  }
-  if (norm.includes('planteamiento') || (norm.includes('quevedo') && norm.includes('erroneo'))) {
-    return 'aWewyeC49e8';
-  }
-  if (norm.includes('graciosa') && (norm.includes('quevedo') || norm.includes('crespo') || norm.includes('buenas noches'))) {
+
+  // ONLY match Quevedo - La Graciosa if BOTH Quevedo AND Graciosa are in the query
+  if (full.includes('graciosa') && (full.includes('quevedo') || full.includes('elvis crespo') || full.includes('buenas noches'))) {
     return 'LZPLBSRnxSY';
+  }
+  // ONLY match Quevedo - Planteamiento Erróneo if BOTH Quevedo AND Planteamiento are in the query
+  if (full.includes('planteamiento') && (full.includes('quevedo') || full.includes('erroneo') || full.includes('buenas noches'))) {
+    return 'aWewyeC49e8';
   }
   return null;
 }
@@ -2045,9 +2029,7 @@ class AudioEngine {
     if (!query) return null;
     const cleanQuery = query.trim();
 
-    const verified =
-      getVerifiedVideoId(cleanQuery) ||
-      (trackTitle && trackArtist ? getVerifiedVideoId(`${trackTitle} ${trackArtist}`) : null);
+    const verified = getVerifiedVideoId(cleanQuery, trackTitle, trackArtist);
     if (verified) {
       persistVideoId(cleanQuery, verified);
       return verified;
