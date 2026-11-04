@@ -350,7 +350,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       try {
         const artist = currentTrack.artists?.[0]?.name || '';
         const title = currentTrack.name;
-        const res = await fetchLyricsUnified(title, artist);
+        const durSec = currentTrack.duration_ms ? currentTrack.duration_ms / 1000 : undefined;
+        const res = await fetchLyricsUnified(title, artist, durSec);
         if (cancelled) return;
         if (res.syncedLyrics) {
           const parsed = parseEnhancedLyrics(res.syncedLyrics);

@@ -86,13 +86,78 @@ const INVIDIOUS_INSTANCES = [
   'https://yt.drgnz.club',
 ];
 
-async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
-  const queryWords = cleanQuery(q)
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
-    .split(/\s+/)
-    .filter((w) => w.length > 2);
+function scoreCandidate(query, expectedTitle, expectedArtist, candTitle, candArtist) {
+  if (!candTitle) return -100;
 
+  const normalize = (s) =>
+    (s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .trim();
+
+  const cTitle = normalize(candTitle);
+  const cArtist = normalize(candArtist);
+
+  let expT = normalize(expectedTitle);
+  let expA = normalize(expectedArtist);
+  if (!expT) {
+    expT = normalize(query);
+  }
+
+  let score = 0;
+
+  // 1. Severe penalties for unwanted content (covers, karaoke, reaction, etc.)
+  if (/\b(cover|karaoke|tributo|instrumental|reaction|reaccion|tutorial|acordes|piano cover|guitar cover|parodia)\b/i.test(cTitle)) {
+    score -= 100;
+  }
+  // Penalize live concerts if the user did not ask for a live version
+  if (/\b(live|en vivo|en directo|directo|concierto|acoustic live)\b/i.test(cTitle) && !/\b(live|en vivo)\b/i.test(expT)) {
+    score -= 50;
+  }
+  // Penalize remix if the original track is not a remix
+  if (/\b(remix|mashup)\b/i.test(cTitle) && !/\b(remix)\b/i.test(expT)) {
+    score -= 30;
+  }
+
+  // 2. High bonus for genuine official studio releases (Audio / Topic / Vevo)
+  if (/\b(official audio|audio oficial|original mix|video oficial|official video|audio|tema oficial)\b/i.test(candTitle.toLowerCase())) {
+    score += 20;
+  }
+  if (/\b(topic|vevo)\b/i.test(candArtist.toLowerCase()) || candArtist.includes(' - Topic')) {
+    score += 25;
+  }
+
+  // 3. Title word matching
+  const tWords = expT.split(/\s+/).filter((w) => w.length > 2);
+  let tMatches = 0;
+  for (const w of tWords) {
+    if (cTitle.includes(w)) tMatches++;
+  }
+  const tRatio = tWords.length > 0 ? tMatches / tWords.length : 1;
+  score += tRatio * 50;
+
+  // 4. Artist word matching
+  if (expA) {
+    const aWords = expA.split(/\s+/).filter((w) => w.length > 2);
+    let aMatches = 0;
+    for (const w of aWords) {
+      if (cArtist.includes(w) || cTitle.includes(w)) aMatches++;
+    }
+    const aRatio = aWords.length > 0 ? aMatches / aWords.length : 0;
+    score += aRatio * 35;
+  }
+
+  // 5. Exact substring matches
+  if (expT && cTitle.includes(expT)) {
+    score += 25;
+  }
+
+  return score;
+}
+
+async function resolveViaYouTubeMusic(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set()) {
   const res = await fetchWithTimeout(
     'https://music.youtube.com/youtubei/v1/search',
     {
@@ -124,8 +189,10 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
     data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content
       ?.sectionListRenderer?.contents || [];
 
+  const candidates = [];
+
   for (const sec of sections) {
-    // 1. Check Top Result Card (official #1 match on YouTube Music, e.g. Quevedo Planteamiento Erróneo)
+    // 1. Check Top Result Card (official #1 match on YouTube Music)
     if (sec.musicCardShelfRenderer) {
       const card = sec.musicCardShelfRenderer;
       const cardTitle = card.title?.runs?.[0]?.text || '';
@@ -135,10 +202,8 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
         card.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId ||
         card.buttons?.[0]?.buttonRenderer?.command?.watchEndpoint?.videoId;
       if (cardVid && /^[a-zA-Z0-9_-]{11}$/.test(cardVid) && !excludeSet.has(cardVid)) {
-        const combined = `${cardTitle} ${cardSub}`.toLowerCase();
-        if (queryWords.length === 0 || queryWords.some((w) => combined.includes(w))) {
-          return { videoId: cardVid };
-        }
+        const score = scoreCandidate(q, expectedTitle, expectedArtist, cardTitle, cardSub) + 15;
+        candidates.push({ videoId: cardVid, score, title: cardTitle, artist: cardSub });
       }
     }
 
@@ -159,30 +224,27 @@ async function resolveViaYouTubeMusic(q, excludeSet = new Set()) {
             renderer?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || '';
           const itemArtist =
             renderer?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((x) => x.text).join('') || '';
-          const combined = `${itemTitle} ${itemArtist}`.toLowerCase();
-
-          if (queryWords.length === 0 || queryWords.some((w) => combined.includes(w))) {
-            return { videoId };
-          }
+          const score = scoreCandidate(q, expectedTitle, expectedArtist, itemTitle, itemArtist);
+          candidates.push({ videoId, score, title: itemTitle, artist: itemArtist });
         }
       }
     }
   }
 
-  // 3. Fallback: match any videoId in response if not excluded
-  const text = JSON.stringify(data);
-  const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
-  for (const vid of matches) {
-    if (!excludeSet.has(vid)) {
-      return { videoId: vid };
-    }
+  candidates.sort((a, b) => b.score - a.score);
+
+  if (candidates.length > 0 && candidates[0].score >= 20) {
+    return { videoId: candidates[0].videoId, title: candidates[0].title, artist: candidates[0].artist };
+  }
+  if (candidates.length > 0 && candidates[0].score > 0) {
+    return { videoId: candidates[0].videoId };
   }
 
-  throw new Error('YTM: no videoId found');
+  throw new Error('YTM: no confident videoId found');
 }
 
-async function resolveViaYouTubeSearch(q, excludeSet = new Set()) {
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' official video')}`;
+async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set()) {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q + ' official audio')}`;
   const res = await fetchWithTimeout(
     url,
     {
@@ -198,21 +260,53 @@ async function resolveViaYouTubeSearch(q, excludeSet = new Set()) {
   if (!res.ok) throw new Error('YT search non-ok');
   const html = await res.text();
 
-  const matches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)].map((m) => m[1]);
-  for (const vid of matches) {
-    if (!excludeSet.has(vid)) {
-      return { videoId: vid };
+  const candidates = [];
+
+  // 1. Try parsing ytInitialData for structured videoRenderer items
+  const jsonMatch = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
+  if (jsonMatch) {
+    try {
+      const data = JSON.parse(jsonMatch[1]);
+      const contents =
+        data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
+          ?.itemSectionRenderer?.contents || [];
+
+      for (const item of contents) {
+        const r = item.videoRenderer;
+        if (r && r.videoId && /^[a-zA-Z0-9_-]{11}$/.test(r.videoId) && !excludeSet.has(r.videoId)) {
+          const title = r.title?.runs?.[0]?.text || '';
+          const artist = r.ownerText?.runs?.[0]?.text || '';
+          const score = scoreCandidate(q, expectedTitle, expectedArtist, title, artist);
+          candidates.push({ videoId: r.videoId, score, title, artist });
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Fallback: Parse <a> tags with titles
+  if (candidates.length === 0) {
+    const linkRegex = /href="\/watch\?v=([a-zA-Z0-9_-]{11})"[^>]*title="([^"]+)"/g;
+    let match;
+    while ((match = linkRegex.exec(html)) !== null) {
+      const vid = match[1];
+      const title = match[2];
+      if (!excludeSet.has(vid)) {
+        const score = scoreCandidate(q, expectedTitle, expectedArtist, title, '');
+        candidates.push({ videoId: vid, score, title, artist: '' });
+      }
     }
   }
 
-  const jsonMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
-  for (const vid of jsonMatches) {
-    if (!excludeSet.has(vid)) {
-      return { videoId: vid };
-    }
+  candidates.sort((a, b) => b.score - a.score);
+
+  if (candidates.length > 0 && candidates[0].score >= 20) {
+    return { videoId: candidates[0].videoId };
+  }
+  if (candidates.length > 0 && candidates[0].score > 0) {
+    return { videoId: candidates[0].videoId };
   }
 
-  throw new Error('YT search: no videoId found');
+  throw new Error('YT search: no confident videoId found');
 }
 
 async function getInvidiousAudioUrl(videoId) {
@@ -272,17 +366,24 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
 
   const rawQ = (req.query?.q || req.query?.query || '').trim();
-  if (!rawQ) {
+  const rawTitle = (req.query?.title || '').trim();
+  const rawArtist = (req.query?.artist || '').trim();
+
+  if (!rawQ && !rawTitle) {
     return res.status(400).json({ error: 'Missing query' });
   }
 
   const excludeParam = (req.query?.exclude || '').trim();
   const excludeSet = new Set(excludeParam ? excludeParam.split(',').map((s) => s.trim()) : []);
 
-  const q = cleanQuery(rawQ);
+  const q = cleanQuery(rawQ || `${rawTitle} ${rawArtist}`.trim());
   const cacheKey = q.toLowerCase();
 
-  const verifiedId = getVerifiedVideoId(q) || getVerifiedVideoId(rawQ);
+  const verifiedId =
+    getVerifiedVideoId(q) ||
+    getVerifiedVideoId(rawQ) ||
+    getVerifiedVideoId(`${rawTitle} ${rawArtist}`);
+
   if (verifiedId && !excludeSet.has(verifiedId)) {
     return res.status(200).json({ success: true, videoId: verifiedId, verified: true });
   }
@@ -295,9 +396,9 @@ export default async function handler(req, res) {
   try {
     let result = null;
     try {
-      result = await resolveViaYouTubeMusic(q, excludeSet);
+      result = await resolveViaYouTubeMusic(q, rawTitle, rawArtist, excludeSet);
     } catch {
-      result = await resolveViaYouTubeSearch(q, excludeSet);
+      result = await resolveViaYouTubeSearch(q, rawTitle, rawArtist, excludeSet);
     }
 
     if (result && result.videoId && !excludeSet.has(result.videoId)) {
@@ -310,7 +411,7 @@ export default async function handler(req, res) {
     try {
       const simplified = q.split(' ').slice(0, 4).join(' ');
       if (simplified !== q) {
-        const retryResult = await resolveViaYouTubeMusic(simplified, excludeSet);
+        const retryResult = await resolveViaYouTubeMusic(simplified, rawTitle, rawArtist, excludeSet);
         if (retryResult?.videoId && !excludeSet.has(retryResult.videoId)) {
           if (excludeSet.size === 0) {
             RESOLVE_CACHE.set(cacheKey, retryResult);

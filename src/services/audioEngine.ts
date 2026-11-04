@@ -172,6 +172,12 @@ class AudioEngine {
   private checkCrossfade(curSec: number, durSec: number) {
     if (this.isAuditioning || this.isSeeking || !durSec || durSec < 15) return;
 
+    const state = usePlayerStore.getState();
+    // CRITICAL FIX: If single track repeat (repeatMode === 'one') is active, DO NOT trigger crossfade or transitions!
+    // Crossfading into the exact same track fades out the volume and triggers silence.
+    if (state.repeatMode === 'one') return;
+    if (state.queue && state.queue.length <= 1 && state.repeatMode !== 'off') return;
+
     const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
     if (gaplessSaved === 'false') return;
 
@@ -194,7 +200,6 @@ class AudioEngine {
         window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
         crossfadeEnabledSaved !== 'false');
 
-    const state = usePlayerStore.getState();
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
 
@@ -256,8 +261,12 @@ class AudioEngine {
     this.isPreloadingNext = true;
     try {
       const state = usePlayerStore.getState();
+      if (state.repeatMode === 'one') {
+        this.isPreloadingNext = false;
+        return;
+      }
       const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || (nextTrack.id === this.currentTrackId && state.repeatMode !== 'one')) {
+      if (!nextTrack || nextTrack.id === this.currentTrackId) {
         this.isPreloadingNext = false;
         return;
       }
@@ -265,13 +274,10 @@ class AudioEngine {
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
 
-      let videoId: string | null | undefined =
-        nextTrack.id === this.currentTrackId && this.currentVideoId
-          ? this.currentVideoId
-          : VIDEO_ID_CACHE.get(query);
+      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
+        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
       }
 
       this.preloadedNext = {
@@ -313,24 +319,26 @@ class AudioEngine {
   }
 
   private async executeCrossfade(crossfadeSec: number, djConfig: DJTransitionConfig | null = null) {
-    this.isCrossfading = true;
     const state = usePlayerStore.getState();
+    if (state.repeatMode === 'one') {
+      this.isCrossfading = false;
+      return;
+    }
+
+    this.isCrossfading = true;
 
     if (!this.preloadedNext) {
       const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || (nextTrack.id === this.currentTrackId && state.repeatMode !== 'one')) {
+      if (!nextTrack || nextTrack.id === this.currentTrackId) {
         this.isCrossfading = false;
         return;
       }
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
-      let videoId: string | null | undefined =
-        nextTrack.id === this.currentTrackId && this.currentVideoId
-          ? this.currentVideoId
-          : VIDEO_ID_CACHE.get(query);
+      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
+        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
       }
       this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
     }
@@ -345,7 +353,7 @@ class AudioEngine {
     if (this.activeEngine === 'youtube' && !nextVideoId) {
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
-      nextVideoId = (await this.resolveVideoId(query, nextTrack.id)) || undefined;
+      nextVideoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
       if (nextVideoId && this.preloadedNext) {
         this.preloadedNext.videoId = nextVideoId;
       }
@@ -1751,8 +1759,21 @@ class AudioEngine {
 
       const state = usePlayerStore.getState();
       if (state.repeatMode === 'one') {
+        const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
+        const primaryYt = this.ytPlayers[this.activeYtIndex];
+        if (primaryYt && typeof primaryYt.setVolume === 'function') {
+          try { primaryYt.setVolume(Math.round(masterVolume * 100)); } catch {}
+        }
+        const strip = this.deckStrips[this.activeYtIndex];
+        if (strip && this.audioContext) {
+          const now = this.audioContext.currentTime;
+          cancelScheduledAutomations(strip, now);
+          strip.outputNode.gain.cancelScheduledValues(now);
+          strip.outputNode.gain.setValueAtTime(masterVolume, now);
+        }
         this.seek(0);
         this.resume();
+        usePlayerStore.setState({ isPlaying: true, progressMs: 0 });
       } else {
         state.nextTrack();
       }
@@ -2015,11 +2036,18 @@ class AudioEngine {
   }
 
   /** Unified Fast Video ID resolution: Cache -> Robust Server Resolution with smart retries */
-  public async resolveVideoId(query: string, trackId?: string): Promise<string | null> {
+  public async resolveVideoId(
+    query: string,
+    trackId?: string,
+    trackTitle?: string,
+    trackArtist?: string
+  ): Promise<string | null> {
     if (!query) return null;
     const cleanQuery = query.trim();
 
-    const verified = getVerifiedVideoId(cleanQuery);
+    const verified =
+      getVerifiedVideoId(cleanQuery) ||
+      (trackTitle && trackArtist ? getVerifiedVideoId(`${trackTitle} ${trackArtist}`) : null);
     if (verified) {
       persistVideoId(cleanQuery, verified);
       return verified;
@@ -2030,10 +2058,15 @@ class AudioEngine {
 
     let resolvedId: string | null = null;
 
-    // 1. Primary backend resolve with 6.5s timeout (safe for 4G/5G mobile connections)
+    // 1. Primary backend resolve with title & artist parameters
     const backendPromise = (async () => {
       try {
-        const url = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery)}${trackId ? `&trackId=${encodeURIComponent(trackId)}` : ''}`;
+        const params = new URLSearchParams();
+        params.set('q', cleanQuery);
+        if (trackId) params.set('trackId', trackId);
+        if (trackTitle) params.set('title', trackTitle);
+        if (trackArtist) params.set('artist', trackArtist);
+        const url = `${API_BASE}/api/audio/resolve?${params.toString()}`;
         const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined });
         if (res.ok) {
           const data = await res.json();
@@ -2047,7 +2080,12 @@ class AudioEngine {
     const fallbackPromise = (async () => {
       await new Promise((r) => setTimeout(r, 1200));
       try {
-        const altUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(cleanQuery + ' audio')}`;
+        const params = new URLSearchParams();
+        params.set('q', cleanQuery + ' audio');
+        if (trackId) params.set('trackId', trackId);
+        if (trackTitle) params.set('title', trackTitle);
+        if (trackArtist) params.set('artist', trackArtist);
+        const altUrl = `${API_BASE}/api/audio/resolve?${params.toString()}`;
         const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
         if (res.ok) {
           const data = await res.json();
@@ -2185,8 +2223,11 @@ class AudioEngine {
         }
       } catch {}
 
-      // 1. Resolve videoId instantly via unified cache & resolver
-      let videoId = await this.resolveVideoId(query, trackId);
+      // 1. Resolve videoId instantly via unified cache & resolver with accurate track metadata
+      const curTrk = usePlayerStore.getState().currentTrack;
+      const tTitle = curTrk?.id === trackId ? curTrk.name : undefined;
+      const tArtist = curTrk?.id === trackId ? curTrk.artists?.[0]?.name : undefined;
+      let videoId = await this.resolveVideoId(query, trackId, tTitle, tArtist);
       if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
         return;
       }

@@ -30,17 +30,20 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const { title = '', artist = '' } = req.query;
+  const { title = '', artist = '', duration = '' } = req.query;
   const t = cleanTitle(title);
   const a = cleanArtist(artist);
+  const durSec = parseInt(duration, 10) || 0;
 
   if (!t) {
     return res.status(200).json({ syncedLyrics: null, plainLyrics: null });
   }
 
   try {
-    // 1. Exact match by clean title and artist
-    const exactUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}`;
+    // 1. Exact match by clean title, artist, and optional duration
+    let exactUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}`;
+    if (durSec > 0) exactUrl += `&duration=${durSec}`;
+
     const exactRes = await fetch(exactUrl, {
       headers: { 'User-Agent': 'Spotifree/1.0' },
       signal: AbortSignal.timeout(5000),
@@ -53,7 +56,22 @@ export default async function handler(req, res) {
       }
     }
 
-    // 2. Fallback to broad search query
+    // 2. Fallback exact match without duration if duration filter failed
+    if (durSec > 0) {
+      const fallbackUrl = `https://lrclib.net/api/get?track_name=${encodeURIComponent(t)}&artist_name=${encodeURIComponent(a)}`;
+      const fallbackRes = await fetch(fallbackUrl, {
+        headers: { 'User-Agent': 'Spotifree/1.0' },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (fallbackRes.ok) {
+        const fbData = await fallbackRes.json();
+        if (fbData && (fbData.syncedLyrics || fbData.plainLyrics)) {
+          return res.status(200).json(fbData);
+        }
+      }
+    }
+
+    // 3. Fallback to broad search query on LRCLib
     const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(`${t} ${a}`.trim())}`;
     const searchRes = await fetch(searchUrl, {
       headers: { 'User-Agent': 'Spotifree/1.0' },
@@ -63,12 +81,26 @@ export default async function handler(req, res) {
     if (searchRes.ok) {
       const results = await searchRes.json();
       if (Array.isArray(results) && results.length > 0) {
-        const best = results.find(r => r.syncedLyrics) || results[0];
-        if (best) return res.status(200).json(best);
+        let best = null;
+        // Prioritize candidate with syncedLyrics whose duration matches within +/- 4 seconds
+        if (durSec > 0) {
+          best = results.find((r) => r.syncedLyrics && Math.abs((r.duration || 0) - durSec) <= 4);
+        }
+        if (!best) {
+          // Match by title inclusion + syncedLyrics
+          const normT = t.toLowerCase();
+          best =
+            results.find((r) => r.syncedLyrics && (r.trackName || '').toLowerCase().includes(normT)) ||
+            results.find((r) => r.syncedLyrics) ||
+            results[0];
+        }
+        if (best && (best.syncedLyrics || best.plainLyrics)) {
+          return res.status(200).json(best);
+        }
       }
     }
 
-    // 3. Fallback to Lyrics.ovh
+    // 4. Fallback to Lyrics.ovh
     try {
       const ovhRes = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(a)}/${encodeURIComponent(t)}`, {
         signal: AbortSignal.timeout(3000),
