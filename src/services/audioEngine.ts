@@ -1926,8 +1926,11 @@ class AudioEngine {
         this.compressorNode = this.audioContext.createDynamicsCompressor();
         const normalizeSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_normalize_volume') : null;
         const isNorm = normalizeSaved !== 'false';
-        this.compressorNode.threshold.value = isNorm ? -24 : 0;
-        this.compressorNode.ratio.value = isNorm ? 12 : 1;
+        this.compressorNode.threshold.value = isNorm ? -20 : 0;
+        this.compressorNode.ratio.value = isNorm ? 4 : 1;
+        this.compressorNode.knee.value = 12;
+        this.compressorNode.attack.value = 0.01;
+        this.compressorNode.release.value = 0.15;
         lastNode.connect(this.compressorNode);
         this.compressorNode.connect(this.audioContext.destination);
       }
@@ -2635,10 +2638,15 @@ class AudioEngine {
 
   public setEqualizerBand(index: number, gainDb: number) {
     if (this.filterNodes[index]) {
-      this.filterNodes[index].gain.value = gainDb;
+      if (this.audioContext && this.audioContext.state === 'running') {
+        const t = this.audioContext.currentTime;
+        this.filterNodes[index].gain.cancelScheduledValues(t);
+        this.filterNodes[index].gain.setTargetAtTime(gainDb, t, 0.02);
+      } else {
+        this.filterNodes[index].gain.value = gainDb;
+      }
     }
   }
-
 
   public setVolumeNormalization(enabled: boolean) {
     if (typeof window !== 'undefined') {
@@ -2649,12 +2657,16 @@ class AudioEngine {
     this.initAudioContext();
     if (this.compressorNode && this.audioContext) {
       try {
+        const t = this.audioContext.currentTime;
+        this.compressorNode.threshold.cancelScheduledValues(t);
+        this.compressorNode.ratio.cancelScheduledValues(t);
         if (enabled) {
-          this.compressorNode.threshold.setValueAtTime(-24, this.audioContext.currentTime);
-          this.compressorNode.ratio.setValueAtTime(12, this.audioContext.currentTime);
+          this.compressorNode.threshold.setTargetAtTime(-20, t, 0.05);
+          this.compressorNode.ratio.setTargetAtTime(4, t, 0.05);
+          this.compressorNode.knee.setTargetAtTime(12, t, 0.05);
         } else {
-          this.compressorNode.threshold.setValueAtTime(0, this.audioContext.currentTime);
-          this.compressorNode.ratio.setValueAtTime(1, this.audioContext.currentTime);
+          this.compressorNode.threshold.setTargetAtTime(0, t, 0.05);
+          this.compressorNode.ratio.setTargetAtTime(1, t, 0.05);
         }
       } catch {}
     }
@@ -2670,9 +2682,16 @@ class AudioEngine {
         window.localStorage.setItem('spotifree_eq_bands', JSON.stringify(bands.map((b) => b.value)));
       }
     } catch {}
+    const isRunning = this.audioContext && this.audioContext.state === 'running';
+    const t = isRunning ? this.audioContext!.currentTime : 0;
     bands.forEach((b, idx) => {
       if (this.filterNodes[idx]) {
-        this.filterNodes[idx].gain.value = b.value;
+        if (isRunning) {
+          this.filterNodes[idx].gain.cancelScheduledValues(t);
+          this.filterNodes[idx].gain.setTargetAtTime(b.value, t, 0.02);
+        } else {
+          this.filterNodes[idx].gain.value = b.value;
+        }
       }
     });
   }

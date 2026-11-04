@@ -776,7 +776,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     <div ref={containerRef} className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
       {/* Sticky Compact Header on Scroll */}
       <div
-        className={`sticky top-0 z-30 px-8 py-3 flex items-center justify-between transition-all duration-300 ${
+        className={`sticky top-0 z-30 px-8 py-2.5 h-[58px] -mb-[58px] flex items-center justify-between transition-all duration-300 ${
           scrollY > (hasBanner ? 320 : 250)
             ? 'opacity-100 backdrop-blur-xl border-b border-white/5 pointer-events-auto shadow-2xl'
             : 'opacity-0 pointer-events-none'

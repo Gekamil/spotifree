@@ -56,6 +56,20 @@ function cleanQuery(query) {
     .replace(/\s*official\s*video/gi, '')
     .replace(/\s*music\s*video/gi, '')
     .replace(/\s*videoclip/gi, '')
+    .replace(/\s*\(audio\s*oficial\)/gi, '')
+    .replace(/\s*\[audio\s*oficial\]/gi, '')
+    .replace(/\s*\(audio\)/gi, '')
+    .replace(/\s*\[audio\]/gi, '')
+    .replace(/\s*\(letra\)/gi, '')
+    .replace(/\s*\[letra\]/gi, '')
+    .replace(/\s*\(video\s*con\s*letra\)/gi, '')
+    .replace(/\s*\[video\s*con\s*letra\)/gi, '')
+    .replace(/\s*\(visualizer\)/gi, '')
+    .replace(/\s*\[visualizer\]/gi, '')
+    .replace(/\s*\(official\s*audio\)/gi, '')
+    .replace(/\s*\[official\s*audio\]/gi, '')
+    .replace(/\s*\(lyric\s*video\)/gi, '')
+    .replace(/\s*\[lyric\s*video\]/gi, '')
     .trim();
 }
 
