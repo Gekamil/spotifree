@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
-import { saveCustomLikedSong, removeCustomLikedSong } from '../utils/userStorage';
+import {
+  saveCustomLikedSong,
+  removeCustomLikedSong,
+  getCustomLikedSongs,
+  getActiveUserId,
+} from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 
 function resolveTrackCover(track: any): string {
@@ -752,13 +757,37 @@ const store = create<PlayerState>((set, get) => ({
         try {
           window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(updated));
 
-          // Manage per-user saved liked tracks collection
+          const activeUserId = getActiveUserId();
+          let updatedLikedTracks: Track[];
           if (exists) {
-            removeCustomLikedSong(trackId);
+            updatedLikedTracks = removeCustomLikedSong(trackId, activeUserId);
           } else if (trackObj) {
-            saveCustomLikedSong(trackObj);
+            updatedLikedTracks = saveCustomLikedSong(trackObj, activeUserId);
+          } else {
+            updatedLikedTracks = getCustomLikedSongs(activeUserId);
           }
-        } catch {}
+
+          // Update liked-songs in SpotifyDataStore and persist everywhere
+          import('./useSpotifyDataStore').then(({ useSpotifyDataStore }) => {
+            useSpotifyDataStore.getState().updatePlaylist('liked-songs', {
+              tracks: { total: updatedLikedTracks.length, items: updatedLikedTracks },
+            });
+          }).catch(() => {});
+
+          // Dispatch event so any currently open playlist view reactively adds/removes the song
+          window.dispatchEvent(
+            new CustomEvent('spotifree_liked_songs_updated', {
+              detail: { trackId, liked: !exists, tracks: updatedLikedTracks },
+            })
+          );
+
+          // Sync with cloud
+          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+            syncSpotifreeAccount({ likedTracks: updated }).catch(() => {});
+          }).catch(() => {});
+        } catch (e) {
+          console.error('Error toggling like:', e);
+        }
       }
 
       return { likedTrackIds: updated };

@@ -4,12 +4,23 @@ export const JORGE_DEFAULT_USER_ID = 'e6yr34zzwnf1yybcw49po6nrw';
 
 /**
  * Returns the currently active Spotify user ID.
+ * Returns 'guest' for unauthenticated visitors so no private user data ever leaks.
  */
 export function getActiveUserId(): string {
-  if (typeof window === 'undefined') return JORGE_DEFAULT_USER_ID;
+  if (typeof window === 'undefined') return 'guest';
   try {
     const savedId = window.localStorage.getItem('spotifree_active_user_id');
-    if (savedId && savedId.trim()) return savedId.trim();
+    if (savedId && savedId.trim() && savedId !== 'undefined' && savedId !== 'null' && savedId !== 'guest') {
+      return savedId.trim();
+    }
+
+    // Check cloud account
+    const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+    if (rawCloud) {
+      const cloud = JSON.parse(rawCloud);
+      if (cloud?.uid) return cloud.uid;
+      if (cloud?.email) return cloud.email;
+    }
 
     // Check if there is an active session
     const sessionRaw = window.localStorage.getItem('spotify_extracted_session');
@@ -21,7 +32,7 @@ export function getActiveUserId(): string {
       }
     }
   } catch {}
-  return JORGE_DEFAULT_USER_ID;
+  return 'guest';
 }
 
 /**
@@ -36,13 +47,14 @@ export function setActiveUserId(userId: string): void {
 
 /**
  * Generates the storage key for a user's liked songs.
+ * Guest users receive their own isolated key so no user songs leak to visitors.
  */
 export function getUserLikedSongsKey(userId?: string): string {
   const targetId = userId || getActiveUserId();
-  if (targetId && targetId !== 'spotify-user' && targetId !== 'guest') {
+  if (targetId && targetId !== 'spotify-user' && targetId !== 'guest' && targetId !== 'undefined') {
     return `spotifree_custom_liked_songs_${targetId}`;
   }
-  return 'spotifree_custom_liked_songs';
+  return 'spotifree_guest_liked_songs';
 }
 
 /**
@@ -112,21 +124,13 @@ export function getSavedCustomTracks(playlistId: string, isLiked: boolean, userI
   if (typeof window === 'undefined') return [];
   try {
     const targetId = userId || getActiveUserId();
-    const key = targetId && targetId !== 'spotify-user'
+    const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
       ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
       : `spotifree_playlist_tracks_${playlistId}`;
     const raw = window.localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) return parsed;
-    }
-    // Fallback for default session
-    if (!targetId || targetId === JORGE_DEFAULT_USER_ID) {
-      const legacyRaw = window.localStorage.getItem(`spotifree_playlist_tracks_${playlistId}`);
-      if (legacyRaw) {
-        const parsed = JSON.parse(legacyRaw);
-        if (Array.isArray(parsed)) return parsed;
-      }
     }
   } catch {}
   return [];
@@ -143,7 +147,7 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
   if (typeof window === 'undefined') return;
   try {
     const targetId = userId || getActiveUserId();
-    const key = targetId && targetId !== 'spotify-user'
+    const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
       ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
       : `spotifree_playlist_tracks_${playlistId}`;
     const raw = window.localStorage.getItem(key);
@@ -159,7 +163,7 @@ export function removeCustomTrackFromStorage(playlistId: string, trackId: string
   if (typeof window === 'undefined') return;
   try {
     const targetId = userId || getActiveUserId();
-    const key = targetId && targetId !== 'spotify-user'
+    const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
       ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
       : `spotifree_playlist_tracks_${playlistId}`;
     const raw = window.localStorage.getItem(key);

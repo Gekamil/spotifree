@@ -490,7 +490,14 @@ export function initAuthListener(): () => void {
         applyAccountToAppStores(freshAcc);
       });
     } else {
-      saveCurrentSpotifreeAccount(null);
+      // Never wipe out a locally stored account/cookie just because Firebase user is null
+      if (typeof window !== 'undefined') {
+        const current = getSavedSpotifreeAccount();
+        const hasLocalCookie = window.localStorage.getItem('user_spotify_cookie');
+        if (!current?.spotifyCookie && !hasLocalCookie) {
+          saveCurrentSpotifreeAccount(null);
+        }
+      }
     }
   });
 }

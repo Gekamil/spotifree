@@ -88,11 +88,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
-  const baseTracks = (playlist.tracks?.items && playlist.tracks.items.length > 0)
+  const baseTracks = isLikedInitially
+    ? (customSaved.length > 0 ? customSaved : (playlist.tracks?.items && playlist.tracks.items.length > 0 ? playlist.tracks.items : (storePl?.tracks?.items || [])))
+    : ((playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
     : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
     ? storePl.tracks.items
-    : customSaved;
+    : customSaved);
 
   const initialTracks = deduplicateTracks(baseTracks).map((t) => {
     if (TRACK_COVER_CACHE.has(t.id)) {
@@ -112,6 +114,21 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(deduplicateTracks(initialTracks));
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
   const [trackCovers, setTrackCovers] = useState<Record<string, string>>({});
+
+  // Reactive listener for real-time liked songs synchronization
+  useEffect(() => {
+    if (!isLikedInitially) return;
+    const handleLikedUpdate = (e: any) => {
+      const updatedTracks = e.detail?.tracks || getSavedCustomTracks(playlist.id, true, user?.id);
+      setDynamicTracks(updatedTracks);
+      setDynamicPlaylist((prev) => ({
+        ...prev,
+        tracks: { total: updatedTracks.length, items: updatedTracks },
+      }));
+    };
+    window.addEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
+    return () => window.removeEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
+  }, [isLikedInitially, playlist.id, user?.id]);
 
   // DJ Mode and Transitions State (Desktop)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
@@ -339,25 +356,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
     if (isLikedInitially) {
       toggleLike(track.id, newTrack);
+    } else {
+      saveCustomTrackToStorage(dynamicPlaylist.id, false, newTrack, user?.id);
     }
-    saveCustomTrackToStorage(dynamicPlaylist.id, isLikedInitially, newTrack, user?.id);
 
-    // Update global store & cache
-    const store = useSpotifyDataStore.getState();
-    const currentPl = store.playlists.find((p) => p.id === dynamicPlaylist.id);
-    if (currentPl) {
-      const updatedPl = {
-        ...currentPl,
-        tracks: { total: updated.length, items: updated },
-      };
-      useSpotifyDataStore.setState((s) => ({
-        playlists: s.playlists.map((p) => (p.id === dynamicPlaylist.id ? updatedPl : p)),
-        playlistDetailsCache: {
-          ...s.playlistDetailsCache,
-          [dynamicPlaylist.id]: updatedPl,
-        },
-      }));
-    }
+    // Persist to store, cache, localStorage, and cloud Firestore
+    useSpotifyDataStore.getState().updatePlaylist(dynamicPlaylist.id, {
+      tracks: { total: updated.length, items: updated },
+    });
   };
 
   useEffect(() => {

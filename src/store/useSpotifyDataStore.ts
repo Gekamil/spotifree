@@ -142,7 +142,7 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
-export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): DynamicShelf[] {
+export function buildExtractedShelves(userName: string = 'Para ti'): DynamicShelf[] {
   const feed = (Array.isArray(liveExtractedFeed) ? liveExtractedFeed : (liveExtractedFeed as any).shelves || []) as any[];
 
   const now = new Date();
@@ -150,6 +150,7 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
   const dateNum = now.getDate();
 
   const processedShelves: DynamicShelf[] = [];
+  const isGuestOrGeneric = !userName || userName === 'Para ti' || userName === 'Jorgeperezvk' || userName === 'Invitado';
 
   feed.forEach((shelf, idx) => {
     // Exclude podcast / episodes per user request
@@ -164,8 +165,10 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
     let type: DynamicShelf['type'] = 'mixes';
 
     if (title === 'Jorgeperezvk' || title.toLowerCase().includes('jorge')) {
-      title = userName;
-      prefix = dayOfWeek === 0
+      title = !isGuestOrGeneric ? userName : 'Para ti';
+      prefix = isGuestOrGeneric
+        ? 'Música recomendada'
+        : dayOfWeek === 0
         ? 'Tu domingo con'
         : dayOfWeek === 5 || dayOfWeek === 6
         ? 'Fin de semana con'
@@ -209,7 +212,9 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
       .map((c: any) => ({
         id: c.id,
         title: c.title,
-        subtitle: stripHtml(c.subtitle || ''),
+        subtitle: stripHtml(c.subtitle || '')
+          .replace(/Jorgeperezvk/gi, !isGuestOrGeneric ? userName : 'Spotify')
+          .replace(/Hecha para Jorgeperezvk/gi, 'Hecha para ti'),
         image: c.image || '',
         isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
       }));
@@ -241,7 +246,7 @@ export function buildExtractedShelves(userName: string = 'Jorgeperezvk'): Dynami
   return processedShelves;
 }
 
-export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = buildExtractedShelves();
+export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = buildExtractedShelves('Para ti');
 
 export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
   {
@@ -305,7 +310,7 @@ export function buildDynamicShelves(
   _topArtists: any[] = [],
   _recentlyPlayed: any[] = []
 ): DynamicShelf[] {
-  const displayName = user?.display_name || 'Jorgeperezvk';
+  const displayName = (user?.display_name && user.display_name !== 'Jorgeperezvk') ? user.display_name : 'Para ti';
   const extracted = buildExtractedShelves(displayName);
 
   const deletedIds = getDeletedPlaylistIds();
@@ -365,31 +370,103 @@ interface SpotifyDataState {
 
 let isInitializing = false;
 
+export function getGuestPlaylists(): Playlist[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const rawImported = window.localStorage.getItem('user_imported_playlists');
+    if (rawImported) {
+      const list = JSON.parse(rawImported);
+      if (Array.isArray(list) && list.length > 0) {
+        return deduplicateUserPlaylists(list);
+      }
+    }
+  } catch {}
+  return [];
+}
+
+export function getInitialPlaylists(userId?: string): Playlist[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const targetId = userId || window.localStorage.getItem('spotifree_active_user_id') || 'active';
+    const rawImported = window.localStorage.getItem('user_imported_playlists');
+    const imported: Playlist[] = rawImported ? JSON.parse(rawImported) : [];
+
+    // 1. Check account session
+    const rawAccountSession = window.localStorage.getItem(`spotifree_account_session_${targetId}`);
+    if (rawAccountSession) {
+      const parsed = JSON.parse(rawAccountSession);
+      if (Array.isArray(parsed.playlists) && parsed.playlists.length > 0) {
+        return deduplicateUserPlaylists([...parsed.playlists, ...imported]);
+      }
+    }
+
+    // 2. Check extracted session
+    const savedSessionRaw = window.localStorage.getItem('spotify_extracted_session');
+    if (savedSessionRaw) {
+      const session = JSON.parse(savedSessionRaw);
+      if (Array.isArray(session.playlists) && session.playlists.length > 0) {
+        return deduplicateUserPlaylists([...session.playlists, ...imported]);
+      }
+    }
+
+    // 3. Check cloud account
+    const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+    if (rawCloud) {
+      const cloud = JSON.parse(rawCloud);
+      if (Array.isArray(cloud.playlists) && cloud.playlists.length > 0) {
+        return deduplicateUserPlaylists([...cloud.playlists, ...imported]);
+      }
+    }
+
+    if (imported.length > 0) {
+      return deduplicateUserPlaylists(imported);
+    }
+  } catch {}
+  return [];
+}
+
 function getInitialSession(): { user: UserProfile | null; isAuthenticated: boolean } {
   if (typeof window !== 'undefined') {
     try {
+      if (window.localStorage.getItem('spotify_logged_out') === 'true') {
+        return { user: null, isAuthenticated: false };
+      }
+
+      // Check cloud account
       const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
       if (rawCloud) {
         const cloud = JSON.parse(rawCloud);
         if (cloud && (cloud.email || cloud.displayName)) {
           return {
             user: {
-              id: cloud.uid || 'spotifree-user',
+              id: cloud.uid || cloud.email || 'spotifree-user',
               display_name: cloud.displayName || cloud.email?.split('@')[0] || 'Usuario',
               email: cloud.email || '',
               images: cloud.avatarUrl ? [{ url: cloud.avatarUrl }] : [],
+              bannerUrl: cloud.bannerUrl || null,
               followers: { total: 0 },
             } as any,
             isAuthenticated: true,
           };
         }
       }
-      if (window.localStorage.getItem('spotify_logged_out') === 'true') {
-        return { user: null, isAuthenticated: false };
+
+      // Check active Spotify cookie session
+      const userCookie = window.localStorage.getItem('user_spotify_cookie');
+      const savedSessionRaw = window.localStorage.getItem('spotify_extracted_session');
+      if (userCookie && savedSessionRaw) {
+        const session = JSON.parse(savedSessionRaw);
+        if (session && session.user && session.user.id) {
+          return {
+            user: session.user,
+            isAuthenticated: true,
+          };
+        }
       }
     } catch {}
   }
-  return { user: DEFAULT_SESSION_USER, isAuthenticated: true };
+  // NEW DEVICE / VISITOR STARTS LOGGED OUT WITH NO LEAKED ACCOUNT
+  return { user: null, isAuthenticated: false };
 }
 
 const initialSession = getInitialSession();
@@ -399,7 +476,9 @@ const store = create<SpotifyDataState>((set, get) => ({
   isLoading: false,
   user: initialSession.user,
   authWarning: null,
-  playlists: DEFAULT_SESSION_PLAYLISTS,
+  playlists: initialSession.isAuthenticated
+    ? getInitialPlaylists(initialSession.user?.id)
+    : getGuestPlaylists(),
   categories: [],
   featuredPlaylists: [],
   featuredMessage: 'Novedades populares',
@@ -407,9 +486,11 @@ const store = create<SpotifyDataState>((set, get) => ({
   topTracks: [],
   topArtists: [],
   recentlyPlayed: [],
-  dynamicShelves: buildDynamicShelves(initialSession.user || DEFAULT_SESSION_USER, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti'),
-  quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
-  playlistDetailsCache: DEFAULT_SESSION_CACHE,
+  dynamicShelves: initialSession.isAuthenticated
+    ? buildDynamicShelves(initialSession.user, getInitialPlaylists(initialSession.user?.id), 'Novedades para ti')
+    : DEFAULT_PUBLIC_SHELVES,
+  quickAccessCards: initialSession.isAuthenticated ? DEFAULT_SESSION_QUICK_ACCESS : [],
+  playlistDetailsCache: initialSession.isAuthenticated ? DEFAULT_SESSION_CACHE : {},
 
   cachePlaylistDetails: (playlist: Playlist) => {
     set((s) => {
@@ -421,6 +502,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         try {
           const userId = s.user?.id || 'active';
           window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(nextCache));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(nextCache));
         } catch {}
       }
       return {
@@ -454,7 +536,7 @@ const store = create<SpotifyDataState>((set, get) => ({
       name: playlistName,
       description: '',
       images: [],
-      owner: { display_name: s.user?.display_name || 'Jorgeperezvk', id: 'user' },
+      owner: { display_name: s.user?.display_name || 'Tú', id: s.user?.id || 'user' },
       tracks: { total: 0, items: [] },
       color: '#303030',
       is_pinned: false,
@@ -465,14 +547,43 @@ const store = create<SpotifyDataState>((set, get) => ({
 
     if (typeof window !== 'undefined') {
       try {
+        // 1. user_imported_playlists
         const rawImported = window.localStorage.getItem('user_imported_playlists');
         const list = rawImported ? JSON.parse(rawImported) : [];
-        window.localStorage.setItem('user_imported_playlists', JSON.stringify([newPlaylist, ...list]));
+        const nextImported = [newPlaylist, ...list.filter((p: any) => p.id !== newPlaylist.id)];
+        window.localStorage.setItem('user_imported_playlists', JSON.stringify(nextImported));
 
+        // 2. spotifree_saved_library_playlists
+        const rawSaved = window.localStorage.getItem('spotifree_saved_library_playlists');
+        const savedList: string[] = rawSaved ? JSON.parse(rawSaved) : [];
+        if (!savedList.includes(newPlaylist.id)) {
+          savedList.unshift(newPlaylist.id);
+          window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(savedList));
+        }
+
+        // 3. User cache
+        const userId = s.user?.id || window.localStorage.getItem('spotifree_active_user_id') || 'active';
+        const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
+        const cacheObj = rawCache ? JSON.parse(rawCache) : {};
+        cacheObj[newPlaylist.id] = newPlaylist;
+        window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
+        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+
+        // 4. Session sync
+        const rawExtracted = window.localStorage.getItem('spotify_extracted_session');
+        if (rawExtracted) {
+          const parsed = JSON.parse(rawExtracted);
+          parsed.playlists = deduplicateUserPlaylists([newPlaylist, ...(parsed.playlists || [])]);
+          window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
+        }
+
+        // 5. Cloud account sync
         import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
           syncSpotifreeAccount({ playlists: updated }).catch(() => {});
         });
-      } catch {}
+      } catch (e) {
+        console.error('Error creating playlist in storage:', e);
+      }
     }
 
     set((state) => ({
@@ -489,40 +600,84 @@ const store = create<SpotifyDataState>((set, get) => ({
   updatePlaylist: (id: string, updates: Partial<Playlist>) => {
     set((s) => {
       const existingInCache = s.playlistDetailsCache[id];
-      const updatedCacheEntry = existingInCache
-        ? { ...existingInCache, ...updates }
-        : undefined;
+      const existingInList = s.playlists.find((p) => p.id === id);
+      const baseEntry = existingInCache || existingInList || { id, name: 'Playlist', tracks: { total: 0, items: [] } };
+      const updatedCacheEntry = { ...baseEntry, ...updates } as Playlist;
 
-      const updatedPlaylists = s.playlists.map((p) => (p.id === id ? { ...p, ...updates } : p));
+      let found = false;
+      const updatedPlaylists = s.playlists.map((p) => {
+        if (p.id === id) {
+          found = true;
+          return { ...p, ...updates };
+        }
+        return p;
+      });
+      if (!found && id !== 'liked-songs') {
+        updatedPlaylists.unshift(updatedCacheEntry);
+      }
 
       if (typeof window !== 'undefined') {
         try {
+          // 1. user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
-          if (rawImported) {
-            const list = JSON.parse(rawImported);
-            const nextList = list.map((p: any) => p.id === id ? { ...p, ...updates } : p);
-            window.localStorage.setItem('user_imported_playlists', JSON.stringify(nextList));
+          const list = rawImported ? JSON.parse(rawImported) : [];
+          const idx = list.findIndex((p: any) => p.id === id);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...updates };
+          } else if (id !== 'liked-songs') {
+            list.unshift(updatedCacheEntry);
           }
-          const userId = window.localStorage.getItem('spotifree_active_user_id') || 'active';
-          if (updatedCacheEntry) {
-            const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
-            const cacheObj = rawCache ? JSON.parse(rawCache) : {};
-            cacheObj[id] = updatedCacheEntry;
-            window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
-            window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+          window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
+
+          // 2. Playlist details cache
+          const userId = s.user?.id || window.localStorage.getItem('spotifree_active_user_id') || 'active';
+          const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
+          const cacheObj = rawCache ? JSON.parse(rawCache) : {};
+          cacheObj[id] = updatedCacheEntry;
+          window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+
+          // 3. spotify_extracted_session
+          const rawExtracted = window.localStorage.getItem('spotify_extracted_session');
+          if (rawExtracted) {
+            const parsed = JSON.parse(rawExtracted);
+            if (Array.isArray(parsed.playlists)) {
+              parsed.playlists = parsed.playlists.map((p: any) => (p.id === id ? { ...p, ...updates } : p));
+              if (!parsed.playlists.some((p: any) => p.id === id) && id !== 'liked-songs') {
+                parsed.playlists.unshift(updatedCacheEntry);
+              }
+            }
+            if (parsed.cachedPlaylistDetails) {
+              parsed.cachedPlaylistDetails[id] = updatedCacheEntry;
+            }
+            window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
           }
 
+          // 4. spotifree_account_session_${userId}
+          const rawAccountSession = window.localStorage.getItem(`spotifree_account_session_${userId}`);
+          if (rawAccountSession) {
+            const parsed = JSON.parse(rawAccountSession);
+            if (Array.isArray(parsed.playlists)) {
+              parsed.playlists = parsed.playlists.map((p: any) => (p.id === id ? { ...p, ...updates } : p));
+            }
+            window.localStorage.setItem(`spotifree_account_session_${userId}`, JSON.stringify(parsed));
+          }
+
+          // 5. Cloud Firestore
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
             syncSpotifreeAccount({ playlists: updatedPlaylists }).catch(() => {});
           });
-        } catch {}
+        } catch (e) {
+          console.error('Error persisting playlist updates:', e);
+        }
       }
 
       return {
         playlists: updatedPlaylists,
-        playlistDetailsCache: updatedCacheEntry
-          ? { ...s.playlistDetailsCache, [id]: updatedCacheEntry }
-          : s.playlistDetailsCache,
+        playlistDetailsCache: {
+          ...s.playlistDetailsCache,
+          [id]: updatedCacheEntry,
+        },
         dynamicShelves: s.dynamicShelves.map((shelf) => ({
           ...shelf,
           cards: shelf.cards.map((c) =>
@@ -937,7 +1092,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           });
 
           // Pre-warm initial top tracks in the background so audio playback starts instantaneously
-          const topCandidates = (uniquePlaylists[0]?.tracks?.items || DEFAULT_SESSION_PLAYLISTS[0]?.tracks?.items || []).slice(0, 6);
+          const topCandidates = (uniquePlaylists[0]?.tracks?.items || []).slice(0, 6);
           if (topCandidates.length > 0) {
             import('../services/audioEngine').then(({ audioEngine }) => {
               audioEngine.warmupInitialTracks(topCandidates);
@@ -997,50 +1152,40 @@ const store = create<SpotifyDataState>((set, get) => ({
           id: cloudAcc.uid || cloudAcc.email,
           display_name: cloudAcc.displayName || 'Usuario',
           email: cloudAcc.email,
-          images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : DEFAULT_SESSION_USER.images,
+          images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : [],
           bannerUrl: cloudAcc.bannerUrl || null,
           followers: { total: 0 },
         };
-        const allPl = Array.isArray(cloudAcc.playlists) && cloudAcc.playlists.length > 0 ? cloudAcc.playlists : importedPlaylists.length > 0 ? importedPlaylists : DEFAULT_SESSION_PLAYLISTS;
+        const allPl = Array.isArray(cloudAcc.playlists) && cloudAcc.playlists.length > 0 ? cloudAcc.playlists : importedPlaylists;
         const uniquePl = deduplicateUserPlaylists(allPl);
         set({
           isAuthenticated: true,
           user: cloudUser as any,
           playlists: uniquePl,
           dynamicShelves: buildDynamicShelves(cloudUser, uniquePl, 'Recomendado para ti'),
-          quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
-          playlistDetailsCache: DEFAULT_SESSION_CACHE,
-          isLoading: false,
-        });
-        return;
-      }
-
-      // 5. Default: User has no active cookie/OAuth session
-      if (isLoggedOut) {
-        set({
-          isAuthenticated: false,
-          user: null,
-          playlists: [],
-          dynamicShelves: [],
-          quickAccessCards: [],
+          quickAccessCards: uniquePl.slice(0, 6).map((p) => ({
+            id: p.id,
+            name: p.name,
+            image: p.images?.[0]?.url || '',
+            color: (p as any).color || '#303030',
+          })),
           playlistDetailsCache: {},
           isLoading: false,
         });
         return;
       }
 
-      // Default active session for all new accounts & visitors (includes AI DJ, shelves & playlists)
-      const defaultUser = DEFAULT_SESSION_USER;
-      const shelves = buildDynamicShelves(defaultUser, DEFAULT_SESSION_PLAYLISTS, 'Novedades para ti');
+      // 5. Default: Visitor / new device has NO active session -> completely LOGGED OUT
       set({
-        isAuthenticated: true,
-        user: defaultUser,
-        playlists: DEFAULT_SESSION_PLAYLISTS,
-        dynamicShelves: shelves,
-        quickAccessCards: DEFAULT_SESSION_QUICK_ACCESS,
-        playlistDetailsCache: DEFAULT_SESSION_CACHE,
+        isAuthenticated: false,
+        user: null,
+        playlists: [],
+        dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+        quickAccessCards: [],
+        playlistDetailsCache: {},
         isLoading: false,
       });
+      return;
     } finally {
       isInitializing = false;
     }
@@ -1067,6 +1212,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotifree_current_cloud_account');
       window.localStorage.removeItem('spotifree_account');
       window.localStorage.removeItem('spotifree_saved_accounts');
+      window.localStorage.removeItem('spotifree_liked_tracks');
+      window.localStorage.removeItem('spotifree_guest_liked_songs');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }
@@ -1074,11 +1221,17 @@ const store = create<SpotifyDataState>((set, get) => ({
       isAuthenticated: false,
       user: null,
       playlists: [],
-      dynamicShelves: [],
+      dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+      quickAccessCards: [],
       authWarning: null,
       isLoading: false,
     });
-    // Reset stats for logged-out state
+    // Reset player liked tracks and stats
+    try {
+      import('./usePlayerStore').then(({ usePlayerStore }) => {
+        usePlayerStore.setState({ likedTrackIds: [] });
+      });
+    } catch {}
     try { useStatsStore.getState().resetStats(); } catch {}
   },
 

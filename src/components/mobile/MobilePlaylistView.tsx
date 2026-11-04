@@ -127,6 +127,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     cleanId.startsWith('artist-');
 
   const [tracks, setTracks] = useState<Track[]>(() => {
+    if (isLikedPlaylist) {
+      const liked = getCustomLikedSongs(user?.id);
+      if (liked.length > 0) return liked;
+    }
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
       return playlist.tracks.items;
     }
@@ -150,6 +154,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
     return getSavedCustomTracks(cleanId, false, user?.id);
   });
+
+  // Reactive listener for real-time liked songs synchronization in mobile
+  useEffect(() => {
+    if (!isLikedPlaylist) return;
+    const handleLikedUpdate = (e: any) => {
+      const updatedTracks = e.detail?.tracks || getCustomLikedSongs(user?.id);
+      setTracks(updatedTracks);
+      setActivePlaylist((prev) => ({
+        ...prev,
+        tracks: { total: updatedTracks.length, items: updatedTracks },
+      }));
+    };
+    window.addEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
+    return () => window.removeEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
+  }, [isLikedPlaylist, user?.id]);
 
   const [loading, setLoading] = useState(false);
   const checkIsInLibrary = (id: string, clean: string): boolean => {
@@ -580,15 +599,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const trackWithMeta: Track = {
       ...track,
       added_at: 'Hoy',
-      added_by: user?.display_name || 'Jorge',
+      added_by: user?.display_name || 'Tú',
     };
 
-    setTracks((prev) => {
-      if (prev.some((t) => t.id === track.id || (t.name === track.name && t.artists[0]?.name === track.artists[0]?.name))) {
-        return prev;
-      }
-      return [trackWithMeta, ...prev];
-    });
+    const updatedTracks = [trackWithMeta, ...tracks.filter((t) => t.id !== track.id)];
+    setTracks(updatedTracks);
+    setActivePlaylist((prev) => ({
+      ...prev,
+      tracks: { total: updatedTracks.length, items: updatedTracks },
+    }));
 
     if (isLikedPlaylist) {
       saveCustomLikedSong(trackWithMeta, user?.id);
@@ -597,24 +616,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       saveCustomTrackToStorage(cleanId, false, trackWithMeta, user?.id);
     }
 
-    const store = useSpotifyDataStore.getState();
-    const currentPl = store.playlists.find((p) => p.id === cleanId || p.id === playlist.id);
-    if (currentPl) {
-      const existingItems = currentPl.tracks?.items || [];
-      const updatedItems = [trackWithMeta, ...existingItems.filter((t) => t.id !== track.id)];
-      const updatedPl = {
-        ...currentPl,
-        tracks: { total: updatedItems.length, items: updatedItems },
-      };
-      useSpotifyDataStore.setState((s) => ({
-        playlists: s.playlists.map((p) => (p.id === currentPl.id ? updatedPl : p)),
-        playlistDetailsCache: {
-          ...s.playlistDetailsCache,
-          [cleanId]: updatedPl,
-          [playlist.id]: updatedPl,
-        },
-      }));
-    }
+    // Persist to store, cache, localStorage, and cloud Firestore
+    useSpotifyDataStore.getState().updatePlaylist(cleanId, {
+      tracks: { total: updatedTracks.length, items: updatedTracks },
+    });
   };
 
   const isCurrentPlaylistPlaying =

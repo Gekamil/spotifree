@@ -63,12 +63,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   } = useSpotifyDataStore();
 
   const currentShortcuts = useMemo(() => {
+    if (!isAuthenticated) return [];
     const raw = storeQuickAccess && storeQuickAccess.length > 0 ? storeQuickAccess : DEFAULT_SHORTCUTS;
     return raw.map((item) => ({
       ...item,
       color: resolveVibrantColor(item.id, item.name, item.color),
     }));
-  }, [storeQuickAccess]);
+  }, [storeQuickAccess, isAuthenticated]);
 
   // Keep background on the last hovered color smoothly
   const [extractedColors, setExtractedColors] = useState<Record<string, string>>({});

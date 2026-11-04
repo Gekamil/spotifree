@@ -163,25 +163,15 @@ export const AddToPlaylistModal: React.FC = () => {
         // Newly added to plId
         saveCustomTrackToStorage(plId, false, track, user?.id);
 
-        // Update in-memory store
         const store = useSpotifyDataStore.getState();
         const currentPl = store.playlists.find((p) => p.id === plId);
         if (currentPl) {
           const existing = currentPl.tracks?.items || [];
           if (!existing.some((t) => t.id === track.id)) {
             const updated = [track, ...existing];
-            useSpotifyDataStore.setState((s) => ({
-              playlists: s.playlists.map((p) =>
-                p.id === plId ? { ...p, tracks: { total: updated.length, items: updated } } : p
-              ),
-              playlistDetailsCache: {
-                ...s.playlistDetailsCache,
-                [plId]: {
-                  ...(s.playlistDetailsCache[plId] || currentPl),
-                  tracks: { total: updated.length, items: updated },
-                },
-              },
-            }));
+            useSpotifyDataStore.getState().updatePlaylist(plId, {
+              tracks: { total: updated.length, items: updated },
+            });
           }
         }
       }
@@ -192,24 +182,14 @@ export const AddToPlaylistModal: React.FC = () => {
         // Removed from plId
         removeCustomTrackFromStorage(plId, track.id, user?.id);
 
-        // Update in-memory store
         const store = useSpotifyDataStore.getState();
         const currentPl = store.playlists.find((p) => p.id === plId);
         if (currentPl) {
           const existing = currentPl.tracks?.items || [];
           const updated = existing.filter((t) => t.id !== track.id);
-          useSpotifyDataStore.setState((s) => ({
-            playlists: s.playlists.map((p) =>
-              p.id === plId ? { ...p, tracks: { total: updated.length, items: updated } } : p
-            ),
-            playlistDetailsCache: {
-              ...s.playlistDetailsCache,
-              [plId]: {
-                ...(s.playlistDetailsCache[plId] || currentPl),
-                tracks: { total: updated.length, items: updated },
-              },
-            },
-          }));
+          useSpotifyDataStore.getState().updatePlaylist(plId, {
+            tracks: { total: updated.length, items: updated },
+          });
         }
       }
     });
