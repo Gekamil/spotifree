@@ -17,7 +17,11 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   return (
     <nav
       data-testid="bottom-tab-navigation"
-      className="fixed bottom-0 left-0 right-0 h-[64px] pb-2 flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-auto"
+      style={{
+        paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+        height: 'calc(64px + env(safe-area-inset-bottom, 0px))',
+      }}
+      className="fixed bottom-0 left-0 right-0 flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-auto"
     >
       {/* 1. Inicio */}
       <button

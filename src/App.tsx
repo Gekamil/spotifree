@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { Capacitor } from '@capacitor/core';
+import { App as CapApp } from '@capacitor/app';
+import { StatusBar, Style } from '@capacitor/status-bar';
 import { DesktopLayout } from './components/desktop/DesktopLayout';
 import { MobileLayout } from './components/mobile/MobileLayout';
 import { AudioController } from './components/common/AudioController';
@@ -64,6 +67,77 @@ function App() {
     const handleOpenModal = () => useUIStore.getState().openLoginModal();
     window.addEventListener('spotifree_open_login_modal', handleOpenModal);
 
+    // ─── Android Hardware Back Button & Native Status Bar (Capacitor & Web) ───────
+    let removeBackListener: (() => void) | null = null;
+    try {
+      if (Capacitor.isPluginAvailable('App')) {
+        CapApp.addListener('backButton', ({ canGoBack }) => {
+          const ui = useUIStore.getState();
+          if (ui.isLoginModalOpen) {
+            ui.closeLoginModal();
+            return;
+          }
+          if (ui.isAddToPlaylistModalOpen) {
+            ui.closeAddToPlaylistModal();
+            return;
+          }
+          if (ui.isSettingsModalOpen) {
+            ui.closeSettingsModal();
+            return;
+          }
+          if (ui.isProfileOpen) {
+            ui.closeProfile();
+            return;
+          }
+          if (ui.isImportModalOpen) {
+            ui.closeImportModal();
+            return;
+          }
+          if (ui.isEditPlaylistModalOpen) {
+            ui.closeEditPlaylistModal();
+            return;
+          }
+          if (ui.isCreateMenuOpen) {
+            ui.closeCreateMenu();
+            return;
+          }
+          if (ui.isSortMenuOpen) {
+            ui.closeSortMenu();
+            return;
+          }
+          if (ui.contextMenu.isOpen) {
+            ui.closeContextMenu();
+            return;
+          }
+
+          let wasHandled = false;
+          const backEvent = new CustomEvent('spotifree_android_back', {
+            detail: { setHandled: () => { wasHandled = true; } },
+          });
+          window.dispatchEvent(backEvent);
+
+          if (wasHandled) return;
+
+          if (canGoBack) {
+            window.history.back();
+          } else {
+            CapApp.exitApp();
+          }
+        }).then((handle) => {
+          removeBackListener = () => handle.remove();
+        }).catch(() => {});
+      }
+    } catch {}
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        if (Capacitor.isPluginAvailable('StatusBar')) {
+          StatusBar.setStyle({ style: Style.Dark }).catch(() => {});
+          StatusBar.setBackgroundColor({ color: '#121212' }).catch(() => {});
+        }
+      } catch {}
+    }
+
     const handleFocus = () => {
       if (typeof window !== 'undefined' && window.location.search.includes('code=')) return;
       const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
@@ -75,6 +149,7 @@ function App() {
     window.addEventListener('focus', handleFocus);
 
     return () => {
+      removeBackListener?.();
       unsubscribeAuth();
       unsubscribePlayer();
       window.removeEventListener('focus', handleFocus);

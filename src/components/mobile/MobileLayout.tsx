@@ -46,6 +46,7 @@ export const MobileLayout: React.FC = () => {
     window.addEventListener('spotifree_open_full_player', handleOpenFull);
     return () => window.removeEventListener('spotifree_open_full_player', handleOpenFull);
   }, []);
+
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isAddLibraryModalOpen, setIsAddLibraryModalOpen] = useState(false);
@@ -60,6 +61,71 @@ export const MobileLayout: React.FC = () => {
   const [editTargetDesc, setEditTargetDesc] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const longPressTimeoutRef = useRef<any>(null);
+
+  // Android Hardware Back & Gesture Navigation Handler
+  useEffect(() => {
+    const handleAndroidBack = (e: any) => {
+      // 1. Full Player Modal
+      if (isFullPlayerOpen) {
+        setIsFullPlayerOpen(false);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      // 2. Overlays & Sheets
+      if (isNotificationsOpen) {
+        setIsNotificationsOpen(false);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      if (isCreateOpen) {
+        setIsCreateOpen(false);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      if (isAddLibraryModalOpen) {
+        setIsAddLibraryModalOpen(false);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      if (playlistMenuTarget || isEditingTarget) {
+        setPlaylistMenuTarget(null);
+        setIsEditingTarget(false);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      if (longPressedPlaylistId) {
+        setLongPressedPlaylistId(null);
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      // 3. Playlist detail view
+      if (selectedPlaylist) {
+        setSelectedPlaylist(null);
+        setMobileTab('home');
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+      // 4. Sub-tabs (Search, Library, DJ, Profile, Settings)
+      if (mobileTab !== 'home') {
+        setMobileTab('home');
+        if (e.detail && typeof e.detail.setHandled === 'function') e.detail.setHandled();
+        return;
+      }
+    };
+
+    window.addEventListener('spotifree_android_back', handleAndroidBack);
+    return () => window.removeEventListener('spotifree_android_back', handleAndroidBack);
+  }, [
+    isFullPlayerOpen,
+    isNotificationsOpen,
+    isCreateOpen,
+    isAddLibraryModalOpen,
+    playlistMenuTarget,
+    isEditingTarget,
+    longPressedPlaylistId,
+    selectedPlaylist,
+    mobileTab,
+  ]);
 
   useEffect(() => {
     const handleOpen = (e: any) => {

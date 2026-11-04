@@ -8,9 +8,17 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "node tests/dj_transitions.test.js",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "build:apk": "npm run build && cap sync android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/status-bar": "^8.0.4",
     "@distube/ytdl-core": "^4.16.12",
     "clsx": "^2.1.1",
     "firebase": "^13.1.0",
