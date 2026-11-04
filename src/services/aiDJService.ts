@@ -11,7 +11,9 @@ import {
   getCuratedSetForHashtag,
   getDominantUserHashtag,
   getInitialDJLibraryRemix,
+  classifyTrackHashtags,
 } from './musicTaggingService';
+import { useStatsStore } from '../store/useStatsStore';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
@@ -100,6 +102,100 @@ async function callGroqDJ(payload: any): Promise<any | null> {
   } catch {
     return null;
   }
+}
+
+export interface UserListeningProfile {
+  topArtists: string[];
+  recentTracks: { name: string; artist: string }[];
+  likedTracks: { name: string; artist: string }[];
+  topGenres: string[];
+  totalTracksPlayed: number;
+}
+
+/**
+ * Dynamically analyzes the current user's genuine listening history,
+ * stats store, played tracks, and liked library to construct an accurate musical taste profile.
+ */
+export function getUserListeningProfile(): UserListeningProfile {
+  const stats = useStatsStore.getState();
+  const topArtists = stats.getTopArtists(8).map((a) => a.name).filter(Boolean);
+  const playerHistory = usePlayerStore.getState().history || [];
+
+  // 1. Recent tracks from player history (what the user actually listens to)
+  const recentTracks = playerHistory.slice(0, 8).map((t) => ({
+    name: t.name,
+    artist: t.artists?.[0]?.name || '',
+  })).filter((t) => t.name && t.artist);
+
+  // 2. If stats hasn't recorded many plays yet, extract top artists directly from history
+  if (topArtists.length === 0) {
+    const artistCounts = new Map<string, number>();
+    playerHistory.forEach((t) => {
+      const art = t.artists?.[0]?.name;
+      if (art && art !== 'Spotify') {
+        artistCounts.set(art, (artistCounts.get(art) || 0) + 1);
+      }
+    });
+    const sorted = Array.from(artistCounts.entries()).sort((a, b) => b[1] - a[1]);
+    sorted.slice(0, 8).forEach(([art]) => topArtists.push(art));
+  }
+
+  // 3. Liked songs sample and additional artists
+  let likedTracks: { name: string; artist: string }[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const localLiked: Track[] = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+      likedTracks = localLiked.slice(0, 8).map((t) => ({
+        name: t.name,
+        artist: t.artists?.[0]?.name || '',
+      })).filter((t) => t.name);
+
+      if (topArtists.length < 5) {
+        localLiked.forEach((t) => {
+          const art = t.artists?.[0]?.name;
+          if (art && art !== 'Spotify' && !topArtists.includes(art)) {
+            topArtists.push(art);
+          }
+        });
+      }
+    } catch {}
+  }
+
+  // 4. Also scan user's playlists if topArtists is still empty
+  if (topArtists.length === 0) {
+    const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
+    const artistCounts = new Map<string, number>();
+    const countArt = (t: Track) => {
+      const art = t.artists?.[0]?.name;
+      if (art && art !== 'Spotify') {
+        artistCounts.set(art, (artistCounts.get(art) || 0) + 1);
+      }
+    };
+    playlists.forEach((p) => p.tracks?.items?.forEach(countArt));
+    Object.values(playlistDetailsCache).forEach((p: any) => p?.tracks?.items?.forEach(countArt));
+    const sorted = Array.from(artistCounts.entries()).sort((a, b) => b[1] - a[1]);
+    sorted.slice(0, 8).forEach(([art]) => topArtists.push(art));
+  }
+
+  // 5. Detect top genres/styles from user's history and liked songs
+  const detectedGenres: string[] = [];
+  const tagCounts = new Map<string, number>();
+  [...playerHistory, ...(typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]') : [])].forEach((t) => {
+    const tags = classifyTrackHashtags(t);
+    tags.forEach((tag) => {
+      tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+    });
+  });
+  const sortedTags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1]);
+  sortedTags.slice(0, 3).forEach(([tag]) => detectedGenres.push(tag.replace('#', '')));
+
+  return {
+    topArtists: topArtists.slice(0, 8),
+    recentTracks,
+    likedTracks,
+    topGenres: detectedGenres,
+    totalTracksPlayed: stats.totalTracksPlayed || playerHistory.length,
+  };
 }
 
 function rawAnalyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
@@ -471,10 +567,20 @@ function rawAnalyzeUserIntent(prompt: string, userName: string): IntentAnalysis 
         `Cambiando de onda${namePhrase}. Aquí tienes una mezcla fresca pensada para ti. A disfrutarla.`,
       ]);
 
+  const userProfile = getUserListeningProfile();
+  let defaultQuery = `${p} exitos canciones`;
+  if (isSurprise) {
+    if (userProfile.topArtists.length > 0) {
+      defaultQuery = `${userProfile.topArtists.slice(0, 3).join(' ')} exitos recomendados`;
+    } else {
+      defaultQuery = 'exitos pop latino urbano indie radio hits';
+    }
+  }
+
   return {
     speech,
-    query: isSurprise ? 'exitos pop latino urbano indie radio hits' : `${p} exitos canciones`,
-    vibeTitle: isSurprise ? (isEn ? 'Session: Surprise Mashup' : 'Sesión: Mezcla Sorpresa') : `Sesión: ${prompt.slice(0, 20)}`,
+    query: defaultQuery,
+    vibeTitle: isSurprise ? (isEn ? 'Session: Your Personalized Mix' : 'Sesión: Tu Mezcla Personalizada') : `Sesión: ${prompt.slice(0, 20)}`,
     vibeColor: '#0050d0',
   };
 }
@@ -563,9 +669,19 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
-    const introText = isEn
-      ? `${greeting}${namePart}! I'm your DJ. I put together a mix with your favorite tracks. What vibe are you feeling today?`
-      : `${greeting}${namePart}! Aquí tu DJ. Te armé una mezcla con tus canciones favoritas. ¿Qué te apetece escuchar hoy?`;
+    const userProfile = getUserListeningProfile();
+    let introText = '';
+
+    if (userProfile.topArtists.length > 0) {
+      const topPick = userProfile.topArtists.slice(0, 2).join(' y ');
+      introText = isEn
+        ? `${greeting}${namePart}! I see you've been listening to ${topPick}. I put together a mix with your favorite sound. What vibe are you feeling today?`
+        : `${greeting}${namePart}! He visto que has estado escuchando a ${topPick}. Te armé una mezcla a tu medida. ¿Qué te apetece escuchar hoy?`;
+    } else {
+      introText = isEn
+        ? `${greeting}${namePart}! I'm your DJ. I put together a mix with your favorite tracks. What vibe are you feeling today?`
+        : `${greeting}${namePart}! Aquí tu DJ. Te armé una mezcla con tus canciones favoritas. ¿Qué te apetece escuchar hoy?`;
+    }
 
     aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
@@ -786,7 +902,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     // Concurrently prefetch local fallback speech audio for zero latency
     aiDJVoiceService.prefetchPhrase(analysis.speech);
 
-    // 1. Collect all available tracks from user playlists, details cache, and localStorage
+    // 1. Collect all available tracks from user playlists, history, and liked songs
     const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
     const allUserTracks: Track[] = [];
     const seenIds = new Set<string>();
@@ -813,6 +929,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       }
     };
 
+    // Include recent listening history so the AI has context on what this specific user plays
+    try {
+      const history = usePlayerStore.getState().history || [];
+      history.forEach(addTrack);
+    } catch {}
+
     Object.values(playlistDetailsCache).forEach((pl: any) => {
       pl?.tracks?.items?.forEach(addTrack);
     });
@@ -830,13 +952,20 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       } catch {}
     }
 
-    // 2. Resolve hashtag and query Groq in parallel
+    // 2. Resolve hashtag, construct listener profile, and query Groq in parallel
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
 
+    const userProfile = getUserListeningProfile();
+
     const [hashtagSet, groqResult] = await Promise.all([
       getCuratedSetForHashtag(targetTag, 15),
-      callGroqDJ({ action: 'recommend', prompt: promptText, userName: cleanName }),
+      callGroqDJ({
+        action: 'recommend',
+        prompt: promptText,
+        userName: cleanName,
+        userProfile,
+      }),
     ]);
 
     let finalSpeech = analysis.speech;
@@ -850,7 +979,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       if (groqResult.vibeTitle) finalTitle = groqResult.vibeTitle;
       if (groqResult.vibeColor) finalColor = groqResult.vibeColor;
 
-      // Smart library matching for Groq suggested tracks
+      // Smart recommendation mapping: user library matches + new personalized discoveries
       if (Array.isArray(groqResult.tracks) && groqResult.tracks.length > 0) {
         const matched: Track[] = [];
         for (const gt of groqResult.tracks) {
@@ -858,7 +987,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
           const gArtist = (gt.artist || '').toLowerCase().trim();
           if (!gTitle) continue;
 
-          const match = allUserTracks.find((ut) => {
+          let match = allUserTracks.find((ut) => {
             const utName = (ut.name || '').toLowerCase();
             const utArtist = (ut.artists?.[0]?.name || '').toLowerCase();
             return (
@@ -866,7 +995,25 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
               (!gArtist || utArtist.includes(gArtist) || gArtist.includes(utArtist))
             );
           });
-          if (match && !matched.some((m) => m.id === match.id)) {
+
+          // If this recommended track is a fresh new discovery (not yet in library),
+          // create a proper Track object so the user can discover new music!
+          if (!match) {
+            match = {
+              id: `rec-groq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              name: gt.title,
+              artists: [{ id: `art-${gt.artist || 'rec'}`, name: gt.artist || 'Artista' }],
+              album: {
+                id: `alb-${Date.now()}`,
+                name: gt.title,
+                images: [{ url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80' }],
+              },
+              duration_ms: 210000,
+              preview_url: null,
+            };
+          }
+
+          if (match && !matched.some((m) => m.name.toLowerCase() === match!.name.toLowerCase())) {
             matched.push(match);
           }
         }
@@ -985,9 +1132,15 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
 
+    const userProfile = getUserListeningProfile();
     let speech = '';
     try {
-      const groqRes = await callGroqDJ({ action: 'transition', prompt: 'fin_set', userName: cleanName });
+      const groqRes = await callGroqDJ({
+        action: 'transition',
+        prompt: 'fin_set',
+        userName: cleanName,
+        userProfile,
+      });
       if (groqRes && groqRes.speech) {
         speech = cleanTextForNaturalTTS(groqRes.speech);
       }
@@ -1057,12 +1210,18 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
 
+    const rawName = useSpotifyDataStore.getState().user?.display_name || '';
+    const cleanName = rawName ? rawName.split(' ')[0] : '';
+    const userProfile = getUserListeningProfile();
+
     let transitionText = '';
     try {
       const groqRes = await callGroqDJ({
         action: 'transition',
         currentTrack,
         nextTrack,
+        userName: cleanName,
+        userProfile,
       });
       if (groqRes && groqRes.speech) {
         transitionText = cleanTextForNaturalTTS(groqRes.speech);

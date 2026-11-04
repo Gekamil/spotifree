@@ -63,7 +63,37 @@ export default async function handler(req, res) {
   const userName = (body.userName || '').trim();
   const currentTrack = body.currentTrack || null;
   const nextTrack = body.nextTrack || null;
+  const userProfile = body.userProfile || null;
   const userGreeting = userName ? `, ${userName}` : '';
+
+  // Extract listener's musical profile context
+  let profileSection = '';
+  if (userProfile && typeof userProfile === 'object') {
+    const parts = [];
+    if (Array.isArray(userProfile.topArtists) && userProfile.topArtists.length > 0) {
+      parts.push(`Artistas más escuchados por este usuario: ${userProfile.topArtists.slice(0, 8).join(', ')}`);
+    }
+    if (Array.isArray(userProfile.recentTracks) && userProfile.recentTracks.length > 0) {
+      const recList = userProfile.recentTracks
+        .slice(0, 6)
+        .map((t) => `${t.name} (${t.artist})`)
+        .join(', ');
+      parts.push(`Canciones escuchadas recientemente: ${recList}`);
+    }
+    if (Array.isArray(userProfile.topGenres) && userProfile.topGenres.length > 0) {
+      parts.push(`Estilos y géneros preferidos: ${userProfile.topGenres.join(', ')}`);
+    }
+    if (Array.isArray(userProfile.likedTracks) && userProfile.likedTracks.length > 0) {
+      const likedList = userProfile.likedTracks
+        .slice(0, 6)
+        .map((t) => `${t.name} (${t.artist})`)
+        .join(', ');
+      parts.push(`Canciones que le gustan: ${likedList}`);
+    }
+    if (parts.length > 0) {
+      profileSection = `\n\nPERFIL MUSICAL DEL OYENTE (lo que realmente escucha):\n${parts.join('\n')}\nINSTRUCCIÓN FUNDAMENTAL: Adapta el estilo, los artistas y la selección musical a este perfil específico del oyente, salvo que pida explícitamente un género diferente.`;
+    }
+  }
 
   const DJ_SYSTEM_PROMPT = `Eres el DJ oficial de Spotifree, un locutor de radio musical joven, carismático y entusiasta en español.
 REGLAS CRÍTICAS PARA LA ENTONACIÓN DE LA VOZ SINTÉTICA:
@@ -78,18 +108,20 @@ REGLAS CRÍTICAS PARA LA ENTONACIÓN DE LA VOZ SINTÉTICA:
     // ─── ACTION 1: RECOMMENDATIONS & VIBE SET GENERATION ───
     if (action === 'recommend') {
       const recSystemPrompt = `${DJ_SYSTEM_PROMPT}
-Genera una sesión musical personalizada basada en la petición del usuario.
+Genera una sesión musical personalizada basada en la petición del usuario y su perfil de escucha real.
+Ten en cuenta que distintos usuarios tienen gustos muy variados (pop internacional, rock, rap, música electrónica, reggaetón, indie, bachata, lofi, etc.).
+Analiza su historial de escucha y artistas favoritos para que la recomendación sea 100% afín a este oyente en particular.
 Debes devolver OBLIGATORIAMENTE un JSON válido con la siguiente estructura:
 {
   "speech": "frase corta y directa del DJ para presentar la sesión (máximo 20 palabras, sin puntos suspensivos)",
-  "vibeTitle": "título corto de la sesión (ej: Sesión: Noche Urbana)",
+  "vibeTitle": "título corto de la sesión (ej: Sesión: Noche Indie, Sesión: Flow Urbano, Sesión: Pop Energy, etc.)",
   "vibeColor": "#color_hex_vibrante",
   "searchQuery": "términos de búsqueda optimizados para encontrar estas canciones en Spotify o Deezer",
   "tracks": [
     { "title": "Nombre de canción", "artist": "Artista" }
   ]
 }
-Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con la petición.`;
+Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con la petición y el gusto del usuario.`;
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -103,7 +135,7 @@ Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con l
             { role: 'system', content: recSystemPrompt },
             {
               role: 'user',
-              content: `Usuario${userGreeting}. Petición: "${prompt}". Crea una sesión con canciones ideales.`,
+              content: `Usuario${userGreeting}. Petición: "${prompt}".${profileSection}\nCrea una sesión musical con canciones ideales para este oyente.`,
             },
           ],
           response_format: { type: 'json_object' },

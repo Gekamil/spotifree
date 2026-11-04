@@ -12,6 +12,7 @@
 
 import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { usePlayerStore } from '../store/usePlayerStore';
 import { searchSpotify } from './spotifyApi';
 
 export type MusicHashtag =
@@ -242,7 +243,7 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
 export function getDominantUserHashtag(): MusicHashtag {
   const library = analyzeUserLibraryByHashtags();
   let maxCount = 0;
-  let dominant: MusicHashtag = '#reggaeton';
+  let dominant: MusicHashtag = '#pop';
   for (const [tag, tracks] of library.entries()) {
     if (tracks.length > maxCount) {
       maxCount = tracks.length;
@@ -253,7 +254,7 @@ export function getDominantUserHashtag(): MusicHashtag {
 }
 
 /**
- * Analyzes the user's entire library of playlists and liked songs
+ * Analyzes the user's entire library of playlists, player history, and liked songs
  * and builds an internal index of tracks grouped by hashtags.
  */
 export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
@@ -278,7 +279,13 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
     });
   };
 
-  // 1. Scan playlists in cache and store
+  // 1. Scan player history (the actual songs the user is listening to)
+  try {
+    const history = usePlayerStore.getState().history || [];
+    history.forEach(processTrack);
+  } catch {}
+
+  // 2. Scan playlists in cache and store
   Object.values(playlistDetailsCache).forEach((pl: any) => {
     pl?.tracks?.items?.forEach(processTrack);
   });
@@ -286,7 +293,7 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
     p.tracks?.items?.forEach(processTrack);
   });
 
-  // 2. Scan locally imported and liked songs
+  // 3. Scan locally imported and liked songs
   if (typeof window !== 'undefined') {
     try {
       const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
@@ -730,6 +737,12 @@ export async function getInitialDJLibraryRemix(count: number = 15): Promise<Trac
     seenIds.add(t.id);
     allUserTracks.push(t);
   };
+
+  // 1. Collect tracks from player history (actual recent listens)
+  try {
+    const history = usePlayerStore.getState().history || [];
+    history.forEach(collect);
+  } catch {}
 
   Object.values(playlistDetailsCache).forEach((pl: any) => {
     pl?.tracks?.items?.forEach(collect);
