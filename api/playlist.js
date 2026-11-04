@@ -693,13 +693,31 @@ async function resolveYouTubePlaylist(listId) {
 }
 
 /**
- * Check if a playlist title is generic (e.g., liked songs, generic favorites)
- * and should not be used as a literal search query term.
+ * Check if a playlist title is generic (e.g., liked songs, favorites, my playlist)
+ * across English, Spanish, and other common languages with emojis/numbers stripped,
+ * so it is never used as an irrelevant search query term.
  */
 function isGenericPlaylistTitle(title) {
   if (!title) return true;
-  const lower = title.trim().toLowerCase();
-  return /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|favoritas|mis canciones|mi playlist|playlist|custom playlist|canciones guardadas|biblioteca|collection:tracks|que te gustan|que me gustan|mis favoritas|favoritos|guardadas|tu biblioteca)$/i.test(lower);
+  const normalized = title
+    .replace(/[\p{Emoji}\p{Symbol}\p{Punctuation}]/gu, ' ')
+    .replace(/\d+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  if (!normalized || normalized.length < 3) return true;
+
+  const genericPatterns = [
+    /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks)$/i,
+    /^(favoritas|mis favoritas|favoritos|mis favoritos|favorites|my favorites|favorite songs|favorite tracks)$/i,
+    /^(mis canciones|my songs|my tracks|my music|mis temas|mi musica|canciones guardadas)$/i,
+    /^(mi playlist|my playlist|playlist|nueva playlist|new playlist|custom playlist|lista|mi lista|tu biblioteca|your library|library|biblioteca)$/i,
+    /^(top tracks|top canciones|top songs|top hits|mejores canciones|best songs|starred|collection tracks)$/i,
+    /^(que te gustan|que me gustan|liked|favoris|titres likes|chansons preferees|musicas curtidas|lieblingssongs)$/i,
+  ];
+
+  return genericPatterns.some((pattern) => pattern.test(normalized));
 }
 
 /**
@@ -725,11 +743,13 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
     queryTerms.push(art);
   }
 
-  // 2. If the playlist has a real, semantic title (e.g., "Rock Clásico", "Reggaeton 2025", "Techno"), add it
+  // 2. If the playlist has a real, semantic title (e.g., "Rock Clásico", "Reggaeton 2025", "Synthwave"), add it
+  // Stripping both Spanish and English stop words
   if (!isGenericPlaylistTitle(playlistTitle)) {
+    const stopWords = /\b(playlist|de|para|mis|tus|sus|las|los|el|la|del|al|canciones|favoritas|favoritos|musica|exitos|que|te|me|gustan|gusta|my|your|the|of|for|songs|tracks|favorites|favorite|liked|music|best|top|hits|new|custom|collection|by|vol|volume|edition|2024|2025|2026)\b/gi;
     const cleanTitle = (playlistTitle || '')
       .replace(/[()[\]{}_-]/g, ' ')
-      .replace(/\b(playlist|de|para|mis|las|los|canciones|favoritas|2024|2025|2026)\b/gi, '')
+      .replace(stopWords, '')
       .replace(/\s+/g, ' ')
       .trim();
 

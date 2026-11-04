@@ -8,8 +8,21 @@ function cleanTitle(title) {
     .replace(/\s*\[feat\..*?\]/gi, '')
     .replace(/\s*\(ft\..*?\)/gi, '')
     .replace(/\s*\[ft\..*?\]/gi, '')
+    .replace(/\s*\(with\s+.*?\)/gi, '')
+    .replace(/\s*\[with\s+.*?\]/gi, '')
     .replace(/\s*\(Official.*?\)/gi, '')
+    .replace(/\s*\[Official.*?\]/gi, '')
+    .replace(/\s*\(Audio.*?\)/gi, '')
+    .replace(/\s*\[Audio.*?\]/gi, '')
+    .replace(/\s*\(Video.*?\)/gi, '')
+    .replace(/\s*\[Video.*?\]/gi, '')
+    .replace(/\s*\(Visualizer.*?\)/gi, '')
+    .replace(/\s*\[Visualizer.*?\]/gi, '')
+    .replace(/\s*\(Live.*?\)/gi, '')
+    .replace(/\s*\[Live.*?\]/gi, '')
     .replace(/\s*-\s*Radio Edit/gi, '')
+    .replace(/\s*-\s*Single Version/gi, '')
+    .replace(/\s*-\s*Original Mix/gi, '')
     .trim();
 }
 

@@ -85,7 +85,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     playlist.id === 'liked-songs' ||
     playlist.id === 'tracks' ||
     playlist.id.includes('collection:tracks') ||
-    playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+    playlist.id.includes('collection-tracks') ||
+    /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
+      (playlist.name || '').trim()
+    );
 
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
@@ -614,7 +617,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     dynamicPlaylist.id === 'liked-songs' ||
     dynamicPlaylist.id === 'tracks' ||
     dynamicPlaylist.id.includes('collection:tracks') ||
-    dynamicPlaylist.name?.toLowerCase().trim() === 'canciones que te gustan';
+    dynamicPlaylist.id.includes('collection-tracks') ||
+    /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
+      (dynamicPlaylist.name || '').trim()
+    );
 
   const isArtist =
     dynamicPlaylist.id === '3x7gz85amxEplGx7LQxE7Z' ||

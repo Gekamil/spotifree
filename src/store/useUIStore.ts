@@ -119,8 +119,12 @@ const store = create<UIState>((set) => ({
   openEditPlaylistModal: (playlist: Playlist) => {
     const isLiked =
       playlist.id === 'liked-songs' ||
+      playlist.id === 'tracks' ||
       playlist.id.includes('collection:tracks') ||
-      playlist.name?.toLowerCase().trim() === 'canciones que te gustan';
+      playlist.id.includes('collection-tracks') ||
+      /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
+        (playlist.name || '').trim()
+      );
     const isEditorialOrAlbum =
       playlist.id.startsWith('37i9dQ') ||
       playlist.id === '37i9dQZF1DWZdsS73T1ogG' ||

@@ -95,19 +95,50 @@ export default async function handler(req, res) {
     }
   }
 
-  const DJ_SYSTEM_PROMPT = `Eres el DJ oficial de Spotifree, un locutor de radio musical joven, carismático y entusiasta en español.
+  const isEnglish =
+    body.language === 'en' ||
+    (/\b(the|is|in|for|and|to|play|music|songs|vibes|rock|chill|party|workout|morning|night|rap|pop|hiphop|electronic|summer|winter)\b/i.test(prompt) &&
+      !/[áéíóúñ¿¡]/i.test(prompt) &&
+      !/\b(de|el|la|los|las|musica|canciones|para|con|por)\b/i.test(prompt));
+
+  const DJ_SYSTEM_PROMPT = isEnglish
+    ? `You are Spotifree's official AI DJ, a charismatic, energetic English radio host.
+CRITICAL RULES FOR SYNTHETIC VOICE NATURALNESS:
+1. Speak in VERY SHORT, punchy sentences (maximum 8 to 12 words per sentence).
+2. NEVER use ellipses ("..."), long dashes, or parentheses.
+3. DO NOT use unnecessary mid-sentence commas that cause unnatural TTS pauses.
+4. Total speech MUST NOT exceed 2 short sentences (maximum 20-25 words in total).
+5. Bring high energy using natural hype exclamations ("Let's go!", "Turn it up!", "Hit play!").
+6. Respond ONLY with the exact text to say out loud, no explanations.`
+    : `Eres el DJ oficial de Spotifree, un locutor de radio musical joven, carismático y entusiasta en español.
 REGLAS CRÍTICAS PARA LA ENTONACIÓN DE LA VOZ SINTÉTICA:
 1. Habla en frases MUY CORTAS y directas (máximo 8 a 12 palabras por frase).
 2. NUNCA uses puntos suspensivos ("..."), guiones largos ni paréntesis.
 3. NO uses comas innecesarias dentro de las frases, porque provocan silencios o pausas artificiales en el sintetizador.
-4. La intervención completa NO debe superar 2 frases cortas (máximo 25 palabras en total).
+4. La intervención completa NO debe superar 2 frases cortas (máximo 20 a 25 palabras en total).
 5. Dale viveza y entusiasmo usando exclamaciones naturales ("¡Vamos!", "¡Súbele!", "¡A disfrutar!").
 6. Solo responde con el texto exacto a decir, sin introducciones ni explicaciones.`;
 
   try {
     // ─── ACTION 1: RECOMMENDATIONS & VIBE SET GENERATION ───
     if (action === 'recommend') {
-      const recSystemPrompt = `${DJ_SYSTEM_PROMPT}
+      const recSystemPrompt = isEnglish
+        ? `${DJ_SYSTEM_PROMPT}
+Generate a personalized music session based on the user's request and listening history.
+Various listeners enjoy diverse genres (global pop, rock, rap, electronic, indie, synthwave, lofi, etc.).
+Analyze their favorite artists and listening patterns so recommendations are 100% tailored to them.
+You MUST output a valid JSON with the following structure:
+{
+  "speech": "short punchy DJ intro phrase for the session (max 20 words, no ellipses)",
+  "vibeTitle": "short session title (e.g. Session: Indie Night, Session: Synthwave Chill, Session: Pop Energy)",
+  "vibeColor": "#vibrant_hex_color",
+  "searchQuery": "optimized search query to find these tracks on Spotify or Deezer",
+  "tracks": [
+    { "title": "Song Title", "artist": "Artist" }
+  ]
+}
+Include between 10 and 15 iconic tracks matching the vibe.`
+        : `${DJ_SYSTEM_PROMPT}
 Genera una sesión musical personalizada basada en la petición del usuario y su perfil de escucha real.
 Ten en cuenta que distintos usuarios tienen gustos muy variados (pop internacional, rock, rap, música electrónica, reggaetón, indie, bachata, lofi, etc.).
 Analiza su historial de escucha y artistas favoritos para que la recomendación sea 100% afín a este oyente en particular.
@@ -166,9 +197,13 @@ Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con l
       const nextTitle = nextTrack?.name || '';
       const nextArtist = nextTrack?.artists?.[0]?.name || '';
 
-      const transPrompt = curTitle
-        ? `Acaba de sonar "${curTitle}" de ${curArtist || 'este artista'}${nextTitle ? ` y ahora viene "${nextTitle}" de ${nextArtist}` : ''}. Haz un comentario corto de DJ de radio presentando el cambio.`
-        : `El usuario ha terminado un bloque de canciones. Invítale con entusiasmo a continuar con 15 canciones más que le van a encantar.`;
+      const transPrompt = isEnglish
+        ? (curTitle
+            ? `Just played "${curTitle}" by ${curArtist || 'this artist'}${nextTitle ? ` and now comes "${nextTitle}" by ${nextArtist}` : ''}. Give a super short, punchy radio DJ transition comment.`
+            : `User finished a block of tracks. Invite them with high energy to continue with more great tracks.`)
+        : (curTitle
+            ? `Acaba de sonar "${curTitle}" de ${curArtist || 'este artista'}${nextTitle ? ` y ahora viene "${nextTitle}" de ${nextArtist}` : ''}. Haz un comentario corto de DJ de radio presentando el cambio.`
+            : `El usuario ha terminado un bloque de canciones. Invítale con entusiasmo a continuar con 15 canciones más que le van a encantar.`);
 
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -210,7 +245,9 @@ Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con l
           { role: 'system', content: DJ_SYSTEM_PROMPT },
           {
             role: 'user',
-            content: `El usuario${userGreeting} te ha dicho: "${prompt}". Preséntale la música con energía y entusiasmo.`,
+            content: isEnglish
+              ? `The listener${userGreeting} requested: "${prompt}". Introduce the session with high energy and rhythm.`
+              : `El usuario${userGreeting} te ha dicho: "${prompt}". Preséntale la música con energía y entusiasmo.`,
           },
         ],
         temperature: 0.7,

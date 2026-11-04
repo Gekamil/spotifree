@@ -657,13 +657,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     });
 
     // Compute intro text immediately and prefetch audio concurrently with set curation
-    const hour = new Date().getHours();
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
-
-    const greeting = isEn
-      ? (hour >= 6 && hour < 13 ? 'Good morning' : hour >= 13 && hour < 21 ? 'Good afternoon' : 'Good evening')
-      : (hour >= 6 && hour < 13 ? '¡Buenos días' : hour >= 13 && hour < 21 ? '¡Buenas tardes' : '¡Buenas noches');
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
@@ -674,35 +669,36 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     const enOptions = topArtist
       ? [
-          `${greeting}${namePart}! Here is your mix with ${topArtist} and your favorites. Turn it up!`,
-          `What's up${namePart}! Got your personal session ready to roll. Let's go!`,
-          `Hey${namePart}! DJ in the booth with fresh bangers for you. Hit play!`,
-          `Welcome back${namePart}! Pure good vibes lined up for you. Turn it up!`,
-          `DJ in the mix${namePart}! Let's drop your favorite sound. Enjoy!`,
+          `What's up${namePart}! Dropping ${topArtist} and your favorites. Let's go!`,
+          `Hey${namePart}! DJ in the booth. Turn it up!`,
+          `What's good${namePart}! Pure bangers ready. Hit play!`,
+          `In the mix! The best of ${topArtist} is up next. Let's roll!`,
+          `Welcome back${namePart}! Fresh fire lined up. Turn it up!`,
+          `Hey${namePart}! Volume all the way up. Let's ride!`,
         ]
       : [
-          `${greeting}${namePart}! Your personal session is ready in the booth. Turn it up!`,
-          `What's up${namePart}! DJ here with fresh music for you. Let's go!`,
-          `Hey${namePart}! Your custom mix is locked and loaded. Hit play!`,
-          `Welcome${namePart}! Pure good vibes to kick off the session. Enjoy!`,
-          `DJ in the booth${namePart}! Turning up the volume for you. Let's roll!`,
+          `What's up${namePart}! DJ in the booth. Let's go!`,
+          `Hey${namePart}! Your mix is locked. Turn it up!`,
+          `What's good${namePart}! Pure heat ready. Hit play!`,
+          `Welcome back${namePart}! Great vibes lined up. Enjoy!`,
+          `DJ in the mix! Turning up the sound. Let's roll!`,
         ];
 
     const esOptions = topArtist
       ? [
-          `${greeting}${namePart}! Arrancamos con ${topArtist} y tus favoritos. ¡Súbele!`,
-          `¡Qué pasa${namePart}! Tu sesión personalizada está lista. ¡A romperla!`,
-          `¡Qué onda${namePart}! Aquí tu DJ con puro temazo para ti. ¡Dale gas!`,
-          `¡Muy buenas${namePart}! Sonando lo mejor de ${topArtist} y tu sonido. ¡Dale play!`,
-          `¡En cabina tu DJ${namePart}! Tu música favorita lista para sonar. ¡A disfrutar!`,
-          `${greeting}${namePart}! Pura buena vibra para arrancar hoy. ¡Súbele al máximo!`,
+          `¡Qué pasa${namePart}! Arrancamos con ${topArtist}. ¡A romperla!`,
+          `¡Hey${namePart}! Tu sesión está lista. ¡Súbele!`,
+          `¡Qué onda${namePart}! Puro temazo preparado. ¡Dale play!`,
+          `¡En cabina tu DJ! Suena lo mejor de ${topArtist}. ¡Vamos!`,
+          `¡Muy buenas${namePart}! Lista tu mezcla. ¡A disfrutar!`,
+          `¡Hey${namePart}! Subiendo el volumen. ¡Dale gas!`,
         ]
       : [
-          `${greeting}${namePart}! Tu sesión está lista en cabina. ¡Súbele!`,
-          `¡Qué pasa${namePart}! Aquí tu DJ con música fresca para ti. ¡A romperla!`,
-          `¡Qué onda${namePart}! Tu mezcla perfecta está lista. ¡Dale play!`,
-          `${greeting}${namePart}! Pura buena vibra para arrancar. ¡A disfrutar!`,
-          `¡En cabina tu DJ${namePart}! Selección lista para ti. ¡Súbele al máximo!`,
+          `¡Qué pasa${namePart}! Aquí tu DJ. ¡A romperla!`,
+          `¡Hey${namePart}! Tu sesión está lista. ¡Súbele!`,
+          `¡Qué onda${namePart}! Tu música favorita lista. ¡Dale play!`,
+          `¡En cabina tu DJ! Arrancamos con todo. ¡Vamos!`,
+          `¡Muy buenas${namePart}! Lista tu mezcla. ¡A disfrutar!`,
         ];
 
     const introText = cleanTextForNaturalTTS(

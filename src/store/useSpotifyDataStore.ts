@@ -58,8 +58,9 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
       pl.id === 'liked-songs' ||
       pl.id.includes('collection:tracks') ||
       pl.id.includes('collection-tracks') ||
-      pl.name?.toLowerCase().trim() === 'canciones que te gustan' ||
-      pl.name?.toLowerCase().trim() === 'liked songs';
+      /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
+        (pl.name || '').trim()
+      );
 
     if (isLiked) {
       if (seenLiked) continue;
