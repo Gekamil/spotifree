@@ -152,7 +152,11 @@ export const AddToPlaylistModal: React.FC = () => {
     }
 
     // 1. Commit Liked Songs change if toggled
-    const wasLiked = likedTrackIds.includes(track.id);
+    const cleanId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const wasLiked =
+      likedTrackIds.includes(track.id) ||
+      likedTrackIds.includes(cleanId) ||
+      likedTrackIds.includes(`spotify:track:${cleanId}`);
     if (isLikedState !== wasLiked) {
       toggleLike(track.id, track);
     }

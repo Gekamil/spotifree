@@ -748,10 +748,17 @@ const store = create<PlayerState>((set, get) => ({
 
   toggleLike: (trackId: string, trackObj?: Track) => {
     set((state) => {
-      const exists = state.likedTrackIds.includes(trackId);
+      const cleanId = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      const exists =
+        state.likedTrackIds.includes(trackId) ||
+        state.likedTrackIds.includes(cleanId) ||
+        state.likedTrackIds.includes(`spotify:track:${cleanId}`);
+
       const updated = exists
-        ? state.likedTrackIds.filter((id) => id !== trackId)
-        : [...state.likedTrackIds, trackId];
+        ? state.likedTrackIds.filter(
+            (id) => id !== trackId && id !== cleanId && id !== `spotify:track:${cleanId}`
+          )
+        : [...state.likedTrackIds, trackId, cleanId];
 
       if (typeof window !== 'undefined') {
         try {

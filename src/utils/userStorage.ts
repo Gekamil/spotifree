@@ -107,7 +107,11 @@ export function removeCustomLikedSong(trackId: string, userId?: string): Track[]
   try {
     const key = getUserLikedSongsKey(userId);
     const current = getCustomLikedSongs(userId);
-    const updated = current.filter((t) => t.id !== trackId);
+    const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const updated = current.filter((t) => {
+      const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return t.id !== trackId && tClean !== clean && t.id !== `spotify:track:${clean}`;
+    });
     window.localStorage.setItem(key, JSON.stringify(updated));
     return updated;
   } catch {}

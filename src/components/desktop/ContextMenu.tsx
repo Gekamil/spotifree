@@ -170,16 +170,19 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
   if (!contextMenu.isOpen) return null;
 
   const isTrackMenu = !!contextMenu.trackId;
-  const isLiked = contextMenu.trackId ? likedTrackIds.includes(contextMenu.trackId) : false;
-
-  if (!isTrackMenu && !targetPlaylist) return null;
-
   const isLikedPlaylist =
     Boolean(targetPlaylist && (
       targetPlaylist.id === 'liked-songs' ||
       targetPlaylist.id?.includes('collection:tracks') ||
       targetPlaylist.name?.toLowerCase().trim() === 'canciones que te gustan'
-    ));
+    )) || contextMenu.playlistId === 'liked-songs' || contextMenu.playlistId?.includes('collection:tracks');
+
+  const isLiked = contextMenu.trackId
+    ? isLikedPlaylist ||
+      likedTrackIds.includes(contextMenu.trackId) ||
+      likedTrackIds.includes(contextMenu.trackId.replace(/^spotify:track:/i, '')) ||
+      likedTrackIds.includes(`spotify:track:${contextMenu.trackId.replace(/^spotify:track:/i, '')}`)
+    : false;
 
   const isArtist = Boolean(
     targetPlaylist && (
@@ -429,7 +432,20 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
           {/* Guardar / Eliminar de tus canciones que te gustan */}
           <button
             onClick={() => {
-              if (contextMenu.trackId) toggleLike(contextMenu.trackId, targetTrack || undefined);
+              if (contextMenu.trackId) {
+                toggleLike(contextMenu.trackId, targetTrack || undefined);
+                if (contextMenu.playlistId === 'liked-songs' || isLikedPlaylist) {
+                  const activeUserId = useSpotifyDataStore.getState().user?.id || 'active';
+                  import('../../utils/userStorage').then(({ removeCustomLikedSong }) => {
+                    const updated = removeCustomLikedSong(contextMenu.trackId!, activeUserId);
+                    window.dispatchEvent(
+                      new CustomEvent('spotifree_liked_songs_updated', {
+                        detail: { tracks: updated },
+                      })
+                    );
+                  });
+                }
+              }
               closeContextMenu();
             }}
             className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"

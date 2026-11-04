@@ -517,8 +517,37 @@ const store = create<SpotifyDataState>((set, get) => ({
       if (s.playlists.some((p) => p.id === playlist.id)) {
         return s;
       }
+      const updatedPlaylists = [playlist, ...s.playlists];
+
+      if (typeof window !== 'undefined') {
+        try {
+          // 1. user_imported_playlists
+          const rawImported = window.localStorage.getItem('user_imported_playlists');
+          const list = rawImported ? JSON.parse(rawImported) : [];
+          if (!list.some((p: any) => p.id === playlist.id)) {
+            list.unshift(playlist);
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
+          }
+
+          // 2. spotifree_saved_library_playlists
+          const rawSaved = window.localStorage.getItem('spotifree_saved_library_playlists');
+          const savedList: string[] = rawSaved ? JSON.parse(rawSaved) : [];
+          if (!savedList.includes(playlist.id)) {
+            savedList.push(playlist.id);
+            window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(savedList));
+          }
+
+          // 3. sync with cloud Firestore
+          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+            syncSpotifreeAccount({ playlists: updatedPlaylists }).catch(() => {});
+          });
+        } catch (e) {
+          console.warn('Error saving playlist to user library storage:', e);
+        }
+      }
+
       return {
-        playlists: [playlist, ...s.playlists],
+        playlists: updatedPlaylists,
         playlistDetailsCache: {
           ...s.playlistDetailsCache,
           [playlist.id]: playlist,

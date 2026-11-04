@@ -16,7 +16,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { getSavedCustomTracks, saveCustomTrackToStorage } from '../../utils/userStorage';
+import { getSavedCustomTracks, saveCustomTrackToStorage, removeCustomLikedSong, getCustomLikedSongs } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
@@ -71,7 +71,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     toggleShuffle,
   } = usePlayerStore();
 
-  const { openContextMenu, openEditPlaylistModal } = useUIStore();
+  const { openContextMenu, openEditPlaylistModal, openAddToPlaylistModal } = useUIStore();
   const { user, playlists: allUserPlaylists } = useSpotifyDataStore();
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
   const [isDownloading, setIsDownloading] = useState(false);
@@ -662,6 +662,74 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
+  const [clipsTracks, setClipsTracks] = useState<Track[]>([]);
+  const [clipsInitialIndex, setClipsInitialIndex] = useState(0);
+
+  const handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
+    const ordered = [selectedTrack, ...allList.filter((t) => t.id !== selectedTrack.id)];
+    setClipsTracks(ordered);
+    setClipsInitialIndex(0);
+    setIsClipsModalOpen(true);
+  };
+
+  const isTrackLiked = (trackId: string, trackObj?: Track) => {
+    if (isLikedPlaylist) return true;
+    if (!trackId) return false;
+    const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+    if (
+      likedTrackIds.includes(trackId) ||
+      likedTrackIds.includes(clean) ||
+      likedTrackIds.includes(`spotify:track:${clean}`)
+    ) {
+      return true;
+    }
+    if (trackObj && trackObj.name) {
+      const activeUserId = user?.id || 'active';
+      const customLiked = getCustomLikedSongs(activeUserId);
+      if (
+        customLiked.some(
+          (t) =>
+            t.id === trackId ||
+            t.id === clean ||
+            (t.name === trackObj.name && t.artists?.[0]?.name === trackObj.artists?.[0]?.name)
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleToggleTrackLike = (track: Track) => {
+    const liked = isTrackLiked(track.id, track);
+    if (liked) {
+      toggleLike(track.id, track);
+      if (isLikedPlaylist) {
+        const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
+        removeCustomLikedSong(track.id, user?.id);
+        removeCustomLikedSong(clean, user?.id);
+        setDynamicTracks((prev) =>
+          prev.filter((t) => {
+            const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return (
+              t.id !== track.id &&
+              tClean !== clean &&
+              (t.name !== track.name || t.artists?.[0]?.name !== track.artists?.[0]?.name)
+            );
+          })
+        );
+        setDynamicPlaylist((prev) => ({
+          ...prev,
+          tracks: {
+            total: Math.max(0, (prev.tracks?.total || 1) - 1),
+            items: (prev.tracks?.items || []).filter((t) => t.id !== track.id),
+          },
+        }));
+      }
+    } else {
+      openAddToPlaylistModal(track);
+    }
+  };
 
   useEffect(() => {
     if (!tracks || tracks.length <= 1 || isClipsModalOpen) return;
@@ -1307,7 +1375,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             {tracks.map((track, index) => {
               const isThisTrackPlaying = isPlaying && currentTrack?.id === track.id;
               const isThisTrackSelected = currentTrack?.id === track.id;
-              const isLiked = likedTrackIds.includes(track.id);
+              const isLiked = isTrackLiked(track.id, track);
               const isHovered = hoveredTrackId === track.id;
 
               const cleanId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -1441,22 +1509,23 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          toggleLike(track.id, track);
+                          handleToggleTrackLike(track);
                         }}
-                        className={`transition-all ${
+                        className={`transition-all cursor-pointer ${
                           isLiked
-                            ? 'text-[#1ed760] opacity-100'
-                            : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100'
+                            ? 'text-[#1ed760] opacity-100 hover:scale-110 active:scale-95'
+                            : 'text-[#b3b3b3] hover:text-white opacity-0 group-hover:opacity-100 hover:scale-110 active:scale-95'
                         }`}
-                        title={isLiked ? "Eliminar de Canciones que te gustan" : "Añadir a Canciones que te gustan"}
+                        title={
+                          isLiked
+                            ? (isLikedPlaylist ? "Eliminar de Canciones que te gustan" : "Guardada en Canciones que te gustan (clic para quitar)")
+                            : "Añadir a playlist"
+                        }
                       >
                         {isLiked ? (
                           <CheckCircleNativeIcon size={16} className="text-[#1ed760]" />
                         ) : (
-                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-                            <path d="M12 7.25H8.75V4h-1.5v3.25H4v1.5h3.25V12h1.5V8.75H12z" />
-                          </svg>
+                          <PlusCircleNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
                         )}
                       </button>
 
@@ -1609,7 +1678,22 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 className="flex items-center justify-between px-3.5 py-2 rounded-md hover:bg-white/10 transition-colors group"
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
-                  <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} />
+                  {/* Artwork with play preview button overlay */}
+                  <div
+                    className="relative group/cover w-10 h-10 shrink-0 cursor-pointer overflow-hidden rounded shadow"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenPreview(tr, addSearchQuery ? addSearchResults : popularSuggestions);
+                    }}
+                    title={`Escuchar preview de ${tr.name}`}
+                  >
+                    <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} size={40} className="w-10 h-10 object-cover" />
+                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover/cover:opacity-100 transition-opacity">
+                      <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-lg hover:scale-110 active:scale-90 transition-transform">
+                        <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                      </div>
+                    </div>
+                  </div>
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{tr.name}</p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
@@ -1653,11 +1737,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
       {/* 15s Clips Mini-Player Modal */}
       <PlaylistClipsMiniPlayer
-        tracks={tracks}
-        initialTrackIndex={rotatingTrackIndex}
+        tracks={clipsTracks.length > 0 ? clipsTracks : tracks}
+        initialTrackIndex={clipsTracks.length > 0 ? clipsInitialIndex : rotatingTrackIndex}
+        skipShuffle={clipsTracks.length > 0}
         playlistTitle={dynamicPlaylist.name}
         isOpen={isClipsModalOpen}
-        onClose={() => setIsClipsModalOpen(false)}
+        onClose={() => {
+          setIsClipsModalOpen(false);
+          setClipsTracks([]);
+        }}
         onPlayFullTrack={(track, allTracks) => {
           playTrack(
             { ...track, playlistId: dynamicPlaylist.id },

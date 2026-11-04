@@ -12,6 +12,7 @@ interface PlaylistClipsMiniPlayerProps {
   isOpen: boolean;
   onClose: () => void;
   onPlayFullTrack: (track: Track, allTracks: Track[]) => void;
+  skipShuffle?: boolean;
 }
 
 const PREVIEW_AUDIO_CACHE = new Map<string, string | null>();
@@ -72,10 +73,12 @@ async function fetchTrackPreviewAudio(track: Track): Promise<string | null> {
 
 export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = ({
   tracks,
+  initialTrackIndex = 0,
   playlistTitle = 'Playlist',
   isOpen,
   onClose,
   onPlayFullTrack,
+  skipShuffle = false,
 }) => {
   const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -91,24 +94,29 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   const isHoldingRef = useRef<boolean>(false);
   const prevIsOpenRef = useRef<boolean>(false);
 
-  // Shuffle playlist tracks into a random order on open
+  // Shuffle playlist tracks into a random order on open, unless skipShuffle or specific initial index is requested
   useEffect(() => {
     if (isOpen && !prevIsOpenRef.current) {
       if (tracks.length > 0) {
-        // Fisher-Yates true random shuffle of the playlist tracks
-        const randomized = [...tracks];
-        for (let i = randomized.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
+        if (skipShuffle || typeof initialTrackIndex === 'number' && initialTrackIndex > 0) {
+          setShuffledTracks(tracks);
+          setCurrentIndex(initialTrackIndex ?? 0);
+        } else {
+          // Fisher-Yates true random shuffle of the playlist tracks
+          const randomized = [...tracks];
+          for (let i = randomized.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
+          }
+          setShuffledTracks(randomized);
+          setCurrentIndex(initialTrackIndex || 0);
         }
-        setShuffledTracks(randomized);
-        setCurrentIndex(0);
       }
       setSecondsElapsed(0);
       setIsPaused(false);
     }
     prevIsOpenRef.current = isOpen;
-  }, [isOpen, tracks]);
+  }, [isOpen, tracks, initialTrackIndex, skipShuffle]);
 
   const currentList = shuffledTracks.length > 0 ? shuffledTracks : tracks;
   const currentTrack = currentList[currentIndex] || currentList[0];

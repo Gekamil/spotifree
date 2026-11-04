@@ -44,6 +44,7 @@ import { parseTrackArtists } from '../../utils/trackArtists';
 import {
   getCustomLikedSongs,
   saveCustomLikedSong,
+  removeCustomLikedSong,
   getSavedCustomTracks,
   saveCustomTrackToStorage,
   saveSharedPlaylist,
@@ -90,7 +91,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
-  const isTrackLiked = (id: string) => Array.isArray(likedTrackIds) ? likedTrackIds.includes(id) : Boolean((likedTrackIds as any)?.has?.(id));
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
 
   const [activePlaylist, setActivePlaylist] = useState<Playlist>(playlist);
@@ -578,6 +578,72 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
+  const [clipsTracks, setClipsTracks] = useState<Track[]>([]);
+  const [clipsInitialIndex, setClipsInitialIndex] = useState(0);
+
+  const handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
+    const ordered = [selectedTrack, ...allList.filter((t) => t.id !== selectedTrack.id)];
+    setClipsTracks(ordered);
+    setClipsInitialIndex(0);
+    setIsClipsModalOpen(true);
+  };
+
+  const isTrackLiked = (trackId: string, trackObj?: Track) => {
+    if (isLikedPlaylist) return true;
+    if (!trackId) return false;
+    const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+    if (
+      likedTrackIds.includes(trackId) ||
+      likedTrackIds.includes(clean) ||
+      likedTrackIds.includes(`spotify:track:${clean}`)
+    ) {
+      return true;
+    }
+    if (trackObj && trackObj.name) {
+      const activeUserId = user?.id || 'active';
+      const customLiked = getCustomLikedSongs(activeUserId);
+      if (
+        customLiked.some(
+          (t) =>
+            t.id === trackId ||
+            t.id === clean ||
+            (t.name === trackObj.name && t.artists?.[0]?.name === trackObj.artists?.[0]?.name)
+        )
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const handleToggleTrackLike = (track: Track) => {
+    const liked = isTrackLiked(track.id, track);
+    if (liked) {
+      toggleLike(track.id, track);
+      if (isLikedPlaylist) {
+        const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
+        removeCustomLikedSong(track.id, user?.id);
+        removeCustomLikedSong(clean, user?.id);
+        const nextTracks = tracks.filter((t) => {
+          const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return (
+            t.id !== track.id &&
+            tClean !== clean &&
+            (t.name !== track.name || t.artists?.[0]?.name !== track.artists?.[0]?.name)
+          );
+        });
+        setTracks(nextTracks);
+        setActivePlaylist((prev) => ({
+          ...prev,
+          tracks: { total: nextTracks.length, items: nextTracks },
+        }));
+        setToastMessage('Canción eliminada de Canciones que te gustan');
+        setTimeout(() => setToastMessage(null), 2500);
+      }
+    } else {
+      openAddToPlaylistModal(track);
+    }
+  };
 
   useEffect(() => {
     if (!displayTracks || displayTracks.length <= 1 || isClipsModalOpen) return;
@@ -634,6 +700,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }, []);
 
   const convertPhotosToBanners = useUIStore((s) => s.convertPhotosToBanners);
+  const openAddToPlaylistModal = useUIStore((s) => s.openAddToPlaylistModal);
   const resolvedBanner = resolvePlaylistBanner(activePlaylist) || undefined;
   const shouldShowFullBleed = Boolean(convertPhotosToBanners || resolvedBanner);
   const bannerImgUrl = resolvedBanner || (convertPhotosToBanners ? activePlaylist.images?.[0]?.url : undefined);
@@ -1008,14 +1075,45 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       )}
 
       {/* Action Row matching Spotify Mobile */}
-      <div className="px-6 py-2 flex items-center justify-between">
-        {/* Left side: 1) Add/Check library, 2) Download, 3) Share */}
-        <div className="flex items-center gap-5">
-          {/* 1. Add / Check to Library */}
+      <div className="px-5 py-2 flex items-center justify-between">
+        {/* Left cluster: 1) Slides/Clips preview, 2) Add/Check (+ / ✓) to library, 3) Share (+ Download) */}
+        <div className="flex items-center gap-3.5">
+          {/* 1. Slides / Previews / Clips of songs on the far left */}
+          {displayTracks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setClipsTracks(displayTracks);
+                setClipsInitialIndex(rotatingTrackIndex);
+                setIsClipsModalOpen(true);
+              }}
+              className="group/thumb relative w-9 h-9 rounded-lg overflow-hidden shadow-md bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
+              title="Ver clips y avances de la playlist"
+            >
+              <img
+                key={displayTracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
+                src={
+                  displayTracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
+                  (displayTracks[rotatingTrackIndex] as any)?.image ||
+                  coverUrl
+                }
+                alt={displayTracks[rotatingTrackIndex]?.name || 'Preview clip'}
+                onError={handleImageError}
+                className="w-full h-full object-cover transition-all duration-700"
+              />
+              <div className="absolute inset-0 bg-black/25 flex items-center justify-center">
+                <div className="w-4 h-4 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white">
+                  <PlayNativeIcon size={8} className="ml-0.5 text-white" />
+                </div>
+              </div>
+            </button>
+          )}
+
+          {/* 2. Add (+ / ✓) to Library */}
           {isArtist ? (
             <button
               onClick={handleToggleLibrary}
-              className="px-5 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white active:scale-95 transition-all cursor-pointer"
+              className="px-4 py-1.5 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white active:scale-95 transition-all cursor-pointer"
             >
               {isSavedInLibrary ? 'Siguiendo' : 'Seguir'}
             </button>
@@ -1026,26 +1124,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               title={isSavedInLibrary ? 'Guardada en tu biblioteca (clic para eliminar)' : 'Añadir a tu biblioteca'}
             >
               {isSavedInLibrary ? (
-                <CheckCircleNativeIcon size={26} className="text-[#1ed760]" />
+                <CheckCircleNativeIcon size={25} className="text-[#1ed760]" />
               ) : (
-                <PlusCircleNativeIcon size={26} className="text-white/80 hover:text-white" />
-              )}
-            </button>
-          )}
-
-          {/* 2. Download Circle Button */}
-          {!isArtist && (
-            <button
-              onClick={handleToggleDownload}
-              className="hover:scale-105 active:scale-90 transition-transform cursor-pointer"
-              title={isDownloaded ? 'Descargado (escucha offline)' : 'Descargar para escuchar offline'}
-            >
-              {isDownloading ? (
-                <div className="w-5 h-5 border-2 border-white/30 border-t-[#1ed760] rounded-full animate-spin" />
-              ) : isDownloaded ? (
-                <DownloadActiveCircleNativeIcon size={24} className="text-[#1ed760]" />
-              ) : (
-                <DownloadCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
+                <PlusCircleNativeIcon size={25} className="text-white/80 hover:text-white" />
               )}
             </button>
           )}
@@ -1053,15 +1134,35 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           {/* 3. Share playlist button */}
           <button
             onClick={handleSharePlaylist}
-            className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer"
+            className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer p-0.5"
             title="Compartir playlist"
           >
-            <ShareNativeIcon size={22} className="text-white/80 hover:text-white" />
+            <ShareNativeIcon size={21} className="text-white/80 hover:text-white" />
           </button>
+
+          {/* Download button (compact beside share) */}
+          {!isArtist && (
+            <button
+              onClick={handleToggleDownload}
+              className="hover:scale-105 active:scale-90 transition-transform cursor-pointer p-0.5"
+              title={isDownloaded ? 'Descargado (escucha offline)' : 'Descargar para escuchar offline'}
+            >
+              {isDownloading ? (
+                <div className="w-5 h-5 border-2 border-white/30 border-t-[#1ed760] rounded-full animate-spin" />
+              ) : isDownloaded ? (
+                <DownloadActiveCircleNativeIcon size={22} className="text-[#1ed760]" />
+              ) : (
+                <DownloadCircleNativeIcon size={22} className="text-white/80 hover:text-white" />
+              )}
+            </button>
+          )}
         </div>
 
-        {/* Right side: 4) DJ Automix bars, 5) Shuffle button, 6) Large Green Play */}
-        <div className="flex items-center gap-3">
+        {/* Subtle spacing gap between left tools and playback controls */}
+        <div className="flex-1 min-w-[10px]" />
+
+        {/* Right cluster: 4) DJ Mode, 5) Shuffle selector, 6) Large Play */}
+        <div className="flex items-center gap-2.5">
           {/* 4. DJ Mixer Faders Toggle Button */}
           <button
             onClick={handleToggleAutomix}
@@ -1095,28 +1196,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             )}
           </button>
 
-          {/* Clips Preview Trigger Thumbnail */}
-          {displayTracks.length > 0 && (
-            <button
-              type="button"
-              onClick={() => setIsClipsModalOpen(true)}
-              className="group/thumb relative w-10 h-10 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
-              title="Ver clips y avances de la playlist"
-            >
-              <img
-                key={displayTracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
-                src={
-                  displayTracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
-                  (displayTracks[rotatingTrackIndex] as any)?.image ||
-                  coverUrl
-                }
-                alt={displayTracks[rotatingTrackIndex]?.name || 'Preview clip'}
-                onError={handleImageError}
-                className="w-full h-full object-cover transition-all duration-700"
-              />
-            </button>
-          )}
-
           {/* 6. Play Button: Authentic Vinyl Turntable (Modo DJ) or Classic Green */}
           {isAutomixActive ? (
             <button
@@ -1126,7 +1205,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             >
               {/* Outer vinyl chassis */}
               <div className="w-full h-full rounded-full bg-[#121212] relative overflow-hidden flex items-center justify-center">
-                {/* Rotating vinyl platter with realistic grooves and angular sheen */}
                 <div
                   className={`absolute inset-0 rounded-full ${
                     isCurrentPlaylistPlaying ? 'animate-[spin_8s_linear_infinite]' : ''
@@ -1136,7 +1214,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       'conic-gradient(from 0deg, #111111 0deg, #2a2a2a 45deg, #0d0d0d 90deg, #2a2a2a 135deg, #111111 180deg, #2a2a2a 225deg, #0d0d0d 270deg, #2a2a2a 315deg, #111111 360deg)',
                   }}
                 >
-                  {/* Concentric microgroove borders */}
                   <div className="absolute inset-[3px] rounded-full border border-white/[0.12] pointer-events-none" />
                   <div className="absolute inset-[6px] rounded-full border border-white/[0.08] pointer-events-none" />
                   <div className="absolute inset-[9px] rounded-full border border-white/[0.06] pointer-events-none" />
@@ -1145,7 +1222,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <div className="absolute inset-[18px] rounded-full border border-white/[0.07] pointer-events-none" />
                 </div>
 
-                {/* Center vinyl spindle label - stays steady and upright */}
                 <div className="relative z-10 w-7 h-7 rounded-full bg-[#181818] border border-white/15 flex items-center justify-center shadow-lg pointer-events-none">
                   {isCurrentPlaylistPlaying ? (
                     <PauseNativeIcon size={16} className="text-white drop-shadow-md" />
@@ -1278,16 +1354,25 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       className="flex items-center justify-between p-2 rounded-xl bg-white/5 active:bg-white/10 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-[#242424] shrink-0 shadow">
-                          {trackCover ? (
-                            <img src={trackCover} alt={trk.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-xs text-white/40">♪</div>
-                          )}
+                        {/* Artwork with play preview button overlay */}
+                        <div
+                          className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#242424] shrink-0 shadow cursor-pointer group/art"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenPreview(trk, addSearchQuery ? addSearchResults : popularSuggestions);
+                          }}
+                          title={`Escuchar preview de ${trk.name}`}
+                        >
+                          <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
+                            <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-md active:scale-90 transition-transform">
+                              <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                            </div>
+                          </div>
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="font-bold text-white text-xs truncate">{trk.name}</span>
-                          <span className="text-[11px] text-[#b3b3b3] truncate">
+                          <span className="text-[11px] text-[#b3b3b3] truncate mt-0.5">
                             {parseTrackArtists(trk.artists).map((a) => a.name).join(', ')}
                           </span>
                         </div>
@@ -1314,7 +1399,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             {displayTracks.map((track, idx) => {
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
               const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
-              const isLiked = likedTrackIds.includes(track.id);
+              const isLiked = isTrackLiked(track.id, track);
               const cleanTrackId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
               const feat =
                 audioFeatures[cleanTrackId] ||
@@ -1385,9 +1470,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                             {feat?.camelot || '9A'}
                           </span>
 
-                          <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">
-                            {formatDuration(track.duration_ms)}
-                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleTrackLike(track);
+                            }}
+                            className="p-1 cursor-pointer active:scale-90 transition-transform"
+                            title={isLiked ? (isLikedPlaylist ? "Eliminar de Canciones que te gustan" : "Guardada en Canciones que te gustan") : "Añadir a playlist"}
+                          >
+                            {isLiked ? (
+                              <CheckCircleNativeIcon size={18} className="text-[#1ed760]" />
+                            ) : (
+                              <PlusCircleNativeIcon size={18} className="text-white/60 hover:text-white" />
+                            )}
+                          </button>
 
                           <button
                             onClick={(e) => {
@@ -1405,9 +1501,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       </div>
                     ) : (
                       <div className="flex items-center gap-2.5 shrink-0 text-[#b3b3b3]">
-                        {isLiked && (
-                          <CheckTrackNativeIcon size={16} className="text-[#1ed760] shrink-0" />
-                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTrackLike(track);
+                          }}
+                          className="p-1 cursor-pointer active:scale-90 transition-transform"
+                          title={isLiked ? (isLikedPlaylist ? "Eliminar de Canciones que te gustan" : "Guardada en Canciones que te gustan") : "Añadir a playlist"}
+                        >
+                          {isLiked ? (
+                            <CheckCircleNativeIcon size={18} className="text-[#1ed760] shrink-0" />
+                          ) : (
+                            <PlusCircleNativeIcon size={18} className="text-white/60 hover:text-white shrink-0" />
+                          )}
+                        </button>
                         <span className="text-xs font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3]">{formatDuration(track.duration_ms)}</span>
                         <button
                           onClick={(e) => {
@@ -1473,21 +1580,49 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               );
             })}
 
-            {/* Bottom Add Songs section matching Spotify */}
-            <div className="pt-6 pb-4 border-t border-white/10 mt-6 px-1">
-              <h3 className="text-base font-bold text-white mb-1">
-                ¿Quieres añadir más canciones?
-              </h3>
-              <p className="text-xs text-[#b3b3b3] mb-3">
-                Busca temas para sumarlos a esta lista
-              </p>
+            {/* Bottom Recommendations & Add Songs section matching Spotify Mobile */}
+            <div className="pt-6 pb-6 border-t border-white/10 mt-6 px-1">
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-base font-bold text-white">
+                    Recomendadas para ti
+                  </h3>
+                  <p className="text-xs text-[#b3b3b3]">
+                    Recomendaciones en tiempo real basadas en esta lista
+                  </p>
+                </div>
+                <button
+                  onClick={() => loadRecommendations()}
+                  disabled={isLoadingSuggestions}
+                  className="px-2.5 py-1 rounded-full border border-white/20 text-[11px] font-bold text-[#b3b3b3] hover:text-white flex items-center gap-1 active:scale-95 cursor-pointer"
+                  title="Actualizar recomendaciones"
+                >
+                  <svg
+                    width="10"
+                    height="10"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className={isLoadingSuggestions ? 'animate-spin' : ''}
+                  >
+                    <path d="M13.65 2.35a8 8 0 1 0 1.63 8.65.75.75 0 1 0-1.39-.56A6.5 6.5 0 1 1 12.5 3.5H9.75a.75.75 0 0 0 0 1.5H14a.75.75 0 0 0 .75-.75V0a.75.75 0 0 0-1.5 0v2.35z" />
+                  </svg>
+                  <span>{isLoadingSuggestions ? 'Actualizando...' : 'Actualizar'}</span>
+                </button>
+              </div>
+
+              {/* Capsule Search Bar */}
               <div className="relative w-full mb-3">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#b3b3b3] pointer-events-none">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M7 1.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5zM.25 7a6.75 6.75 0 1 1 12.096 4.12l3.184 3.185a.75.75 0 1 1-1.06 1.06L11.286 12.18A6.75 6.75 0 0 1 .25 7z" />
+                  </svg>
+                </div>
                 <input
                   type="text"
                   value={addSearchQuery}
                   onChange={(e) => setAddSearchQuery(e.target.value)}
-                  placeholder="Buscar más canciones..."
-                  className="w-full h-10 pl-4 pr-9 bg-[#242424] text-white text-xs rounded-full outline-none placeholder:text-[#a7a7a7] border border-white/10 focus:border-white/30"
+                  placeholder="Buscar más canciones o artistas..."
+                  className="w-full h-10 pl-9 pr-9 bg-[#242424] text-white text-xs rounded-full outline-none placeholder:text-[#a7a7a7] border border-white/10 focus:border-white/30"
                 />
                 {addSearchQuery && (
                   <button
@@ -1503,38 +1638,66 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               </div>
 
               {isSearchingAdd && (
-                <div className="py-2 text-xs text-[#b3b3b3] text-center">Buscando...</div>
+                <div className="py-2 text-xs text-[#b3b3b3] text-center flex items-center justify-center gap-2">
+                  <div className="w-3.5 h-3.5 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+                  <span>Buscando canciones...</span>
+                </div>
               )}
 
-              {addSearchResults.map((trk) => {
-                const alreadyInList = tracks.some(
-                  (t) => t.id === trk.id || (t.name === trk.name && t.artists[0]?.name === trk.artists[0]?.name)
-                );
-                return (
-                  <div
-                    key={trk.id}
-                    className="flex items-center justify-between p-2 rounded-xl bg-white/5 mb-1.5"
-                  >
-                    <div className="flex flex-col min-w-0 pr-2 text-left">
-                      <span className="font-bold text-white text-xs truncate">{trk.name}</span>
-                      <span className="text-[11px] text-[#b3b3b3] truncate">
-                        {parseTrackArtists(trk.artists).map((a) => a.name).join(', ')}
-                      </span>
-                    </div>
-                    <button
-                      disabled={alreadyInList}
-                      onClick={() => handleAddTrack(trk)}
-                      className={`px-3 py-1 rounded-full text-xs font-bold shrink-0 ${
-                        alreadyInList
-                          ? 'bg-white/10 text-white/40 cursor-default'
-                          : 'bg-white text-black hover:bg-[#1ed760]'
-                      }`}
+              {/* Suggestions / Results */}
+              <div className="space-y-1.5">
+                {(addSearchQuery ? addSearchResults : popularSuggestions).map((trk) => {
+                  const alreadyInList = tracks.some(
+                    (t) => t.id === trk.id || (t.name === trk.name && t.artists[0]?.name === trk.artists[0]?.name)
+                  );
+                  const trackCover = trk.album?.images?.[0]?.url;
+
+                  return (
+                    <div
+                      key={trk.id}
+                      className="flex items-center justify-between p-2 rounded-xl bg-white/5 active:bg-white/10 transition-colors"
                     >
-                      {alreadyInList ? '✓ Añadida' : 'Añadir'}
-                    </button>
-                  </div>
-                );
-              })}
+                      <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                        {/* Artwork with play preview button overlay */}
+                        <div
+                          className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#242424] shrink-0 shadow cursor-pointer group/art"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleOpenPreview(trk, addSearchQuery ? addSearchResults : popularSuggestions);
+                          }}
+                          title={`Escuchar preview de ${trk.name}`}
+                        >
+                          <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
+                            <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-md active:scale-90 transition-transform">
+                              <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-bold text-white text-xs truncate">{trk.name}</span>
+                          <span className="text-[11px] text-[#b3b3b3] truncate mt-0.5">
+                            {parseTrackArtists(trk.artists).map((a) => a.name).join(', ')}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        disabled={alreadyInList}
+                        onClick={() => handleAddTrack(trk)}
+                        className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition-transform active:scale-95 ${
+                          alreadyInList
+                            ? 'bg-white/10 text-white/40 cursor-default'
+                            : 'bg-white text-black hover:bg-[#1ed760]'
+                        }`}
+                      >
+                        {alreadyInList ? '✓ Añadida' : 'Añadir'}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </>
         )}
@@ -1714,18 +1877,18 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             <div className="space-y-1">
               <button
                 onClick={() => {
-                  toggleLike(activeTrackMenu.id, activeTrackMenu);
+                  handleToggleTrackLike(activeTrackMenu);
                   setActiveTrackMenu(null);
                 }}
                 className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
               >
-                {isTrackLiked(activeTrackMenu.id) ? (
+                {isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? (
                   <CheckTrackNativeIcon size={22} className="text-[#1ed760] shrink-0" />
                 ) : (
                   <AddTrackNativeIcon size={22} className="text-white/80 shrink-0" />
                 )}
                 <span className="font-bold text-sm">
-                  {isTrackLiked(activeTrackMenu.id)
+                  {isTrackLiked(activeTrackMenu.id, activeTrackMenu)
                     ? 'Eliminar de Canciones que te gustan'
                     : 'Añadir a Canciones que te gustan'}
                 </span>
@@ -1970,11 +2133,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
       {/* Clips Mini-Player Modal */}
       <PlaylistClipsMiniPlayer
-        tracks={displayTracks}
-        initialTrackIndex={rotatingTrackIndex}
+        tracks={clipsTracks.length > 0 ? clipsTracks : displayTracks}
+        initialTrackIndex={clipsTracks.length > 0 ? clipsInitialIndex : rotatingTrackIndex}
+        skipShuffle={clipsTracks.length > 0}
         playlistTitle={playlist.name}
         isOpen={isClipsModalOpen}
-        onClose={() => setIsClipsModalOpen(false)}
+        onClose={() => {
+          setIsClipsModalOpen(false);
+          setClipsTracks([]);
+        }}
         onPlayFullTrack={(track, allTracks) => {
           playTrack(track, allTracks);
         }}

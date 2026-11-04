@@ -794,7 +794,7 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
   }
 
   // 2. High-quality Deezer fallback with HD album covers
-  if (tracks.length < 6) {
+  if (tracks.length < limit) {
     const fallbackTerm = queryTerms[0] || 'top hits';
     try {
       const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(fallbackTerm)}&limit=15`, {
@@ -825,6 +825,157 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
         }
       }
     } catch {}
+  }
+
+  // 3. iTunes search fallback if still below limit
+  if (tracks.length < limit) {
+    try {
+      const itunesQuery = queryTerms[0] || 'top hits';
+      const itRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(itunesQuery)}&media=music&entity=song&limit=15`, {
+        signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
+      });
+      if (itRes.ok) {
+        const itData = await itRes.json();
+        for (const t of itData.results || []) {
+          const tid = `it-${t.trackId}`;
+          if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+          seenIds.add(tid);
+          const cover = (t.artworkUrl100 || '').replace('100x100bb', '600x600bb');
+          tracks.push({
+            id: tid,
+            name: t.trackName,
+            artists: [{ id: `art-${t.artistId || tid}`, name: t.artistName || 'Artista' }],
+            album: {
+              id: `alb-${t.collectionId || tid}`,
+              name: t.collectionName || t.trackName,
+              images: cover ? [{ url: cover }] : [],
+            },
+            duration_ms: t.trackTimeMillis || 180000,
+            preview_url: t.previewUrl || null,
+            added_at: 'Recomendada',
+          });
+          if (tracks.length >= limit) break;
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Curated catalog so recommendations NEVER fail or display empty
+  if (tracks.length < 5) {
+    const CURATED_BACKUP = [
+      {
+        id: 'dz-2432976725',
+        name: 'Columbia',
+        artists: [{ id: 'art-quevedo', name: 'Quevedo' }],
+        album: {
+          id: 'alb-columbia',
+          name: 'Columbia',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/b4ea39ef6ea328ecf4b16260ea8d1159/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 186000,
+        preview_url: 'https://cdns-preview-d.dzcdn.net/stream/c-df51b54c034aefc96cb8a4ebaa9670aa-5.mp3',
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2503254921',
+        name: 'MONACO',
+        artists: [{ id: 'art-badbunny', name: 'Bad Bunny' }],
+        album: {
+          id: 'alb-nsneve',
+          name: 'nadie sabe lo que va a pasar mañana',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/9cb1f1bf40cb7e71f5445ea4e4125b0f/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 267000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2549257631',
+        name: 'LUNA',
+        artists: [{ id: 'art-feid', name: 'Feid' }, { id: 'art-atljacob', name: 'ATL Jacob' }],
+        album: {
+          id: 'alb-ferxxocalipsis',
+          name: 'FERXXOCALIPSIS',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/6c65b53027b165275e01691230678788/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 196000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2228518177',
+        name: 'DILUVIO',
+        artists: [{ id: 'art-rauw', name: 'Rauw Alejandro' }],
+        album: {
+          id: 'alb-saturno',
+          name: 'SATURNO',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/25d3fa961ef0a6a22f307ba4da4a43ef/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 198000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2484089985',
+        name: 'REINA',
+        artists: [{ id: 'art-mora', name: 'Mora' }, { id: 'art-saiko', name: 'Saiko' }],
+        album: {
+          id: 'alb-estrella',
+          name: 'ESTRELLA',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/5f58c7438ae7b3ebfb4f7c2235c05280/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 228000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2358047915',
+        name: 'LALA',
+        artists: [{ id: 'art-myke', name: 'Myke Towers' }],
+        album: {
+          id: 'alb-lala',
+          name: 'LA VIDA ES UNA',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/0bc52251a31b402cf8fa5dcfae69eec4/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 197000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-2321568205',
+        name: 'LAS BABYS',
+        artists: [{ id: 'art-aitana', name: 'Aitana' }],
+        album: {
+          id: 'alb-alpha',
+          name: 'alpha',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/19e917d54e44f8f7422dd81f01cb18be/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 153000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+      {
+        id: 'dz-1811631527',
+        name: 'Quevedo: Bzrp Music Sessions, Vol. 52',
+        artists: [{ id: 'art-bizarrap', name: 'Bizarrap' }, { id: 'art-quevedo', name: 'Quevedo' }],
+        album: {
+          id: 'alb-bzrp52',
+          name: 'Quevedo: Bzrp Music Sessions, Vol. 52',
+          images: [{ url: 'https://e-cdns-images.dzcdn.net/images/cover/2513a968600d8d42dff0421da1d8a0c2/1000x1000-000000-80-0-0.jpg' }],
+        },
+        duration_ms: 198000,
+        preview_url: null,
+        added_at: 'Recomendada',
+      },
+    ];
+
+    for (const item of CURATED_BACKUP) {
+      if (!seenIds.has(item.id) && !existingIdSet.has(item.id)) {
+        seenIds.add(item.id);
+        tracks.push(item);
+        if (tracks.length >= limit) break;
+      }
+    }
   }
 
   return tracks;
