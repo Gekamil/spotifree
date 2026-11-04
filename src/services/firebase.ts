@@ -227,11 +227,34 @@ export function onFirebaseAuthStateChanged(cb: (user: User | null) => void): () 
 // Firestore Database Synchronization (Playlists, Liked Songs, Transitions)
 // ----------------------------------------------------------------------
 
+function cleanDataForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter((item) => item !== undefined)
+      .map((item) => (typeof item === 'object' && item !== null ? cleanDataForFirestore(item) : item));
+  }
+  if (typeof obj !== 'object') {
+    return obj;
+  }
+  const cleaned: Record<string, any> = {};
+  for (const [key, val] of Object.entries(obj)) {
+    if (val === undefined) continue;
+    if (val !== null && typeof val === 'object') {
+      cleaned[key] = cleanDataForFirestore(val);
+    } else {
+      cleaned[key] = val;
+    }
+  }
+  return cleaned;
+}
+
 export async function saveUserDataToFirestore(uid: string, data: Partial<CloudUserData>): Promise<boolean> {
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const userRef = doc(db, 'users', uid);
-    await setDoc(userRef, { ...data, updatedAt: Date.now() }, { merge: true });
+    const cleaned = cleanDataForFirestore({ ...data, updatedAt: Date.now() });
+    await setDoc(userRef, cleaned, { merge: true });
     return true;
   } catch (err) {
     console.error('[Firestore] Error saving user data:', err);

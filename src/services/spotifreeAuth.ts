@@ -375,6 +375,8 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   // 2. Persist custom profile info (avatar, banner, display name) across all local profile keys
   if (typeof window !== 'undefined') {
     try {
+      window.localStorage.setItem('spotifree_active_user_id', userId);
+      window.localStorage.removeItem('spotify_logged_out');
       const customProf = {
         displayName,
         avatarUrl: acc.avatarUrl || undefined,
@@ -398,7 +400,7 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     } as any,
   }));
 
-  // 4. Sync playlists to local storage and store (authoritative from cloud, filtering deleted IDs)
+  // 4. Sync playlists to local storage, cache, and store (authoritative from cloud, filtering deleted IDs)
   if (Array.isArray(acc.playlists)) {
     const deletedSet = new Set(Array.isArray(acc.deletedPlaylistIds) ? acc.deletedPlaylistIds : []);
     if (typeof window !== 'undefined') {
@@ -417,6 +419,26 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem('user_imported_playlists', JSON.stringify(cleanPlaylists));
+
+        // Prime cache for each playlist so tracks and items are instantly accessible
+        const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
+        const cacheObj: Record<string, Playlist> = rawCache ? JSON.parse(rawCache) : {};
+        cleanPlaylists.forEach((p) => {
+          if (p && p.id) {
+            cacheObj[p.id] = p;
+          }
+        });
+        window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
+        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+
+        // If liked-songs has tracks, prime custom liked songs for this user
+        const likedPl = cleanPlaylists.find((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
+        if (likedPl?.tracks?.items && Array.isArray(likedPl.tracks.items) && likedPl.tracks.items.length > 0) {
+          window.localStorage.setItem(`spotifree_custom_liked_songs_${userId}`, JSON.stringify(likedPl.tracks.items));
+          window.dispatchEvent(new CustomEvent('spotifree_liked_songs_updated', {
+            detail: { tracks: likedPl.tracks.items },
+          }));
+        }
       } catch {}
     }
     useSpotifyDataStore.setState((s) => {

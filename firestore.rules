@@ -21,6 +21,7 @@ rules_version = '2';
 //   - playlists: list (required, max 500 items) - User's playlists array
 //   - likedTracks: list (required, max 20000 items) - Array of liked track IDs
 //   - history: list (optional, max 500 items) - Recent playback history tracks array
+//   - deletedPlaylistIds: list (optional, max 1000 items) - Deleted playlist IDs array
 //   - stats: map (optional) - Playback and listening statistics map
 //   - customTransitions: map (optional) - Custom playback transition preferences map
 //   - theme: string (optional, allowed: 'standard' | 'oled' | 'platinum') - UI theme
@@ -90,7 +91,7 @@ service cloud.firestore {
           'uid', 'id', 'email', 'displayName',
           'avatarUrl', 'photoURL', 'bannerUrl',
           'spotifyCookie', 'playlists', 'likedTracks',
-          'history', 'stats', 'customTransitions',
+          'history', 'deletedPlaylistIds', 'stats', 'customTransitions',
           'theme', 'createdAt', 'updatedAt'
         ]) &&
         data.keys().hasAll(['email', 'playlists', 'likedTracks']) &&
@@ -114,6 +115,7 @@ service cloud.firestore {
         (!('spotifyCookie' in data) || data.spotifyCookie == null || (data.spotifyCookie is string && data.spotifyCookie.size() <= 10000)) &&
         // Collections & configurations bounds
         (!('history' in data) || (data.history is list && data.history.size() <= 500)) &&
+        (!('deletedPlaylistIds' in data) || (data.deletedPlaylistIds is list && data.deletedPlaylistIds.size() <= 1000)) &&
         (!('stats' in data) || data.stats is map) &&
         (!('customTransitions' in data) || data.customTransitions is map) &&
         (!('theme' in data) || (data.theme is string && data.theme in ['standard', 'oled', 'platinum'])) &&

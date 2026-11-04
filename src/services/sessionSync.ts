@@ -87,10 +87,10 @@ export async function syncChromeSession(): Promise<boolean> {
 
   // 3. Synchronize user profile and playlists into useSpotifyDataStore
   const userProfile: UserProfile = {
-    id: session.user.id || 'e6yr34zzwnf1yybcw49po6nrw',
-    display_name: session.user.display_name || 'Jorgeperezvk',
+    id: session.user.id || 'user',
+    display_name: session.user.display_name || 'Usuario',
     images: mappedImages,
-    email: 'jorgeperezvk@spotify.com',
+    email: (session.user as any).email || '',
     followers: { total: 0 },
   };
 
