@@ -662,26 +662,52 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const isEn = lang === 'en';
 
     const greeting = isEn
-      ? (hour >= 6 && hour < 13 ? 'Good morning' : hour >= 13 && hour < 21 ? 'Hey what is up' : 'Good evening')
-      : (hour >= 6 && hour < 13 ? '¡Buenos días' : hour >= 13 && hour < 21 ? '¡Qué onda' : '¡Buenas noches');
+      ? (hour >= 6 && hour < 13 ? 'Good morning' : hour >= 13 && hour < 21 ? 'Good afternoon' : 'Good evening')
+      : (hour >= 6 && hour < 13 ? '¡Buenos días' : hour >= 13 && hour < 21 ? '¡Buenas tardes' : '¡Buenas noches');
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const namePart = cleanName ? `, ${cleanName}` : '';
 
     const userProfile = getUserListeningProfile();
-    let introText = '';
+    const topArtist = userProfile.topArtists?.[0] || '';
 
-    if (userProfile.topArtists.length > 0) {
-      const topPick = userProfile.topArtists.slice(0, 2).join(' y ');
-      introText = isEn
-        ? `${greeting}${namePart}! I see you've been listening to ${topPick}. I put together a mix with your favorite sound. What vibe are you feeling today?`
-        : `${greeting}${namePart}! He visto que has estado escuchando a ${topPick}. Te armé una mezcla a tu medida. ¿Qué te apetece escuchar hoy?`;
-    } else {
-      introText = isEn
-        ? `${greeting}${namePart}! I'm your DJ. I put together a mix with your favorite tracks. What vibe are you feeling today?`
-        : `${greeting}${namePart}! Aquí tu DJ. Te armé una mezcla con tus canciones favoritas. ¿Qué te apetece escuchar hoy?`;
-    }
+    const enOptions = topArtist
+      ? [
+          `${greeting}${namePart}! Here is your mix with ${topArtist} and your favorites. Turn it up!`,
+          `What's up${namePart}! Got your personal session ready to roll. Let's go!`,
+          `Hey${namePart}! DJ in the booth with fresh bangers for you. Hit play!`,
+          `Welcome back${namePart}! Pure good vibes lined up for you. Turn it up!`,
+          `DJ in the mix${namePart}! Let's drop your favorite sound. Enjoy!`,
+        ]
+      : [
+          `${greeting}${namePart}! Your personal session is ready in the booth. Turn it up!`,
+          `What's up${namePart}! DJ here with fresh music for you. Let's go!`,
+          `Hey${namePart}! Your custom mix is locked and loaded. Hit play!`,
+          `Welcome${namePart}! Pure good vibes to kick off the session. Enjoy!`,
+          `DJ in the booth${namePart}! Turning up the volume for you. Let's roll!`,
+        ];
+
+    const esOptions = topArtist
+      ? [
+          `${greeting}${namePart}! Arrancamos con ${topArtist} y tus favoritos. ¡Súbele!`,
+          `¡Qué pasa${namePart}! Tu sesión personalizada está lista. ¡A romperla!`,
+          `¡Qué onda${namePart}! Aquí tu DJ con puro temazo para ti. ¡Dale gas!`,
+          `¡Muy buenas${namePart}! Sonando lo mejor de ${topArtist} y tu sonido. ¡Dale play!`,
+          `¡En cabina tu DJ${namePart}! Tu música favorita lista para sonar. ¡A disfrutar!`,
+          `${greeting}${namePart}! Pura buena vibra para arrancar hoy. ¡Súbele al máximo!`,
+        ]
+      : [
+          `${greeting}${namePart}! Tu sesión está lista en cabina. ¡Súbele!`,
+          `¡Qué pasa${namePart}! Aquí tu DJ con música fresca para ti. ¡A romperla!`,
+          `¡Qué onda${namePart}! Tu mezcla perfecta está lista. ¡Dale play!`,
+          `${greeting}${namePart}! Pura buena vibra para arrancar. ¡A disfrutar!`,
+          `¡En cabina tu DJ${namePart}! Selección lista para ti. ¡Súbele al máximo!`,
+        ];
+
+    const introText = cleanTextForNaturalTTS(
+      pickDynamicSpeech('dj_intro', isEn ? enOptions : esOptions)
+    );
 
     aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
