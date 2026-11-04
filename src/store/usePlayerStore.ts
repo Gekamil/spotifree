@@ -73,6 +73,7 @@ interface PlayerState {
   shuffleVersion: number;
   repeatMode: 'off' | 'all' | 'one';
   queue: Track[];
+  originalQueue: Track[];
   history: Track[];
   playedInShuffle: string[];
   likedTrackIds: string[];
@@ -128,6 +129,7 @@ const store = create<PlayerState>((set, get) => ({
   shuffleVersion: 0,
   repeatMode: 'off',
   queue: [],
+  originalQueue: [],
   history: [],
   playedInShuffle: [],
   likedTrackIds: getInitialLikedTrackIds(),
@@ -138,11 +140,15 @@ const store = create<PlayerState>((set, get) => ({
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
-    set((s) => ({ queue: deduplicateTracks([...s.queue, ...list]) }));
+    set((s) => ({
+      queue: deduplicateTracks([...s.queue, ...list]),
+      originalQueue: deduplicateTracks([...s.originalQueue, ...list]),
+    }));
   },
 
   setQueue: (tracks: Track[]) => {
-    set({ queue: deduplicateTracks(tracks) });
+    const deduped = deduplicateTracks(tracks);
+    set({ queue: deduped, originalQueue: deduped });
   },
 
   reorderQueue: (fromIndex: number, toIndex: number) => {
@@ -156,7 +162,7 @@ const store = create<PlayerState>((set, get) => ({
       return;
     const [moved] = current.splice(fromIndex, 1);
     current.splice(toIndex, 0, moved);
-    set({ queue: current });
+    set({ queue: current, originalQueue: current });
   },
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
@@ -170,7 +176,23 @@ const store = create<PlayerState>((set, get) => ({
       ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
       : [];
 
-    const activeQueue = newQueue ?? state.queue;
+    const rawOriginal = newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue);
+    let activeQueue: Track[];
+    if (newQueue) {
+      if (state.isShuffle) {
+        const others = rawOriginal.filter((t) => t.id !== track.id);
+        for (let i = others.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [others[i], others[j]] = [others[j], others[i]];
+        }
+        activeQueue = [track, ...others];
+      } else {
+        activeQueue = rawOriginal;
+      }
+    } else {
+      activeQueue = state.queue;
+    }
+
     let nextPreselectedId: string | null = null;
     if (state.isShuffle && activeQueue.length > 1) {
       const unplayed = activeQueue.filter((t) => !updatedShuffle.includes(t.id));
@@ -193,6 +215,7 @@ const store = create<PlayerState>((set, get) => ({
       progressMs: 0,
       durationMs: track.duration_ms,
       queue: activeQueue,
+      originalQueue: rawOriginal,
       history: updatedHistory,
       playedInShuffle: updatedShuffle,
       preselectedNextTrackId: nextPreselectedId,
@@ -688,7 +711,8 @@ const store = create<PlayerState>((set, get) => ({
     const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
 
     if (nextShuffle === 'off') {
-      const cleanQueue = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
+      const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
       set({
         shuffleMode: nextShuffle,
         isShuffle: false,
@@ -701,7 +725,8 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     if (nextShuffle === 'all') {
-      const baseTracks = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
+      const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
       const curr = state.currentTrack;
       const others = baseTracks.filter((t) => t.id !== curr?.id);
       // Fisher-Yates random shuffle
@@ -722,7 +747,8 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     if (nextShuffle === 'smart') {
-      const baseTracks = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
+      const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
       const curr = state.currentTrack;
       const others = baseTracks.filter((t) => t.id !== curr?.id);
       for (let i = others.length - 1; i > 0; i--) {

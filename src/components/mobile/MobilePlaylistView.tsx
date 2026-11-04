@@ -86,9 +86,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     togglePlay,
     toggleLike,
     likedTrackIds,
-    isShuffle,
     shuffleMode,
-    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
@@ -494,30 +492,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   };
 
-  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
-  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
+  // Authentic track sequence: displayed track list stays in true order, shuffle affects only queue
+  const displayTracks = tracks;
 
-  useEffect(() => {
-    if (!isShuffle || shuffleMode === 'off' || tracks.length <= 1) {
-      setShuffledTracks([]);
-      return;
-    }
-    const list = deduplicateTracks([...tracks]);
-    const currentId = usePlayerStore.getState().currentTrack?.id;
-    let head: Track[] = [];
-    let rest: Track[] = list;
-    if (currentId && list.some((t) => t.id === currentId)) {
-      head = list.filter((t) => t.id === currentId);
-      rest = list.filter((t) => t.id !== currentId);
-    }
-    for (let i = rest.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [rest[i], rest[j]] = [rest[j], rest[i]];
-    }
-    setShuffledTracks(deduplicateTracks([...head, ...rest]));
-  }, [isShuffle, shuffleMode, shuffleVersion, cleanId, tracks.length]);
-
-  const displayTracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : tracks;
+  // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
+  const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
 
   if (
     playlist.id === 'spotify-dj' ||
@@ -542,39 +521,40 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      const clickedIndex = displayTracks.findIndex((t) => t.id === track.id);
-      const sequentialQueue = clickedIndex >= 0
-        ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
-        : displayTracks;
-
-      usePlayerStore.setState({
-        shuffleMode: 'off',
-        isShuffle: false,
-        playedInShuffle: [],
-        preselectedNextTrackId: null,
-      });
-
-      playTrack(track, sequentialQueue);
+      if (shuffleMode !== 'off') {
+        const others = tracks.filter((t) => t.id !== track.id);
+        for (let i = others.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [others[i], others[j]] = [others[j], others[i]];
+        }
+        playTrack(track, [track, ...others], playlist.id);
+      } else {
+        const clickedIndex = tracks.findIndex((t) => t.id === track.id);
+        const sequentialQueue = clickedIndex >= 0
+          ? [...tracks.slice(clickedIndex), ...tracks.slice(0, clickedIndex)]
+          : tracks;
+        playTrack(track, sequentialQueue, playlist.id);
+      }
     }
   };
 
   const handlePlayAll = () => {
-    if (displayTracks.length === 0) return;
-    if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
+    if (tracks.length === 0) return;
+    if (isPlaying && tracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
       if (shuffleMode !== 'off') {
-        const randomized = [...displayTracks];
+        const randomized = [...tracks];
         for (let i = randomized.length - 1; i > 0; i--) {
           const j = Math.floor(Math.random() * (i + 1));
           [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
         }
-        playTrack(randomized[0], randomized);
+        playTrack(randomized[0], randomized, playlist.id);
         if (shuffleMode === 'smart') {
           usePlayerStore.getState().populateSmartShuffleRecommendations(randomized);
         }
       } else {
-        playTrack(displayTracks[0], displayTracks);
+        playTrack(tracks[0], tracks, playlist.id);
       }
     }
   };
@@ -1287,8 +1267,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               </div>
             )}
 
-            {/* In-place Track Searcher matching Spotify Mobile */}
-            <div className="space-y-3 pt-2">
+            {/* In-place Track Searcher matching Spotify Mobile (Only shown if user can add tracks) */}
+            {canAddTracksToThisList && (
+              <div className="space-y-3 pt-2">
               <div className="relative w-full">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#b3b3b3] pointer-events-none">
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
@@ -1368,8 +1349,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         >
                           <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
-                            <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-md active:scale-90 transition-transform">
-                              <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                            <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center shadow-md active:scale-90 transition-transform">
+                              <PlayNativeIcon size={12} className="ml-0.5 text-white" />
                             </div>
                           </div>
                         </div>
@@ -1396,6 +1377,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 })}
               </div>
             </div>
+            )}
           </div>
         ) : (
           <>
@@ -1583,8 +1565,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               );
             })}
 
-            {/* Bottom Recommendations & Add Songs section matching Spotify Mobile */}
-            <div className="pt-6 pb-6 border-t border-white/10 mt-6 px-1">
+            {/* Bottom Recommendations & Add Songs section matching Spotify Mobile (Only shown if user can add tracks) */}
+            {canAddTracksToThisList && (
+              <div className="pt-6 pb-6 border-t border-white/10 mt-6 px-1">
               <div className="flex items-center justify-between mb-2">
                 <div>
                   <h3 className="text-base font-bold text-white">
@@ -1672,8 +1655,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         >
                           <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
                           <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
-                            <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-md active:scale-90 transition-transform">
-                              <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                            <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center shadow-md active:scale-90 transition-transform">
+                              <PlayNativeIcon size={12} className="ml-0.5 text-white" />
                             </div>
                           </div>
                         </div>
@@ -1702,6 +1685,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 })}
               </div>
             </div>
+            )}
           </>
         )}
       </div>

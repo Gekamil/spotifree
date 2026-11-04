@@ -65,9 +65,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     playTrack,
     togglePlay,
     toggleLike,
-    isShuffle,
     shuffleMode,
-    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
 
@@ -573,31 +571,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setHeroCoverError(false);
   }, [dynamicPlaylist.id]);
 
-  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
-  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
-
-  useEffect(() => {
-    if (!isShuffle || shuffleMode === 'off' || dynamicTracks.length <= 1) {
-      setShuffledTracks([]);
-      return;
-    }
-    const list = deduplicateTracks([...dynamicTracks]);
-    const currentId = usePlayerStore.getState().currentTrack?.id;
-    let head: Track[] = [];
-    let rest: Track[] = list;
-    if (currentId && list.some((t) => t.id === currentId)) {
-      head = list.filter((t) => t.id === currentId);
-      rest = list.filter((t) => t.id !== currentId);
-    }
-    // Fisher-Yates true random shuffle
-    for (let i = rest.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [rest[i], rest[j]] = [rest[j], rest[i]];
-    }
-    setShuffledTracks(deduplicateTracks([...head, ...rest]));
-  }, [isShuffle, shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
-
-  const tracks = (isShuffle && shuffledTracks.length > 0) ? shuffledTracks : dynamicTracks;
+  // Track list remains stable in authentic order (shuffle affects playback queue, not visible track numbers)
+  const tracks = dynamicTracks;
 
   if (
     dynamicPlaylist.id === 'spotify-dj' ||
@@ -660,6 +635,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       dynamicPlaylist.owner?.id === user?.id ||
       dynamicPlaylist.owner?.display_name?.toLowerCase() === (user?.display_name || 'jorgeperezvk').toLowerCase()
     );
+
+  const canAddTracksToThisList = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || isUserCreatedPlaylist);
 
   const tracksWithPlaylistId = tracks.map((t) => ({ ...t, playlistId: playlist.id }));
 
@@ -770,19 +747,21 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
-      const sequentialQueue = clickedIndex >= 0
-        ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
-        : tracksWithPlaylistId;
-
-      usePlayerStore.setState({
-        shuffleMode: 'off',
-        isShuffle: false,
-        playedInShuffle: [],
-        preselectedNextTrackId: null,
-      });
-
-      playTrack({ ...track, playlistId: playlist.id }, sequentialQueue, playlist.id);
+      const clickedTrack = { ...track, playlistId: playlist.id };
+      if (shuffleMode !== 'off') {
+        const others = tracksWithPlaylistId.filter((t) => t.id !== track.id);
+        for (let i = others.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [others[i], others[j]] = [others[j], others[i]];
+        }
+        playTrack(clickedTrack, [clickedTrack, ...others], playlist.id);
+      } else {
+        const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
+        const sequentialQueue = clickedIndex >= 0
+          ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
+          : tracksWithPlaylistId;
+        playTrack(clickedTrack, sequentialQueue, playlist.id);
+      }
     }
   };
 
@@ -1610,8 +1589,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         )}
       </div>
 
-      {/* Spotify "Busquemos algo para tu lista" Section (1:1 Spotify Fidelity) */}
-      <div className="px-8 pt-8 pb-16 mt-4 border-t border-white/10">
+      {/* Spotify "Busquemos algo para tu lista" Section (Only shown if user can add tracks: saved or owned playlist, never on artists) */}
+      {canAddTracksToThisList && (
+        <div className="px-8 pt-8 pb-16 mt-4 border-t border-white/10">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
           <div>
             <div className="flex items-center gap-3">
@@ -1694,10 +1674,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     title={`Escuchar preview de ${tr.name}`}
                   >
                     <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} size={40} className="w-10 h-10 object-cover" />
-                    <div className="absolute inset-0 bg-black/35 flex items-center justify-center group-hover/cover:bg-black/60 transition-colors">
-                      <div className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-lg opacity-90 group-hover/cover:opacity-100 group-hover/cover:scale-110 active:scale-90 transition-all">
-                        <PlayNativeIcon size={12} className="ml-0.5 text-black" />
-                      </div>
+                    {/* Hover play preview overlay matching playlist tracks */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition-all duration-200">
+                      <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
                     </div>
                   </div>
                   <div className="min-w-0">
@@ -1729,6 +1708,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           })}
         </div>
       </div>
+      )}
 
       {/* Interactive DJ Transition Editor Modal (✦ Automática) */}
       {transitionModalPair && (

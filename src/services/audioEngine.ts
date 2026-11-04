@@ -268,7 +268,8 @@ class AudioEngine {
       let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
+        const nextDur = nextTrack.duration_ms ? nextTrack.duration_ms / 1000 : undefined;
+        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName, nextDur)) || undefined;
       }
 
       this.preloadedNext = {
@@ -329,7 +330,8 @@ class AudioEngine {
       let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
       if (!videoId) {
-        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
+        const nextDur = nextTrack.duration_ms ? nextTrack.duration_ms / 1000 : undefined;
+        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName, nextDur)) || undefined;
       }
       this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
     }
@@ -2115,7 +2117,8 @@ class AudioEngine {
     query: string,
     trackId?: string,
     trackTitle?: string,
-    trackArtist?: string
+    trackArtist?: string,
+    trackDurationSec?: number
   ): Promise<string | null> {
     if (!query) return null;
     const cleanQuery = query.trim();
@@ -2131,7 +2134,7 @@ class AudioEngine {
 
     let resolvedId: string | null = null;
 
-    // 1. Primary backend resolve with title & artist parameters
+    // 1. Primary backend resolve with title, artist & duration parameters
     const backendPromise = (async () => {
       try {
         const params = new URLSearchParams();
@@ -2139,6 +2142,7 @@ class AudioEngine {
         if (trackId) params.set('trackId', trackId);
         if (trackTitle) params.set('title', trackTitle);
         if (trackArtist) params.set('artist', trackArtist);
+        if (trackDurationSec && trackDurationSec > 0) params.set('duration', Math.round(trackDurationSec).toString());
         const url = `${API_BASE}/api/audio/resolve?${params.toString()}`;
         const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined });
         if (res.ok) {
@@ -2154,10 +2158,11 @@ class AudioEngine {
       await new Promise((r) => setTimeout(r, 1200));
       try {
         const params = new URLSearchParams();
-        params.set('q', cleanQuery + ' audio');
+        params.set('q', cleanQuery + ' Topic');
         if (trackId) params.set('trackId', trackId);
         if (trackTitle) params.set('title', trackTitle);
         if (trackArtist) params.set('artist', trackArtist);
+        if (trackDurationSec && trackDurationSec > 0) params.set('duration', Math.round(trackDurationSec).toString());
         const altUrl = `${API_BASE}/api/audio/resolve?${params.toString()}`;
         const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
         if (res.ok) {
@@ -2300,7 +2305,8 @@ class AudioEngine {
       const curTrk = usePlayerStore.getState().currentTrack;
       const tTitle = curTrk?.id === trackId ? curTrk.name : undefined;
       const tArtist = curTrk?.id === trackId ? curTrk.artists?.[0]?.name : undefined;
-      let videoId = await this.resolveVideoId(query, trackId, tTitle, tArtist);
+      const tDur = curTrk?.id === trackId && curTrk.duration_ms ? curTrk.duration_ms / 1000 : undefined;
+      let videoId = await this.resolveVideoId(query, trackId, tTitle, tArtist, tDur);
       if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
         return;
       }
