@@ -12,6 +12,11 @@ const VERIFIED_TRACK_VIDEOS = {
   'quevedo planteamiento erróneo': 'aWewyeC49e8',
   'quevedo - planteamiento erroneo': 'aWewyeC49e8',
   'quevedo - planteamiento erróneo': 'aWewyeC49e8',
+  'la graciosa': 'LZPLBSRnxSY',
+  'graciosa': 'LZPLBSRnxSY',
+  'quevedo la graciosa': 'LZPLBSRnxSY',
+  'quevedo - la graciosa': 'LZPLBSRnxSY',
+  'la graciosa quevedo': 'LZPLBSRnxSY',
 };
 
 function getVerifiedVideoId(q) {
@@ -30,6 +35,9 @@ function getVerifiedVideoId(q) {
     if (norm === normKey || norm.includes(normKey) || (norm.includes('quevedo') && norm.includes('planteamiento'))) {
       return id;
     }
+  }
+  if (norm.includes('graciosa') && (norm.includes('quevedo') || norm.includes('crespo') || norm.includes('buenas noches'))) {
+    return 'LZPLBSRnxSY';
   }
   return null;
 }
@@ -271,10 +279,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    const result = await Promise.any([
-      resolveViaYouTubeMusic(q, excludeSet),
-      resolveViaYouTubeSearch(q, excludeSet),
-    ]);
+    let result = null;
+    try {
+      result = await resolveViaYouTubeMusic(q, excludeSet);
+    } catch {
+      result = await resolveViaYouTubeSearch(q, excludeSet);
+    }
 
     if (result && result.videoId && !excludeSet.has(result.videoId)) {
       if (excludeSet.size === 0) {

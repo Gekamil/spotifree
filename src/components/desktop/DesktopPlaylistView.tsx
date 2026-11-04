@@ -675,7 +675,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
-      playTrack({ ...tracks[0], playlistId: playlist.id }, tracksWithPlaylistId);
+      if (shuffleMode !== 'off') {
+        const randomized = [...tracksWithPlaylistId];
+        for (let i = randomized.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
+        }
+        playTrack(randomized[0], randomized, playlist.id);
+        if (shuffleMode === 'smart') {
+          usePlayerStore.getState().populateSmartShuffleRecommendations(randomized);
+        }
+      } else {
+        playTrack(tracksWithPlaylistId[0], tracksWithPlaylistId, playlist.id);
+      }
     }
   };
 
@@ -683,7 +695,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      playTrack({ ...track, playlistId: playlist.id }, tracksWithPlaylistId);
+      const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
+      const sequentialQueue = clickedIndex >= 0
+        ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
+        : tracksWithPlaylistId;
+
+      usePlayerStore.setState({
+        shuffleMode: 'off',
+        isShuffle: false,
+        playedInShuffle: [],
+        preselectedNextTrackId: null,
+      });
+
+      playTrack({ ...track, playlistId: playlist.id }, sequentialQueue, playlist.id);
     }
   };
 
@@ -941,8 +965,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
                   <>
                     <span className="font-bold text-white hover:underline cursor-pointer">Spotifree</span>
-                    <span>•</span>
-                    <span className="text-white/90">guardada 625.055 veces</span>
                     <span>•</span>
                     <span className="text-white/90">
                       {loading

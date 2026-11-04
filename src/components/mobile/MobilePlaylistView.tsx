@@ -528,7 +528,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      playTrack(track, displayTracks);
+      const clickedIndex = displayTracks.findIndex((t) => t.id === track.id);
+      const sequentialQueue = clickedIndex >= 0
+        ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
+        : displayTracks;
+
+      usePlayerStore.setState({
+        shuffleMode: 'off',
+        isShuffle: false,
+        playedInShuffle: [],
+        preselectedNextTrackId: null,
+      });
+
+      playTrack(track, sequentialQueue);
     }
   };
 
@@ -537,7 +549,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
-      playTrack(displayTracks[0], displayTracks);
+      if (shuffleMode !== 'off') {
+        const randomized = [...displayTracks];
+        for (let i = randomized.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
+        }
+        playTrack(randomized[0], randomized);
+        if (shuffleMode === 'smart') {
+          usePlayerStore.getState().populateSmartShuffleRecommendations(randomized);
+        }
+      } else {
+        playTrack(displayTracks[0], displayTracks);
+      }
     }
   };
 
@@ -942,7 +966,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
                 </div>
                 <div className="text-xs text-[#b3b3b3] font-medium">
-                  guardada {(tracks.length * 48201 + 120492).toLocaleString('es-ES')} veces • {tracks.length} canciones
+                  {tracks.length} {tracks.length === 1 ? 'canción' : 'canciones'}
                 </div>
               </div>
             </>
@@ -1314,13 +1338,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                         </span>
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
                           <span className="truncate">
-                            {isArtist
-                              ? (track as any).playcount
-                                ? `${Number((track as any).playcount).toLocaleString('es-ES')} reproducciones`
-                                : (track as any).plays
-                                ? `${Number((track as any).plays).toLocaleString('es-ES')} reproducciones`
-                                : track.album?.name || parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'
-                              : parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'}
+                            {parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'}
                           </span>
                           {track.added_by && (
                             <span className="text-[10px] text-[#1ed760] font-medium shrink-0">

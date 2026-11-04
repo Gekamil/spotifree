@@ -83,6 +83,7 @@ interface PlayerState {
   completeCrossfadeTrack: (track: Track, initialProgressMs?: number) => void;
   triggerAutoplaySimilar: (track: Track) => Promise<void>;
   triggerSmartShuffleRecommendation: (track: Track) => Promise<void>;
+  populateSmartShuffleRecommendations: (baseTracks?: Track[]) => Promise<void>;
   previousTrack: () => void;
   setProgress: (ms: number) => void;
   setDuration: (ms: number) => void;
@@ -414,7 +415,7 @@ const store = create<PlayerState>((set, get) => ({
         };
         const currentQueue = get().queue;
         const currentIdx = get().currentTrack ? currentQueue.findIndex((t) => t.id === get().currentTrack?.id) : -1;
-        const insertIdx = currentIdx >= 0 ? currentIdx + 1 : currentQueue.length;
+        const insertIdx = currentIdx >= 0 ? currentIdx + 2 : currentQueue.length;
         set({
           queue: [...currentQueue.slice(0, insertIdx), smartTrack, ...currentQueue.slice(insertIdx)],
         });
@@ -424,42 +425,99 @@ const store = create<PlayerState>((set, get) => ({
     }
   },
 
+  populateSmartShuffleRecommendations: async (baseTracks?: Track[]) => {
+    try {
+      const currentQ = get().queue;
+      const tracksToAnalyze = baseTracks || currentQ.filter((t: any) => !t.isSmartRecommendation);
+      if (tracksToAnalyze.length === 0) return;
+
+      const artists = Array.from(
+        new Set(
+          tracksToAnalyze
+            .map((t) => t.artists?.[0]?.name)
+            .filter((name): name is string => Boolean(name && name.length > 1))
+        )
+      ).slice(0, 4);
+
+      if (artists.length === 0) return;
+
+      const { searchSpotify } = await import('../services/spotifyApi');
+      const existingIds = new Set(get().queue.map((t) => t.id));
+      const existingNames = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
+
+      const recommendedCandidates: Track[] = [];
+
+      for (const artist of artists) {
+        try {
+          const res = await searchSpotify(artist);
+          const items: Track[] = res?.tracks?.items || [];
+          for (const item of items) {
+            const cleanName = (item.name || '').toLowerCase().trim();
+            if (!existingIds.has(item.id) && !existingNames.has(cleanName)) {
+              existingIds.add(item.id);
+              existingNames.add(cleanName);
+              recommendedCandidates.push({
+                ...item,
+                isSmartRecommendation: true,
+              });
+              if (recommendedCandidates.length >= 6) break;
+            }
+          }
+        } catch {}
+        if (recommendedCandidates.length >= 6) break;
+      }
+
+      if (recommendedCandidates.length > 0) {
+        const cleanQueue = get().queue.filter((t: any) => !t.isSmartRecommendation);
+        const interspersed: Track[] = [];
+        let recIdx = 0;
+
+        for (let i = 0; i < cleanQueue.length; i++) {
+          interspersed.push(cleanQueue[i]);
+          // Insert a recommended track every 3 tracks (and not on track 0)
+          if ((i + 1) % 3 === 0 && recIdx < recommendedCandidates.length) {
+            interspersed.push(recommendedCandidates[recIdx]);
+            recIdx++;
+          }
+        }
+        while (recIdx < Math.min(recommendedCandidates.length, 3)) {
+          interspersed.push(recommendedCandidates[recIdx]);
+          recIdx++;
+        }
+
+        set({ queue: interspersed });
+      }
+    } catch (e) {
+      console.warn('[SmartShuffle] Error populating recommendations:', e);
+    }
+  },
+
   getNextTrack: (): Track | null => {
-    const { queue, currentTrack, isShuffle, repeatMode, playedInShuffle, preselectedNextTrackId } = get();
+    const { queue, currentTrack, repeatMode, preselectedNextTrackId } = get();
     if (queue.length === 0) return null;
 
     if (repeatMode === 'one' && currentTrack) {
       return currentTrack;
     }
 
-    if (isShuffle && queue.length > 1) {
-      if (preselectedNextTrackId) {
-        const found = queue.find((t) => t.id === preselectedNextTrackId);
-        if (found) return found;
-      }
-      const unplayed = queue.filter((t) => !playedInShuffle.includes(t.id) && t.id !== currentTrack?.id);
-      if (unplayed.length > 0) {
-        const rnd = Math.floor(Math.random() * unplayed.length);
-        const rndTrack = unplayed[rnd];
-        set({ preselectedNextTrackId: rndTrack.id });
-        return rndTrack;
-      }
-      const candidates = queue.filter((t) => t.id !== currentTrack?.id);
-      if (candidates.length > 0) {
-        const rnd = Math.floor(Math.random() * candidates.length);
-        const rndTrack = candidates[rnd];
-        set({ preselectedNextTrackId: rndTrack.id });
-        return rndTrack;
-      }
-      return queue[0] || null;
-    } else {
-      const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
-      if (currentIndex === queue.length - 1 && repeatMode === 'off') {
-        return null;
-      }
-      const nextIndex = (currentIndex + 1) % queue.length;
-      return queue[nextIndex] || null;
+    const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+
+    // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
+    if (currentIndex >= 0 && currentIndex < queue.length - 1) {
+      return queue[currentIndex + 1];
     }
+
+    if (preselectedNextTrackId) {
+      const found = queue.find((t) => t.id === preselectedNextTrackId && t.id !== currentTrack?.id);
+      if (found) return found;
+    }
+
+    // End of queue:
+    if (repeatMode === 'all') {
+      return queue[0] || null;
+    }
+
+    return null;
   },
 
   completeCrossfadeTrack: (track: Track, initialProgressMs: number = 0) => {
@@ -617,39 +675,62 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   toggleShuffle: () => {
-    set((state) => {
-      const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
-      const isShuffle = nextShuffle !== 'off';
-      if (nextShuffle === 'off') {
-        return {
-          shuffleMode: nextShuffle,
-          isShuffle,
-          shuffleVersion: state.shuffleVersion + 1,
-          playedInShuffle: [],
-          preselectedNextTrackId: null,
-          queue: deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation)),
-        };
-      }
-      const played = state.currentTrack && isShuffle ? [state.currentTrack.id] : [];
-      let preselectedId: string | null = null;
-      if (state.queue.length > 1) {
-        const unplayed = state.queue.filter((t) => t.id !== state.currentTrack?.id);
-        if (unplayed.length > 0) {
-          const rnd = Math.floor(Math.random() * unplayed.length);
-          preselectedId = unplayed[rnd].id;
-        }
-      }
-      return {
+    const state = get();
+    const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
+
+    if (nextShuffle === 'off') {
+      const cleanQueue = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      set({
         shuffleMode: nextShuffle,
-        isShuffle,
+        isShuffle: false,
         shuffleVersion: state.shuffleVersion + 1,
-        playedInShuffle: played,
-        preselectedNextTrackId: preselectedId,
-        queue: deduplicateTracks(state.queue),
-      };
-    });
-    if (get().shuffleMode === 'smart' && get().currentTrack) {
-      get().triggerSmartShuffleRecommendation(get().currentTrack!);
+        playedInShuffle: [],
+        preselectedNextTrackId: null,
+        queue: cleanQueue,
+      });
+      return;
+    }
+
+    if (nextShuffle === 'all') {
+      const baseTracks = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      const curr = state.currentTrack;
+      const others = baseTracks.filter((t) => t.id !== curr?.id);
+      // Fisher-Yates random shuffle
+      for (let i = others.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [others[i], others[j]] = [others[j], others[i]];
+      }
+      const shuffledQueue = curr ? [curr, ...others] : others;
+      set({
+        shuffleMode: nextShuffle,
+        isShuffle: true,
+        shuffleVersion: state.shuffleVersion + 1,
+        playedInShuffle: curr ? [curr.id] : [],
+        preselectedNextTrackId: others[0]?.id || null,
+        queue: shuffledQueue,
+      });
+      return;
+    }
+
+    if (nextShuffle === 'smart') {
+      const baseTracks = deduplicateTracks(state.queue.filter((t: any) => !t.isSmartRecommendation));
+      const curr = state.currentTrack;
+      const others = baseTracks.filter((t) => t.id !== curr?.id);
+      for (let i = others.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [others[i], others[j]] = [others[j], others[i]];
+      }
+      const shuffledQueue = curr ? [curr, ...others] : others;
+      set({
+        shuffleMode: nextShuffle,
+        isShuffle: true,
+        shuffleVersion: state.shuffleVersion + 1,
+        playedInShuffle: curr ? [curr.id] : [],
+        preselectedNextTrackId: others[0]?.id || null,
+        queue: shuffledQueue,
+      });
+      get().populateSmartShuffleRecommendations(shuffledQueue);
+      return;
     }
   },
 

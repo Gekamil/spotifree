@@ -33,6 +33,11 @@ const VERIFIED_TRACK_VIDEOS: Record<string, string> = {
   'quevedo planteamiento erróneo': 'aWewyeC49e8',
   'quevedo - planteamiento erroneo': 'aWewyeC49e8',
   'quevedo - planteamiento erróneo': 'aWewyeC49e8',
+  'la graciosa': 'LZPLBSRnxSY',
+  'graciosa': 'LZPLBSRnxSY',
+  'quevedo la graciosa': 'LZPLBSRnxSY',
+  'quevedo - la graciosa': 'LZPLBSRnxSY',
+  'la graciosa quevedo': 'LZPLBSRnxSY',
 };
 
 function getVerifiedVideoId(q: string): string | null {
@@ -49,6 +54,9 @@ function getVerifiedVideoId(q: string): string | null {
   }
   if (norm.includes('planteamiento') || (norm.includes('quevedo') && norm.includes('erroneo'))) {
     return 'aWewyeC49e8';
+  }
+  if (norm.includes('graciosa') && (norm.includes('quevedo') || norm.includes('crespo') || norm.includes('buenas noches'))) {
+    return 'LZPLBSRnxSY';
   }
   return null;
 }
