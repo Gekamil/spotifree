@@ -51,6 +51,27 @@ const DEFAULT_CONFIG: AIDJConfig = {
   azureRegion: '',
 };
 
+export function cleanTextForNaturalTTS(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/["“”«»]/g, '')
+    // Replace multiple periods/ellipses with single period to eliminate awkward 700ms pauses
+    .replace(/\.{2,}/g, '.')
+    // Remove dashes that cause hesitation
+    .replace(/[—–]/g, ' ')
+    // Remove brackets and parentheses
+    .replace(/[()[\]{}]/g, '')
+    // Remove commas directly preceding exclamation or question marks
+    .replace(/,\s*([!¡?¿])/g, ' $1')
+    // Remove duplicate commas
+    .replace(/,+/g, ',')
+    // Replace semicolons with period for crisp sentence boundary
+    .replace(/\s*;\s*/g, '. ')
+    // Normalize spaces
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 class AIDJVoiceService {
   private isSpeaking: boolean = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
@@ -145,15 +166,17 @@ class AIDJVoiceService {
    */
   public prefetchPhrase(text: string) {
     if (typeof window === 'undefined' || !text || text.trim().length === 0) return;
+    const clean = cleanTextForNaturalTTS(text);
+    if (!clean) return;
     try {
       const lang = useLanguageStore.getState().language;
       const activeVoice = this.getSelectedVoice();
-      const cacheKey = `${lang}:${activeVoice}:${text}`;
+      const cacheKey = `${lang}:${activeVoice}:${clean}`;
       if (this.ttsCache.has(cacheKey)) return;
 
       const provider = activeVoice === 'gemini' ? 'gemini' : activeVoice === 'elevenlabs' ? 'elevenlabs' : 'edge';
       const params = new URLSearchParams({
-        text,
+        text: clean,
         voice: activeVoice,
         provider,
         format: 'mp3',
@@ -568,15 +591,16 @@ class AIDJVoiceService {
   public async speak(text: string, options: DJVoiceOptions = {}): Promise<void> {
     this.stopSpeaking();
 
-    if (!text || text.trim().length === 0) {
+    const clean = cleanTextForNaturalTTS(text);
+    if (!clean || clean.trim().length === 0) {
       options.onEnd?.();
       return;
     }
 
     this.isSpeaking = true;
 
-    // High-fidelity Neural Studio TTS (Consistent Colombian persona - es-CO-SalomeNeural)
-    const success = await this.speakViaNeuralTTS(text, options);
+    // High-fidelity Neural Studio TTS with crisp intonation and zero awkward pauses
+    const success = await this.speakViaNeuralTTS(clean, options);
     if (!success && this.isSpeaking) {
       this.restoreAudio();
       this.isSpeaking = false;

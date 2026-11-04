@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { aiDJVoiceService } from './aiDJVoiceService';
+import { aiDJVoiceService, cleanTextForNaturalTTS } from './aiDJVoiceService';
 import { useLanguageStore } from '../utils/i18n';
 import { resolveTrackCoversBatch } from '../utils/trackCovers';
 import {
@@ -86,7 +86,23 @@ function pickDynamicSpeech(categoryKey: string, options: string[]): string {
   return picked;
 }
 
-function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
+async function callGroqDJ(payload: any): Promise<any | null> {
+  try {
+    const res = await fetch('/api/groq', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(2800) : undefined,
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data && data.success ? data : null;
+  } catch {
+    return null;
+  }
+}
+
+function rawAnalyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   const p = prompt.toLowerCase().trim();
   const namePhrase = userName ? `, ${userName}` : '';
   const isEn = useLanguageStore.getState().language === 'en';
@@ -463,6 +479,14 @@ function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
   };
 }
 
+function analyzeUserIntent(prompt: string, userName: string): IntentAnalysis {
+  const res = rawAnalyzeUserIntent(prompt, userName);
+  return {
+    ...res,
+    speech: cleanTextForNaturalTTS(res.speech),
+  };
+}
+
 /**
  * Pre-warms neural TTS audio for all primary quick vibe chips so that
  * tapping any button starts voice playback with 0ms network latency.
@@ -540,8 +564,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const namePart = cleanName ? `, ${cleanName}` : '';
 
     const introText = isEn
-      ? `${greeting}${namePart}! I'm your DJ. I took a look at what you've been listening to and built a personalized mix of your favorite tracks. What vibe are you feeling today?`
-      : `${greeting}${namePart}! Aquí tu DJ. Estuve viendo lo que escuchas y te armé una mezcla con tus temas favoritos. ¿Qué te apetece escuchar ahora?`;
+      ? `${greeting}${namePart}! I'm your DJ. I put together a mix with your favorite tracks. What vibe are you feeling today?`
+      : `${greeting}${namePart}! Aquí tu DJ. Te armé una mezcla con tus canciones favoritas. ¿Qué te apetece escuchar hoy?`;
 
     aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
@@ -750,7 +774,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     set((state) => ({
       chatHistory: [...state.chatHistory, userMsg],
       visualizerState: 'speaking',
-      currentMessage: `Entendido... preparando música para "${promptText}"`,
+      currentMessage: `Entendido. Preparando tu sesión...`,
       displayedTranscript: '',
       voiceLevel: 0.3,
     }));
@@ -759,7 +783,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const cleanName = rawName ? rawName.split(' ')[0] : '';
     const analysis = analyzeUserIntent(promptText, cleanName);
 
-    // Immediately prefetch the speech audio concurrently so playback starts with minimal latency
+    // Concurrently prefetch local fallback speech audio for zero latency
     aiDJVoiceService.prefetchPhrase(analysis.speech);
 
     // 1. Collect all available tracks from user playlists, details cache, and localStorage
@@ -806,12 +830,60 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       } catch {}
     }
 
-    // 2. Resolve hashtag and curate cohesive 15-track playlist set instantaneously
+    // 2. Resolve hashtag and query Groq in parallel
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
 
-    const hashtagSet = await getCuratedSetForHashtag(targetTag, 15);
-    const finalSet = hashtagSet.length >= 8 ? hashtagSet : (allUserTracks.length > 0 ? allUserTracks.slice(0, 15) : hashtagSet);
+    const [hashtagSet, groqResult] = await Promise.all([
+      getCuratedSetForHashtag(targetTag, 15),
+      callGroqDJ({ action: 'recommend', prompt: promptText, userName: cleanName }),
+    ]);
+
+    let finalSpeech = analysis.speech;
+    let finalTitle = analysis.vibeTitle;
+    let finalColor = analysis.vibeColor;
+    let finalSet: Track[] = [];
+
+    if (groqResult && groqResult.speech) {
+      finalSpeech = cleanTextForNaturalTTS(groqResult.speech);
+      aiDJVoiceService.prefetchPhrase(finalSpeech);
+      if (groqResult.vibeTitle) finalTitle = groqResult.vibeTitle;
+      if (groqResult.vibeColor) finalColor = groqResult.vibeColor;
+
+      // Smart library matching for Groq suggested tracks
+      if (Array.isArray(groqResult.tracks) && groqResult.tracks.length > 0) {
+        const matched: Track[] = [];
+        for (const gt of groqResult.tracks) {
+          const gTitle = (gt.title || '').toLowerCase().trim();
+          const gArtist = (gt.artist || '').toLowerCase().trim();
+          if (!gTitle) continue;
+
+          const match = allUserTracks.find((ut) => {
+            const utName = (ut.name || '').toLowerCase();
+            const utArtist = (ut.artists?.[0]?.name || '').toLowerCase();
+            return (
+              (utName.includes(gTitle) || gTitle.includes(utName)) &&
+              (!gArtist || utArtist.includes(gArtist) || gArtist.includes(utArtist))
+            );
+          });
+          if (match && !matched.some((m) => m.id === match.id)) {
+            matched.push(match);
+          }
+        }
+
+        finalSet = [...matched];
+        for (const t of hashtagSet) {
+          if (finalSet.length >= 15) break;
+          if (!finalSet.some((m) => m.id === t.id)) {
+            finalSet.push(t);
+          }
+        }
+      }
+    }
+
+    if (finalSet.length < 8) {
+      finalSet = hashtagSet.length >= 8 ? hashtagSet : (allUserTracks.length > 0 ? allUserTracks.slice(0, 15) : hashtagSet);
+    }
 
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});
@@ -827,17 +899,17 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const djMsg: DJChatMessage = {
       id: `msg-dj-${Date.now()}`,
       sender: 'dj',
-      text: analysis.speech,
+      text: finalSpeech,
       timestamp: djTime,
-      curatedSetTitle: analysis.vibeTitle,
+      curatedSetTitle: finalTitle,
       trackCount: finalSet.length,
     };
 
     set((state) => ({
-      currentMessage: analysis.speech,
+      currentMessage: finalSpeech,
       displayedTranscript: '',
-      currentSetTitle: analysis.vibeTitle,
-      djThemeColor: analysis.vibeColor || state.djThemeColor,
+      currentSetTitle: finalTitle,
+      djThemeColor: finalColor || state.djThemeColor,
       songsPlayedInSet: 0,
       djTracks: finalSet,
       chatHistory: [...state.chatHistory, djMsg],
@@ -855,7 +927,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     // 5. Speak the personalized charismatic DJ intro cleanly
     get().stopVoiceListening();
-    await aiDJVoiceService.speak(analysis.speech, {
+    await aiDJVoiceService.speak(finalSpeech, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
       },
@@ -877,7 +949,6 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
   /**
    * Called when the 15-track DJ set finishes or reaches the end of queue.
-   * Speaks to the user: "¿Qué tal si mantenemos este rollo? Te he preparado 15 temazos más..."
    * Analyzes user playlists and related songs by hashtag, queues 15 new songs, and plays them smoothly.
    */
   handleSetCompletion: async () => {
@@ -911,19 +982,31 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
+    const rawName = useSpotifyDataStore.getState().user?.display_name || '';
+    const cleanName = rawName ? rawName.split(' ')[0] : '';
 
-    const completionPhrases = isEn
-      ? [
-          "How about we keep this vibe going? I checked your playlists and lined up 15 more tracks you're going to love.",
-          "What an amazing session so far! Keeping this momentum with 15 fresh tracks selected just for you. Turn it up!",
-          "Keeping the music flowing without missing a beat. Here are 15 more songs to keep the energy going.",
-        ]
-      : [
-          '¿Qué te parece si mantenemos este rollo? He analizado tus playlists y te preparé 15 temazos más que te van a flipar.',
-          '¡Vaya sesión que llevamos! Mantenemos esta misma vibra con otras 15 canciones seleccionadas para ti. ¡A disfrutarlas!',
-          'Para que la música no pare, seguimos en esta misma onda con 15 canciones de tus listas y novedades.',
-        ];
-    const speech = completionPhrases[Math.floor(Math.random() * completionPhrases.length)];
+    let speech = '';
+    try {
+      const groqRes = await callGroqDJ({ action: 'transition', prompt: 'fin_set', userName: cleanName });
+      if (groqRes && groqRes.speech) {
+        speech = cleanTextForNaturalTTS(groqRes.speech);
+      }
+    } catch {}
+
+    if (!speech) {
+      const completionPhrases = isEn
+        ? [
+            "Keeping the vibe going! Here are 15 more songs chosen for you.",
+            "What a session so far! Let's continue with 15 fresh tracks. Turn it up!",
+            "The music never stops. Here are 15 new bangers to keep the energy high.",
+          ]
+        : [
+            '¡Seguimos con todo! Te preparé 15 temazos más para no parar la fiesta.',
+            '¡Vaya sesión que llevamos! Mantenemos el rollo arriba con 15 canciones para ti. ¡Súbele!',
+            '¡La música no para! Dale caña a estas 15 canciones que te van a flipar.',
+          ];
+      speech = completionPhrases[Math.floor(Math.random() * completionPhrases.length)];
+    }
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     set((s) => ({
@@ -963,6 +1046,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const currentTrack = usePlayerStore.getState().currentTrack;
     const curArtist = currentTrack?.artists?.[0]?.name || '';
     const curTitle = currentTrack?.name || '';
+    const nextTrack = usePlayerStore.getState().getNextTrack();
 
     aiDJVoiceService.stopSpeaking();
     set({
@@ -973,18 +1057,32 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
 
-    const transitionPhrases = isEn
-      ? [
-          `That was ${curTitle}${curArtist ? ` by ${curArtist}` : ''}. Switching it up with this next track. Turn it up!`,
-          `What a track we just listened to! Keeping the energy high, let's jump into this one.`,
-          `Changing up the vibe... here is another tune you're gonna love. Hit play!`,
-        ]
-      : [
-          `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. Cambiemos de rollo con esto otro. ¡Súbele!`,
-          `¡Qué temazo acabamos de escuchar! Para mantener el ambiente arriba, vamos con esto.`,
-          `Cambiando de onda... aquí tienes otro tema que te va a encantar. ¡Dale play!`,
-        ];
-    const transitionText = transitionPhrases[Math.floor(Math.random() * transitionPhrases.length)];
+    let transitionText = '';
+    try {
+      const groqRes = await callGroqDJ({
+        action: 'transition',
+        currentTrack,
+        nextTrack,
+      });
+      if (groqRes && groqRes.speech) {
+        transitionText = cleanTextForNaturalTTS(groqRes.speech);
+      }
+    } catch {}
+
+    if (!transitionText) {
+      const transitionPhrases = isEn
+        ? [
+            `That was ${curTitle}${curArtist ? ` by ${curArtist}` : ''}. Switching it up with the next track. Turn it up!`,
+            `What a song! Keeping the energy high with the next one.`,
+            `Changing up the rhythm! Here is another track you will love.`,
+          ]
+        : [
+            `Ese fue ${curTitle}${curArtist ? ` de ${curArtist}` : ''}. ¡Cambiamos de ritmo con la siguiente! Súbele.`,
+            `¡Qué temazo acabamos de escuchar! Vamos con la siguiente para mantener la fiesta arriba.`,
+            `Cambiando de onda. Aquí tienes otro temazo que te va a encantar. ¡Dale play!`,
+          ];
+      transitionText = transitionPhrases[Math.floor(Math.random() * transitionPhrases.length)];
+    }
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
