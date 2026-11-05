@@ -66,6 +66,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     togglePlay,
     toggleLike,
     shuffleMode,
+    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
 
@@ -571,8 +572,26 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setHeroCoverError(false);
   }, [dynamicPlaylist.id]);
 
-  // Track list remains stable in authentic order (shuffle affects playback queue, not visible track numbers)
-  const tracks = dynamicTracks;
+  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
+  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
+
+  useEffect(() => {
+    if (shuffleMode === 'off' || dynamicTracks.length <= 1) {
+      setShuffledTracks([]);
+      return;
+    }
+    const list = [...dynamicTracks];
+    // Fisher-Yates natural shuffle (does not force currentTrack to #1)
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    setShuffledTracks(list);
+  }, [shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
+
+  const tracks = (shuffleMode !== 'off' && shuffledTracks.length === dynamicTracks.length)
+    ? shuffledTracks
+    : dynamicTracks;
 
   if (
     dynamicPlaylist.id === 'spotify-dj' ||
@@ -727,18 +746,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
-      if (shuffleMode !== 'off') {
-        const randomized = [...tracksWithPlaylistId];
-        for (let i = randomized.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
-        }
-        playTrack(randomized[0], randomized, playlist.id);
-        if (shuffleMode === 'smart') {
-          usePlayerStore.getState().populateSmartShuffleRecommendations(randomized);
-        }
-      } else {
-        playTrack(tracksWithPlaylistId[0], tracksWithPlaylistId, playlist.id);
+      playTrack(tracksWithPlaylistId[0], tracksWithPlaylistId, playlist.id);
+      if (shuffleMode === 'smart') {
+        usePlayerStore.getState().populateSmartShuffleRecommendations(tracksWithPlaylistId);
       }
     }
   };
@@ -748,20 +758,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       togglePlay();
     } else {
       const clickedTrack = { ...track, playlistId: playlist.id };
-      if (shuffleMode !== 'off') {
-        const others = tracksWithPlaylistId.filter((t) => t.id !== track.id);
-        for (let i = others.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [others[i], others[j]] = [others[j], others[i]];
-        }
-        playTrack(clickedTrack, [clickedTrack, ...others], playlist.id);
-      } else {
-        const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
-        const sequentialQueue = clickedIndex >= 0
-          ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
-          : tracksWithPlaylistId;
-        playTrack(clickedTrack, sequentialQueue, playlist.id);
-      }
+      const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
+      const sequentialQueue = clickedIndex >= 0
+        ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
+        : tracksWithPlaylistId;
+      playTrack(clickedTrack, sequentialQueue, playlist.id);
     }
   };
 

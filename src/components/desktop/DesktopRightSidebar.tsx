@@ -406,54 +406,60 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
               </div>
             </div>
 
-            {/* Library / Desktop Switcher */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
-                    <path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.1a1 1 0 0 0-1.2.7l-4.2 16a1 1 0 0 0 .7 1.2 1 1 0 0 0 1.2-.7l4.2-16a1 1 0 0 0-.7-1.2zM21 4a1 1 0 0 0-1 1v14a1 1 0 0 0 2 0V5a1 1 0 0 0-1-1z" />
-                  </svg>
-                  Música y Biblioteca
-                </span>
-                <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
-                  {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi música'}
-                </span>
-              </div>
+            {/* Library / Desktop Switcher (Solo para invitados: el anfitrión siempre gestiona su propia biblioteca) */}
+            {!isHost ? (
+              <>
+                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
+                        <path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.1a1 1 0 0 0-1.2.7l-4.2 16a1 1 0 0 0 .7 1.2 1 1 0 0 0 1.2-.7l4.2-16a1 1 0 0 0-.7-1.2zM21 4a1 1 0 0 0-1 1v14a1 1 0 0 0 2 0V5a1 1 0 0 0-1-1z" />
+                      </svg>
+                      Música y Biblioteca
+                    </span>
+                    <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
+                      {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi música'}
+                    </span>
+                  </div>
 
-              <div className="grid grid-cols-2 p-1 bg-black/40 rounded-lg gap-1 border border-white/5 text-xs font-bold">
-                <button
-                  onClick={() => setLibraryViewMode('host')}
-                  className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
-                    libraryViewMode === 'host'
-                      ? 'bg-[#1ed760] text-black font-extrabold shadow'
-                      : 'text-[#b3b3b3] hover:text-white'
-                  }`}
-                >
-                  Anfitrión
-                </button>
-                <button
-                  onClick={() => setLibraryViewMode('my')}
-                  className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
-                    libraryViewMode === 'my'
-                      ? 'bg-white text-black font-extrabold shadow'
-                      : 'text-[#b3b3b3] hover:text-white'
-                  }`}
-                >
-                  Mi biblioteca
-                </button>
-              </div>
+                  <div className="grid grid-cols-2 p-1 bg-black/40 rounded-lg gap-1 border border-white/5 text-xs font-bold">
+                    <button
+                      onClick={() => setLibraryViewMode('host')}
+                      className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
+                        libraryViewMode === 'host'
+                          ? 'bg-[#1ed760] text-black font-extrabold shadow'
+                          : 'text-[#b3b3b3] hover:text-white'
+                      }`}
+                    >
+                      Anfitrión
+                    </button>
+                    <button
+                      onClick={() => setLibraryViewMode('my')}
+                      className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
+                        libraryViewMode === 'my'
+                          ? 'bg-white text-black font-extrabold shadow'
+                          : 'text-[#b3b3b3] hover:text-white'
+                      }`}
+                    >
+                      Mi biblioteca
+                    </button>
+                  </div>
 
-              <p className="text-[11px] text-[#b3b3b3] leading-tight">
-                {libraryViewMode === 'host'
-                  ? `Escuchando la cola y listas de ${hostName || 'el anfitrión'}.`
-                  : 'Navega por tus propias listas y canciones. Lo que elijas sonará para todos en vivo.'}
-              </p>
-            </div>
+                  <p className="text-[11px] text-[#b3b3b3] leading-tight">
+                    {libraryViewMode === 'host'
+                      ? `Escuchando la cola y listas de ${hostName || 'el anfitrión'}.`
+                      : 'Navega por tus propias listas y canciones. Lo que elijas sonará para todos en vivo.'}
+                  </p>
+                </div>
 
-            {/* Guest note */}
-            {!isHost && (
+                {/* Guest note */}
+                <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-[#b3b3b3] leading-relaxed border border-white/5">
+                  Estás participando como invitado. Puedes cambiar canciones y abrir playlists. La configuración está protegida por el anfitrión.
+                </div>
+              </>
+            ) : (
               <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-[#b3b3b3] leading-relaxed border border-white/5">
-                Estás participando como invitado. Puedes cambiar canciones y abrir playlists. La configuración está protegida por el anfitrión.
+                Eres el <span className="text-[#1ed760] font-bold">anfitrión</span> de la sesión. Todos los participantes están escuchando tu música y cola en tiempo real.
               </div>
             )}
 

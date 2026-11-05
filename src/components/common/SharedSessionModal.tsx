@@ -335,59 +335,65 @@ export const SharedSessionModal: React.FC = () => {
               </div>
             </div>
 
-            {/* Library / Music Switcher */}
-            <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>
-                  Vista de música
-                </span>
-                <span style={{ fontSize: '10px', color: '#1ed760', fontWeight: 800, textTransform: 'uppercase' }}>
-                  {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi biblioteca'}
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', padding: '4px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
-                <button
-                  onClick={() => setLibraryViewMode('host')}
-                  style={{
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 800,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    background: libraryViewMode === 'host' ? '#1ed760' : 'transparent',
-                    color: libraryViewMode === 'host' ? '#000' : '#b3b3b3',
-                  }}
-                >
-                  Anfitrión
-                </button>
-                <button
-                  onClick={() => setLibraryViewMode('my')}
-                  style={{
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    fontWeight: 800,
-                    fontSize: '12px',
-                    cursor: 'pointer',
-                    background: libraryViewMode === 'my' ? '#ffffff' : 'transparent',
-                    color: libraryViewMode === 'my' ? '#000' : '#b3b3b3',
-                  }}
-                >
-                  Mi biblioteca
-                </button>
-              </div>
-              <p style={{ margin: 0, fontSize: '11px', color: '#b3b3b3', lineHeight: 1.4 }}>
-                {libraryViewMode === 'host'
-                  ? `Viendo la música y cola de ${hostName || 'el anfitrión'}.`
-                  : 'Navega por tus propias canciones. Lo que reproduzcas sonará para ambos.'}
-              </p>
-            </div>
+            {/* Library / Music Switcher (Solo para invitados) */}
+            {!isHost ? (
+              <>
+                <div style={{ padding: '12px', borderRadius: '12px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'white' }}>
+                      Vista de música
+                    </span>
+                    <span style={{ fontSize: '10px', color: '#1ed760', fontWeight: 800, textTransform: 'uppercase' }}>
+                      {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi biblioteca'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', padding: '4px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px' }}>
+                    <button
+                      onClick={() => setLibraryViewMode('host')}
+                      style={{
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        background: libraryViewMode === 'host' ? '#1ed760' : 'transparent',
+                        color: libraryViewMode === 'host' ? '#000' : '#b3b3b3',
+                      }}
+                    >
+                      Anfitrión
+                    </button>
+                    <button
+                      onClick={() => setLibraryViewMode('my')}
+                      style={{
+                        padding: '8px',
+                        borderRadius: '8px',
+                        border: 'none',
+                        fontWeight: 800,
+                        fontSize: '12px',
+                        cursor: 'pointer',
+                        background: libraryViewMode === 'my' ? '#ffffff' : 'transparent',
+                        color: libraryViewMode === 'my' ? '#000' : '#b3b3b3',
+                      }}
+                    >
+                      Mi biblioteca
+                    </button>
+                  </div>
+                  <p style={{ margin: 0, fontSize: '11px', color: '#b3b3b3', lineHeight: 1.4 }}>
+                    {libraryViewMode === 'host'
+                      ? `Viendo la música y cola de ${hostName || 'el anfitrión'}.`
+                      : 'Navega por tus propias canciones. Lo que reproduzcas sonará para ambos.'}
+                  </p>
+                </div>
 
-            {/* Guest notice */}
-            {!isHost && (
+                {/* Guest notice */}
+                <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '12px', color: '#b3b3b3', lineHeight: 1.5 }}>
+                  Estás en la sesión como invitado. Puedes cambiar canciones y abrir playlists. Los ajustes están protegidos.
+                </div>
+              </>
+            ) : (
               <div style={{ padding: '10px 12px', borderRadius: '10px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.05)', fontSize: '12px', color: '#b3b3b3', lineHeight: 1.5 }}>
-                Estás en la sesión como invitado. Puedes cambiar canciones y abrir playlists. Los ajustes están protegidos.
+                Eres el <span style={{ color: '#1ed760', fontWeight: 700 }}>anfitrión</span> de la sesión. Todos los participantes escuchan tu música y cola en directo.
               </div>
             )}
 
