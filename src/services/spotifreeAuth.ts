@@ -327,9 +327,63 @@ export async function syncSpotifreeAccount(
 
   if (!email) return null;
 
+  // Gather all deleted playlist IDs
+  const deletedSet = new Set<string>(
+    Array.isArray(payload.deletedPlaylistIds)
+      ? payload.deletedPlaylistIds
+      : Array.isArray(current?.deletedPlaylistIds)
+      ? current.deletedPlaylistIds
+      : []
+  );
+  if (typeof window !== 'undefined') {
+    try {
+      const rawD = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+      if (rawD) {
+        (JSON.parse(rawD) as string[]).forEach((id) => deletedSet.add(id));
+      }
+    } catch {}
+  }
+
+  // Source of playlists
+  const rawPlaylists = payload.playlists || current?.playlists || [];
+  const cleanPlaylists = rawPlaylists
+    .filter((p) => p && p.id && !deletedSet.has(p.id))
+    .map((p) => {
+      if (!p.tracks?.items || !Array.isArray(p.tracks.items)) return p;
+      const removedSet = getRemovedTrackIdsForPlaylist(p.id);
+      if (removedSet.size === 0) return p;
+      const filteredItems = p.tracks.items.filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedSet.has(t.id) && !removedSet.has(c);
+      });
+      return {
+        ...p,
+        tracks: {
+          ...p.tracks,
+          total: filteredItems.length,
+          items: filteredItems,
+        },
+      };
+    });
+
+  // Source of liked tracks
+  const likedRemovedSet = getRemovedTrackIdsForPlaylist('liked-songs');
+  const rawLikedTracks = payload.likedTracks || current?.likedTracks || [];
+  const cleanLikedTracks = Array.from(
+    new Set(
+      rawLikedTracks.filter((id) => {
+        const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !likedRemovedSet.has(id) && !likedRemovedSet.has(c);
+      })
+    )
+  );
+
   const merged: SpotifreeAccount = {
     ...(current || {}),
     ...payload,
+    playlists: cleanPlaylists,
+    deletedPlaylistIds: Array.from(deletedSet),
+    likedTracks: cleanLikedTracks,
     email,
     uid,
     updatedAt: Date.now(),
@@ -469,7 +523,16 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       const systemPlaylists = s.playlists.filter((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
       const cleanIds = new Set(cleanPlaylists.map((p) => p.id));
       const remainingSystem = systemPlaylists.filter((p) => !cleanIds.has(p.id));
-      return { playlists: [...cleanPlaylists, ...remainingSystem] };
+      const updatedCache = { ...s.playlistDetailsCache };
+      cleanPlaylists.forEach((p) => {
+        if (p && p.id) {
+          updatedCache[p.id] = p;
+        }
+      });
+      return {
+        playlists: [...cleanPlaylists, ...remainingSystem],
+        playlistDetailsCache: updatedCache,
+      };
     });
   }
 

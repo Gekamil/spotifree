@@ -778,6 +778,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
         removeCustomLikedSong(track.id, user?.id);
         removeCustomLikedSong(clean, user?.id);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean);
         setDynamicTracks((prev) =>
           prev.filter((t) => {
             const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();

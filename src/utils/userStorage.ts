@@ -181,11 +181,33 @@ export function removeCustomLikedSong(trackId: string, userId?: string): Track[]
     if (rawCloud) {
       try {
         const parsed = JSON.parse(rawCloud);
+        let changed = false;
         if (Array.isArray(parsed.likedTracks)) {
           parsed.likedTracks = parsed.likedTracks.filter((id: string) => {
             const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
             return id !== trackId && id !== clean && c !== clean;
           });
+          changed = true;
+        }
+        if (Array.isArray(parsed.playlists)) {
+          parsed.playlists = parsed.playlists.map((p: any) => {
+            const isLikedPl =
+              p.id === 'liked-songs' ||
+              p.id === 'user-liked-songs' ||
+              p.id === 'tracks' ||
+              p.id?.includes('collection:tracks');
+            if (isLikedPl && p.tracks?.items) {
+              const filtered = p.tracks.items.filter((t: any) => {
+                const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                return t.id !== trackId && t.id !== clean && c !== clean;
+              });
+              changed = true;
+              return { ...p, tracks: { total: filtered.length, items: filtered } };
+            }
+            return p;
+          });
+        }
+        if (changed) {
           window.localStorage.setItem('spotifree_current_cloud_account', JSON.stringify(parsed));
         }
       } catch {}
@@ -443,6 +465,52 @@ export function removeCustomTrackFromStorage(playlistId: string, trackId: string
         }
         if (changed) {
           window.localStorage.setItem(`spotifree_account_session_${targetId}`, JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+
+    // 7. Update current cloud account session cache
+    const rawCloudAcc = window.localStorage.getItem('spotifree_current_cloud_account');
+    if (rawCloudAcc) {
+      try {
+        const parsed = JSON.parse(rawCloudAcc);
+        let changed = false;
+        const isLikedPl =
+          cleanPl === 'liked-songs' ||
+          cleanPl === 'tracks' ||
+          cleanPl === 'collection:tracks' ||
+          playlistId === 'liked-songs';
+
+        if (isLikedPl && Array.isArray(parsed.likedTracks)) {
+          const prevLen = parsed.likedTracks.length;
+          parsed.likedTracks = parsed.likedTracks.filter((id: string) => {
+            const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return id !== trackId && id !== cleanTrack && c !== cleanTrack;
+          });
+          if (parsed.likedTracks.length !== prevLen) changed = true;
+        }
+
+        if (Array.isArray(parsed.playlists)) {
+          parsed.playlists = parsed.playlists.map((p: any) => {
+            const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+            const match =
+              p.id === playlistId ||
+              p.id === cleanPl ||
+              pClean === cleanPl ||
+              (isLikedPl && (p.id === 'liked-songs' || pClean === 'liked-songs'));
+            if (match && p.tracks?.items) {
+              changed = true;
+              const filtered = p.tracks.items.filter((t: any) => {
+                const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+              });
+              return { ...p, tracks: { total: filtered.length, items: filtered } };
+            }
+            return p;
+          });
+        }
+        if (changed) {
+          window.localStorage.setItem('spotifree_current_cloud_account', JSON.stringify(parsed));
         }
       } catch {}
     }

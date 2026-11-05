@@ -913,9 +913,26 @@ const store = create<PlayerState>((set, get) => ({
 
           // Update liked-songs in SpotifyDataStore and persist everywhere
           import('./useSpotifyDataStore').then(({ useSpotifyDataStore }) => {
-            useSpotifyDataStore.getState().updatePlaylist('liked-songs', {
-              tracks: { total: updatedLikedTracks.length, items: updatedLikedTracks },
+            const ds = useSpotifyDataStore.getState();
+            const updatedPlaylists = ds.playlists.map((p) => {
+              const isLiked =
+                p.id === 'liked-songs' ||
+                p.id === 'user-liked-songs' ||
+                p.id === 'tracks' ||
+                p.id.includes('collection:tracks');
+              if (isLiked) {
+                return {
+                  ...p,
+                  tracks: { total: updatedLikedTracks.length, items: updatedLikedTracks },
+                };
+              }
+              return p;
             });
+            useSpotifyDataStore.setState({ playlists: updatedPlaylists });
+            // Sync with cloud
+            import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
+              syncSpotifreeAccount({ playlists: updatedPlaylists, likedTracks: updated }).catch(() => {});
+            }).catch(() => {});
           }).catch(() => {});
 
           // Dispatch event so any currently open playlist view reactively adds/removes the song
@@ -924,11 +941,6 @@ const store = create<PlayerState>((set, get) => ({
               detail: { trackId, liked: !exists, tracks: updatedLikedTracks },
             })
           );
-
-          // Sync with cloud
-          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
-            syncSpotifreeAccount({ likedTracks: updated }).catch(() => {});
-          }).catch(() => {});
         } catch (e) {
           console.error('Error toggling like:', e);
         }

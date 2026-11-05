@@ -73,7 +73,11 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
       }
       seenLiked = true;
       const customLiked = getCustomLikedSongs(getActiveUserId());
-      const baseTracks = pl.tracks?.items || [];
+      const removedLiked = getRemovedTrackIdsForPlaylist('liked-songs');
+      const baseTracks = (pl.tracks?.items || []).filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedLiked.has(t.id) && !removedLiked.has(c);
+      });
       const mergedTracks = deduplicateTracks([...customLiked, ...baseTracks]);
       result.push({
         ...pl,
@@ -924,6 +928,7 @@ const store = create<SpotifyDataState>((set, get) => ({
     removeCustomTrackFromStorage(cleanPl, cleanTrack);
 
     // 2. Update store playlists and playlistDetailsCache in state
+    let updatedPlaylistsList: Playlist[] = [];
     set((s) => {
       const filterItems = (items: Track[] = []) =>
         items.filter((t) => {
@@ -955,11 +960,38 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
       }
 
+      updatedPlaylistsList = updatedPlaylists;
       return {
         playlists: updatedPlaylists,
         playlistDetailsCache: updatedCache,
       };
     });
+
+    // 2b. Sync with Cloud Firestore
+    const isLikedPl =
+      cleanPl === 'liked-songs' ||
+      cleanPl === 'tracks' ||
+      cleanPl === 'collection:tracks' ||
+      cleanPl === 'user-liked-songs';
+
+    import('../services/spotifreeAuth')
+      .then(({ syncSpotifreeAccount }) => {
+        let cleanLikedIds: string[] | undefined = undefined;
+        if (isLikedPl) {
+          const playerStore = (window as any).__usePlayerStore?.getState?.();
+          const currentLikedIds: string[] = playerStore?.likedTrackIds || [];
+          cleanLikedIds = currentLikedIds.filter((id: string) => {
+            const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return id !== trackId && id !== cleanTrack && c !== cleanTrack;
+          });
+          (window as any).__usePlayerStore?.setState?.({ likedTrackIds: cleanLikedIds });
+        }
+        syncSpotifreeAccount({
+          playlists: updatedPlaylistsList,
+          ...(cleanLikedIds !== undefined ? { likedTracks: cleanLikedIds } : {}),
+        }).catch(() => {});
+      })
+      .catch(() => {});
 
     // 3. Dispatch global event for live views
     if (typeof window !== 'undefined') {

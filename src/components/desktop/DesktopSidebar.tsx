@@ -539,7 +539,10 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                       )}
                       <span className="truncate">
                         {isLikedSongs
-                          ? 'Lista • 23 canciones'
+                          ? (() => {
+                              const cnt = playlist.tracks?.total ?? playlist.tracks?.items?.length ?? 0;
+                              return `Lista • ${cnt} ${cnt === 1 ? 'canción' : 'canciones'}`;
+                            })()
                           : playlist.owner?.display_name
                           ? `Lista • ${playlist.owner.display_name}`
                           : stripHtml(playlist.description) || 'Lista'}

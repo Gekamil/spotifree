@@ -669,6 +669,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
         removeCustomLikedSong(track.id, user?.id);
         removeCustomLikedSong(clean, user?.id);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean);
         const nextTracks = tracks.filter((t) => {
           const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
           return (
@@ -1988,18 +1990,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 <span className="font-bold text-sm">Compartir canción</span>
               </button>
 
-              {cleanId !== 'liked-songs' && (
-                <button
-                  onClick={() => {
+              <button
+                onClick={() => {
+                  if (cleanId === 'liked-songs' || isLikedPlaylist) {
+                    handleToggleTrackLike(activeTrackMenu);
+                  } else {
                     handleRemoveTrackFromPlaylist(activeTrackMenu.id);
-                    setActiveTrackMenu(null);
-                  }}
-                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-left text-red-400"
-                >
-                  <TrashNativeIcon size={20} className="shrink-0" />
-                  <span className="font-bold text-sm">Eliminar de esta playlist</span>
-                </button>
-              )}
+                  }
+                  setActiveTrackMenu(null);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-left text-red-400"
+              >
+                <TrashNativeIcon size={20} className="shrink-0" />
+                <span className="font-bold text-sm">
+                  {cleanId === 'liked-songs' || isLikedPlaylist ? 'Eliminar de canciones que te gustan' : 'Eliminar de esta playlist'}
+                </span>
+              </button>
             </div>
 
             <button
