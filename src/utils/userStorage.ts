@@ -65,13 +65,14 @@ export function getCustomLikedSongs(userId?: string): Track[] {
   if (typeof window === 'undefined') return [];
   try {
     const key = getUserLikedSongsKey(userId);
+    let songs: Track[] = [];
     const raw = window.localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) songs = parsed;
     }
     // Fallback: If user-specific key is empty, check guest key and copy over
-    if (key !== 'spotifree_guest_liked_songs') {
+    if (songs.length === 0 && key !== 'spotifree_guest_liked_songs') {
       const guestRaw = window.localStorage.getItem('spotifree_guest_liked_songs');
       if (guestRaw) {
         const guestParsed = JSON.parse(guestRaw);
@@ -79,10 +80,17 @@ export function getCustomLikedSongs(userId?: string): Track[] {
           try {
             window.localStorage.setItem(key, JSON.stringify(guestParsed));
           } catch {}
-          return guestParsed;
+          songs = guestParsed;
         }
       }
     }
+
+    const removedIds = getRemovedTrackIdsForPlaylist('liked-songs');
+    if (removedIds.size === 0) return songs;
+    return songs.filter((t) => {
+      const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return !removedIds.has(t.id) && !removedIds.has(tClean);
+    });
   } catch {}
   return [];
 }
@@ -93,6 +101,20 @@ export function getCustomLikedSongs(userId?: string): Track[] {
 export function saveCustomLikedSong(track: Track, userId?: string): Track[] {
   if (typeof window === 'undefined' || !track) return [];
   try {
+    // Un-blacklist if previously removed
+    const clean = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const rawBlacklist = window.localStorage.getItem('spotifree_removed_tracks_liked-songs');
+    if (rawBlacklist) {
+      try {
+        const bl: string[] = JSON.parse(rawBlacklist);
+        const filtered = bl.filter((id) => {
+          const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return id !== track.id && id !== clean && c !== clean;
+        });
+        window.localStorage.setItem('spotifree_removed_tracks_liked-songs', JSON.stringify(filtered));
+      } catch {}
+    }
+
     const key = getUserLikedSongsKey(userId);
     const current = getCustomLikedSongs(userId);
     const exists = current.some(
@@ -126,6 +148,14 @@ export function removeCustomLikedSong(trackId: string, userId?: string): Track[]
       return t.id !== trackId && tClean !== clean && t.id !== `spotify:track:${clean}`;
     });
     window.localStorage.setItem(key, JSON.stringify(updated));
+
+    // Blacklist in liked-songs so it never resurrects on refresh
+    const rawBlacklist = window.localStorage.getItem('spotifree_removed_tracks_liked-songs');
+    let blacklist: string[] = rawBlacklist ? JSON.parse(rawBlacklist) : [];
+    if (!blacklist.includes(clean)) blacklist.push(clean);
+    if (!blacklist.includes(trackId)) blacklist.push(trackId);
+    window.localStorage.setItem('spotifree_removed_tracks_liked-songs', JSON.stringify(blacklist));
+
     return updated;
   } catch {}
   return [];
@@ -138,17 +168,38 @@ export function getSavedCustomTracks(playlistId: string, isLiked: boolean, userI
   if (isLiked) {
     return getCustomLikedSongs(userId);
   }
-  if (typeof window === 'undefined') return [];
+  if (typeof window === 'undefined' || !playlistId) return [];
   try {
     const targetId = userId || getActiveUserId();
-    const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
-      ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
-      : `spotifree_playlist_tracks_${playlistId}`;
-    const raw = window.localStorage.getItem(key);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+    const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+    const keys = [
+      targetId && targetId !== 'guest' && targetId !== 'spotify-user' ? `spotifree_playlist_tracks_${targetId}_${playlistId}` : null,
+      targetId && targetId !== 'guest' && targetId !== 'spotify-user' ? `spotifree_playlist_tracks_${targetId}_${cleanPl}` : null,
+      `spotifree_playlist_tracks_${playlistId}`,
+      `spotifree_playlist_tracks_${cleanPl}`,
+    ].filter(Boolean) as string[];
+
+    let found: Track[] = [];
+    for (const key of keys) {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            found = parsed;
+            break;
+          }
+        } catch {}
+      }
     }
+
+    const removedIds = getRemovedTrackIdsForPlaylist(playlistId);
+    if (removedIds.size === 0) return found;
+
+    return found.filter((t) => {
+      const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return !removedIds.has(t.id) && !removedIds.has(tClean);
+    });
   } catch {}
   return [];
 }
@@ -161,9 +212,26 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
     saveCustomLikedSong(track, userId);
     return;
   }
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !playlistId || !track) return;
   try {
     const targetId = userId || getActiveUserId();
+    const cleanTrack = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+
+    // Un-blacklist if previously removed
+    const blacklistKey = `spotifree_removed_tracks_${cleanPl}`;
+    const rawBlacklist = window.localStorage.getItem(blacklistKey);
+    if (rawBlacklist) {
+      try {
+        const bl: string[] = JSON.parse(rawBlacklist);
+        const filtered = bl.filter((id) => {
+          const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return id !== track.id && id !== cleanTrack && c !== cleanTrack;
+        });
+        window.localStorage.setItem(blacklistKey, JSON.stringify(filtered));
+      } catch {}
+    }
+
     const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
       ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
       : `spotifree_playlist_tracks_${playlistId}`;
@@ -172,6 +240,9 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
     if (!list.some((t) => t.id === track.id || (t.name === track.name && t.artists[0]?.name === track.artists[0]?.name))) {
       list.push({ ...track, added_at: track.added_at || 'Hoy' });
       window.localStorage.setItem(key, JSON.stringify(list));
+      if (cleanPl !== playlistId) {
+        window.localStorage.setItem(`spotifree_playlist_tracks_${targetId}_${cleanPl}`, JSON.stringify(list));
+      }
     }
   } catch {}
 }
@@ -259,6 +330,77 @@ export function removeCustomTrackFromStorage(playlistId: string, trackId: string
           }
         } catch {}
       }
+    }
+
+    // 5. Update cached playlist object in spotify_extracted_session
+    const rawExtracted = window.localStorage.getItem('spotify_extracted_session');
+    if (rawExtracted) {
+      try {
+        const parsed = JSON.parse(rawExtracted);
+        let changed = false;
+        if (Array.isArray(parsed.playlists)) {
+          parsed.playlists = parsed.playlists.map((p: any) => {
+            const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+            if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) {
+              if (p.tracks?.items) {
+                changed = true;
+                const filtered = p.tracks.items.filter((t: any) => {
+                  const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                  return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+                });
+                return { ...p, tracks: { total: filtered.length, items: filtered } };
+              }
+            }
+            return p;
+          });
+        }
+        if (parsed.cachedPlaylistDetails) {
+          for (const key of [playlistId, cleanPl, `spotify:playlist:${cleanPl}`]) {
+            if (parsed.cachedPlaylistDetails[key]?.tracks?.items) {
+              changed = true;
+              const filtered = parsed.cachedPlaylistDetails[key].tracks.items.filter((t: any) => {
+                const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+              });
+              parsed.cachedPlaylistDetails[key] = {
+                ...parsed.cachedPlaylistDetails[key],
+                tracks: { total: filtered.length, items: filtered },
+              };
+            }
+          }
+        }
+        if (changed) {
+          window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+
+    // 6. Update cached playlist object in spotifree_account_session_${targetId}
+    const rawAccount = window.localStorage.getItem(`spotifree_account_session_${targetId}`);
+    if (rawAccount) {
+      try {
+        const parsed = JSON.parse(rawAccount);
+        let changed = false;
+        if (Array.isArray(parsed.playlists)) {
+          parsed.playlists = parsed.playlists.map((p: any) => {
+            const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+            if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) {
+              if (p.tracks?.items) {
+                changed = true;
+                const filtered = p.tracks.items.filter((t: any) => {
+                  const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                  return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+                });
+                return { ...p, tracks: { total: filtered.length, items: filtered } };
+              }
+            }
+            return p;
+          });
+        }
+        if (changed) {
+          window.localStorage.setItem(`spotifree_account_session_${targetId}`, JSON.stringify(parsed));
+        }
+      } catch {}
     }
   } catch {}
 }

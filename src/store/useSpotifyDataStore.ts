@@ -20,7 +20,7 @@ import {
 } from '../utils/userAccounts';
 import { useStatsStore } from './useStatsStore';
 import { stripHtml } from '../utils/formatters';
-import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage } from '../utils/userStorage';
+import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage, getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
@@ -110,7 +110,23 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
 
     if (seenIds.has(pl.id)) continue;
     seenIds.add(pl.id);
-    result.push(pl);
+
+    const removedTrackIds = getRemovedTrackIdsForPlaylist(pl.id);
+    let finalPl = pl;
+    if (pl.tracks?.items && removedTrackIds.size > 0) {
+      const cleanItems = pl.tracks.items.filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedTrackIds.has(t.id) && !removedTrackIds.has(c);
+      });
+      finalPl = {
+        ...pl,
+        tracks: {
+          total: cleanItems.length,
+          items: cleanItems,
+        },
+      };
+    }
+    result.push(finalPl);
   }
 
   // Ensure Liked Songs is ALWAYS present at position 0
@@ -528,10 +544,23 @@ const store = create<SpotifyDataState>((set, get) => ({
   playlistDetailsCache: initialSession.isAuthenticated ? DEFAULT_SESSION_CACHE : {},
 
   cachePlaylistDetails: (playlist: Playlist) => {
+    const removedIds = getRemovedTrackIdsForPlaylist(playlist.id);
+    let cleanPlaylist = playlist;
+    if (playlist.tracks?.items && removedIds.size > 0) {
+      const cleanItems = playlist.tracks.items.filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedIds.has(t.id) && !removedIds.has(c);
+      });
+      cleanPlaylist = {
+        ...playlist,
+        tracks: { total: cleanItems.length, items: cleanItems },
+      };
+    }
+
     set((s) => {
       const nextCache = {
         ...s.playlistDetailsCache,
-        [playlist.id]: playlist,
+        [cleanPlaylist.id]: cleanPlaylist,
       };
       if (typeof window !== 'undefined') {
         try {
@@ -542,7 +571,7 @@ const store = create<SpotifyDataState>((set, get) => ({
       }
       return {
         playlistDetailsCache: nextCache,
-        playlists: s.playlists.map((p) => (p.id === playlist.id ? { ...p, tracks: playlist.tracks } : p)),
+        playlists: s.playlists.map((p) => (p.id === cleanPlaylist.id ? { ...p, tracks: cleanPlaylist.tracks } : p)),
       };
     });
   },

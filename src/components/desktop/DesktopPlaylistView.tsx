@@ -418,9 +418,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
     const customIds = new Set(currentCustom.map((t) => t.id));
     const baseItems = playlist.tracks?.items || [];
+    const removedSet = getRemovedTrackIdsForPlaylist(playlist.id);
+    const isNotRemoved = (t: Track) => {
+      const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return !removedSet.has(t.id) && !removedSet.has(c);
+    };
     const sourceTracks = [
-      ...currentCustom,
-      ...baseItems.filter((t) => !customIds.has(t.id)),
+      ...currentCustom.filter(isNotRemoved),
+      ...baseItems.filter((t) => !customIds.has(t.id) && isNotRemoved(t)),
     ];
 
     let mapped = sourceTracks.map((t) => {
@@ -522,6 +527,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
             const hasValidScrapedImage = data.images?.length > 0 && data.images[0].url && !data.images[0].url.includes('liked-songs');
             const hasInitialHdImage = playlist.images && playlist.images.length > 0 && playlist.images[0].url && !playlist.images[0].url.includes('liked-songs');
+            const removedSet = getRemovedTrackIdsForPlaylist(playlist.id);
+            const isNotRemoved = (t: Track) => {
+              const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+              return !removedSet.has(t.id) && !removedSet.has(c);
+            };
+            const filteredDataItems = (data.tracks?.items || []).filter(isNotRemoved);
+
             const updated: Playlist = {
               ...playlist,
               ...data,
@@ -530,9 +542,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               images: hasInitialHdImage ? playlist.images : (hasValidScrapedImage ? data.images : playlist.images),
               color: data.color || playlist.color,
               owner: data.owner || playlist.owner,
-              tracks: data.tracks,
+              tracks: { total: filteredDataItems.length, items: filteredDataItems },
             };
-            const hydrated = data.tracks.items.map((t: Track) => {
+            const hydrated = filteredDataItems.map((t: Track) => {
               if (TRACK_COVER_CACHE.has(t.id)) {
                 return {
                   ...t,
@@ -551,7 +563,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             try {
               useSpotifyDataStore.getState().cachePlaylistDetails(updated);
               useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
-                tracks: data.tracks,
+                tracks: { total: filteredDataItems.length, items: filteredDataItems },
                 ...(hasInitialHdImage ? {} : (hasValidScrapedImage ? { images: data.images } : {})),
                 ...(data.color ? { color: data.color } : {}),
                 ...(data.owner ? { owner: data.owner } : {}),

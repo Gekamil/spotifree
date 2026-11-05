@@ -439,6 +439,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
               if (contextMenu.trackId) {
                 toggleLike(contextMenu.trackId, targetTrack || undefined);
                 if (contextMenu.playlistId === 'liked-songs' || isLikedPlaylist) {
+                  useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', contextMenu.trackId);
                   const activeUserId = useSpotifyDataStore.getState().user?.id || 'active';
                   import('../../utils/userStorage').then(({ removeCustomLikedSong }) => {
                     const updated = removeCustomLikedSong(contextMenu.trackId!, activeUserId);

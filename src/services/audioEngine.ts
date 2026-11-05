@@ -725,10 +725,16 @@ class AudioEngine {
     const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
     const oldYtIndex = this.activeYtIndex;
     const oldAudioIndex = this.activeAudioIndex;
+    const isMobile = this.isMobileOrPWA();
 
-    // Alternate active deck cleanly across all platforms
-    this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
-    this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
+    // Alternate active deck cleanly on desktop (mobile browsers block background secondary deck playback)
+    if (!isMobile) {
+      this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
+      this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
+    } else {
+      this.activeYtIndex = 0;
+      this.activeAudioIndex = 0;
+    }
 
     this.currentTrackId = nextTrack.id;
     this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
@@ -1728,7 +1734,8 @@ class AudioEngine {
 
     if (cleanEngine && cleanState && cleanEngine !== cleanState) {
       this.desyncTicks++;
-      if (this.desyncTicks >= 25) { // ~2.5s sustained desync
+      const maxTicks = this.isMobileOrPWA() ? 60 : 35; // ~6s on mobile to prevent spurious resync during track switches
+      if (this.desyncTicks >= maxTicks) {
         console.warn(`[AudioWatchdog] Desync detected: UI shows "${state.currentTrack.name}" (${state.currentTrack.id}) but audio engine playing (${this.currentTrackId}). Resyncing audio immediately...`);
         this.desyncTicks = 0;
         const artist = state.currentTrack.artists?.[0]?.name || '';
@@ -2168,6 +2175,11 @@ class AudioEngine {
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
+    if (this.isMobileOrPWA()) {
+      this.activeYtIndex = 0;
+      this.activeAudioIndex = 0;
+    }
+
     const cleanNew = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanCur = (this.currentTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 

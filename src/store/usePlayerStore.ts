@@ -9,6 +9,14 @@ import {
 } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 
+function matchTrackId(a?: string | null, b?: string | null): boolean {
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const ca = a.replace(/^spotify:track:/i, '').split('?')[0].trim();
+  const cb = b.replace(/^spotify:track:/i, '').split('?')[0].trim();
+  return ca === cb;
+}
+
 function resolveTrackCover(track: any): string {
   if (!track) return '';
   if (track.album?.images && track.album.images.length > 0) {
@@ -170,7 +178,7 @@ const store = create<PlayerState>((set, get) => ({
     const state = get();
     const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanNew = (track?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-    if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying) {
+    if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying && !newQueue) {
       // Already playing this song, do not reset to 0 or restart!
       return;
     }
@@ -361,6 +369,9 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
+    const isMobile =
+      typeof window !== 'undefined' &&
+      (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768);
     const isDjMode =
       typeof window !== 'undefined' &&
       (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
@@ -370,8 +381,8 @@ const store = create<PlayerState>((set, get) => ({
       window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
 
-    // Dual-deck crossfade or DJ Automix transition (Desktop, Mobile & Car)
-    if (isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
+    // Dual-deck crossfade or DJ Automix transition (Desktop only: mobile browsers block background secondary deck playback)
+    if (!isMobile && isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
       if (engine.isCrossfading || engine.isTransitioning || (engine.lastCrossfadeFinishTime && Date.now() - engine.lastCrossfadeFinishTime < 4000)) {
         console.warn('[PlayerStore] Skipping redundant nextTrack transition during active transition window');
         return;
@@ -380,7 +391,7 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    // Direct, instant, high-reliability track playback (car controls / mobile / standard)
+    // Direct, instant, high-reliability track playback (mobile / car controls / standard)
     get().playTrack(nextTrackCandidate);
     if (get().shuffleMode === 'smart') {
       get().triggerSmartShuffleRecommendation(nextTrackCandidate);
@@ -543,7 +554,9 @@ const store = create<PlayerState>((set, get) => ({
       return currentTrack;
     }
 
-    const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+    const currentIndex = currentTrack
+      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
+      : -1;
 
     // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {
@@ -551,7 +564,7 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     if (preselectedNextTrackId) {
-      const found = queue.find((t) => t.id === preselectedNextTrackId && t.id !== currentTrack?.id);
+      const found = queue.find((t) => matchTrackId(t.id, preselectedNextTrackId) && !matchTrackId(t.id, currentTrack?.id));
       if (found) return found;
     }
 
@@ -571,7 +584,9 @@ const store = create<PlayerState>((set, get) => ({
       return Array(count).fill(currentTrack);
     }
 
-    const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+    const currentIndex = currentTrack
+      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
+      : -1;
     const result: Track[] = [];
 
     if (currentIndex >= 0) {
@@ -588,10 +603,10 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     if (preselectedNextTrackId) {
-      const found = queue.find((t) => t.id === preselectedNextTrackId && t.id !== currentTrack?.id);
+      const found = queue.find((t) => matchTrackId(t.id, preselectedNextTrackId) && !matchTrackId(t.id, currentTrack?.id));
       if (found) {
         result.push(found);
-        const nextIdx = queue.findIndex((t) => t.id === found.id);
+        const nextIdx = queue.findIndex((t) => matchTrackId(t.id, found.id));
         if (nextIdx >= 0 && nextIdx < queue.length - 1) {
           result.push(queue[nextIdx + 1]);
         }
@@ -704,7 +719,9 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     // Normal sequential playback previous track
-    const currentIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : 0;
+    const currentIndex = currentTrack
+      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
+      : 0;
     const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
     const prev = queue[prevIndex];
     if (prev) {
