@@ -13,6 +13,7 @@ import {
 } from './firebase';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 
 export interface SpotifreeAccount {
   uid?: string;
@@ -413,8 +414,26 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       } catch {}
     }
 
-    // Filter out any deleted playlists
-    const cleanPlaylists = acc.playlists.filter((p) => p && p.id && !deletedSet.has(p.id));
+    // Filter out any deleted playlists and removed tracks from each playlist
+    const cleanPlaylists = acc.playlists
+      .filter((p) => p && p.id && !deletedSet.has(p.id))
+      .map((p) => {
+        if (!p.tracks?.items || !Array.isArray(p.tracks.items)) return p;
+        const removedSet = getRemovedTrackIdsForPlaylist(p.id);
+        if (removedSet.size === 0) return p;
+        const filteredItems = p.tracks.items.filter((t) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return !removedSet.has(t.id) && !removedSet.has(c);
+        });
+        return {
+          ...p,
+          tracks: {
+            ...p.tracks,
+            total: filteredItems.length,
+            items: filteredItems,
+          },
+        };
+      });
 
     if (typeof window !== 'undefined') {
       try {
@@ -431,12 +450,17 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
         window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
         window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
 
-        // If liked-songs has tracks, prime custom liked songs for this user
+        // If liked-songs has tracks, prime custom liked songs for this user (filtering blacklisted items)
         const likedPl = cleanPlaylists.find((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
         if (likedPl?.tracks?.items && Array.isArray(likedPl.tracks.items) && likedPl.tracks.items.length > 0) {
-          window.localStorage.setItem(`spotifree_custom_liked_songs_${userId}`, JSON.stringify(likedPl.tracks.items));
+          const likedRemovedSet = getRemovedTrackIdsForPlaylist('liked-songs');
+          const cleanLikedItems = likedPl.tracks.items.filter((t) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return !likedRemovedSet.has(t.id) && !likedRemovedSet.has(c);
+          });
+          window.localStorage.setItem(`spotifree_custom_liked_songs_${userId}`, JSON.stringify(cleanLikedItems));
           window.dispatchEvent(new CustomEvent('spotifree_liked_songs_updated', {
-            detail: { tracks: likedPl.tracks.items },
+            detail: { tracks: cleanLikedItems },
           }));
         }
       } catch {}
@@ -449,15 +473,20 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     });
   }
 
-  // 5. Sync liked tracks to local storage and player store
+  // 5. Sync liked tracks to local storage and player store (filtering removed IDs)
   if (Array.isArray(acc.likedTracks)) {
+    const likedRemovedSet = getRemovedTrackIdsForPlaylist('liked-songs');
+    const cleanLikedIds = acc.likedTracks.filter((id) => {
+      const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return !likedRemovedSet.has(id) && !likedRemovedSet.has(c);
+    });
     if (typeof window !== 'undefined') {
       try {
-        window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(acc.likedTracks));
+        window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(cleanLikedIds));
       } catch {}
     }
     usePlayerStore.setState({
-      likedTrackIds: acc.likedTracks,
+      likedTrackIds: cleanLikedIds,
     });
   }
 }

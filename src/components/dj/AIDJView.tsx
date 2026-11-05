@@ -373,7 +373,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
           <div className="flex items-center justify-center pointer-events-none select-none">
             <SpotifyDJVisualizer
-              size={isMobile ? 210 : 230}
+              size={isMobile ? 225 : 255}
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}

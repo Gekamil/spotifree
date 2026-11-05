@@ -83,7 +83,6 @@ class AIDJVoiceService {
   private config: AIDJConfig = DEFAULT_CONFIG;
   private selectedVoiceId: DJVoiceId = 'dalia';
   private testPhraseIndex: number = 0;
-  private wasPlayingBeforeSpeech: boolean = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -282,30 +281,11 @@ class AIDJVoiceService {
    */
   private duckAudio() {
     try {
-      const playerState = usePlayerStore.getState();
-      const isMobile =
-        typeof window !== 'undefined' &&
-        (window.innerWidth < 768 || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent));
-
-      // Always stop carrierAudio during speech on mobile/desktop so no secondary carrier stream interferes with TTS fidelity
-      if (audioEngine && typeof audioEngine.stopCarrier === 'function') {
-        audioEngine.stopCarrier();
-      }
-
-      // On mobile devices, because mobile browsers ignore programmatic volume reduction on video/iframe streams
-      // and cause severe speaker clipping when two media elements play at 100%, pause the background track cleanly:
-      if (isMobile && playerState.isPlaying) {
-        this.wasPlayingBeforeSpeech = true;
-        usePlayerStore.setState({ isPlaying: false });
-        if (audioEngine && typeof audioEngine.pause === 'function') {
-          audioEngine.pause();
-        }
-      }
-
+      // Lower background music volume smoothly to 12% so the new song plays quietly under the DJ's voice
       if (audioEngine && typeof audioEngine.setDuckedVolume === 'function') {
-        audioEngine.setDuckedVolume(0.08);
+        audioEngine.setDuckedVolume(0.12);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.setDuckedVolume(0.08);
+        (window as any).__audioEngine.setDuckedVolume(0.12);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Duck audio warning:', e);
@@ -313,26 +293,18 @@ class AIDJVoiceService {
   }
 
   /**
-   * Restore music audio when DJ finishes speaking
+   * Restore music audio smoothly when DJ finishes speaking
    */
   private restoreAudio() {
     try {
-      if (this.wasPlayingBeforeSpeech) {
-        this.wasPlayingBeforeSpeech = false;
-        usePlayerStore.setState({ isPlaying: true });
-        if (audioEngine && typeof audioEngine.resume === 'function') {
-          audioEngine.resume();
-        }
-      } else {
-        const { isPlaying } = usePlayerStore.getState();
-        if (isPlaying && audioEngine && typeof audioEngine.startCarrier === 'function') {
-          audioEngine.startCarrier();
-        }
+      const { isPlaying } = usePlayerStore.getState();
+      if (isPlaying && audioEngine && typeof audioEngine.startCarrier === 'function') {
+        audioEngine.startCarrier();
       }
       if (audioEngine && typeof audioEngine.restoreDuckedVolume === 'function') {
-        audioEngine.restoreDuckedVolume(1000);
+        audioEngine.restoreDuckedVolume(1200);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.restoreDuckedVolume(1000);
+        (window as any).__audioEngine.restoreDuckedVolume(1200);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Restore audio warning:', e);

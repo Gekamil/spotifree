@@ -148,13 +148,57 @@ export function removeCustomLikedSong(trackId: string, userId?: string): Track[]
       return t.id !== trackId && tClean !== clean && t.id !== `spotify:track:${clean}`;
     });
     window.localStorage.setItem(key, JSON.stringify(updated));
+    if (key !== 'spotifree_custom_liked_songs') {
+      window.localStorage.setItem('spotifree_custom_liked_songs', JSON.stringify(updated));
+    }
+    if (key !== 'spotifree_custom_liked_songs_active') {
+      window.localStorage.setItem('spotifree_custom_liked_songs_active', JSON.stringify(updated));
+    }
 
     // Blacklist in liked-songs so it never resurrects on refresh
     const rawBlacklist = window.localStorage.getItem('spotifree_removed_tracks_liked-songs');
     let blacklist: string[] = rawBlacklist ? JSON.parse(rawBlacklist) : [];
     if (!blacklist.includes(clean)) blacklist.push(clean);
     if (!blacklist.includes(trackId)) blacklist.push(trackId);
+    if (!blacklist.includes(`spotify:track:${clean}`)) blacklist.push(`spotify:track:${clean}`);
     window.localStorage.setItem('spotifree_removed_tracks_liked-songs', JSON.stringify(blacklist));
+
+    // Remove from spotifree_liked_tracks array
+    const rawLikedTracks = window.localStorage.getItem('spotifree_liked_tracks');
+    if (rawLikedTracks) {
+      try {
+        const lList: string[] = JSON.parse(rawLikedTracks);
+        const fList = lList.filter((id) => {
+          const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return id !== trackId && id !== clean && c !== clean;
+        });
+        window.localStorage.setItem('spotifree_liked_tracks', JSON.stringify(fList));
+      } catch {}
+    }
+
+    // Remove from cloud account cached session
+    const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+    if (rawCloud) {
+      try {
+        const parsed = JSON.parse(rawCloud);
+        if (Array.isArray(parsed.likedTracks)) {
+          parsed.likedTracks = parsed.likedTracks.filter((id: string) => {
+            const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return id !== trackId && id !== clean && c !== clean;
+          });
+          window.localStorage.setItem('spotifree_current_cloud_account', JSON.stringify(parsed));
+        }
+      } catch {}
+    }
+
+    // Deep clean from extracted sessions, playlists cache and imported lists
+    removeCustomTrackFromStorage('liked-songs', trackId, userId);
+
+    window.dispatchEvent(
+      new CustomEvent('spotifree_track_removed', {
+        detail: { playlistId: 'liked-songs', trackId },
+      })
+    );
 
     return updated;
   } catch {}
@@ -409,10 +453,27 @@ export function getRemovedTrackIdsForPlaylist(playlistId: string): Set<string> {
   if (typeof window === 'undefined' || !playlistId) return new Set();
   try {
     const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
-    const raw = window.localStorage.getItem(`spotifree_removed_tracks_${cleanPl}`);
+    const isLiked =
+      cleanPl === 'liked-songs' ||
+      cleanPl === 'tracks' ||
+      cleanPl === 'collection:tracks' ||
+      cleanPl === 'collection-tracks' ||
+      cleanPl === 'user-liked-songs';
+    const targetKey = isLiked ? 'liked-songs' : cleanPl;
+    const raw = window.localStorage.getItem(`spotifree_removed_tracks_${targetKey}`);
     if (raw) {
       const list: string[] = JSON.parse(raw);
-      return new Set(list.map((id) => (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+      const set = new Set<string>();
+      list.forEach((id) => {
+        if (!id) return;
+        set.add(id);
+        const c = id.replace(/^spotify:track:/i, '').split('?')[0].trim();
+        if (c) {
+          set.add(c);
+          set.add(`spotify:track:${c}`);
+        }
+      });
+      return set;
     }
   } catch {}
   return new Set();

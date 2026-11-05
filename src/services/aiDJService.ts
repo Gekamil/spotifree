@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
+import { audioEngine } from './audioEngine';
 import { aiDJVoiceService, cleanTextForNaturalTTS } from './aiDJVoiceService';
 import { useLanguageStore } from '../utils/i18n';
 import { resolveTrackCoversBatch } from '../utils/trackCovers';
@@ -738,6 +739,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     });
 
     get().stopVoiceListening();
+    if (initialSet.length > 0) {
+      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
+      audioEngine.setDuckedVolume(0.12);
+    }
     await aiDJVoiceService.speak(introText, {
       onWord: (_word, partial) => {
         set({ displayedTranscript: partial });
@@ -746,10 +751,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: level });
       },
       onEnd: () => {
-        // Drop the beat cleanly right as the DJ intro concludes!
-        if (initialSet.length > 0) {
-          usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
-        }
+        // Song is already playing underneath! Smoothly fade volume up to 100%
+        audioEngine.restoreDuckedVolume(1200);
         set({
           visualizerState: 'playing',
           voiceLevel: 0,
@@ -1084,14 +1087,11 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       chatHistory: [...state.chatHistory, djMsg],
     }));
 
-    // 4. Stage track 1 in the player without un-ducked audio overlap
+    // 4. Start playing the next song right now ducked under the DJ's voice
     const track1 = finalSet[0];
     if (track1) {
-      usePlayerStore.setState({
-        queue: finalSet,
-        currentTrack: track1,
-        isPlaying: false,
-      });
+      usePlayerStore.getState().playTrack(track1, finalSet, 'dj-session');
+      audioEngine.setDuckedVolume(0.12);
     }
 
     // 5. Speak the personalized charismatic DJ intro cleanly
@@ -1104,10 +1104,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: level });
       },
       onEnd: () => {
-        // Drop the beat cleanly right as speech concludes!
-        if (track1) {
-          usePlayerStore.getState().playTrack(track1, finalSet, 'dj-session');
-        }
+        // Song is already playing! Smoothly fade volume up to 100%
+        audioEngine.restoreDuckedVolume(1200);
         set({
           visualizerState: 'playing',
           voiceLevel: 0,
@@ -1209,6 +1207,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: level });
       },
       onEnd: () => {
+        audioEngine.restoreDuckedVolume(1200);
         set({ visualizerState: 'playing', voiceLevel: 0 });
       },
     });
@@ -1267,6 +1266,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
+    // Switch to next track right now ducked under the DJ's voice!
+    if (nextTrack) {
+      usePlayerStore.getState().playTrack(nextTrack, undefined, 'dj-session');
+      audioEngine.setDuckedVolume(0.12);
+    }
+
     get().stopVoiceListening();
     await aiDJVoiceService.speak(transitionText, {
       onWord: (_word, partial) => {
@@ -1276,8 +1281,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         set({ voiceLevel: lvl });
       },
       onEnd: () => {
-        // Drop the next track cleanly as the DJ finishes introducing it
-        usePlayerStore.getState().nextTrack();
+        // Next track is already playing! Smoothly bring volume back up to 100%
+        audioEngine.restoreDuckedVolume(1200);
         set({ visualizerState: 'playing', voiceLevel: 0 });
       },
     });

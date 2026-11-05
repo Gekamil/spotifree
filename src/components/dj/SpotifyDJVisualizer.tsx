@@ -73,8 +73,9 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    const baseRadius = size * (mini ? 0.35 : 0.33);
-    const strokeWidth = Math.max(3.5, size * (mini ? 0.13 : 0.082));
+    // Ring tuned slightly larger with a sleeker, thinner stroke as requested
+    const baseRadius = size * (mini ? 0.36 : 0.375);
+    const strokeWidth = Math.max(2.2, size * (mini ? 0.095 : 0.052));
     const numPoints = mini ? 70 : 160;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 

@@ -128,7 +128,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   useEffect(() => {
     if (!isLikedInitially) return;
     const handleLikedUpdate = (e: any) => {
-      const updatedTracks = e.detail?.tracks || getSavedCustomTracks(playlist.id, true, user?.id);
+      const rawUpdated = e.detail?.tracks || getSavedCustomTracks(playlist.id, true, user?.id);
+      const remSet = getRemovedTrackIdsForPlaylist('liked-songs');
+      const updatedTracks = rawUpdated.filter((t: Track) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !remSet.has(t.id) && !remSet.has(c);
+      });
       setDynamicTracks(updatedTracks);
       setDynamicPlaylist((prev) => ({
         ...prev,

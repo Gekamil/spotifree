@@ -130,41 +130,52 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     cleanId.startsWith('artist-');
 
   const [tracks, setTracks] = useState<Track[]>(() => {
+    const removedSet = getRemovedTrackIdsForPlaylist(isLikedPlaylist ? 'liked-songs' : cleanId);
+    const isNotRemoved = (t: Track) => {
+      const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      return !removedSet.has(t.id) && !removedSet.has(c);
+    };
+
     if (isLikedPlaylist) {
       const liked = getCustomLikedSongs(user?.id);
-      const base = playlist.tracks?.items || [];
-      const merged = deduplicateTracks([...liked, ...base]);
+      const base = (playlist.tracks?.items || []).filter(isNotRemoved);
+      const merged = deduplicateTracks([...liked, ...base]).filter(isNotRemoved);
       if (merged.length > 0) return merged;
     }
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
-      return playlist.tracks.items;
+      return playlist.tracks.items.filter(isNotRemoved);
     }
     const cached =
       useSpotifyDataStore.getState().playlistDetailsCache[cleanId] ||
       useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
-      return cached.tracks.items;
+      return cached.tracks.items.filter(isNotRemoved);
     }
     if (typeof window !== 'undefined') {
       try {
         const storedTracks = window.localStorage.getItem(`spotifree_playlist_tracks_${cleanId}`);
         if (storedTracks) {
           const parsed = JSON.parse(storedTracks);
-          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter(isNotRemoved);
         }
       } catch {}
     }
     if (isLikedPlaylist) {
-      return getCustomLikedSongs(user?.id);
+      return getCustomLikedSongs(user?.id).filter(isNotRemoved);
     }
-    return getSavedCustomTracks(cleanId, false, user?.id);
+    return getSavedCustomTracks(cleanId, false, user?.id).filter(isNotRemoved);
   });
 
   // Reactive listener for real-time liked songs synchronization in mobile
   useEffect(() => {
     if (!isLikedPlaylist) return;
     const handleLikedUpdate = (e: any) => {
-      const updatedTracks = e.detail?.tracks || getCustomLikedSongs(user?.id);
+      const rawTracks = e.detail?.tracks || getCustomLikedSongs(user?.id);
+      const removedSet = getRemovedTrackIdsForPlaylist('liked-songs');
+      const updatedTracks = rawTracks.filter((t: Track) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedSet.has(t.id) && !removedSet.has(c);
+      });
       setTracks(updatedTracks);
       setActivePlaylist((prev) => ({
         ...prev,
@@ -342,11 +353,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       };
     }
 
-    // B. LIKED SONGS: Merge saved custom liked songs with any playlist tracks
+    // B. LIKED SONGS: Merge saved custom liked songs with any playlist tracks (filtering removed IDs)
     if (isLikedPlaylist) {
-      const customLiked = getCustomLikedSongs(user?.id);
-      const baseTracks = playlist.tracks?.items || [];
-      const merged = deduplicateTracks([...customLiked, ...baseTracks]);
+      const removedSet = getRemovedTrackIdsForPlaylist('liked-songs');
+      const isNotRemoved = (t: Track) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedSet.has(t.id) && !removedSet.has(c);
+      };
+      const customLiked = getCustomLikedSongs(user?.id).filter(isNotRemoved);
+      const baseTracks = (playlist.tracks?.items || []).filter(isNotRemoved);
+      const merged = deduplicateTracks([...customLiked, ...baseTracks]).filter(isNotRemoved);
       if (merged.length > 0) {
         setTracks(merged);
       }

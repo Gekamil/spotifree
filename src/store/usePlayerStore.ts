@@ -8,6 +8,7 @@ import {
   getActiveUserId,
 } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
+import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } from '../utils/trackCovers';
 
 function matchTrackId(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
@@ -19,19 +20,42 @@ function matchTrackId(a?: string | null, b?: string | null): boolean {
 
 function resolveTrackCover(track: any): string {
   if (!track) return '';
+
+  const rawId = track.id || '';
+  const cleanId = rawId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+
+  // 1. High-priority dedicated cover cache
+  if (rawId && TRACK_COVER_CACHE.has(rawId)) {
+    const cached = TRACK_COVER_CACHE.get(rawId);
+    if (cached && !isPlaylistOrGenericCover(cached)) return cached;
+  }
+  if (cleanId && TRACK_COVER_CACHE.has(cleanId)) {
+    const cached = TRACK_COVER_CACHE.get(cleanId);
+    if (cached && !isPlaylistOrGenericCover(cached)) return cached;
+  }
+
+  // 2. Direct album images on track (filtering generic/playlist placeholders)
   if (track.album?.images && track.album.images.length > 0) {
     for (const img of track.album.images) {
-      if (img && img.url) return img.url;
+      if (img && img.url && !isPlaylistOrGenericCover(img.url)) return img.url;
     }
   }
-  if (track.coverUrl) return track.coverUrl;
-  if (track.imageUrl) return track.imageUrl;
-  if (track.image) return track.image;
-  if (track.thumbnail) return track.thumbnail;
-  if (typeof window !== 'undefined' && track.id) {
+
+  // 3. Fallback direct properties on track
+  if (track.coverUrl && !isPlaylistOrGenericCover(track.coverUrl)) return track.coverUrl;
+  if (track.imageUrl && !isPlaylistOrGenericCover(track.imageUrl)) return track.imageUrl;
+  if (track.image && !isPlaylistOrGenericCover(track.image)) return track.image;
+  if (track.thumbnail && !isPlaylistOrGenericCover(track.thumbnail)) return track.thumbnail;
+
+  // 4. Check spotifree_track_covers in localStorage
+  if (typeof window !== 'undefined') {
     try {
-      const cached = window.localStorage.getItem(`spotifree_track_cover_${track.id}`);
-      if (cached) return cached;
+      const rawCovers = window.localStorage.getItem('spotifree_track_covers');
+      if (rawCovers) {
+        const parsed = JSON.parse(rawCovers);
+        if (parsed[rawId] && !isPlaylistOrGenericCover(parsed[rawId])) return parsed[rawId];
+        if (cleanId && parsed[cleanId] && !isPlaylistOrGenericCover(parsed[cleanId])) return parsed[cleanId];
+      }
     } catch {}
   }
   return '';
@@ -57,14 +81,54 @@ function getMediaSessionArtwork(imageUrl?: string) {
     .replace('liked-songs-64.png', 'liked-songs-640.jpg')
     .replace('liked-songs-300.png', 'liked-songs-640.jpg');
 
+  const mime = hd.toLowerCase().endsWith('.png') ? 'image/png' : hd.toLowerCase().endsWith('.webp') ? 'image/webp' : 'image/jpeg';
+
   return [
-    { src: hd, sizes: '96x96', type: 'image/jpeg' },
-    { src: hd, sizes: '128x128', type: 'image/jpeg' },
-    { src: hd, sizes: '192x192', type: 'image/jpeg' },
-    { src: hd, sizes: '256x256', type: 'image/jpeg' },
-    { src: hd, sizes: '384x384', type: 'image/jpeg' },
-    { src: hd, sizes: '512x512', type: 'image/jpeg' },
+    { src: hd, sizes: '96x96', type: mime },
+    { src: hd, sizes: '128x128', type: mime },
+    { src: hd, sizes: '192x192', type: mime },
+    { src: hd, sizes: '256x256', type: mime },
+    { src: hd, sizes: '384x384', type: mime },
+    { src: hd, sizes: '512x512', type: mime },
   ];
+}
+
+function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
+  if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !track) return;
+  try {
+    registerMediaSessionHandlers();
+    const coverUrl = resolveTrackCover(track);
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.name,
+      artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+      album: track.album?.name || 'Spotifree',
+      artwork: getMediaSessionArtwork(coverUrl),
+    });
+    navigator.mediaSession.playbackState = 'playing';
+    if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
+      (navigator.mediaSession as any).setPositionState({
+        duration: Math.max(1, track.duration_ms / 1000),
+        playbackRate: 1,
+        position: Math.max(0, positionSec),
+      });
+      lastMediaSessionPositionUpdate = Date.now();
+    }
+
+    // If artwork is not resolved yet, resolve in background and re-apply crisp lockscreen artwork immediately
+    if (!coverUrl && track.name) {
+      resolveTrackCoversBatch([track]).then(() => {
+        const freshCover = resolveTrackCover(track);
+        if (freshCover && typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: track.name,
+            artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+            album: track.album?.name || 'Spotifree',
+            artwork: getMediaSessionArtwork(freshCover),
+          });
+        }
+      }).catch(() => {});
+    }
+  } catch {}
 }
 let lastMediaSessionPositionUpdate = 0;
 
@@ -261,26 +325,7 @@ const store = create<PlayerState>((set, get) => ({
       }, 500);
     }
 
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-      try {
-        registerMediaSessionHandlers();
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: track.name,
-          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
-          album: track.album?.name || 'Spotifree',
-          artwork: getMediaSessionArtwork(resolveTrackCover(track)),
-        });
-        navigator.mediaSession.playbackState = 'playing';
-        if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
-          (navigator.mediaSession as any).setPositionState({
-            duration: Math.max(1, track.duration_ms / 1000),
-            playbackRate: 1,
-            position: 0,
-          });
-          lastMediaSessionPositionUpdate = Date.now();
-        }
-      } catch {}
-    }
+    updateMediaSessionTrack(track, 0);
   },
 
   togglePlay: () => {
@@ -658,26 +703,7 @@ const store = create<PlayerState>((set, get) => ({
       preselectedNextTrackId: nextPreselectedId,
     });
 
-    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-      try {
-        registerMediaSessionHandlers();
-        navigator.mediaSession.metadata = new MediaMetadata({
-          title: track.name,
-          artist: track.artists?.map((a) => a.name).join(', ') || 'Spotifree',
-          album: track.album?.name || 'Spotifree',
-          artwork: getMediaSessionArtwork(resolveTrackCover(track)),
-        });
-        navigator.mediaSession.playbackState = 'playing';
-        if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
-          (navigator.mediaSession as any).setPositionState({
-            duration: Math.max(1, track.duration_ms / 1000),
-            playbackRate: 1,
-            position: Math.max(0, initialProgressMs / 1000),
-          });
-          lastMediaSessionPositionUpdate = Date.now();
-        }
-      } catch {}
-    }
+    updateMediaSessionTrack(track, initialProgressMs / 1000);
 
     // Preload next upcoming tracks N+1 and N+2
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
