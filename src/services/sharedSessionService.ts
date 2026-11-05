@@ -486,7 +486,9 @@ function applySynchronizedPlayback(pb: any) {
     const expectedProgress = (pb.progressMs || 0) + elapsed;
 
     // Track change
-    if (pb.track && pb.track.id !== player.currentTrack?.id) {
+    const curClean = (player.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const pbClean = (pb.track?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    if (pb.track && pbClean && pbClean !== curClean) {
       player.playTrack(pb.track, pb.queue);
     }
 

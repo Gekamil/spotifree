@@ -25,13 +25,15 @@ export const AudioController: React.FC = () => {
   // 2. Play track when currentTrack changes (Desktop + Mobile parity)
   useEffect(() => {
     if (!currentTrack) return;
-    if (lastTrackIdRef.current === currentTrack.id) return;
-    lastTrackIdRef.current = currentTrack.id;
+    const cleanCurrent = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    if (lastTrackIdRef.current === cleanCurrent) return;
+    lastTrackIdRef.current = cleanCurrent;
 
     const artistName = currentTrack.artists?.[0]?.name || '';
     const query = `${currentTrack.name} ${artistName}`.trim();
+    const cleanEngine = (audioEngine.getCurrentTrackId() || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
-    if (audioEngine.getCurrentTrackId() !== currentTrack.id) {
+    if (cleanEngine !== cleanCurrent) {
       audioEngine.playTrack(currentTrack.id, query, 0);
     }
 

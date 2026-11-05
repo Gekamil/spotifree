@@ -1642,8 +1642,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     <div
                       key={trk.id}
                       onClick={() => {
-                        const list = addSearchQuery ? addSearchResults : popularSuggestions;
-                        playTrack(trk, [trk, ...list.filter((t) => t.id !== trk.id)], 'recommended');
+                        const currentClean = (currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                        const trkClean = (trk.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                        if (currentClean && currentClean === trkClean) {
+                          togglePlay();
+                        } else {
+                          const list = addSearchQuery ? addSearchResults : popularSuggestions;
+                          playTrack(trk, [trk, ...list.filter((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim() !== trkClean)], 'recommended');
+                        }
                       }}
                       className="flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer active:bg-white/5 transition-colors"
                     >

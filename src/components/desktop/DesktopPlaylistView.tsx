@@ -1660,15 +1660,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               (t) => t.id === tr.id || (t.name === tr.name && t.artists[0]?.name === tr.artists[0]?.name)
             );
 
-            const isPlayingThisTrack = isPlaying && currentTrack?.id === tr.id;
-            const isThisSelected = currentTrack?.id === tr.id;
+            const currentClean = (currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            const trClean = (tr.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            const isPlayingThisTrack = isPlaying && Boolean(currentClean && currentClean === trClean);
+            const isThisSelected = Boolean(currentClean && currentClean === trClean);
 
             const handlePlaySuggestion = () => {
-              if (currentTrack?.id === tr.id) {
+              if (currentClean && currentClean === trClean) {
                 togglePlay();
               } else {
                 const list = addSearchQuery ? addSearchResults : popularSuggestions;
-                const recQueue = [tr, ...list.filter((t) => t.id !== tr.id)];
+                const recQueue = [tr, ...list.filter((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim() !== trClean)];
                 playTrack(tr, recQueue, 'playlist-recommendations');
               }
             };

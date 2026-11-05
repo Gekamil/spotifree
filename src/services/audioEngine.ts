@@ -229,6 +229,8 @@ class AudioEngine {
     }
 
     if (effectiveCrossfade <= 0) return;
+    // Opening seconds of a track should NEVER trigger crossfade or preloading transitions
+    if (curSec < 5 || durSec < 15) return;
 
     // Silence Truncation & Outro Dead Air Elimination:
     // Spotify duration represents true studio audio length. YouTube videos often include
@@ -1721,9 +1723,12 @@ class AudioEngine {
       return;
     }
 
-    if (this.currentTrackId && this.currentTrackId !== state.currentTrack.id) {
+    const cleanEngine = (this.currentTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanState = (state.currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+
+    if (cleanEngine && cleanState && cleanEngine !== cleanState) {
       this.desyncTicks++;
-      if (this.desyncTicks >= 15) { // ~1.5s sustained desync
+      if (this.desyncTicks >= 25) { // ~2.5s sustained desync
         console.warn(`[AudioWatchdog] Desync detected: UI shows "${state.currentTrack.name}" (${state.currentTrack.id}) but audio engine playing (${this.currentTrackId}). Resyncing audio immediately...`);
         this.desyncTicks = 0;
         const artist = state.currentTrack.artists?.[0]?.name || '';
@@ -1742,6 +1747,7 @@ class AudioEngine {
    */
   private checkOutroTruncation(curSec: number, durSec: number) {
     if (this.isCrossfading || this.isTransitioning) return;
+    if (curSec < 5 || durSec < 15) return; // Guard: Opening seconds must never trigger truncation
     if (Date.now() - this.lastCrossfadeFinishTime < 5000) return;
     const state = usePlayerStore.getState();
     if (!state.isPlaying || state.repeatMode === 'one') return;
@@ -2162,6 +2168,25 @@ class AudioEngine {
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
+    const cleanNew = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanCur = (this.currentTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+
+    // Guard against duplicate rapid playTrack triggers while resolving or if already actively playing this track:
+    if (cleanNew && cleanCur === cleanNew) {
+      if (this.isTransitioning) {
+        // Already resolving and loading this exact track in active sequence, avoid restarting to 0!
+        return;
+      }
+      if (startSeconds === 0 && usePlayerStore.getState().isPlaying) {
+        const curTime = this.getCurrentTime();
+        if (curTime > 0.2) {
+          // Already actively playing this song, keep playing smoothly!
+          this.resume();
+          return;
+        }
+      }
+    }
+
     this.playSequenceId++;
     const currentSeq = this.playSequenceId;
 
@@ -2172,10 +2197,21 @@ class AudioEngine {
     this.isCrossfading = false;
     this.preloadedNext = null;
     this.stopAuxiliaryTransitionFX();
+    this.desyncTicks = 0;
     if (this.audioContext) {
       const now = this.audioContext.currentTime;
       if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
       if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
+    }
+
+    // Immediately silence outgoing player if changing to a new track so old audio doesn't bleed into the first second
+    if (cleanNew !== cleanCur) {
+      if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+        try { this.ytPlayer.pauseVideo(); } catch {}
+      }
+      if (this.audio) {
+        try { this.audio.pause(); } catch {}
+      }
     }
 
     // Stop secondary player
