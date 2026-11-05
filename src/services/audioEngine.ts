@@ -121,6 +121,7 @@ class AudioEngine {
   private lastEndedTimestamp = 0;
   private consecutiveEndedCount = 0;
   public lastCrossfadeFinishTime = 0;
+  public lastTrackStartTime = 0;
   private lastObservedSec = -1;
   private lastObservedAdvanceTime = 0;
   private stuckRecoveryAttempts = 0;
@@ -1653,10 +1654,15 @@ class AudioEngine {
         return;
       }
 
-      // CRITICAL SHIELD: If a transition or crossfade finished recently (< 5000ms),
-      // ignore this ENDED event completely! It is a delayed event from the outgoing video or player deck handoff.
-      if (this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 5000)) {
-        console.log('[AudioEngine] Ignored delayed ENDED event shortly after crossfade/transition', {
+      // CRITICAL SHIELD: If track started recently (< 3500ms) or a transition/crossfade finished recently (< 5000ms),
+      // ignore this ENDED event completely! It is a delayed event from the outgoing video, player initialization, or ad blip.
+      if (
+        this.isTransitioning ||
+        (Date.now() - this.lastTrackStartTime < 3500) ||
+        (Date.now() - this.lastCrossfadeFinishTime < 5000)
+      ) {
+        console.log('[AudioEngine] Ignored delayed/premature ENDED event', {
+          sinceStart: Date.now() - this.lastTrackStartTime,
           sinceCrossfade: Date.now() - this.lastCrossfadeFinishTime,
           isTransitioning: this.isTransitioning,
         });
@@ -1669,11 +1675,11 @@ class AudioEngine {
       }
 
       // Debounce false-positive immediate ends:
-      // If current track duration > 10s and currentTime < 3s, ignore as premature / ad event
+      // If currentTime < 3.5s or duration is not yet established, ignore as premature / initialization event
       const curTime = typeof this.ytPlayer?.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : (event?.currentTime ?? 0);
       const durTime = typeof this.ytPlayer?.getDuration === 'function' ? this.ytPlayer.getDuration() : (event?.duration ?? 0);
-      if (durTime > 10 && curTime < 3) {
-        console.warn('[AudioEngine] Ignored premature track end (<3s)', { curTime, durTime });
+      if (curTime < 3.5) {
+        console.warn('[AudioEngine] Ignored premature track end (<3.5s)', { curTime, durTime });
         return;
       }
 
@@ -2198,6 +2204,7 @@ class AudioEngine {
 
     this.playSequenceId++;
     const currentSeq = this.playSequenceId;
+    this.lastTrackStartTime = Date.now();
 
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);

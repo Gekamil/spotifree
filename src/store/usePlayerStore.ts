@@ -39,6 +39,8 @@ function resolveTrackCover(track: any): string {
     for (const img of track.album.images) {
       if (img && img.url && !isPlaylistOrGenericCover(img.url)) return img.url;
     }
+    const first = track.album.images[0]?.url;
+    if (first && !first.includes('liked-songs') && !first.includes('mosaic.scdn.co')) return first;
   }
 
   // 3. Fallback direct properties on track
@@ -46,6 +48,9 @@ function resolveTrackCover(track: any): string {
   if (track.imageUrl && !isPlaylistOrGenericCover(track.imageUrl)) return track.imageUrl;
   if (track.image && !isPlaylistOrGenericCover(track.image)) return track.image;
   if (track.thumbnail && !isPlaylistOrGenericCover(track.thumbnail)) return track.thumbnail;
+
+  const directProp = track.coverUrl || track.imageUrl || track.image || track.thumbnail;
+  if (directProp && !directProp.includes('liked-songs') && !directProp.includes('mosaic.scdn.co')) return directProp;
 
   // 4. Check spotifree_track_covers in localStorage
   if (typeof window !== 'undefined') {
@@ -242,19 +247,6 @@ const store = create<PlayerState>((set, get) => ({
     const state = get();
     const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanNew = (track?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-    if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying && !newQueue) {
-      // Already playing this song, do not reset to 0 or restart!
-      return;
-    }
-
-    const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
-    try {
-      useStatsStore.getState().recordTrackPlayed(track);
-    } catch {}
-
-    const updatedShuffle = state.isShuffle
-      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
-      : [];
 
     const rawOriginal = newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue);
     let activeQueue: Track[];
@@ -272,6 +264,27 @@ const store = create<PlayerState>((set, get) => ({
     } else {
       activeQueue = state.queue;
     }
+
+    if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying) {
+      // Already playing this song, update queue if newQueue is provided, but do NOT restart to 0!
+      if (newQueue) {
+        set({
+          queue: activeQueue,
+          originalQueue: rawOriginal,
+          currentContextId: contextId !== undefined ? contextId : state.currentContextId,
+        });
+      }
+      return;
+    }
+
+    const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
+    try {
+      useStatsStore.getState().recordTrackPlayed(track);
+    } catch {}
+
+    const updatedShuffle = state.isShuffle
+      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
+      : [];
 
     let nextPreselectedId: string | null = null;
     if (state.isShuffle && activeQueue.length > 1) {
@@ -355,19 +368,8 @@ const store = create<PlayerState>((set, get) => ({
       (usePlayerStore as any).isSkippingLock = false;
     }, 120);
 
-    const { queue, currentTrack, repeatMode, isPlaying } = get();
+    const { queue, currentTrack, isPlaying } = get();
     if (queue.length === 0) return;
-
-    if (repeatMode === 'one' && currentTrack) {
-      set({
-        isPlaying: true,
-        progressMs: 0,
-      });
-      if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.seek(0);
-      }
-      return;
-    }
 
     const nextTrackCandidate = get().getNextTrack();
 
@@ -904,7 +906,7 @@ const store = create<PlayerState>((set, get) => ({
           const activeUserId = getActiveUserId();
           let updatedLikedTracks: Track[];
           if (exists) {
-            updatedLikedTracks = removeCustomLikedSong(trackId, activeUserId);
+            updatedLikedTracks = removeCustomLikedSong(trackId, activeUserId, trackObj);
           } else if (trackObj) {
             updatedLikedTracks = saveCustomLikedSong(trackObj, activeUserId);
           } else {
@@ -914,13 +916,15 @@ const store = create<PlayerState>((set, get) => ({
           // Update liked-songs in SpotifyDataStore and persist everywhere
           import('./useSpotifyDataStore').then(({ useSpotifyDataStore }) => {
             const ds = useSpotifyDataStore.getState();
+            const isLikedTarget = (pid: string, pname?: string) =>
+              pid === 'liked-songs' ||
+              pid === 'user-liked-songs' ||
+              pid === 'tracks' ||
+              pid.includes('collection:tracks') ||
+              /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks)$/i.test((pname || '').trim());
+
             const updatedPlaylists = ds.playlists.map((p) => {
-              const isLiked =
-                p.id === 'liked-songs' ||
-                p.id === 'user-liked-songs' ||
-                p.id === 'tracks' ||
-                p.id.includes('collection:tracks');
-              if (isLiked) {
+              if (isLikedTarget(p.id, p.name)) {
                 return {
                   ...p,
                   tracks: { total: updatedLikedTracks.length, items: updatedLikedTracks },

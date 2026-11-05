@@ -14,6 +14,7 @@ import {
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
+import { deduplicateTracks } from '../utils/trackDeduplication';
 
 export interface SpotifreeAccount {
   uid?: string;
@@ -354,7 +355,8 @@ export async function syncSpotifreeAccount(
       if (removedSet.size === 0) return p;
       const filteredItems = p.tracks.items.filter((t) => {
         const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return !removedSet.has(t.id) && !removedSet.has(c);
+        const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+        return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
       });
       return {
         ...p,
@@ -373,7 +375,7 @@ export async function syncSpotifreeAccount(
     new Set(
       rawLikedTracks.filter((id) => {
         const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return !likedRemovedSet.has(id) && !likedRemovedSet.has(c);
+        return !likedRemovedSet.has(id) && !likedRemovedSet.has(c) && !likedRemovedSet.has(`spotify:track:${c}`);
       })
     )
   );
@@ -477,7 +479,8 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
         if (removedSet.size === 0) return p;
         const filteredItems = p.tracks.items.filter((t) => {
           const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-          return !removedSet.has(t.id) && !removedSet.has(c);
+          const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+          return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
         });
         return {
           ...p,
@@ -505,16 +508,36 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
         window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
 
         // If liked-songs has tracks, prime custom liked songs for this user (filtering blacklisted items)
-        const likedPl = cleanPlaylists.find((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
+        const isLikedPl = (p: any) =>
+          p.id === 'liked-songs' ||
+          p.id === 'user-liked-songs' ||
+          p.id === 'tracks' ||
+          p.id?.includes('collection:tracks') ||
+          /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs)/i.test((p.name || '').trim());
+
+        const likedPl = cleanPlaylists.find(isLikedPl);
         if (likedPl?.tracks?.items && Array.isArray(likedPl.tracks.items) && likedPl.tracks.items.length > 0) {
           const likedRemovedSet = getRemovedTrackIdsForPlaylist('liked-songs');
           const cleanLikedItems = likedPl.tracks.items.filter((t) => {
             const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-            return !likedRemovedSet.has(t.id) && !likedRemovedSet.has(c);
+            const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+            return !likedRemovedSet.has(t.id) && !likedRemovedSet.has(c) && (!sig || !likedRemovedSet.has(sig));
           });
-          window.localStorage.setItem(`spotifree_custom_liked_songs_${userId}`, JSON.stringify(cleanLikedItems));
+
+          const rawExisting = window.localStorage.getItem(`spotifree_custom_liked_songs_${userId}`);
+          let existingLiked: any[] = rawExisting ? JSON.parse(rawExisting) : [];
+          // Preserve existing liked tracks if cleanLikedItems is smaller
+          const mergedLiked = cleanLikedItems.length >= existingLiked.length
+            ? cleanLikedItems
+            : deduplicateTracks([...cleanLikedItems, ...existingLiked]).filter((t) => {
+                const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+                return !likedRemovedSet.has(t.id) && !likedRemovedSet.has(c) && (!sig || !likedRemovedSet.has(sig));
+              });
+
+          window.localStorage.setItem(`spotifree_custom_liked_songs_${userId}`, JSON.stringify(mergedLiked));
           window.dispatchEvent(new CustomEvent('spotifree_liked_songs_updated', {
-            detail: { tracks: cleanLikedItems },
+            detail: { tracks: mergedLiked },
           }));
         }
       } catch {}

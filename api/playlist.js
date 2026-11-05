@@ -720,6 +720,13 @@ function isGenericPlaylistTitle(title) {
   return genericPatterns.some((pattern) => pattern.test(normalized));
 }
 
+const NOISE_FILTER_REGEX = /\b(ruido\s+blanco|white\s+noise|ruido\s+rosa|pink\s+noise|ruido\s+marr[oó]n|brown\s+noise|green\s+noise|static\s+noise|sonido(s)?\s+de\s+(lluvia|agua|olas|mar|viento|tormenta|ventilador|secador|aspiradora|reloj)|(rain|water|ocean|waves|storm|fan|wind)\s+sound(s)?|ambient\s+noise|binaural\s+beat(s)?|ondas\s+(alfa|delta|theta|gamma)|sleep\s+sound(s)?|sonido(s)?\s+para\s+dormir|deep\s+sleep|baby\s+sleep|nature\s+sound(s)?|sound\s+effects?|test\s+tone|\d+\s*hz\b)\b/i;
+
+function isNoiseTrack(title, artist) {
+  const combined = `${title || ''} ${artist || ''}`;
+  return NOISE_FILTER_REGEX.test(combined);
+}
+
 /**
  * Dynamically queries real Spotify recommendations for any playlist
  * using Spotify Pathfinder GraphQL search (backed by Web Player auth) with Deezer fallback.
@@ -755,6 +762,16 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
 
     if (cleanTitle.length >= 3 && !isGenericPlaylistTitle(cleanTitle)) {
       queryTerms.push(cleanTitle);
+
+      // Expand specific popular themes to ensure rich, diverse music catalogs
+      const lower = cleanTitle.toLowerCase();
+      if (/^(gaming|games|gamer|videojuegos)$/i.test(lower)) {
+        queryTerms.push('electronic gaming music', 'ncs hits', 'dance edm');
+      } else if (/^(workout|gym|entreno|fitness)$/i.test(lower)) {
+        queryTerms.push('workout motivation edm', 'gym energetic hits');
+      } else if (/^(chill|relax|estudio|study|calma)$/i.test(lower)) {
+        queryTerms.push('lofi chill beats', 'indie folk calm');
+      }
     }
   }
 
@@ -765,6 +782,27 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
 
   const tracks = [];
   const seenIds = new Set();
+  const seenSignatures = new Set();
+  const titleCounts = new Map();
+  const artistCounts = new Map();
+
+  const isDuplicateOrExcessive = (title, artist) => {
+    const cleanT = (title || '').toLowerCase().trim();
+    const cleanA = (artist || '').toLowerCase().trim();
+    const sig = `${cleanT}::${cleanA}`;
+    if (seenSignatures.has(sig)) return true;
+    if (cleanT && (titleCounts.get(cleanT) || 0) >= 2) return true;
+    if (cleanA && (artistCounts.get(cleanA) || 0) >= 2) return true;
+    return false;
+  };
+
+  const recordAcceptedTrack = (title, artist) => {
+    const cleanT = (title || '').toLowerCase().trim();
+    const cleanA = (artist || '').toLowerCase().trim();
+    seenSignatures.add(`${cleanT}::${cleanA}`);
+    if (cleanT) titleCounts.set(cleanT, (titleCounts.get(cleanT) || 0) + 1);
+    if (cleanA) artistCounts.set(cleanA, (artistCounts.get(cleanA) || 0) + 1);
+  };
 
   // 1. Query Spotify Pathfinder GraphQL search (Real Spotify Tracks!)
   if (auth.accessToken) {
@@ -797,7 +835,11 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
             const rawUri = d.uri || '';
             const trackId = rawUri.split(':').pop() || d.id;
             if (!trackId || seenIds.has(trackId) || existingIdSet.has(trackId)) continue;
+            const artistsStr = (d.artists?.items || []).map((a) => a.profile?.name || a.name || '').join(' ');
+            if (isNoiseTrack(d.name, artistsStr)) continue;
+            if (isDuplicateOrExcessive(d.name, (d.artists?.items || [])[0]?.profile?.name || (d.artists?.items || [])[0]?.name)) continue;
             seenIds.add(trackId);
+            recordAcceptedTrack(d.name, (d.artists?.items || [])[0]?.profile?.name || (d.artists?.items || [])[0]?.name);
 
             const cover = toHDImage(
               d.albumOfTrack?.coverArt?.sources?.[0]?.url ||
@@ -845,7 +887,10 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
           for (const t of dzData.data || []) {
             const tid = `dz-${t.id}`;
             if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+            if (isNoiseTrack(t.title || t.title_short, t.artist?.name)) continue;
+            if (isDuplicateOrExcessive(t.title || t.title_short, t.artist?.name)) continue;
             seenIds.add(tid);
+            recordAcceptedTrack(t.title || t.title_short, t.artist?.name);
             const cover = toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '');
             tracks.push({
               id: tid,
@@ -881,7 +926,10 @@ async function getSpotifyRecommendations({ playlistId = '', playlistTitle = '', 
           for (const t of itData.results || []) {
             const tid = `it-${t.trackId}`;
             if (seenIds.has(tid) || existingIdSet.has(tid)) continue;
+            if (isNoiseTrack(t.trackName, t.artistName)) continue;
+            if (isDuplicateOrExcessive(t.trackName, t.artistName)) continue;
             seenIds.add(tid);
+            recordAcceptedTrack(t.trackName, t.artistName);
             const cover = (t.artworkUrl100 || '').replace('100x100bb', '600x600bb');
             tracks.push({
               id: tid,

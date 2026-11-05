@@ -14,6 +14,7 @@ import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { searchSpotify } from './spotifyApi';
+import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
 
 export type MusicHashtag =
   | '#reggaeton'
@@ -346,6 +347,7 @@ export async function fetchRoleChartTracks(targetTag: MusicHashtag): Promise<Tra
   const add = (t: Track) => {
     if (!t || !t.id || seenIds.has(t.id)) return;
     if (isGenericTitleMatch(t.name, targetTag)) return;
+    if (isNonMusicOrNoise(t)) return;
     seenIds.add(t.id);
     tracks.push(t);
   };
@@ -607,6 +609,7 @@ export async function getCuratedSetForHashtag(
   const addTrack = (t: Track) => {
     if (!t || !t.id || seen.has(t.id)) return false;
     if (isGenericTitleMatch(t.name, targetTag)) return false;
+    if (isNonMusicOrNoise(t)) return false;
 
     // Strict guard for #chill
     if (targetTag === '#chill') {
@@ -795,7 +798,7 @@ export async function getInitialDJLibraryRemix(count: number = 15): Promise<Trac
       }
     }
 
-    return result.slice(0, count).sort(() => Math.random() - 0.5);
+    return filterMusicTracksOnly(result).slice(0, count).sort(() => Math.random() - 0.5);
   }
 
   // Fallback to dominant hashtag if library is completely empty

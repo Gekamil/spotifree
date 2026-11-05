@@ -35,6 +35,7 @@ import { djTransitionService } from '../../services/djTransitionService';
 import { audioEngine } from '../../services/audioEngine';
 import { AIDJView } from '../dj/AIDJView';
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
+import { filterMusicTracksOnly } from '../../utils/trackFilter';
 import {
   getTrackCoverUrl,
   resolveTrackCoversBatch,
@@ -170,21 +171,76 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   useEffect(() => {
     if (!isLikedPlaylist) return;
     const handleLikedUpdate = (e: any) => {
-      const rawTracks = e.detail?.tracks || getCustomLikedSongs(user?.id);
+      const rawTracks = e.detail?.tracks;
       const removedSet = getRemovedTrackIdsForPlaylist('liked-songs');
-      const updatedTracks = rawTracks.filter((t: Track) => {
+      const isNotRemoved = (t: Track) => {
         const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return !removedSet.has(t.id) && !removedSet.has(c);
-      });
-      setTracks(updatedTracks);
-      setActivePlaylist((prev) => ({
-        ...prev,
-        tracks: { total: updatedTracks.length, items: updatedTracks },
-      }));
+        const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+        return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
+      };
+
+      if (rawTracks && Array.isArray(rawTracks)) {
+        const cleanUpdated = rawTracks.filter(isNotRemoved);
+        setTracks((prev) => {
+          if (cleanUpdated.length >= prev.length) {
+            return cleanUpdated;
+          }
+          return deduplicateTracks([...cleanUpdated, ...prev]).filter(isNotRemoved);
+        });
+        setActivePlaylist((prev) => ({
+          ...prev,
+          tracks: { total: cleanUpdated.length, items: cleanUpdated },
+        }));
+      } else {
+        const custom = getCustomLikedSongs(user?.id).filter(isNotRemoved);
+        setTracks((prev) => deduplicateTracks([...custom, ...prev]).filter(isNotRemoved));
+      }
     };
     window.addEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
     return () => window.removeEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
   }, [isLikedPlaylist, user?.id]);
+
+  // Reactive listener for removed tracks from this playlist in mobile
+  useEffect(() => {
+    const handleTrackRemoved = (e: any) => {
+      const { playlistId: targetPlId, trackId: targetTrackId, trackObj } = e.detail || {};
+      const cleanCurrent = (activePlaylist.id || cleanId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const cleanTarget = (targetPlId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const isLikedTarget =
+        cleanTarget === 'liked-songs' ||
+        cleanTarget === 'tracks' ||
+        cleanTarget.includes('collection:tracks') ||
+        cleanTarget === 'user-liked-songs';
+
+      const matchesThisPlaylist =
+        cleanCurrent === cleanTarget ||
+        activePlaylist.id === targetPlId ||
+        cleanId === targetPlId ||
+        (isLikedPlaylist && isLikedTarget);
+
+      if (matchesThisPlaylist) {
+        const cleanTrack = (targetTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        const filterFn = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const matchId = t.id === targetTrackId || t.id === cleanTrack || c === cleanTrack || t.id === `spotify:track:${cleanTrack}`;
+          const matchName = trackObj && t.name?.toLowerCase().trim() === trackObj.name?.toLowerCase().trim() &&
+            t.artists?.[0]?.name?.toLowerCase().trim() === trackObj.artists?.[0]?.name?.toLowerCase().trim();
+          return !matchId && !matchName;
+        };
+
+        setTracks((prev) => prev.filter(filterFn));
+        setActivePlaylist((prev) => {
+          const nextItems = (prev.tracks?.items || []).filter(filterFn);
+          return {
+            ...prev,
+            tracks: { total: nextItems.length, items: nextItems },
+          };
+        });
+      }
+    };
+    window.addEventListener('spotifree_track_removed', handleTrackRemoved);
+    return () => window.removeEventListener('spotifree_track_removed', handleTrackRemoved);
+  }, [activePlaylist.id, cleanId, isLikedPlaylist]);
 
   const [loading, setLoading] = useState(false);
   const checkIsInLibrary = (id: string, clean: string): boolean => {
@@ -238,7 +294,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         8
       );
       if (recs && recs.length > 0) {
-        setPopularSuggestions(recs);
+        setPopularSuggestions(filterMusicTracksOnly(recs));
       }
     } catch (err) {
       console.warn('[MobilePlaylistView] loadRecommendations error:', err);
@@ -266,7 +322,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       try {
         const data = await searchSpotify(q);
         if (!cancelled) {
-          setAddSearchResults(data?.tracks?.items || []);
+          setAddSearchResults(filterMusicTracksOnly(data?.tracks?.items || []));
         }
       } catch {
         if (!cancelled) setAddSearchResults([]);
@@ -358,7 +414,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       const removedSet = getRemovedTrackIdsForPlaylist('liked-songs');
       const isNotRemoved = (t: Track) => {
         const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return !removedSet.has(t.id) && !removedSet.has(c);
+        const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+        return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
       };
       const customLiked = getCustomLikedSongs(user?.id).filter(isNotRemoved);
       const baseTracks = (playlist.tracks?.items || []).filter(isNotRemoved);
@@ -667,17 +724,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       toggleLike(track.id, track);
       if (isLikedPlaylist) {
         const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
-        removeCustomLikedSong(track.id, user?.id);
-        removeCustomLikedSong(clean, user?.id);
-        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id);
-        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean);
+        removeCustomLikedSong(track.id, user?.id, track);
+        removeCustomLikedSong(clean, user?.id, track);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id, track);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean, track);
         const nextTracks = tracks.filter((t) => {
           const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-          return (
-            t.id !== track.id &&
-            tClean !== clean &&
-            (t.name !== track.name || t.artists?.[0]?.name !== track.artists?.[0]?.name)
-          );
+          const matchId = t.id === track.id || t.id === clean || tClean === clean;
+          const matchName = t.name && track.name &&
+            t.name.toLowerCase().trim() === track.name.toLowerCase().trim() &&
+            t.artists?.[0]?.name?.toLowerCase().trim() === track.artists?.[0]?.name?.toLowerCase().trim();
+          return !matchId && !matchName;
         });
         setTracks(nextTracks);
         setActivePlaylist((prev) => ({
@@ -715,14 +772,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }));
 
     if (isLikedPlaylist) {
-      saveCustomLikedSong(trackWithMeta, user?.id);
-      toggleLike(track.id, trackWithMeta);
+      saveCustomLikedSong(trackWithMeta, user?.id, updatedTracks);
+      const curLiked = usePlayerStore.getState().likedTrackIds;
+      if (!curLiked.includes(track.id)) {
+        usePlayerStore.setState({ likedTrackIds: [...curLiked, track.id] });
+      }
     } else {
-      saveCustomTrackToStorage(cleanId, false, trackWithMeta, user?.id);
+      saveCustomTrackToStorage(cleanId, false, trackWithMeta, user?.id, updatedTracks);
     }
 
     // Persist to store, cache, localStorage, and cloud Firestore
-    useSpotifyDataStore.getState().updatePlaylist(cleanId, {
+    const targetKey = isLikedPlaylist ? 'liked-songs' : cleanId;
+    useSpotifyDataStore.getState().updatePlaylist(targetKey, {
+      tracks: { total: updatedTracks.length, items: updatedTracks },
+    });
+    useSpotifyDataStore.getState().cachePlaylistDetails({
+      ...activePlaylist,
+      id: targetKey,
       tracks: { total: updatedTracks.length, items: updatedTracks },
     });
   };
@@ -854,21 +920,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     setTimeout(() => setToastMessage(null), 2500);
   };
 
-  const handleRemoveTrackFromPlaylist = (trackId: string) => {
-    useSpotifyDataStore.getState().removeTrackFromPlaylist(activePlaylist.id, trackId);
-    useSpotifyDataStore.getState().removeTrackFromPlaylist(cleanId, trackId);
+  const handleRemoveTrackFromPlaylist = (trackId: string, trackObj?: Track) => {
+    useSpotifyDataStore.getState().removeTrackFromPlaylist(activePlaylist.id, trackId, trackObj);
+    useSpotifyDataStore.getState().removeTrackFromPlaylist(cleanId, trackId, trackObj);
     const cleanTrack = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-    setTracks((prev) =>
-      prev.filter((t) => {
-        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return t.id !== trackId && t.id !== cleanTrack && c !== cleanTrack;
-      })
-    );
+    const filterFn = (t: Track) => {
+      const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      const matchId = t.id === trackId || t.id === cleanTrack || c === cleanTrack || t.id === `spotify:track:${cleanTrack}`;
+      const matchName = trackObj && t.name && trackObj.name &&
+        t.name.toLowerCase().trim() === trackObj.name.toLowerCase().trim() &&
+        t.artists?.[0]?.name?.toLowerCase().trim() === trackObj.artists?.[0]?.name?.toLowerCase().trim();
+      return !matchId && !matchName;
+    };
+
+    setTracks((prev) => prev.filter(filterFn));
     setActivePlaylist((prev) => {
-      const nextItems = (prev.tracks?.items || []).filter((t) => {
-        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return t.id !== trackId && t.id !== cleanTrack && c !== cleanTrack;
-      });
+      const nextItems = (prev.tracks?.items || []).filter(filterFn);
       return {
         ...prev,
         tracks: { total: nextItems.length, items: nextItems },
@@ -1406,8 +1473,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     <div
                       key={trk.id}
                       onClick={() => {
-                        const list = addSearchQuery ? addSearchResults : popularSuggestions;
-                        playTrack(trk, [trk, ...list.filter((t) => t.id !== trk.id)], 'search-suggestions');
+                        const currentClean = (currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                        const trkClean = (trk.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                        if (currentClean && currentClean === trkClean) {
+                          togglePlay();
+                        } else {
+                          const list = addSearchQuery ? addSearchResults : popularSuggestions;
+                          playTrack(trk, [trk, ...list.filter((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim() !== trkClean)], 'search-suggestions');
+                        }
                       }}
                       className="flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer active:bg-white/5 transition-colors"
                     >
@@ -1995,7 +2068,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   if (cleanId === 'liked-songs' || isLikedPlaylist) {
                     handleToggleTrackLike(activeTrackMenu);
                   } else {
-                    handleRemoveTrackFromPlaylist(activeTrackMenu.id);
+                    handleRemoveTrackFromPlaylist(activeTrackMenu.id, activeTrackMenu);
                   }
                   setActiveTrackMenu(null);
                 }}

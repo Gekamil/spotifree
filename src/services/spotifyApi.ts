@@ -1,5 +1,6 @@
 import type { Playlist, Track, UserProfile } from '../types/spotify';
 import { getValidAccessToken } from './spotifyAuth';
+import { filterMusicTracksOnly } from '../utils/trackFilter';
 
 export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
   try {
@@ -577,7 +578,7 @@ export async function fetchPlaylistRecommendations(
     if (res.ok) {
       const data = await res.json();
       if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-        return data.tracks;
+        return filterMusicTracksOnly(data.tracks);
       }
     }
   } catch (err) {

@@ -112,6 +112,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
       const inPl = pl.tracks?.items?.find((t) => t.id === contextMenu.trackId);
       if (inPl) return inPl;
     }
+    const cache = useSpotifyDataStore.getState().playlistDetailsCache;
+    if (cache) {
+      for (const pl of Object.values(cache)) {
+        const inPl = pl.tracks?.items?.find((t) => t.id === contextMenu.trackId);
+        if (inPl) return inPl;
+      }
+    }
     return null;
   }, [contextMenu.trackId, playlists]);
 
@@ -164,7 +171,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
   const handleRemoveTrackFromCurrentPlaylist = () => {
     if (contextMenu.playlistId && contextMenu.trackId) {
-      useSpotifyDataStore.getState().removeTrackFromPlaylist(contextMenu.playlistId, contextMenu.trackId);
+      useSpotifyDataStore.getState().removeTrackFromPlaylist(contextMenu.playlistId, contextMenu.trackId, targetTrack || undefined);
     }
     closeContextMenu();
   };
@@ -437,18 +444,10 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
           <button
             onClick={() => {
               if (contextMenu.trackId) {
-                toggleLike(contextMenu.trackId, targetTrack || undefined);
+                const targetObj = targetTrack || undefined;
+                toggleLike(contextMenu.trackId, targetObj);
                 if (contextMenu.playlistId === 'liked-songs' || isLikedPlaylist) {
-                  useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', contextMenu.trackId);
-                  const activeUserId = useSpotifyDataStore.getState().user?.id || 'active';
-                  import('../../utils/userStorage').then(({ removeCustomLikedSong }) => {
-                    const updated = removeCustomLikedSong(contextMenu.trackId!, activeUserId);
-                    window.dispatchEvent(
-                      new CustomEvent('spotifree_liked_songs_updated', {
-                        detail: { tracks: updated },
-                      })
-                    );
-                  });
+                  useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', contextMenu.trackId, targetObj);
                 }
               }
               closeContextMenu();

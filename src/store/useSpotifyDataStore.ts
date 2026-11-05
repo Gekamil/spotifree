@@ -420,7 +420,7 @@ interface SpotifyDataState {
   setDynamicShelves: (shelves: DynamicShelf[]) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
-  removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string, trackObj?: Track) => void;
 }
 
 let isInitializing = false;
@@ -918,27 +918,59 @@ const store = create<SpotifyDataState>((set, get) => ({
     });
   },
 
-  removeTrackFromPlaylist: (playlistId: string, trackId: string) => {
+  removeTrackFromPlaylist: (playlistId: string, trackId: string, trackObj?: Track) => {
     if (!playlistId || !trackId) return;
     const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
     const cleanTrack = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
+    const isLikedPl =
+      cleanPl === 'liked-songs' ||
+      cleanPl === 'tracks' ||
+      cleanPl === 'collection:tracks' ||
+      cleanPl === 'collection-tracks' ||
+      cleanPl === 'user-liked-songs' ||
+      /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks)$/i.test(cleanPl);
+
     // 1. Remove from all storage layers and add to blacklist
-    removeCustomTrackFromStorage(playlistId, trackId);
-    removeCustomTrackFromStorage(cleanPl, cleanTrack);
+    removeCustomTrackFromStorage(playlistId, trackId, undefined, trackObj);
+    removeCustomTrackFromStorage(cleanPl, cleanTrack, undefined, trackObj);
+    if (isLikedPl) {
+      import('../utils/userStorage').then(({ removeCustomLikedSong }) => {
+        removeCustomLikedSong(trackId, undefined, trackObj);
+        removeCustomLikedSong(cleanTrack, undefined, trackObj);
+      }).catch(() => {});
+    }
 
     // 2. Update store playlists and playlistDetailsCache in state
     let updatedPlaylistsList: Playlist[] = [];
     set((s) => {
+      const matchPl = (p: Playlist) => {
+        const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+        if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) return true;
+        if (isLikedPl) {
+          return (
+            p.id === 'liked-songs' ||
+            p.id === 'user-liked-songs' ||
+            p.id === 'tracks' ||
+            p.id.includes('collection:tracks') ||
+            p.id.includes('collection-tracks') ||
+            /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks)$/i.test((p.name || '').trim())
+          );
+        }
+        return false;
+      };
+
       const filterItems = (items: Track[] = []) =>
         items.filter((t) => {
           const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-          return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+          const matchId = t.id === trackId || t.id === cleanTrack || tClean === cleanTrack || t.id === `spotify:track:${cleanTrack}`;
+          const matchName = trackObj && t.name?.toLowerCase().trim() === trackObj.name?.toLowerCase().trim() &&
+            t.artists?.[0]?.name?.toLowerCase().trim() === trackObj.artists?.[0]?.name?.toLowerCase().trim();
+          return !matchId && !matchName;
         });
 
       const updatedPlaylists = s.playlists.map((p) => {
-        const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
-        if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) {
+        if (matchPl(p)) {
           const newItems = filterItems(p.tracks?.items || []);
           return {
             ...p,
@@ -949,7 +981,12 @@ const store = create<SpotifyDataState>((set, get) => ({
       });
 
       const updatedCache = { ...s.playlistDetailsCache };
-      const cacheKeys = [playlistId, cleanPl, `spotify:playlist:${cleanPl}`];
+      const cacheKeys = [
+        playlistId,
+        cleanPl,
+        `spotify:playlist:${cleanPl}`,
+        ...(isLikedPl ? ['liked-songs', 'user-liked-songs', 'collection:tracks', 'tracks'] : []),
+      ];
       for (const k of cacheKeys) {
         if (updatedCache[k]?.tracks?.items) {
           const newItems = filterItems(updatedCache[k].tracks.items);
@@ -968,12 +1005,6 @@ const store = create<SpotifyDataState>((set, get) => ({
     });
 
     // 2b. Sync with Cloud Firestore
-    const isLikedPl =
-      cleanPl === 'liked-songs' ||
-      cleanPl === 'tracks' ||
-      cleanPl === 'collection:tracks' ||
-      cleanPl === 'user-liked-songs';
-
     import('../services/spotifreeAuth')
       .then(({ syncSpotifreeAccount }) => {
         let cleanLikedIds: string[] | undefined = undefined;
@@ -982,7 +1013,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           const currentLikedIds: string[] = playerStore?.likedTrackIds || [];
           cleanLikedIds = currentLikedIds.filter((id: string) => {
             const c = (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-            return id !== trackId && id !== cleanTrack && c !== cleanTrack;
+            return id !== trackId && id !== cleanTrack && c !== cleanTrack && id !== `spotify:track:${cleanTrack}`;
           });
           (window as any).__usePlayerStore?.setState?.({ likedTrackIds: cleanLikedIds });
         }
@@ -997,7 +1028,7 @@ const store = create<SpotifyDataState>((set, get) => ({
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('spotifree_track_removed', {
-          detail: { playlistId: cleanPl, rawPlaylistId: playlistId, trackId: cleanTrack, rawTrackId: trackId },
+          detail: { playlistId: cleanPl, rawPlaylistId: playlistId, trackId: cleanTrack, rawTrackId: trackId, trackObj },
         })
       );
     }

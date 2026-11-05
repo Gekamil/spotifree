@@ -16,6 +16,8 @@ function getGroqApiKey() {
   );
 }
 
+const NOISE_FILTER_REGEX = /\b(ruido\s+blanco|white\s+noise|ruido\s+rosa|pink\s+noise|ruido\s+marr[oó]n|brown\s+noise|green\s+noise|static\s+noise|sonido(s)?\s+de\s+(lluvia|agua|olas|mar|viento|tormenta|ventilador|secador|aspiradora|reloj)|(rain|water|ocean|waves|storm|fan|wind)\s+sound(s)?|ambient\s+noise|binaural\s+beat(s)?|ondas\s+(alfa|delta|theta|gamma)|sleep\s+sound(s)?|sonido(s)?\s+para\s+dormir|deep\s+sleep|baby\s+sleep|nature\s+sound(s)?|sound\s+effects?|test\s+tone|\d+\s*hz\b)\b/i;
+
 function cleanPunchySpeech(text) {
   if (!text) return '';
   return text
@@ -186,6 +188,15 @@ Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con l
 
       if (parsed && parsed.speech) {
         parsed.speech = cleanPunchySpeech(parsed.speech);
+        if (Array.isArray(parsed.tracks)) {
+          parsed.tracks = parsed.tracks.filter((t) => {
+            if (!t) return false;
+            const title = (t.title || '').trim();
+            const artist = (t.artist || '').trim();
+            if (!title || !artist) return false;
+            return !NOISE_FILTER_REGEX.test(`${title} ${artist}`);
+          });
+        }
         return res.status(200).json({ success: true, ...parsed });
       }
     }

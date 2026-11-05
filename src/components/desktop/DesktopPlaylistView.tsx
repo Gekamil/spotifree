@@ -16,7 +16,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { getSavedCustomTracks, saveCustomTrackToStorage, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
+import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
@@ -24,6 +24,7 @@ import { djTransitionService } from '../../services/djTransitionService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { AIDJView } from '../dj/AIDJView';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
+import { filterMusicTracksOnly } from '../../utils/trackFilter';
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -128,17 +129,30 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   useEffect(() => {
     if (!isLikedInitially) return;
     const handleLikedUpdate = (e: any) => {
-      const rawUpdated = e.detail?.tracks || getSavedCustomTracks(playlist.id, true, user?.id);
+      const rawUpdated = e.detail?.tracks;
       const remSet = getRemovedTrackIdsForPlaylist('liked-songs');
-      const updatedTracks = rawUpdated.filter((t: Track) => {
+      const isNotRemoved = (t: Track) => {
         const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        return !remSet.has(t.id) && !remSet.has(c);
-      });
-      setDynamicTracks(updatedTracks);
-      setDynamicPlaylist((prev) => ({
-        ...prev,
-        tracks: { total: updatedTracks.length, items: updatedTracks },
-      }));
+        const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+        return !remSet.has(t.id) && !remSet.has(c) && (!sig || !remSet.has(sig));
+      };
+
+      if (rawUpdated && Array.isArray(rawUpdated)) {
+        const cleanUpdated = rawUpdated.filter(isNotRemoved);
+        setDynamicTracks((prev) => {
+          if (cleanUpdated.length >= prev.length) {
+            return cleanUpdated;
+          }
+          return deduplicateTracks([...cleanUpdated, ...prev]).filter(isNotRemoved);
+        });
+        setDynamicPlaylist((prev) => ({
+          ...prev,
+          tracks: { total: cleanUpdated.length, items: cleanUpdated },
+        }));
+      } else {
+        const custom = getSavedCustomTracks(playlist.id, true, user?.id).filter(isNotRemoved);
+        setDynamicTracks((prev) => deduplicateTracks([...custom, ...prev]).filter(isNotRemoved));
+      }
     };
     window.addEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
     return () => window.removeEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
@@ -147,22 +161,33 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   // Reactive listener for removed tracks from this playlist
   useEffect(() => {
     const handleTrackRemoved = (e: any) => {
-      const { playlistId: targetPlId, trackId: targetTrackId } = e.detail || {};
+      const { playlistId: targetPlId, trackId: targetTrackId, trackObj } = e.detail || {};
       const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
       const cleanTarget = (targetPlId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
-      if (cleanCurrent === cleanTarget || dynamicPlaylist.id === targetPlId) {
+      const isLikedTarget =
+        cleanTarget === 'liked-songs' ||
+        cleanTarget === 'tracks' ||
+        cleanTarget.includes('collection:tracks') ||
+        cleanTarget === 'user-liked-songs';
+
+      const matchesThisPlaylist =
+        cleanCurrent === cleanTarget ||
+        dynamicPlaylist.id === targetPlId ||
+        (isLikedInitially && isLikedTarget);
+
+      if (matchesThisPlaylist) {
         const cleanTrack = (targetTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-        setDynamicTracks((prev) =>
-          prev.filter((t) => {
-            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-            return t.id !== targetTrackId && t.id !== cleanTrack && c !== cleanTrack;
-          })
-        );
+        const filterFn = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const matchId = t.id === targetTrackId || t.id === cleanTrack || c === cleanTrack || t.id === `spotify:track:${cleanTrack}`;
+          const matchName = trackObj && t.name?.toLowerCase().trim() === trackObj.name?.toLowerCase().trim() &&
+            t.artists?.[0]?.name?.toLowerCase().trim() === trackObj.artists?.[0]?.name?.toLowerCase().trim();
+          return !matchId && !matchName;
+        };
+
+        setDynamicTracks((prev) => prev.filter(filterFn));
         setDynamicPlaylist((prev) => {
-          const nextItems = (prev.tracks?.items || []).filter((t) => {
-            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-            return t.id !== targetTrackId && t.id !== cleanTrack && c !== cleanTrack;
-          });
+          const nextItems = (prev.tracks?.items || []).filter(filterFn);
           return {
             ...prev,
             tracks: { total: nextItems.length, items: nextItems },
@@ -172,7 +197,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
     window.addEventListener('spotifree_track_removed', handleTrackRemoved);
     return () => window.removeEventListener('spotifree_track_removed', handleTrackRemoved);
-  }, [dynamicPlaylist.id]);
+  }, [dynamicPlaylist.id, isLikedInitially]);
 
   // Reactive listener for deleted playlists: return to home immediately if this playlist is deleted
   useEffect(() => {
@@ -331,7 +356,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         8
       );
       if (recs && recs.length > 0) {
-        setPopularSuggestions(recs);
+        setPopularSuggestions(filterMusicTracksOnly(recs));
       }
     } catch (err) {
       console.warn('[DesktopPlaylistView] loadRecommendations error:', err);
@@ -372,7 +397,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
               },
             }));
-            setAddSearchResults(mapped);
+            setAddSearchResults(filterMusicTracksOnly(mapped));
           }
         }
       } catch {} finally {
@@ -407,9 +432,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }));
 
     if (isLikedInitially) {
-      toggleLike(track.id, newTrack);
+      saveCustomLikedSong(newTrack, user?.id, updated);
+      usePlayerStore.setState((s) => ({
+        likedTrackIds: Array.from(new Set([...s.likedTrackIds, newTrack.id, (newTrack.id || '').replace(/^spotify:track:/i, '')])),
+      }));
     } else {
-      saveCustomTrackToStorage(dynamicPlaylist.id, false, newTrack, user?.id);
+      saveCustomTrackToStorage(dynamicPlaylist.id, false, newTrack, user?.id, updated);
     }
 
     // Persist to store, cache, localStorage, and cloud Firestore
@@ -426,12 +454,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     const removedSet = getRemovedTrackIdsForPlaylist(playlist.id);
     const isNotRemoved = (t: Track) => {
       const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-      return !removedSet.has(t.id) && !removedSet.has(c);
+      const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+      return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
     };
-    const sourceTracks = [
-      ...currentCustom.filter(isNotRemoved),
-      ...baseItems.filter((t) => !customIds.has(t.id) && isNotRemoved(t)),
-    ];
+    const sourceTracks = isLikedInitially
+      ? deduplicateTracks([...currentCustom.filter(isNotRemoved), ...baseItems.filter(isNotRemoved)])
+      : [
+          ...currentCustom.filter(isNotRemoved),
+          ...baseItems.filter((t) => !customIds.has(t.id) && isNotRemoved(t)),
+        ];
 
     let mapped = sourceTracks.map((t) => {
       if (TRACK_COVER_CACHE.has(t.id)) {
@@ -448,7 +479,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       return t;
     });
 
-    setDynamicTracks(mapped);
+    // Do NOT wipe out existing dynamicTracks if we already have them for this playlist
+    setDynamicTracks((prev) => {
+      if (mapped.length === 0 && prev.length > 0) {
+        return prev.filter(isNotRemoved);
+      }
+      if (prev.length > mapped.length) {
+        return deduplicateTracks([...mapped, ...prev]).filter(isNotRemoved);
+      }
+      return mapped;
+    });
     setDynamicPlaylist(playlist);
 
     async function loadTracks() {
@@ -776,10 +816,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       toggleLike(track.id, track);
       if (isLikedPlaylist) {
         const clean = track.id.replace(/^spotify:track:/i, '').split('?')[0].trim();
-        removeCustomLikedSong(track.id, user?.id);
-        removeCustomLikedSong(clean, user?.id);
-        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id);
-        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean);
+        removeCustomLikedSong(track.id, user?.id, track);
+        removeCustomLikedSong(clean, user?.id, track);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', track.id, track);
+        useSpotifyDataStore.getState().removeTrackFromPlaylist('liked-songs', clean, track);
         setDynamicTracks((prev) =>
           prev.filter((t) => {
             const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -794,7 +834,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           ...prev,
           tracks: {
             total: Math.max(0, (prev.tracks?.total || 1) - 1),
-            items: (prev.tracks?.items || []).filter((t) => t.id !== track.id),
+            items: (prev.tracks?.items || []).filter((t) => {
+              const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+              return t.id !== track.id && tClean !== clean && (t.name !== track.name || t.artists?.[0]?.name !== track.artists?.[0]?.name);
+            }),
           },
         }));
       }

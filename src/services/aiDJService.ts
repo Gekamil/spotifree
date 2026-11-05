@@ -15,6 +15,7 @@ import {
   classifyTrackHashtags,
 } from './musicTaggingService';
 import { useStatsStore } from '../store/useStatsStore';
+import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
@@ -709,8 +710,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
 
-    // 1. Curate initial set: 75% directly from user playlists + same library artists
-    const initialSet = await getInitialDJLibraryRemix(15);
+    // 1. Curate initial set: 75% directly from user playlists + same library artists (strictly filtered for music)
+    const initialSet = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
     set({ djTracks: initialSet });
 
     // 2. Stage track 1 in the player without playing audio yet (prevents volume collision while DJ speaks)
@@ -934,6 +935,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     const addTrack = (t: Track) => {
       if (t && t.id && !seenIds.has(t.id)) {
+        if (isNonMusicOrNoise(t)) return;
         seenIds.add(t.id);
         const art =
           t.album?.images?.[0]?.url ||
@@ -1008,6 +1010,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       if (Array.isArray(groqResult.tracks) && groqResult.tracks.length > 0) {
         const matched: Track[] = [];
         for (const gt of groqResult.tracks) {
+          if (isNonMusicOrNoise(gt)) continue;
           const gTitle = (gt.title || '').toLowerCase().trim();
           const gArtist = (gt.artist || '').toLowerCase().trim();
           if (!gTitle) continue;
@@ -1056,6 +1059,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (finalSet.length < 8) {
       finalSet = hashtagSet.length >= 8 ? hashtagSet : (allUserTracks.length > 0 ? allUserTracks.slice(0, 15) : hashtagSet);
     }
+
+    finalSet = filterMusicTracksOnly(finalSet);
 
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});
@@ -1129,7 +1134,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       songsPlayedInSet: 0,
     });
 
-    const nextSet = await getCuratedSetForHashtag(currentTag, 15, previousIds);
+    const nextSet = filterMusicTracksOnly(await getCuratedSetForHashtag(currentTag, 15, previousIds));
     set({ djTracks: nextSet });
 
     // Pre-resolve artwork in parallel
@@ -1145,6 +1150,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     // Play first track of new set in background with ducked volume
     if (nextSet.length > 0) {
       usePlayerStore.getState().playTrack(nextSet[0], nextSet, 'dj-session');
+      audioEngine.setDuckedVolume(0.12);
     }
 
     const lang = useLanguageStore.getState().language;
