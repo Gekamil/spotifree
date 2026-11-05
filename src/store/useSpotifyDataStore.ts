@@ -20,7 +20,7 @@ import {
 } from '../utils/userAccounts';
 import { useStatsStore } from './useStatsStore';
 import { stripHtml } from '../utils/formatters';
-import { getCustomLikedSongs, getActiveUserId } from '../utils/userStorage';
+import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
@@ -400,6 +400,7 @@ interface SpotifyDataState {
   setDynamicShelves: (shelves: DynamicShelf[]) => void;
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
+  removeTrackFromPlaylist: (playlistId: string, trackId: string) => void;
 }
 
 let isInitializing = false;
@@ -787,33 +788,43 @@ const store = create<SpotifyDataState>((set, get) => ({
   },
 
   deletePlaylist: (id: string) => {
+    if (!id) return;
+    const cleanId = (id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+    const matchId = (pid: string) => {
+      if (!pid) return false;
+      if (pid === id || pid === cleanId) return true;
+      const pClean = pid.replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      return pClean === cleanId;
+    };
+
     set((s) => {
-      const remainingPlaylists = s.playlists.filter((p) => p.id !== id);
+      const remainingPlaylists = s.playlists.filter((p) => !matchId(p.id));
       const newCache = { ...s.playlistDetailsCache };
       delete newCache[id];
+      delete newCache[cleanId];
+      delete newCache[`spotify:playlist:${cleanId}`];
 
       if (typeof window !== 'undefined') {
         try {
           // 0. Permanent blacklist of deleted playlist IDs
           const rawDeleted = window.localStorage.getItem('spotifree_deleted_playlist_ids');
           const deletedList: string[] = rawDeleted ? JSON.parse(rawDeleted) : [];
-          if (!deletedList.includes(id)) {
-            deletedList.push(id);
-            window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(deletedList));
-          }
+          if (!deletedList.includes(id)) deletedList.push(id);
+          if (cleanId && !deletedList.includes(cleanId)) deletedList.push(cleanId);
+          window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(deletedList));
 
           // 1. Remove from user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           if (rawImported) {
             const list = JSON.parse(rawImported);
-            const updated = list.filter((p: any) => p.id !== id);
+            const updated = list.filter((p: any) => !matchId(p.id));
             window.localStorage.setItem('user_imported_playlists', JSON.stringify(updated));
           }
           // 2. Remove from spotifree_saved_library_playlists
           const rawSaved = window.localStorage.getItem('spotifree_saved_library_playlists');
           if (rawSaved) {
             const list = JSON.parse(rawSaved);
-            const updated = list.filter((pId: string) => pId !== id);
+            const updated = list.filter((pId: string) => !matchId(pId));
             window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(updated));
           }
           // 3. Remove from user caches and sessions
@@ -837,10 +848,12 @@ const store = create<SpotifyDataState>((set, get) => ({
 
           // 4. Remove offline download files
           window.localStorage.removeItem(`spotifree_downloaded_${id}`);
+          window.localStorage.removeItem(`spotifree_downloaded_${cleanId}`);
           window.localStorage.removeItem(`spotifree_offline_playlist_${id}`);
+          window.localStorage.removeItem(`spotifree_offline_playlist_${cleanId}`);
           const rawDl = window.localStorage.getItem('spotifree_downloaded_playlists_list');
           if (rawDl) {
-            const list = JSON.parse(rawDl).filter((x: string) => x !== id);
+            const list = JSON.parse(rawDl).filter((x: string) => !matchId(x));
             window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
           }
 
@@ -848,6 +861,13 @@ const store = create<SpotifyDataState>((set, get) => ({
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
             syncSpotifreeAccount({ playlists: remainingPlaylists, deletedPlaylistIds: deletedList }).catch(() => {});
           });
+
+          // 6. Global event for live UI navigation
+          window.dispatchEvent(
+            new CustomEvent('spotifree_playlist_deleted', {
+              detail: { id: cleanId, rawId: id },
+            })
+          );
         } catch (e) {
           console.error('Error deleting playlist from storage:', e);
         }
@@ -858,11 +878,68 @@ const store = create<SpotifyDataState>((set, get) => ({
         playlistDetailsCache: newCache,
         dynamicShelves: s.dynamicShelves.map((shelf) => ({
           ...shelf,
-          cards: shelf.cards.filter((c) => c.id !== id),
+          cards: shelf.cards.filter((c) => !matchId(c.id)),
         })),
-        quickAccessCards: s.quickAccessCards.filter((q) => q.id !== id),
+        quickAccessCards: s.quickAccessCards.filter((q) => !matchId(q.id)),
       };
     });
+  },
+
+  removeTrackFromPlaylist: (playlistId: string, trackId: string) => {
+    if (!playlistId || !trackId) return;
+    const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+    const cleanTrack = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+
+    // 1. Remove from all storage layers and add to blacklist
+    removeCustomTrackFromStorage(playlistId, trackId);
+    removeCustomTrackFromStorage(cleanPl, cleanTrack);
+
+    // 2. Update store playlists and playlistDetailsCache in state
+    set((s) => {
+      const filterItems = (items: Track[] = []) =>
+        items.filter((t) => {
+          const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+        });
+
+      const updatedPlaylists = s.playlists.map((p) => {
+        const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+        if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) {
+          const newItems = filterItems(p.tracks?.items || []);
+          return {
+            ...p,
+            tracks: { total: newItems.length, items: newItems },
+          };
+        }
+        return p;
+      });
+
+      const updatedCache = { ...s.playlistDetailsCache };
+      const cacheKeys = [playlistId, cleanPl, `spotify:playlist:${cleanPl}`];
+      for (const k of cacheKeys) {
+        if (updatedCache[k]?.tracks?.items) {
+          const newItems = filterItems(updatedCache[k].tracks.items);
+          updatedCache[k] = {
+            ...updatedCache[k],
+            tracks: { total: newItems.length, items: newItems },
+          };
+        }
+      }
+
+      return {
+        playlists: updatedPlaylists,
+        playlistDetailsCache: updatedCache,
+      };
+    });
+
+    // 3. Dispatch global event for live views
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('spotifree_track_removed', {
+          detail: { playlistId: cleanPl, rawPlaylistId: playlistId, trackId: cleanTrack, rawTrackId: trackId },
+        })
+      );
+    }
   },
 
   setDynamicShelves: (shelves: DynamicShelf[]) => {

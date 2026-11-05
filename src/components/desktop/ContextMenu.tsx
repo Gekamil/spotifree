@@ -37,18 +37,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
   const targetPlaylist = React.useMemo(() => {
     if (!contextMenu.isOpen || !contextMenu.playlistId) return null;
+    const cleanMenuId = (contextMenu.playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
     const found = playlists.find(
       (p) =>
         p.id === contextMenu.playlistId ||
+        p.id === cleanMenuId ||
         (p as any).uri === contextMenu.playlistId ||
-        (p as any).uri === `spotify:playlist:${contextMenu.playlistId}` ||
-        (p as any).uri === `spotify:album:${contextMenu.playlistId}`
+        (p as any).uri === `spotify:playlist:${cleanMenuId}` ||
+        (p as any).uri === `spotify:album:${cleanMenuId}`
     );
     if (found) return found;
 
+    // Check playlistDetailsCache
+    const fromCache =
+      useSpotifyDataStore.getState().playlistDetailsCache[contextMenu.playlistId] ||
+      useSpotifyDataStore.getState().playlistDetailsCache[cleanMenuId];
+    if (fromCache) return fromCache;
+
     // Check quick access cards
     const quickAccess = useSpotifyDataStore.getState().quickAccessCards || [];
-    const foundQuick = quickAccess.find((q) => q.id === contextMenu.playlistId);
+    const foundQuick = quickAccess.find((q) => q.id === contextMenu.playlistId || q.id === cleanMenuId);
     if (foundQuick) {
       return {
         id: foundQuick.id,
@@ -66,7 +74,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
     // Check dynamic shelves
     const shelves = useSpotifyDataStore.getState().dynamicShelves || [];
     for (const s of shelves) {
-      const c = s.cards.find((card) => card.id === contextMenu.playlistId);
+      const c = s.cards.find((card) => card.id === contextMenu.playlistId || card.id === cleanMenuId);
       if (c) {
         return {
           id: c.id,
@@ -156,13 +164,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
   const handleRemoveTrackFromCurrentPlaylist = () => {
     if (contextMenu.playlistId && contextMenu.trackId) {
-      const pl = playlists.find((p) => p.id === contextMenu.playlistId);
-      if (pl && pl.tracks?.items) {
-        const updated = pl.tracks.items.filter((t) => t.id !== contextMenu.trackId);
-        useSpotifyDataStore.getState().updatePlaylist(pl.id, {
-          tracks: { total: updated.length, items: updated },
-        });
-      }
+      useSpotifyDataStore.getState().removeTrackFromPlaylist(contextMenu.playlistId, contextMenu.trackId);
     }
     closeContextMenu();
   };
@@ -212,9 +214,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
   );
 
   const handleDeletePlaylist = () => {
-    if (targetPlaylist && isUserCreatedPlaylist && !isLikedPlaylist) {
-      if (window.confirm(`¿Seguro que deseas eliminar «${targetPlaylist.name}»?`)) {
-        deletePlaylist(targetPlaylist.id);
+    const plId = targetPlaylist?.id || contextMenu.playlistId;
+    if (plId && isUserCreatedPlaylist && !isLikedPlaylist) {
+      const plName = targetPlaylist?.name || 'esta lista';
+      if (window.confirm(`¿Seguro que deseas eliminar «${plName}»?`)) {
+        deletePlaylist(plId);
         setActiveMainTab('home');
       }
     }

@@ -2178,12 +2178,9 @@ class AudioEngine {
         return;
       }
       if (startSeconds === 0 && usePlayerStore.getState().isPlaying) {
-        const curTime = this.getCurrentTime();
-        if (curTime > 0.2) {
-          // Already actively playing this song, keep playing smoothly!
-          this.resume();
-          return;
-        }
+        // Already actively playing this song, keep playing smoothly!
+        this.resume();
+        return;
       }
     }
 

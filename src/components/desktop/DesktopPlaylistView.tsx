@@ -16,7 +16,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { getSavedCustomTracks, saveCustomTrackToStorage, removeCustomLikedSong, getCustomLikedSongs } from '../../utils/userStorage';
+import { getSavedCustomTracks, saveCustomTrackToStorage, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
@@ -91,13 +91,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
-  const baseTracks = isLikedInitially
+  const rawBaseTracks = isLikedInitially
     ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || [])])
     : ((playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
     : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
     ? storePl.tracks.items
     : customSaved);
+
+  const removedTrackIds = getRemovedTrackIdsForPlaylist(playlist.id);
+  const baseTracks = rawBaseTracks.filter((t) => {
+    const cleanT = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    return !removedTrackIds.has(t.id) && !removedTrackIds.has(cleanT);
+  });
 
   const initialTracks = deduplicateTracks(baseTracks).map((t) => {
     if (TRACK_COVER_CACHE.has(t.id)) {
@@ -132,6 +138,50 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     window.addEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
     return () => window.removeEventListener('spotifree_liked_songs_updated', handleLikedUpdate);
   }, [isLikedInitially, playlist.id, user?.id]);
+
+  // Reactive listener for removed tracks from this playlist
+  useEffect(() => {
+    const handleTrackRemoved = (e: any) => {
+      const { playlistId: targetPlId, trackId: targetTrackId } = e.detail || {};
+      const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const cleanTarget = (targetPlId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (cleanCurrent === cleanTarget || dynamicPlaylist.id === targetPlId) {
+        const cleanTrack = (targetTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        setDynamicTracks((prev) =>
+          prev.filter((t) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return t.id !== targetTrackId && t.id !== cleanTrack && c !== cleanTrack;
+          })
+        );
+        setDynamicPlaylist((prev) => {
+          const nextItems = (prev.tracks?.items || []).filter((t) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return t.id !== targetTrackId && t.id !== cleanTrack && c !== cleanTrack;
+          });
+          return {
+            ...prev,
+            tracks: { total: nextItems.length, items: nextItems },
+          };
+        });
+      }
+    };
+    window.addEventListener('spotifree_track_removed', handleTrackRemoved);
+    return () => window.removeEventListener('spotifree_track_removed', handleTrackRemoved);
+  }, [dynamicPlaylist.id]);
+
+  // Reactive listener for deleted playlists: return to home immediately if this playlist is deleted
+  useEffect(() => {
+    const handlePlaylistDeleted = (e: any) => {
+      const { id: deletedId } = e.detail || {};
+      const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const cleanDeleted = (deletedId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (cleanCurrent === cleanDeleted || dynamicPlaylist.id === deletedId) {
+        useUIStore.getState().setActiveMainTab('home');
+      }
+    };
+    window.addEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
+    return () => window.removeEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
+  }, [dynamicPlaylist.id]);
 
   // DJ Mode and Transitions State (Desktop)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
@@ -1380,7 +1430,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     onClick={() => handleTrackClick(track)}
                     onContextMenu={(e) => {
                       e.preventDefault();
-                      openContextMenu(e.clientX, e.clientY, track.id);
+                      openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
                     }}
                     className={`grid ${
                       isAutomixActive

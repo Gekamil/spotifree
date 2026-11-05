@@ -177,19 +177,103 @@ export function saveCustomTrackToStorage(playlistId: string, isLiked: boolean, t
 }
 
 export function removeCustomTrackFromStorage(playlistId: string, trackId: string, userId?: string): void {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || !playlistId || !trackId) return;
   try {
     const targetId = userId || getActiveUserId();
-    const key = targetId && targetId !== 'guest' && targetId !== 'spotify-user'
-      ? `spotifree_playlist_tracks_${targetId}_${playlistId}`
-      : `spotifree_playlist_tracks_${playlistId}`;
-    const raw = window.localStorage.getItem(key);
-    if (raw) {
-      const list: Track[] = JSON.parse(raw);
-      const filtered = list.filter((t) => t.id !== trackId);
-      window.localStorage.setItem(key, JSON.stringify(filtered));
+    const cleanTrack = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+
+    // 1. Remove from all possible custom saved track keys
+    const customKeys = [
+      `spotifree_playlist_tracks_${targetId}_${playlistId}`,
+      `spotifree_playlist_tracks_${targetId}_${cleanPl}`,
+      `spotifree_playlist_tracks_${playlistId}`,
+      `spotifree_playlist_tracks_${cleanPl}`,
+    ];
+    for (const key of customKeys) {
+      const raw = window.localStorage.getItem(key);
+      if (raw) {
+        try {
+          const list: Track[] = JSON.parse(raw);
+          const filtered = list.filter((t) => {
+            const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+          });
+          window.localStorage.setItem(key, JSON.stringify(filtered));
+        } catch {}
+      }
+    }
+
+    // 2. Blacklist this track for this playlist so it never resurrects from initial cache or server
+    const blacklistKey = `spotifree_removed_tracks_${cleanPl}`;
+    const rawBlacklist = window.localStorage.getItem(blacklistKey);
+    let blacklist: string[] = rawBlacklist ? JSON.parse(rawBlacklist) : [];
+    if (!blacklist.includes(cleanTrack)) blacklist.push(cleanTrack);
+    if (!blacklist.includes(trackId)) blacklist.push(trackId);
+    window.localStorage.setItem(blacklistKey, JSON.stringify(blacklist));
+
+    // 3. Update cached playlist object in user_imported_playlists
+    const rawImported = window.localStorage.getItem('user_imported_playlists');
+    if (rawImported) {
+      try {
+        const list = JSON.parse(rawImported);
+        let changed = false;
+        const nextList = list.map((p: any) => {
+          const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+          if (p.id === playlistId || p.id === cleanPl || pClean === cleanPl) {
+            if (p.tracks?.items) {
+              changed = true;
+              const filtered = p.tracks.items.filter((t: any) => {
+                const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+              });
+              return { ...p, tracks: { total: filtered.length, items: filtered } };
+            }
+          }
+          return p;
+        });
+        if (changed) {
+          window.localStorage.setItem('user_imported_playlists', JSON.stringify(nextList));
+        }
+      } catch {}
+    }
+
+    // 4. Update cached playlist object in spotifree_playlist_cache_*
+    const cacheKeys = [`spotifree_playlist_cache_${targetId}`, 'spotifree_playlist_cache_active'];
+    for (const ck of cacheKeys) {
+      const rawCache = window.localStorage.getItem(ck);
+      if (rawCache) {
+        try {
+          const cacheObj = JSON.parse(rawCache);
+          const targetKey = cacheObj[playlistId] ? playlistId : cacheObj[cleanPl] ? cleanPl : null;
+          if (targetKey && cacheObj[targetKey]?.tracks?.items) {
+            const filtered = cacheObj[targetKey].tracks.items.filter((t: any) => {
+              const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+              return t.id !== trackId && t.id !== cleanTrack && tClean !== cleanTrack;
+            });
+            cacheObj[targetKey] = {
+              ...cacheObj[targetKey],
+              tracks: { total: filtered.length, items: filtered },
+            };
+            window.localStorage.setItem(ck, JSON.stringify(cacheObj));
+          }
+        } catch {}
+      }
     }
   } catch {}
+}
+
+export function getRemovedTrackIdsForPlaylist(playlistId: string): Set<string> {
+  if (typeof window === 'undefined' || !playlistId) return new Set();
+  try {
+    const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+    const raw = window.localStorage.getItem(`spotifree_removed_tracks_${cleanPl}`);
+    if (raw) {
+      const list: string[] = JSON.parse(raw);
+      return new Set(list.map((id) => (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+    }
+  } catch {}
+  return new Set();
 }
 
 export const SHARED_PLAYLISTS_KEY = 'spotifree_shared_playlists';

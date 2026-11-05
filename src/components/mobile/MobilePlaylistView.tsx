@@ -47,6 +47,7 @@ import {
   removeCustomLikedSong,
   getSavedCustomTracks,
   saveCustomTrackToStorage,
+  getRemovedTrackIdsForPlaylist,
   saveSharedPlaylist,
   getSharedPlaylistById,
 } from '../../utils/userStorage';
@@ -353,12 +354,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
 
     // C. REGULAR PLAYLIST: Merge with any saved custom tracks
-    const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
+    const removedIds = getRemovedTrackIdsForPlaylist(cleanId);
+    const filterOutRemoved = (list: Track[]) =>
+      list.filter((t) => {
+        const tClean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return !removedIds.has(t.id) && !removedIds.has(tClean);
+      });
+
+    const savedCustom = filterOutRemoved(getSavedCustomTracks(cleanId, false, user?.id));
     const mergeWithCustom = (baseList: Track[]): Track[] => {
-      if (savedCustom.length === 0) return deduplicateTracks(baseList);
-      const baseIds = new Set(baseList.map((t) => t.id));
-      const toAdd = savedCustom.filter((t) => !baseIds.has(t.id));
-      return deduplicateTracks([...toAdd, ...baseList]);
+      const cleanBase = filterOutRemoved(baseList);
+      if (savedCustom.length === 0) return deduplicateTracks(cleanBase);
+      const baseIds = new Set(cleanBase.map((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+      const toAdd = savedCustom.filter((t) => !baseIds.has((t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+      return deduplicateTracks([...toAdd, ...cleanBase]);
     };
 
     // 1. Direct items
@@ -518,6 +527,36 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const displayTracks = (shuffleMode !== 'off' && shuffledTracks.length === tracks.length)
     ? shuffledTracks
     : tracks;
+
+  // Real-time synchronization for deleted tracks & deleted playlists
+  useEffect(() => {
+    const handleTrackRemoved = (e: any) => {
+      const { playlistId: targetPlId, trackId: targetTrackId } = e.detail || {};
+      const cleanTarget = (targetPlId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (cleanId === cleanTarget || activePlaylist.id === targetPlId) {
+        const cleanTrack = (targetTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        setTracks((prev) =>
+          prev.filter((t) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return t.id !== targetTrackId && t.id !== cleanTrack && c !== cleanTrack;
+          })
+        );
+      }
+    };
+    const handlePlaylistDeleted = (e: any) => {
+      const { id: deletedId } = e.detail || {};
+      const cleanDeleted = (deletedId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (cleanId === cleanDeleted || activePlaylist.id === deletedId) {
+        onBack();
+      }
+    };
+    window.addEventListener('spotifree_track_removed', handleTrackRemoved);
+    window.addEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
+    return () => {
+      window.removeEventListener('spotifree_track_removed', handleTrackRemoved);
+      window.removeEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
+    };
+  }, [cleanId, activePlaylist.id, onBack]);
 
   // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
   const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
@@ -798,18 +837,25 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   };
 
   const handleRemoveTrackFromPlaylist = (trackId: string) => {
-    const nextTracks = tracks.filter((t) => t.id !== trackId);
-    setTracks(nextTracks);
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(nextTracks));
-        const updatedPlaylist: Playlist = {
-          ...activePlaylist,
-          tracks: { total: nextTracks.length, items: nextTracks },
-        };
-        updatePlaylist(activePlaylist.id, updatedPlaylist);
-      } catch {}
-    }
+    useSpotifyDataStore.getState().removeTrackFromPlaylist(activePlaylist.id, trackId);
+    useSpotifyDataStore.getState().removeTrackFromPlaylist(cleanId, trackId);
+    const cleanTrack = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    setTracks((prev) =>
+      prev.filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return t.id !== trackId && t.id !== cleanTrack && c !== cleanTrack;
+      })
+    );
+    setActivePlaylist((prev) => {
+      const nextItems = (prev.tracks?.items || []).filter((t) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return t.id !== trackId && t.id !== cleanTrack && c !== cleanTrack;
+      });
+      return {
+        ...prev,
+        tracks: { total: nextItems.length, items: nextItems },
+      };
+    });
     setToastMessage('Canción eliminada de la playlist');
     setTimeout(() => setToastMessage(null), 2500);
   };
@@ -1802,6 +1848,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                             setIsConfirmDeleteOpen(false);
                             setIsOptionsOpen(false);
                             deletePlaylist(activePlaylist.id);
+                            deletePlaylist(cleanId);
                             onBack();
                           }}
                           className="flex-1 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"

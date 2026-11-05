@@ -168,6 +168,13 @@ const store = create<PlayerState>((set, get) => ({
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
     const state = get();
+    const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanNew = (track?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying) {
+      // Already playing this song, do not reset to 0 or restart!
+      return;
+    }
+
     const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
     try {
       useStatsStore.getState().recordTrackPlayed(track);
