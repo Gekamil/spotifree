@@ -14,10 +14,11 @@ export const AudioController: React.FC = () => {
 
   const lastTrackIdRef = useRef<string | null>(null);
 
-  // 1. Ensure window.__audioEngine is available globally
+  // 1. Ensure window.__audioEngine and window.__usePlayerStore are available globally
   useEffect(() => {
     if (typeof window !== 'undefined') {
       (window as any).__audioEngine = audioEngine;
+      (window as any).__usePlayerStore = usePlayerStore;
     }
   }, []);
 
