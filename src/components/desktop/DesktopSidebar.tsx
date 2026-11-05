@@ -10,7 +10,7 @@ import {
   SpotifyLogoNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
-import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
+import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds, deduplicateUserPlaylists } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { stripHtml, toHDImage } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
@@ -67,7 +67,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   } = useUIStore();
 
   const deletedIds = getDeletedPlaylistIds();
-  let processedPlaylists = playlists.filter((p) => !deletedIds.has(p.id));
+  let processedPlaylists: Playlist[] = deduplicateUserPlaylists(playlists.filter((p: Playlist) => !deletedIds.has(p.id)));
 
   // Helper to determine if an item is strictly an Artist
   const checkIsArtist = (p: any): boolean => {

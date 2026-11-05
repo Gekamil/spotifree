@@ -87,6 +87,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     toggleLike,
     likedTrackIds,
     shuffleMode,
+    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
@@ -130,7 +131,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [tracks, setTracks] = useState<Track[]>(() => {
     if (isLikedPlaylist) {
       const liked = getCustomLikedSongs(user?.id);
-      if (liked.length > 0) return liked;
+      const base = playlist.tracks?.items || [];
+      const merged = deduplicateTracks([...liked, ...base]);
+      if (merged.length > 0) return merged;
     }
     if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
       return playlist.tracks.items;
@@ -338,7 +341,18 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       };
     }
 
-    // B. REGULAR PLAYLIST: Merge with any saved custom tracks
+    // B. LIKED SONGS: Merge saved custom liked songs with any playlist tracks
+    if (isLikedPlaylist) {
+      const customLiked = getCustomLikedSongs(user?.id);
+      const baseTracks = playlist.tracks?.items || [];
+      const merged = deduplicateTracks([...customLiked, ...baseTracks]);
+      if (merged.length > 0) {
+        setTracks(merged);
+      }
+      return;
+    }
+
+    // C. REGULAR PLAYLIST: Merge with any saved custom tracks
     const savedCustom = getSavedCustomTracks(cleanId, false, user?.id);
     const mergeWithCustom = (baseList: Track[]): Track[] => {
       if (savedCustom.length === 0) return deduplicateTracks(baseList);
@@ -360,14 +374,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       setTracks(mergeWithCustom(cached.tracks.items));
       return;
-    }
-
-    // 3. Check Liked Songs specifically (isolated per user)
-    if (isLikedPlaylist) {
-      const customLiked = getCustomLikedSongs(user?.id);
-      if (customLiked.length > 0) {
-        setTracks(customLiked);
-      }
     }
 
     // 4. Check store user playlists
@@ -492,8 +498,26 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   };
 
-  // Authentic track sequence: displayed track list stays in true order, shuffle affects only queue
-  const displayTracks = tracks;
+  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
+  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
+
+  useEffect(() => {
+    if (shuffleMode === 'off' || tracks.length <= 1) {
+      setShuffledTracks([]);
+      return;
+    }
+    const list = [...tracks];
+    // Fisher-Yates natural shuffle (does not force currentTrack to #1)
+    for (let i = list.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [list[i], list[j]] = [list[j], list[i]];
+    }
+    setShuffledTracks(list);
+  }, [shuffleMode, shuffleVersion, cleanId, tracks.length]);
+
+  const displayTracks = (shuffleMode !== 'off' && shuffledTracks.length === tracks.length)
+    ? shuffledTracks
+    : tracks;
 
   // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
   const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
@@ -521,40 +545,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (currentTrack?.id === track.id) {
       togglePlay();
     } else {
-      if (shuffleMode !== 'off') {
-        const others = tracks.filter((t) => t.id !== track.id);
-        for (let i = others.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [others[i], others[j]] = [others[j], others[i]];
-        }
-        playTrack(track, [track, ...others], playlist.id);
-      } else {
-        const clickedIndex = tracks.findIndex((t) => t.id === track.id);
-        const sequentialQueue = clickedIndex >= 0
-          ? [...tracks.slice(clickedIndex), ...tracks.slice(0, clickedIndex)]
-          : tracks;
-        playTrack(track, sequentialQueue, playlist.id);
-      }
+      const clickedIndex = displayTracks.findIndex((t) => t.id === track.id);
+      const sequentialQueue = clickedIndex >= 0
+        ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
+        : displayTracks;
+      playTrack(track, sequentialQueue, playlist.id);
     }
   };
 
   const handlePlayAll = () => {
-    if (tracks.length === 0) return;
-    if (isPlaying && tracks.some((t) => t.id === currentTrack?.id)) {
+    if (displayTracks.length === 0) return;
+    if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
-      if (shuffleMode !== 'off') {
-        const randomized = [...tracks];
-        for (let i = randomized.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [randomized[i], randomized[j]] = [randomized[j], randomized[i]];
-        }
-        playTrack(randomized[0], randomized, playlist.id);
-        if (shuffleMode === 'smart') {
-          usePlayerStore.getState().populateSmartShuffleRecommendations(randomized);
-        }
-      } else {
-        playTrack(tracks[0], tracks, playlist.id);
+      playTrack(displayTracks[0], displayTracks, playlist.id);
+      if (shuffleMode === 'smart') {
+        usePlayerStore.getState().populateSmartShuffleRecommendations(displayTracks);
       }
     }
   };
@@ -564,12 +570,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [clipsTracks, setClipsTracks] = useState<Track[]>([]);
   const [clipsInitialIndex, setClipsInitialIndex] = useState(0);
 
-  const handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
+  const _handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
     const ordered = [selectedTrack, ...allList.filter((t) => t.id !== selectedTrack.id)];
     setClipsTracks(ordered);
     setClipsInitialIndex(0);
     setIsClipsModalOpen(true);
   };
+  void _handleOpenPreview;
 
   const isTrackLiked = (trackId: string, trackObj?: Track) => {
     if (isLikedPlaylist) return true;
@@ -1335,24 +1342,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   return (
                     <div
                       key={trk.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white/5 active:bg-white/10 transition-colors"
+                      onClick={() => {
+                        const list = addSearchQuery ? addSearchResults : popularSuggestions;
+                        playTrack(trk, [trk, ...list.filter((t) => t.id !== trk.id)], 'search-suggestions');
+                      }}
+                      className="flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer active:bg-white/5 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                        {/* Artwork with play preview button overlay */}
-                        <div
-                          className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#242424] shrink-0 shadow cursor-pointer group/art"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenPreview(trk, addSearchQuery ? addSearchResults : popularSuggestions);
-                          }}
-                          title={`Escuchar preview de ${trk.name}`}
-                        >
-                          <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
-                            <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center shadow-md active:scale-90 transition-transform">
-                              <PlayNativeIcon size={12} className="ml-0.5 text-white" />
-                            </div>
-                          </div>
+                        <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
+                          <TrackArtwork src={trackCover} alt={trk.name} className="w-11 h-11 rounded object-cover" size={44} />
                         </div>
                         <div className="flex flex-col min-w-0">
                           <span className="font-bold text-white text-xs truncate">{trk.name}</span>
@@ -1363,7 +1361,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       </div>
                       <button
                         disabled={alreadyInList}
-                        onClick={() => handleAddTrack(trk)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddTrack(trk);
+                        }}
                         className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition-transform active:scale-95 ${
                           alreadyInList
                             ? 'bg-white/10 text-white/40 cursor-default'
@@ -1641,24 +1642,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   return (
                     <div
                       key={trk.id}
-                      className="flex items-center justify-between p-2 rounded-xl bg-white/5 active:bg-white/10 transition-colors"
+                      onClick={() => {
+                        const list = addSearchQuery ? addSearchResults : popularSuggestions;
+                        playTrack(trk, [trk, ...list.filter((t) => t.id !== trk.id)], 'recommended');
+                      }}
+                      className="flex items-center justify-between py-2 px-2 rounded-lg cursor-pointer active:bg-white/5 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
-                        {/* Artwork with play preview button overlay */}
-                        <div
-                          className="relative w-11 h-11 rounded-lg overflow-hidden bg-[#242424] shrink-0 shadow cursor-pointer group/art"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenPreview(trk, addSearchQuery ? addSearchResults : popularSuggestions);
-                          }}
-                          title={`Escuchar preview de ${trk.name}`}
-                        >
-                          <TrackArtwork src={trackCover} alt={trk.name} className="w-full h-full object-cover" size={44} />
-                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center group-hover/art:bg-black/60 transition-colors">
-                            <div className="w-6 h-6 rounded-full bg-black/60 backdrop-blur-sm text-white flex items-center justify-center shadow-md active:scale-90 transition-transform">
-                              <PlayNativeIcon size={12} className="ml-0.5 text-white" />
-                            </div>
-                          </div>
+                        <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow relative">
+                          <TrackArtwork src={trackCover} alt={trk.name} className="w-11 h-11 rounded object-cover" size={44} />
                         </div>
 
                         <div className="flex flex-col min-w-0">
@@ -1671,7 +1663,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
                       <button
                         disabled={alreadyInList}
-                        onClick={() => handleAddTrack(trk)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleAddTrack(trk);
+                        }}
                         className={`px-3.5 py-1.5 rounded-full text-xs font-bold shrink-0 transition-transform active:scale-95 ${
                           alreadyInList
                             ? 'bg-white/10 text-white/40 cursor-default'

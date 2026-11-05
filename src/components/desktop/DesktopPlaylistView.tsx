@@ -91,7 +91,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
   const baseTracks = isLikedInitially
-    ? (customSaved.length > 0 ? customSaved : (playlist.tracks?.items && playlist.tracks.items.length > 0 ? playlist.tracks.items : (storePl?.tracks?.items || [])))
+    ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || [])])
     : ((playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
     : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
@@ -452,7 +452,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         return;
       }
 
-      if (playlist.tracks?.items && playlist.tracks.items.length > 0) return;
+      if (isLikedInitially || (playlist.tracks?.items && playlist.tracks.items.length > 0)) return;
       setLoading(true);
       try {
         const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';

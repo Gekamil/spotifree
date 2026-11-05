@@ -68,7 +68,20 @@ export function getCustomLikedSongs(userId?: string): Track[] {
     const raw = window.localStorage.getItem(key);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    // Fallback: If user-specific key is empty, check guest key and copy over
+    if (key !== 'spotifree_guest_liked_songs') {
+      const guestRaw = window.localStorage.getItem('spotifree_guest_liked_songs');
+      if (guestRaw) {
+        const guestParsed = JSON.parse(guestRaw);
+        if (Array.isArray(guestParsed) && guestParsed.length > 0) {
+          try {
+            window.localStorage.setItem(key, JSON.stringify(guestParsed));
+          } catch {}
+          return guestParsed;
+        }
+      }
     }
   } catch {}
   return [];

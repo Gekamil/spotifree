@@ -20,6 +20,8 @@ import {
 } from '../utils/userAccounts';
 import { useStatsStore } from './useStatsStore';
 import { stripHtml } from '../utils/formatters';
+import { getCustomLikedSongs, getActiveUserId } from '../utils/userStorage';
+import { deduplicateTracks } from '../utils/trackDeduplication';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -56,6 +58,8 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
     if (!pl || !pl.id || deletedIds.has(pl.id)) continue;
     const isLiked =
       pl.id === 'liked-songs' ||
+      pl.id === 'user-liked-songs' ||
+      pl.id === 'tracks' ||
       pl.id.includes('collection:tracks') ||
       pl.id.includes('collection-tracks') ||
       /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
@@ -63,15 +67,26 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
       );
 
     if (isLiked) {
-      if (seenLiked) continue;
+      if (seenLiked) {
+        seenIds.add(pl.id);
+        continue;
+      }
       seenLiked = true;
+      const customLiked = getCustomLikedSongs(getActiveUserId());
+      const baseTracks = pl.tracks?.items || [];
+      const mergedTracks = deduplicateTracks([...customLiked, ...baseTracks]);
       result.push({
         ...pl,
         id: 'liked-songs',
         name: 'Canciones que te gustan',
         images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+        tracks: {
+          total: mergedTracks.length,
+          items: mergedTracks,
+        },
       });
       seenIds.add('liked-songs');
+      seenIds.add(pl.id);
       continue;
     }
 
@@ -82,7 +97,10 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
       pl.name?.toLowerCase().trim() === 'dj';
 
     if (isDJ) {
-      if (seenDJ) continue;
+      if (seenDJ) {
+        seenIds.add(pl.id);
+        continue;
+      }
       seenDJ = true;
       result.push(SPOTIFY_DJ_PLAYLIST);
       seenIds.add('spotify-dj');
@@ -95,9 +113,24 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
     result.push(pl);
   }
 
+  // Ensure Liked Songs is ALWAYS present at position 0
+  if (!seenLiked) {
+    const customLiked = getCustomLikedSongs(getActiveUserId());
+    result.unshift({
+      id: 'liked-songs',
+      name: 'Canciones que te gustan',
+      description: 'Tus canciones favoritas guardadas',
+      type: 'playlist',
+      images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      owner: { display_name: 'Spotify', id: 'spotify' },
+      tracks: { total: customLiked.length, items: customLiked },
+    } as any);
+    seenIds.add('liked-songs');
+  }
+
   // Ensure single DJ playlist is always present in library right after Liked Songs
   if (!seenDJ) {
-    result.splice(seenLiked ? 1 : 0, 0, SPOTIFY_DJ_PLAYLIST);
+    result.splice(1, 0, SPOTIFY_DJ_PLAYLIST);
     seenIds.add('spotify-dj');
   }
 
@@ -629,21 +662,32 @@ const store = create<SpotifyDataState>((set, get) => ({
 
   updatePlaylist: (id: string, updates: Partial<Playlist>) => {
     set((s) => {
+      const isLikedTarget = (pid: string, pname?: string) =>
+        pid === 'liked-songs' ||
+        pid === 'user-liked-songs' ||
+        pid.includes('collection:tracks') ||
+        /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks)$/i.test((pname || '').trim());
+
+      const isTargetLiked = id === 'liked-songs';
       const existingInCache = s.playlistDetailsCache[id];
-      const existingInList = s.playlists.find((p) => p.id === id);
-      const baseEntry = existingInCache || existingInList || { id, name: 'Playlist', tracks: { total: 0, items: [] } };
+      const existingInList = s.playlists.find((p) => p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name)));
+      const baseEntry = existingInCache || existingInList || { id, name: isTargetLiked ? 'Canciones que te gustan' : 'Playlist', tracks: { total: 0, items: [] } };
       const updatedCacheEntry = { ...baseEntry, ...updates } as Playlist;
 
       let found = false;
       const updatedPlaylists = s.playlists.map((p) => {
-        if (p.id === id) {
+        if (p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name))) {
           found = true;
-          return { ...p, ...updates };
+          return { ...p, ...updates, id: isTargetLiked ? 'liked-songs' : p.id };
         }
         return p;
       });
-      if (!found && id !== 'liked-songs') {
-        updatedPlaylists.unshift(updatedCacheEntry);
+      if (!found) {
+        if (isTargetLiked) {
+          updatedPlaylists.unshift(updatedCacheEntry);
+        } else {
+          updatedPlaylists.unshift(updatedCacheEntry);
+        }
       }
 
       if (typeof window !== 'undefined') {
@@ -651,10 +695,10 @@ const store = create<SpotifyDataState>((set, get) => ({
           // 1. user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           const list = rawImported ? JSON.parse(rawImported) : [];
-          const idx = list.findIndex((p: any) => p.id === id);
+          const idx = list.findIndex((p: any) => p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name)));
           if (idx >= 0) {
-            list[idx] = { ...list[idx], ...updates };
-          } else if (id !== 'liked-songs') {
+            list[idx] = { ...list[idx], ...updates, id: isTargetLiked ? 'liked-songs' : list[idx].id };
+          } else if (!isTargetLiked) {
             list.unshift(updatedCacheEntry);
           }
           window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
@@ -672,8 +716,15 @@ const store = create<SpotifyDataState>((set, get) => ({
           if (rawExtracted) {
             const parsed = JSON.parse(rawExtracted);
             if (Array.isArray(parsed.playlists)) {
-              parsed.playlists = parsed.playlists.map((p: any) => (p.id === id ? { ...p, ...updates } : p));
-              if (!parsed.playlists.some((p: any) => p.id === id) && id !== 'liked-songs') {
+              let extFound = false;
+              parsed.playlists = parsed.playlists.map((p: any) => {
+                if (p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name))) {
+                  extFound = true;
+                  return { ...p, ...updates, id: isTargetLiked ? 'liked-songs' : p.id };
+                }
+                return p;
+              });
+              if (!extFound) {
                 parsed.playlists.unshift(updatedCacheEntry);
               }
             }
@@ -688,7 +739,17 @@ const store = create<SpotifyDataState>((set, get) => ({
           if (rawAccountSession) {
             const parsed = JSON.parse(rawAccountSession);
             if (Array.isArray(parsed.playlists)) {
-              parsed.playlists = parsed.playlists.map((p: any) => (p.id === id ? { ...p, ...updates } : p));
+              let accFound = false;
+              parsed.playlists = parsed.playlists.map((p: any) => {
+                if (p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name))) {
+                  accFound = true;
+                  return { ...p, ...updates, id: isTargetLiked ? 'liked-songs' : p.id };
+                }
+                return p;
+              });
+              if (!accFound) {
+                parsed.playlists.unshift(updatedCacheEntry);
+              }
             }
             window.localStorage.setItem(`spotifree_account_session_${userId}`, JSON.stringify(parsed));
           }

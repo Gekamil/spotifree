@@ -21,6 +21,7 @@ import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { isPlaylistDownloaded, getDownloadedPlaylists, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
+import { getCustomLikedSongs } from '../../utils/userStorage';
 import {
   ShareNativeIcon,
   EditNativeIcon,
@@ -902,7 +903,7 @@ export const MobileLayout: React.FC = () => {
                         Canciones que te gustan
                       </span>
                       <span className="text-xs text-[#b3b3b3] mt-0.5">
-                        Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || 0} canciones
+                        Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
                       </span>
                     </div>
                   </div>
@@ -955,7 +956,11 @@ export const MobileLayout: React.FC = () => {
                       (p) =>
                         !deletedIds.has(p.id) &&
                         !p.id.includes('collection:tracks') &&
+                        !p.id.includes('collection-tracks') &&
                         p.id !== 'liked-songs' &&
+                        p.id !== 'user-liked-songs' &&
+                        p.id !== 'tracks' &&
+                        !/^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|favoritas|favorites)$/i.test((p.name || '').trim()) &&
                         p.id !== 'spotify-dj' &&
                         p.id !== 'dj' &&
                         p.name?.toLowerCase().trim() !== 'dj'
