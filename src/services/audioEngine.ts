@@ -173,23 +173,27 @@ class AudioEngine {
     const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
     if (gaplessSaved === 'false') return;
 
-    const crossfadeEnabledSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_crossfade_enabled') : null;
-    if (crossfadeEnabledSaved === 'false') return;
+    const isDjMode =
+      typeof window !== 'undefined' &&
+      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
+        Boolean((window as any).__useAIDJStore?.getState?.()?.isDJModeActive));
+
+    const crossfadeEnabledSaved = typeof window !== 'undefined'
+      ? window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false'
+      : true;
+
+    // Precedence Check: If neither DJ Mode nor Crossfade is enabled, exit immediately
+    if (!isDjMode && !crossfadeEnabledSaved) return;
 
     let crossfadeSec = 4;
     try {
       const saved = typeof window !== 'undefined'
         ? (window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade'))
         : null;
-      if (saved !== null) crossfadeSec = Math.max(0, Math.min(12, parseInt(saved, 10)));
+      if (saved !== null) crossfadeSec = Math.max(1, Math.min(12, parseInt(saved, 10)));
       else crossfadeSec = 4;
     } catch {}
-
-    // DJ Mode Check: When DJ Mode is active, bypass simple flat fade and use beat-aligned transition duration & custom transition config
-    const isDjMode =
-      typeof window !== 'undefined' &&
-      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
 
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
@@ -197,6 +201,9 @@ class AudioEngine {
     let djConfig: DJTransitionConfig | null = null;
     let effectiveCrossfade = crossfadeSec;
 
+    // CRITICAL USER REQUIREMENT:
+    // If BOTH DJ Mode and Crossfade are activated in settings:
+    // DJ MODE PREVAILS (prevalece) while Crossfade does NOT act!
     if (isDjMode) {
       if (curTrack && nextTrack) {
         const curIdx = state.queue.findIndex((t) => t.id === curTrack.id);
@@ -215,6 +222,10 @@ class AudioEngine {
       } else {
         effectiveCrossfade = 3.8;
       }
+    } else {
+      // Standard crossfade with user-configured duration (1s - 12s)
+      effectiveCrossfade = crossfadeSec;
+      djConfig = null;
     }
 
     if (effectiveCrossfade <= 0) return;
@@ -230,14 +241,14 @@ class AudioEngine {
 
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
 
-    // 1. Preload upcoming song in the background before crossfade starts
+    // 1. Preload upcoming songs in the background before crossfade starts
     if (
       !this.preloadedNext &&
       !this.isPreloadingNext &&
       remaining <= Math.max(20, effectiveCrossfade + 8) &&
       remaining > effectiveCrossfade
     ) {
-      this.preloadUpcomingTrack();
+      this.preloadUpcomingTracks();
     }
 
     // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
@@ -248,66 +259,83 @@ class AudioEngine {
     }
   }
 
-  private async preloadUpcomingTrack() {
+  /**
+   * Universal Background Preloader for upcoming tracks N+1 and N+2.
+   * Ensures zero-lag skipping and flawless instantaneous transitions on both Mobile & Desktop.
+   */
+  public async preloadUpcomingTracks(tracksToPreload?: (Track | null | undefined)[]) {
+    if (this.isPreloadingNext) return;
     this.isPreloadingNext = true;
     try {
       const state = usePlayerStore.getState();
       if (state.repeatMode === 'one') {
-        this.isPreloadingNext = false;
-        return;
-      }
-      const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || nextTrack.id === this.currentTrackId) {
-        this.isPreloadingNext = false;
         return;
       }
 
-      const artistName = nextTrack.artists?.[0]?.name || '';
-      const query = `${nextTrack.name} ${artistName}`.trim();
-
-      let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
-
-      if (!videoId) {
-        const nextDur = nextTrack.duration_ms ? nextTrack.duration_ms / 1000 : undefined;
-        videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName, nextDur)) || undefined;
+      let upcoming: Track[] = [];
+      if (tracksToPreload && tracksToPreload.length > 0) {
+        upcoming = tracksToPreload.filter((t): t is Track => Boolean(t && t.id !== this.currentTrackId));
+      } else if (typeof state.getUpcomingTracks === 'function') {
+        upcoming = state.getUpcomingTracks(2);
+      } else {
+        const t1 = state.getNextTrack?.();
+        if (t1) upcoming.push(t1);
       }
 
-      this.preloadedNext = {
-        track: nextTrack,
-        videoId: videoId || undefined,
-        query,
-      };
+      if (upcoming.length === 0) return;
 
-      // On mobile devices, playing a secondary player interrupts the primary active playback!
-      // Therefore, pre-warm secondary player with silent audio on desktop ONLY.
-      const isMobileDevice =
-        typeof window !== 'undefined' &&
-        (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768);
+      // 1. Process track N+1 (pre-cue into inactive player without stealing audio focus)
+      const next1 = upcoming[0];
+      if (next1 && next1.id !== this.currentTrackId) {
+        const artist1 = next1.artists?.[0]?.name || '';
+        const query1 = `${next1.name} ${artist1}`.trim();
+        let videoId1: string | null | undefined = VIDEO_ID_CACHE.get(query1);
+        if (!videoId1) {
+          const dur1 = next1.duration_ms ? next1.duration_ms / 1000 : undefined;
+          videoId1 = (await this.resolveVideoId(query1, next1.id, next1.name, artist1, dur1)) || undefined;
+        }
 
-      if (!isMobileDevice) {
+        this.preloadedNext = {
+          track: next1,
+          videoId: videoId1 || undefined,
+          query: query1,
+        };
+
+        // Cue video on inactive secondary player ready for instant playback
         const secPlayer = this.secondaryYtPlayer;
-        if (videoId && secPlayer && typeof secPlayer.loadVideoById === 'function') {
+        if (videoId1 && secPlayer && typeof secPlayer.cueVideoById === 'function') {
           try {
-            if (typeof secPlayer.unMute === 'function') secPlayer.unMute();
-            if (typeof secPlayer.setVolume === 'function') secPlayer.setVolume(0);
-            secPlayer.loadVideoById({ videoId, startSeconds: 0 });
-            secPlayer.playVideo();
-            // Pause after 350ms of silent buffering
-            setTimeout(() => {
-              try {
-                if (secPlayer.getPlayerState() === 1) {
-                  secPlayer.pauseVideo();
-                }
-              } catch {}
-            }, 350);
+            secPlayer.cueVideoById({ videoId: videoId1, startSeconds: 0 });
           } catch {}
         }
       }
+
+      // 2. Process track N+2 in background (resolve videoId and prime cache for instant subsequent skip)
+      if (upcoming.length > 1) {
+        const next2 = upcoming[1];
+        if (next2 && next2.id !== this.currentTrackId) {
+          const artist2 = next2.artists?.[0]?.name || '';
+          const query2 = `${next2.name} ${artist2}`.trim();
+          let videoId2: string | null | undefined = VIDEO_ID_CACHE.get(query2);
+          if (!videoId2) {
+            const dur2 = next2.duration_ms ? next2.duration_ms / 1000 : undefined;
+            this.resolveVideoId(query2, next2.id, next2.name, artist2, dur2).then((vid) => {
+              if (vid) {
+                VIDEO_ID_CACHE.set(query2, vid);
+              }
+            }).catch(() => {});
+          }
+        }
+      }
     } catch (e) {
-      console.warn('[AudioEngine] Preload upcoming track error:', e);
+      console.warn('[AudioEngine] Preload upcoming tracks error:', e);
     } finally {
       this.isPreloadingNext = false;
     }
+  }
+
+  public async preloadUpcomingTrack() {
+    return this.preloadUpcomingTracks();
   }
 
   private async executeCrossfade(crossfadeSec: number, djConfig: DJTransitionConfig | null = null) {
@@ -359,87 +387,9 @@ class AudioEngine {
 
     const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
 
-    // Mobile Single-Deck Continuity: On mobile devices, operating systems kill audio focus when a second iframe starts!
-    // Perform in-place musical transition on Deck 0 without invoking secondary player playVideo()
-    if (this.isMobileOrPWA()) {
-      const primaryYt = this.ytPlayers[0];
-      const strip0 = this.deckStrips[0];
-      const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
-      const transitionTimeSec = Math.max(2.5, Math.min(6.0, crossfadeSec));
-      const phase1Sec = Math.max(1.2, transitionTimeSec * 0.5);
-      const phase2Sec = transitionTimeSec - phase1Sec;
-
-      if (this.audioContext && strip0) {
-        const now = this.audioContext.currentTime;
-        cancelScheduledAutomations(strip0, now);
-        scheduleResonantHPFSweep(strip0, now, phase1Sec, 40, 8000, 2.0);
-        strip0.outputNode.gain.setValueAtTime(masterVolume, now);
-        strip0.outputNode.gain.linearRampToValueAtTime(0.001, now + phase1Sec);
-      } else if (primaryYt && typeof primaryYt.setVolume === 'function') {
-        try { primaryYt.setVolume(Math.round(masterVolume * 40)); } catch {}
-      }
-
-      if (this.audioContext && djConfig) {
-        this.stopAuxiliaryTransitionFX();
-        this.activeAuxFX = triggerAuxiliaryTransitionFX(
-          this.audioContext,
-          djConfig.preset,
-          transitionTimeSec,
-          safeTempo,
-          masterVolume
-        );
-      }
-
-      // Smooth volume ramp down during Phase 1
-      const p1Steps = 6;
-      for (let s = 1; s <= p1Steps; s++) {
-        setTimeout(() => {
-          if (this.isCrossfading && primaryYt && typeof primaryYt.setVolume === 'function') {
-            const frac = 1.0 - (s / p1Steps);
-            try { primaryYt.setVolume(Math.round(masterVolume * frac * 100)); } catch {}
-          }
-        }, Math.round((phase1Sec * 1000 * s) / p1Steps));
-      }
-
-      setTimeout(() => {
-        if (primaryYt && nextVideoId) {
-          try {
-            if (typeof primaryYt.setVolume === 'function') primaryYt.setVolume(0);
-            primaryYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
-            if (typeof primaryYt.playVideo === 'function') primaryYt.playVideo();
-          } catch {}
-        }
-
-        // Smooth volume ramp up during Phase 2
-        const p2Steps = 6;
-        for (let s = 1; s <= p2Steps; s++) {
-          setTimeout(() => {
-            if (this.isCrossfading && primaryYt && typeof primaryYt.setVolume === 'function') {
-              const frac = s / p2Steps;
-              try { primaryYt.setVolume(Math.round(masterVolume * frac * 100)); } catch {}
-            }
-          }, Math.round((phase2Sec * 1000 * s) / p2Steps));
-        }
-
-        setTimeout(() => {
-          this.finishCrossfade(transitionTimeSec);
-          if (primaryYt && typeof primaryYt.setVolume === 'function') {
-            try { primaryYt.setVolume(Math.round(masterVolume * 100)); } catch {}
-          }
-          if (this.audioContext && strip0) {
-            const now = this.audioContext.currentTime;
-            cancelScheduledAutomations(strip0, now);
-            strip0.outputNode.gain.setValueAtTime(0.001, now);
-            strip0.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.3);
-          }
-        }, Math.round(phase2Sec * 1000));
-      }, Math.round(phase1Sec * 1000));
-      return;
-    }
-
     const secYt = this.secondaryYtPlayer;
 
-    // Start secondary player at volume 0 (Desktop only)
+    // Start secondary player at volume 0 (Universal dual-deck simultaneous crossfade)
     if (this.activeEngine === 'youtube' && secYt && nextVideoId) {
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
@@ -770,19 +720,13 @@ class AudioEngine {
       return;
     }
 
-    const isMobile = this.isMobileOrPWA();
     const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
     const oldYtIndex = this.activeYtIndex;
     const oldAudioIndex = this.activeAudioIndex;
 
-    // On mobile, pin active deck strictly to Deck 0 without alternating indices to preserve unlocked Deck 0
-    if (isMobile) {
-      this.activeYtIndex = 0;
-      this.activeAudioIndex = 0;
-    } else {
-      this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
-      this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
-    }
+    // Alternate active deck cleanly across all platforms
+    this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
+    this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
 
     this.currentTrackId = nextTrack.id;
     this.currentTrackQuery = nextQuery || `${nextTrack.name} ${nextTrack.artists?.[0]?.name || ''}`.trim();
@@ -868,6 +812,11 @@ class AudioEngine {
 
     // 5. Resume progress ticker on new active player
     this.startProgressTicker();
+
+    // 6. Automatically preload upcoming tracks N+1 and N+2 in the background
+    setTimeout(() => {
+      this.preloadUpcomingTracks();
+    }, 400);
   }
 
   /**
@@ -883,7 +832,6 @@ class AudioEngine {
 
     const state = usePlayerStore.getState();
     const curTrack = state.currentTrack;
-    const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
     const artistName = nextTrack.artists?.[0]?.name || '';
     const query = `${nextTrack.name} ${artistName}`.trim();
 
@@ -905,59 +853,32 @@ class AudioEngine {
     }
 
     this.initAudioContext();
-    const isMobile = this.isMobileOrPWA();
+    this.preloadedNext = { track: nextTrack, videoId, query };
 
-    if (isMobile) {
-      // Mobile Single-Deck in-place smooth musical transition:
-      const player = this.ytPlayers[0];
-      const strip = this.deckStrips[0];
+    const isDjMode =
+      typeof window !== 'undefined' &&
+      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
+        Boolean((window as any).__useAIDJStore?.getState?.()?.isDJModeActive));
 
-      if (this.audioContext && strip) {
-        const now = this.audioContext.currentTime;
-        cancelScheduledAutomations(strip, now);
-        scheduleResonantHPFSweep(strip, now, 0.7, 40, 8000, 2.0);
-        strip.outputNode.gain.setValueAtTime(masterVolume, now);
-        strip.outputNode.gain.linearRampToValueAtTime(0.001, now + 0.7);
-      } else if (player && typeof player.setVolume === 'function') {
-        try { player.setVolume(Math.round(masterVolume * 25)); } catch {}
-      }
+    const djConfig = isDjMode && curTrack
+      ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
+      : null;
 
-      this.preloadedNext = { track: nextTrack, videoId, query };
-      state.completeCrossfadeTrack(nextTrack);
-
-      setTimeout(() => {
-        if (player) {
-          try {
-            if (typeof player.setVolume === 'function') player.setVolume(0);
-            player.loadVideoById({ videoId, startSeconds: 0 });
-            if (typeof player.playVideo === 'function') player.playVideo();
-          } catch {}
-        }
-        setTimeout(() => {
-          this.finishCrossfade();
-          if (player && typeof player.setVolume === 'function') {
-            try { player.setVolume(Math.round(masterVolume * 100)); } catch {}
-          }
-          if (this.audioContext && strip) {
-            const now = this.audioContext.currentTime;
-            cancelScheduledAutomations(strip, now);
-            strip.outputNode.gain.setValueAtTime(0.001, now);
-            strip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + 0.3);
-          }
-        }, 500);
-      }, 700);
+    let crossfadeDuration = 3.5;
+    if (isDjMode) {
+      crossfadeDuration = 3.8;
     } else {
-      // Desktop dual-deck transition
-      this.preloadedNext = { track: nextTrack, videoId, query };
-      const isDjMode =
-        typeof window !== 'undefined' &&
-        (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-          window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
-      const djConfig = isDjMode && curTrack
-        ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
-        : null;
-      await this.executeCrossfade(isDjMode ? 3.5 : 2, djConfig);
+      try {
+        const saved = typeof window !== 'undefined'
+          ? (window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade'))
+          : null;
+        if (saved !== null) crossfadeDuration = Math.max(1, Math.min(12, parseInt(saved, 10)));
+        else crossfadeDuration = 4;
+      } catch {}
     }
+
+    await this.executeCrossfade(crossfadeDuration, djConfig);
   }
 
   /**
@@ -2344,6 +2265,11 @@ class AudioEngine {
           setTimeout(() => {
             this.isTransitioning = false;
           }, 4000);
+
+          // Preload upcoming tracks N+1 and N+2
+          setTimeout(() => {
+            this.preloadUpcomingTracks();
+          }, 800);
           return;
         }
       } else {

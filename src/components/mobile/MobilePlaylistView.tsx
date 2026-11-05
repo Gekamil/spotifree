@@ -720,11 +720,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   // Automix / Transiciones inteligentes (Modo DJ)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
+    if (typeof window === 'undefined') return false;
     try {
-      return window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
+      return (
+        window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true'
+      );
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -815,12 +818,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const next = !isAutomixActive;
     setIsAutomixActive(next);
     try {
-      window.localStorage.setItem('spotifree_crossfade_enabled', String(next));
       window.localStorage.setItem('spotifree_dj_mode', String(next));
       window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
-      if (next) {
-        window.localStorage.setItem('spotifree_crossfade_sec', '0');
-      }
     } catch {}
 
     if (next) {

@@ -30,6 +30,8 @@ async function generate() {
     const page = await browser.newPage();
     await page.setViewport({ width: size, height: size });
     const logoPx = Math.round(size * scale);
+    const squircleSize = Math.round(size * 0.94);
+    const radius = Math.round(size * 0.22);
     const html = `
       <!DOCTYPE html>
       <html>
@@ -39,6 +41,15 @@ async function generate() {
           body {
             width: ${size}px;
             height: ${size}px;
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .squircle {
+            width: ${squircleSize}px;
+            height: ${squircleSize}px;
+            border-radius: ${radius}px;
             background: #000000;
             display: flex;
             align-items: center;
@@ -51,16 +62,18 @@ async function generate() {
         </style>
       </head>
       <body>
-        <svg viewBox="0 0 24 24" fill="none">
-          ${spotifySvgPathOnly}
-        </svg>
+        <div class="squircle">
+          <svg viewBox="0 0 24 24" fill="none">
+            ${spotifySvgPathOnly}
+          </svg>
+        </div>
       </body>
       </html>
     `;
     await page.setContent(html);
     const outPath = path.join(__dirname, '..', 'public', name);
-    await page.screenshot({ path: outPath, type: 'png', omitBackground: false });
-    console.log(`[Mobile] Generated ${name} (${size}x${size}, scale ${scale * 100}%)`);
+    await page.screenshot({ path: outPath, type: 'png', omitBackground: true });
+    console.log(`[Mobile Squircle] Generated ${name} (${size}x${size}, scale ${scale * 100}%, radius ${radius}px)`);
     await page.close();
   }
 
