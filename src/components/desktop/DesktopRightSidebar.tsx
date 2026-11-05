@@ -219,9 +219,9 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
       {/* Body */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {!isInSession ? (
-          <div className="flex flex-col items-center text-center space-y-4 pt-4">
-            <div className="w-16 h-16 rounded-full bg-[#1ed760]/15 text-[#1ed760] flex items-center justify-center shadow-lg">
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+          <div className="flex flex-col items-center text-center space-y-4 pt-2">
+            <div className="w-14 h-14 rounded-full bg-[#1ed760]/15 text-[#1ed760] flex items-center justify-center shadow-lg">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
                 <path d="M4.5 10c1.38 0 2.5-1.12 2.5-2.5S5.88 5 4.5 5 2 6.12 2 7.5 3.12 10 4.5 10zm-1.5 3.5C1.84 14.16 0 15.33 0 17v2h6v-2c0-1.67-1.84-2.84-3-3.5z"/>
                 <path d="M19.5 10c1.38 0 2.5-1.12 2.5-2.5S20.88 5 19.5 5 17 6.12 17 7.5s1.12 2.5 2.5 2.5zm1.5 3.5c1.16.66 3 1.83 3 3.5v2h-6v-2c0-1.67 1.84-2.84 3-3.5z"/>
@@ -229,16 +229,16 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
             </div>
 
             <div className="space-y-1">
-              <h3 className="font-extrabold text-base text-white font-['SpotifyMixUITitle']">
+              <h3 className="font-bold text-base text-white font-['SpotifyMixUITitle']">
                 Escucha con tus amigos
               </h3>
               <p className="text-xs text-[#b3b3b3] leading-relaxed">
-                Comparte un enlace para escuchar la misma canción al segundo, ver sus cursores en vivo y elegir canciones juntos.
+                Comparte un enlace para escuchar la misma canción al segundo, ver sus cursores en vivo y elegir música juntos.
               </p>
             </div>
 
             <div className="w-full text-left space-y-1.5">
-              <label className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
+              <label className="text-xs font-bold text-white block">
                 Tu nombre
               </label>
               <input
@@ -246,20 +246,20 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
                 placeholder="Nombre para mostrar"
-                className="w-full px-3.5 py-2.5 rounded-full bg-white/5 border border-white/15 text-white text-xs outline-none focus:border-[#1ed760] focus:bg-white/10 transition-all placeholder:text-[#535353]"
+                className="w-full px-3.5 py-2.5 rounded-md bg-[#242424] focus:bg-[#2a2a2a] border border-transparent focus:border-[#535353] text-white text-xs outline-none transition-all placeholder:text-[#727272]"
               />
             </div>
 
             <button
               onClick={handleStart}
               disabled={isSubmitting}
-              className="w-full py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-extrabold text-xs tracking-wide hover:scale-102 active:scale-98 transition-all shadow-md cursor-pointer disabled:opacity-50"
+              className="w-full py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-extrabold text-xs tracking-normal hover:scale-102 active:scale-98 transition-all shadow-md cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? 'Iniciando...' : 'Iniciar sesión compartida'}
             </button>
 
-            <div className="w-full pt-3 border-t border-white/10 text-left space-y-2">
-              <label className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
+            <div className="w-full pt-3 border-t border-white/5 text-left space-y-2">
+              <label className="text-xs font-bold text-white block">
                 O únete con un código
               </label>
               <div className="flex gap-2">
@@ -269,12 +269,12 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                   onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
                   placeholder="CÓDIGO (EJ. 2SACKT)"
                   maxLength={8}
-                  className="flex-1 px-3.5 py-2.5 rounded-full bg-white/5 border border-white/15 text-white text-xs uppercase tracking-widest font-mono text-center outline-none focus:border-[#1ed760] focus:bg-white/10 transition-all placeholder:text-[#535353]"
+                  className="flex-1 px-3 py-2 rounded-md bg-[#242424] focus:bg-[#2a2a2a] border border-transparent focus:border-[#535353] text-white text-xs uppercase tracking-widest font-mono text-center outline-none transition-all placeholder:text-[#727272]"
                 />
                 <button
                   onClick={handleJoin}
                   disabled={isSubmitting || !joinCodeInput.trim()}
-                  className="px-5 py-2.5 rounded-full bg-white text-black font-extrabold text-xs cursor-pointer hover:scale-105 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-sm"
+                  className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs cursor-pointer hover:scale-104 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-sm"
                 >
                   Unirse
                 </button>
@@ -284,24 +284,27 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
         ) : (
           <div className="space-y-4">
             {/* Status card */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2.5">
+            <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
               <div className="flex items-center justify-between text-xs">
                 <span className="font-bold text-white flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
                   Sala en vivo
                 </span>
-                <span className="text-[10px] text-[#b3b3b3] uppercase font-bold px-2 py-0.5 rounded-full bg-white/5">
+                <span className="text-[10px] text-[#b3b3b3] uppercase font-bold px-2.5 py-0.5 rounded-full bg-white/10">
                   {isHost ? 'Anfitrión' : 'Invitado'}
                 </span>
               </div>
-              <div className="text-xs text-[#b3b3b3]">
-                Código de sala: <span className="font-mono font-bold text-white tracking-widest">{sessionId}</span>
+              <div className="text-xs text-[#b3b3b3] flex items-center justify-between pt-1">
+                <span>Código de sala:</span>
+                <span className="font-mono font-bold text-white tracking-widest bg-black/40 px-2 py-0.5 rounded text-xs select-all">
+                  {sessionId}
+                </span>
               </div>
             </div>
 
             {/* Link sharing */}
-            <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
-              <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
+            <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
+              <span className="text-xs font-bold text-white block">
                 Enlace para tus amigos
               </span>
               <div className="flex items-center gap-2">
@@ -309,15 +312,15 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                   type="text"
                   readOnly
                   value={sessionLink || ''}
-                  className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/50 border border-white/5 text-xs text-white/90 font-mono truncate select-all outline-none"
+                  className="flex-1 px-3 py-2 rounded-md bg-[#282828] text-xs text-white/90 font-mono truncate select-all outline-none border border-transparent focus:border-[#535353]"
                   onClick={(e) => (e.target as HTMLInputElement).select()}
                 />
                 <button
                   onClick={handleCopyLink}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
                     isCopied
                       ? 'bg-[#1ed760] text-black shadow-md'
-                      : 'bg-white text-black hover:scale-102 active:scale-95'
+                      : 'bg-white text-black hover:scale-104 active:scale-95'
                   }`}
                 >
                   {isCopied ? 'Copiado' : 'Copiar'}
@@ -327,16 +330,16 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
 
             {/* Participants list */}
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block">
+              <div className="flex items-center justify-between px-0.5">
+                <span className="text-xs font-bold text-white">
                   Participantes ({participants.length})
                 </span>
               </div>
-              <div className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
+              <div className="space-y-1 max-h-56 overflow-y-auto pr-0.5">
                 {participants.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between p-2 rounded-lg bg-black/35 border border-white/5 text-xs"
+                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#181818] hover:bg-[#202020] transition-colors text-xs"
                   >
                     {p.id === myParticipantId && editingName ? (
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -354,7 +357,7 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                           }}
                           autoFocus
                           maxLength={24}
-                          className="px-2 py-0.5 rounded bg-white/10 border border-[#1ed760] text-xs text-white outline-none w-28"
+                          className="px-2 py-0.5 rounded bg-[#282828] border border-[#535353] focus:border-white text-xs text-white outline-none w-28"
                         />
                         <button
                           onClick={() => {
@@ -375,19 +378,19 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                         </button>
                       </div>
                     ) : (
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0">
                         <span
-                          className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
                           style={{ backgroundColor: p.color }}
                         />
-                        <span className="font-bold text-white truncate">{p.name}</span>
+                        <span className="font-semibold text-white truncate text-xs">{p.name}</span>
                         {p.id === myParticipantId && (
                           <button
                             onClick={() => {
                               setNewNameInput(p.name);
                               setEditingName(true);
                             }}
-                            className="p-0.5 text-[#b3b3b3] hover:text-[#1ed760] transition-colors cursor-pointer"
+                            className="p-1 text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
                             title="Cambiar mi nombre"
                           >
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -409,7 +412,7 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
             {/* Library / Desktop Switcher (Solo para invitados: el anfitrión siempre gestiona su propia biblioteca) */}
             {!isHost ? (
               <>
-                <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-2">
+                <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
@@ -453,13 +456,16 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
                 </div>
 
                 {/* Guest note */}
-                <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-[#b3b3b3] leading-relaxed border border-white/5">
-                  Estás participando como invitado. Puedes cambiar canciones y abrir playlists. La configuración está protegida por el anfitrión.
+                <div className="p-3 rounded-lg bg-[#181818] text-xs text-[#b3b3b3] leading-relaxed">
+                  Estás participando como <span className="text-white font-bold">invitado</span>. Puedes cambiar canciones y abrir playlists. La configuración está protegida por el anfitrión.
                 </div>
               </>
             ) : (
-              <div className="p-2.5 rounded-lg bg-white/5 text-[11px] text-[#b3b3b3] leading-relaxed border border-white/5">
-                Eres el <span className="text-[#1ed760] font-bold">anfitrión</span> de la sesión. Todos los participantes están escuchando tu música y cola en tiempo real.
+              <div className="p-3 rounded-lg bg-[#181818] text-xs text-[#b3b3b3] leading-relaxed flex items-center gap-2.5">
+                <span className="w-2 h-2 rounded-full bg-[#1ed760] shrink-0" />
+                <span>
+                  Eres el <span className="text-white font-bold">anfitrión</span> de la sesión. Todos los participantes están escuchando tu música y cola en tiempo real.
+                </span>
               </div>
             )}
 
@@ -468,14 +474,14 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
               {isHost ? (
                 <button
                   onClick={terminateSession}
-                  className="w-full py-2 rounded-full bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white font-bold text-xs transition-all cursor-pointer"
+                  className="w-full py-2.5 rounded-full border border-red-500/40 hover:border-red-500 text-red-200 hover:text-white font-bold text-xs transition-all cursor-pointer hover:bg-red-500/10 active:scale-98"
                 >
                   Finalizar sesión para todos
                 </button>
               ) : (
                 <button
                   onClick={leaveSession}
-                  className="w-full py-2 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold text-xs transition-all cursor-pointer"
+                  className="w-full py-2.5 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs transition-all cursor-pointer active:scale-98"
                 >
                   Salir de la sesión
                 </button>

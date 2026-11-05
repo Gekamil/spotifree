@@ -49,34 +49,33 @@ export const ImportLibraryModal: React.FC = () => {
       onClick={closeImportModal}
     >
       <div
-        className="w-full max-w-lg bg-[#242424] rounded-2xl p-6 text-white shadow-2xl border border-white/10 space-y-4 animate-in zoom-in-95 duration-200"
+        className="w-full max-w-[520px] bg-[#282828] rounded-lg p-6 text-white shadow-[0_20px_48px_rgba(0,0,0,0.65)] space-y-5 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between pb-2 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-[#1ed760]/20 text-[#1ed760] flex items-center justify-center shrink-0">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 14.5v-9l6 4.5-6 4.5z" />
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-                {t('importMusicTitle')}
-              </h3>
-              <p className="text-xs text-[#b3b3b3] mt-0.5">{t('importMusicSubtitle')}</p>
-            </div>
+        <div className="flex items-start justify-between">
+          <div>
+            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+              {t('importMusicTitle') || 'Importa tu música'}
+            </h2>
+            <p className="text-sm text-[#b3b3b3] mt-1 font-['SpotifyMixUI']">
+              {t('importMusicSubtitle') || 'Trae tus listas, canciones y artistas a tu biblioteca.'}
+            </p>
           </div>
           <button
+            type="button"
             onClick={closeImportModal}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0 ml-2"
+            title="Cerrar"
           >
-            ✕
+            <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+              <path d="M2.47 2.47a.75.75 0 0 1 1.06 0L8 6.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L9.06 8l4.47 4.47a.75.75 0 1 1-1.06 1.06L8 9.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L6.94 8 2.47 3.53a.75.75 0 0 1 0-1.06z" />
+            </svg>
           </button>
         </div>
 
-        <form onSubmit={handleImport} className="space-y-4 pt-1">
+        <form onSubmit={handleImport} className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-[#b3b3b3] block mb-1.5 uppercase tracking-wider">
+            <label className="text-xs font-bold text-white block mb-2 font-['SpotifyMixUI']">
               Enlace de playlist o lista de canciones
             </label>
             <textarea
@@ -84,22 +83,22 @@ export const ImportLibraryModal: React.FC = () => {
               onChange={(e) => setImportInput(e.target.value)}
               placeholder="Pega un enlace de Spotify (https://open.spotify.com/playlist/...) o una lista con 'Canción - Artista'"
               rows={4}
-              className="w-full bg-[#181818] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-[#727272] focus:border-[#1ed760] outline-none transition-colors resize-none"
+              className="w-full bg-[#3e3e3e] focus:bg-[#333333] border border-transparent focus:border-[#535353] rounded-md p-3.5 text-sm text-white placeholder-[#a7a7a7] outline-none transition-all resize-none font-normal leading-relaxed"
               autoFocus
             />
-            <p className="text-[11px] text-[#727272] mt-1">
+            <p className="text-xs text-[#a7a7a7] mt-2 leading-relaxed">
               Compatible con enlaces públicos de Spotify, YouTube, Apple Music o listados de texto línea por línea.
             </p>
           </div>
 
           {errorMsg && (
-            <div className="p-3 bg-red-950/50 border border-red-500/30 rounded-xl text-xs text-red-200">
+            <div className="p-3 bg-red-950/60 border border-red-500/30 rounded-md text-xs text-red-200">
               {errorMsg}
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 bg-[#1ed760]/20 border border-[#1ed760]/40 rounded-xl text-xs text-[#1ed760] font-bold">
+            <div className="p-3 bg-[#1ed760]/20 border border-[#1ed760]/40 rounded-md text-xs text-[#1ed760] font-bold">
               {successMsg}
             </div>
           )}
@@ -108,14 +107,14 @@ export const ImportLibraryModal: React.FC = () => {
             <button
               type="button"
               onClick={closeImportModal}
-              className="px-4 py-2 rounded-full text-xs font-bold text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
+              className="px-6 py-2.5 rounded-full text-sm font-bold text-white hover:scale-104 active:scale-100 transition-transform cursor-pointer"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || !importInput.trim()}
-              className="px-6 py-2 rounded-full bg-white text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer disabled:opacity-50 disabled:pointer-events-none shadow-lg"
+              className="px-8 py-2.5 rounded-full bg-white text-black text-sm font-bold hover:scale-104 active:scale-100 transition-all cursor-pointer disabled:opacity-40 disabled:scale-100 shadow-md"
             >
               {isLoading ? 'Importando...' : 'Importar ahora'}
             </button>

@@ -667,12 +667,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [clipsTracks, setClipsTracks] = useState<Track[]>([]);
   const [clipsInitialIndex, setClipsInitialIndex] = useState(0);
 
-  const handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
+  const _handleOpenPreview = (selectedTrack: Track, allList: Track[]) => {
     const ordered = [selectedTrack, ...allList.filter((t) => t.id !== selectedTrack.id)];
     setClipsTracks(ordered);
     setClipsInitialIndex(0);
     setIsClipsModalOpen(true);
   };
+  void _handleOpenPreview;
 
   const isTrackLiked = (trackId: string, trackObj?: Track) => {
     if (isLikedPlaylist) return true;
@@ -1659,29 +1660,51 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               (t) => t.id === tr.id || (t.name === tr.name && t.artists[0]?.name === tr.artists[0]?.name)
             );
 
+            const isPlayingThisTrack = isPlaying && currentTrack?.id === tr.id;
+            const isThisSelected = currentTrack?.id === tr.id;
+
+            const handlePlaySuggestion = () => {
+              if (currentTrack?.id === tr.id) {
+                togglePlay();
+              } else {
+                const list = addSearchQuery ? addSearchResults : popularSuggestions;
+                const recQueue = [tr, ...list.filter((t) => t.id !== tr.id)];
+                playTrack(tr, recQueue, 'playlist-recommendations');
+              }
+            };
+
             return (
               <div
                 key={tr.id}
-                className="flex items-center justify-between px-3.5 py-2 rounded-md hover:bg-white/10 transition-colors group"
+                onClick={handlePlaySuggestion}
+                className={`flex items-center justify-between px-3.5 py-2 rounded-md hover:bg-white/10 transition-colors group cursor-pointer ${
+                  isThisSelected ? 'bg-white/5' : ''
+                }`}
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1 pr-4">
                   {/* Artwork with play preview button overlay */}
                   <div
-                    className="relative group/cover w-10 h-10 shrink-0 cursor-pointer overflow-hidden rounded shadow"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleOpenPreview(tr, addSearchQuery ? addSearchResults : popularSuggestions);
-                    }}
-                    title={`Escuchar preview de ${tr.name}`}
+                    className="relative group/cover w-10 h-10 shrink-0 cursor-pointer overflow-hidden rounded shadow bg-[#282828]"
+                    title={isPlayingThisTrack ? 'Pausar' : `Reproducir ${tr.name}`}
                   >
                     <TrackArtwork src={tr.album?.images?.[0]?.url} alt={tr.name} size={40} className="w-10 h-10 object-cover" />
-                    {/* Hover play preview overlay matching playlist tracks */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover/cover:opacity-100 flex items-center justify-center transition-all duration-200">
-                      <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
+                    {/* Hover play/pause overlay matching playlist tracks */}
+                    <div className={`absolute inset-0 bg-black/50 flex items-center justify-center transition-all duration-200 ${
+                      isPlayingThisTrack ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}>
+                      {isPlayingThisTrack ? (
+                        <PauseNativeIcon size={16} className="text-[#1ed760] drop-shadow-md" />
+                      ) : (
+                        <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
+                      )}
                     </div>
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{tr.name}</p>
+                    <p className={`text-sm font-semibold truncate ${
+                      isThisSelected ? 'text-[#1ed760]' : 'text-white'
+                    }`}>
+                      {tr.name}
+                    </p>
                     <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
                       {parseTrackArtists(tr.artists).map((a) => a.name).join(', ')}
                     </p>
@@ -1694,7 +1717,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </span>
                   <button
                     disabled={alreadyInList}
-                    onClick={() => handleAddTrack(tr)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddTrack(tr);
+                    }}
                     className={`h-8 px-4 rounded-full border text-xs font-bold transition-all cursor-pointer ${
                       alreadyInList
                         ? 'border-white/10 text-white/40 cursor-default'

@@ -112,10 +112,10 @@ export const SharedSessionModal: React.FC = () => {
           width: '100%',
           maxWidth: '520px',
           maxHeight: '85vh',
-          background: '#121212',
-          borderTop: '1px solid rgba(255,255,255,0.12)',
-          borderTopLeftRadius: '24px',
-          borderTopRightRadius: '24px',
+          background: '#282828',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          borderTopLeftRadius: '20px',
+          borderTopRightRadius: '20px',
           padding: '12px 20px 28px 20px',
           color: 'white',
           position: 'relative',
@@ -402,14 +402,14 @@ export const SharedSessionModal: React.FC = () => {
               {isHost ? (
                 <button
                   onClick={terminateSession}
-                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'rgba(220,38,38,0.15)', border: '1px solid rgba(220,38,38,0.3)', color: '#fca5a5', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.4)', color: '#fca5a5', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                 >
                   Finalizar sesión para todos
                 </button>
               ) : (
                 <button
                   onClick={leaveSession}
-                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'white', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
+                  style={{ width: '100%', padding: '10px', borderRadius: '999px', background: 'transparent', border: '1px solid #727272', color: 'white', fontWeight: 700, fontSize: '13px', cursor: 'pointer' }}
                 >
                   Salir de la sesión
                 </button>
