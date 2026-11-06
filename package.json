@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node tests/dj_transitions.test.js",
+    "test": "node tests/dj_transitions.test.js && node tests/dj_planner.test.js",
     "preview": "vite preview",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",

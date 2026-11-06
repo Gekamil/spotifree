@@ -11,6 +11,7 @@ import {
   type HarmonicRelation,
   type HarmonicCompatibilityResult,
 } from '../utils/audioFeatures.ts';
+import { getSessionPlan } from './djMixPlanner.ts';
 
 export type TransitionPreset =
   | 'automatica'
@@ -45,6 +46,14 @@ export type DJFXMode =
 export interface DJTransitionConfig {
   trackAId: string;
   trackBId: string;
+  /** Second of song B where it enters (skips silent intros / enters at the drop). */
+  mixInSec?: number;
+  /** 'basic' | 'smooth' | 'wow' — used to keep variety across a DJ set. */
+  intensity?: 'basic' | 'smooth' | 'wow';
+  /** Plain-language reason for this choice, shown in the editor. */
+  reason?: string;
+  /** True when the user saved this transition by hand in the editor. */
+  isCustom?: boolean;
   compases: number; // 1, 2, 4, 8, 16
   preset: TransitionPreset;
   volumeEnvelope: VolumeEnvelope;
@@ -214,6 +223,40 @@ class DJTransitionService {
     const cleanA = (trackAId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanB = (trackBId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     return `spotifree_dj_transition_${cleanA}_${cleanB}`;
+  }
+
+  /** The user's saved transition for this exact pair, if any. */
+  public getSavedTransitionConfig(trackAId: string, trackBId: string): DJTransitionConfig | null {
+    if (typeof window === 'undefined') return null;
+    try {
+      const saved = window.localStorage.getItem(this.getTransitionKey(trackAId, trackBId));
+      return saved ? { ...JSON.parse(saved), isCustom: true } : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Transition used by the live DJ mix and the editor: the user's saved one for the pair,
+   * otherwise the planner's choice (real BPM / key / energy, varied per session).
+   */
+  public getPlannedTransition(trackA: Track, trackB: Track): DJTransitionConfig {
+    const plan = getSessionPlan(trackA, trackB);
+    const saved = this.getSavedTransitionConfig(trackA.id, trackB.id);
+    if (saved) {
+      return {
+        ...saved,
+        // keep live tempo info, so durations follow the measured BPM
+        tempoA: plan.tempoA,
+        tempoB: plan.tempoB,
+        camelotA: plan.camelotA,
+        camelotB: plan.camelotB,
+        mixInSec: typeof saved.mixInSec === 'number' ? saved.mixInSec : plan.mixInSec,
+        intensity: saved.intensity || plan.intensity,
+        reason: saved.reason || 'Transición personalizada guardada por ti.',
+      };
+    }
+    return plan;
   }
 
   public getTransitionConfig(

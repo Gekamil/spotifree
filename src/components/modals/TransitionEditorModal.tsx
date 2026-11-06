@@ -2,8 +2,28 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Track } from '../../types/spotify';
 import {
   type AudioFeature,
+  getTrackAnalysis,
   resolveClientSideRealFeature,
+  TRACK_ANALYSIS_EVENT,
 } from '../../utils/audioFeatures';
+import { getDJSessionSeed, getMixTrackInfo, planTransition, type PlannedTransition } from '../../services/djMixPlanner';
+import { analyzeTrackAudio } from '../../services/trackAnalysisService';
+
+/** Human label for where a track's BPM / key come from. */
+function sourceLabel(f: AudioFeature): string {
+  switch (f.source) {
+    case 'analysis':
+      return 'Medido del audio';
+    case 'deezer':
+      return 'BPM de Deezer · tono estimado';
+    case 'catalog':
+      return 'Catálogo verificado';
+    case 'artist':
+      return 'Estimado por artista';
+    default:
+      return 'Estimado';
+  }
+}
 import { formatDuration } from '../../utils/formatters';
 import { getTrackCoverUrl } from '../../utils/trackCovers';
 import {
@@ -202,6 +222,37 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   const [volumeEnvelope, setVolumeEnvelope] = useState<VolumeEnvelope>('superposicion');
   const [eqMode, setEqMode] = useState<EQFilterMode>('intercambio_graves_central');
   const [fxMode, setFxMode] = useState<DJFXMode>('ninguno');
+  // Where song B enters (seconds) and why the planner chose this transition
+  const [mixInSec, setMixInSec] = useState<number>(0);
+  const [planReason, setPlanReason] = useState<string | null>(null);
+  const [planIntensity, setPlanIntensity] = useState<DJTransitionConfig['intensity']>(undefined);
+  const [ideaNonce, setIdeaNonce] = useState(0);
+  const [analysisVersion, setAnalysisVersion] = useState(0);
+  const [isMeasuring, setIsMeasuring] = useState(false);
+  // True once the user changes something by hand (then new analysis data won't overwrite it)
+  const dirtyRef = useRef(false);
+  const lastAppliedRef = useRef('');
+  const shownIdeasRef = useRef<Array<{ preset: TransitionPreset; intensity: 'basic' | 'smooth' | 'wow' }>>([]);
+
+  const applyConfig = (cfg: Partial<PlannedTransition> & Partial<DJTransitionConfig>) => {
+    const next = {
+      compases: cfg.compases || 2,
+      preset: cfg.preset || 'automatica',
+      volumeEnvelope: cfg.volumeEnvelope || 'superposicion',
+      eqMode: cfg.eqMode || 'intercambio_graves_central',
+      fxMode: cfg.fxMode || 'ninguno',
+      mixInSec: typeof cfg.mixInSec === 'number' ? cfg.mixInSec : 0,
+    } as const;
+    lastAppliedRef.current = JSON.stringify(next);
+    setCompases(next.compases);
+    setPreset(next.preset);
+    setVolumeEnvelope(next.volumeEnvelope);
+    setEqMode(next.eqMode);
+    setFxMode(next.fxMode);
+    setMixInSec(next.mixInSec);
+    setPlanReason(cfg.reason || null);
+    setPlanIntensity(cfg.intensity);
+  };
 
   // Dropdown menus
   const [isCompasesMenuOpen, setIsCompasesMenuOpen] = useState(false);
@@ -242,23 +293,74 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     return () => ro.disconnect();
   }, []);
 
-  // Load saved config on mount or track change, calculating tailored smart parameters
+  // Load the saved transition for this pair, or the planner's choice (real BPM / key / energy)
+  useEffect(() => {
+    dirtyRef.current = false;
+    shownIdeasRef.current = [];
+    setIdeaNonce(0);
+  }, [trackA?.id, trackB?.id]);
+
   useEffect(() => {
     if (!trackA?.id || !trackB?.id) return;
-    const config = djTransitionService.getTransitionConfig(
-      trackA.id,
-      trackB.id,
-      featA?.tempo,
-      featB?.tempo,
-      featA?.camelot,
-      featB?.camelot
-    );
-    setCompases(config.compases || 2);
-    setPreset(config.preset || 'automatica');
-    setVolumeEnvelope(config.volumeEnvelope || 'superposicion');
-    setEqMode(config.eqMode || 'intercambio_graves_central');
-    setFxMode(config.fxMode || 'ninguno');
-  }, [trackA?.id, trackB?.id, featA?.tempo, featB?.tempo, featA?.camelot, featB?.camelot]);
+    if (dirtyRef.current) return; // never overwrite the user's manual edits
+    applyConfig(djTransitionService.getPlannedTransition(trackA, trackB));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trackA?.id, trackB?.id, analysisVersion]);
+
+  // Any state that differs from the last applied plan is a manual edit
+  useEffect(() => {
+    if (!lastAppliedRef.current) return;
+    const current = JSON.stringify({ compases, preset, volumeEnvelope, eqMode, fxMode, mixInSec });
+    if (current !== lastAppliedRef.current) dirtyRef.current = true;
+  }, [compases, preset, volumeEnvelope, eqMode, fxMode, mixInSec]);
+
+  // Measure both songs from their real audio when the editor opens
+  useEffect(() => {
+    if (!isOpen || !trackA || !trackB) return;
+    const onAnalysis = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id || '';
+      if (trackA.id.includes(id) || trackB.id.includes(id)) setAnalysisVersion((v) => v + 1);
+    };
+    window.addEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+    const needsA = getTrackAnalysis(trackA.id)?.tempoSource !== 'analysis';
+    const needsB = getTrackAnalysis(trackB.id)?.tempoSource !== 'analysis';
+    if (needsA || needsB) {
+      setIsMeasuring(true);
+      Promise.all([needsA ? analyzeTrackAudio(trackA) : null, needsB ? analyzeTrackAudio(trackB) : null]).finally(() =>
+        setIsMeasuring(false)
+      );
+    }
+    return () => window.removeEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+  }, [isOpen, trackA?.id, trackB?.id]);
+
+  // "Otra idea": ask the planner for a different transition that still makes sense
+  const handleAnotherIdea = () => {
+    if (!trackA || !trackB) return;
+    const a = getMixTrackInfo(trackA);
+    const b = getMixTrackInfo(trackB);
+    // Everything already suggested counts as "recent", so each click explores something new
+    shownIdeasRef.current.push({ preset, intensity: planIntensity || 'smooth' });
+    if (shownIdeasRef.current.length > 4) shownIdeasRef.current.shift();
+    const recent = [...shownIdeasRef.current];
+    // Look for a different style that still fits these two songs
+    let nonce = ideaNonce;
+    let plan = planTransition(a, b, { seed: getDJSessionSeed(), recent, nonce: ++nonce });
+    for (let tries = 0; tries < 12 && plan.preset === preset && plan.compases === compases; tries++) {
+      plan = planTransition(a, b, { seed: getDJSessionSeed(), recent, nonce: ++nonce });
+    }
+    setIdeaNonce(nonce);
+    dirtyRef.current = false;
+    applyConfig(plan);
+  };
+
+  const analysisB = getTrackAnalysis(trackB?.id);
+  const mixInOptions: Array<{ label: string; sec: number }> = [{ label: 'Inicio', sec: 0 }];
+  if (analysisB?.tempoSource === 'analysis') {
+    if ((analysisB.audioStartSec || 0) > 0.4) mixInOptions.push({ label: 'Tras el silencio', sec: Math.round((analysisB.audioStartSec || 0) * 10) / 10 });
+    if ((analysisB.introEndSec || 0) > (analysisB.audioStartSec || 0) + 2 && (analysisB.introEndSec || 0) <= 45) {
+      mixInOptions.push({ label: 'Parte fuerte', sec: Math.round((analysisB.introEndSec || 0) * 10) / 10 });
+    }
+  }
 
   // Clean up audition on close
   useEffect(() => {
@@ -287,21 +389,16 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {
     if (!trackA || !trackB) return;
-    setPreset(p);
     if (p === 'automatica') {
-      const smart = djTransitionService.calculateSmartTransition(
-        trackA.id,
-        trackB.id,
-        featA?.tempo,
-        featB?.tempo,
-        featA?.camelot,
-        featB?.camelot
-      );
-      setVolumeEnvelope(smart.volumeEnvelope);
-      setEqMode(smart.eqMode);
-      setFxMode(smart.fxMode || 'ninguno');
-      setCompases(smart.compases);
-    } else if (p === 'fundido') {
+      // Let the planner decide from the real BPM / key / energy of both songs
+      applyConfig(planTransition(getMixTrackInfo(trackA), getMixTrackInfo(trackB), { seed: getDJSessionSeed(), recent: [], nonce: ideaNonce }));
+      dirtyRef.current = true;
+      return;
+    }
+    setPreset(p);
+    setPlanReason(null);
+    setPlanIntensity(p === 'crescendo' || p === 'beat_roll' || p === 'freno_vinilo' ? 'wow' : p === 'corte' || p === 'fundido' ? 'basic' : 'smooth');
+    if (p === 'fundido') {
       setVolumeEnvelope('lineal');
       setEqMode('sin_filtro');
       setFxMode('ninguno');
@@ -377,6 +474,8 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         tempoB: featB.tempo,
         camelotA: featA.camelot,
         camelotB: featB.camelot,
+        mixInSec,
+        intensity: planIntensity,
       };
 
       try {
@@ -424,6 +523,10 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       tempoB: featB.tempo,
       camelotA: featA.camelot,
       camelotB: featB.camelot,
+      mixInSec,
+      intensity: planIntensity,
+      reason: planReason || undefined,
+      isCustom: true,
     };
     djTransitionService.saveTransitionConfig(config);
     if (onSaveConfig) {
@@ -1282,7 +1385,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                     : '✦ Fundido Dinámico'}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-[#b3b3b3]">
-                  {compases} {compases === 1 ? 'compás' : 'compases'} ({((compases * 4 * 60) / (featA.tempo || 128)).toFixed(1)}s)
+                  {compases} {compases === 1 ? 'compás' : 'compases'} ({djTransitionService.calculateDurationSeconds(featA.tempo || 128, compases).toFixed(1)}s)
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-[#a7a7a7]">
@@ -1291,7 +1394,13 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                 <span>Clave: <strong className="text-white">{featA.camelot}</strong> → <strong className="text-white">{featB.camelot}</strong></span>
               </div>
             </div>
-            <p className="text-xs text-[#b3b3b3] leading-relaxed">
+            {planReason && (
+              <p className="text-xs text-white/90 leading-relaxed">
+                <span className="font-bold text-[#1ed760]">Por qué: </span>
+                {planReason}
+              </p>
+            )}
+            <p className={`text-xs text-[#b3b3b3] leading-relaxed ${planReason ? 'hidden' : ''}`}>
               {preset === 'mezcla_voces'
                 ? 'Aísla las frecuencias vocales suprimiendo el bajo en ambas pistas (-36dB) para entrelazar las voces con nitidez total. Al llegar al compás central, el bombo de la pista entrante toma el control sin choques ni silencios.'
                 : preset === 'repeticion_ritmo'
@@ -1312,6 +1421,62 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
                 ? 'Cruce enérgico con rampa rápida anti-clic para pasar directamente a la pegada del bombo de la nueva pista sin pausas.'
                 : 'Cruce suave de volumen para conectar ambas canciones de forma balanceada.'}
             </p>
+
+            {/* Where the data comes from + "another idea" */}
+            <div className="flex items-center justify-between flex-wrap gap-2 pt-1">
+              <span className="text-[11px] text-[#a7a7a7]">
+                {isMeasuring ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="w-3 h-3 border-2 border-[#1ed760] border-t-transparent rounded-full animate-spin" />
+                    Midiendo BPM y tono del audio real…
+                  </span>
+                ) : (
+                  <>
+                    A: {sourceLabel(featA)} · B: {sourceLabel(featB)}
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={handleAnotherIdea}
+                className="px-3 py-1 rounded-full border border-[#727272] hover:border-white text-[11px] font-bold text-white hover:scale-[1.04] active:scale-95 transition-all cursor-pointer"
+              >
+                Otra idea
+              </button>
+            </div>
+
+            {/* Song B entry point */}
+            <div className="pt-2 border-t border-white/5 space-y-1.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-[#a7a7a7] uppercase tracking-wider">Entrada de B</span>
+                <span className="text-xs font-bold text-white tabular-nums">{formatDuration(Math.round(mixInSec * 1000))}</span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={45}
+                step={0.5}
+                value={mixInSec}
+                onChange={(e) => setMixInSec(Number(e.target.value))}
+                aria-label="Segundo de la canción B en el que empieza la mezcla"
+                className="w-full accent-[#1ed760] cursor-pointer"
+              />
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {mixInOptions.map((o) => (
+                  <button
+                    key={o.label}
+                    type="button"
+                    onClick={() => setMixInSec(o.sec)}
+                    className={`px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors cursor-pointer ${
+                      Math.abs(mixInSec - o.sec) < 0.3 ? 'bg-white text-black' : 'bg-white/10 text-white hover:bg-white/20'
+                    }`}
+                  >
+                    {o.label}
+                    {o.sec > 0 ? ` · ${formatDuration(Math.round(o.sec * 1000))}` : ''}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
           {/* Lower Controls: Responsive side-by-side on desktop */}

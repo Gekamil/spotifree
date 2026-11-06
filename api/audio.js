@@ -406,6 +406,35 @@ export default async function handler(req, res) {
     }
   }
 
+  // 1b. CHUNK ACTION: first ~3 MB of the audio, same-origin + CORS, for in-browser analysis
+  // of BPM / key / structure (the decoded chunk usually covers the whole song at 128 kbps).
+  if (action === 'chunk') {
+    const id = (req.query?.id || '').trim();
+    const q = (req.query?.q || '').trim();
+    if (!id && !q) return res.status(400).json({ error: 'Missing id or q' });
+    try {
+      let videoId = /^[\w-]{11}$/.test(id) ? id : null;
+      if (!videoId) {
+        try {
+          videoId = (await resolveViaYouTubeMusic(q))?.videoId || null;
+        } catch {
+          videoId = (await resolveViaYouTubeSearch(q))?.videoId || null;
+        }
+      }
+      if (!videoId) return res.status(404).json({ error: 'Video not found' });
+      const audioUrl = await getInvidiousAudioUrl(videoId);
+      if (!audioUrl) return res.status(404).json({ error: 'Audio stream not found' });
+      const upstream = await fetchWithTimeout(audioUrl, { headers: { Range: 'bytes=0-3145727' } }, 15000);
+      if (!upstream.ok) return res.status(502).json({ error: `Upstream ${upstream.status}` });
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/webm');
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+      return res.status(200).send(buf);
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
   // 2. RESOLVE ACTION (Default)
   res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800');
 

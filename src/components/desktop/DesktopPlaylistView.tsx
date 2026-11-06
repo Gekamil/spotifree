@@ -20,8 +20,10 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
-import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
+import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { djTransitionService } from '../../services/djTransitionService';
+import { buildDJSetOrder, getSessionFlavour, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
+import { prepareDJAnalyses } from '../../services/trackAnalysisService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { AIDJView } from '../dj/AIDJView';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
@@ -297,6 +299,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [isAutomixActive, dynamicTracks]);
 
+  // Refresh BPM / key badges as soon as a song's real audio analysis arrives
+  useEffect(() => {
+    const onAnalysis = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      const t = dynamicTracks.find((x) => cleanTrackId(x.id) === id);
+      if (!t) return;
+      setAudioFeatures((prev) => ({ ...prev, [id]: resolveClientSideRealFeature(id, t.name, t.artists?.[0]?.name) }));
+    };
+    window.addEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+    return () => window.removeEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+  }, [dynamicTracks]);
+
   // Preload and pre-warm audio & video IDs for top tracks in this playlist for instant 0ms playback
   useEffect(() => {
     if (dynamicTracks && dynamicTracks.length > 0) {
@@ -350,11 +365,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
         originalTracksRef.current = deduplicateTracks([...dynamicTracks]);
       }
-      // 2. Sort tracks along Camelot Wheel & BPM proximity for seamless transitions
-      const harmonized = deduplicateTracks(
-        djTransitionService.sortPlaylistHarmonically(dynamicTracks, audioFeatures)
-      );
-      setDynamicTracks(harmonized);
+      // 2. New DJ session: a different set order and different transitions every time.
+      //    The order follows real BPM / key / energy (when measured) with a random strategy.
+      const seed = startNewDJSession();
+      const { order, strategy } = buildDJSetOrder(dynamicTracks, seed);
+      console.info(`[DJ] Nueva sesión: orden "${SET_STRATEGY_LABELS[strategy]}" (${getSessionFlavour(seed)})`);
+      setDynamicTracks(deduplicateTracks(order));
+      // Real BPM for every song (Deezer) + full audio analysis of the first ones, in background
+      void prepareDJAnalyses(order, 3);
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {

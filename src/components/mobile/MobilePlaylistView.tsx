@@ -26,13 +26,15 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
-import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
+import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
+import { buildDJSetOrder, getSessionFlavour, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
+import { prepareDJAnalyses } from '../../services/trackAnalysisService';
 import { audioEngine } from '../../services/audioEngine';
 import { AIDJView } from '../dj/AIDJView';
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
@@ -916,6 +918,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [tracks, isAutomixActive]);
 
+  // Refresh BPM / key badges as soon as a song's real audio analysis arrives
+  useEffect(() => {
+    const onAnalysis = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      const t = tracks.find((x) => cleanTrackId(x.id) === id);
+      if (!t) return;
+      setAudioFeatures((prev) => ({ ...prev, [id]: resolveClientSideRealFeature(id, t.name, t.artists?.[0]?.name) }));
+    };
+    window.addEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+    return () => window.removeEventListener(TRACK_ANALYSIS_EVENT, onAnalysis);
+  }, [tracks]);
+
   const handleToggleDownload = async () => {
     if (isDownloading) return;
     if (isDownloaded) {
@@ -1033,11 +1048,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
         originalTracksRef.current = deduplicateTracks([...tracks]);
       }
-      // 2. Sort tracks along Camelot Wheel & BPM proximity
-      const harmonized = deduplicateTracks(
-        djTransitionService.sortPlaylistHarmonically(tracks, audioFeatures)
-      );
-      setTracks(harmonized);
+      // 2. New DJ session: a different set order and different transitions every time.
+      //    The order follows real BPM / key / energy (when measured) with a random strategy.
+      const seed = startNewDJSession();
+      const { order, strategy } = buildDJSetOrder(tracks, seed);
+      console.info(`[DJ] Nueva sesión: orden "${SET_STRATEGY_LABELS[strategy]}" (${getSessionFlavour(seed)})`);
+      setTracks(deduplicateTracks(order));
+      // Real BPM for every song (Deezer) + full audio analysis of the first ones, in background
+      void prepareDJAnalyses(order, 3);
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {

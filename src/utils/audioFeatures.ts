@@ -9,6 +9,12 @@ export interface AudioFeature {
   color: string; // Background color for badge chip
   textColor: string; // Foreground text color
   time_signature?: number;
+  /**
+   * Where the values come from: 'analysis' (measured from the real audio), 'deezer' (real BPM
+   * from Deezer), 'catalog' (verified local list), 'artist' (genre/artist heuristic) or
+   * 'estimated' (deterministic placeholder; must not be trusted for harmonic decisions).
+   */
+  source?: 'analysis' | 'deezer' | 'catalog' | 'artist' | 'estimated';
 }
 
 // Major (mode=1) -> B
@@ -102,10 +108,108 @@ const FEATURE_CACHE = new Map<string, AudioFeature>();
 
 const VERIFIED_CLIENT_DB = realFeaturesData as Record<string, { tempo: number; key: number; mode: number; camelot?: string }>;
 
+// ============================================================================
+// Real measured data (audio analysis / Deezer BPM), persisted per track
+// ============================================================================
+
+export interface TrackAnalysisData {
+  tempo: number;
+  tempoSource: 'analysis' | 'deezer';
+  tempoConfidence?: number;
+  key?: number;
+  mode?: number;
+  camelot?: string;
+  keySource?: 'analysis';
+  keyConfidence?: number;
+  energy?: number;
+  beatOffsetSec?: number;
+  downbeatOffsetSec?: number;
+  audioStartSec?: number;
+  introEndSec?: number;
+  outroStartSec?: number;
+  musicEndSec?: number;
+  durationSec?: number;
+  analyzedAt: number;
+}
+
+export const TRACK_ANALYSIS_EVENT = 'spotifree_track_analysis_updated';
+const ANALYSIS_STORAGE_PREFIX = 'spotifree_track_analysis_v1_';
+const analysisMemory = new Map<string, TrackAnalysisData | null>();
+
+export function cleanTrackId(id?: string | null): string {
+  return (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+}
+
+/** Real measured data for a track, if it has been analysed (memory → localStorage). */
+export function getTrackAnalysis(trackId?: string | null): TrackAnalysisData | null {
+  const id = cleanTrackId(trackId);
+  if (!id) return null;
+  if (analysisMemory.has(id)) return analysisMemory.get(id) || null;
+  let data: TrackAnalysisData | null = null;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem(ANALYSIS_STORAGE_PREFIX + id);
+      if (raw) data = JSON.parse(raw);
+    }
+  } catch {}
+  analysisMemory.set(id, data);
+  return data;
+}
+
+export function setTrackAnalysis(trackId: string, data: TrackAnalysisData): void {
+  const id = cleanTrackId(trackId);
+  if (!id) return;
+  // Never downgrade measured audio analysis to a Deezer-only BPM
+  const prev = getTrackAnalysis(id);
+  if (prev && prev.tempoSource === 'analysis' && data.tempoSource !== 'analysis') return;
+  analysisMemory.set(id, data);
+  FEATURE_CACHE.delete(id);
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      window.localStorage.setItem(ANALYSIS_STORAGE_PREFIX + id, JSON.stringify(data));
+    }
+  } catch {}
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent(TRACK_ANALYSIS_EVENT, { detail: { id } }));
+    }
+  } catch {}
+}
+
 /**
- * Resolves a real feature from local verified database or genre analysis
+ * Resolves a track's BPM / key. Measured data (real audio analysis or Deezer BPM) wins over
+ * the local catalog and the heuristics, and the result says where it came from (`source`).
  */
 export function resolveClientSideRealFeature(trackId: string, trackName?: string, artistName?: string): AudioFeature {
+  const base = resolveBaseFeature(trackId, trackName, artistName);
+  const measured = getTrackAnalysis(trackId);
+  if (!measured) return base;
+
+  let { key, mode, camelot } = base;
+  let source: AudioFeature['source'] = measured.tempoSource;
+  if (measured.keySource === 'analysis' && typeof measured.key === 'number' && typeof measured.mode === 'number') {
+    key = measured.key;
+    mode = measured.mode;
+    camelot = measured.camelot || getCamelotKey(measured.key, measured.mode);
+    source = 'analysis';
+  }
+  const visuals = getCamelotVisuals(camelot);
+  return {
+    ...base,
+    tempo: Math.round(measured.tempo),
+    key,
+    mode,
+    camelot,
+    color: visuals.bg,
+    textColor: visuals.text,
+    source,
+  };
+}
+
+/**
+ * Resolves a feature from local verified database or genre analysis (no measured data)
+ */
+function resolveBaseFeature(trackId: string, trackName?: string, artistName?: string): AudioFeature {
   const tNorm = normalizeTitle(trackName);
   const aNorm = normalizeTitle(artistName);
 
@@ -121,6 +225,7 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
       color: visuals.bg,
       textColor: visuals.text,
       time_signature: 4,
+      source: 'estimated',
     };
   }
 
@@ -129,6 +234,7 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
   let mode = 0;
   let camelot = '9A';
   let matched = false;
+  let source: AudioFeature['source'] = 'estimated';
 
   // 1. Direct or partial catalog match in verified DB
   if (tNorm && VERIFIED_CLIENT_DB[tNorm]) {
@@ -150,6 +256,8 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
       }
     }
   }
+
+  if (matched) source = 'catalog';
 
   // 2. Genre & Artist Heuristics when not in verified database
   if (!matched) {
@@ -200,6 +308,7 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
       mode = (hash >> 7) % 2;
       camelot = getCamelotKey(key, mode);
     }
+    if (matched) source = 'artist';
   }
 
   const visuals = getCamelotVisuals(camelot);
@@ -212,6 +321,7 @@ export function resolveClientSideRealFeature(trackId: string, trackName?: string
     color: visuals.bg,
     textColor: visuals.text,
     time_signature: 4,
+    source,
   };
 }
 
@@ -232,6 +342,11 @@ export async function fetchAudioFeaturesBatch(
 
     if (FEATURE_CACHE.has(cleanId)) {
       result[cleanId] = FEATURE_CACHE.get(cleanId)!;
+    } else if (getTrackAnalysis(cleanId)) {
+      // Already measured (real audio analysis or Deezer BPM): no need to ask the server
+      const resolved = resolveClientSideRealFeature(cleanId, t.name, t.artists?.[0]?.name);
+      FEATURE_CACHE.set(cleanId, resolved);
+      result[cleanId] = resolved;
     } else {
       toFetch.push({
         id: cleanId,
@@ -265,25 +380,14 @@ export async function fetchAudioFeaturesBatch(
       const data = await res.json();
       if (Array.isArray(data?.audio_features)) {
         for (const feat of data.audio_features) {
-          if (feat && feat.id) {
-            const tempo = Math.round(feat.tempo || 128);
-            const key = typeof feat.key === 'number' ? feat.key : 0;
-            const mode = typeof feat.mode === 'number' ? feat.mode : 1;
-            const camelot = feat.camelot || getCamelotKey(key, mode);
-            const visuals = getCamelotVisuals(camelot);
-
-            const full: AudioFeature = {
-              id: feat.id,
-              tempo,
-              key,
-              mode,
-              camelot,
-              color: visuals.bg,
-              textColor: visuals.text,
-              time_signature: feat.time_signature || 4,
-            };
-            FEATURE_CACHE.set(feat.id, full);
-            result[feat.id] = full;
+          // Only trust real measured tempos (Deezer's BPM database). The server's other values
+          // are placeholders, so key/mode keep coming from the client resolver.
+          if (feat && feat.id && feat.tempo_source === 'deezer' && Number(feat.tempo) > 40) {
+            setTrackAnalysis(feat.id, {
+              tempo: Number(feat.tempo),
+              tempoSource: 'deezer',
+              analyzedAt: Date.now(),
+            });
           }
         }
       }

@@ -795,6 +795,31 @@ function dynamicSpotifyPlugin(): Plugin {
         }
       });
 
+      // 2b-bis. First ~3 MB of a track for in-browser BPM / key analysis (/api/audio/chunk)
+      server.middlewares.use('/api/audio/chunk', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        const url = new URL(req.url || '', 'http://localhost');
+        const target = url.searchParams.get('id') || url.searchParams.get('q') || '';
+        if (!target.trim()) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: 'Missing id or q' }));
+        }
+        try {
+          const info = await resolveAudio(target);
+          if (!info || !info.url) {
+            res.statusCode = 404;
+            return res.end(JSON.stringify({ error: 'Stream URL not found' }));
+          }
+          req.headers.range = 'bytes=0-3145727';
+          streamAudioFromUrl(info.url, req, res);
+        } catch (err: any) {
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+      });
+
       // 2c. Audio Play metadata resolver (/api/audio/play)
       server.middlewares.use('/api/audio/play', async (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', '*');
@@ -958,6 +983,13 @@ function dynamicSpotifyPlugin(): Plugin {
         try {
           const url = new URL(req.url || '', 'http://localhost');
           (req as any).query = { ...Object.fromEntries(url.searchParams.entries()), action: 'audio-features' };
+          // Vercel-style helpers expected by the serverless handler
+          const r: any = res;
+          if (typeof r.status !== 'function') {
+            r.status = (code: number) => { res.statusCode = code; return r; };
+            r.json = (obj: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); return r; };
+            r.send = (body: unknown) => { res.end(typeof body === 'string' ? body : JSON.stringify(body)); return r; };
+          }
           await metadataHandler(req, res);
         } catch (e: any) {
           res.statusCode = 500;

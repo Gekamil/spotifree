@@ -9,7 +9,9 @@ import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
-import { resolveClientSideRealFeature } from '../utils/audioFeatures';
+import { getTrackAnalysis } from '../utils/audioFeatures';
+import { analyzeTrackAudio } from './trackAnalysisService';
+import { auxFXForPreset, computeTransitionGains, recordTransitionUsed } from './djMixPlanner';
 import {
   createDJChannelStrip,
   scheduleBassSwap,
@@ -179,6 +181,19 @@ class AudioEngine {
     }
   }
 
+  private isDJModeEnabled(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      return (
+        window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
+        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
+        Boolean((window as any).__useAIDJStore?.getState?.()?.isDJModeActive)
+      );
+    } catch {
+      return false;
+    }
+  }
+
   private static cleanId(id?: string | null): string {
     return (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
   }
@@ -226,19 +241,9 @@ class AudioEngine {
     // DJ MODE PREVAILS (prevalece) while Crossfade does NOT act!
     if (isDjMode) {
       if (curTrack && nextTrack) {
-        const curIdx = state.queue.findIndex((t) => t.id === curTrack.id);
-        const feat = resolveClientSideRealFeature(curTrack.id, curTrack.name, curTrack.artists?.[0]?.name);
-        const nextFeat = resolveClientSideRealFeature(nextTrack.id, nextTrack.name, nextTrack.artists?.[0]?.name);
-        djConfig = djTransitionService.getTransitionConfig(
-          curTrack.id,
-          nextTrack.id,
-          feat.tempo,
-          nextFeat.tempo,
-          feat.camelot,
-          nextFeat.camelot,
-          curIdx >= 0 ? curIdx : 0
-        );
-        effectiveCrossfade = djTransitionService.calculateDurationSeconds(feat.tempo, djConfig.compases);
+        // Real measured BPM / key / energy + per-session variety (or the user's saved transition)
+        djConfig = djTransitionService.getPlannedTransition(curTrack, nextTrack);
+        effectiveCrossfade = djTransitionService.calculateDurationSeconds(djConfig.tempoA ?? 120, djConfig.compases);
       } else {
         effectiveCrossfade = 3.8;
       }
@@ -258,12 +263,41 @@ class AudioEngine {
     // Spotify duration represents true studio audio length. YouTube videos often include
     // 5-25 seconds of outro cards, silent credits, or sponsors after the music ends.
     const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 ? curTrack.duration_ms / 1000 : durSec;
-    const effectiveTrackEndSec =
+    let effectiveTrackEndSec =
       spotifyDurationSec > 25 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 120
         ? spotifyDurationSec
         : durSec;
 
+    // DJ mode with real analysis: mix out where the music actually ends (not over silent tails),
+    // and start the transition exactly on a bar line of song A.
+    const curAnalysis = isDjMode && curTrack ? getTrackAnalysis(curTrack.id) : null;
+    if (curAnalysis?.tempoSource === 'analysis' && typeof curAnalysis.musicEndSec === 'number') {
+      if (curAnalysis.musicEndSec > 30 && curAnalysis.musicEndSec < effectiveTrackEndSec) {
+        effectiveTrackEndSec = curAnalysis.musicEndSec;
+      }
+    }
+
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
+
+    if (
+      djConfig &&
+      !this.isCrossfading &&
+      curAnalysis?.tempoSource === 'analysis' &&
+      typeof curAnalysis.downbeatOffsetSec === 'number' &&
+      curAnalysis.tempo > 40
+    ) {
+      const bar = 240 / curAnalysis.tempo;
+      const ideal = effectiveTrackEndSec - effectiveCrossfade;
+      const onBar = curAnalysis.downbeatOffsetSec + Math.floor((ideal - curAnalysis.downbeatOffsetSec) / bar) * bar;
+      if (remaining > effectiveCrossfade + 8 && remaining <= Math.max(20, effectiveCrossfade + 8 + bar) && !this.preloadedNext && !this.isPreloadingNext) {
+        this.preloadUpcomingTracks();
+      }
+      if (onBar > 10 && curSec >= onBar && remaining > 0) {
+        this.executeCrossfade(Math.min(effectiveCrossfade, Math.max(1.5, remaining)), djConfig);
+        return;
+      }
+      if (remaining > effectiveCrossfade + bar) return; // wait for the bar line
+    }
 
     // 1. Preload upcoming songs in the background before crossfade starts
     if (
@@ -341,6 +375,13 @@ class AudioEngine {
           videoId: videoId1 || undefined,
           query: query1,
         };
+
+        // DJ mode: measure the real BPM / key / structure of the playing and the next song
+        if (this.isDJModeEnabled()) {
+          const cur = usePlayerStore.getState().currentTrack;
+          if (cur) void analyzeTrackAudio(cur, { videoId: this.currentVideoId });
+          void analyzeTrackAudio(next1, { videoId: videoId1 || null });
+        }
 
         // Cue video on inactive secondary player ready for instant playback
         const secPlayer = this.secondaryYtPlayer;
@@ -454,17 +495,24 @@ class AudioEngine {
     const masterVolume = state.isMuted ? 0 : this.getEffectiveVolume();
 
     const secYt = this.secondaryYtPlayer;
+    // DJ mode: song B enters where it makes sense (after a silent intro, or at its drop)
+    const mixInSec = djConfig && typeof djConfig.mixInSec === 'number' && djConfig.mixInSec > 0 ? djConfig.mixInSec : 0;
+    if (djConfig) {
+      recordTransitionUsed(djConfig.preset, djConfig.intensity || 'smooth');
+      console.info(`[DJ] ${djConfig.title || djConfig.preset} (${djConfig.compases} compases, B entra en ${mixInSec.toFixed(1)}s) — ${djConfig.reason || ''}`);
+    }
 
     // Start secondary player at volume 0 (Universal dual-deck simultaneous crossfade)
     if (this.activeEngine === 'youtube' && secYt && nextVideoId) {
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
         if (typeof secYt.unMute === 'function') secYt.unMute();
+        if (typeof secYt.setPlaybackRate === 'function') secYt.setPlaybackRate(1);
         const currentData = typeof secYt.getVideoData === 'function' ? secYt.getVideoData() : null;
         if (currentData && currentData.video_id === nextVideoId) {
-          secYt.seekTo(0, true);
+          secYt.seekTo(mixInSec, true);
         } else {
-          secYt.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+          secYt.loadVideoById({ videoId: nextVideoId, startSeconds: mixInSec });
         }
         secYt.playVideo();
       } catch {}
@@ -484,7 +532,6 @@ class AudioEngine {
     const outStrip = this.deckStrips[outIdx];
     const inStrip = this.deckStrips[inIdx];
     const safeTempo = djConfig?.tempoA && djConfig.tempoA > 40 && djConfig.tempoA < 240 ? djConfig.tempoA : 128;
-    const beatSec = 60 / safeTempo;
 
     if (this.audioContext && outStrip && inStrip) {
       if (this.audioContext.state === 'suspended') {
@@ -555,6 +602,7 @@ class AudioEngine {
     let lastTick = Date.now();
     const crossfadeStartTime = Date.now();
     let isDeckBReady = false;
+    let lastRateOut = 1;
 
     if (this.crossfadeInterval !== null) {
       clearInterval(this.crossfadeInterval);
@@ -606,12 +654,14 @@ class AudioEngine {
         } else {
           isDeckBReady = true;
           lastTick = now;
-          // Trigger auxiliary Web Audio acoustic FX layer for YouTube mode presets
-          if (this.activeEngine === 'youtube' && this.audioContext && djConfig) {
+          // Only musical synthesized layers (a soft noise riser) are added on top of the songs;
+          // the old oscillator tones (saw/square/triangle buzz) made transitions sound broken.
+          const aux = djConfig ? auxFXForPreset(djConfig.preset) : null;
+          if (this.activeEngine === 'youtube' && this.audioContext && aux) {
             this.stopAuxiliaryTransitionFX();
             this.activeAuxFX = triggerAuxiliaryTransitionFX(
               this.audioContext,
-              djConfig.preset,
+              aux,
               crossfadeSec,
               safeTempo,
               masterVolume
@@ -629,100 +679,14 @@ class AudioEngine {
       let inVol: number;
 
       if (djConfig) {
-        // DJ Automix with Beat-Matching, Volume Envelope & Bass Swap
-        const volEnvelope = djConfig.volumeEnvelope || 'superposicion';
-        if (volEnvelope === 'superposicion' || djConfig.preset === 'automatica' || djConfig.preset === 'mezcla_voces') {
-          // Outgoing: full volume for 1st bar, then smooth slope down
-          if (progress <= 0.5) {
-            outVol = masterVolume;
-          } else {
-            outVol = Math.cos((progress - 0.5) * Math.PI) * masterVolume;
-          }
-          inVol = progress * masterVolume;
-        } else if (volEnvelope === 'corte_directo' || djConfig.preset === 'corte') {
-          // Downbeat handoff with smooth equal-power crossover — ZERO dry cold cuts
-          if (progress < 0.4) {
-            outVol = masterVolume;
-            inVol = (progress / 0.4) * 0.4 * masterVolume;
-          } else if (progress < 0.6) {
-            const sub = (progress - 0.4) / 0.2;
-            outVol = Math.cos(sub * 0.5 * Math.PI) * masterVolume;
-            inVol = Math.sin((0.4 + sub * 0.6) * 0.5 * Math.PI) * masterVolume;
-          } else {
-            outVol = Math.max(0, (1 - progress) * 0.25) * masterVolume;
-            inVol = masterVolume;
-          }
-        } else if (djConfig.preset === 'crescendo') {
-          outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
-          inVol = Math.pow(progress, 1.8) * masterVolume;
-        } else {
-          // Lineal / Curva en S
-          outVol = Math.cos(progress * 0.5 * Math.PI) * masterVolume;
-          inVol = Math.sin(progress * 0.5 * Math.PI) * masterVolume;
-        }
-
-        // Bass Swap (Intercambio de graves central):
-        // 1st half: Outgoing track retains full punch, incoming enters with melodic highs/mids
-        // 2nd half (crossover downbeat): Outgoing drops low frequencies immediately (-20dB ducking), incoming slams at 100%!
-        if (djConfig.eqMode === 'intercambio_graves_central' || djConfig.preset === 'automatica') {
-          if (progress < 0.5) {
-            inVol = inVol * 0.5;
-          } else {
-            outVol = outVol * 0.20;
-            inVol = masterVolume;
-          }
-        } else if (djConfig.eqMode === 'filtro_paso_bajo' || djConfig.preset === 'filtro') {
-          outVol = outVol * Math.pow(Math.max(0, 1.0 - progress), 1.6);
-        }
-
-        // --- Studio DJ Real-Audio Physical Track Manipulation ---
-        // 1. Turntable Vinyl Brake: Platter decelerates real track audio down to halt
-        if (djConfig.preset === 'freno_vinilo' || djConfig.fxMode === 'freno_vinilo') {
-          if (progress >= 0.50 && progress < 0.75) {
-            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.75); } catch {}
-            try { if (this.audio) this.audio.playbackRate = 0.75; } catch {}
-          } else if (progress >= 0.75 && progress < 0.92) {
-            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.5); } catch {}
-            try { if (this.audio) this.audio.playbackRate = 0.5; } catch {}
-            outVol = outVol * (1.0 - ((progress - 0.75) / 0.17) * 0.6);
-          } else if (progress >= 0.92 && progress < 0.98) {
-            try { if (this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(0.25); } catch {}
-            try { if (this.audio) this.audio.playbackRate = 0.25; } catch {}
-            outVol = outVol * 0.15;
-          } else if (progress >= 0.98) {
-            outVol = 0;
-            inVol = masterVolume;
-          }
-        }
-
-        // 2. Beat Roll & Rhythm Repetition / Stutter: Real audio rhythmic modulation on the beat grid
-        if (
-          djConfig.preset === 'beat_roll' ||
-          djConfig.preset === 'repeticion_ritmo' ||
-          djConfig.fxMode === 'repeticion_loop' ||
-          djConfig.fxMode === 'distorsion_wash'
-        ) {
-          if (progress >= 0.25 && progress < 0.98) {
-            let division = 1; // 1/4 note
-            if (progress >= 0.60) division = 2; // 1/8 note
-            if (progress >= 0.82) division = 4; // 1/16 note roll
-            const stepDur = beatSec / division;
-            const cycle = ((accumulatedCrossfadeMs / 1000) % stepDur) / stepDur;
-            const groovePulse = 0.60 + 0.40 * Math.sin(cycle * Math.PI * 2);
-            outVol = outVol * groovePulse;
-          } else if (progress >= 0.98) {
-            outVol = 0;
-            inVol = masterVolume;
-          }
-        }
-
-        // 3. Spatial Echo Out: Rhythmic 3/4 beat delay decay pulses
-        if (djConfig.preset === 'eco_out' || djConfig.fxMode === 'eco') {
-          const echoPeriod = beatSec * 0.75;
-          const cycle = ((accumulatedCrossfadeMs / 1000) % echoPeriod) / echoPeriod;
-          const decay = Math.pow(Math.max(0, 1.0 - progress), 2.0);
-          const pulse = Math.cos(cycle * Math.PI * 0.5);
-          outVol = masterVolume * decay * (0.35 + 0.65 * pulse);
+        // Same renderer as the editor preview, so what you set there is exactly what plays
+        const g = computeTransitionGains(djConfig, progress, crossfadeSec);
+        outVol = g.outVol * masterVolume;
+        inVol = g.inVol * masterVolume;
+        if (g.rateOut !== lastRateOut) {
+          lastRateOut = g.rateOut;
+          try { if (this.activeEngine === 'youtube' && this.ytPlayer?.setPlaybackRate) this.ytPlayer.setPlaybackRate(g.rateOut); } catch {}
+          try { if (this.activeEngine === 'html5' && this.audio) this.audio.playbackRate = g.rateOut; } catch {}
         }
       } else {
         // Equal power sinusoidal curve for continuous crossfade
@@ -1022,11 +986,13 @@ class AudioEngine {
         window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true' ||
         Boolean((window as any).__useAIDJStore?.getState?.()?.isDJModeActive));
 
-    const djConfig = isDjMode && curTrack
-      ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
-      : null;
+    // Manual skip: same planned style, but at most 2 bars so the skip feels immediate
+    const planned = isDjMode && curTrack ? djTransitionService.getPlannedTransition(curTrack, nextTrack) : null;
+    const djConfig = planned ? { ...planned, compases: Math.min(2, planned.compases || 2) } : null;
 
-    const crossfadeDuration = isDjMode ? 3.8 : this.getConfiguredCrossfadeSec();
+    const crossfadeDuration = djConfig
+      ? Math.min(6, djTransitionService.calculateDurationSeconds(djConfig.tempoA ?? 120, djConfig.compases))
+      : this.getConfiguredCrossfadeSec();
 
     await this.executeCrossfade(crossfadeDuration, djConfig);
   }
@@ -1185,19 +1151,25 @@ class AudioEngine {
       return this.startAcousticAudition(config, onProgress, onEnded);
     }
 
-    // Compute DJ timing parameters
+    // Same timing as the live mix: duration from the measured BPM and bars, A heard from just
+    // before where the live mix would start (end of its music), B from its planned entry point.
     const tempoA = config.tempoA || 128;
     const safeTempo = tempoA > 40 && tempoA < 240 ? tempoA : 128;
-    const barSec = (4 * 60) / safeTempo;
-    const transitionDur = Math.max(2.0, Math.min(16.0, barSec * (config.compases || 2)));
-    const leadInSec = 1.5;
-    const leadOutSec = 2.0;
+    const transitionDur = djTransitionService.calculateDurationSeconds(safeTempo, config.compases || 2);
+    const leadInSec = 6;
+    const leadOutSec = 6;
     const totalSec = leadInSec + transitionDur + leadOutSec;
 
     const durA = (trackA.duration_ms || 210000) / 1000;
-    // Cue Track A to an energetic musical phrase with plenty of runway before the track ends
-    const startSecA = Math.max(15, Math.min(Math.round(durA * 0.65), Math.max(15, Math.round(durA - leadInSec - transitionDur - 25))));
-    const startSecB = 0;
+    const anA = getTrackAnalysis(trackA.id);
+    const endA = anA?.tempoSource === 'analysis' && typeof anA.musicEndSec === 'number' && anA.musicEndSec > 30 ? Math.min(anA.musicEndSec, durA) : durA;
+    let mixStartA = endA - transitionDur;
+    if (anA?.tempoSource === 'analysis' && typeof anA.downbeatOffsetSec === 'number' && anA.tempo > 40) {
+      const bar = 240 / anA.tempo;
+      mixStartA = anA.downbeatOffsetSec + Math.floor((mixStartA - anA.downbeatOffsetSec) / bar) * bar;
+    }
+    const startSecA = Math.max(0, mixStartA - leadInSec);
+    const startSecB = typeof config.mixInSec === 'number' && config.mixInSec > 0 ? config.mixInSec : 0;
 
     await this.ensureYouTubeReady();
     const p0 = this.ytPlayers[0];
@@ -1221,12 +1193,15 @@ class AudioEngine {
       p0.playVideo();
     } catch {}
 
-    // Deck B (Track B): Pre-warm secondary player at volume 0 in background
+    // Deck B (Track B): cue at its entry point, paused, until the transition starts
     try {
       if (typeof p1.unMute === 'function') p1.unMute();
       if (typeof p1.setVolume === 'function') p1.setVolume(0);
-      p1.loadVideoById({ videoId: videoIdB, startSeconds: startSecB });
-      p1.playVideo();
+      if (typeof p1.cueVideoById === 'function') p1.cueVideoById({ videoId: videoIdB, startSeconds: startSecB });
+      else {
+        p1.loadVideoById({ videoId: videoIdB, startSeconds: startSecB });
+        p1.pauseVideo?.();
+      }
     } catch {}
 
     // Wait until Deck A actually begins playing audio before starting the transition timeline
@@ -1253,56 +1228,27 @@ class AudioEngine {
     const totalDurationMs = totalSec * 1000;
 
     this.initAudioContext();
-    if (this.audioContext && this.deckStrips[0] && this.deckStrips[1]) {
+    if (this.audioContext) {
       if (this.audioContext.state === 'suspended') {
         this.audioContext.resume().catch(() => {});
       }
-      const now = this.audioContext.currentTime;
-      cancelScheduledAutomations(this.deckStrips[0], now);
-      cancelScheduledAutomations(this.deckStrips[1], now);
-
-      const mixStart = now + leadInSec;
-      const crossoverTime = mixStart + transitionDur * 0.5;
-
-      // 1. Low-End Clash Prevention & Bass Swap
-      if (config.eqMode === 'intercambio_graves_central' || config.preset === 'automatica' || config.preset === 'corte') {
-        scheduleBassSwap(this.deckStrips[0], this.deckStrips[1], crossoverTime, mixStart);
-      }
-
-      // 2. Resonant Filter Sweeps
-      if (config.preset === 'filtro') {
-        scheduleResonantHPFSweep(this.deckStrips[0], mixStart, transitionDur, 20, 18000, 3.0);
-        this.deckStrips[1].eqLow.gain.setValueAtTime(-40, mixStart);
-        this.deckStrips[1].eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
-      } else if (config.eqMode === 'filtro_paso_bajo') {
-        scheduleResonantLPFSweep(this.deckStrips[0], mixStart, transitionDur, 20000, 80, 2.5);
-      }
-
-      // 3. Beat-Synchronized Echo Delay
-      if (config.preset === 'eco_out' || config.fxMode === 'eco') {
-        scheduleBeatDelay(this.deckStrips[0], crossoverTime, transitionDur * 0.5, safeTempo, 0.75, 0.65);
-      }
-
-      // 4. Accelerating Loop Stutter Roll
-      if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
-        scheduleLoopStutter(this.deckStrips[0], mixStart + transitionDur * 0.35, transitionDur * 0.63, safeTempo);
-        this.deckStrips[1].eqLow.gain.setValueAtTime(-40, mixStart);
-        this.deckStrips[1].eqLow.gain.setTargetAtTime(0, mixStart + transitionDur * 0.98, 0.02);
-      }
-
-      // 5. Auxiliary acoustic FX layer for audition preview
+      // Only musical synthesized layers (noise riser), exactly like the live mix
       this.stopAuxiliaryTransitionFX();
-      this.activeAuxFX = triggerAuxiliaryTransitionFX(
-        this.audioContext,
-        config.preset,
-        transitionDur,
-        safeTempo,
-        1.0,
-        mixStart
-      );
+      const aux = auxFXForPreset(config.preset);
+      if (aux) {
+        this.activeAuxFX = triggerAuxiliaryTransitionFX(
+          this.audioContext,
+          aux,
+          transitionDur,
+          safeTempo,
+          1.0,
+          this.audioContext.currentTime + leadInSec
+        );
+      }
     }
 
     let startedB = false;
+    let lastRate = 1;
     this.auditionInterval = window.setInterval(() => {
       if (!this.isAuditioning) {
         this.stopTransitionAudition();
@@ -1314,96 +1260,25 @@ class AudioEngine {
       const progress = Math.min(1.0, Math.max(0.0, elapsedMs / totalDurationMs));
       onProgress(progress);
 
-      // Phase 1: Lead-in (Song A outro playing solo)
+      // Phase 1: Lead-in (Song A playing solo, so you hear where the mix comes from)
       if (elapsedSec < leadInSec) {
         if (typeof p0.setVolume === 'function') p0.setVolume(100);
         if (typeof p1.setVolume === 'function') p1.setVolume(0);
       }
-      // Phase 2: Active DJ Transition Window
+      // Phase 2: the transition, rendered exactly like the live DJ mix
       else if (elapsedSec < leadInSec + transitionDur) {
         if (!startedB) {
           startedB = true;
           try { p1.playVideo(); } catch {}
         }
         const pMix = Math.min(1.0, Math.max(0.0, (elapsedSec - leadInSec) / transitionDur));
-        let outVol = 1.0;
-        let inVol = 0.0;
-
-        if (config.preset === 'mezcla_voces') {
-          // Vocal blend handoff: Track A stays dominant during lead-in phrase, then smoothly crosses with Track B
-          outVol = Math.cos(Math.pow(pMix, 1.3) * 0.5 * Math.PI);
-          inVol = Math.sin(Math.pow(pMix, 0.75) * 0.5 * Math.PI);
-        } else if (config.preset === 'repeticion_ritmo' || config.fxMode === 'distorsion_wash') {
-          // Rhythmic Groove Transition: Constant equal-power curve with subtle rhythmic pulse
-          const beatSec = 60 / safeTempo;
-          const cycle = ((elapsedSec - leadInSec) % (beatSec * 0.5)) / (beatSec * 0.5);
-          const groovePulse = 0.70 + 0.30 * Math.sin(cycle * Math.PI * 2);
-          outVol = Math.cos(pMix * 0.5 * Math.PI) * (pMix > 0.4 ? groovePulse : 1.0);
-          inVol = Math.sin(pMix * 0.5 * Math.PI);
-        } else if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
-          if (pMix < 0.6) {
-            outVol = 1.0;
-            inVol = (pMix / 0.6) * 0.35;
-          } else {
-            const brakeP = (pMix - 0.6) / 0.4;
-            outVol = Math.max(0, 1.0 - brakeP * 1.5);
-            inVol = 0.35 + 0.65 * brakeP;
-          }
-        } else if (config.preset === 'crescendo') {
-          outVol = Math.cos(pMix * 0.5 * Math.PI);
-          inVol = Math.pow(pMix, 1.4);
-        } else {
-          // Automix Standard & Equal Power Crossover (Zero volume dips, zero silent cuts)
-          outVol = Math.cos(pMix * 0.5 * Math.PI);
-          inVol = Math.sin(pMix * 0.5 * Math.PI);
+        const g = computeTransitionGains(config, pMix, transitionDur);
+        if (g.rateOut !== lastRate) {
+          lastRate = g.rateOut;
+          try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(g.rateOut); } catch {}
         }
-
-        // Resonant Highpass / Lowpass filter attenuation
-        if (config.eqMode === 'filtro_paso_bajo' || config.preset === 'filtro') {
-          outVol = outVol * Math.pow(Math.max(0, 1.0 - pMix), 1.2);
-        }
-
-        // DJ FX 1: Turntable / Vinyl Brake (Freno de vinilo)
-        if (config.preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
-          if (pMix >= 0.50 && pMix < 0.75) {
-            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.75); } catch {}
-          } else if (pMix >= 0.75 && pMix < 0.92) {
-            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.5); } catch {}
-          } else if (pMix >= 0.92 && pMix < 0.98) {
-            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(0.25); } catch {}
-          } else if (pMix >= 0.98) {
-            try { if (typeof p0.pauseVideo === 'function') p0.pauseVideo(); } catch {}
-            try { if (typeof p0.setPlaybackRate === 'function') p0.setPlaybackRate(1); } catch {}
-          }
-        }
-
-        // DJ FX 2: Beat Roll / Loop Stutter acceleration
-        if (config.preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
-          const beatSec = 60 / safeTempo;
-          if (pMix >= 0.35 && pMix < 0.98) {
-            let division = 1;
-            if (pMix >= 0.65) division = 2;
-            if (pMix >= 0.85) division = 4;
-            const stepDur = beatSec / division;
-            const cycle = ((elapsedSec - leadInSec) % stepDur) / stepDur;
-            if (cycle > 0.65) {
-              outVol = outVol * 0.45; // Gentle rhythmic pump instead of silence
-            }
-          }
-        }
-
-        // DJ FX 3: Echo Out tail
-        if (config.preset === 'eco_out' || config.fxMode === 'eco') {
-          const beatSec = 60 / safeTempo;
-          const echoPeriod = beatSec * 0.75;
-          const cycle = ((elapsedSec - leadInSec) % echoPeriod) / echoPeriod;
-          const decay = Math.pow(Math.max(0, 1.0 - pMix), 1.8);
-          const pulse = Math.cos(cycle * Math.PI * 0.5);
-          outVol = decay * (0.45 + 0.55 * pulse);
-        }
-
-        if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(Math.max(0, Math.min(1, outVol)) * 100));
-        if (typeof p1.setVolume === 'function') p1.setVolume(Math.round(Math.max(0, Math.min(1, inVol)) * 100));
+        if (typeof p0.setVolume === 'function') p0.setVolume(Math.round(g.outVol * 100));
+        if (typeof p1.setVolume === 'function') p1.setVolume(Math.round(g.inVol * 100));
       }
       // Phase 3: Lead-out (Song B playing solo at full volume)
       else if (elapsedSec < totalSec) {

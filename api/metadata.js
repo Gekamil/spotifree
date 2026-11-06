@@ -256,8 +256,49 @@ async function handleArtistImage(req, res) {
   return res.status(200).json({ picture: null });
 }
 
+// Real BPM lookup in Deezer's public catalogue (it exposes a measured `bpm` per track).
+const DEEZER_BPM_CACHE = new Map();
+
+function normalizeForSearch(s = '') {
+  return String(s)
+    .replace(/\s*[([].*?[)\]]/g, '')
+    .replace(/\s*-\s*(remaster|remix|radio|edit|version|live).*$/i, '')
+    .replace(/\b(feat|ft)\.?\s.*$/i, '')
+    .trim();
+}
+
+async function lookupDeezerBpm(title, artist) {
+  const t = normalizeForSearch(title);
+  const a = normalizeForSearch(artist);
+  if (!t) return null;
+  const cacheKey = `${t}__${a}`.toLowerCase();
+  if (DEEZER_BPM_CACHE.has(cacheKey)) return DEEZER_BPM_CACHE.get(cacheKey);
+  let bpm = null;
+  try {
+    const q = a ? `${a} ${t}` : t;
+    const sRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=1`, {
+      headers: { 'User-Agent': 'Spotifree/1.0' },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+    });
+    const sData = sRes.ok ? await sRes.json() : null;
+    const hit = sData?.data?.[0];
+    if (hit?.id) {
+      const tRes = await fetch(`https://api.deezer.com/track/${hit.id}`, {
+        headers: { 'User-Agent': 'Spotifree/1.0' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+      });
+      const tData = tRes.ok ? await tRes.json() : null;
+      const v = Number(tData?.bpm);
+      if (Number.isFinite(v) && v > 40 && v < 250) bpm = Math.round(v * 10) / 10;
+    }
+  } catch {}
+  DEEZER_BPM_CACHE.set(cacheKey, bpm);
+  return bpm;
+}
+
 async function handleAudioFeatures(req, res) {
   let ids = [];
+  let tracks = [];
   if (req.method === 'POST') {
     let body = req.body;
     if (!body || typeof body !== 'object') {
@@ -268,21 +309,38 @@ async function handleAudioFeatures(req, res) {
       } catch {}
     }
     ids = body?.ids || [];
+    // The web client sends [{ id, name, artist }]
+    tracks = Array.isArray(body?.tracks) ? body.tracks.slice(0, 60) : [];
   } else {
     const qIds = req.query?.ids || '';
     ids = qIds ? qIds.split(',') : [];
   }
+  if (tracks.length === 0) tracks = ids.map((id) => ({ id, name: '', artist: '' }));
 
-  const results = ids.map((id) => {
-    let matched = VERIFIED_CATALOG[id] || null;
-    let tempo = matched?.tempo || 105;
-    let key = matched?.key ?? 5;
-    let mode = matched?.mode ?? 1;
-    let camelot = matched?.camelot || getCamelot(key, mode);
+  // Look up real BPMs with a small concurrency pool
+  const bpms = new Array(tracks.length).fill(null);
+  let next = 0;
+  const worker = async () => {
+    while (next < tracks.length) {
+      const i = next++;
+      const tr = tracks[i];
+      if (tr?.name) bpms[i] = await lookupDeezerBpm(tr.name, tr.artist);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(6, tracks.length) }, worker));
 
+  const results = tracks.map((tr, i) => {
+    const id = tr.id;
+    const matched = VERIFIED_CATALOG[id] || null;
+    const key = matched?.key ?? 5;
+    const mode = matched?.mode ?? 1;
+    const camelot = matched?.camelot || getCamelot(key, mode);
+    const realBpm = bpms[i];
     return {
       id,
-      tempo,
+      tempo: realBpm ?? matched?.tempo ?? 105,
+      // 'deezer' = measured BPM; anything else is a placeholder the client must not trust
+      tempo_source: realBpm ? 'deezer' : matched ? 'catalog' : 'default',
       key,
       mode,
       camelot,
