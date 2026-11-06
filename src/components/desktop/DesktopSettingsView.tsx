@@ -1,4 +1,6 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
+import { AppIconSelector } from '../common/AppIconSelector';
+import { getAppIconPlatform } from '../../utils/appIcon';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -775,6 +777,17 @@ export const DesktopSettingsView: React.FC = () => {
                 onChange={setConvertPhotosToBanners}
                 ariaLabel="Convertir fotos a banners"
               />
+            </div>
+          </section>
+        )}
+
+        {/* 5b. ICONO DE LA APP (solo en navegador antes de instalar y en la APK) */}
+        {getAppIconPlatform() !== 'installed-pwa' &&
+          matchesSearch('icono app logo aplicación pantalla inicio aniversario bola discoteca retro') && (
+          <section className="space-y-3">
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Icono de la app</h2>
+            <div className="py-3 border-b border-white/5">
+              <AppIconSelector variant="desktop" />
             </div>
           </section>
         )}

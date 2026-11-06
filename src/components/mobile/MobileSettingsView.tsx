@@ -1,4 +1,6 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
+import { AppIconSelector } from '../common/AppIconSelector';
+import { getAppIconPlatform } from '../../utils/appIcon';
 import React, { useState, useEffect, useRef } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -475,6 +477,18 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Icono de la app (solo en navegador antes de instalar y en la APK) */}
+        {getAppIconPlatform() !== 'installed-pwa' && (
+          <div className="space-y-3">
+            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+              Icono de la app
+            </h3>
+            <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.04]">
+              <AppIconSelector variant="mobile" />
+            </div>
+          </div>
+        )}
 
         {/* Reproducción */}
         <div className="space-y-3">

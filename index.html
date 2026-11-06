@@ -5,7 +5,7 @@
     <meta name="referrer" content="no-referrer" />
     <link id="app-favicon" rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link id="app-apple-icon" rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link id="app-manifest" rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#121212" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -40,6 +40,18 @@
               if (appleIcon) {
                 appleIcon.href = '/icon-desktop-192.png';
               }
+            }
+            // Icono de la app elegido en Ajustes (se aplica antes de "Añadir a pantalla de inicio")
+            var chosen = null;
+            try { chosen = window.localStorage.getItem('spotifree_app_icon'); } catch (e2) {}
+            var manifest = document.getElementById('app-manifest');
+            if (chosen && chosen !== 'default' && /^[a-z0-9-]+$/.test(chosen)) {
+              var base = '/app-icons/variants/' + chosen;
+              if (favicon) { favicon.type = 'image/png'; favicon.href = base + '/icon-192.png'; }
+              if (appleIcon) { appleIcon.href = base + '/apple-touch-icon.png'; }
+              if (manifest) { manifest.href = base + '/manifest.webmanifest'; }
+            } else if (manifest) {
+              manifest.href = '/manifest.webmanifest';
             }
           } catch (e) {}
         }
