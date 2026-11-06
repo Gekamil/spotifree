@@ -312,11 +312,8 @@ export const DesktopSettingsView: React.FC = () => {
   const handleToggleGapless = (val: boolean) => {
     setGaplessAudio(val);
     if (typeof window !== 'undefined') {
+      // Gapless and crossfade are independent: never wipe the crossfade duration here
       window.localStorage.setItem('spotifree_gapless', String(val));
-      if (!val) {
-        setCrossfadeSeconds(0);
-        window.localStorage.setItem('spotifree_crossfade_sec', '0');
-      }
     }
   };
 

@@ -241,11 +241,8 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     const next = !gaplessAudio;
     setGaplessAudio(next);
     if (typeof window !== 'undefined') {
+      // Gapless and crossfade are independent: never wipe the crossfade duration here
       window.localStorage.setItem('spotifree_gapless', String(next));
-      if (!next) {
-        setCrossfadeSeconds(0);
-        window.localStorage.setItem('spotifree_crossfade_sec', '0');
-      }
     }
   };
 

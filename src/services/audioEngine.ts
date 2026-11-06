@@ -162,6 +162,32 @@ class AudioEngine {
     return this.deckStrips[this.activeAudioIndex === 0 ? 1 : 0];
   }
 
+  /**
+   * User-configured crossfade length (1-12s). Matches the default (5s) shown in the settings UI,
+   * and treats legacy "0" values (written when gapless was toggled off) as the default instead of 1s.
+   */
+  private getConfiguredCrossfadeSec(): number {
+    const DEFAULT_SEC = 5;
+    try {
+      if (typeof window === 'undefined') return DEFAULT_SEC;
+      const saved = window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade');
+      const parsed = saved !== null ? parseInt(saved, 10) : NaN;
+      if (!isFinite(parsed) || parsed <= 0) return DEFAULT_SEC;
+      return Math.max(1, Math.min(12, parsed));
+    } catch {
+      return DEFAULT_SEC;
+    }
+  }
+
+  private static cleanId(id?: string | null): string {
+    return (id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+  }
+
+  private static isSameTrack(a?: Track | null, b?: Track | null): boolean {
+    if (!a || !b) return false;
+    return AudioEngine.cleanId(a.id) === AudioEngine.cleanId(b.id);
+  }
+
   private checkCrossfade(curSec: number, durSec: number) {
     if (this.isAuditioning || this.isSeeking || !durSec || durSec < 15) return;
 
@@ -171,8 +197,8 @@ class AudioEngine {
     if (state.repeatMode === 'one') return;
     if (state.queue && state.queue.length <= 1 && state.repeatMode !== 'off') return;
 
-    const gaplessSaved = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_gapless') : null;
-    if (gaplessSaved === 'false') return;
+    // NOTE: Gapless and crossfade are independent settings (as in Spotify). Crossfade is controlled
+    // only by 'spotifree_crossfade_enabled', so turning gapless off no longer silently disables it.
 
     const isDjMode =
       typeof window !== 'undefined' &&
@@ -187,14 +213,7 @@ class AudioEngine {
     // Precedence Check: If neither DJ Mode nor Crossfade is enabled, exit immediately
     if (!isDjMode && !crossfadeEnabledSaved) return;
 
-    let crossfadeSec = 4;
-    try {
-      const saved = typeof window !== 'undefined'
-        ? (window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade'))
-        : null;
-      if (saved !== null) crossfadeSec = Math.max(1, Math.min(12, parseInt(saved, 10)));
-      else crossfadeSec = 4;
-    } catch {}
+    const crossfadeSec = this.getConfiguredCrossfadeSec();
 
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
@@ -270,7 +289,12 @@ class AudioEngine {
    */
   public async preloadUpcomingTracks(tracksToPreload?: (Track | null | undefined)[]) {
     if (this.isPreloadingNext) return;
+    // Never re-cue the secondary deck while it is audibly fading in (would restart the incoming song)
+    if (this.isCrossfading) return;
     this.isPreloadingNext = true;
+    // Snapshot of the playing track: if it changes while we await the resolver, the result is stale
+    const ownerTrackId = this.currentTrackId;
+    const ownerSeq = this.playSequenceId;
     try {
       const state = usePlayerStore.getState();
       if (state.repeatMode === 'one') {
@@ -298,6 +322,18 @@ class AudioEngine {
         if (!videoId1) {
           const dur1 = next1.duration_ms ? next1.duration_ms / 1000 : undefined;
           videoId1 = (await this.resolveVideoId(query1, next1.id, next1.name, artist1, dur1)) || undefined;
+        }
+
+        // Discard stale preload: the song changed, a crossfade started, or the queue/shuffle order
+        // changed while resolving. Otherwise the next crossfade would play a different song than the UI.
+        const expectedNext = tracksToPreload && tracksToPreload.length > 0 ? next1 : usePlayerStore.getState().getNextTrack?.();
+        if (
+          this.currentTrackId !== ownerTrackId ||
+          this.playSequenceId !== ownerSeq ||
+          this.isCrossfading ||
+          !AudioEngine.isSameTrack(expectedNext, next1)
+        ) {
+          return;
         }
 
         this.preloadedNext = {
@@ -343,6 +379,18 @@ class AudioEngine {
     return this.preloadUpcomingTracks();
   }
 
+  /**
+   * Called when the queue order changes (shuffle on/off, smart shuffle, queue edits).
+   * Drops a preloaded "next" song that is no longer next and cues the correct one.
+   */
+  public refreshPreloadForQueueChange() {
+    if (this.isCrossfading) return;
+    const expected = usePlayerStore.getState().getNextTrack?.();
+    if (this.preloadedNext && AudioEngine.isSameTrack(this.preloadedNext.track, expected)) return;
+    this.preloadedNext = null;
+    if (expected) this.preloadUpcomingTracks();
+  }
+
   private async executeCrossfade(crossfadeSec: number, djConfig: DJTransitionConfig | null = null) {
     const state = usePlayerStore.getState();
     if (state.repeatMode === 'one') {
@@ -351,10 +399,18 @@ class AudioEngine {
     }
 
     this.isCrossfading = true;
+    const ownerTrackId = this.currentTrackId;
+    const ownerSeq = this.playSequenceId;
+    // If the preloaded song is no longer the real "next" (shuffle toggled, queue edited, smart shuffle
+    // inserted a track...), drop it so the audio always matches the cover/lyrics shown afterwards.
+    const expectedNext = state.getNextTrack?.();
+    if (this.preloadedNext && !AudioEngine.isSameTrack(this.preloadedNext.track, expectedNext)) {
+      this.preloadedNext = null;
+    }
 
     if (!this.preloadedNext) {
-      const nextTrack = state.getNextTrack?.();
-      if (!nextTrack || nextTrack.id === this.currentTrackId) {
+      const nextTrack = expectedNext;
+      if (!nextTrack || AudioEngine.cleanId(nextTrack.id) === AudioEngine.cleanId(this.currentTrackId)) {
         this.isCrossfading = false;
         return;
       }
@@ -383,6 +439,11 @@ class AudioEngine {
       if (nextVideoId && this.preloadedNext) {
         this.preloadedNext.videoId = nextVideoId;
       }
+    }
+
+    // A manual skip / new song started while we were resolving: abandon this crossfade
+    if (this.currentTrackId !== ownerTrackId || this.playSequenceId !== ownerSeq || !this.isCrossfading) {
+      return;
     }
 
     if (this.activeEngine === 'youtube' && !nextVideoId) {
@@ -775,8 +836,25 @@ class AudioEngine {
     const oldAudioIndex = this.activeAudioIndex;
     const isMobile = this.isMobileOrPWA();
 
-    // Alternate active deck cleanly on desktop (mobile browsers block background secondary deck playback)
-    if (!isMobile) {
+    // Is the secondary deck really outputting the incoming song? On mobile it may have been blocked.
+    let secondaryIsPlayingIncoming = false;
+    try {
+      if (this.activeEngine === 'youtube') {
+        const sec = this.secondaryYtPlayer;
+        const st = sec && typeof sec.getPlayerState === 'function' ? sec.getPlayerState() : -1;
+        const ct = sec && typeof sec.getCurrentTime === 'function' ? sec.getCurrentTime() : 0;
+        const vid = sec && typeof sec.getVideoData === 'function' ? sec.getVideoData()?.video_id : null;
+        secondaryIsPlayingIncoming = (st === 1 || st === 3 || ct > 0) && (!nextVideoId || !vid || vid === nextVideoId);
+      } else {
+        const secA = this.secondaryAudio;
+        secondaryIsPlayingIncoming = Boolean(secA && !secA.paused && secA.currentTime > 0);
+      }
+    } catch {}
+
+    // Alternate active deck when the incoming deck is playing (always on desktop; on mobile only if it
+    // actually started). If we stay on the same deck, the incoming song is force-loaded on it below,
+    // so the audio can never keep playing the OLD song while the UI shows the new cover/lyrics.
+    if (!isMobile || secondaryIsPlayingIncoming) {
       this.activeYtIndex = oldYtIndex === 0 ? 1 : 0;
       this.activeAudioIndex = oldAudioIndex === 0 ? 1 : 0;
     } else {
@@ -792,8 +870,21 @@ class AudioEngine {
       this.isTransitioning = false;
     }, 3500);
 
+    const swappedDecks = this.activeEngine === 'youtube' ? oldYtIndex !== this.activeYtIndex : oldAudioIndex !== this.activeAudioIndex;
+
     // 2. NOW silence and cleanly stop outgoing old player if we swapped decks
-    if (oldYtIndex !== this.activeYtIndex && this.activeEngine === 'youtube') {
+    if (!swappedDecks) {
+      // Same deck reused: the secondary (incoming) deck must be silenced, the primary will load song B
+      try {
+        const sec = this.secondaryYtPlayer;
+        if (sec) {
+          if (typeof sec.setVolume === 'function') sec.setVolume(0);
+          if (typeof sec.stopVideo === 'function') sec.stopVideo();
+        }
+        const secA = this.secondaryAudio;
+        if (secA) { secA.volume = 0; secA.pause(); }
+      } catch {}
+    } else if (oldYtIndex !== this.activeYtIndex && this.activeEngine === 'youtube') {
       const oldPlayer = this.ytPlayers[oldYtIndex];
       if (oldPlayer) {
         try {
@@ -826,21 +917,29 @@ class AudioEngine {
           if (typeof newPlayer.setVolume === 'function') newPlayer.setVolume(Math.round(masterVolume * 100));
           if (typeof newPlayer.setPlaybackRate === 'function') newPlayer.setPlaybackRate(1);
 
-          // Force load on mobile or unbuffered secondary player to ensure immediate seamless playback
+          // Force load when the deck is not playing song B (same deck reused on mobile, unbuffered
+          // secondary, or a different video cued) so audio always matches the track shown in the UI.
           if (nextVideoId && typeof newPlayer.loadVideoById === 'function') {
             const pState = typeof newPlayer.getPlayerState === 'function' ? newPlayer.getPlayerState() : -1;
-            if (pState !== 1 && pState !== 3) {
-              newPlayer.loadVideoById({ videoId: nextVideoId, startSeconds: 0 });
+            const loadedVid = typeof newPlayer.getVideoData === 'function' ? newPlayer.getVideoData()?.video_id : null;
+            const wrongVideo = Boolean(loadedVid && loadedVid !== nextVideoId);
+            if (!swappedDecks || wrongVideo || (pState !== 1 && pState !== 3)) {
+              newPlayer.loadVideoById({ videoId: nextVideoId, startSeconds: swappedDecks ? 0 : Math.max(0, crossfadeSec) });
             }
           }
           if (typeof newPlayer.playVideo === 'function') newPlayer.playVideo();
 
           const data = typeof newPlayer.getVideoData === 'function' ? newPlayer.getVideoData() : null;
-          if (data && data.video_id) {
+          if (swappedDecks && data && data.video_id) {
             detectedVideoId = data.video_id;
           }
+          if (!swappedDecks) {
+            // Treat the reload like a fresh start so stale progress/ENDED events from song A are ignored
+            this.lastTrackStartTime = Date.now();
+          }
 
-          if (typeof newPlayer.getCurrentTime === 'function') {
+          // When the deck was just reloaded, getCurrentTime() may still report the OLD song position
+          if (swappedDecks && typeof newPlayer.getCurrentTime === 'function') {
             const ct = newPlayer.getCurrentTime();
             if (isFinite(ct) && ct > 0) {
               elapsedSeconds = ct;
@@ -852,6 +951,11 @@ class AudioEngine {
       const newAudio = this.audios[this.activeAudioIndex];
       if (newAudio) {
         try {
+          if (!swappedDecks && nextQuery) {
+            newAudio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(nextQuery)}&trackId=${encodeURIComponent(nextTrack.id)}`;
+            newAudio.currentTime = 0;
+            elapsedSeconds = 0;
+          }
           newAudio.volume = Math.max(0, Math.min(1, masterVolume));
           newAudio.play().catch(() => {});
           if (isFinite(newAudio.currentTime) && newAudio.currentTime > 0) {
@@ -922,18 +1026,7 @@ class AudioEngine {
       ? djTransitionService.getTransitionConfig(curTrack.id, nextTrack.id)
       : null;
 
-    let crossfadeDuration = 3.5;
-    if (isDjMode) {
-      crossfadeDuration = 3.8;
-    } else {
-      try {
-        const saved = typeof window !== 'undefined'
-          ? (window.localStorage.getItem('spotifree_crossfade_sec') || window.localStorage.getItem('spotifree_crossfade'))
-          : null;
-        if (saved !== null) crossfadeDuration = Math.max(1, Math.min(12, parseInt(saved, 10)));
-        else crossfadeDuration = 4;
-      } catch {}
-    }
+    const crossfadeDuration = isDjMode ? 3.8 : this.getConfiguredCrossfadeSec();
 
     await this.executeCrossfade(crossfadeDuration, djConfig);
   }
@@ -2403,6 +2496,10 @@ class AudioEngine {
     if (failedId) {
       this.failedVideoIds.add(failedId);
     }
+    const ownerSeq = this.playSequenceId;
+    const ownerTrackId = this.currentTrackId;
+    // If the user moved to another song while we searched an alternate, never load the old song's audio
+    const isStale = () => this.playSequenceId !== ownerSeq || this.currentTrackId !== ownerTrackId;
     try {
       // 1. Try resolving official video
       const officialQuery = `${originalQuery} official video`;
@@ -2428,6 +2525,8 @@ class AudioEngine {
         const altQuery = `${originalQuery} audio`;
         videoId = await this.resolveVideoIdClient(altQuery, this.failedVideoIds);
       }
+
+      if (isStale()) return;
 
       if (videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
         this.currentVideoId = videoId;

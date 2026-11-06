@@ -50,6 +50,19 @@ export const AudioController: React.FC = () => {
     }
   }, [currentTrack, queue]);
 
+  // 2b. When the queue order changes (shuffle toggled, smart shuffle inserts, reorder), make sure the
+  // song preloaded for the next crossfade is the real next one (fixes crossfade in shuffle mode)
+  const shuffleVersion = usePlayerStore((s) => s.shuffleVersion);
+  const repeatMode = usePlayerStore((s) => s.repeatMode);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try {
+        audioEngine.refreshPreloadForQueueChange();
+      } catch {}
+    }, 300);
+    return () => window.clearTimeout(t);
+  }, [queue, shuffleVersion, repeatMode]);
+
   // 3. Keep volume and mute synchronized
   useEffect(() => {
     audioEngine.setVolume(isMuted ? 0 : volume);
