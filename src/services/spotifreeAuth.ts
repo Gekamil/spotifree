@@ -557,6 +557,15 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
         playlistDetailsCache: updatedCache,
       };
     });
+
+    // Notify all active playlist views in real time that cloud sync has arrived
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('spotifree_playlists_synced', {
+          detail: { playlists: cleanPlaylists },
+        })
+      );
+    }
   }
 
   // 5. Sync liked tracks to local storage and player store (filtering removed IDs)

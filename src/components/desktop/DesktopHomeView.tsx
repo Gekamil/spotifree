@@ -210,20 +210,22 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       return;
     }
 
+    const pStore = usePlayerStore.getState();
+    const isShuffleActive = pStore.isShuffle || pStore.shuffleMode !== 'off';
+
     const cached = useSpotifyDataStore.getState().playlistDetailsCache[card.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       const items = cached.tracks.items.map((t: any) => ({ ...t, playlistId: card.id }));
-      playTrack(items[0], items);
+      const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
+      playTrack(start, items);
       return;
     }
 
     const cardPlaylist = playlists.find((p) => p.id === card.id);
     if (cardPlaylist?.tracks?.items && cardPlaylist.tracks.items.length > 0) {
-      const firstTrack = cardPlaylist.tracks.items[0];
-      playTrack(
-        { ...firstTrack, playlistId: card.id } as any,
-        cardPlaylist.tracks.items
-      );
+      const items = cardPlaylist.tracks.items.map((t: any) => ({ ...t, playlistId: card.id }));
+      const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
+      playTrack(start, items);
       return;
     }
 
@@ -247,7 +249,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             owner: { display_name: 'Spotify', id: 'spotify' },
             tracks: data.tracks,
           } as any);
-          playTrack(items[0], items);
+          const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
+          playTrack(start, items);
           return;
         }
       }

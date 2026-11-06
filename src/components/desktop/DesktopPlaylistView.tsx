@@ -9,6 +9,7 @@ import {
   CheckCircleNativeIcon,
   PlusCircleNativeIcon,
   AutomixNativeIcon,
+  SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -210,6 +211,64 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
     window.addEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
     return () => window.removeEventListener('spotifree_playlist_deleted', handlePlaylistDeleted);
+  }, [dynamicPlaylist.id]);
+
+  // Reactive listener for cloud-synced & updated playlists (cross-device & cross-browser real-time updates)
+  useEffect(() => {
+    const handlePlaylistsSynced = (e: any) => {
+      const syncedPlaylists: Playlist[] = e.detail?.playlists || [];
+      const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const updated = syncedPlaylists.find((p) => {
+        if (!p) return false;
+        const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+        return p.id === dynamicPlaylist.id || pClean === cleanCurrent;
+      });
+      if (updated?.tracks?.items) {
+        const removedSet = getRemovedTrackIdsForPlaylist(cleanCurrent);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+          return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
+        };
+        const filtered = updated.tracks.items.filter(isNotRemoved);
+        setDynamicTracks(filtered);
+        setDynamicPlaylist((prev) => ({
+          ...prev,
+          ...updated,
+          tracks: { total: filtered.length, items: filtered },
+        }));
+      }
+    };
+
+    const handlePlaylistUpdated = (e: any) => {
+      const { id: updatedId, cleanId: updatedCleanId, updatedPlaylist } = e.detail || {};
+      const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (
+        (dynamicPlaylist.id === updatedId || cleanCurrent === updatedCleanId) &&
+        updatedPlaylist?.tracks?.items
+      ) {
+        const removedSet = getRemovedTrackIdsForPlaylist(cleanCurrent);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+          return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
+        };
+        const filtered = updatedPlaylist.tracks.items.filter(isNotRemoved);
+        setDynamicTracks(filtered);
+        setDynamicPlaylist((prev) => ({
+          ...prev,
+          ...updatedPlaylist,
+          tracks: { total: filtered.length, items: filtered },
+        }));
+      }
+    };
+
+    window.addEventListener('spotifree_playlists_synced', handlePlaylistsSynced);
+    window.addEventListener('spotifree_playlist_updated', handlePlaylistUpdated);
+    return () => {
+      window.removeEventListener('spotifree_playlists_synced', handlePlaylistsSynced);
+      window.removeEventListener('spotifree_playlist_updated', handlePlaylistUpdated);
+    };
   }, [dynamicPlaylist.id]);
 
   // DJ Mode and Transitions State (Desktop)
@@ -873,7 +932,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
-      playTrack(tracksWithPlaylistId[0], tracksWithPlaylistId, playlist.id);
+      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+      const startTrack = isShuffleActive && tracksWithPlaylistId.length > 1
+        ? tracksWithPlaylistId[Math.floor(Math.random() * tracksWithPlaylistId.length)]
+        : tracksWithPlaylistId[0];
+      playTrack(startTrack, tracksWithPlaylistId, playlist.id);
       if (shuffleMode === 'smart') {
         usePlayerStore.getState().populateSmartShuffleRecommendations(tracksWithPlaylistId);
       }
@@ -1166,8 +1229,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </>
                 ) : (
                   <>
-                    <span className="font-bold text-white hover:underline cursor-pointer">
-                      {dynamicPlaylist.owner?.display_name === 'Spotify' ? 'Spotifree' : (dynamicPlaylist.owner?.display_name || 'Spotifree')}
+                    <span className="flex items-center gap-1.5 font-bold text-white hover:underline cursor-pointer">
+                      <SpotifyBadgeIcon size={18} />
+                      <span>{dynamicPlaylist.owner?.display_name === 'Spotify' ? 'Spotifree' : (dynamicPlaylist.owner?.display_name || 'Spotifree')}</span>
                     </span>
                     <span>•</span>
                     <span className="text-white/90">

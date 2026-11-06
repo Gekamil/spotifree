@@ -1,8 +1,8 @@
 /**
  * Adaptive Logo and Device Detector
  *
- * - Mobile: Uses the icon with the sleek black background frame around the Spotify circle (icon-mobile-192.png / icon-mobile.png)
- * - Desktop: Uses ONLY THE LOGO (pure transparent green Spotify circle, favicon.svg / icon-desktop.png)
+ * - Mobile: Uses the official Spotify rounded green logo (icon-192.png / apple-touch-icon.png)
+ * - Desktop: Uses the official vector Spotify green circle (favicon.svg / icon-desktop-192.png)
  */
 
 export function isMobileDevice(): boolean {
@@ -22,7 +22,7 @@ export function updateDocumentFavicon(): void {
   if (mobile) {
     if (favicon) {
       favicon.type = 'image/png';
-      favicon.href = '/icon-mobile-192.png';
+      favicon.href = '/icon-192.png';
     }
     if (appleIcon) {
       appleIcon.href = '/apple-touch-icon.png';

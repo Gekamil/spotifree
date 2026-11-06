@@ -23,6 +23,7 @@ import {
   PlusCircleNativeIcon,
   CheckCircleNativeIcon,
   QueueNativeIcon,
+  SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
 import { fetchAudioFeaturesBatch, resolveClientSideRealFeature, type AudioFeature } from '../../utils/audioFeatures';
@@ -240,6 +241,64 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     window.addEventListener('spotifree_track_removed', handleTrackRemoved);
     return () => window.removeEventListener('spotifree_track_removed', handleTrackRemoved);
   }, [activePlaylist.id, cleanId, isLikedPlaylist]);
+
+  // Reactive listener for cloud-synced & updated playlists in mobile (real-time cross-device updates)
+  useEffect(() => {
+    const handlePlaylistsSynced = (e: any) => {
+      const syncedPlaylists: Playlist[] = e.detail?.playlists || [];
+      const currentClean = (activePlaylist.id || cleanId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const updated = syncedPlaylists.find((p) => {
+        if (!p) return false;
+        const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+        return p.id === activePlaylist.id || p.id === cleanId || pClean === currentClean;
+      });
+      if (updated?.tracks?.items) {
+        const removedSet = getRemovedTrackIdsForPlaylist(currentClean);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+          return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
+        };
+        const filtered = updated.tracks.items.filter(isNotRemoved);
+        setTracks(filtered);
+        setActivePlaylist((prev) => ({
+          ...prev,
+          ...updated,
+          tracks: { total: filtered.length, items: filtered },
+        }));
+      }
+    };
+
+    const handlePlaylistUpdated = (e: any) => {
+      const { id: updatedId, cleanId: updatedCleanId, updatedPlaylist } = e.detail || {};
+      const currentClean = (activePlaylist.id || cleanId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      if (
+        (activePlaylist.id === updatedId || cleanId === updatedId || currentClean === updatedCleanId) &&
+        updatedPlaylist?.tracks?.items
+      ) {
+        const removedSet = getRemovedTrackIdsForPlaylist(currentClean);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const sig = t.name && t.artists?.[0]?.name ? `sig:${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : '';
+          return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
+        };
+        const filtered = updatedPlaylist.tracks.items.filter(isNotRemoved);
+        setTracks(filtered);
+        setActivePlaylist((prev) => ({
+          ...prev,
+          ...updatedPlaylist,
+          tracks: { total: filtered.length, items: filtered },
+        }));
+      }
+    };
+
+    window.addEventListener('spotifree_playlists_synced', handlePlaylistsSynced);
+    window.addEventListener('spotifree_playlist_updated', handlePlaylistUpdated);
+    return () => {
+      window.removeEventListener('spotifree_playlists_synced', handlePlaylistsSynced);
+      window.removeEventListener('spotifree_playlist_updated', handlePlaylistUpdated);
+    };
+  }, [activePlaylist.id, cleanId]);
 
   const [loading, setLoading] = useState(false);
   const checkIsInLibrary = (id: string, clean: string): boolean => {
@@ -651,7 +710,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
       togglePlay();
     } else {
-      playTrack(displayTracks[0], displayTracks, playlist.id);
+      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+      const startTrack = isShuffleActive && displayTracks.length > 1
+        ? displayTracks[Math.floor(Math.random() * displayTracks.length)]
+        : displayTracks[0];
+      playTrack(startTrack, displayTracks, playlist.id);
       if (shuffleMode === 'smart') {
         usePlayerStore.getState().populateSmartShuffleRecommendations(displayTracks);
       }
@@ -1156,9 +1219,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   </p>
                 )}
                 <div className="flex items-center gap-1.5 text-xs text-white/90 font-bold">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
-                  </svg>
+                  <SpotifyBadgeIcon size={18} />
                   <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
                 </div>
                 <div className="text-xs text-[#b3b3b3] font-medium">
@@ -1194,9 +1255,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 </p>
               )}
               <div className="flex items-center gap-1.5 text-xs text-[#b3b3b3] font-medium">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="#1ed760" className="shrink-0">
-                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm5.5 14.5c-.2.3-.6.4-.9.2-2.5-1.5-5.6-1.9-9.3-1-.4.1-.7-.1-.8-.5s.1-.7.5-.8c4-.9 7.5-.5 10.3 1.2.3.2.4.6.2.9zm1.5-3.3c-.3.4-.8.5-1.2.3-3-1.8-7.6-2.4-11.1-1.3-.5.1-.9-.2-1-.6s.2-.9.6-1c4.1-1.2 9.1-.6 12.5 1.5.4.2.5.7.2 1.1zm.1-3.4C15.5 7.7 9.6 7.5 6.2 8.5c-.6.2-1.2-.1-1.4-.7-.2-.6.1-1.2.7-1.4 4-.1.2 10.6.1 14.8 2.6.5.3.7 1 .4 1.5-.3.5-1 .7-1.5.4z" />
-                </svg>
+                <SpotifyBadgeIcon size={16} />
                 <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
                 <span>•</span>
                 <span>{tracks.length} canciones</span>

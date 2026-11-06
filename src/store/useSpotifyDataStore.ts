@@ -425,6 +425,28 @@ interface SpotifyDataState {
 
 let isInitializing = false;
 
+// Cross-tab and cross-window instantaneous synchronization channel
+let crossTabSyncChannel: BroadcastChannel | null = null;
+if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+  try {
+    crossTabSyncChannel = new BroadcastChannel('spotifree_cross_tab_sync');
+    crossTabSyncChannel.onmessage = (event) => {
+      if (event?.data?.type && event?.data?.detail) {
+        window.dispatchEvent(new CustomEvent(event.data.type, { detail: event.data.detail }));
+      }
+    };
+  } catch {}
+}
+
+export function broadcastCrossTabEvent(type: string, detail: any) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(type, { detail }));
+    try {
+      crossTabSyncChannel?.postMessage({ type, detail });
+    } catch {}
+  }
+}
+
 export function getGuestPlaylists(): Playlist[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -695,6 +717,7 @@ const store = create<SpotifyDataState>((set, get) => ({
   },
 
   updatePlaylist: (id: string, updates: Partial<Playlist>) => {
+    const cleanId = (id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
     set((s) => {
       const isLikedTarget = (pid: string, pname?: string) =>
         pid === 'liked-songs' ||
@@ -791,6 +814,14 @@ const store = create<SpotifyDataState>((set, get) => ({
           // 5. Cloud Firestore
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
             syncSpotifreeAccount({ playlists: updatedPlaylists }).catch(() => {});
+          });
+
+          // 6. Broadcast cross-tab and cross-window instantaneous update
+          broadcastCrossTabEvent('spotifree_playlist_updated', {
+            id,
+            cleanId,
+            updates,
+            updatedPlaylist: updatedCacheEntry,
           });
         } catch (e) {
           console.error('Error persisting playlist updates:', e);
@@ -895,12 +926,8 @@ const store = create<SpotifyDataState>((set, get) => ({
             syncSpotifreeAccount({ playlists: remainingPlaylists, deletedPlaylistIds: deletedList }).catch(() => {});
           });
 
-          // 6. Global event for live UI navigation
-          window.dispatchEvent(
-            new CustomEvent('spotifree_playlist_deleted', {
-              detail: { id: cleanId, rawId: id },
-            })
-          );
+          // 6. Global event for live UI navigation and cross-tab synchronization
+          broadcastCrossTabEvent('spotifree_playlist_deleted', { id: cleanId, rawId: id });
         } catch (e) {
           console.error('Error deleting playlist from storage:', e);
         }
@@ -1024,14 +1051,14 @@ const store = create<SpotifyDataState>((set, get) => ({
       })
       .catch(() => {});
 
-    // 3. Dispatch global event for live views
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(
-        new CustomEvent('spotifree_track_removed', {
-          detail: { playlistId: cleanPl, rawPlaylistId: playlistId, trackId: cleanTrack, rawTrackId: trackId, trackObj },
-        })
-      );
-    }
+    // 3. Dispatch global event for live views and cross-tab synchronization
+    broadcastCrossTabEvent('spotifree_track_removed', {
+      playlistId: cleanPl,
+      rawPlaylistId: playlistId,
+      trackId: cleanTrack,
+      rawTrackId: trackId,
+      trackObj,
+    });
   },
 
   setDynamicShelves: (shelves: DynamicShelf[]) => {
