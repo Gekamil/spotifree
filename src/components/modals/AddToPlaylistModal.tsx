@@ -3,8 +3,9 @@ import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useLanguageStore, useTranslation } from '../../utils/i18n';
-import { saveCustomTrackToStorage, removeCustomTrackFromStorage } from '../../utils/userStorage';
+import { saveCustomTrackToStorage } from '../../utils/userStorage';
 import { handleImageError } from '../../utils/imageFallback';
+import { getPlaylistCover } from '../../utils/playlistCover';
 import type { Track, Playlist } from '../../types/spotify';
 
 export const AddToPlaylistModal: React.FC = () => {
@@ -112,31 +113,18 @@ export const AddToPlaylistModal: React.FC = () => {
     const newPlaylist: Playlist = {
       id: newId,
       name: finalName,
-      description: 'Creada con Spotifree',
-      images: track.album?.images?.[0]?.url
-        ? [{ url: track.album.images[0].url }]
-        : [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+      description: '',
+      images: track.album?.images?.[0]?.url ? [{ url: track.album.images[0].url }] : [],
       owner: { display_name: user?.display_name || 'Tú', id: user?.id || 'user' },
-      tracks: { total: 1, items: [track] },
-    };
+      tracks: { total: 1, items: [{ ...track, added_at: track.added_at || 'Hoy' }] },
+      is_custom: true,
+    } as Playlist;
 
     // Save to user storage
     saveCustomTrackToStorage(newId, false, track, user?.id);
 
-    // Save playlist to local storage list
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = window.localStorage.getItem('user_imported_playlists') || '[]';
-        const list: Playlist[] = JSON.parse(raw);
-        list.unshift(newPlaylist);
-        window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
-      } catch {}
-    }
-
-    // Update in-memory store
-    useSpotifyDataStore.setState((s) => ({
-      playlists: [newPlaylist, ...s.playlists],
-    }));
+    // Library + every storage layer + cloud account (same path as "Crear lista")
+    useSpotifyDataStore.getState().addCustomPlaylist(newPlaylist);
 
     // Auto-select this newly created playlist
     setSelectedPlaylistIds((prev) => new Set(prev).add(newId));
@@ -183,18 +171,8 @@ export const AddToPlaylistModal: React.FC = () => {
 
     initialPlaylistIds.forEach((plId) => {
       if (!selectedPlaylistIds.has(plId)) {
-        // Removed from plId
-        removeCustomTrackFromStorage(plId, track.id, user?.id);
-
-        const store = useSpotifyDataStore.getState();
-        const currentPl = store.playlists.find((p) => p.id === plId);
-        if (currentPl) {
-          const existing = currentPl.tracks?.items || [];
-          const updated = existing.filter((t) => t.id !== track.id);
-          useSpotifyDataStore.getState().updatePlaylist(plId, {
-            tracks: { total: updated.length, items: updated },
-          });
-        }
+        // Removed from plId: same path as "Quitar de esta lista" (blacklist + all layers + open views)
+        useSpotifyDataStore.getState().removeTrackFromPlaylist(plId, track.id, track);
       }
     });
 
@@ -290,7 +268,7 @@ export const AddToPlaylistModal: React.FC = () => {
           ) : (
             userPlaylists.map((pl) => {
               const isSelected = selectedPlaylistIds.has(pl.id);
-              const coverImg = pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+              const coverImg = getPlaylistCover(pl);
 
               return (
                 <div

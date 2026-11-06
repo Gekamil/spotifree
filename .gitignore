@@ -31,6 +31,10 @@ dist-ssr
 !public/apple-touch-icon.png
 !public/icon-192.png
 !public/icon-512.png
+!public/icon-mobile-192.png
+!public/icon-mobile-512.png
+!public/icon-desktop-192.png
+!public/icon-desktop-512.png
 !public/app-icons/**/*.png
 .agents
 cookies.txt

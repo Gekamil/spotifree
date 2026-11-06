@@ -30,6 +30,7 @@ import {
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
+import { getPlaylistCover } from '../../utils/playlistCover';
 import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 
@@ -294,28 +295,8 @@ export const MobileLayout: React.FC = () => {
   const { openLoginModal } = useUIStore();
 
   const handleCreatePlaylist = (name: string) => {
-    const newId = `user-playlist-${Date.now()}`;
-    const newPlaylist: Playlist = {
-      id: newId,
-      name,
-      description: `Creada por ${user?.display_name || 'ti'}`,
-      type: 'playlist',
-      images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-      owner: { display_name: user?.display_name || 'Tú', id: user?.id || 'me' },
-      tracks: { total: 0, items: [] },
-    } as any;
-
-    const currentLists = useSpotifyDataStore.getState().playlists;
-    const updated = [newPlaylist, ...currentLists];
-    useSpotifyDataStore.setState({ playlists: updated });
-    useSpotifyDataStore.getState().cachePlaylistDetails(newPlaylist);
-
-    if (typeof window !== 'undefined') {
-      try {
-        window.localStorage.setItem('user_imported_playlists', JSON.stringify(updated));
-      } catch {}
-    }
-
+    // Same path as desktop: saved in every storage layer + cloud account, marked as the user's own
+    const newPlaylist = useSpotifyDataStore.getState().createPlaylist(name);
     setSelectedPlaylist(newPlaylist);
     setMobileTab('playlist');
   };
@@ -351,7 +332,12 @@ export const MobileLayout: React.FC = () => {
 
     // 1. User's Playlists from current session ("nuestra sesión")
     const userLists = playlists.filter(
-      (p) => !deletedIds.has(p.id) && !p.id.includes('collection:tracks') && p.type !== 'folder'
+      (p) =>
+        !deletedIds.has(p.id) &&
+        !p.id.includes('collection:tracks') &&
+        p.type !== 'folder' &&
+        // An empty "Canciones que te gustan" is not worth a card on Home
+        (p.id !== 'liked-songs' || (p.tracks?.items?.length || 0) > 0)
     );
     if (userLists.length > 0) {
       list.push({
@@ -361,7 +347,7 @@ export const MobileLayout: React.FC = () => {
           id: p.id,
           title: p.name,
           subtitle: stripHtml(p.description) || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
-          image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+          image: getPlaylistCover(p),
         })),
       });
     }
@@ -372,6 +358,8 @@ export const MobileLayout: React.FC = () => {
       : buildDynamicShelves(user, playlists, featuredMessage);
 
     base
+      // "Tus listas creadas" repeats what "Tus playlists" already shows on mobile
+      .filter((s) => !(s.id === 'shelf-user-created' && userLists.length > 0))
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .forEach((s) => {
         const filteredCards = s.cards.filter((c) => !deletedIds.has(c.id));
@@ -697,7 +685,7 @@ export const MobileLayout: React.FC = () => {
                               </div>
                               <div className="flex flex-col min-w-0">
                                 <span className="text-[10px] font-bold text-[#1ed760] uppercase tracking-wider mb-0.5">
-                                  Nuevo lanzamiento
+                                  {playlists.some((p) => p.id === single.id) ? 'Playlist' : 'Destacado'}
                                 </span>
                                 <h4 className="font-bold text-white text-sm line-clamp-1">
                                   {single.title}
@@ -1003,7 +991,7 @@ export const MobileLayout: React.FC = () => {
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                           <img
-                            src={pl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                            src={getPlaylistCover(pl)}
                             alt={pl.name}
                             onError={handleImageError}
                             className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
@@ -1202,7 +1190,7 @@ export const MobileLayout: React.FC = () => {
             {/* Header: Cover + Title + Owner */}
             <div className="flex items-center gap-3 pb-3 border-b border-white/10">
               <img
-                src={editTargetCover || playlistMenuTarget.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+                src={editTargetCover || getPlaylistCover(playlistMenuTarget)}
                 alt={playlistMenuTarget.name}
                 onError={handleImageError}
                 className="w-14 h-14 rounded-[4px] object-cover shadow shrink-0 bg-[#181818]"

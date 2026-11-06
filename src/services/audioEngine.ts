@@ -9,7 +9,7 @@ import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
-import { getTrackAnalysis } from '../utils/audioFeatures';
+import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { analyzeTrackAudio } from './trackAnalysisService';
 import { auxFXForPreset, computeTransitionGains, recordTransitionUsed } from './djMixPlanner';
 import {
@@ -279,16 +279,15 @@ class AudioEngine {
 
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
 
-    if (
-      djConfig &&
-      !this.isCrossfading &&
-      curAnalysis?.tempoSource === 'analysis' &&
-      typeof curAnalysis.downbeatOffsetSec === 'number' &&
-      curAnalysis.tempo > 40
-    ) {
+    // Bar line where the mix should start, only when the measured grid is reliable that late
+    // in the song (a wrong "bar line" sounds worse than a plain start).
+    const barAlignedStart =
+      djConfig && !this.isCrossfading && curAnalysis
+        ? snapToBarGrid(curAnalysis, effectiveTrackEndSec - effectiveCrossfade, 'floor')
+        : null;
+    if (djConfig && !this.isCrossfading && curAnalysis && barAlignedStart !== null) {
       const bar = 240 / curAnalysis.tempo;
-      const ideal = effectiveTrackEndSec - effectiveCrossfade;
-      const onBar = curAnalysis.downbeatOffsetSec + Math.floor((ideal - curAnalysis.downbeatOffsetSec) / bar) * bar;
+      const onBar = barAlignedStart;
       if (remaining > effectiveCrossfade + 8 && remaining <= Math.max(20, effectiveCrossfade + 8 + bar) && !this.preloadedNext && !this.isPreloadingNext) {
         this.preloadUpcomingTracks();
       }
@@ -1164,10 +1163,8 @@ class AudioEngine {
     const anA = getTrackAnalysis(trackA.id);
     const endA = anA?.tempoSource === 'analysis' && typeof anA.musicEndSec === 'number' && anA.musicEndSec > 30 ? Math.min(anA.musicEndSec, durA) : durA;
     let mixStartA = endA - transitionDur;
-    if (anA?.tempoSource === 'analysis' && typeof anA.downbeatOffsetSec === 'number' && anA.tempo > 40) {
-      const bar = 240 / anA.tempo;
-      mixStartA = anA.downbeatOffsetSec + Math.floor((mixStartA - anA.downbeatOffsetSec) / bar) * bar;
-    }
+    const snappedA = snapToBarGrid(anA, mixStartA, 'floor');
+    if (snappedA !== null) mixStartA = snappedA;
     const startSecA = Math.max(0, mixStartA - leadInSec);
     const startSecB = typeof config.mixInSec === 'number' && config.mixInSec > 0 ? config.mixInSec : 0;
 

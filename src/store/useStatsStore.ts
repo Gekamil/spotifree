@@ -15,6 +15,8 @@ export interface TrackStat {
   artist: string;
   image: string;
   plays: number;
+  /** Epoch ms of the last time it was played (used by the DJ for "hace tiempo que no la escuchas") */
+  lastPlayedAt?: number;
 }
 
 interface StatsState {
@@ -204,6 +206,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
           [trackId]: {
             ...existingTrack,
             plays: existingTrack.plays + 1,
+            lastPlayedAt: Date.now(),
           },
         },
       };

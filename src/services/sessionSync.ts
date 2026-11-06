@@ -1,4 +1,4 @@
-import { useSpotifyDataStore, buildDynamicShelves } from '../store/useSpotifyDataStore';
+import { useSpotifyDataStore, buildDynamicShelves, deduplicateUserPlaylists } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import type { Playlist, UserProfile, Track, SpotifyImage } from '../types/spotify';
 
@@ -127,12 +127,19 @@ export async function syncChromeSession(): Promise<boolean> {
         { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
       ];
 
+  // Keep the user's own lists (created/imported here) next to the synced ones
+  let ownLists: Playlist[] = [];
+  try {
+    const raw = window.localStorage.getItem('user_imported_playlists');
+    if (raw) ownLists = JSON.parse(raw);
+  } catch {}
+
   useSpotifyDataStore.setState((state) => ({
     isAuthenticated: true,
     user: userProfile,
     playlists:
       session.playlists && session.playlists.length > 0
-        ? session.playlists
+        ? deduplicateUserPlaylists([...session.playlists, ...ownLists])
         : state.playlists,
     quickAccessCards: quickAccess,
     featuredMessage: msg,

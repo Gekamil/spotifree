@@ -78,7 +78,16 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     startVoiceListening,
     stopVoiceListening,
     handleUserPrompt,
+    displayedTranscript,
+    currentMessage,
+    segments,
+    activeSegmentId,
+    isThinking,
+    nextSegment,
   } = useAIDJStore();
+  const activeSegment = segments.find((s) => s.id === activeSegmentId) || null;
+  const activeSegIdx = activeSegment ? segments.indexOf(activeSegment) : -1;
+  const upcomingSegment = activeSegIdx >= 0 ? segments[activeSegIdx + 1] || null : null;
 
   const {
     currentTrack,
@@ -388,6 +397,46 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               </span>
             </div>
           )}
+
+          {/* Live captions of what the DJ says, or the block that is on now */}
+          <div className="mt-4 w-full max-w-md min-h-[64px] flex flex-col items-center justify-start px-2" aria-live="polite">
+            {isThinking ? (
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
+                <span className="flex gap-1" aria-hidden="true">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
+                </span>
+                <span className="text-xs font-bold text-white/90">Preparando tu sesión</span>
+              </div>
+            ) : isSpeaking && (displayedTranscript || currentMessage) && !isMicListening ? (
+              <p className="text-[15px] sm:text-base font-bold leading-snug text-white text-center font-['SpotifyMixUITitle'] drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] animate-in fade-in duration-300">
+                {displayedTranscript || currentMessage}
+              </p>
+            ) : activeSegment && !isMicListening ? (
+              <div className="flex flex-col items-center gap-2 animate-in fade-in duration-500">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-white/60">Ahora</span>
+                <span className="text-base font-black text-white font-['SpotifyMixUITitle'] leading-tight text-center">
+                  {activeSegment.title}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void nextSegment()}
+                  className="mt-1 flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full bg-white text-black text-xs font-bold hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-lg"
+                  title={upcomingSegment ? `Siguiente: ${upcomingSegment.title}` : 'El DJ prepara algo diferente'}
+                >
+                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+                    <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
+                    <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+                  </svg>
+                  Cambiar de rollo
+                </button>
+                {upcomingSegment && (
+                  <span className="text-[11px] text-white/55">Luego: {upcomingSegment.title}</span>
+                )}
+              </div>
+            ) : null}
+          </div>
         </div>
 
         {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
@@ -599,9 +648,15 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               {tracksToDisplay.map((track, idx) => {
                 const isPlayingThis = isPlaying && currentTrack?.id === track.id;
                 const trackArt = getBestTrackArtwork(track);
+                const blockStart = tracksToDisplay === djTracks && segments.length > 1 ? segments.find((s) => s.startIndex === idx) : undefined;
                 return (
+                  <React.Fragment key={`${track.id}-${idx}`}>
+                  {blockStart && (
+                    <p className={`px-2.5 text-[11px] font-bold uppercase tracking-widest ${idx === 0 ? 'pt-0.5' : 'pt-3'} pb-1 ${blockStart.id === activeSegmentId ? 'text-[#1ed760]' : 'text-[#a7a7a7]'}`}>
+                      {blockStart.title}
+                    </p>
+                  )}
                   <div
-                    key={`${track.id}-${idx}`}
                     onClick={() => handleTrackClick(track)}
                     className={`flex items-center justify-between p-2.5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors ${
                       isPlayingThis ? 'bg-white/10' : ''
@@ -641,6 +696,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                       {formatDuration(track.duration_ms || 180000)}
                     </span>
                   </div>
+                  </React.Fragment>
                 );
               })}
             </div>

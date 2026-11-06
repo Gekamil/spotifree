@@ -15,6 +15,7 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { searchSpotify } from './spotifyApi';
 import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
+import { getCustomLikedSongs } from '../utils/userStorage';
 
 export type MusicHashtag =
   | '#reggaeton'
@@ -299,7 +300,7 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
     try {
       const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
       local.forEach((p: any) => p?.tracks?.items?.forEach(processTrack));
-      const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+      const liked = getCustomLikedSongs();
       liked.forEach(processTrack);
     } catch {}
   }
@@ -758,7 +759,7 @@ export async function getInitialDJLibraryRemix(count: number = 15): Promise<Trac
     try {
       const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
       local.forEach((p: any) => p?.tracks?.items?.forEach(collect));
-      const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+      const liked = getCustomLikedSongs();
       liked.forEach(collect);
     } catch {}
   }

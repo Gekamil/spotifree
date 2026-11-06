@@ -185,6 +185,39 @@ describe('Transition planner', () => {
     assert.ok(Math.abs(((drop - 0.5) / 2) - Math.round((drop - 0.5) / 2)) < 0.01, `drop entry on bar: ${drop}`);
     assert.ok(drop > 14 && drop < 18);
   });
+
+  it('P.8: the bar grid is used inside the analysed audio and dropped when it would drift', () => {
+    const an = { tempo: 120, tempoSource: 'analysis', tempoConfidence: 0.6, downbeatOffsetSec: 0.5, durationSec: 150, analyzedAt: 1 };
+    // Inside the analysed chunk: snapped to a bar line (bars every 2 s from 0.5)
+    const inside = F.snapToBarGrid(an, 101.3);
+    assert.equal(inside, 100.5);
+    // Slightly past the chunk: drift still tiny, keep aligning
+    assert.notEqual(F.snapToBarGrid(an, 170), null);
+    // Far past it (minute 5 of a long song): extrapolated grid would be off by ~a beat
+    assert.equal(F.snapToBarGrid(an, 300), null);
+    // Low tempo confidence or Deezer disagreement: never trust the grid that far
+    assert.equal(F.snapToBarGrid({ ...an, tempoConfidence: 0.1 }, 50), null);
+    assert.equal(F.snapToBarGrid({ ...an, tempoRelErr: 0.01 }, 190), null);
+    // Not measured from audio: no grid at all
+    assert.equal(F.snapToBarGrid({ ...an, tempoSource: 'deezer' }, 50), null);
+  });
+
+  it('P.9: same pulse with unknown key still gets blends (not only cuts)', () => {
+    const a = { ...info('a', 124, undefined, 0.5), keyReliable: false };
+    const b = { ...info('b', 125, undefined, 0.55), keyReliable: false };
+    const presets = new Set();
+    for (let seed = 1; seed <= 60; seed++) presets.add(P.planTransition(a, b, { seed, recent: [] }).preset);
+    assert.ok(presets.has('automatica') || presets.has('filtro'), `presets: ${[...presets]}`);
+    assert.ok(presets.size >= 3, `variety: ${[...presets]}`);
+  });
+
+  it('P.10: a "clash" from our own key measurement is not trusted as a clash', () => {
+    const a = { ...info('a', 124, '2B', 0.5), keyMeasured: true };
+    const b = { ...info('b', 124, '6B', 0.5), keyMeasured: true };
+    const p = P.planTransition(a, b, { seed: 3, recent: [] });
+    assert.ok(/poco seguro/.test(p.reason), p.reason);
+    assert.ok(!/tonos que chocan/.test(p.reason));
+  });
 });
 
 describe('Unified transition renderer (live mix == preview)', () => {

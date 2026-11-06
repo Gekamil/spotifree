@@ -22,6 +22,7 @@ import { useStatsStore } from './useStatsStore';
 import { stripHtml } from '../utils/formatters';
 import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage, getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
+import { getPlaylistCover } from '../utils/playlistCover';
 import liveExtractedSession from '../data/liveExtractedSession.json';
 import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
@@ -384,7 +385,7 @@ export function buildDynamicShelves(
         id: p.id,
         title: p.name,
         subtitle: stripHtml(p.description) || `De ${displayName}`,
-        image: p.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+        image: getPlaylistCover(p),
       })),
     };
     return [userShelf, ...extracted];
@@ -1409,9 +1410,11 @@ const store = create<SpotifyDataState>((set, get) => ({
           email: '',
         } as any;
 
+        // Same list the user saw before reloading: Liked Songs + DJ + their lists (minus deleted ones)
+        const guestPlaylists = deduplicateUserPlaylists(importedPlaylists);
         const shelves = buildDynamicShelves(
           guestUser,
-          importedPlaylists,
+          guestPlaylists,
           'Tus listas importadas',
           [],
           []
@@ -1420,14 +1423,17 @@ const store = create<SpotifyDataState>((set, get) => ({
         set({
           isAuthenticated: true,
           user: guestUser,
-          playlists: importedPlaylists,
+          playlists: guestPlaylists,
           dynamicShelves: shelves,
-          quickAccessCards: importedPlaylists.slice(0, 4).map((p) => ({
-            id: p.id,
-            name: p.name,
-            image: p.images?.[0]?.url || '',
-            color: (p as any).color || '#303030',
-          })),
+          quickAccessCards: guestPlaylists
+            .filter((p) => p.id !== 'spotify-dj' && (p.id !== 'liked-songs' || (p.tracks?.items?.length || 0) > 0))
+            .slice(0, 8)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: getPlaylistCover(p),
+              color: (p as any).color || '#303030',
+            })),
           isLoading: false,
         });
         return;
@@ -1450,10 +1456,10 @@ const store = create<SpotifyDataState>((set, get) => ({
           user: cloudUser as any,
           playlists: uniquePl,
           dynamicShelves: buildDynamicShelves(cloudUser, uniquePl, 'Recomendado para ti'),
-          quickAccessCards: uniquePl.slice(0, 6).map((p) => ({
+          quickAccessCards: uniquePl.filter((p) => p.id !== 'spotify-dj').slice(0, 6).map((p) => ({
             id: p.id,
             name: p.name,
-            image: p.images?.[0]?.url || '',
+            image: getPlaylistCover(p),
             color: (p as any).color || '#303030',
           })),
           playlistDetailsCache: {},

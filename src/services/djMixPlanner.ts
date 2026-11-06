@@ -25,6 +25,7 @@ import {
   cleanTrackId,
   getTrackAnalysis,
   resolveClientSideRealFeature,
+  snapToBarGrid,
   type TrackAnalysisData,
 } from '../utils/audioFeatures.ts';
 
@@ -37,6 +38,8 @@ export interface MixTrackInfo {
   tempoReliable: boolean;
   camelot?: string;
   keyReliable: boolean;
+  /** Key comes from our own audio measurement (less certain than catalog data) */
+  keyMeasured?: boolean;
   energy?: number;
   analysis?: TrackAnalysisData | null;
   durationSec?: number;
@@ -129,6 +132,7 @@ export function getMixTrackInfo(track: Pick<Track, 'id' | 'name' | 'artists' | '
     tempoReliable: feat.source === 'analysis' || feat.source === 'deezer' || feat.source === 'catalog',
     camelot: feat.camelot,
     keyReliable: feat.source === 'analysis' || feat.source === 'catalog',
+    keyMeasured: feat.source === 'analysis',
     energy: analysis?.energy,
     analysis,
     durationSec: track.duration_ms ? track.duration_ms / 1000 : analysis?.durationSec,
@@ -203,6 +207,15 @@ function candidatesFor(t: TempoRelation, k: KeyRelation, energyUp: number): Cand
       list.push(C('mezcla_voces', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Fusión vocal', 'las dos canciones conviven 4 compases antes del relevo', 3));
       list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión con barrido y entrada de B en su parte fuerte', 1.5 + up * 6, true));
       list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera (1/4 → 1/8 → 1/16) hasta soltar B', 1.2 + up * 3, true));
+    } else if (k === 'unknown') {
+      // Same pulse, key not known: blend, but keep the overlap moderate and swap the bass
+      // (two bass lines in different keys is what clashes most)
+      list.push(C('automatica', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'mezcla de 4 compases: B entra sin graves y a mitad se intercambian', 3.5));
+      list.push(C('automatica', 8, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Mezcla larga', 'mezcla larga de 8 compases con cruce de graves a mitad', 1.6));
+      list.push(C('filtro', 4, 'superposicion', 'filtro_paso_alto', 'ninguno', 'smooth', 'Filtro', 'A se va vaciando con un filtro mientras entra B', 2.4));
+      list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión y B entra en su parte fuerte', 1.2 + up * 5, true));
+      list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera hasta soltar B', 1 + up * 3, true));
+      list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte limpio justo en el primer tiempo del compás', 1 + up * 2, true));
     } else {
       list.push(C('automatica', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'cruce corto: el ritmo encaja pero los tonos no, así que no se solapan mucho', 3.5));
       list.push(C('filtro', 4, 'superposicion', 'filtro_paso_alto', 'ninguno', 'smooth', 'Filtro', 'A se va vaciando mientras entra B, para que los tonos no choquen', 3));
@@ -242,11 +255,10 @@ export function chooseMixInSec(b: MixTrackInfo, enterAtDrop: boolean): number {
   if (enterAtDrop && typeof an.introEndSec === 'number' && an.introEndSec > t && an.introEndSec <= 30) {
     t = an.introEndSec;
   }
-  // Snap to B's bar grid so the first thing you hear is a downbeat
-  if (an.tempoSource === 'analysis' && typeof an.downbeatOffsetSec === 'number' && an.tempo > 40 && t > 0) {
-    const bar = 240 / an.tempo;
-    const k = Math.round((t - an.downbeatOffsetSec) / bar);
-    t = Math.max(0, an.downbeatOffsetSec + k * bar);
+  // Snap to B's bar grid so the first thing you hear is a downbeat (only where the grid is reliable)
+  if (t > 0) {
+    const snapped = snapToBarGrid(an, t, 'round');
+    if (snapped !== null) t = snapped;
   }
   return Math.round(t * 100) / 100;
 }
@@ -265,8 +277,11 @@ export function planTransition(
   const kr = keyRelation(a, b);
   const energyUp = typeof a.energy === 'number' && typeof b.energy === 'number' ? b.energy - a.energy : 0;
   const flavour = getSessionFlavour(seed);
+  // Our own key detection is often a step or two off on real songs: a measured "clash" is not
+  // trustworthy enough to rule out a blend, so it is treated as unknown.
+  const keyForPlan: KeyRelation = kr.relation === 'clash' && (a.keyMeasured || b.keyMeasured) ? 'unknown' : kr.relation;
 
-  const cands = candidatesFor(tr.relation, kr.relation, energyUp);
+  const cands = candidatesFor(tr.relation, keyForPlan, energyUp);
   const last = recent[recent.length - 1];
   const last3 = recent.slice(-3).map((r) => r.preset);
   const wowRecently = recent.slice(-2).some((r) => r.intensity === 'wow');
@@ -303,7 +318,9 @@ export function planTransition(
       : `${Math.round(a.tempo)} → ${Math.round(b.tempo)} BPM (${tr.relation === 'close' ? 'casi igual' : tr.relation === 'moderate' ? 'tempo distinto' : 'salto grande de tempo'})`;
   const energyTxt = energyUp > 0.12 ? ', B tiene más energía' : energyUp < -0.12 ? ', B es más tranquila' : '';
   const estimated = !a.tempoReliable || !b.tempoReliable ? ' (BPM estimado)' : '';
-  const reason = `${capitalize(tempoTxt)}${kr.relation !== 'unknown' ? `, ${kr.label}` : ''}${energyTxt}${estimated}: ${pick.what}.`;
+  const keyTxt =
+    kr.relation === 'unknown' ? '' : keyForPlan === kr.relation ? `, ${kr.label}` : `, ${a.camelot} → ${b.camelot} (tono medido, poco seguro)`;
+  const reason = `${capitalize(tempoTxt)}${keyTxt}${energyTxt}${estimated}: ${pick.what}.`;
 
   const h = calculateHarmonicCompatibility(a.camelot || '', b.camelot || '');
   return {

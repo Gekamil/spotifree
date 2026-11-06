@@ -129,7 +129,32 @@ export interface TrackAnalysisData {
   outroStartSec?: number;
   musicEndSec?: number;
   durationSec?: number;
+  /** Relative difference between our measured tempo and Deezer's (when both exist) */
+  tempoRelErr?: number;
   analyzedAt: number;
+}
+
+/**
+ * Snaps `atSec` to the measured bar grid, or returns null when the grid can't be trusted there.
+ *
+ * The grid (downbeat + tempo) is fitted jointly over the analysed chunk (first ~3 MB of audio),
+ * so inside that chunk it lines up with the real beats. Past the chunk it is extrapolated and
+ * a tiny tempo error keeps growing (0.4% over 2 minutes ≈ 0.5 s, a whole beat). A misplaced
+ * "bar line" sounds worse than not aligning at all, so we only snap where the expected drift
+ * stays under a quarter of a beat.
+ */
+export function snapToBarGrid(an: TrackAnalysisData | null | undefined, atSec: number, mode: 'floor' | 'round' = 'floor'): number | null {
+  if (!an || an.tempoSource !== 'analysis' || typeof an.downbeatOffsetSec !== 'number' || !(an.tempo > 40)) return null;
+  if (typeof an.tempoConfidence === 'number' && an.tempoConfidence < 0.2) return null;
+  const beat = 60 / an.tempo;
+  const bar = beat * 4;
+  const analysedUntil = an.durationSec || 150;
+  const beyond = Math.max(0, atSec - analysedUntil);
+  // Residual tempo error of the fitted grid; Deezer agreement (when known) bounds it
+  const relErr = typeof an.tempoRelErr === 'number' ? Math.min(0.01, Math.max(0.002, an.tempoRelErr)) : 0.004;
+  if (beyond * relErr > beat * 0.25) return null;
+  const k = mode === 'round' ? Math.round((atSec - an.downbeatOffsetSec) / bar) : Math.floor((atSec - an.downbeatOffsetSec) / bar);
+  return Math.max(0, an.downbeatOffsetSec + k * bar);
 }
 
 export const TRACK_ANALYSIS_EVENT = 'spotifree_track_analysis_updated';

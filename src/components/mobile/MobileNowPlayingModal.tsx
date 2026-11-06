@@ -1041,7 +1041,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* Option 1: Añadir / Quitar Canciones que te gustan */}
               <button
                 onClick={() => {
-                  toggleLike(currentTrack.id);
+                  toggleLike(currentTrack.id, currentTrack);
                   setIsMenuOpen(false);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"

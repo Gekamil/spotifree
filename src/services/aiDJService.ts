@@ -16,6 +16,9 @@ import {
 } from './musicTaggingService';
 import { useStatsStore } from '../store/useStatsStore';
 import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
+import { getCustomLikedSongs } from '../utils/userStorage';
+import { searchSpotify } from './spotifyApi';
+import { buildSegmentedDJSet, buildSegmentIntro, segmentAt, type DJSegment } from './djSegments';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
 
@@ -42,6 +45,13 @@ export interface AIDJState {
   currentHashtag: MusicHashtag;
   chatHistory: DJChatMessage[];
   viewMode: 'chat' | 'playlist';
+  /** Blocks of the current set ("Lo que más te suena", "Hace tiempo que no suenan"...) */
+  segments: DJSegment[];
+  activeSegmentId: string | null;
+  /** True while the DJ prepares a set (AI request in flight) */
+  isThinking: boolean;
+  /** 'personal' = built from the user's library; 'request' = built from what they asked for */
+  setMode: 'personal' | 'request';
 
   // Actions
   setViewMode: (mode: 'chat' | 'playlist') => void;
@@ -57,6 +67,8 @@ export interface AIDJState {
   startVoiceListening: () => void;
   stopVoiceListening: () => void;
   triggerManualTransition: () => Promise<void>;
+  /** Spotify DJ's main button: jump to the next block (or build new ones) and let the DJ present it */
+  nextSegment: () => Promise<void>;
 }
 
 // Preset vibes for clean Spotify chips (NO EMOJIS, pure Spotify aesthetic)
@@ -90,20 +102,89 @@ function pickDynamicSpeech(categoryKey: string, options: string[]): string {
   return picked;
 }
 
-async function callGroqDJ(payload: any): Promise<any | null> {
+async function callGroqDJ(payload: any, timeoutMs = 4500): Promise<any | null> {
   try {
     const res = await fetch('/api/groq', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout ? AbortSignal.timeout(2800) : undefined,
+      body: JSON.stringify({ language: useLanguageStore.getState().language, ...payload }),
+      signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined,
     });
     if (!res.ok) return null;
     const data = await res.json();
+    if (data && !data.success && data.reason) console.info('[AIDJ] AI not available, using local DJ lines:', data.reason);
     return data && data.success ? data : null;
   } catch {
     return null;
   }
+}
+
+/** Liked songs as tracks (the real storage, not the legacy 'spotifree_liked_songs' key). */
+function getLikedTracksForDJ(): Track[] {
+  try {
+    const custom = getCustomLikedSongs();
+    if (custom.length > 0) return custom;
+  } catch {}
+  const likedPl = useSpotifyDataStore.getState().playlists.find((p) => p.id === 'liked-songs');
+  return likedPl?.tracks?.items || [];
+}
+
+function firstName(): string {
+  const raw = useSpotifyDataStore.getState().user?.display_name || '';
+  const n = raw ? raw.split(' ')[0] : '';
+  return n === 'Invitado' ? '' : n;
+}
+
+/** Turns an AI recommendation into a real catalog track (real id + cover) when possible. */
+async function resolveRecommendedTrack(title: string, artist: string): Promise<Track | null> {
+  try {
+    const res = await Promise.race([
+      searchSpotify(`${title} ${artist}`),
+      new Promise<null>((r) => setTimeout(() => r(null), 3500)),
+    ]);
+    const items: Track[] = (res as any)?.tracks?.items || [];
+    const a = artist.toLowerCase();
+    const t = title.toLowerCase();
+    const hit =
+      items.find((it) => (it.name || '').toLowerCase().includes(t) && (it.artists || []).some((x) => (x.name || '').toLowerCase().includes(a) || a.includes((x.name || '').toLowerCase()))) ||
+      items.find((it) => (it.artists || []).some((x) => (x.name || '').toLowerCase() === a));
+    return hit || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Speaks a DJ line over the music (ducked), with live captions. */
+async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
+  set({ visualizerState: 'speaking', currentMessage: text, displayedTranscript: '' });
+  audioEngine.setDuckedVolume(0.18);
+  await aiDJVoiceService.speak(text, {
+    onWord: (_w, partial) => set({ displayedTranscript: partial }),
+    onVoiceLevel: (level) => set({ voiceLevel: level }),
+    onEnd: () => {
+      audioEngine.restoreDuckedVolume(1200);
+      set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
+    },
+  });
+}
+
+const announcedSegments = new Set<string>();
+
+/** Asks the AI (in the background) for nicer block intros; keeps the local ones if it is slow. */
+function polishSegmentIntros(segments: DJSegment[], tracks: Track[], set: (fn: (s: AIDJState) => Partial<AIDJState>) => void) {
+  const userName = firstName();
+  segments.slice(1).forEach((seg) => {
+    const first = tracks[seg.startIndex];
+    if (!first) return;
+    callGroqDJ({ action: 'segment', kind: seg.title, reason: seg.reason, currentTrack: first, userName }, 5000).then((r) => {
+      if (!r?.speech) return;
+      const speech = cleanTextForNaturalTTS(r.speech);
+      aiDJVoiceService.prefetchPhrase(speech);
+      set((s) => ({ segments: s.segments.map((x) => (x.id === seg.id ? { ...x, intro: speech } : x)) }));
+    });
+  });
+  // Warm up the local lines too, so the voice starts instantly at each block
+  segments.forEach((s) => aiDJVoiceService.prefetchPhrase(s.intro));
 }
 
 export interface UserListeningProfile {
@@ -146,7 +227,7 @@ export function getUserListeningProfile(): UserListeningProfile {
   let likedTracks: { name: string; artist: string }[] = [];
   if (typeof window !== 'undefined') {
     try {
-      const localLiked: Track[] = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
+      const localLiked: Track[] = getLikedTracksForDJ();
       likedTracks = localLiked.slice(0, 8).map((t) => ({
         name: t.name,
         artist: t.artists?.[0]?.name || '',
@@ -182,7 +263,7 @@ export function getUserListeningProfile(): UserListeningProfile {
   // 5. Detect top genres/styles from user's history and liked songs
   const detectedGenres: string[] = [];
   const tagCounts = new Map<string, number>();
-  [...playerHistory, ...(typeof window !== 'undefined' ? JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]') : [])].forEach((t) => {
+  [...playerHistory, ...getLikedTracksForDJ()].forEach((t) => {
     const tags = classifyTrackHashtags(t);
     tags.forEach((tag) => {
       tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
@@ -630,6 +711,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   currentHashtag: '#reggaeton',
   chatHistory: [],
   viewMode: 'chat',
+  segments: [],
+  activeSegmentId: null,
+  isThinking: false,
+  setMode: 'personal',
 
   setViewMode: (viewMode) => set({ viewMode }),
   setVisualizerState: (visualizerState) => set({ visualizerState }),
@@ -663,116 +748,72 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     } catch {}
 
     const dominantTag = getDominantUserHashtag();
+    const cleanName = firstName();
 
     set({
       isDJModeActive: true,
       visualizerState: 'speaking',
       songsPlayedInSet: 0,
       currentHashtag: dominantTag,
+      isThinking: true,
+      setMode: 'personal',
+      currentMessage: '',
+      displayedTranscript: '',
     });
-
-    // Compute intro text immediately and prefetch audio concurrently with set curation
-    const lang = useLanguageStore.getState().language;
-    const isEn = lang === 'en';
-
-    const rawName = useSpotifyDataStore.getState().user?.display_name || '';
-    const cleanName = rawName ? rawName.split(' ')[0] : '';
-    const namePart = cleanName ? `, ${cleanName}` : '';
-
-    const userProfile = getUserListeningProfile();
-    const topArtist = userProfile.topArtists?.[0] || '';
-
-    const enOptions = topArtist
-      ? [
-          `What's up${namePart}! Dropping ${topArtist} and your favorites. Let's go!`,
-          `Hey${namePart}! DJ in the booth. Turn it up!`,
-          `What's good${namePart}! Pure bangers ready. Hit play!`,
-          `In the mix! The best of ${topArtist} is up next. Let's roll!`,
-          `Welcome back${namePart}! Fresh fire lined up. Turn it up!`,
-          `Hey${namePart}! Volume all the way up. Let's ride!`,
-        ]
-      : [
-          `What's up${namePart}! DJ in the booth. Let's go!`,
-          `Hey${namePart}! Your mix is locked. Turn it up!`,
-          `What's good${namePart}! Pure heat ready. Hit play!`,
-          `Welcome back${namePart}! Great vibes lined up. Enjoy!`,
-          `DJ in the mix! Turning up the sound. Let's roll!`,
-        ];
-
-    const esOptions = topArtist
-      ? [
-          `¡Qué pasa${namePart}! Arrancamos con ${topArtist}. ¡A romperla!`,
-          `¡Hey${namePart}! Tu sesión está lista. ¡Súbele!`,
-          `¡Qué onda${namePart}! Puro temazo preparado. ¡Dale play!`,
-          `¡En cabina tu DJ! Suena lo mejor de ${topArtist}. ¡Vamos!`,
-          `¡Muy buenas${namePart}! Lista tu mezcla. ¡A disfrutar!`,
-          `¡Hey${namePart}! Subiendo el volumen. ¡Dale gas!`,
-        ]
-      : [
-          `¡Qué pasa${namePart}! Aquí tu DJ. ¡A romperla!`,
-          `¡Hey${namePart}! Tu sesión está lista. ¡Súbele!`,
-          `¡Qué onda${namePart}! Tu música favorita lista. ¡Dale play!`,
-          `¡En cabina tu DJ! Arrancamos con todo. ¡Vamos!`,
-          `¡Muy buenas${namePart}! Lista tu mezcla. ¡A disfrutar!`,
-        ];
-
-    const introText = cleanTextForNaturalTTS(
-      pickDynamicSpeech('dj_intro', isEn ? enOptions : esOptions)
-    );
-
-    aiDJVoiceService.prefetchPhrase(introText);
     prefetchQuickVibeVoices(cleanName);
 
-    // 1. Curate initial set: 75% directly from user playlists + same library artists (strictly filtered for music)
-    const initialSet = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
-    set({ djTracks: initialSet });
-
-    // 2. Stage track 1 in the player without playing audio yet (prevents volume collision while DJ speaks)
-    if (initialSet.length > 0) {
-      usePlayerStore.setState({
-        queue: initialSet,
-        currentTrack: initialSet[0],
-        isPlaying: false,
-      });
+    // 1. Build the set in blocks from the user's real listening (fresh order every time)
+    let tracks: Track[] = [];
+    let segments: DJSegment[] = [];
+    try {
+      const built = await buildSegmentedDJSet({ userName: cleanName });
+      tracks = filterMusicTracksOnly(built.tracks);
+      segments = built.segments;
+    } catch (e) {
+      console.warn('[AIDJ] Segmented set failed, using library remix:', e);
     }
+    if (tracks.length < 3) {
+      tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
+      segments = tracks.length
+        ? [{ id: `seg-${Date.now()}`, kind: 'liked', title: 'Tu mezcla', reason: 'canciones de su biblioteca', startIndex: 0, length: tracks.length, intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true) }]
+        : [];
+    }
+    // If filtering removed songs, keep block boundaries inside the list
+    segments = segments.filter((s) => s.startIndex < tracks.length);
+
+    const introText = cleanTextForNaturalTTS(segments[0]?.intro || buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true));
+    announcedSegments.clear();
+    if (segments[0]) announcedSegments.add(segments[0].id);
+
+    set({
+      djTracks: tracks,
+      segments,
+      activeSegmentId: segments[0]?.id || null,
+      currentSetTitle: segments[0]?.title || 'Tu mezcla',
+      isThinking: false,
+    });
+    polishSegmentIntros(segments, tracks, set as any);
+    resolveTrackCoversBatch(tracks).catch(() => {});
 
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     set({
-      currentMessage: introText,
-      displayedTranscript: '',
       chatHistory: [
         {
           id: 'msg-initial',
           sender: 'dj',
           text: introText,
           timestamp: timeStr,
-          curatedSetTitle: 'Tu Mezcla Inicial',
-          trackCount: initialSet.length,
+          curatedSetTitle: segments[0]?.title || 'Tu mezcla',
+          trackCount: tracks.length,
         },
       ],
     });
 
     get().stopVoiceListening();
-    if (initialSet.length > 0) {
-      usePlayerStore.getState().playTrack(initialSet[0], initialSet, 'dj-session');
-      audioEngine.setDuckedVolume(0.12);
+    if (tracks.length > 0) {
+      usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
     }
-    await aiDJVoiceService.speak(introText, {
-      onWord: (_word, partial) => {
-        set({ displayedTranscript: partial });
-      },
-      onVoiceLevel: (level) => {
-        set({ voiceLevel: level });
-      },
-      onEnd: () => {
-        // Song is already playing underneath! Smoothly fade volume up to 100%
-        audioEngine.restoreDuckedVolume(1200);
-        set({
-          visualizerState: 'playing',
-          voiceLevel: 0,
-        });
-      },
-    });
+    await djSpeak(introText, set);
   },
 
   /**
@@ -883,6 +924,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     aiDJVoiceService.stopSpeaking();
 
     const pLow = promptText.toLowerCase().trim();
+    // Never leave the "preparing" indicator stuck if something below throws
+    setTimeout(() => {
+      if (get().isThinking) set({ isThinking: false });
+    }, 16000);
 
     // ─── FAST-PATH: "siguiente", "siguiente canción", "otra", "skip", "cambia" ───
     const isSkipCmd = /^(siguiente|sig|skip|otra|cambia(r)?(\s+de\s+canci[oó]n)?|next|salta)$/i.test(pLow)
@@ -929,9 +974,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     set((state) => ({
       chatHistory: [...state.chatHistory, userMsg],
       visualizerState: 'speaking',
-      currentMessage: `Entendido. Preparando tu sesión...`,
+      currentMessage: '',
       displayedTranscript: '',
       voiceLevel: 0.3,
+      isThinking: true,
     }));
 
     const rawName = useSpotifyDataStore.getState().user?.display_name || '';
@@ -987,8 +1033,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       try {
         const local = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
         local.forEach((p: any) => p?.tracks?.items?.forEach(addTrack));
-        const liked = JSON.parse(window.localStorage.getItem('spotifree_liked_songs') || '[]');
-        liked.forEach(addTrack);
+        getLikedTracksForDJ().forEach(addTrack);
       } catch {}
     }
 
@@ -1005,7 +1050,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         prompt: promptText,
         userName: cleanName,
         userProfile,
-      }),
+      }, 10000),
     ]);
 
     let finalSpeech = analysis.speech;
@@ -1021,40 +1066,36 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
       // Smart recommendation mapping: user library matches + new personalized discoveries
       if (Array.isArray(groqResult.tracks) && groqResult.tracks.length > 0) {
-        const matched: Track[] = [];
-        for (const gt of groqResult.tracks) {
-          if (isNonMusicOrNoise(gt)) continue;
-          const gTitle = (gt.title || '').toLowerCase().trim();
-          const gArtist = (gt.artist || '').toLowerCase().trim();
-          if (!gTitle) continue;
-
-          let match = allUserTracks.find((ut) => {
-            const utName = (ut.name || '').toLowerCase();
-            const utArtist = (ut.artists?.[0]?.name || '').toLowerCase();
-            return (
-              (utName.includes(gTitle) || gTitle.includes(utName)) &&
-              (!gArtist || utArtist.includes(gArtist) || gArtist.includes(utArtist))
-            );
-          });
-
-          // If this recommended track is a fresh new discovery (not yet in library),
-          // create a proper Track object so the user can discover new music!
-          if (!match) {
-            match = {
+        const candidates = (groqResult.tracks as any[])
+          .filter((gt) => gt && gt.title && !isNonMusicOrNoise(gt))
+          .slice(0, 15);
+        // Songs already in the library are used as they are; new discoveries are looked up in the
+        // catalog (in parallel) so they get their real id and cover instead of a stock photo.
+        const resolved = await Promise.all(
+          candidates.map(async (gt) => {
+            const gTitle = String(gt.title || '').toLowerCase().trim();
+            const gArtist = String(gt.artist || '').toLowerCase().trim();
+            const inLibrary = allUserTracks.find((ut) => {
+              const utName = (ut.name || '').toLowerCase();
+              const utArtist = (ut.artists?.[0]?.name || '').toLowerCase();
+              return (utName.includes(gTitle) || gTitle.includes(utName)) && (!gArtist || utArtist.includes(gArtist) || gArtist.includes(utArtist));
+            });
+            if (inLibrary) return inLibrary;
+            const found = await resolveRecommendedTrack(String(gt.title), String(gt.artist || ''));
+            if (found) return found;
+            return {
               id: `rec-groq-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
               name: gt.title,
               artists: [{ id: `art-${gt.artist || 'rec'}`, name: gt.artist || 'Artista' }],
-              album: {
-                id: `alb-${Date.now()}`,
-                name: gt.title,
-                images: [{ url: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80' }],
-              },
+              album: { id: `alb-${Date.now()}`, name: gt.title, images: [] },
               duration_ms: 210000,
               preview_url: null,
-            };
-          }
-
-          if (match && !matched.some((m) => m.name.toLowerCase() === match!.name.toLowerCase())) {
+            } as Track;
+          })
+        );
+        const matched: Track[] = [];
+        for (const match of resolved) {
+          if (match && !matched.some((m) => m.name.toLowerCase() === match.name.toLowerCase())) {
             matched.push(match);
           }
         }
@@ -1074,6 +1115,26 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     }
 
     finalSet = filterMusicTracksOnly(finalSet);
+
+    // The DJ always says what is about to play (the local lines did not name the song)
+    const first = finalSet[0];
+    if (first?.name && !finalSpeech.toLowerCase().includes(first.name.toLowerCase().slice(0, 12))) {
+      const art = first.artists?.[0]?.name;
+      finalSpeech = `${finalSpeech} Empezamos con ${first.name}${art ? ` de ${art}` : ''}.`;
+    }
+
+    const requestSegment: DJSegment = {
+      id: `seg-req-${Date.now()}`,
+      kind: 'request',
+      title: finalTitle.replace(/^Sesi[oó]n:\s*/i, '') || 'Tu petición',
+      reason: `lo que ha pedido: ${promptText}`,
+      startIndex: 0,
+      length: finalSet.length,
+      intro: finalSpeech,
+    };
+    announcedSegments.clear();
+    announcedSegments.add(requestSegment.id);
+    set({ segments: [requestSegment], activeSegmentId: requestSegment.id, setMode: 'request', isThinking: false });
 
     // Pre-resolve artwork for all tracks in parallel
     resolveTrackCoversBatch(finalSet).catch(() => {});
@@ -1138,72 +1199,49 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
    */
   handleSetCompletion: async () => {
     const state = get();
-    const currentTag = state.currentHashtag || getDominantUserHashtag();
     const previousIds = new Set(state.djTracks.map((t) => t.id));
+    const cleanName = firstName();
 
     aiDJVoiceService.stopSpeaking();
-    set({
-      visualizerState: 'speaking',
-      songsPlayedInSet: 0,
-    });
+    set({ visualizerState: 'speaking', songsPlayedInSet: 0, isThinking: true });
 
-    const nextSet = filterMusicTracksOnly(await getCuratedSetForHashtag(currentTag, 15, previousIds));
-    set({ djTracks: nextSet });
-
-    // Pre-resolve artwork in parallel
-    resolveTrackCoversBatch(nextSet).catch(() => {});
-
-    // Pre-warm audio streams
-    if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+    let nextSet: Track[] = [];
+    let segments: DJSegment[] = [];
+    if (state.setMode === 'personal') {
+      // New blocks from the library, skipping what already sounded in this session
       try {
-        (window as any).__audioEngine.warmupInitialTracks(nextSet.slice(0, 6));
+        const built = await buildSegmentedDJSet({ userName: cleanName, exclude: previousIds });
+        nextSet = filterMusicTracksOnly(built.tracks);
+        segments = built.segments.filter((s) => s.startIndex < nextSet.length);
       } catch {}
     }
+    if (nextSet.length < 3) {
+      const currentTag = state.currentHashtag || getDominantUserHashtag();
+      nextSet = filterMusicTracksOnly(await getCuratedSetForHashtag(currentTag, 15, previousIds));
+      const prevTitle = state.segments[0]?.title || state.currentSetTitle || 'Tu mezcla';
+      const speech = pickDynamicSpeech('set_more', [
+        `Seguimos con más de esto. ${nextSet[0]?.name ? `Ahora ${nextSet[0].name}.` : ''}`,
+        `La música no para. Más ${prevTitle.toLowerCase()} para ti.`,
+        `¿Otra ronda? Venga. ${nextSet[0]?.name ? `Suena ${nextSet[0].name}.` : ''}`,
+      ]).trim();
+      segments = nextSet.length
+        ? [{ id: `seg-more-${Date.now()}`, kind: state.setMode === 'request' ? 'request' : 'liked', title: prevTitle, reason: 'más del mismo estilo', startIndex: 0, length: nextSet.length, intro: speech }]
+        : [];
+    }
 
-    // Play first track of new set in background with ducked volume
+    announcedSegments.clear();
+    if (segments[0]) announcedSegments.add(segments[0].id);
+    set({ djTracks: nextSet, segments, activeSegmentId: segments[0]?.id || null, currentSetTitle: segments[0]?.title || state.currentSetTitle, isThinking: false });
+    resolveTrackCoversBatch(nextSet).catch(() => {});
+    if (state.setMode === 'personal') polishSegmentIntros(segments, nextSet, set as any);
+
     if (nextSet.length > 0) {
       usePlayerStore.getState().playTrack(nextSet[0], nextSet, 'dj-session');
-      audioEngine.setDuckedVolume(0.12);
     }
 
-    const lang = useLanguageStore.getState().language;
-    const isEn = lang === 'en';
-    const rawName = useSpotifyDataStore.getState().user?.display_name || '';
-    const cleanName = rawName ? rawName.split(' ')[0] : '';
-
-    const userProfile = getUserListeningProfile();
-    let speech = '';
-    try {
-      const groqRes = await callGroqDJ({
-        action: 'transition',
-        prompt: 'fin_set',
-        userName: cleanName,
-        userProfile,
-      });
-      if (groqRes && groqRes.speech) {
-        speech = cleanTextForNaturalTTS(groqRes.speech);
-      }
-    } catch {}
-
-    if (!speech) {
-      const completionPhrases = isEn
-        ? [
-            "Keeping the vibe going! Here are 15 more songs chosen for you.",
-            "What a session so far! Let's continue with 15 fresh tracks. Turn it up!",
-            "The music never stops. Here are 15 new bangers to keep the energy high.",
-          ]
-        : [
-            '¡Seguimos con todo! Te preparé 15 temazos más para no parar la fiesta.',
-            '¡Vaya sesión que llevamos! Mantenemos el rollo arriba con 15 canciones para ti. ¡Súbele!',
-            '¡La música no para! Dale caña a estas 15 canciones que te van a flipar.',
-          ];
-      speech = completionPhrases[Math.floor(Math.random() * completionPhrases.length)];
-    }
-
+    const speech = cleanTextForNaturalTTS(segments[0]?.intro || '¡Seguimos!');
     const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     set((s) => ({
-      currentMessage: speech,
-      displayedTranscript: '',
       chatHistory: [
         ...s.chatHistory,
         {
@@ -1211,25 +1249,29 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
           sender: 'dj',
           text: speech,
           timestamp: timeStr,
-          curatedSetTitle: s.currentSetTitle || 'Sesión en curso',
+          curatedSetTitle: segments[0]?.title || 'Sesión en curso',
           trackCount: nextSet.length,
         },
       ],
     }));
 
     get().stopVoiceListening();
-    await aiDJVoiceService.speak(speech, {
-      onWord: (_word, partial) => {
-        set({ displayedTranscript: partial });
-      },
-      onVoiceLevel: (level) => {
-        set({ voiceLevel: level });
-      },
-      onEnd: () => {
-        audioEngine.restoreDuckedVolume(1200);
-        set({ visualizerState: 'playing', voiceLevel: 0 });
-      },
-    });
+    await djSpeak(speech, set);
+  },
+
+  nextSegment: async () => {
+    const { djTracks, segments } = get();
+    const cur = usePlayerStore.getState().currentTrack;
+    const idx = cur ? djTracks.findIndex((t) => t.id === cur.id) : -1;
+    const next = segments.find((s) => s.startIndex > idx);
+    if (next && djTracks[next.startIndex]) {
+      // The track-change watcher presents the block as soon as its first song starts
+      usePlayerStore.getState().playTrack(djTracks[next.startIndex], djTracks, 'dj-session');
+      return;
+    }
+    // No more blocks: a brand-new personal set
+    set({ setMode: 'personal' });
+    await get().handleSetCompletion();
   },
 
   /**
@@ -1310,4 +1352,32 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
 if (typeof window !== 'undefined') {
   (window as any).__useAIDJStore = useAIDJStore;
+
+  // The DJ comes back on air at the start of every block, like Spotify's DJ
+  usePlayerStore.subscribe((state, prev) => {
+    if (!state.currentTrack || state.currentTrack.id === prev.currentTrack?.id) return;
+    const dj = useAIDJStore.getState();
+    if (!dj.isDJModeActive || state.currentContextId !== 'dj-session' || dj.segments.length === 0) return;
+    const idx = dj.djTracks.findIndex((t) => t.id === state.currentTrack!.id);
+    if (idx < 0) return;
+    const seg = segmentAt(dj.segments, idx);
+    if (!seg) return;
+    if (seg.id !== dj.activeSegmentId) {
+      useAIDJStore.setState({ activeSegmentId: seg.id, currentSetTitle: seg.title, songsPlayedInSet: 0 });
+    }
+    if (seg.startIndex !== idx || announcedSegments.has(seg.id)) return;
+    announcedSegments.add(seg.id);
+    if (dj.isThinking) return;
+    // A new block always wins: if the DJ was still talking, it cuts itself off and presents it
+    if (aiDJVoiceService.getIsSpeaking()) aiDJVoiceService.stopSpeaking();
+    const text = cleanTextForNaturalTTS(seg.intro);
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    useAIDJStore.setState((s) => ({
+      chatHistory: [...s.chatHistory, { id: `msg-seg-${Date.now()}`, sender: 'dj', text, timestamp: t, curatedSetTitle: seg.title, trackCount: seg.length }],
+    }));
+    // Small delay so the voice lands on the new song, not on the crossfade tail of the previous one
+    setTimeout(() => {
+      void djSpeak(text, useAIDJStore.setState);
+    }, 1200);
+  });
 }

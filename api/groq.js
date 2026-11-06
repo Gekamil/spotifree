@@ -1,7 +1,14 @@
 /**
- * Groq Ultra-Fast AI DJ Intelligence & Recommendation API
- * Powered by Groq's high-speed inference (Llama 3.3 70B & Llama 3.1 8B)
- * Reads process.env.groqapi (or GROQ_API_KEY / GROQAPI)
+ * AI DJ brain: session recommendations, transition lines and segment intros.
+ *
+ * Providers (first that works wins):
+ *   1. Groq   - process.env.groqapi / GROQAPI / GROQ_API_KEY ...
+ *   2. Gemini - process.env.GEMINI_API_KEY / gemini / GOOGLE_API_KEY
+ *
+ * Model names change over time (Groq retires models every few months), so instead of a
+ * hard-coded model the available list is fetched once per warm instance and the best
+ * match is picked. When everything fails the response says why (`reason`) so it can be
+ * diagnosed from the browser, and the client falls back to its local DJ lines.
  */
 
 function getGroqApiKey() {
@@ -16,12 +23,17 @@ function getGroqApiKey() {
   );
 }
 
+function getGeminiApiKey() {
+  return process.env.GEMINI_API_KEY || process.env.gemini || process.env.GEMINI || process.env.GOOGLE_API_KEY || '';
+}
+
 const NOISE_FILTER_REGEX = /\b(ruido\s+blanco|white\s+noise|ruido\s+rosa|pink\s+noise|ruido\s+marr[oó]n|brown\s+noise|green\s+noise|static\s+noise|sonido(s)?\s+de\s+(lluvia|agua|olas|mar|viento|tormenta|ventilador|secador|aspiradora|reloj)|(rain|water|ocean|waves|storm|fan|wind)\s+sound(s)?|ambient\s+noise|binaural\s+beat(s)?|ondas\s+(alfa|delta|theta|gamma)|sleep\s+sound(s)?|sonido(s)?\s+para\s+dormir|deep\s+sleep|baby\s+sleep|nature\s+sound(s)?|sound\s+effects?|test\s+tone|\d+\s*hz\b)\b/i;
 
 function cleanPunchySpeech(text) {
   if (!text) return '';
   return text
-    .replace(/["“”«»]/g, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/["“”«»*]/g, '')
     .replace(/\.{2,}/g, '.')
     .replace(/[—–]/g, ' ')
     .replace(/[()[\]{}]/g, '')
@@ -31,6 +43,231 @@ function cleanPunchySpeech(text) {
     .trim();
 }
 
+function extractJson(text) {
+  if (!text) return null;
+  const cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/```json|```/g, '').trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1));
+    } catch {}
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Groq
+// ---------------------------------------------------------------------------
+const GROQ_SMART = [
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-120b',
+  'meta-llama/llama-4-maverick-17b-128e-instruct',
+  'moonshotai/kimi-k2-instruct',
+  'openai/gpt-oss-20b',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'llama-3.1-8b-instant',
+];
+const GROQ_FAST = [
+  'llama-3.1-8b-instant',
+  'openai/gpt-oss-20b',
+  'meta-llama/llama-4-scout-17b-16e-instruct',
+  'llama-3.3-70b-versatile',
+  'openai/gpt-oss-120b',
+];
+let groqModelsCache = null; // { at, ids }
+
+async function listGroqModels(apiKey) {
+  if (groqModelsCache && Date.now() - groqModelsCache.at < 30 * 60 * 1000) return groqModelsCache.ids;
+  try {
+    const r = await fetch('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout?.(2500),
+    });
+    if (!r.ok) {
+      const err = new Error(`models HTTP ${r.status}`);
+      err.status = r.status;
+      throw err;
+    }
+    const data = await r.json();
+    const ids = (data.data || [])
+      .filter((m) => m && m.id && m.active !== false)
+      .map((m) => m.id)
+      .filter((id) => !/whisper|guard|tts|playai|distil|orpheus|compound|prompt-guard/i.test(id));
+    groqModelsCache = { at: Date.now(), ids };
+    return ids;
+  } catch (e) {
+    if (e && (e.status === 401 || e.status === 403)) throw e;
+    return null; // unknown: just try the preference list
+  }
+}
+
+function pickModels(available, preference) {
+  if (!available || available.length === 0) return preference.slice(0, 3);
+  const picked = preference.filter((m) => available.includes(m));
+  for (const id of available) {
+    if (picked.length >= 3) break;
+    if (!picked.includes(id)) picked.push(id);
+  }
+  return picked.slice(0, 3);
+}
+
+async function groqChat({ apiKey, system, user, json, maxTokens, temperature, fast, timeoutMs, deadline }) {
+  const available = await listGroqModels(apiKey);
+  const models = pickModels(available, fast ? GROQ_FAST : GROQ_SMART);
+  let lastErr = 'no model';
+  for (const model of models) {
+    const left = deadline - Date.now();
+    if (left < 900) {
+      lastErr = `sin tiempo (${lastErr})`;
+      break;
+    }
+    timeoutMs = Math.min(timeoutMs, left);
+    try {
+      const body = {
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user },
+        ],
+        temperature,
+        max_tokens: maxTokens,
+      };
+      if (json) body.response_format = { type: 'json_object' };
+      if (/gpt-oss/.test(model)) body.reasoning_effort = 'low';
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout?.(timeoutMs),
+      });
+      if (!r.ok) {
+        let detail = '';
+        try {
+          const e = await r.json();
+          detail = e?.error?.code || e?.error?.message || '';
+        } catch {}
+        lastErr = `HTTP ${r.status} ${String(detail).slice(0, 80)} (${model})`;
+        if (r.status === 401 || r.status === 403) break; // bad key: other models won't help
+        continue;
+      }
+      const data = await r.json();
+      const content = data.choices?.[0]?.message?.content || '';
+      if (content.trim()) return { content, model: `groq:${model}` };
+      lastErr = `empty (${model})`;
+    } catch (e) {
+      lastErr = `${e?.name === 'TimeoutError' ? 'timeout' : e?.message || 'error'} (${model})`;
+    }
+  }
+  throw new Error(lastErr);
+}
+
+// ---------------------------------------------------------------------------
+// Gemini
+// ---------------------------------------------------------------------------
+const GEMINI_PREF = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-2.0-flash-lite'];
+let geminiModelsCache = null;
+
+async function listGeminiModels(apiKey) {
+  if (geminiModelsCache && Date.now() - geminiModelsCache.at < 30 * 60 * 1000) return geminiModelsCache.ids;
+  try {
+    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(apiKey)}`, {
+      signal: AbortSignal.timeout?.(2500),
+    });
+    if (!r.ok) return null;
+    const data = await r.json();
+    const ids = (data.models || [])
+      .filter((m) => (m.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m) => String(m.name || '').replace(/^models\//, ''))
+      .filter((id) => /flash/i.test(id) && !/image|tts|audio|live|vision|exp|thinking/i.test(id));
+    geminiModelsCache = { at: Date.now(), ids };
+    return ids;
+  } catch {
+    return null;
+  }
+}
+
+async function geminiChat({ apiKey, system, user, json, maxTokens, temperature, timeoutMs, deadline }) {
+  const available = await listGeminiModels(apiKey);
+  const models = pickModels(available, GEMINI_PREF).slice(0, 2);
+  let lastErr = 'no model';
+  for (const model of models) {
+    const left = deadline - Date.now();
+    if (left < 900) {
+      lastErr = `sin tiempo (${lastErr})`;
+      break;
+    }
+    timeoutMs = Math.min(timeoutMs, left);
+    try {
+      const generationConfig = { temperature, maxOutputTokens: maxTokens };
+      if (json) generationConfig.responseMimeType = 'application/json';
+      if (/2\.5/.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 };
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: 'user', parts: [{ text: user }] }],
+            generationConfig,
+          }),
+          signal: AbortSignal.timeout?.(timeoutMs),
+        }
+      );
+      if (!r.ok) {
+        lastErr = `HTTP ${r.status} (${model})`;
+        if (r.status === 401 || r.status === 403) break;
+        continue;
+      }
+      const data = await r.json();
+      const content = (data.candidates?.[0]?.content?.parts || []).map((p) => p.text || '').join('');
+      if (content.trim()) return { content, model: `gemini:${model}` };
+      lastErr = `empty (${model})`;
+    } catch (e) {
+      lastErr = `${e?.name === 'TimeoutError' ? 'timeout' : e?.message || 'error'} (${model})`;
+    }
+  }
+  throw new Error(lastErr);
+}
+
+/** Runs the prompt on the first provider that answers. */
+async function llmChat(rawOpts) {
+  // Whole request (both providers, retries included) stays well inside the function limit
+  const opts = { ...rawOpts, deadline: Date.now() + rawOpts.timeoutMs + 2500 };
+  const reasons = [];
+  const groqKey = getGroqApiKey();
+  if (groqKey) {
+    try {
+      return await groqChat({ ...opts, apiKey: groqKey });
+    } catch (e) {
+      reasons.push(`groq: ${e.message}`);
+    }
+  } else {
+    reasons.push('groq: sin clave');
+  }
+  const geminiKey = getGeminiApiKey();
+  if (geminiKey) {
+    try {
+      // Gemini gets its own short window even if Groq used up the first one
+      return await geminiChat({ ...opts, apiKey: geminiKey, deadline: Math.max(opts.deadline, Date.now() + Math.min(5000, rawOpts.timeoutMs)) });
+    } catch (e) {
+      reasons.push(`gemini: ${e.message}`);
+    }
+  } else {
+    reasons.push('gemini: sin clave');
+  }
+  const err = new Error(reasons.join(' | '));
+  err.reasons = reasons;
+  throw err;
+}
+
+// ---------------------------------------------------------------------------
+// Handler
+// ---------------------------------------------------------------------------
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -38,15 +275,6 @@ export default async function handler(req, res) {
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
-  }
-
-  const apiKey = getGroqApiKey();
-  if (!apiKey) {
-    return res.status(200).json({
-      success: false,
-      error: 'groqapi variable not configured',
-      useFallback: true,
-    });
   }
 
   let body = {};
@@ -60,15 +288,24 @@ export default async function handler(req, res) {
     body = req.query || {};
   }
 
-  const action = body.action || 'speech'; // 'speech' | 'recommend' | 'transition'
-  const prompt = (body.prompt || '').trim();
-  const userName = (body.userName || '').trim();
+  const action = body.action || 'speech'; // 'speech' | 'recommend' | 'transition' | 'segment' | 'status'
+  const prompt = String(body.prompt || '').trim().slice(0, 300);
+  const userName = String(body.userName || '').trim().slice(0, 40);
   const currentTrack = body.currentTrack || null;
   const nextTrack = body.nextTrack || null;
   const userProfile = body.userProfile || null;
   const userGreeting = userName ? `, ${userName}` : '';
 
-  // Extract listener's musical profile context
+  if (action === 'status') {
+    try {
+      const r = await llmChat({ system: 'Responde solo: ok', user: 'ok', json: false, maxTokens: 5, temperature: 0, fast: true, timeoutMs: 4000 });
+      return res.status(200).json({ success: true, model: r.model });
+    } catch (e) {
+      return res.status(200).json({ success: false, reason: e.message });
+    }
+  }
+
+  // Listener profile context
   let profileSection = '';
   if (userProfile && typeof userProfile === 'object') {
     const parts = [];
@@ -76,21 +313,13 @@ export default async function handler(req, res) {
       parts.push(`Artistas más escuchados por este usuario: ${userProfile.topArtists.slice(0, 8).join(', ')}`);
     }
     if (Array.isArray(userProfile.recentTracks) && userProfile.recentTracks.length > 0) {
-      const recList = userProfile.recentTracks
-        .slice(0, 6)
-        .map((t) => `${t.name} (${t.artist})`)
-        .join(', ');
-      parts.push(`Canciones escuchadas recientemente: ${recList}`);
+      parts.push(`Canciones escuchadas recientemente: ${userProfile.recentTracks.slice(0, 6).map((t) => `${t.name} (${t.artist})`).join(', ')}`);
     }
     if (Array.isArray(userProfile.topGenres) && userProfile.topGenres.length > 0) {
       parts.push(`Estilos y géneros preferidos: ${userProfile.topGenres.join(', ')}`);
     }
     if (Array.isArray(userProfile.likedTracks) && userProfile.likedTracks.length > 0) {
-      const likedList = userProfile.likedTracks
-        .slice(0, 6)
-        .map((t) => `${t.name} (${t.artist})`)
-        .join(', ');
-      parts.push(`Canciones que le gustan: ${likedList}`);
+      parts.push(`Canciones que le gustan: ${userProfile.likedTracks.slice(0, 6).map((t) => `${t.name} (${t.artist})`).join(', ')}`);
     }
     if (parts.length > 0) {
       profileSection = `\n\nPERFIL MUSICAL DEL OYENTE (lo que realmente escucha):\n${parts.join('\n')}\nINSTRUCCIÓN FUNDAMENTAL: Adapta el estilo, los artistas y la selección musical a este perfil específico del oyente, salvo que pida explícitamente un género diferente.`;
@@ -104,182 +333,127 @@ export default async function handler(req, res) {
       !/\b(de|el|la|los|las|musica|canciones|para|con|por)\b/i.test(prompt));
 
   const DJ_SYSTEM_PROMPT = isEnglish
-    ? `You are Spotifree's official AI DJ, a charismatic, energetic English radio host.
-CRITICAL RULES FOR SYNTHETIC VOICE NATURALNESS:
-1. Speak in VERY SHORT, punchy sentences (maximum 8 to 12 words per sentence).
-2. NEVER use ellipses ("..."), long dashes, or parentheses.
-3. DO NOT use unnecessary mid-sentence commas that cause unnatural TTS pauses.
-4. Total speech MUST NOT exceed 2 short sentences (maximum 20-25 words in total).
-5. Bring high energy using natural hype exclamations ("Let's go!", "Turn it up!", "Hit play!").
-6. Respond ONLY with the exact text to say out loud, no explanations.`
-    : `Eres el DJ oficial de Spotifree, un locutor de radio musical joven, carismático y entusiasta en español.
-REGLAS CRÍTICAS PARA LA ENTONACIÓN DE LA VOZ SINTÉTICA:
-1. Habla en frases MUY CORTAS y directas (máximo 8 a 12 palabras por frase).
-2. NUNCA uses puntos suspensivos ("..."), guiones largos ni paréntesis.
-3. NO uses comas innecesarias dentro de las frases, porque provocan silencios o pausas artificiales en el sintetizador.
-4. La intervención completa NO debe superar 2 frases cortas (máximo 20 a 25 palabras en total).
-5. Dale viveza y entusiasmo usando exclamaciones naturales ("¡Vamos!", "¡Súbele!", "¡A disfrutar!").
-6. Solo responde con el texto exacto a decir, sin introducciones ni explicaciones.`;
+    ? `You are Spotifree's AI DJ: a warm, witty radio host who knows the listener's taste.
+RULES FOR A NATURAL SYNTHETIC VOICE:
+1. Very short sentences (8 to 12 words each). Maximum 2 sentences, 25 words in total.
+2. Never use ellipses, long dashes, parentheses, emojis or hashtags.
+3. Mention the song or artist by name when you have it. Sound like a person, not an ad.
+4. Reply ONLY with the exact words to say out loud.`
+    : `Eres el DJ de Spotifree: un locutor cercano, con gracia y que conoce los gustos del oyente. Hablas español de España de forma natural.
+REGLAS PARA QUE LA VOZ SINTÉTICA SUENE NATURAL:
+1. Frases muy cortas (8 a 12 palabras). Máximo 2 frases y 25 palabras en total.
+2. Nunca uses puntos suspensivos, guiones largos, paréntesis, emojis ni hashtags.
+3. Si tienes el nombre de la canción o del artista, menciónalo. Suena a persona, no a anuncio.
+4. Responde SOLO con las palabras exactas que vas a decir en voz alta.`;
 
   try {
-    // ─── ACTION 1: RECOMMENDATIONS & VIBE SET GENERATION ───
+    // ─── RECOMMENDATIONS & SESSION ───
     if (action === 'recommend') {
       const recSystemPrompt = isEnglish
         ? `${DJ_SYSTEM_PROMPT}
-Generate a personalized music session based on the user's request and listening history.
-Various listeners enjoy diverse genres (global pop, rock, rap, electronic, indie, synthwave, lofi, etc.).
-Analyze their favorite artists and listening patterns so recommendations are 100% tailored to them.
-You MUST output a valid JSON with the following structure:
+Build a personalized music session from the request and the listener's real taste.
+Output ONLY valid JSON:
 {
-  "speech": "short punchy DJ intro phrase for the session (max 20 words, no ellipses)",
-  "vibeTitle": "short session title (e.g. Session: Indie Night, Session: Synthwave Chill, Session: Pop Energy)",
+  "speech": "short DJ intro (max 22 words) that names the first song",
+  "vibeTitle": "short session title",
   "vibeColor": "#vibrant_hex_color",
-  "searchQuery": "optimized search query to find these tracks on Spotify or Deezer",
-  "tracks": [
-    { "title": "Song Title", "artist": "Artist" }
-  ]
+  "tracks": [ { "title": "Song Title", "artist": "Artist" } ]
 }
-Include between 10 and 15 iconic tracks matching the vibe.`
+Include 12 to 15 real, existing songs. Mix favourites of their artists with a few fitting discoveries. Order them so the energy flows.`
         : `${DJ_SYSTEM_PROMPT}
-Genera una sesión musical personalizada basada en la petición del usuario y su perfil de escucha real.
-Ten en cuenta que distintos usuarios tienen gustos muy variados (pop internacional, rock, rap, música electrónica, reggaetón, indie, bachata, lofi, etc.).
-Analiza su historial de escucha y artistas favoritos para que la recomendación sea 100% afín a este oyente en particular.
-Debes devolver OBLIGATORIAMENTE un JSON válido con la siguiente estructura:
+Crea una sesión musical personalizada a partir de la petición y del gusto real del oyente.
+Devuelve SOLO un JSON válido:
 {
-  "speech": "frase corta y directa del DJ para presentar la sesión (máximo 20 palabras, sin puntos suspensivos)",
-  "vibeTitle": "título corto de la sesión (ej: Sesión: Noche Indie, Sesión: Flow Urbano, Sesión: Pop Energy, etc.)",
+  "speech": "intro corta del DJ (máximo 22 palabras) que nombre la primera canción",
+  "vibeTitle": "título corto de la sesión",
   "vibeColor": "#color_hex_vibrante",
-  "searchQuery": "términos de búsqueda optimizados para encontrar estas canciones en Spotify o Deezer",
-  "tracks": [
-    { "title": "Nombre de canción", "artist": "Artista" }
-  ]
+  "tracks": [ { "title": "Nombre de canción", "artist": "Artista" } ]
 }
-Incluye entre 10 y 15 canciones emblemáticas que encajen a la perfección con la petición y el gusto del usuario.`;
+Incluye de 12 a 15 canciones reales que existan. Mezcla temas de sus artistas con algunos descubrimientos que encajen. Ordénalas para que la energía fluya.`;
 
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [
-            { role: 'system', content: recSystemPrompt },
-            {
-              role: 'user',
-              content: `Usuario${userGreeting}. Petición: "${prompt}".${profileSection}\nCrea una sesión musical con canciones ideales para este oyente.`,
-            },
-          ],
-          response_format: { type: 'json_object' },
-          temperature: 0.65,
-          max_tokens: 650,
-        }),
-        signal: AbortSignal.timeout?.(4000),
+      const r = await llmChat({
+        system: recSystemPrompt,
+        user: `Usuario${userGreeting}. Petición: "${prompt}".${profileSection}\nCrea la sesión ideal para este oyente.`,
+        json: true,
+        maxTokens: 900,
+        temperature: 0.7,
+        fast: false,
+        timeoutMs: 7000,
       });
-
-      if (!response.ok) {
-        throw new Error(`Groq HTTP ${response.status}`);
-      }
-
-      const data = await response.json();
-      const rawContent = data.choices?.[0]?.message?.content || '{}';
-      const parsed = JSON.parse(rawContent);
-
-      if (parsed && parsed.speech) {
-        parsed.speech = cleanPunchySpeech(parsed.speech);
+      const parsed = extractJson(r.content);
+      if (parsed && (parsed.speech || Array.isArray(parsed.tracks))) {
+        parsed.speech = cleanPunchySpeech(parsed.speech || '');
         if (Array.isArray(parsed.tracks)) {
           parsed.tracks = parsed.tracks.filter((t) => {
             if (!t) return false;
-            const title = (t.title || '').trim();
-            const artist = (t.artist || '').trim();
+            const title = String(t.title || '').trim();
+            const artist = String(t.artist || '').trim();
             if (!title || !artist) return false;
             return !NOISE_FILTER_REGEX.test(`${title} ${artist}`);
           });
         }
-        return res.status(200).json({ success: true, ...parsed });
+        return res.status(200).json({ success: true, model: r.model, ...parsed });
       }
+      return res.status(200).json({ success: false, useFallback: true, reason: `JSON no válido (${r.model})` });
     }
 
-    // ─── ACTION 2: TRANSITION COMMENTARY (Between tracks or sets) ───
+    // ─── SEGMENT INTRO (DJ talks before a block of songs) ───
+    if (action === 'segment') {
+      const kind = String(body.kind || '').slice(0, 40);
+      const reason = String(body.reason || '').slice(0, 160);
+      const title = String(currentTrack?.name || '').slice(0, 80);
+      const artist = String(currentTrack?.artists?.[0]?.name || '').slice(0, 60);
+      const r = await llmChat({
+        system: DJ_SYSTEM_PROMPT,
+        user: isEnglish
+          ? `Introduce the next block of songs${userGreeting}. Block: ${kind}. Why: ${reason}. First song: "${title}" by ${artist}. One or two short sentences.`
+          : `Presenta el siguiente bloque de canciones${userGreeting}. Bloque: ${kind}. Motivo: ${reason}. Primera canción: "${title}" de ${artist}. Una o dos frases cortas.`,
+        json: false,
+        maxTokens: 90,
+        temperature: 0.85,
+        fast: true,
+        timeoutMs: 3500,
+      });
+      const speech = cleanPunchySpeech(r.content);
+      if (speech) return res.status(200).json({ success: true, model: r.model, speech });
+    }
+
+    // ─── TRANSITION COMMENTARY ───
     if (action === 'transition') {
       const curTitle = currentTrack?.name || '';
       const curArtist = currentTrack?.artists?.[0]?.name || '';
       const nextTitle = nextTrack?.name || '';
       const nextArtist = nextTrack?.artists?.[0]?.name || '';
-
       const transPrompt = isEnglish
-        ? (curTitle
-            ? `Just played "${curTitle}" by ${curArtist || 'this artist'}${nextTitle ? ` and now comes "${nextTitle}" by ${nextArtist}` : ''}. Give a super short, punchy radio DJ transition comment.`
-            : `User finished a block of tracks. Invite them with high energy to continue with more great tracks.`)
-        : (curTitle
-            ? `Acaba de sonar "${curTitle}" de ${curArtist || 'este artista'}${nextTitle ? ` y ahora viene "${nextTitle}" de ${nextArtist}` : ''}. Haz un comentario corto de DJ de radio presentando el cambio.`
-            : `El usuario ha terminado un bloque de canciones. Invítale con entusiasmo a continuar con 15 canciones más que le van a encantar.`);
-
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'llama-3.1-8b-instant',
-          messages: [
-            { role: 'system', content: DJ_SYSTEM_PROMPT },
-            { role: 'user', content: transPrompt },
-          ],
-          temperature: 0.7,
-          max_tokens: 80,
-        }),
-        signal: AbortSignal.timeout?.(2500),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const speech = cleanPunchySpeech(data.choices?.[0]?.message?.content || '');
-        if (speech) {
-          return res.status(200).json({ success: true, speech });
-        }
-      }
+        ? curTitle
+          ? `Just played "${curTitle}" by ${curArtist || 'this artist'}${nextTitle ? ` and now comes "${nextTitle}" by ${nextArtist}` : ''}. Short radio DJ link between them.`
+          : `The listener finished a block of songs. Invite them to keep going with more music they will love.`
+        : curTitle
+        ? `Acaba de sonar "${curTitle}" de ${curArtist || 'este artista'}${nextTitle ? ` y ahora viene "${nextTitle}" de ${nextArtist}` : ''}. Enlace corto de DJ de radio entre las dos.`
+        : `El oyente ha terminado un bloque de canciones. Invítale a seguir con más música que le va a encantar.`;
+      const r = await llmChat({ system: DJ_SYSTEM_PROMPT, user: transPrompt, json: false, maxTokens: 90, temperature: 0.8, fast: true, timeoutMs: 3500 });
+      const speech = cleanPunchySpeech(r.content);
+      if (speech) return res.status(200).json({ success: true, model: r.model, speech });
     }
 
-    // ─── ACTION 3: GENERAL SPEECH INTRO ───
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'llama-3.1-8b-instant',
-        messages: [
-          { role: 'system', content: DJ_SYSTEM_PROMPT },
-          {
-            role: 'user',
-            content: isEnglish
-              ? `The listener${userGreeting} requested: "${prompt}". Introduce the session with high energy and rhythm.`
-              : `El usuario${userGreeting} te ha dicho: "${prompt}". Preséntale la música con energía y entusiasmo.`,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 80,
-      }),
-      signal: AbortSignal.timeout?.(2500),
+    // ─── GENERAL SPEECH ───
+    const r = await llmChat({
+      system: DJ_SYSTEM_PROMPT,
+      user: isEnglish
+        ? `The listener${userGreeting} said: "${prompt}". Introduce the music with energy.`
+        : `El oyente${userGreeting} te ha dicho: "${prompt}". Preséntale la música con energía.`,
+      json: false,
+      maxTokens: 90,
+      temperature: 0.8,
+      fast: true,
+      timeoutMs: 3500,
     });
-
-    if (response.ok) {
-      const data = await response.json();
-      const speech = cleanPunchySpeech(data.choices?.[0]?.message?.content || '');
-      if (speech) {
-        return res.status(200).json({ success: true, speech });
-      }
-    }
+    const speech = cleanPunchySpeech(r.content);
+    if (speech) return res.status(200).json({ success: true, model: r.model, speech });
   } catch (err) {
-    console.warn('[api/groq] Error, using fallback engine:', err.message);
+    console.warn('[api/groq] AI unavailable, client will use local DJ lines:', err.message);
+    return res.status(200).json({ success: false, useFallback: true, reason: String(err.message || 'error').slice(0, 300) });
   }
 
-  return res.status(200).json({
-    success: false,
-    useFallback: true,
-  });
+  return res.status(200).json({ success: false, useFallback: true, reason: 'respuesta vacía' });
 }

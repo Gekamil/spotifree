@@ -154,6 +154,7 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
   const tempoOk = r.tempoConfidence >= 0.12 || !prev;
   let tempo = tempoOk ? r.tempo : prev!.tempo;
   let gridUnreliable = false;
+  let tempoRelErr: number | undefined;
   // Fuse with Deezer's BPM when it exists: if our estimate is a metrical multiple of it
   // (x2, /2, 3:2, 2:3), take the multiple that agrees with Deezer.
   if (prev?.tempoSource === 'deezer' && prev.tempo > 40) {
@@ -171,10 +172,18 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
     }
     if (bestErr <= 0.04) {
       tempo = Math.round(best * 10) / 10;
+      tempoRelErr = bestErr;
       // A 3:2-type correction means our beat grid was on the wrong pulse: don't use it
       if (bestRatio !== 1 && bestRatio !== 2 && bestRatio !== 0.5) gridUnreliable = true;
+      // Same pulse but >1.5% apart: Deezer measured the whole song, ours only a chunk. Use
+      // Deezer's tempo, and drop our grid (it was built on the wrong tempo and would drift).
+      if (bestErr > 0.015) {
+        tempo = Math.round(prev.tempo * 10) / 10;
+        gridUnreliable = true;
+      }
     }
   }
+  if (r.tempoConfidence < 0.2) gridUnreliable = true;
 
   const data: TrackAnalysisData = {
     tempo,
@@ -188,6 +197,7 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
     outroStartSec: coversEnd ? r.outroStartSec : undefined,
     musicEndSec: coversEnd ? r.musicEndSec : undefined,
     durationSec: r.durationSec,
+    tempoRelErr,
     analyzedAt: Date.now(),
   };
   // Only trust the detected key when it is clear; otherwise the planner treats it as unknown
