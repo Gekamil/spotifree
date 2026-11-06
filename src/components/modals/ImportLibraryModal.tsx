@@ -49,15 +49,15 @@ export const ImportLibraryModal: React.FC = () => {
       onClick={closeImportModal}
     >
       <div
-        className="w-full max-w-[520px] bg-[#282828] rounded-lg p-6 text-white shadow-[0_20px_48px_rgba(0,0,0,0.65)] space-y-5 animate-in zoom-in-95 duration-200"
+        className="w-full max-w-[500px] bg-[#282828] border border-white/10 rounded-xl p-6 text-white shadow-[0_24px_56px_rgba(0,0,0,0.8)] space-y-5 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+            <h2 className="text-xl font-bold text-white font-['SpotifyMixUITitle'] tracking-tight">
               {t('importMusicTitle') || 'Importa tu música'}
             </h2>
-            <p className="text-sm text-[#b3b3b3] mt-1 font-['SpotifyMixUI']">
+            <p className="text-xs text-[#b3b3b3] mt-1 font-['SpotifyMixUI']">
               {t('importMusicSubtitle') || 'Trae tus listas, canciones y artistas a tu biblioteca.'}
             </p>
           </div>
@@ -75,7 +75,7 @@ export const ImportLibraryModal: React.FC = () => {
 
         <form onSubmit={handleImport} className="space-y-4">
           <div>
-            <label className="text-xs font-bold text-white block mb-2 font-['SpotifyMixUI']">
+            <label className="text-xs font-bold text-[#b3b3b3] block mb-2 font-['SpotifyMixUI'] uppercase tracking-wider">
               Enlace de playlist o lista de canciones
             </label>
             <textarea
@@ -83,7 +83,7 @@ export const ImportLibraryModal: React.FC = () => {
               onChange={(e) => setImportInput(e.target.value)}
               placeholder="Pega un enlace de Spotify (https://open.spotify.com/playlist/...) o una lista con 'Canción - Artista'"
               rows={4}
-              className="w-full bg-[#3e3e3e] focus:bg-[#333333] border border-transparent focus:border-[#535353] rounded-md p-3.5 text-sm text-white placeholder-[#a7a7a7] outline-none transition-all resize-none font-normal leading-relaxed"
+              className="w-full bg-[#3e3e3e] focus:bg-[#333333] border border-transparent focus:border-[#727272] focus:ring-1 focus:ring-[#727272] rounded-lg p-3.5 text-sm text-white placeholder-[#878787] outline-none transition-all resize-none font-normal leading-relaxed font-['SpotifyMixUI']"
               autoFocus
             />
             <p className="text-xs text-[#a7a7a7] mt-2 leading-relaxed">
@@ -92,13 +92,13 @@ export const ImportLibraryModal: React.FC = () => {
           </div>
 
           {errorMsg && (
-            <div className="p-3 bg-red-950/60 border border-red-500/30 rounded-md text-xs text-red-200">
+            <div className="p-3 bg-red-950/60 border border-red-500/30 rounded-lg text-xs text-red-200">
               {errorMsg}
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3 bg-[#1ed760]/20 border border-[#1ed760]/40 rounded-md text-xs text-[#1ed760] font-bold">
+            <div className="p-3 bg-[#1ed760]/20 border border-[#1ed760]/40 rounded-lg text-xs text-[#1ed760] font-bold">
               {successMsg}
             </div>
           )}
@@ -107,14 +107,14 @@ export const ImportLibraryModal: React.FC = () => {
             <button
               type="button"
               onClick={closeImportModal}
-              className="px-6 py-2.5 rounded-full text-sm font-bold text-white hover:scale-104 active:scale-100 transition-transform cursor-pointer"
+              className="px-6 py-2.5 rounded-full text-sm font-bold text-[#b3b3b3] hover:text-white hover:scale-104 active:scale-100 transition-all cursor-pointer font-['SpotifyMixUI']"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={isLoading || !importInput.trim()}
-              className="px-8 py-2.5 rounded-full bg-white text-black text-sm font-bold hover:scale-104 active:scale-100 transition-all cursor-pointer disabled:opacity-40 disabled:scale-100 shadow-md"
+              className="px-8 py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-104 active:scale-100 text-black text-sm font-bold transition-all cursor-pointer disabled:opacity-40 disabled:scale-100 shadow-lg font-['SpotifyMixUI']"
             >
               {isLoading ? 'Importando...' : 'Importar ahora'}
             </button>

@@ -277,26 +277,6 @@ export const DesktopSettingsView: React.FC = () => {
     return true;
   });
 
-  const [djModeActive, setDjModeActive] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return (
-        window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true'
-      );
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleDjMode = (val: boolean) => {
-    setDjModeActive(val);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('spotifree_dj_mode', String(val));
-      window.localStorage.setItem('spotifree_dj_mode_desktop', String(val));
-    }
-  };
-
   const handleToggleCrossfade = (val: boolean) => {
     setCrossfadeEnabled(val);
     if (typeof window !== 'undefined') {
@@ -874,26 +854,6 @@ export const DesktopSettingsView: React.FC = () => {
                 />
               </div>
 
-              {/* Modo DJ (Automix Inteligente) */}
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-white">Modo DJ (Automix Inteligente)</span>
-                    <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#1ed760]/20 text-[#1ed760]">
-                      Pro
-                    </span>
-                  </div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5 max-w-md">
-                    Mezclas armónicas por compases y Camelot Wheel. Cuando está activado, prevalece sobre el fundido simple.
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={djModeActive}
-                  onChange={handleToggleDjMode}
-                  ariaLabel="Modo DJ Automix"
-                />
-              </div>
-
               {/* Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
               {gaplessAudio && (
                 <div className="py-3 border-b border-white/5 animate-in fade-in space-y-3">
@@ -913,14 +873,6 @@ export const DesktopSettingsView: React.FC = () => {
 
                   {crossfadeEnabled && (
                     <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
-                      {djModeActive && (
-                        <div className="p-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-xs text-[#1ed760] flex items-start gap-2">
-                          <span className="font-bold">⚡ Modo DJ prioritario:</span>
-                          <span className="text-white/80">
-                            El Modo DJ está activo y prevalece sobre este ajuste calculando transiciones inteligentes por compases. Si desactivas el Modo DJ, se usará exactamente este fundido de {crossfadeSeconds}s.
-                          </span>
-                        </div>
-                      )}
                       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="text-xs text-[#b3b3b3]">
                           <span>Duración del fundido continuo entre pistas</span>

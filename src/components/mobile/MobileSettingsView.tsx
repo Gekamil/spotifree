@@ -84,27 +84,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     return true;
   });
 
-  const [djModeActive, setDjModeActive] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return (
-        window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true'
-      );
-    } catch {
-      return false;
-    }
-  });
-
-  const handleToggleDjMode = () => {
-    const next = !djModeActive;
-    setDjModeActive(next);
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem('spotifree_dj_mode', String(next));
-      window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
-    }
-  };
-
   const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem('spotifree_autoplay') !== 'false';
@@ -567,31 +546,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
               </button>
             </div>
 
-            {/* Modo DJ (Automix Inteligente) */}
-            <div className="flex items-center justify-between py-2 border-t border-white/5">
-              <div>
-                <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-bold text-white">Modo DJ (Automix)</p>
-                  <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-[#1ed760]/20 text-[#1ed760]">
-                    PRO
-                  </span>
-                </div>
-                <p className="text-xs text-[#b3b3b3]">Mezcla armónica por compases (prevalece sobre fundido)</p>
-              </div>
-              <button
-                onClick={handleToggleDjMode}
-                className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
-                  djModeActive ? 'bg-[#1ed760]' : 'bg-[#535353]'
-                }`}
-              >
-                <div
-                  className={`w-5 h-5 rounded-full bg-white absolute top-0.5 transition-transform ${
-                    djModeActive ? 'left-5' : 'left-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-
             {/* Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
             {gaplessAudio && (
               <div className="pt-2 border-t border-white/5 space-y-3 animate-in fade-in">
@@ -616,14 +570,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
 
                 {crossfadeEnabled && (
                   <div className="p-3 rounded-xl bg-[#181818] border border-white/5 space-y-2.5 animate-in fade-in">
-                    {djModeActive && (
-                      <div className="p-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-xs text-[#1ed760] space-y-1">
-                        <p className="font-bold">⚡ Modo DJ activo (Prioritario)</p>
-                        <p className="text-[11px] text-white/80 leading-relaxed">
-                          El Modo DJ prevalece calculando la mezcla armónica. Al desactivar Modo DJ, se aplicará este fundido de {crossfadeSeconds}s.
-                        </p>
-                      </div>
-                    )}
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-[#b3b3b3]">
                         Duración del fundido

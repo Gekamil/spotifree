@@ -89,7 +89,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     toggleLike,
     likedTrackIds,
     shuffleMode,
-    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
@@ -580,26 +579,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   };
 
-  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
-  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
-
-  useEffect(() => {
-    if (shuffleMode === 'off' || tracks.length <= 1) {
-      setShuffledTracks([]);
-      return;
-    }
-    const list = [...tracks];
-    // Fisher-Yates natural shuffle (does not force currentTrack to #1)
-    for (let i = list.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [list[i], list[j]] = [list[j], list[i]];
-    }
-    setShuffledTracks(list);
-  }, [shuffleMode, shuffleVersion, cleanId, tracks.length]);
-
-  const displayTracks = (shuffleMode !== 'off' && shuffledTracks.length === tracks.length)
-    ? shuffledTracks
-    : tracks;
+  // Playlist tracks maintain their original sequence (Spotify parity: shuffle does not rearrange the visible list)
+  const displayTracks = tracks;
 
   // Real-time synchronization for deleted tracks & deleted playlists
   useEffect(() => {
@@ -945,15 +926,46 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     setTimeout(() => setToastMessage(null), 2500);
   };
 
+  // Synchronize DJ / Automix state when toggled externally (e.g. mutual exclusivity from shuffle)
+  useEffect(() => {
+    const handleDjChange = (e: any) => {
+      const enabled = Boolean(e?.detail?.enabled);
+      setIsAutomixActive(enabled);
+      if (!enabled && originalTracksRef.current && originalTracksRef.current.length > 0) {
+        setTracks(deduplicateTracks(originalTracksRef.current));
+        originalTracksRef.current = null;
+      }
+    };
+    window.addEventListener('spotifree_dj_mode_changed', handleDjChange);
+    return () => window.removeEventListener('spotifree_dj_mode_changed', handleDjChange);
+  }, []);
+
   const handleToggleAutomix = () => {
     const next = !isAutomixActive;
     setIsAutomixActive(next);
     try {
       window.localStorage.setItem('spotifree_dj_mode', String(next));
       window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
+      window.dispatchEvent(new CustomEvent('spotifree_dj_mode_changed', { detail: { enabled: next } }));
+      (audioEngine as any).resetTransitionState?.();
     } catch {}
 
     if (next) {
+      // Mutual Exclusivity: Turning DJ ON automatically disables Shuffle
+      const pState = usePlayerStore.getState();
+      if (pState.isShuffle || pState.shuffleMode !== 'off') {
+        const source = pState.originalQueue.length > 0 ? pState.originalQueue : pState.queue;
+        const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+        usePlayerStore.setState({
+          shuffleMode: 'off',
+          isShuffle: false,
+          shuffleVersion: pState.shuffleVersion + 1,
+          playedInShuffle: [],
+          preselectedNextTrackId: null,
+          queue: cleanQueue,
+        });
+      }
+
       // 1. Save original order before harmonic sorting (deduplicated)
       if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
         originalTracksRef.current = deduplicateTracks([...tracks]);

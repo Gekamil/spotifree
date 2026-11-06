@@ -649,6 +649,19 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       return;
     }
 
+    // Mutual Exclusivity: Starting DJ session turns off shuffle mode
+    try {
+      const pState = usePlayerStore.getState();
+      if (pState.isShuffle || pState.shuffleMode !== 'off') {
+        usePlayerStore.setState({
+          shuffleMode: 'off',
+          isShuffle: false,
+          playedInShuffle: [],
+          preselectedNextTrackId: null,
+        });
+      }
+    } catch {}
+
     const dominantTag = getDominantUserHashtag();
 
     set({

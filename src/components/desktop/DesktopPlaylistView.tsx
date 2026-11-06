@@ -67,7 +67,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     togglePlay,
     toggleLike,
     shuffleMode,
-    shuffleVersion,
     toggleShuffle,
   } = usePlayerStore();
 
@@ -246,15 +245,48 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
   }, [dynamicTracks.length, dynamicPlaylist.id]);
 
+  // Synchronize DJ / Automix state when toggled externally (e.g. mutual exclusivity from shuffle)
+  useEffect(() => {
+    const handleDjChange = (e: any) => {
+      const enabled = Boolean(e?.detail?.enabled);
+      setIsAutomixActive(enabled);
+      if (!enabled && originalTracksRef.current && originalTracksRef.current.length > 0) {
+        setDynamicTracks(deduplicateTracks(originalTracksRef.current));
+        originalTracksRef.current = null;
+      }
+    };
+    window.addEventListener('spotifree_dj_mode_changed', handleDjChange);
+    return () => window.removeEventListener('spotifree_dj_mode_changed', handleDjChange);
+  }, []);
+
   const handleToggleAutomix = () => {
     const next = !isAutomixActive;
     setIsAutomixActive(next);
     if (typeof window !== 'undefined') {
       window.localStorage.setItem('spotifree_dj_mode_desktop', String(next));
       window.localStorage.setItem('spotifree_dj_mode', String(next));
+      window.dispatchEvent(new CustomEvent('spotifree_dj_mode_changed', { detail: { enabled: next } }));
+      try {
+        (audioEngine as any).resetTransitionState?.();
+      } catch {}
     }
 
     if (next) {
+      // Mutual Exclusivity: Turning DJ ON automatically disables Shuffle
+      const pState = usePlayerStore.getState();
+      if (pState.isShuffle || pState.shuffleMode !== 'off') {
+        const source = pState.originalQueue.length > 0 ? pState.originalQueue : pState.queue;
+        const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+        usePlayerStore.setState({
+          shuffleMode: 'off',
+          isShuffle: false,
+          shuffleVersion: pState.shuffleVersion + 1,
+          playedInShuffle: [],
+          preselectedNextTrackId: null,
+          queue: cleanQueue,
+        });
+      }
+
       // 1. Save original playlist order before harmonic DJ set sorting (deduplicated)
       if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
         originalTracksRef.current = deduplicateTracks([...dynamicTracks]);
@@ -679,26 +711,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setHeroCoverError(false);
   }, [dynamicPlaylist.id]);
 
-  // Shuffle Reordering: when shuffle is ON, reorder playlist visibly in a new random sequence per shuffleVersion
-  const [shuffledTracks, setShuffledTracks] = useState<Track[]>([]);
-
-  useEffect(() => {
-    if (shuffleMode === 'off' || dynamicTracks.length <= 1) {
-      setShuffledTracks([]);
-      return;
-    }
-    const list = [...dynamicTracks];
-    // Fisher-Yates natural shuffle (does not force currentTrack to #1)
-    for (let i = list.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [list[i], list[j]] = [list[j], list[i]];
-    }
-    setShuffledTracks(list);
-  }, [shuffleMode, shuffleVersion, dynamicPlaylist.id, dynamicTracks.length]);
-
-  const tracks = (shuffleMode !== 'off' && shuffledTracks.length === dynamicTracks.length)
-    ? shuffledTracks
-    : dynamicTracks;
+  // Playlist tracks maintain their original sequence (Spotify parity: shuffle does not rearrange the visible list)
+  const tracks = dynamicTracks;
 
   if (
     dynamicPlaylist.id === 'spotify-dj' ||

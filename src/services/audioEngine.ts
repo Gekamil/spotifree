@@ -230,8 +230,10 @@ class AudioEngine {
     }
 
     if (effectiveCrossfade <= 0) return;
-    // Opening seconds of a track should NEVER trigger crossfade or preloading transitions
-    if (curSec < 5 || durSec < 15) return;
+    // Opening seconds of a track, or recent crossfade completion, must NEVER trigger crossfade
+    if (Date.now() - this.lastTrackStartTime < 5000) return;
+    if (Date.now() - this.lastCrossfadeFinishTime < 15000) return;
+    if (curSec < 10 || durSec < 20) return;
 
     // Silence Truncation & Outro Dead Air Elimination:
     // Spotify duration represents true studio audio length. YouTube videos often include
@@ -691,6 +693,51 @@ class AudioEngine {
   }
 
   /**
+   * Resets active crossfade and automix transitions cleanly.
+   * Clears Web Audio automations, stops secondary players, and restores active deck volume.
+   */
+  public resetTransitionState() {
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    this.isCrossfading = false;
+    this.isTransitioning = false;
+    this.preloadedNext = null;
+    this.stopAuxiliaryTransitionFX();
+    if (this.audioContext) {
+      const now = this.audioContext.currentTime;
+      if (this.deckStrips[0]) cancelScheduledAutomations(this.deckStrips[0], now);
+      if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
+    }
+    // Stop secondary player safely
+    try {
+      const secYt = this.secondaryYtPlayer;
+      if (secYt) {
+        if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
+        if (typeof secYt.stopVideo === 'function') secYt.stopVideo();
+        else if (typeof secYt.pauseVideo === 'function') secYt.pauseVideo();
+      }
+      const secAudio = this.secondaryAudio;
+      if (secAudio) {
+        secAudio.volume = 0;
+        secAudio.pause();
+        secAudio.currentTime = 0;
+      }
+    } catch {}
+    // Restore primary player volume
+    const masterVolume = usePlayerStore.getState().isMuted ? 0 : this.getEffectiveVolume();
+    try {
+      if (this.activeEngine === 'youtube' && this.ytPlayer) {
+        if (typeof this.ytPlayer.unMute === 'function') this.ytPlayer.unMute();
+        if (typeof this.ytPlayer.setVolume === 'function') this.ytPlayer.setVolume(Math.round(masterVolume * 100));
+      } else if (this.audio) {
+        this.audio.volume = Math.max(0, Math.min(1, masterVolume));
+      }
+    } catch {}
+  }
+
+  /**
    * Atomic finalizer for crossfade and Automix transitions.
    * Ensures the incoming song continues playing seamlessly from its elapsed time
    * without skipping, avoids false-positive ad detection, and smoothly pauses the outgoing player.
@@ -745,13 +792,14 @@ class AudioEngine {
       this.isTransitioning = false;
     }, 3500);
 
-    // 2. NOW silence and gently pause outgoing old player if we swapped decks
+    // 2. NOW silence and cleanly stop outgoing old player if we swapped decks
     if (oldYtIndex !== this.activeYtIndex && this.activeEngine === 'youtube') {
       const oldPlayer = this.ytPlayers[oldYtIndex];
       if (oldPlayer) {
         try {
           if (typeof oldPlayer.setVolume === 'function') oldPlayer.setVolume(0);
-          if (typeof oldPlayer.pauseVideo === 'function') oldPlayer.pauseVideo();
+          if (typeof oldPlayer.stopVideo === 'function') oldPlayer.stopVideo();
+          else if (typeof oldPlayer.pauseVideo === 'function') oldPlayer.pauseVideo();
           if (typeof oldPlayer.setPlaybackRate === 'function') oldPlayer.setPlaybackRate(1);
         } catch {}
       }
@@ -1654,12 +1702,12 @@ class AudioEngine {
         return;
       }
 
-      // CRITICAL SHIELD: If track started recently (< 3500ms) or a transition/crossfade finished recently (< 5000ms),
+      // CRITICAL SHIELD: If track started recently (< 5000ms) or a transition/crossfade finished recently (< 12000ms),
       // ignore this ENDED event completely! It is a delayed event from the outgoing video, player initialization, or ad blip.
       if (
         this.isTransitioning ||
-        (Date.now() - this.lastTrackStartTime < 3500) ||
-        (Date.now() - this.lastCrossfadeFinishTime < 5000)
+        (Date.now() - this.lastTrackStartTime < 5000) ||
+        (Date.now() - this.lastCrossfadeFinishTime < 12000)
       ) {
         console.log('[AudioEngine] Ignored delayed/premature ENDED event', {
           sinceStart: Date.now() - this.lastTrackStartTime,
@@ -1760,8 +1808,9 @@ class AudioEngine {
    */
   private checkOutroTruncation(curSec: number, durSec: number) {
     if (this.isCrossfading || this.isTransitioning) return;
-    if (curSec < 5 || durSec < 15) return; // Guard: Opening seconds must never trigger truncation
-    if (Date.now() - this.lastCrossfadeFinishTime < 5000) return;
+    if (curSec < 10 || durSec < 20) return; // Guard: Opening seconds must never trigger truncation
+    if (Date.now() - this.lastTrackStartTime < 5000) return; // Guard: Stale or newly loaded track
+    if (Date.now() - this.lastCrossfadeFinishTime < 15000) return;
     const state = usePlayerStore.getState();
     if (!state.isPlaying || state.repeatMode === 'one') return;
     const curTrack = state.currentTrack;
@@ -1835,6 +1884,10 @@ class AudioEngine {
           }
           const curSec = this.ytPlayer.getCurrentTime();
           const durSec = this.ytPlayer.getDuration();
+          // Filter out stale progress from previous video during the initial second of loading
+          if (Date.now() - this.lastTrackStartTime < 1800 && curSec > 5) {
+            return;
+          }
           if (isFinite(curSec) && curSec >= 0) {
             usePlayerStore.getState().setProgress(curSec * 1000);
             this.checkStuckPlaybackWatchdog(curSec);

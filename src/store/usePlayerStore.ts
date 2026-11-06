@@ -819,6 +819,20 @@ const store = create<PlayerState>((set, get) => ({
     const state = get();
     const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
 
+    // Mutual exclusivity: Activating shuffle automatically deactivates DJ mode
+    if (nextShuffle !== 'off' && typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_dj_mode', 'false');
+      window.localStorage.setItem('spotifree_dj_mode_desktop', 'false');
+      window.dispatchEvent(new CustomEvent('spotifree_dj_mode_changed', { detail: { enabled: false } }));
+      try {
+        (window as any).__audioEngine?.resetTransitionState?.();
+        const dj = (window as any).__useAIDJStore?.getState?.();
+        if (dj?.isDJModeActive) {
+          dj.stopDJSession?.();
+        }
+      } catch {}
+    }
+
     if (nextShuffle === 'off') {
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
       const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));

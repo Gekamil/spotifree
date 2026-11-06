@@ -7,7 +7,6 @@ import {
   SearchLibraryNativeIcon,
   SortListNativeIcon,
   PinNativeIcon,
-  SpotifyLogoNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds, deduplicateUserPlaylists } from '../../store/useSpotifyDataStore';
@@ -205,48 +204,32 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         </button>
       </div>
 
-      {/* 1:1 Spotify "Importa tu música desde otras aplicaciones" Card (matching Image 2) */}
+      {/* 1:1 Spotify "Importa tu música" Card (matching authentic Spotify library announcement style) */}
       {showImportCard && (
-        <div
-          className="mx-2.5 my-2 p-4 rounded-2xl border border-white/10 shadow-2xl relative overflow-hidden text-white select-none animate-in fade-in duration-300"
-          style={{
-            background: 'radial-gradient(ellipse 90% 80% at 85% 65%, #6a249f 0%, #351554 48%, #170c2a 100%)',
-          }}
-        >
-          {/* Curved glowing beam in background connecting into the tile */}
-          <div className="absolute top-1/2 -right-4 -translate-y-1/2 w-32 h-32 rounded-full bg-[#9333ea]/35 blur-2xl pointer-events-none" />
-          <div className="absolute -bottom-6 right-6 w-24 h-12 bg-[#a855f7]/25 blur-xl -rotate-12 pointer-events-none" />
-
+        <div className="mx-2 my-2 p-4 rounded-lg bg-[#242424] relative text-white select-none animate-in fade-in duration-300">
           {/* Close button X */}
           <button
             onClick={handleDismissImportCard}
-            className="absolute top-2.5 right-2.5 w-6 h-6 rounded-full hover:bg-white/10 text-white/75 hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer z-20"
+            className="absolute top-3 right-3 w-6 h-6 rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
             title="Descartar"
           >
             ✕
           </button>
 
-          <div className="flex items-center justify-between gap-3 relative z-10">
-            <div className="space-y-1 pr-1 flex-1 min-w-0">
-              <h4 className="font-extrabold text-[13px] leading-tight text-white font-['SpotifyMixUITitle'] tracking-tight">
-                Importa tu música
-              </h4>
-              <p className="text-[11px] text-white/90 font-medium leading-snug pt-0.5">
-                Trae tus listas, canciones y artistas favoritos.
-              </p>
-              <div className="pt-2">
-                <button
-                  onClick={() => openImportModal()}
-                  className="px-3.5 py-1.5 rounded-full bg-white text-black font-extrabold text-[11px] hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
-                >
-                  Importar biblioteca
-                </button>
-              </div>
-            </div>
-
-            {/* Official Spotify Brand Icon Badge */}
-            <div className="w-11 h-11 rounded-full bg-black/80 border border-white/10 flex items-center justify-center shrink-0 shadow-lg">
-              <SpotifyLogoNativeIcon size={34} className="text-[#1ed760]" />
+          <div className="space-y-1 pr-6">
+            <h4 className="font-bold text-[14px] leading-tight text-white font-['SpotifyMixUITitle']">
+              Importa tu música
+            </h4>
+            <p className="text-[12px] text-[#b3b3b3] font-medium leading-snug">
+              Trae tus listas, canciones y artistas favoritos a tu biblioteca.
+            </p>
+            <div className="pt-2">
+              <button
+                onClick={() => openImportModal()}
+                className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
+              >
+                Importar biblioteca
+              </button>
             </div>
           </div>
         </div>
