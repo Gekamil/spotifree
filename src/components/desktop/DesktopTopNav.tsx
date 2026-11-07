@@ -180,13 +180,14 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
         )}
 
         {/* Instalar app */}
-        <button
-          className="flex items-center gap-2 text-[#b3b3b3] hover:text-white hover:scale-104 transition-all py-1 px-2 shrink-0 font-bold text-sm"
+        <a
+          href="/instalar.html"
+          className="flex items-center gap-2 text-[#b3b3b3] hover:text-white hover:scale-104 transition-all py-1 px-2 shrink-0 font-bold text-sm no-underline"
           title="Instalar app"
         >
           <InstallAppNativeIcon size={16} className="text-[#b3b3b3] group-hover:text-white" />
           <span>Instalar app</span>
-        </button>
+        </a>
 
         {/* Novedades (Bell) */}
         <button

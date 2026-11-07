@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#121212" />
+<title>Instalar Spotifree</title>
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<style>
+  @font-face { font-family: 'SpotifyMixUI'; src: url("https://encore.scdn.co/fonts/SpotifyMixUI-Regular-76c92fb1a35c462f73429fa8865163eb.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'SpotifyMixUI'; src: url("https://encore.scdn.co/fonts/SpotifyMixUI-Bold-09c45a3a0ce9d2971e62cb26e97760fb.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+  @font-face { font-family: 'SpotifyMixUITitle'; src: url("https://encore.scdn.co/fonts/SpotifyMixUITitle-Bold-2c79abf9c6697da8b2bf5af3f11e6913.woff2") format("woff2"); font-weight: 700; font-display: swap; }
+  :root { --bg: #121212; --card: #181818; --card2: #242424; --text: #fff; --sub: #b3b3b3; --green: #1ed760; --line: #2a2a2a; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: SpotifyMixUI, "Helvetica Neue", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+  a { color: inherit; }
+  .hero { position: relative; padding: calc(env(safe-area-inset-top, 0px) + 28px) 16px 40px; background: linear-gradient(180deg, #1e6b3a 0%, #154a29 38%, var(--bg) 100%); }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 17px; text-decoration: none; }
+  .brand img { width: 34px; height: 34px; border-radius: 8px; }
+  .back { font-size: 14px; font-weight: 700; color: var(--text); text-decoration: none; padding: 8px 14px; border-radius: 999px; background: rgba(0,0,0,.25); }
+  .back:hover { background: rgba(0,0,0,.4); }
+  h1 { font-family: SpotifyMixUITitle, SpotifyMixUI, sans-serif; font-size: clamp(34px, 8vw, 56px); line-height: 1.02; letter-spacing: -.02em; margin: 40px 0 12px; }
+  .lead { color: #e6e6e6; font-size: 17px; line-height: 1.45; margin: 0; max-width: 540px; }
+  .tabs { display: flex; gap: 8px; margin: 28px 0 0; flex-wrap: wrap; }
+  .tab { appearance: none; border: 0; cursor: pointer; font: inherit; font-size: 14px; font-weight: 700; padding: 8px 16px; border-radius: 999px; background: rgba(255,255,255,.12); color: #fff; }
+  .tab[aria-selected="true"] { background: #fff; color: #000; }
+  main { padding: 8px 16px calc(env(safe-area-inset-bottom, 0px) + 48px); }
+  section.panel { display: none; }
+  section.panel.on { display: block; }
+  .card { background: var(--card); border-radius: 12px; padding: 22px; margin: 16px 0; }
+  .card h2 { font-size: 22px; margin: 0 0 6px; }
+  .card p { color: var(--sub); line-height: 1.5; margin: 0; font-size: 15px; }
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 30px; border-radius: 999px; background: var(--green); color: #000; font-weight: 700; font-size: 16px; text-decoration: none; border: 0; cursor: pointer; transition: transform .1s, background .2s; }
+  .btn:hover { transform: scale(1.03); background: #3be477; }
+  .btn:active { transform: scale(.98); }
+  .btn.ghost { background: transparent; color: #fff; box-shadow: inset 0 0 0 1px #7c7c7c; }
+  .btn.ghost:hover { box-shadow: inset 0 0 0 1px #fff; background: transparent; }
+  .meta { margin-top: 12px; font-size: 13px; color: var(--sub); }
+  .steps { list-style: none; counter-reset: s; padding: 0; margin: 16px 0 0; }
+  .steps li { counter-increment: s; position: relative; padding: 0 0 16px 44px; color: #e6e6e6; line-height: 1.45; font-size: 15px; }
+  .steps li::before { content: counter(s); position: absolute; left: 0; top: -2px; width: 28px; height: 28px; border-radius: 50%; background: var(--card2); color: #fff; font-weight: 700; font-size: 14px; display: grid; place-items: center; }
+  .steps b { color: #fff; }
+  .feat { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-top: 16px; }
+  .f { background: var(--card2); border-radius: 10px; padding: 16px; }
+  .f svg { width: 26px; height: 26px; color: var(--green); }
+  .f h3 { font-size: 15px; margin: 10px 0 4px; }
+  .f p { font-size: 13px; color: var(--sub); line-height: 1.45; margin: 0; }
+  .note { border-left: 3px solid var(--green); padding: 10px 14px; background: #1a1a1a; border-radius: 0 8px 8px 0; color: #d6d6d6; font-size: 14px; line-height: 1.5; margin-top: 16px; }
+  .note.warn { border-color: #ffa42b; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin-top: 18px; }
+  .kbd { display: inline-block; padding: 1px 7px; border-radius: 5px; background: #333; font-size: 13px; }
+  footer { text-align: center; color: #6a6a6a; font-size: 12px; margin-top: 28px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="top">
+      <a class="brand" href="/"><img src="/icon-192.png" alt="" />Spotifree</a>
+      <a class="back" href="/">Volver a la app</a>
+    </div>
+    <h1>Instala Spotifree</h1>
+    <p class="lead">La app completa en tu móvil: a pantalla completa, con tu cuenta de Spotify y sin anuncios.</p>
+    <div class="tabs" role="tablist">
+      <button class="tab" role="tab" data-p="android">Android</button>
+      <button class="tab" role="tab" data-p="iphone">iPhone</button>
+      <button class="tab" role="tab" data-p="pc">Ordenador</button>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div class="wrap">
+    <!-- ANDROID -->
+    <section class="panel" id="p-android">
+      <div class="card">
+        <h2>App para Android (APK)</h2>
+        <p>La versión con todas las funciones. Se instala como cualquier app y tiene su propio icono, sin insignias de navegador.</p>
+        <div class="row">
+          <a class="btn" id="apk-btn" href="https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk">
+            <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M4.995 8.745a.75.75 0 0 1 1.06 0L7.25 9.939V4a.75.75 0 0 1 1.5 0v5.94l1.195-1.195a.75.75 0 1 1 1.06 1.06L8 12.811l-3.005-3.006a.75.75 0 0 1 0-1.06"/><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8-6.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13"/></svg>
+            Descargar APK
+          </a>
+        </div>
+        <p class="meta" id="apk-meta">Compilada automáticamente con la última versión de la app.</p>
+        <ol class="steps">
+          <li>Pulsa <b>Descargar APK</b> y abre el archivo cuando termine.</li>
+          <li>Si Android avisa de <b>«origen desconocido»</b>, toca <b>Ajustes</b> y permite instalar apps desde tu navegador.</li>
+          <li>Toca <b>Instalar</b>. Abre Spotifree e inicia sesión con tu cuenta de Spotify.</li>
+          <li>Para actualizar, descarga de nuevo el APK desde aquí e instálalo encima: no pierdes nada.</li>
+        </ol>
+        <div class="feat">
+          <div class="f">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10M4 21c0-4 3.6-7 8-7s8 3 8 7z"/></svg>
+            <h3>Entra con Spotify</h3>
+            <p>Inicia sesión como en la app de Spotify. No hace falta copiar la cookie a mano.</p>
+          </div>
+          <div class="f">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zm2.2-1h9.6l-1-3H8.2zM7.5 15a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3"/></svg>
+            <h3>Android Auto</h3>
+            <p>Tus playlists en la pantalla del coche, y la línea de la letra que va sonando.</p>
+          </div>
+          <div class="f">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 2h10a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2m0 2v16h10V4zm3 12h4v2h-4z"/></svg>
+            <h3>Controles fuera de la app</h3>
+            <p>Pausa y cambia de canción desde la notificación, la pantalla de bloqueo o el Bluetooth.</p>
+          </div>
+          <div class="f">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 5h16v2H4zm0 6h16v2H4zm0 6h10v2H4z"/></svg>
+            <h3>Todo lo de la web</h3>
+            <p>Modo DJ, ecualizador, letras, sesiones compartidas y descargas.</p>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Usarla en el coche (Android Auto)</h2>
+        <p>Android Auto solo muestra apps de Google Play hasta que lo cambias una vez:</p>
+        <ol class="steps">
+          <li>En el móvil, abre <b>Ajustes → Android Auto</b> (o la app Android Auto).</li>
+          <li>Toca <b>Versión</b> 10 veces seguidas y acepta: se activan los ajustes para desarrolladores.</li>
+          <li>Menú <span class="kbd">⋮</span> → <b>Ajustes para desarrolladores</b> → activa <b>Fuentes desconocidas</b>.</li>
+          <li>Conecta el coche: Spotifree aparece con tus playlists. La letra se muestra donde va el artista; puedes quitarla en Ajustes → <b>Letra en el coche</b>.</li>
+        </ol>
+      </div>
+      <div class="card">
+        <h2>¿Prefieres no instalar el APK?</h2>
+        <p>En <b>Chrome</b> abre la web, toca <span class="kbd">⋮</span> y elige <b>Instalar aplicación</b>. Chrome la instala como app de verdad, sin el iconito en la esquina que pone Brave en los accesos directos.</p>
+      </div>
+    </section>
+
+    <!-- IPHONE -->
+    <section class="panel" id="p-iphone">
+      <div class="card">
+        <h2>En iPhone</h2>
+        <p>Apple no permite instalar APK ni apps fuera de la App Store, así que en iPhone Spotifree se usa como web app. iOS nunca añade insignias al icono, así que se ve como cualquier app.</p>
+        <ol class="steps">
+          <li>Abre <b>spotifreeweb.vercel.app</b> en <b>Safari</b>.</li>
+          <li>Toca el botón <b>Compartir</b> (el cuadrado con la flecha hacia arriba).</li>
+          <li>Elige <b>Añadir a pantalla de inicio</b> y luego <b>Añadir</b>.</li>
+          <li>Abre Spotifree desde el icono: se abre a pantalla completa, sin barra del navegador.</li>
+        </ol>
+        <div class="note warn">
+          <b>Música con la pantalla bloqueada:</b> iOS pausa el audio de las web apps al bloquear el iPhone o cambiar de app, y Safari no tiene forma de evitarlo.
+          Si necesitas oírla en segundo plano, usa <b>Brave</b>: menú <span class="kbd">⋯</span> → <b>Ajustes</b> → activa <b>Enable Background Audio</b> (o «Audio en segundo plano») y abre la web desde Brave.
+          Brave no puede crear el icono de app, así que tendrás que abrirla desde Brave, y en algunas versiones de iOS YouTube también corta ese audio.
+        </div>
+      </div>
+    </section>
+
+    <!-- PC -->
+    <section class="panel" id="p-pc">
+      <div class="card">
+        <h2>En el ordenador</h2>
+        <p>Instálala como app en Chrome o Edge: tendrá su ventana, su icono en el escritorio y se abrirá sin pestañas.</p>
+        <div class="row">
+          <button class="btn" id="pwa-btn" hidden>Instalar en este ordenador</button>
+          <a class="btn ghost" href="/">Abrir Spotifree</a>
+        </div>
+        <ol class="steps" id="pwa-steps">
+          <li>Abre Spotifree en <b>Chrome</b> o <b>Edge</b>.</li>
+          <li>En la barra de direcciones, pulsa el icono de <b>Instalar</b> (una pantalla con una flecha), o menú <span class="kbd">⋮</span> → <b>Enviar, guardar y compartir</b> → <b>Instalar página como app</b>.</li>
+        </ol>
+        <div class="note">¿Lo quieres en el móvil? Abre <b>spotifreeweb.vercel.app/instalar</b> desde el teléfono.</div>
+      </div>
+    </section>
+
+    <footer>Spotifree no está afiliado con Spotify.</footer>
+  </div>
+</main>
+
+<script>
+(function () {
+  var ua = navigator.userAgent || '';
+  var isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/i.test(ua);
+  var start = isIOS ? 'iphone' : isAndroid ? 'android' : 'pc';
+  try { var h = (location.hash || '').slice(1); if (h === 'android' || h === 'iphone' || h === 'pc') start = h; } catch (e) {}
+  var tabs = document.querySelectorAll('.tab');
+  function show(p) {
+    for (var i = 0; i < tabs.length; i++) tabs[i].setAttribute('aria-selected', String(tabs[i].getAttribute('data-p') === p));
+    var panels = document.querySelectorAll('.panel');
+    for (var j = 0; j < panels.length; j++) panels[j].classList.toggle('on', panels[j].id === 'p-' + p);
+  }
+  for (var k = 0; k < tabs.length; k++) tabs[k].addEventListener('click', function () { show(this.getAttribute('data-p')); history.replaceState(null, '', '#' + this.getAttribute('data-p')); });
+  show(start);
+  window.addEventListener('hashchange', function () {
+    var h = (location.hash || '').slice(1);
+    if (h === 'android' || h === 'iphone' || h === 'pc') show(h);
+  });
+
+  // Size and date of the latest APK build
+  fetch('https://api.github.com/repos/Gekamil/spotifree/releases/tags/android-latest')
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (rel) {
+      var meta = document.getElementById('apk-meta');
+      if (!rel || !rel.assets) return;
+      var a = rel.assets.filter(function (x) { return /\.apk$/i.test(x.name); })[0];
+      if (!a) return;
+      var d = new Date(a.updated_at || rel.published_at);
+      meta.textContent = 'Versión del ' + d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · ' + (a.size / 1048576).toFixed(1) + ' MB';
+      document.getElementById('apk-btn').href = a.browser_download_url;
+    })
+    .catch(function () {});
+
+  // Desktop install prompt (Chrome / Edge)
+  var deferred = null;
+  window.addEventListener('beforeinstallprompt', function (e) {
+    e.preventDefault();
+    deferred = e;
+    var b = document.getElementById('pwa-btn');
+    b.hidden = false;
+  });
+  document.getElementById('pwa-btn').addEventListener('click', function () {
+    if (!deferred) return;
+    deferred.prompt();
+    deferred.userChoice.finally(function () { deferred = null; document.getElementById('pwa-btn').hidden = true; });
+  });
+})();
+</script>
+</body>
+</html>

@@ -3,6 +3,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
+import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -534,10 +535,26 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
           <div className="h-px bg-white/10 my-1 mx-1" />
 
+          {/* Fuente de audio (elegir otra subida de la canción) */}
+          {targetTrack && (
+            <button
+              onClick={() => {
+                openAudioSourceSheet(targetTrack);
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
+              </svg>
+              <span>Cambiar fuente de audio</span>
+            </button>
+          )}
+
           {/* Compartir */}
           <button
             onClick={() => {
-              const text = targetTrack ? `${targetTrack.name} - ${targetTrack.artists[0]?.name || ''}` : window.location.href;
+              const text = targetTrack ?`${targetTrack.name} - ${targetTrack.artists[0]?.name || ''}` : window.location.href;
               navigator.clipboard?.writeText(text).catch(() => {});
               closeContextMenu();
             }}

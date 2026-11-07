@@ -4,9 +4,12 @@ import './index.css';
 import App from './App.tsx';
 import './utils/adaptiveLogo';
 import { initDomTranslator } from './utils/domTranslator';
+import { initNativeMedia } from './services/nativeMedia';
 
 // Whole-interface English/Spanish switch (Settings → Language)
 initDomTranslator();
+// APK: Android Auto, playback notification, lock screen and car/Bluetooth controls
+initNativeMedia();
 
 console.log('Spotifree: main.tsx mounting root...');
 const rootElement = document.getElementById('root');

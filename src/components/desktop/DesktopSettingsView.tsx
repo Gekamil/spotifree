@@ -1,6 +1,7 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
+import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
@@ -397,6 +398,15 @@ export const DesktopSettingsView: React.FC = () => {
                 >
                   ¿Cómo obtener tu cookie sp_dc?
                 </button>
+                <div className="pt-2 max-w-[340px]">
+                  <NativeSpotifyLoginButton
+                    compact
+                    onDone={() => {
+                      setSpotifyCookie(window.localStorage.getItem('user_spotify_cookie') || '');
+                      setActiveMainTab('home');
+                    }}
+                  />
+                </div>
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">

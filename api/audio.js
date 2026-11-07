@@ -199,7 +199,141 @@ function scoreCandidate(query, expectedTitle, expectedArtist, candTitle, candArt
   return score;
 }
 
+// YouTube Music search filtered to "Songs": only the audio uploads of each song
+// (MUSIC_VIDEO_TYPE_ATV, the album audio with no video intro / outro)
+const YTM_SONGS_PARAMS = 'EgWKAQIIAWoMEA4QChADEAQQCRAF';
+
+async function ytmSearch(q, params) {
+  const res = await fetchWithTimeout(
+    'https://music.youtube.com/youtubei/v1/search',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+      body: JSON.stringify({
+        context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20240318.01.00', hl: 'es', gl: 'ES' } },
+        query: q,
+        ...(params ? { params } : {}),
+      }),
+    },
+    3500
+  );
+  if (!res.ok) throw new Error('YTM non-ok');
+  const data = await res.json();
+  const sections =
+    data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
+  const out = [];
+  const typeOf = (we) => we?.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType || '';
+  for (const sec of sections) {
+    if (sec.musicCardShelfRenderer) {
+      const card = sec.musicCardShelfRenderer;
+      const we =
+        card.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint ||
+        card.onTap?.watchEndpoint ||
+        card.buttons?.[0]?.buttonRenderer?.command?.watchEndpoint;
+      const sub = card.subtitle?.runs?.map((x) => x.text).join('') || '';
+      if (we?.videoId) {
+        const dm = sub.match(/\b(\d+:\d{2})\b/);
+        out.push({ videoId: we.videoId, type: typeOf(we), title: card.title?.runs?.[0]?.text || '', artist: sub, durationSec: dm ? parseDurationSec(dm[1]) : 0, top: true });
+      }
+    }
+    for (const item of sec.musicShelfRenderer?.contents || []) {
+      const r = item.musicResponsiveListItemRenderer;
+      const we =
+        r?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint?.watchEndpoint ||
+        r?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.navigationEndpoint?.watchEndpoint;
+      const videoId = we?.videoId || r?.playlistItemData?.videoId;
+      if (!videoId) continue;
+      const title = r?.flexColumns?.[0]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.[0]?.text || '';
+      const sub = r?.flexColumns?.[1]?.musicResponsiveListItemFlexColumnRenderer?.text?.runs?.map((x) => x.text).join('') || '';
+      const durText = r?.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text || sub;
+      const dm = durText.match(/\b(\d+:\d{2})\b/);
+      out.push({ videoId, type: typeOf(we), title, artist: sub, durationSec: dm ? parseDurationSec(dm[1]) : 0, top: false });
+    }
+  }
+  return out.filter((c) => /^[a-zA-Z0-9_-]{11}$/.test(c.videoId));
+}
+
+function matchWords(s = '') {
+  return normForMatch(s).split(' ').filter((w) => w.length > 2 && !['feat', 'the', 'con', 'and', 'remastered', 'version'].includes(w));
+}
+
+/**
+ * Every upload of a song found on YouTube Music, best first. Audio-only uploads (the album
+ * audio) win over video clips, which often add intros, skits and outros; the length must
+ * agree with Spotify's. `match` = same song (title, artist and length agree).
+ */
+async function collectCandidates(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
+  const [songs, general] = await Promise.all([
+    ytmSearch(q, YTM_SONGS_PARAMS).catch(() => []),
+    ytmSearch(q).catch(() => []),
+  ]);
+  const byId = new Map();
+  const tWords = matchWords(expectedTitle || q);
+  const aWords = matchWords(expectedArtist);
+  for (const c of [...songs, ...general]) {
+    if (excludeSet.has(c.videoId)) continue;
+    const isAudio = c.type === 'MUSIC_VIDEO_TYPE_ATV';
+    let score = scoreCandidate(q, expectedTitle, expectedArtist, c.title, c.artist, c.durationSec, expectedDurationSec);
+    if (isAudio) score += 85;
+    else if (c.type === 'MUSIC_VIDEO_TYPE_OMV') score -= 10;
+    if (c.top) score += 10;
+    const hay = `${c.title} ${c.artist}`
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ');
+    // Artist = the uploader/performer field ("Romeo Santos • Album • 3:56"), not the title:
+    // covers say "Song (Romeo Santos)" in the title but are by someone else
+    const performer = c.artist
+      .replace(/^(Canción|Song|Vídeo|Video|Episodio|Episode)\s*•\s*/i, '')
+      .split(' • ')[0]
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^a-z0-9 ]/g, ' ');
+    const titleHit = tWords.length === 0 || tWords.some((w) => hay.includes(w));
+    // Whole words: "Princesita" is not "Prince"
+    const performerWords = new Set(performer.split(/\s+/).filter(Boolean));
+    const hayWords = new Set(hay.split(/\s+/).filter(Boolean));
+    const artistHit =
+      aWords.length === 0 ||
+      aWords.some((w) => performerWords.has(w)) ||
+      (!performer.trim() && aWords.some((w) => hayWords.has(w)));
+    if (!artistHit) score -= 40;
+    const expNorm = normForMatch(`${expectedTitle} ${q}`);
+    const isCoverLike =
+      /\b(karaoke|cover|in the style of|made popular|tribute|tributo|instrumental|backing track|8d|sped up|slowed|nightcore)\b/i.test(c.title) &&
+      !/\b(karaoke|cover|instrumental|sped up|slowed)\b/i.test(expNorm);
+    if (isCoverLike) score -= 60;
+    const durOk = !expectedDurationSec || !c.durationSec || Math.abs(c.durationSec - expectedDurationSec) <= 15;
+    const cand = {
+      videoId: c.videoId,
+      title: c.title,
+      artist: c.artist,
+      durationSec: c.durationSec,
+      kind: isAudio ? 'audio' : 'video',
+      score: Math.round(score),
+      match: titleHit && artistHit && durOk && !isCoverLike,
+    };
+    const prev = byId.get(c.videoId);
+    if (!prev || prev.score < cand.score) byId.set(c.videoId, cand);
+  }
+  return [...byId.values()].sort((a, b) => Number(b.match) - Number(a.match) || b.score - a.score);
+}
+
 async function resolveViaYouTubeMusic(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
+  const cands = await collectCandidates(q, expectedTitle, expectedArtist, excludeSet, expectedDurationSec);
+  const best = cands[0];
+  if (best && best.score >= 25) return { videoId: best.videoId, title: best.title, artist: best.artist, kind: best.kind };
+  return resolveViaYouTubeMusicLegacy(q, expectedTitle, expectedArtist, excludeSet, expectedDurationSec);
+}
+
+// Previous single-search resolver, kept as a fallback
+async function resolveViaYouTubeMusicLegacy(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
   const res = await fetchWithTimeout(
     'https://music.youtube.com/youtubei/v1/search',
     {
@@ -497,6 +631,24 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Audio stream not found' });
     } catch (err) {
       return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // 1c. CANDIDATES ACTION: every upload of a song, best first (used to switch the audio source
+  // automatically when the playing video is not the song, and by hand from the "..." menu)
+  if (action === 'candidates') {
+    const title = (req.query?.title || '').trim();
+    const artist = (req.query?.artist || '').trim();
+    const q = cleanQuery((req.query?.q || `${title} ${artist}`).trim());
+    const rawDur = req.query?.duration;
+    const dur = rawDur ? (Number(rawDur) > 1000 ? Math.round(Number(rawDur) / 1000) : Math.round(Number(rawDur))) : 0;
+    if (!q) return res.status(400).json({ error: 'Missing query' });
+    try {
+      const list = await collectCandidates(q, title, artist, new Set(), dur);
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      return res.status(200).json({ candidates: list.slice(0, 12) });
+    } catch (err) {
+      return res.status(500).json({ error: err.message, candidates: [] });
     }
   }
 

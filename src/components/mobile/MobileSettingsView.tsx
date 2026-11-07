@@ -2,6 +2,7 @@ import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
+import { getCarLyricsEnabled, isNativeMediaAvailable, setCarLyricsEnabled } from '../../services/nativeMedia';
 import { getAppIconPlatform } from '../../utils/appIcon';
 import React, { useState, useEffect } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -60,6 +61,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
     return true;
   });
 
+  const [carLyrics, setCarLyrics] = useState(() => getCarLyricsEnabled());
   const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem('spotifree_autoplay') !== 'false';
@@ -514,6 +516,30 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             <div className="pt-3 border-t border-white/5">
               <DJEffectsSelector compact />
             </div>
+
+            {/* APK: letra en la pantalla del coche / Bluetooth */}
+            {isNativeMediaAvailable() && (
+              <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white">Letra en el coche</p>
+                  <p className="text-xs text-[#b3b3b3] leading-snug">
+                    Muestra la línea de la letra que suena en Android Auto y en la pantalla del Bluetooth del coche.
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    const next = !carLyrics;
+                    setCarLyrics(next);
+                    setCarLyricsEnabled(next);
+                  }}
+                  role="switch"
+                  aria-checked={carLyrics}
+                  className={`w-10 h-6 rounded-full relative transition-colors shrink-0 ${carLyrics ? 'bg-[#1ed760]' : 'bg-[#535353]'}`}
+                >
+                  <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${carLyrics ? 'left-[18px]' : 'left-0.5'}`} />
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

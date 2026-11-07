@@ -12,6 +12,8 @@ import { djTransitionService, type DJTransitionConfig } from './djTransitionServ
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { effectiveEqGains } from '../utils/eqSettings';
 import { analyzeTrackAudio } from './trackAnalysisService';
+import { showGlobalToast } from '../utils/globalToast';
+import { useLanguageStore } from '../utils/i18n';
 import { computeTransitionGains, djFxLevelGain, recordTransitionUsed, transitionFXLayers } from './djMixPlanner';
 import {
   createDJChannelStrip,
@@ -54,7 +56,9 @@ if (typeof window !== 'undefined') {
     purgeCorruptedPreviewAudio().catch(() => {});
     // Purge legacy cache v1 which may contain bad/ad video IDs
     window.localStorage.removeItem('spotifree_yt_cache');
-    const saved = window.localStorage.getItem('spotifree_yt_cache_v2');
+    // v3: the resolver now prefers audio-only uploads; v2 mappings were often video clips
+    window.localStorage.removeItem('spotifree_yt_cache_v2');
+    const saved = window.localStorage.getItem('spotifree_yt_cache_v3');
     if (saved) {
       const parsed = JSON.parse(saved);
       Object.entries(parsed).forEach(([k, v]) => {
@@ -80,9 +84,83 @@ function persistVideoId(query: string, videoId: string) {
         obj[k] = v;
         if (++count > 500) break;
       }
-      window.localStorage.setItem('spotifree_yt_cache_v2', JSON.stringify(obj));
+      window.localStorage.setItem('spotifree_yt_cache_v3', JSON.stringify(obj));
     } catch {}
   }
+}
+
+/** One upload of a song, as ranked by /api/audio/candidates */
+export interface SourceCandidate {
+  videoId: string;
+  title: string;
+  artist: string;
+  durationSec: number;
+  /** 'audio' = the song's audio-only upload (YouTube Music "song"), 'video' = video clip / other */
+  kind: 'audio' | 'video';
+  score: number;
+  /** Same song (title/artist/length agree) */
+  match: boolean;
+}
+
+// Source the user picked by hand for a song (trackId -> videoId), always used for that song
+const SOURCE_OVERRIDE_KEY = 'spotifree_source_overrides';
+function readOverrides(): Record<string, string> {
+  try {
+    return JSON.parse(window.localStorage.getItem(SOURCE_OVERRIDE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+export function getSourceOverride(trackId?: string | null): string | null {
+  if (!trackId || typeof window === 'undefined') return null;
+  const id = trackId.replace(/^spotify:track:/i, '');
+  return readOverrides()[id] || null;
+}
+export function setSourceOverride(trackId: string, videoId: string | null) {
+  if (typeof window === 'undefined') return;
+  const id = trackId.replace(/^spotify:track:/i, '');
+  const all = readOverrides();
+  if (videoId) all[id] = videoId;
+  else delete all[id];
+  const keys = Object.keys(all);
+  if (keys.length > 800) for (const k of keys.slice(0, keys.length - 800)) delete all[k];
+  try {
+    window.localStorage.setItem(SOURCE_OVERRIDE_KEY, JSON.stringify(all));
+  } catch {}
+}
+
+function normWords(s: string): string[] {
+  return (s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\(.*?\)|\[.*?\]/g, ' ')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2 && !['feat', 'the', 'con', 'and', 'los', 'las', 'del', 'remastered', 'version', 'remaster'].includes(w));
+}
+
+/**
+ * Is a YouTube video (title, channel, length) really this song?
+ * Different song: neither title words nor artist words appear. Different version: the video is
+ * much longer (clip with intro/outro, live) or shorter (cut) than the Spotify song.
+ */
+export function judgeSource(track: Track, ytTitle: string, ytAuthor: string, ytDurSec: number): { ok: boolean; reason: string } {
+  const hay = new Set(normWords(`${ytTitle} ${ytAuthor}`));
+  const hayStr = normWords(`${ytTitle} ${ytAuthor}`).join(' ');
+  const tWords = normWords(track.name || '');
+  const aWords = (track.artists || []).flatMap((a) => normWords(a.name || ''));
+  const titleHit = tWords.length === 0 || tWords.some((w) => hay.has(w) || hayStr.includes(w));
+  const artistHit = aWords.length === 0 || aWords.some((w) => hay.has(w) || hayStr.includes(w));
+  if (!titleHit && !artistHit) return { ok: false, reason: 'otra canción' };
+  if (!titleHit && tWords.length >= 2) return { ok: false, reason: 'título distinto' };
+  const spDur = (track.duration_ms || 0) / 1000;
+  if (spDur > 30 && ytDurSec > 30) {
+    const diff = ytDurSec - spDur;
+    if (diff > 25) return { ok: false, reason: `vídeo ${Math.round(diff)} s más largo (intro o videoclip)` };
+    if (diff < -20) return { ok: false, reason: `vídeo ${Math.round(-diff)} s más corto` };
+  }
+  return { ok: true, reason: '' };
 }
 
 class AudioEngine {
@@ -277,9 +355,20 @@ class AudioEngine {
       if (curAnalysis.musicEndSec > 30 && curAnalysis.musicEndSec < effectiveTrackEndSec) {
         effectiveTrackEndSec = curAnalysis.musicEndSec;
       }
+    } else if (isDjMode && effectiveTrackEndSec > 60) {
+      // Where the music really ends is unknown (only the 30 s preview could be measured): most
+      // songs close with a fade-out or a few silent seconds, and a mix that starts there is not
+      // heard at all. Finish the mix a little before the end instead.
+      effectiveTrackEndSec -= Math.min(7, Math.max(3, effectiveTrackEndSec * 0.025));
     }
 
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
+
+    // Have the next song resolved and cued well before the mix (a mix waiting for the search
+    // used to be skipped and the song simply ended)
+    if (!this.preloadedNext && !this.isPreloadingNext && remaining <= Math.max(45, effectiveCrossfade + 30)) {
+      this.preloadUpcomingTracks();
+    }
 
     // Bar line where the mix should start, only when the measured grid is reliable that late
     // in the song (a wrong "bar line" sounds worse than a plain start).
@@ -633,8 +722,15 @@ class AudioEngine {
         }
 
         if (!ready) {
-          // Safety timeout: If secondary player takes > 1500ms to buffer, proceed with fallback
-          if (now - crossfadeStartTime > 1500) {
+          // Give the incoming song time to start (slow networks), as long as song A still has
+          // music left to mix over. Proceeding with a silent deck B made the mix a hard cut.
+          let aLeft = 99;
+          try {
+            if (this.activeEngine === 'youtube' && this.ytPlayer) aLeft = this.ytPlayer.getDuration() - this.ytPlayer.getCurrentTime();
+            else if (this.audio) aLeft = this.audio.duration - this.audio.currentTime;
+          } catch {}
+          const waitLimit = isFinite(aLeft) && aLeft > crossfadeSec + 3 ? 4500 : 1500;
+          if (now - crossfadeStartTime > waitLimit) {
             console.warn('[AudioEngine] Secondary player buffering timeout (1500ms), advancing fallback');
             isDeckBReady = true;
             lastTick = now;
@@ -1396,6 +1492,7 @@ class AudioEngine {
                   const { isMuted } = usePlayerStore.getState();
                   if (!isMuted) this.ytPlayer.setVolume(Math.round(this.getEffectiveVolume() * 100));
                 }
+                if (this.ensureActiveVideoMatches()) return;
                 // Check if player is paused/stopped and resume if needed
                 const ytState = typeof this.ytPlayer.getPlayerState === 'function'
                   ? this.ytPlayer.getPlayerState() : -1;
@@ -1841,8 +1938,19 @@ class AudioEngine {
         }
       } catch {}
     } else if (stuckDurationMs > 10000 && this.stuckRecoveryAttempts === 1) {
+      // Usually an expired stream after a long pause: reload the SAME video at the same second
       this.stuckRecoveryAttempts = 2;
-      console.warn(`[AudioEngine] Playback still stuck after 10s. Resolving alternate video / stream...`);
+      console.warn(`[AudioEngine] Playback still stuck after 10s. Reloading the same video at ${curSec.toFixed(1)}s`);
+      try {
+        if (this.ytPlayer && this.currentVideoId && typeof this.ytPlayer.loadVideoById === 'function') {
+          this.ytPlayer.loadVideoById({ videoId: this.currentVideoId, startSeconds: Math.max(0, curSec) });
+          this.ytPlayer.playVideo();
+        }
+      } catch {}
+    } else if (stuckDurationMs > 20000 && this.stuckRecoveryAttempts === 2) {
+      // Still nothing: another upload of the same song, from the same second
+      this.stuckRecoveryAttempts = 3;
+      console.warn('[AudioEngine] Same video does not play. Switching to another source of the same song');
       if (this.currentTrackQuery) {
         this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
       }
@@ -1879,6 +1987,7 @@ class AudioEngine {
           if (isFinite(durSec) && durSec > 0) {
             usePlayerStore.getState().setDuration(durSec * 1000);
             if (isFinite(curSec) && !this.isCrossfading) {
+              this.verifyPlayingSource(curSec, durSec);
               this.checkCrossfade(curSec, durSec);
               this.checkOutroTruncation(curSec, durSec);
             }
@@ -2033,59 +2142,175 @@ class AudioEngine {
     }
   }
 
-  /** Direct client-side Innertube search fallback if backend resolve times out */
-  private async resolveVideoIdClient(query: string, excludeIds?: Set<string>): Promise<string | null> {
+  // ---------------------------------------------------------------------------
+  // Audio source (which YouTube upload plays a song): checks, automatic and manual switch
+  // ---------------------------------------------------------------------------
+
+  /** Songs whose source was already checked (trackId|videoId) and automatic switches per track */
+  private verifiedSources = new Set<string>();
+  private autoSwitches = new Map<string, number>();
+  private switchingSource = false;
+
+  /**
+   * The paused/active player must hold the video of the song shown. If something else was
+   * cued in it (or the player was reset while the app was in the background), reload the
+   * right video at the saved position. Returns true when it reloaded.
+   */
+  private ensureActiveVideoMatches(): boolean {
+    const p = this.ytPlayer;
+    if (!p || !this.currentVideoId || this.activeEngine !== 'youtube' || this.isCrossfading) return false;
     try {
-      const res = await fetch('https://music.youtube.com/youtubei/v1/search', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-        body: JSON.stringify({
-          context: {
-            client: {
-              clientName: 'WEB_REMIX',
-              clientVersion: '1.20240318.01.00',
-              hl: 'es',
-              gl: 'ES',
-            },
-          },
-          query,
-          params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D',
-        }),
-        signal: AbortSignal.timeout?.(3000),
-      });
+      const loaded = typeof p.getVideoData === 'function' ? p.getVideoData()?.video_id : null;
+      const st = typeof p.getPlayerState === 'function' ? p.getPlayerState() : -1;
+      const wrong = Boolean(loaded && loaded !== this.currentVideoId);
+      const empty = !loaded && (st === -1 || st === 5);
+      if (!wrong && !empty) return false;
+      const sec = Math.max(0, (usePlayerStore.getState().progressMs || 0) / 1000);
+      console.warn(`[AudioEngine] Player held ${loaded || 'nothing'} instead of ${this.currentVideoId}; reloading at ${sec.toFixed(1)}s`);
+      this.lastTrackStartTime = Date.now();
+      const { isMuted } = usePlayerStore.getState();
+      if (typeof p.unMute === 'function') p.unMute();
+      if (typeof p.setVolume === 'function') p.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
+      p.loadVideoById({ videoId: this.currentVideoId, startSeconds: sec });
+      p.playVideo();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
-      if (res.ok) {
-        const data = await res.json();
-        const text = JSON.stringify(data);
-        const matches = [...text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map((m) => m[1]);
-        for (const vid of matches) {
-          if (!excludeIds || !excludeIds.has(vid)) {
-            return vid;
-          }
-        }
-      }
-    } catch {}
-
-    // Fallback: direct web search
+  /** Uploads of a song ranked by the resolver (songs-only "audio" uploads first). */
+  public async fetchSourceCandidates(track: Track): Promise<SourceCandidate[]> {
+    const artist = track.artists?.[0]?.name || '';
+    const params = new URLSearchParams();
+    params.set('q', `${track.name} ${artist}`.trim());
+    params.set('title', track.name || '');
+    if (artist) params.set('artist', artist);
+    if (track.duration_ms) params.set('duration', String(Math.round(track.duration_ms / 1000)));
     try {
-      const searchRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, {
-        signal: AbortSignal.timeout?.(2500),
+      const res = await fetch(`${API_BASE}/api/audio/candidates?${params.toString()}`, {
+        signal: AbortSignal.timeout ? AbortSignal.timeout(8000) : undefined,
       });
-      if (searchRes.ok) {
-        const html = await searchRes.text();
-        const matches = [...html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)].map((m) => m[1]);
-        for (const vid of matches) {
-          if (!excludeIds || !excludeIds.has(vid)) {
-            return vid;
-          }
-        }
-      }
-    } catch {}
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data?.candidates) ? (data.candidates as SourceCandidate[]) : [];
+    } catch {
+      return [];
+    }
+  }
 
-    return null;
+  /** Video playing the current song (null when not on YouTube) */
+  public getActiveVideoInfo(): { videoId: string; title: string; author: string; durationSec: number } | null {
+    const p = this.ytPlayer;
+    if (this.activeEngine !== 'youtube' || !p || !this.currentVideoId) return null;
+    try {
+      const d = typeof p.getVideoData === 'function' ? p.getVideoData() : null;
+      return {
+        videoId: this.currentVideoId,
+        title: d?.title || '',
+        author: d?.author || '',
+        durationSec: typeof p.getDuration === 'function' ? Number(p.getDuration()) || 0 : 0,
+      };
+    } catch {
+      return { videoId: this.currentVideoId, title: '', author: '', durationSec: 0 };
+    }
+  }
+
+  /**
+   * Plays another upload of the current song, from the same second.
+   * videoId = null picks the best one not tried yet. `manual` choices are remembered for the song.
+   */
+  public async switchSource(videoId: string | null, opts: { manual?: boolean; reason?: string } = {}): Promise<boolean> {
+    const track = usePlayerStore.getState().currentTrack;
+    if (!track || this.switchingSource) return false;
+    const trackId = track.id;
+    const query = `${track.name} ${track.artists?.[0]?.name || ''}`.trim();
+    this.switchingSource = true;
+    try {
+      let target = videoId;
+      if (!target) {
+        if (this.currentVideoId) this.failedVideoIds.add(this.currentVideoId);
+        const cands = await this.fetchSourceCandidates(track);
+        target = cands.find((c) => c.match && !this.failedVideoIds.has(c.videoId) && c.videoId !== this.currentVideoId)?.videoId || null;
+      }
+      if (!target) return false;
+      if (usePlayerStore.getState().currentTrack?.id !== trackId) return false; // song changed meanwhile
+
+      if (opts.manual) setSourceOverride(trackId, target);
+      persistVideoId(query, target);
+      this.verifiedSources.add(`${trackId}|${target}`);
+      console.info(`[AudioEngine] Audio source -> ${target}${opts.reason ? ` (${opts.reason})` : ''}`);
+
+      if (this.isCrossfading) this.resetTransitionState();
+      this.preloadedNext = null;
+      const pos = Math.max(0, (usePlayerStore.getState().progressMs || 0) / 1000);
+      const wasPlaying = usePlayerStore.getState().isPlaying;
+      await this.ensureYouTubeReady();
+      const p = this.ytPlayer;
+      if (!p || typeof p.loadVideoById !== 'function') return false;
+      this.activeEngine = 'youtube';
+      this.currentVideoId = target;
+      this.currentTrackId = trackId;
+      this.currentTrackQuery = query;
+      this.lastTrackStartTime = Date.now();
+      this.isTransitioning = true;
+      setTimeout(() => { this.isTransitioning = false; }, 3000);
+      const { isMuted } = usePlayerStore.getState();
+      if (typeof p.unMute === 'function') p.unMute();
+      if (typeof p.setVolume === 'function') p.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
+      if (wasPlaying) {
+        p.loadVideoById({ videoId: target, startSeconds: pos > 2 ? pos : 0 });
+        p.playVideo();
+        this.startProgressTicker();
+      } else {
+        p.cueVideoById({ videoId: target, startSeconds: pos > 2 ? pos : 0 });
+      }
+      setTimeout(() => this.preloadUpcomingTracks(), 1500);
+      return true;
+    } catch (e) {
+      console.warn('[AudioEngine] switchSource failed', e);
+      return false;
+    } finally {
+      this.switchingSource = false;
+    }
+  }
+
+  /**
+   * Once per song: does the video really play this song? Compares the YouTube title/channel
+   * with the song and artist, and its length with Spotify's. A different song, or a version far
+   * longer/shorter (video clip with intro, live, cut) is replaced by the next best upload.
+   */
+  private verifyPlayingSource(curSec: number, durSec: number) {
+    if (this.switchingSource || this.isCrossfading || this.isTransitioning || this.isAuditioning) return;
+    if (curSec < 1.5 || !durSec || !this.currentVideoId) return;
+    const track = usePlayerStore.getState().currentTrack;
+    if (!track || !this.currentTrackId || AudioEngine.cleanId(track.id) !== AudioEngine.cleanId(this.currentTrackId)) return;
+    const key = `${track.id}|${this.currentVideoId}`;
+    if (this.verifiedSources.has(key)) return;
+    if (getSourceOverride(track.id) === this.currentVideoId) {
+      this.verifiedSources.add(key); // chosen by the user
+      return;
+    }
+    let data: any = null;
+    try { data = this.ytPlayer?.getVideoData?.(); } catch {}
+    if (!data || !data.title) return; // not known yet, try on the next tick
+    this.verifiedSources.add(key);
+
+    const verdict = judgeSource(track, String(data.title || ''), String(data.author || ''), durSec);
+    if (verdict.ok) return;
+    const n = this.autoSwitches.get(track.id) || 0;
+    if (n >= 2) return;
+    this.autoSwitches.set(track.id, n + 1);
+    console.warn(`[AudioEngine] Source mismatch for "${track.name}": ${verdict.reason} ("${data.title}" by ${data.author}, ${Math.round(durSec)}s)`);
+    void this.switchSource(null, { reason: verdict.reason }).then((ok) => {
+      if (ok) {
+        showGlobalToast(
+          useLanguageStore.getState().language === 'en'
+            ? 'The audio did not match the song. Switched to another source'
+            : 'El audio no coincidía con la canción. Cambiado a otra fuente'
+        );
+      }
+    });
   }
 
   /** Unified Fast Video ID resolution: Cache -> Robust Server Resolution with smart retries */
@@ -2098,6 +2323,10 @@ class AudioEngine {
   ): Promise<string | null> {
     if (!query) return null;
     const cleanQuery = query.trim();
+
+    // A source the user chose by hand for this song always wins
+    const override = getSourceOverride(trackId);
+    if (override) return override;
 
     const verified = getVerifiedVideoId(cleanQuery, trackTitle, trackArtist);
     if (verified) {
@@ -2129,12 +2358,13 @@ class AudioEngine {
       return null;
     })();
 
-    // 2. Parallel secondary retry with audio qualifier if primary takes > 1200ms
+    // 2. Retry once if the first request fails (same query: a modified query such as
+    // "<song> Topic" used to win the race with uploads of other artists)
     const fallbackPromise = (async () => {
-      await new Promise((r) => setTimeout(r, 1200));
+      if (await backendPromise) return null;
       try {
         const params = new URLSearchParams();
-        params.set('q', cleanQuery + ' Topic');
+        params.set('q', cleanQuery);
         if (trackId) params.set('trackId', trackId);
         if (trackTitle) params.set('title', trackTitle);
         if (trackArtist) params.set('artist', trackArtist);
@@ -2150,15 +2380,8 @@ class AudioEngine {
     })();
 
     try {
-      resolvedId = await Promise.race([
-        backendPromise.then((id) => id || fallbackPromise),
-        fallbackPromise.then((id) => id || backendPromise),
-      ]);
-    } catch {}
-
-    if (!resolvedId) {
       resolvedId = (await backendPromise) || (await fallbackPromise);
-    }
+    } catch {}
 
     if (resolvedId) {
       persistVideoId(cleanQuery, resolvedId);
@@ -2182,7 +2405,9 @@ class AudioEngine {
     if (first) {
       const q = `${first.name} ${first.artists?.[0]?.name || ''}`.trim();
       this.resolveVideoId(q, first.id).then((vid) => {
-        if (vid && !usePlayerStore.getState().isPlaying) {
+        // Only on a cold start. With a paused song in the player, cueing another video here made
+        // "play" resume a different song than the one shown.
+        if (vid && !usePlayerStore.getState().isPlaying && !usePlayerStore.getState().currentTrack && !this.currentTrackId) {
           this.ensureYouTubeReady()
             .then(() => {
               if (this.ytPlayer && typeof this.ytPlayer.cueVideoById === 'function') {
@@ -2391,38 +2616,23 @@ class AudioEngine {
     // If the user moved to another song while we searched an alternate, never load the old song's audio
     const isStale = () => this.playSequenceId !== ownerSeq || this.currentTrackId !== ownerTrackId;
     try {
-      // 1. Try resolving official video
-      const officialQuery = `${originalQuery} official video`;
-      let videoId = await this.resolveVideoIdClient(officialQuery, this.failedVideoIds);
-
-      // 2. Try backend API with exclusion
-      if (!videoId) {
-        try {
-          const excludeList = Array.from(this.failedVideoIds).join(',');
-          const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(officialQuery)}&exclude=${encodeURIComponent(excludeList)}`;
-          const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(5000) });
-          if (res.ok) {
-            const data = await res.json();
-            if (data.videoId && !this.failedVideoIds.has(data.videoId)) {
-              videoId = data.videoId;
-            }
-          }
-        } catch {}
-      }
-
-      // 3. Fallback to simplified query + audio
-      if (!videoId) {
-        const altQuery = `${originalQuery} audio`;
-        videoId = await this.resolveVideoIdClient(altQuery, this.failedVideoIds);
-      }
+      // Another upload of the SAME song (same title, artist and length), never a loose
+      // "official video" search, which could bring a different song
+      const track = usePlayerStore.getState().currentTrack;
+      const candidates = track ? await this.fetchSourceCandidates(track) : [];
+      const pick = candidates.find((c) => !this.failedVideoIds.has(c.videoId) && c.videoId !== this.currentVideoId && c.match);
+      const videoId = pick?.videoId || null;
 
       if (isStale()) return;
 
       if (videoId && this.ytPlayer && typeof this.ytPlayer.loadVideoById === 'function') {
+        // Continue from where the song was (same song, so the same second)
+        const pos = Math.max(0, (usePlayerStore.getState().progressMs || 0) / 1000);
         this.currentVideoId = videoId;
         persistVideoId(originalQuery, videoId);
         this.activeEngine = 'youtube';
-        this.ytPlayer.loadVideoById({ videoId, startSeconds: 0 });
+        this.lastTrackStartTime = Date.now();
+        this.ytPlayer.loadVideoById({ videoId, startSeconds: pos > 3 ? pos : 0 });
         this.ytPlayer.playVideo();
         this.startBackgroundCarrier();
         usePlayerStore.setState({ isPlaying: true });
@@ -2558,6 +2768,11 @@ class AudioEngine {
       }
       if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
         try {
+          if (this.ensureActiveVideoMatches()) {
+            this.startProgressTicker();
+            usePlayerStore.setState({ isPlaying: true });
+            return;
+          }
           if (typeof this.ytPlayer.unMute === 'function') {
             this.ytPlayer.unMute();
           }
@@ -2941,11 +3156,6 @@ class AudioEngine {
         }
       }
     } catch {}
-    const clientVid = await this.resolveVideoIdClient(query);
-    if (clientVid) {
-      persistVideoId(query, clientVid);
-      return clientVid;
-    }
     return null;
   }
 }

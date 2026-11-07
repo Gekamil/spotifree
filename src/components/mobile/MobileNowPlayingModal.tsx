@@ -19,6 +19,7 @@ import {
   ShareNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
+import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
@@ -1083,6 +1084,25 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-sm text-white">Ir al artista</p>
                   <p className="text-xs text-[#b3b3b3] truncate">{artistName}</p>
+                </div>
+              </button>
+
+              {/* Option: audio source */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  openAudioSourceSheet(currentTrack);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Cambiar fuente de audio</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">Si no suena la canción correcta</p>
                 </div>
               </button>
 

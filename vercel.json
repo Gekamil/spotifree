@@ -4,6 +4,14 @@
   "framework": "vite",
   "rewrites": [
     {
+      "source": "/instalar",
+      "destination": "/instalar.html"
+    },
+    {
+      "source": "/install",
+      "destination": "/instalar.html"
+    },
+    {
       "source": "/api/token",
       "destination": "/api/token"
     },

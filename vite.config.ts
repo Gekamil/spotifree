@@ -14,9 +14,10 @@ import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/
 import metadataHandler from './api/metadata.js';
 // @ts-ignore
 import ttsHandler from './api/tts.js';
+// @ts-ignore
+import audioHandler from './api/audio.js';
 
 const PLAYLIST_CACHE = new Map<string, any>();
-const YT_CACHE = new Map<string, string>();
 let currentPlayingTrackId: string | null = null;
 
 
@@ -31,94 +32,6 @@ function toHDImage(url: string | null | undefined): string {
     .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
     .replace('liked-songs-64.png', 'liked-songs-640.jpg')
     .replace('liked-songs-300.png', 'liked-songs-640.jpg');
-}
-
-async function resolveYouTubeVideoId(query: string, exclude?: string): Promise<string | null> {
-  const cleanQ = query.trim().toLowerCase();
-  const excludeList = exclude ? exclude.split(',').map((s) => s.trim()) : [];
-  if (excludeList.length === 0 && YT_CACHE.has(cleanQ)) {
-    return YT_CACHE.get(cleanQ) || null;
-  }
-
-  // 1. Prioritize YouTube Music search (official music tracks only, zero shorts/podcasts)
-  try {
-    const ytmRes = await fetch('https://music.youtube.com/youtubei/v1/search', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      body: JSON.stringify({
-        context: {
-          client: {
-            clientName: 'WEB_REMIX',
-            clientVersion: '1.20240318.01.00',
-            hl: 'es',
-            gl: 'ES',
-          },
-        },
-        query,
-        params: 'Eg-KAQwIARAAGAAgACgAMABqChAEEAMQCRAFEAo%3D', // Pure songs/audio tracks only!
-      }),
-    });
-    if (ytmRes.ok) {
-      const data: any = await ytmRes.json();
-      const sections = data.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer?.contents || [];
-      for (const sec of sections) {
-        const shelf = sec.musicShelfRenderer || sec.musicCardShelfRenderer;
-        if (shelf) {
-          if (shelf.title?.runs?.[0]?.navigationEndpoint?.watchEndpoint?.videoId) {
-            const vId = shelf.title.runs[0].navigationEndpoint.watchEndpoint.videoId;
-            if (!excludeList.includes(vId)) {
-              if (excludeList.length === 0) YT_CACHE.set(cleanQ, vId);
-              return vId;
-            }
-          }
-          for (const item of shelf.contents || []) {
-            const itemRenderer = item.musicResponsiveListItemRenderer;
-            const playNav = itemRenderer?.overlay?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
-            const videoId = playNav?.watchEndpoint?.videoId || itemRenderer?.navigationEndpoint?.watchEndpoint?.videoId;
-            if (videoId && !excludeList.includes(videoId)) {
-              if (excludeList.length === 0) YT_CACHE.set(cleanQ, videoId);
-              return videoId;
-            }
-          }
-        }
-      }
-      // General match in json text
-      const text = JSON.stringify(data);
-      const matches = Array.from(text.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)).map((m) => m[1]);
-      for (const vid of matches) {
-        if (!excludeList.includes(vid)) {
-          if (excludeList.length === 0) YT_CACHE.set(cleanQ, vid);
-          return vid;
-        }
-      }
-    }
-  } catch {}
-
-  // 2. Fallback to YouTube web search
-  const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query + ' official video')}`;
-  try {
-    const res = await fetch(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
-      },
-    });
-    const html = await res.text();
-    const matches = Array.from(html.matchAll(/\/watch\?v=([a-zA-Z0-9_-]{11})/g)).map((m) => m[1]);
-    for (const vid of matches) {
-      if (!excludeList.includes(vid)) {
-        if (excludeList.length === 0) YT_CACHE.set(cleanQ, vid);
-        return vid;
-      }
-    }
-  } catch (err) {
-    console.error('YT search error:', err);
-    return null;
-  }
-  return null;
 }
 
 function parseEmbedHtml(html: string, cleanId: string) {
@@ -728,36 +641,28 @@ function dynamicSpotifyPlugin(): Plugin {
         }
       });
 
-      // 2. Dynamic Audio Resolver Endpoint (/api/audio/resolve)
-      server.middlewares.use('/api/audio/resolve', async (req, res) => {
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Content-Type', 'application/json');
-
-        if (req.method === 'OPTIONS') {
-          res.statusCode = 204;
-          return res.end();
-        }
-
-        const url = new URL(req.url || '', 'http://localhost');
-        const title = url.searchParams.get('title') || '';
-        const artist = url.searchParams.get('artist') || '';
-        const exclude = url.searchParams.get('exclude') || '';
-        const q = url.searchParams.get('q') || `${title} ${artist}`;
-
-        if (!q.trim()) {
-          res.statusCode = 400;
-          return res.end(JSON.stringify({ error: 'Missing query' }));
-        }
-
+      // 2. Audio resolver + source candidates: same serverless handler as production (api/audio.js),
+      // so dev picks exactly the uploads the deployed app picks
+      const runAudioHandler = (action: string) => async (req: any, res: any) => {
         try {
-          const videoId = await resolveYouTubeVideoId(q, exclude);
-          res.statusCode = 200;
-          return res.end(JSON.stringify({ videoId }));
-        } catch (err: any) {
-          res.statusCode = 500;
-          return res.end(JSON.stringify({ error: err.message }));
+          const url = new URL(req.url || '', 'http://localhost');
+          req.query = { ...Object.fromEntries(url.searchParams.entries()), action };
+          if (typeof res.status !== 'function') {
+            res.status = (code: number) => { res.statusCode = code; return res; };
+            res.json = (obj: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); return res; };
+            res.send = (body: unknown) => { res.end(typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body)); return res; };
+            res.redirect = (code: number, loc: string) => { res.statusCode = code; res.setHeader('Location', loc); res.end(); return res; };
+          }
+          await audioHandler(req, res);
+        } catch (e: any) {
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e?.message }));
+          }
         }
-      });
+      };
+      server.middlewares.use('/api/audio/resolve', runAudioHandler('resolve'));
+      server.middlewares.use('/api/audio/candidates', runAudioHandler('candidates'));
 
       // 2b. Direct Native Audio Stream (/api/audio/stream) - 0% ADS, NO 59s STALL, DESKTOP & MOBILE
       server.middlewares.use('/api/audio/stream', async (req, res) => {

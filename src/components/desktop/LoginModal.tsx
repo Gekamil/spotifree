@@ -1,6 +1,7 @@
 import React from 'react';
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { useUIStore } from '../../store/useUIStore';
+import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 
 export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, closeLoginModal } = useUIStore();
@@ -37,6 +38,7 @@ export const LoginModal: React.FC = () => {
 
         {/* Modal Body */}
         <div className="px-6 pb-6 pt-2 space-y-4">
+          <NativeSpotifyLoginButton onDone={() => setTimeout(closeLoginModal, 400)} />
           <SpotifreeAuthCard
             showCookieInput={false}
             onAuthSuccess={() => setTimeout(closeLoginModal, 600)}

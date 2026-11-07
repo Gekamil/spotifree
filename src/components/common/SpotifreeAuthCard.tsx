@@ -10,6 +10,7 @@ import {
 } from '../../services/spotifreeAuth';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { NativeSpotifyLoginButton } from './NativeSpotifyLoginButton';
 
 export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCookieInput?: boolean }> = ({
   onAuthSuccess,
@@ -233,6 +234,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
                 <span className="text-[10px] text-[#b3b3b3]">No vinculada</span>
               )}
             </div>
+            <NativeSpotifyLoginButton compact />
             <p className="text-[11px] text-[#b3b3b3] leading-relaxed">
               Pega aquí tu cookie para vincular tus playlists privadas de Spotify. Se sincronizará automáticamente en todos tus dispositivos.
             </p>

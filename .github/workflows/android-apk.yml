@@ -1,0 +1,101 @@
+# Builds the Spotifree APK on every push to main and publishes it as the release
+# "android-latest", so the install page (/instalar) always offers the latest version at
+# https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk
+name: Android APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build the web app
+        run: npm run build
+
+      - name: Create the Android project
+        run: |
+          npx cap add android
+          npx cap sync android
+          node scripts/setup-android-app-icons.mjs
+          node scripts/setup-android-native.mjs
+
+      # The same signing key on every build, so a new APK installs over the previous one.
+      # Use the ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD secrets when they exist;
+      # otherwise a key generated once and kept in the Actions cache.
+      - name: Restore signing key
+        id: keycache
+        uses: actions/cache@v4
+        with:
+          path: .signing/spotifree.jks
+          key: spotifree-signing-key-v1
+
+      - name: Prepare signing key
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          mkdir -p .signing
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > .signing/release.jks
+            echo "KS_FILE=.signing/release.jks" >> "$GITHUB_ENV"
+            echo "KS_PASS=$KS_PASS" >> "$GITHUB_ENV"
+          else
+            if [ ! -f .signing/spotifree.jks ]; then
+              keytool -genkeypair -keystore .signing/spotifree.jks -storepass spotifree -keypass spotifree \
+                -alias spotifree -keyalg RSA -keysize 2048 -validity 10000 \
+                -dname "CN=Spotifree, O=Spotifree, C=ES"
+            fi
+            echo "KS_FILE=.signing/spotifree.jks" >> "$GITHUB_ENV"
+            echo "KS_PASS=spotifree" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Sign the APK
+        run: |
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          UNSIGNED=$(ls android/app/build/outputs/apk/release/*.apk | head -1)
+          "$BT/zipalign" -p -f 4 "$UNSIGNED" aligned.apk
+          "$BT/apksigner" sign --ks "$KS_FILE" --ks-pass "pass:$KS_PASS" --out Spotifree.apk aligned.apk
+          "$BT/apksigner" verify Spotifree.apk
+          ls -la Spotifree.apk
+
+      - name: Publish as "android-latest"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete android-latest --yes --cleanup-tag || true
+          gh release create android-latest Spotifree.apk \
+            --title "Spotifree para Android" \
+            --notes "APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar" \
+            --latest

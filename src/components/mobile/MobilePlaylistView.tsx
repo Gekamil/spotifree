@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
+import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -2150,6 +2151,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               >
                 <ShareNativeIcon size={20} className="text-white/80 shrink-0" />
                 <span className="font-bold text-sm">Compartir canción</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  const t = activeTrackMenu;
+                  setActiveTrackMenu(null);
+                  openAudioSourceSheet(t);
+                }}
+                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
+              >
+                <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" className="text-white/80 shrink-0">
+                  <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
+                </svg>
+                <span className="font-bold text-sm">Cambiar fuente de audio</span>
               </button>
 
               <button
