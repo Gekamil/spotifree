@@ -6,6 +6,18 @@ name: Android APK
 on:
   push:
     branches: [main]
+    # The APK loads the live web (capacitor.config.ts server.url), so web-only changes don't
+    # need a new APK. Rebuilding on every push replaced the file while people were downloading it.
+    paths:
+      - 'native/**'
+      - 'scripts/setup-android-*.mjs'
+      - 'capacitor.config.ts'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'public/offline.html'
+      - 'public/icon-mobile-512.png'
+      - 'public/app-icons/**'
+      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 
 permissions:
@@ -93,9 +105,12 @@ jobs:
       - name: Publish as "android-latest"
         env:
           GH_TOKEN: ${{ github.token }}
+        # Replace the file in place (no deleting and recreating the whole release)
         run: |
-          gh release delete android-latest --yes --cleanup-tag || true
-          gh release create android-latest Spotifree.apk \
-            --title "Spotifree para Android" \
-            --notes "APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar" \
-            --latest
+          NOTES="APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar"
+          if gh release view android-latest >/dev/null 2>&1; then
+            gh release upload android-latest Spotifree.apk --clobber
+            gh release edit android-latest --notes "$NOTES" --latest
+          else
+            gh release create android-latest Spotifree.apk --title "Spotifree para Android" --notes "$NOTES" --latest
+          fi

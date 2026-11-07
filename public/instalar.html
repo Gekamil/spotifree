@@ -87,12 +87,21 @@
           </a>
         </div>
         <p class="meta" id="apk-meta">Compilada automáticamente con la última versión de la app.</p>
+        <p class="meta" id="apk-alt-row" hidden>¿No baja? Prueba el <a id="apk-alt" href="https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk">enlace alternativo</a>.</p>
         <ol class="steps">
           <li>Pulsa <b>Descargar APK</b> y abre el archivo cuando termine.</li>
           <li>Si Android avisa de <b>«origen desconocido»</b>, toca <b>Ajustes</b> y permite instalar apps desde tu navegador.</li>
           <li>Toca <b>Instalar</b>. Abre Spotifree e inicia sesión con tu cuenta de Spotify.</li>
           <li>La app carga siempre la última versión de Spotifree: las mejoras llegan solas. Solo hay que volver a descargar el APK cuando cambian las funciones del sistema (coche, ecualizador…), y se instala encima sin perder nada.</li>
         </ol>
+        <div class="note">
+          <b>¿La descarga llega al final pero no termina?</b>
+          <ol class="steps">
+            <li>Baja la barra de notificaciones: muchos navegadores preguntan ahí si quieres <b>conservar</b> el archivo (<b>«Descargar de todas formas»</b> o <b>«Conservar»</b>). Hasta que aceptas, la descarga se queda parada al 100 %.</li>
+            <li>Si ya terminó, ábrelo desde la app <b>Archivos</b> → <b>Descargas</b> → <b>Spotifree.apk</b>.</li>
+            <li>Si sigue igual, borra la descarga a medias y vuelve a intentarlo con el <b>enlace alternativo</b> o desde <b>Chrome</b>.</li>
+          </ol>
+        </div>
         <div class="feat">
           <div class="f">
             <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a5 5 0 1 0 0 10 5 5 0 0 0 0-10M4 21c0-4 3.6-7 8-7s8 3 8 7z"/></svg>
@@ -197,19 +206,35 @@
     if (h === 'android' || h === 'iphone' || h === 'pc') show(h);
   });
 
-  // Size and date of the latest APK build
-  fetch('https://api.github.com/repos/Gekamil/spotifree/releases/tags/android-latest')
-    .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (rel) {
-      var meta = document.getElementById('apk-meta');
-      if (!rel || !rel.assets) return;
-      var a = rel.assets.filter(function (x) { return /\.apk$/i.test(x.name); })[0];
-      if (!a) return;
-      var d = new Date(a.updated_at || rel.published_at);
-      meta.textContent = 'Versión del ' + d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · ' + (a.size / 1048576).toFixed(1) + ' MB';
-      document.getElementById('apk-btn').href = a.browser_download_url;
-    })
-    .catch(function () {});
+  // Where to download the APK from: the copy on this site (/Spotifree.apk, made when the web
+  // is published) when it is the latest one, otherwise GitHub. The other one is the alternative.
+  var GH_APK = 'https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk';
+  function getJson(u) {
+    return fetch(u, { cache: 'no-store' })
+      .then(function (r) { return r.ok && /json/i.test(r.headers.get('content-type') || '') ? r.json() : null; })
+      .catch(function () { return null; });
+  }
+  Promise.all([
+    getJson('/apk.json'),
+    getJson('https://api.github.com/repos/Gekamil/spotifree/releases/tags/android-latest'),
+  ]).then(function (res) {
+    var local = res[0] && res[0].updatedAt && res[0].size ? res[0] : null;
+    var rel = res[1];
+    var a = rel && rel.assets ? rel.assets.filter(function (x) { return /\.apk$/i.test(x.name); })[0] : null;
+    var gh = a ? { url: a.browser_download_url || GH_APK, updatedAt: a.updated_at || rel.published_at, size: a.size } : null;
+    // GitHub has a newer build only after a change to the app itself, until the web is published again
+    var useLocal = local && (!gh || new Date(local.updatedAt).getTime() >= new Date(gh.updatedAt).getTime() - 60000);
+    var pick = useLocal ? { url: '/Spotifree.apk', updatedAt: local.updatedAt, size: local.size } : gh;
+    if (!pick) return;
+    var d = new Date(pick.updatedAt);
+    document.getElementById('apk-meta').textContent = 'Versión del ' + d.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' }) + ' · ' + (pick.size / 1048576).toFixed(1) + ' MB';
+    document.getElementById('apk-btn').href = pick.url;
+    var alt = useLocal ? (gh ? gh.url : GH_APK) : local ? '/Spotifree.apk' : null;
+    if (alt) {
+      document.getElementById('apk-alt').href = alt;
+      document.getElementById('apk-alt-row').hidden = false;
+    }
+  });
 
   // Desktop install prompt (Chrome / Edge)
   var deferred = null;
