@@ -90,6 +90,10 @@ const media = `        ${START}
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
         </service>
+        <provider
+            android:name=".SpotifreeArtProvider"
+            android:authorities="\${applicationId}.art"
+            android:exported="true" />
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"
             android:exported="true">

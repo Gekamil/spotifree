@@ -15,10 +15,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Iterator;
+
 /**
  * Bridge between the web player and SpotifreeMediaService (Android Auto, notification, lock
- * screen, Bluetooth). The web layer pushes the library and what is playing; the service sends
- * back the user's commands as "command" events.
+ * screen, Bluetooth). The web layer pushes the library, playlists' songs, search results and
+ * what is playing; the service sends back the user's commands as "command" events.
  * JS side: src/services/nativeMedia.ts (registerPlugin('SpotifreeMedia')).
  */
 @CapacitorPlugin(name = "SpotifreeMedia")
@@ -38,34 +40,29 @@ public class SpotifreeMediaPlugin extends Plugin {
         super.handleOnDestroy();
     }
 
+    private static JSObject toEvent(String action, JSONObject data) {
+        JSObject ev = new JSObject();
+        ev.put("action", action);
+        if (data != null) {
+            Iterator<String> keys = data.keys();
+            while (keys.hasNext()) {
+                String k = keys.next();
+                ev.put(k, data.opt(k));
+            }
+        }
+        return ev;
+    }
+
     /** Sends a command to the web layer. False when the app UI is not running. */
     static boolean emit(String action, JSONObject data) {
         SpotifreeMediaPlugin p = instance;
         if (p == null || p.getBridge() == null) return false;
-        JSObject ev = new JSObject();
-        ev.put("action", action);
-        if (data != null) {
-            java.util.Iterator<String> keys = data.keys();
-            while (keys.hasNext()) {
-                String k = keys.next();
-                ev.put(k, data.opt(k));
-            }
-        }
-        p.notifyListeners("command", ev, true);
+        p.notifyListeners("command", toEvent(action, data), true);
         return true;
     }
 
     static void setPending(String action, JSONObject data) {
-        JSObject ev = new JSObject();
-        ev.put("action", action);
-        if (data != null) {
-            java.util.Iterator<String> keys = data.keys();
-            while (keys.hasNext()) {
-                String k = keys.next();
-                ev.put(k, data.opt(k));
-            }
-        }
-        pending = ev;
+        pending = toEvent(action, data);
     }
 
     /** A command that arrived from the car while the app was closed */
@@ -93,36 +90,71 @@ public class SpotifreeMediaPlugin extends Plugin {
         } catch (Exception ignored) {}
     }
 
+    private static JSONArray arr(PluginCall call, String key) {
+        JSArray a = call.getArray(key, null);
+        if (a == null) return null;
+        try {
+            return new JSONArray(a.toString());
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** playlists: [{id,name,subtitle,image}], home: [{title, items:[...]}], loggedIn */
     @PluginMethod
     public void setLibrary(PluginCall call) {
-        JSArray playlists = call.getArray("playlists", new JSArray());
-        try {
-            SpotifreeMediaService.saveLibrary(getContext(), new JSONArray(playlists.toString()));
-        } catch (Exception ignored) {}
+        JSONArray playlists = arr(call, "playlists");
+        JSONArray home = arr(call, "home");
+        SpotifreeMediaService.loggedIn = Boolean.TRUE.equals(call.getBoolean("loggedIn", true));
+        SpotifreeMediaService.saveLibrary(getContext(), playlists != null ? playlists : new JSONArray(), home);
         if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.notifyLibraryChanged();
+        call.resolve();
+    }
+
+    /** id, tracks: [{id,title,artist,image}] (answer to a "loadPlaylist" command) */
+    @PluginMethod
+    public void setPlaylistTracks(PluginCall call) {
+        String id = call.getString("id", "");
+        JSONArray tracks = arr(call, "tracks");
+        if (id != null && !id.isEmpty() && tracks != null) {
+            if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.onPlaylistTracks(id, tracks);
+            else SpotifreeMediaService.playlistTracks.put(id, tracks);
+        }
+        call.resolve();
+    }
+
+    /** requestId, tracks: [...], playlists: [...] (answer to a "search" command) */
+    @PluginMethod
+    public void setSearchResults(PluginCall call) {
+        String reqId = call.getString("requestId", "");
+        if (SpotifreeMediaService.current != null) {
+            SpotifreeMediaService.current.onSearchResults(reqId, arr(call, "tracks"), arr(call, "playlists"));
+        }
         call.resolve();
     }
 
     @PluginMethod
     public void updateNowPlaying(PluginCall call) {
+        SpotifreeMediaService.trackId = call.getString("trackId", "");
         SpotifreeMediaService.title = call.getString("title", "");
         SpotifreeMediaService.artist = call.getString("artist", "");
         SpotifreeMediaService.album = call.getString("album", "");
         SpotifreeMediaService.artworkUrl = call.getString("artworkUrl", "");
         SpotifreeMediaService.lyricLine = call.getString("lyricLine", "");
         SpotifreeMediaService.language = call.getString("language", "es");
+        SpotifreeMediaService.repeat = call.getString("repeat", "off");
+        SpotifreeMediaService.liked = Boolean.TRUE.equals(call.getBoolean("liked", false));
+        SpotifreeMediaService.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
         Double dur = call.getDouble("durationMs");
         Double pos = call.getDouble("positionMs");
         SpotifreeMediaService.durationMs = dur == null ? 0 : dur.longValue();
         SpotifreeMediaService.positionMs = pos == null ? 0 : pos.longValue();
         boolean playing = Boolean.TRUE.equals(call.getBoolean("isPlaying", false));
         SpotifreeMediaService.playing = playing;
-        JSArray q = call.getArray("queue", null);
+        JSONArray q = arr(call, "queue");
         if (q != null) {
-            try {
-                SpotifreeMediaService.queue = new JSONArray(q.toString());
-                if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.notifyChildrenChanged("queue");
-            } catch (Exception ignored) {}
+            SpotifreeMediaService.queue = q;
+            if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.refreshQueue();
         }
         kickService(playing);
         call.resolve();
