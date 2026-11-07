@@ -22,6 +22,7 @@ export const SYNCED_SETTING_KEYS = [
   'spotifree_theme',
   'spotifree_car_lyrics',
   'spotifree_source_overrides',
+  'spotifree_dj_voice_choice',
 ] as const;
 
 export interface SyncedSettings {

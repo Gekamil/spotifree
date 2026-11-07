@@ -21,6 +21,7 @@ import {
 import { formatDuration } from '../../utils/formatters';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openCarMode } from '../../utils/carMode';
+import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
@@ -119,6 +120,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
@@ -1113,6 +1115,27 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-sm text-white">Modo coche</p>
                   <p className="text-xs text-[#b3b3b3] truncate">Botones grandes, Canvas y letra</p>
+                </div>
+              </button>
+
+              {/* Option: sleep timer */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  openSleepTimerSheet();
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className={`w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12.34 2.02A10 10 0 1 0 21.98 11.7a.75.75 0 0 0-1.2-.65 6.5 6.5 0 0 1-9.06-9.06.75.75 0 0 0-.66-1.2zM9.2 4.1a8 8 0 0 0 10.7 10.7A8.5 8.5 0 1 1 9.2 4.1z" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className={`font-bold text-sm ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>Temporizador de apagado</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">
+                    {sleepActive ? 'Activado: toca para cambiarlo' : 'Para la música pasado un rato'}
+                  </p>
                 </div>
               </button>
 

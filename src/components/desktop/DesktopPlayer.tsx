@@ -24,12 +24,14 @@ import { audioEngine } from '../../services/audioEngine';
 import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
 import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
+import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
 }
 
 export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistById }) => {
+  const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
   const {
     currentTrack,
     isPlaying,
@@ -452,6 +454,18 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           title="Cola"
         >
           <QueueNativeIcon size={16} className={activeRightSidebar === 'queue' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'} />
+        </button>
+
+        {/* Temporizador de apagado */}
+        <button
+          onClick={openSleepTimerSheet}
+          className={`p-1 relative flex flex-col items-center transition-colors ${sleepActive ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'}`}
+          title={sleepActive ? 'Temporizador de apagado (activado)' : 'Temporizador de apagado'}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M12.34 2.02A10 10 0 1 0 21.98 11.7a.75.75 0 0 0-1.2-.65 6.5 6.5 0 0 1-9.06-9.06.75.75 0 0 0-.66-1.2zM9.2 4.1a8 8 0 0 0 10.7 10.7A8.5 8.5 0 1 1 9.2 4.1z" />
+          </svg>
+          {sleepActive && <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1ed760]" />}
         </button>
 
         <button

@@ -2,6 +2,7 @@ import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
+import { DJVoicePicker } from '../common/DJVoicePicker';
 import {
   getBackgroundPlaybackAllowed,
   getCarLyricsEnabled,
@@ -568,6 +569,11 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             {/* Efectos de las transiciones del DJ */}
             <div className="pt-3 border-t border-white/5">
               <DJEffectsSelector compact />
+            </div>
+
+            {/* Voz del DJ con IA */}
+            <div className="pt-3 border-t border-white/5">
+              <DJVoicePicker compact />
             </div>
 
             {/* APK: letra en la pantalla del coche / Bluetooth */}

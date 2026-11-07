@@ -14,6 +14,7 @@ import { EQ_CHANGED_EVENT, effectiveEqGains } from '../utils/eqSettings';
 import { analyzeTrackAudio } from './trackAnalysisService';
 import { showGlobalToast } from '../utils/globalToast';
 import { cancelNativeTransitionFx, nativeTransitionFx } from './nativeAudioFx';
+import { sleepTimerHoldsTransition } from './sleepTimer';
 import { useLanguageStore } from '../utils/i18n';
 import { computeTransitionGains, djFxLevelGain, recordTransitionUsed, transitionFXLayers } from './djMixPlanner';
 import {
@@ -287,6 +288,8 @@ class AudioEngine {
 
   private checkCrossfade(curSec: number, durSec: number) {
     if (this.isAuditioning || this.isSeeking || !durSec || durSec < 15) return;
+    // Sleep timer about to stop the music: no mix into the next song
+    if (sleepTimerHoldsTransition()) return;
 
     const state = usePlayerStore.getState();
     // CRITICAL FIX: If single track repeat (repeatMode === 'one') is active, DO NOT trigger crossfade or transitions!

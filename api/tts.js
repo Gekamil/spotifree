@@ -177,12 +177,30 @@ async function synthesizeWithGemini(text, voice = 'Kore', userApiKey = '') {
 /**
  * Microsoft Edge Neural TTS with high-quality 24kHz 96kbps MP3 (Pristine studio voice, reliable on all browsers)
  */
-async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format = 'mp3') {
+async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format = 'mp3', opts = {}) {
   const tts = new MsEdgeTTS();
   const selectedFormat = OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3;
 
-  await tts.setMetadata(voice, selectedFormat);
-  const { audioStream } = tts.toStream(text);
+  await tts.setMetadata(voice, selectedFormat, opts.words ? { wordBoundaryEnabled: true } : undefined);
+  const { audioStream, metadataStream } = tts.toStream(text, opts.prosody || undefined);
+
+  // Word timings (ms) for exact live captions: [{ t, d, w }]
+  const words = [];
+  if (metadataStream) {
+    metadataStream.on('data', (chunk) => {
+      try {
+        const parsed = JSON.parse(chunk.toString());
+        for (const m of parsed.Metadata || []) {
+          if (m.Type !== 'WordBoundary' || !m.Data) continue;
+          words.push({
+            t: Math.round((m.Data.Offset || 0) / 10000),
+            d: Math.round((m.Data.Duration || 0) / 10000),
+            w: m.Data.text?.Text || '',
+          });
+        }
+      } catch {}
+    });
+  }
 
   return new Promise((resolve, reject) => {
     const chunks = [];
@@ -191,11 +209,22 @@ async function synthesizeWithEdge(text, voice = 'es-VE-SebastianNeural', format 
       resolve({
         buffer: Buffer.concat(chunks),
         contentType: 'audio/mpeg',
+        words,
       });
     });
     audioStream.on('error', (err) => reject(err));
   });
 }
+
+/** A radio presenter's delivery: a bit faster and brighter than the default reading voice */
+const DJ_PROSODY = {
+  alvaro: { rate: '+8%', pitch: '+2%' },
+  jorge: { rate: '+8%', pitch: '+2%' },
+  sebastian: { rate: '+6%', pitch: '+2%' },
+  dalia: { rate: '+6%', pitch: '+1%' },
+  salome: { rate: '+6%', pitch: '+1%' },
+  elvira: { rate: '+6%', pitch: '+1%' },
+};
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -241,6 +270,10 @@ export default async function handler(req, res) {
     selectedVoice = 'salome';
   } else if (rawVoice.includes('sebastian') || rawVoice.includes('venezuela') || rawVoice === 'es-ve-sebastianneural') {
     selectedVoice = 'sebastian';
+  } else if (rawVoice.includes('jorge')) {
+    selectedVoice = 'jorge';
+  } else if (rawVoice.includes('elvira')) {
+    selectedVoice = 'elvira';
   } else if (rawVoice.includes('gemini') || rawProvider === 'gemini') {
     selectedVoice = 'gemini';
   }
@@ -248,7 +281,7 @@ export default async function handler(req, res) {
   // Voice mapping based on language
   let edgeVoiceName = 'es-ES-AlvaroNeural';
   if (isEnglish) {
-    if (selectedVoice === 'dalia' || selectedVoice === 'salome') {
+    if (selectedVoice === 'dalia' || selectedVoice === 'salome' || selectedVoice === 'elvira') {
       edgeVoiceName = 'en-US-JennyNeural';
     } else {
       edgeVoiceName = 'en-US-GuyNeural';
@@ -260,6 +293,12 @@ export default async function handler(req, res) {
         break;
       case 'dalia':
         edgeVoiceName = 'es-MX-DaliaNeural';
+        break;
+      case 'jorge':
+        edgeVoiceName = 'es-MX-JorgeNeural';
+        break;
+      case 'elvira':
+        edgeVoiceName = 'es-ES-ElviraNeural';
         break;
       case 'salome':
         edgeVoiceName = 'es-CO-SalomeNeural';
@@ -329,9 +368,27 @@ export default async function handler(req, res) {
     }
 
     // 3. High-fidelity Edge Neural TTS with MP3 (zero failure rate, instant 24kHz natural voice)
+    const wantTimings = String(query.timings || body.timings || '') === '1';
     if (!result) {
-      result = await synthesizeWithEdge(text, edgeVoiceName, 'mp3');
+      result = await synthesizeWithEdge(text, edgeVoiceName, 'mp3', {
+        words: wantTimings,
+        prosody: String(query.style || body.style || '') === 'dj' ? DJ_PROSODY[selectedVoice] : undefined,
+      });
       res.setHeader('x-tts-provider', 'edge-mp3-studio');
+    }
+
+    // The DJ's voice with the time of every word (exact live captions)
+    if (wantTimings) {
+      res.statusCode = 200;
+      res.setHeader('Content-Type', 'application/json');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      return res.end(
+        JSON.stringify({
+          mime: result.contentType,
+          audio: result.buffer.toString('base64'),
+          words: Array.isArray(result.words) ? result.words : [],
+        })
+      );
     }
 
     res.statusCode = 200;

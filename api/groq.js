@@ -326,6 +326,27 @@ export default async function handler(req, res) {
     }
   }
 
+  // Real facts the DJ may mention (sent by the app). The DJ must never invent others.
+  const ctx = body.context && typeof body.context === 'object' ? body.context : {};
+  const clip = (v, n) => String(v || '').trim().slice(0, n);
+  const facts = [];
+  if (ctx.timeOfDay) facts.push(`Momento: ${clip(ctx.weekday, 12)} por la ${clip(ctx.timeOfDay, 12)}`);
+  if (ctx.releaseYear) facts.push(`La canción salió en ${clip(ctx.releaseYear, 4)}`);
+  if (ctx.album) facts.push(`Es del álbum "${clip(ctx.album, 60)}"`);
+  if (ctx.topArtist) facts.push(`El artista que más escucha el oyente: ${clip(ctx.topArtist, 50)}`);
+  if (ctx.isTopArtist) facts.push('Esta canción es de uno de sus artistas favoritos');
+  const factsSection = facts.length
+    ? `\n\nDATOS REALES que puedes usar (como mucho uno, solo si queda natural; no inventes ningún otro dato, año, récord ni anécdota):\n- ${facts.join('\n- ')}`
+    : '';
+  // Accent of the chosen voice
+  const DIALECT = {
+    mx: 'español de México, natural y cercano',
+    co: 'español de Colombia, alegre',
+    ve: 'español de Venezuela, animado',
+    es: 'español de España, natural',
+  };
+  const dialect = DIALECT[clip(ctx.voiceRegion, 2)] || DIALECT.es;
+
   const isEnglish =
     body.language === 'en' ||
     (/\b(the|is|in|for|and|to|play|music|songs|vibes|rock|chill|party|workout|morning|night|rap|pop|hiphop|electronic|summer|winter)\b/i.test(prompt) &&
@@ -339,7 +360,7 @@ RULES FOR A NATURAL SYNTHETIC VOICE:
 2. Never use ellipses, long dashes, parentheses, emojis or hashtags.
 3. Mention the song or artist by name when you have it. Sound like a person, not an ad.
 4. Reply ONLY with the exact words to say out loud.`
-    : `Eres el DJ de Spotifree: un locutor cercano, con gracia y que conoce los gustos del oyente. Hablas español de España de forma natural.
+    : `Eres el DJ de Spotifree: un locutor cercano, con gracia y que conoce los gustos del oyente. Hablas ${dialect}.
 REGLAS PARA QUE LA VOZ SINTÉTICA SUENE NATURAL:
 1. Frases muy cortas (8 a 12 palabras). Máximo 2 frases y 25 palabras en total.
 2. Nunca uses puntos suspensivos, guiones largos, paréntesis, emojis ni hashtags.
@@ -406,8 +427,8 @@ Incluye de 12 a 15 canciones reales que existan. Mezcla temas de sus artistas co
       const r = await llmChat({
         system: DJ_SYSTEM_PROMPT,
         user: isEnglish
-          ? `Introduce the next block of songs${userGreeting}. Block: ${kind}. Why: ${reason}. First song: "${title}" by ${artist}. One or two short sentences.`
-          : `Presenta el siguiente bloque de canciones${userGreeting}. Bloque: ${kind}. Motivo: ${reason}. Primera canción: "${title}" de ${artist}. Una o dos frases cortas.`,
+          ? `Introduce the next block of songs${userGreeting}. Block: ${kind}. Why: ${reason}. First song: "${title}" by ${artist}. One or two short sentences.${factsSection}`
+          : `Presenta el siguiente bloque de canciones${userGreeting}. Bloque: ${kind}. Motivo: ${reason}. Primera canción: "${title}" de ${artist}. Una o dos frases cortas.${factsSection}`,
         json: false,
         maxTokens: 90,
         temperature: 0.85,
@@ -431,7 +452,7 @@ Incluye de 12 a 15 canciones reales que existan. Mezcla temas de sus artistas co
         : curTitle
         ? `Acaba de sonar "${curTitle}" de ${curArtist || 'este artista'}${nextTitle ? ` y ahora viene "${nextTitle}" de ${nextArtist}` : ''}. Enlace corto de DJ de radio entre las dos.`
         : `El oyente ha terminado un bloque de canciones. Invítale a seguir con más música que le va a encantar.`;
-      const r = await llmChat({ system: DJ_SYSTEM_PROMPT, user: transPrompt, json: false, maxTokens: 90, temperature: 0.8, fast: true, timeoutMs: 3500 });
+      const r = await llmChat({ system: DJ_SYSTEM_PROMPT, user: transPrompt + factsSection, json: false, maxTokens: 90, temperature: 0.8, fast: true, timeoutMs: 3500 });
       const speech = cleanPunchySpeech(r.content);
       if (speech) return res.status(200).json({ success: true, model: r.model, speech });
     }

@@ -42,7 +42,7 @@ function copyDir(src, dst) {
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
 
 // 3. MainActivity: every plugin of the app
-const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin'].filter((p) =>
+const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeSpeechPlugin'].filter((p) =>
   fs.existsSync(path.join(javaDir, `${p}.java`))
 );
 fs.writeFileSync(
@@ -74,11 +74,20 @@ const PERMS = [
   'android.permission.MODIFY_AUDIO_SETTINGS',
   // "Allow Spotifree to always run in the background?" (Ajustes → Reproducción en segundo plano)
   'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+  // The DJ's microphone (asked the first time it is used)
+  'android.permission.RECORD_AUDIO',
 ];
 for (const p of PERMS) {
   if (!manifest.includes(`"${p}"`)) {
     manifest = manifest.replace(/<application/, `<uses-permission android:name="${p}" />\n    <application`);
   }
+}
+// Android 11+: the app must declare that it uses the speech recognition service to see it
+if (!manifest.includes('android.speech.RecognitionService')) {
+  manifest = manifest.replace(
+    /<application/,
+    `<queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>\n    <application`
+  );
 }
 const START = '<!-- spotifree-media:start -->';
 const END = '<!-- spotifree-media:end -->';

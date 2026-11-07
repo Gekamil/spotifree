@@ -1,6 +1,8 @@
 package com.spotifree.music;
 
+import android.media.audiofx.DynamicsProcessing;
 import android.media.audiofx.Equalizer;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
@@ -28,6 +30,11 @@ public class SpotifreeAudioFxPlugin extends Plugin {
 
     private static final double[] APP_FREQS = { 60, 150, 400, 1000, 2400, 15000 };
 
+    // Android 9+: DynamicsProcessing = 12-band EQ + limiter (no distortion with boosts / DJ moves)
+    private static final float[] DP_CUTOFFS = { 45, 90, 160, 280, 500, 900, 1600, 2800, 5000, 8500, 13000, 20000 };
+    private DynamicsProcessing dp;
+    private float lastInputGain = 0f;
+
     private Equalizer eq;
     private String error = null;
     private int bands = 0;
@@ -38,8 +45,47 @@ public class SpotifreeAudioFxPlugin extends Plugin {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable animator;
 
+    private boolean tryDynamics() {
+        if (Build.VERSION.SDK_INT < 28) return false;
+        try {
+            int n = DP_CUTOFFS.length;
+            DynamicsProcessing.Config cfg = new DynamicsProcessing.Config.Builder(
+                DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION, 2,
+                true, n,      // pre-EQ
+                false, 0,     // multi-band compressor
+                false, 0,     // post-EQ
+                true          // limiter
+            ).build();
+            DynamicsProcessing.Eq pre = new DynamicsProcessing.Eq(true, true, n);
+            for (int i = 0; i < n; i++) pre.setBand(i, new DynamicsProcessing.EqBand(true, DP_CUTOFFS[i], 0f));
+            cfg.setPreEqAllChannelsTo(pre);
+            // Soft safety limiter just below 0 dBFS
+            cfg.setLimiterAllChannelsTo(new DynamicsProcessing.Limiter(true, true, 0, 1f, 80f, 10f, -1f, 0f));
+            DynamicsProcessing d = new DynamicsProcessing(1000, 0, cfg);
+            d.setEnabled(true);
+            bands = n;
+            centersHz = new double[n];
+            for (int i = 0; i < n; i++) {
+                double lo = i == 0 ? 20 : DP_CUTOFFS[i - 1];
+                centersHz[i] = Math.sqrt(lo * DP_CUTOFFS[i]); // each band ends at its cutoff
+            }
+            baseDb = new double[n];
+            fxDb = new double[n];
+            minMb = -3000;
+            maxMb = 1500;
+            dp = d;
+            error = null;
+            return true;
+        } catch (Throwable t) {
+            dp = null;
+            error = t.getClass().getSimpleName() + ": " + t.getMessage();
+            return false;
+        }
+    }
+
     private synchronized boolean ensure() {
-        if (eq != null) return true;
+        if (dp != null || eq != null) return true;
+        if (tryDynamics()) return true;
         try {
             Equalizer e = new Equalizer(1000, 0);
             e.setEnabled(true);
@@ -75,6 +121,23 @@ public class SpotifreeAudioFxPlugin extends Plugin {
     }
 
     private synchronized void apply() {
+        if (dp != null) {
+            double maxBoost = 0;
+            for (int i = 0; i < bands; i++) maxBoost = Math.max(maxBoost, baseDb[i] + fxDb[i]);
+            try {
+                for (int i = 0; i < bands; i++) {
+                    double db = Math.max(minMb / 100.0, Math.min(maxMb / 100.0, baseDb[i] + fxDb[i]));
+                    dp.setPreEqBandAllChannelsTo(i, new DynamicsProcessing.EqBand(true, DP_CUTOFFS[i], (float) db));
+                }
+                // Headroom: when the curve boosts, lower the input a bit so the limiter barely works
+                float inGain = (float) -Math.min(6, maxBoost * 0.5);
+                if (Math.abs(inGain - lastInputGain) > 0.05f) {
+                    dp.setInputGainAllChannelsTo(inGain);
+                    lastInputGain = inGain;
+                }
+            } catch (Throwable ignored) {}
+            return;
+        }
         if (eq == null) return;
         for (short i = 0; i < bands; i++) {
             double db = baseDb[i] + fxDb[i];
@@ -89,6 +152,7 @@ public class SpotifreeAudioFxPlugin extends Plugin {
         boolean ok = ensure();
         JSObject ret = new JSObject();
         ret.put("available", ok);
+        ret.put("engine", dp != null ? "dynamics" : eq != null ? "equalizer" : "none");
         JSArray c = new JSArray();
         for (double hz : centersHz) c.put(Math.round(hz));
         ret.put("bandsHz", c);
@@ -133,7 +197,8 @@ public class SpotifreeAudioFxPlugin extends Plugin {
         final String kind = call.getString("kind", "build");
         final long dur = Math.max(400, call.getInt("durationMs", 4000));
         final double swapAt = Math.max(0.1, Math.min(0.97, call.getDouble("swapAt", 0.5)));
-        final double depth = Math.max(0, Math.min(15, call.getDouble("depthDb", 12.0)));
+        // The advanced processor can cut deeper (a real filter feel); the basic one stops at 15 dB
+        final double depth = Math.max(0, Math.min(dp != null ? 24 : 15, call.getDouble("depthDb", 12.0) * (dp != null ? 1.6 : 1.0)));
         final long start = SystemClock.uptimeMillis();
         if (animator != null) handler.removeCallbacks(animator);
         animator = new Runnable() {
@@ -191,6 +256,10 @@ public class SpotifreeAudioFxPlugin extends Plugin {
             if (eq != null) {
                 try { eq.release(); } catch (Throwable ignored) {}
                 eq = null;
+            }
+            if (dp != null) {
+                try { dp.release(); } catch (Throwable ignored) {}
+                dp = null;
             }
         }
         super.handleOnDestroy();

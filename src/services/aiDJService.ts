@@ -4,6 +4,7 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { audioEngine } from './audioEngine';
 import { aiDJVoiceService, cleanTextForNaturalTTS } from './aiDJVoiceService';
+import { isNativeSpeechAvailable, nativeListen, nativeStopListening } from './nativeSpeech';
 import { useLanguageStore } from '../utils/i18n';
 import { resolveTrackCoversBatch } from '../utils/trackCovers';
 import {
@@ -18,6 +19,7 @@ import { useStatsStore } from '../store/useStatsStore';
 import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
 import { getCustomLikedSongs } from '../utils/userStorage';
 import { searchSpotify } from './spotifyApi';
+import { fetchLyricsUnified, parseEnhancedLyrics } from '../utils/lyricsService';
 import { buildSegmentedDJSet, buildSegmentIntro, segmentAt, type DJSegment } from './djSegments';
 
 export type AIDJVisualizerMode = 'idle' | 'speaking' | 'listening' | 'playing';
@@ -104,12 +106,37 @@ function pickDynamicSpeech(categoryKey: string, options: string[]): string {
   return picked;
 }
 
+/** Real facts the DJ may mention (the AI is told not to invent any other) */
+function buildDJContext(track?: Track | null): Record<string, unknown> {
+  const now = new Date();
+  const h = now.getHours();
+  const timeOfDay = h < 6 ? 'madrugada' : h < 13 ? 'mañana' : h < 21 ? 'tarde' : 'noche';
+  const weekday = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'][now.getDay()];
+  const voice = aiDJVoiceService.getSelectedVoice();
+  const voiceRegion = voice === 'dalia' || voice === 'jorge' ? 'mx' : voice === 'salome' ? 'co' : voice === 'sebastian' ? 've' : 'es';
+  const ctx: Record<string, unknown> = { timeOfDay, weekday, voiceRegion };
+  try {
+    const top = useStatsStore.getState().getTopArtists(3).map((a) => a.name).filter(Boolean);
+    if (top[0]) ctx.topArtist = top[0];
+    if (track && top.some((n) => (track.artists || []).some((a) => a.name === n))) ctx.isTopArtist = true;
+  } catch {}
+  const release = String((track as any)?.album?.release_date || '');
+  if (/^\d{4}/.test(release)) ctx.releaseYear = release.slice(0, 4);
+  const album = track?.album?.name;
+  if (album && track && album.toLowerCase() !== (track.name || '').toLowerCase()) ctx.album = album;
+  return ctx;
+}
+
 async function callGroqDJ(payload: any, timeoutMs = 4500): Promise<any | null> {
   try {
     const res = await fetch('/api/groq', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ language: useLanguageStore.getState().language, ...payload }),
+      body: JSON.stringify({
+        language: useLanguageStore.getState().language,
+        context: buildDJContext(payload?.currentTrack || payload?.nextTrack),
+        ...payload,
+      }),
       signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined,
     });
     if (!res.ok) return null;
@@ -839,6 +866,43 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (typeof window === 'undefined') return;
 
     aiDJVoiceService.stopSpeaking();
+
+    // APK: Android's own speech recognition (the WebView has none)
+    if (isNativeSpeechAvailable()) {
+      const en = isEnglishUI();
+      set({
+        isMicListening: true,
+        visualizerState: 'listening',
+        currentMessage: en ? "I'm listening… talk to me" : 'Te escucho... habla conmigo',
+        displayedTranscript: '',
+      });
+      let finalText = '';
+      void nativeListen(en ? 'en-US' : 'es-ES', {
+        onPartial: (text) => set({ displayedTranscript: text }),
+        onFinal: (text) => {
+          finalText = text;
+          set({ displayedTranscript: text });
+        },
+        onLevel: (level) => set({ voiceLevel: level }),
+        onEnd: (error) => {
+          const isPlaying = usePlayerStore.getState().isPlaying;
+          set({ isMicListening: false, voiceLevel: 0, visualizerState: isPlaying ? 'playing' : 'idle' });
+          if (finalText.trim()) {
+            void get().handleUserPrompt(finalText.trim());
+          } else if (error === 'permission') {
+            const msg = en
+              ? 'Spotifree needs microphone permission. You can type your request below.'
+              : 'Spotifree necesita permiso para el micrófono. Puedes escribir tu petición aquí abajo.';
+            set({ currentMessage: msg, displayedTranscript: msg });
+          } else if (error) {
+            const msg = en ? "I didn't catch that. Try again or type it below." : 'No te he entendido. Prueba otra vez o escríbelo aquí abajo.';
+            set({ currentMessage: msg, displayedTranscript: msg });
+          }
+        },
+      });
+      return;
+    }
+
     const SpeechRec = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRec) {
@@ -904,6 +968,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   },
 
   stopVoiceListening: () => {
+    if (isNativeSpeechAvailable() && get().isMicListening) nativeStopListening();
     if (speechRecognitionInstance) {
       try {
         speechRecognitionInstance.stop();
@@ -1366,31 +1431,94 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 if (typeof window !== 'undefined') {
   (window as any).__useAIDJStore = useAIDJStore;
 
-  // The DJ comes back on air at the start of every block, like Spotify's DJ
+  // ---------------------------------------------------------------- talk-over timing
+  // Like a radio DJ: talk over the instrumental intro and stop before the singer comes in. If the
+  // new song's intro is too short but the previous one ends with a long instrumental outro, the
+  // DJ talks over that outro instead (just before the block starts).
+  const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
+  const estimateSpeechMs = (text: string) => Math.round(words(text) * 360 + 700);
+  const vocalTimes = async (t: Track): Promise<{ first: number; last: number } | null> => {
+    try {
+      const res = await Promise.race([
+        fetchLyricsUnified(t.name, t.artists?.[0]?.name || '', (t.duration_ms || 0) / 1000),
+        new Promise<null>((r) => setTimeout(() => r(null), 2500)),
+      ]);
+      const synced = (res as any)?.syncedLyrics;
+      if (!synced) return null;
+      const lines = parseEnhancedLyrics(synced).filter((l) => l.text && l.text.trim());
+      if (!lines.length) return null;
+      return { first: lines[0].timeMs, last: lines[lines.length - 1].timeMs };
+    } catch {
+      return null;
+    }
+  };
+
+  const announceBlock = (seg: DJSegment) => {
+    const text = cleanTextForNaturalTTS(seg.intro);
+    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    useAIDJStore.setState((s) => ({
+      chatHistory: [...s.chatHistory, { id: `msg-seg-${Date.now()}`, sender: 'dj', text, timestamp: t, curatedSetTitle: seg.title, trackCount: seg.length }],
+    }));
+    void djSpeak(text, useAIDJStore.setState);
+  };
+
+  let outroTimer: number | undefined;
+
   usePlayerStore.subscribe((state, prev) => {
     if (!state.currentTrack || state.currentTrack.id === prev.currentTrack?.id) return;
+    window.clearTimeout(outroTimer);
     const dj = useAIDJStore.getState();
     if (!dj.isDJModeActive || state.currentContextId !== 'dj-session' || dj.segments.length === 0) return;
-    const idx = dj.djTracks.findIndex((t) => t.id === state.currentTrack!.id);
+    const current = state.currentTrack;
+    const idx = dj.djTracks.findIndex((t) => t.id === current.id);
     if (idx < 0) return;
     const seg = segmentAt(dj.segments, idx);
     if (!seg) return;
     if (seg.id !== dj.activeSegmentId) {
       useAIDJStore.setState({ activeSegmentId: seg.id, currentSetTitle: seg.title, songsPlayedInSet: 0 });
     }
+
+    // The next song opens a block: maybe present it over this song's instrumental outro
+    const nextSeg = dj.segments.find((s) => s.startIndex === idx + 1);
+    const nextTrack = dj.djTracks[idx + 1];
+    if (nextSeg && nextTrack && !announcedSegments.has(nextSeg.id)) {
+      void (async () => {
+        const [here, there] = await Promise.all([vocalTimes(current), vocalTimes(nextTrack)]);
+        const need = estimateSpeechMs(nextSeg.intro);
+        const nextIntro = there ? there.first : 0;
+        if (!here || nextIntro >= need + 800) return; // the next intro is long enough: talk there
+        const dur = state.durationMs || current.duration_ms || 0;
+        const outroStart = here.last + 4500; // the last sung line, plus a few seconds to finish it
+        const crossfadeMs = 8000;
+        const startAt = Math.max(outroStart, dur - crossfadeMs - need - 1000);
+        if (dur <= 0 || startAt + need > dur - 1000) return; // no room in the outro either
+        const wait = startAt - (usePlayerStore.getState().progressMs || 0);
+        if (wait < 0) return;
+        outroTimer = window.setTimeout(() => {
+          const p = usePlayerStore.getState();
+          const d = useAIDJStore.getState();
+          if (!p.isPlaying || p.currentTrack?.id !== current.id || !d.isDJModeActive || d.isThinking) return;
+          if (announcedSegments.has(nextSeg.id) || aiDJVoiceService.getIsSpeaking()) return;
+          announcedSegments.add(nextSeg.id);
+          announceBlock(nextSeg);
+        }, wait);
+      })();
+    }
+
     if (seg.startIndex !== idx || announcedSegments.has(seg.id)) return;
     announcedSegments.add(seg.id);
     if (dj.isThinking) return;
     // A new block always wins: if the DJ was still talking, it cuts itself off and presents it
     if (aiDJVoiceService.getIsSpeaking()) aiDJVoiceService.stopSpeaking();
-    const text = cleanTextForNaturalTTS(seg.intro);
-    const t = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    useAIDJStore.setState((s) => ({
-      chatHistory: [...s.chatHistory, { id: `msg-seg-${Date.now()}`, sender: 'dj', text, timestamp: t, curatedSetTitle: seg.title, trackCount: seg.length }],
-    }));
-    // Small delay so the voice lands on the new song, not on the crossfade tail of the previous one
-    setTimeout(() => {
-      void djSpeak(text, useAIDJStore.setState);
-    }, 1200);
+    // Over the intro: as soon as the new song is on (not on the previous one's crossfade tail),
+    // earlier when the singer comes in soon
+    void vocalTimes(current).then((v) => {
+      const need = estimateSpeechMs(seg.intro);
+      const delay = v && v.first > 0 && v.first < need + 1800 ? 300 : 1200;
+      window.setTimeout(() => {
+        if (usePlayerStore.getState().currentTrack?.id !== current.id) return;
+        announceBlock(seg);
+      }, delay);
+    });
   });
 }

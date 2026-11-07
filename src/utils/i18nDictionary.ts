@@ -926,6 +926,9 @@ export const EN_DICTIONARY: Record<string, string> = {
   'Botones grandes, Canvas y letra': 'Big buttons, Canvas and lyrics',
   'Letra en el coche': 'Lyrics in the car',
   'Música con la pantalla apagada': 'Music with the screen off',
+  'Temporizador de apagado': 'Sleep timer',
+  'Activado: toca para cambiarlo': 'On: tap to change it',
+  'Para la música pasado un rato': 'Stop the music after a while',
   'Activado: la música sigue con el móvil bloqueado y en el coche.': 'On: music keeps playing with the phone locked and in the car.',
   'Permite a Spotifree funcionar en segundo plano para que tu móvil no la cierre al bloquearlo.':
     'Let Spotifree run in the background so your phone doesn’t close it when locked.',

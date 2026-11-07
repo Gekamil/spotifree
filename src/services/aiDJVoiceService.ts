@@ -7,23 +7,34 @@ import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
 import { usePlayerStore } from '../store/usePlayerStore';
 
-export type DJVoiceId = 'dalia' | 'elevenlabs' | 'sebastian' | 'alvaro' | 'salome' | 'gemini';
+export type DJVoiceId = 'dalia' | 'elevenlabs' | 'sebastian' | 'alvaro' | 'salome' | 'gemini' | 'jorge' | 'elvira';
 
 export interface DJVoiceOptionItem {
   id: DJVoiceId;
   name: string;
   region: string;
   description: string;
+  descriptionEn: string;
 }
 
+/** The DJ's voices (Microsoft neural voices, with a radio presenter's delivery) */
 export const DJ_VOICE_OPTIONS: DJVoiceOptionItem[] = [
-  {
-    id: 'dalia',
-    name: 'Dalia Multilingual',
-    region: 'México',
-    description: 'Voz oficial de Spotifree DJ • Entusiasta, brillante y ultra-natural',
-  },
+  { id: 'dalia', name: 'Dalia', region: 'México', description: 'Cercana y con energía', descriptionEn: 'Warm and upbeat' },
+  { id: 'jorge', name: 'Jorge', region: 'México', description: 'Locutor de radio, grave', descriptionEn: 'Radio host, deep' },
+  { id: 'alvaro', name: 'Álvaro', region: 'España', description: 'Locutor joven y natural', descriptionEn: 'Young, natural host' },
+  { id: 'elvira', name: 'Elvira', region: 'España', description: 'Clara y elegante', descriptionEn: 'Clear and elegant' },
+  { id: 'salome', name: 'Salomé', region: 'Colombia', description: 'Alegre y musical', descriptionEn: 'Bright and musical' },
+  { id: 'sebastian', name: 'Sebastián', region: 'Venezuela', description: 'Animado, de fiesta', descriptionEn: 'Lively, party vibe' },
 ];
+const VOICE_KEY = 'spotifree_dj_voice_choice';
+const isKnownVoice = (v: unknown): v is DJVoiceId => DJ_VOICE_OPTIONS.some((o) => o.id === v);
+
+/** Exact time of each spoken word (ms), from the voice service */
+interface WordTiming {
+  t: number;
+  d: number;
+  w: string;
+}
 
 export interface DJVoiceOptions {
   onWord?: (word: string, currentFullText: string) => void;
@@ -86,15 +97,15 @@ class AIDJVoiceService {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.selectedVoiceId = 'dalia';
       try {
-        localStorage.setItem('spotifree_dj_voice_choice', 'dalia');
+        const v = localStorage.getItem(VOICE_KEY);
+        this.selectedVoiceId = isKnownVoice(v) ? v : 'dalia';
       } catch {}
 
       try {
         const saved = localStorage.getItem('spotifree_ai_dj_config');
         if (saved) {
-          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved), voice: 'dalia', provider: 'edge' };
+          this.config = { ...DEFAULT_CONFIG, ...JSON.parse(saved), voice: this.selectedVoiceId, provider: 'edge' };
         }
       } catch {}
 
@@ -146,17 +157,79 @@ class AIDJVoiceService {
   }
 
   public getSelectedVoice(): DJVoiceId {
+    // Also picks up a voice synced from another device
+    try {
+      const v = localStorage.getItem(VOICE_KEY);
+      if (isKnownVoice(v)) this.selectedVoiceId = v;
+    } catch {}
     return this.selectedVoiceId;
   }
 
-  public setSelectedVoice(_voice?: DJVoiceId) {
-    this.selectedVoiceId = 'dalia';
-    this.config.voice = 'dalia';
+  public setSelectedVoice(voice?: DJVoiceId) {
+    const v = isKnownVoice(voice) ? voice : 'dalia';
+    this.selectedVoiceId = v;
+    this.config.voice = v;
     this.config.provider = 'edge';
     if (typeof window !== 'undefined') {
       try {
-        localStorage.setItem('spotifree_dj_voice_choice', 'dalia');
+        localStorage.setItem(VOICE_KEY, v);
       } catch {}
+    }
+  }
+
+  /** /api/tts parameters: the chosen voice, the presenter's delivery and word timings */
+  private ttsParams(text: string, lang: string, voice: DJVoiceId): URLSearchParams {
+    const provider = voice === 'gemini' ? 'gemini' : voice === 'elevenlabs' ? 'elevenlabs' : 'edge';
+    const params = new URLSearchParams({ text, voice, provider, format: 'mp3', lang, style: 'dj', timings: '1', v: '5' });
+    if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
+    if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
+    if (this.config.azureKey) params.set('azureKey', this.config.azureKey);
+    if (this.config.azureRegion) params.set('azureRegion', this.config.azureRegion);
+    return params;
+  }
+
+  /** Audio (blob URL) + word timings; works with the JSON answer and with plain audio */
+  private async fetchSpeech(text: string, lang: string, voice: DJVoiceId, signal?: AbortSignal): Promise<{ url: string; words: WordTiming[] } | null> {
+    const res = await fetch(`/api/tts?${this.ttsParams(text, lang, voice).toString()}`, { signal });
+    if (!res.ok) throw new Error(`TTS API returned ${res.status}`);
+    if ((res.headers.get('content-type') || '').includes('json')) {
+      const data = await res.json();
+      if (!data?.audio) return null;
+      const bin = atob(data.audio);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      if (bytes.length < 500) return null;
+      return { url: URL.createObjectURL(new Blob([bytes], { type: data.mime || 'audio/mpeg' })), words: Array.isArray(data.words) ? data.words : [] };
+    }
+    const blob = await res.blob();
+    if (blob.size < 500) return null;
+    return { url: URL.createObjectURL(blob), words: [] };
+  }
+
+  private wordCache: Map<string, WordTiming[]> = new Map();
+
+  /** Real loudness of the DJ's voice (drives the sphere), when the audio can be analysed */
+  private analyserCtx: AudioContext | null = null;
+  private attachAnalyser(audio: HTMLAudioElement): AnalyserNode | null {
+    try {
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (!AC) return null;
+      if (!this.analyserCtx) this.analyserCtx = new AC();
+      const ctx = this.analyserCtx!;
+      if ((ctx.state as string) !== 'running') {
+        void ctx.resume().catch(() => {});
+        // Not running yet: the element would be silent through the graph. Keep it direct.
+        return null;
+      }
+      const src = ctx.createMediaElementSource(audio);
+      const an = ctx.createAnalyser();
+      an.fftSize = 512;
+      an.smoothingTimeConstant = 0.6;
+      src.connect(an);
+      an.connect(ctx.destination);
+      return an;
+    } catch {
+      return null;
     }
   }
 
@@ -172,27 +245,11 @@ class AIDJVoiceService {
       const activeVoice = this.getSelectedVoice();
       const cacheKey = `${lang}:${activeVoice}:${clean}`;
       if (this.ttsCache.has(cacheKey)) return;
-
-      const provider = activeVoice === 'gemini' ? 'gemini' : activeVoice === 'elevenlabs' ? 'elevenlabs' : 'edge';
-      const params = new URLSearchParams({
-        text: clean,
-        voice: activeVoice,
-        provider,
-        format: 'mp3',
-        lang,
-        v: '4',
-      });
-      if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
-      if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
-      if (this.config.azureKey) params.set('azureKey', this.config.azureKey);
-      if (this.config.azureRegion) params.set('azureRegion', this.config.azureRegion);
-      fetch(`/api/tts?${params.toString()}`)
-        .then((r) => (r.ok ? r.blob() : null))
-        .then((blob) => {
-          if (blob && blob.size > 500) {
-            const url = URL.createObjectURL(blob);
-            this.ttsCache.set(cacheKey, url);
-          }
+      this.fetchSpeech(clean, lang, activeVoice)
+        .then((r) => {
+          if (!r) return;
+          this.ttsCache.set(cacheKey, r.url);
+          this.wordCache.set(cacheKey, r.words);
         })
         .catch(() => {});
     } catch {}
@@ -323,41 +380,25 @@ class AIDJVoiceService {
       const activeVoice = this.getSelectedVoice();
       const cacheKey = `${lang}:${activeVoice}:${text}`;
       let audioUrl = this.ttsCache.get(cacheKey);
+      let timings = this.wordCache.get(cacheKey) || [];
       if (!audioUrl) {
-        const provider = activeVoice === 'gemini' ? 'gemini' : activeVoice === 'elevenlabs' ? 'elevenlabs' : 'edge';
-        const params = new URLSearchParams({
-          text,
-          voice: activeVoice,
-          provider,
-          format: 'mp3',
-          lang,
-          v: '4',
-        });
-        if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
-        if (this.config.voiceId) params.set('voiceId', this.config.voiceId);
-        if (this.config.azureKey) params.set('azureKey', this.config.azureKey);
-        if (this.config.azureRegion) params.set('azureRegion', this.config.azureRegion);
-
-        const res = await fetch(`/api/tts?${params.toString()}`, {
-          signal,
-        });
-        if (!res.ok) {
-          throw new Error(`TTS API returned ${res.status}`);
-        }
-        const blob = await res.blob();
-        if (blob.size < 500) {
+        const got = await this.fetchSpeech(text, lang, activeVoice, signal);
+        if (!got) {
           throw new Error('TTS returned incomplete audio blob');
         }
-        audioUrl = URL.createObjectURL(blob);
+        audioUrl = got.url;
+        timings = got.words;
         if (this.ttsCache.size > 20) {
           const firstKey = this.ttsCache.keys().next().value;
           if (firstKey) {
             const oldUrl = this.ttsCache.get(firstKey);
             if (oldUrl) URL.revokeObjectURL(oldUrl);
             this.ttsCache.delete(firstKey);
+            this.wordCache.delete(firstKey);
           }
         }
         this.ttsCache.set(cacheKey, audioUrl);
+        this.wordCache.set(cacheKey, timings);
       }
 
       if (!this.isSpeaking) return true;
@@ -410,6 +451,10 @@ class AIDJVoiceService {
           resolve(true);
         };
 
+        // The sphere follows the real loudness of the voice when the audio can be analysed
+        const analyser = this.attachAnalyser(audio);
+        const samples = analyser ? new Uint8Array(analyser.fftSize) : null;
+
         // Smooth 30ms high-frequency timer for fluid voice level and real-time streaming word subtitles
         let phase = 0;
         let lastReportedWordIdx = -1;
@@ -418,13 +463,33 @@ class AIDJVoiceService {
             options.onVoiceLevel?.(0.05);
             return;
           }
-          phase += 0.28;
-          const raw = Math.sin(phase) * 0.45 + Math.sin(phase * 2.1) * 0.35 + 0.55;
-          const bounded = Math.max(0.18, Math.min(1.0, raw));
-          options.onVoiceLevel?.(bounded);
+          if (analyser && samples) {
+            analyser.getByteTimeDomainData(samples);
+            let sum = 0;
+            for (let i = 0; i < samples.length; i++) {
+              const v = (samples[i] - 128) / 128;
+              sum += v * v;
+            }
+            const rms = Math.sqrt(sum / samples.length);
+            options.onVoiceLevel?.(Math.max(0.08, Math.min(1, rms * 4.2)));
+          } else {
+            phase += 0.28;
+            const raw = Math.sin(phase) * 0.45 + Math.sin(phase * 2.1) * 0.35 + 0.55;
+            options.onVoiceLevel?.(Math.max(0.18, Math.min(1.0, raw)));
+          }
 
-          // Fluid word subtitle progression calculated continuously at 30ms resolution
-          if (audio.duration && audio.duration > 0 && !isNaN(audio.currentTime)) {
+          // Exact captions: the words the voice has really said (timings from the voice service)
+          if (timings.length > 0 && !isNaN(audio.currentTime)) {
+            const nowMs = audio.currentTime * 1000 + 60;
+            let spoken = 0;
+            while (spoken < timings.length && timings[spoken].t <= nowMs) spoken++;
+            const wordIndex = Math.min(words.length - 1, Math.round((spoken / timings.length) * words.length) - 1);
+            if (wordIndex >= 0 && wordIndex !== lastReportedWordIdx) {
+              lastReportedWordIdx = wordIndex;
+              options.onWord?.(words[wordIndex] || '', words.slice(0, wordIndex + 1).join(' '));
+            }
+          } else if (audio.duration && audio.duration > 0 && !isNaN(audio.currentTime)) {
+            // Fluid word subtitle progression calculated continuously at 30ms resolution
             const effectiveTime = Math.min(audio.duration, audio.currentTime + 0.09);
             const progress = Math.max(0, Math.min(1, effectiveTime / audio.duration));
             const wordIndex = Math.min(words.length - 1, Math.floor(progress * words.length));
@@ -574,6 +639,13 @@ class AIDJVoiceService {
     // High-fidelity Neural Studio TTS with crisp intonation and zero awkward pauses
     const success = await this.speakViaNeuralTTS(clean, options);
     if (!success && this.isSpeaking) {
+      // The voice service failed: the device's own voice rather than silence (when it has one)
+      const hasDeviceVoice =
+        typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0;
+      if (hasDeviceVoice) {
+        await this.speakViaSpeechSynthesis(clean, options);
+        return;
+      }
       this.restoreAudio();
       this.isSpeaking = false;
       options.onEnd?.();

@@ -3,6 +3,7 @@ import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
+import { DJVoicePicker } from '../common/DJVoicePicker';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -808,6 +809,11 @@ export const DesktopSettingsView: React.FC = () => {
             {/* Efectos de DJ */}
             <div className="py-3 border-b border-white/5">
               <DJEffectsSelector />
+            </div>
+
+            {/* Voz del DJ con IA */}
+            <div className="py-3 border-b border-white/5">
+              <DJVoicePicker />
             </div>
 
             {/* Ecualizador (estilo Spotify) */}
