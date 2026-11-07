@@ -21,6 +21,7 @@ async function main() {
     return;
   }
   let updatedAt = null;
+  let native = null;
   let url = `https://github.com/${REPO}/releases/download/${TAG}/${ASSET}`;
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${TAG}`, {
@@ -28,6 +29,8 @@ async function main() {
     });
     if (r.ok) {
       const rel = await r.json();
+      // Last commit that changed the app itself (written by the APK workflow)
+      native = (/native:\s*([0-9a-f]{7,40})/i.exec(rel.body || '') || [])[1] || null;
       const a = (rel.assets || []).find((x) => /\.apk$/i.test(x.name));
       if (a) {
         updatedAt = a.updated_at || rel.published_at || null;
@@ -46,8 +49,8 @@ async function main() {
     updatedAt = lm ? new Date(lm).toISOString() : new Date().toISOString();
   }
   fs.writeFileSync(path.join(dist, ASSET), buf);
-  fs.writeFileSync(path.join(dist, 'apk.json'), JSON.stringify({ updatedAt, size: buf.length }));
-  console.log(`[apk] copied ${ASSET} (${(buf.length / 1048576).toFixed(1)} MB, ${updatedAt})`);
+  fs.writeFileSync(path.join(dist, 'apk.json'), JSON.stringify({ updatedAt, size: buf.length, native }));
+  console.log(`[apk] copied ${ASSET} (${(buf.length / 1048576).toFixed(1)} MB, ${updatedAt}, native ${native || '?'})`);
 }
 
 main().catch((e) => {

@@ -33,6 +33,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -105,12 +107,26 @@ jobs:
       - name: Publish as "android-latest"
         env:
           GH_TOKEN: ${{ github.token }}
-        # Replace the file in place (no deleting and recreating the whole release)
+        # Replace the file in place (no deleting and recreating the whole release).
+        # "native:" = last commit that changed the app itself (same paths as the trigger): the
+        # install page compares it with the copy on the website to know whether they are the same app.
         run: |
-          NOTES="APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar"
+          NATIVE=$(git log -1 --format=%H -- native 'scripts/setup-android-*.mjs' capacitor.config.ts package.json package-lock.json public/offline.html public/icon-mobile-512.png public/app-icons .github/workflows/android-apk.yml)
+          NOTES="APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar
+
+          native: ${NATIVE}"
           if gh release view android-latest >/dev/null 2>&1; then
             gh release upload android-latest Spotifree.apk --clobber
             gh release edit android-latest --notes "$NOTES" --latest
           else
             gh release create android-latest Spotifree.apk --title "Spotifree para Android" --notes "$NOTES" --latest
           fi
+
+      # Optional: republish the website so spotifreeweb.vercel.app/Spotifree.apk is the new APK
+      # right away (Vercel → Settings → Git → Deploy Hooks, saved as the VERCEL_DEPLOY_HOOK secret).
+      # Without it, the site's copy updates with the next web deploy and the page uses GitHub meanwhile.
+      - name: Refresh the website's copy
+        env:
+          HOOK: ${{ secrets.VERCEL_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$HOOK" ]; then curl -fsS -X POST "$HOOK" >/dev/null && echo "Vercel redeploy requested"; else echo "No VERCEL_DEPLOY_HOOK secret"; fi

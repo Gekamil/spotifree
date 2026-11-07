@@ -221,9 +221,13 @@
     var local = res[0] && res[0].updatedAt && res[0].size ? res[0] : null;
     var rel = res[1];
     var a = rel && rel.assets ? rel.assets.filter(function (x) { return /\.apk$/i.test(x.name); })[0] : null;
+    var ghNative = rel && rel.body ? (/native:\s*([0-9a-f]{7,40})/i.exec(rel.body) || [])[1] : null;
     var gh = a ? { url: a.browser_download_url || GH_APK, updatedAt: a.updated_at || rel.published_at, size: a.size } : null;
-    // GitHub has a newer build only after a change to the app itself, until the web is published again
-    var useLocal = local && (!gh || new Date(local.updatedAt).getTime() >= new Date(gh.updatedAt).getTime() - 60000);
+    // GitHub has a different app only after a change to the app itself, until the web is published
+    // again. Both labelled: compare the label; otherwise, the dates.
+    var useLocal = local && (!gh ||
+      (local.native && ghNative ? local.native === ghNative
+        : new Date(local.updatedAt).getTime() >= new Date(gh.updatedAt).getTime() - 60000));
     var pick = useLocal ? { url: '/Spotifree.apk', updatedAt: local.updatedAt, size: local.size } : gh;
     if (!pick) return;
     var d = new Date(pick.updatedAt);
