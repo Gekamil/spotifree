@@ -925,6 +925,11 @@ export const EN_DICTIONARY: Record<string, string> = {
   'Modo coche': 'Car mode',
   'Botones grandes, Canvas y letra': 'Big buttons, Canvas and lyrics',
   'Letra en el coche': 'Lyrics in the car',
+  'Música con la pantalla apagada': 'Music with the screen off',
+  'Activado: la música sigue con el móvil bloqueado y en el coche.': 'On: music keeps playing with the phone locked and in the car.',
+  'Permite a Spotifree funcionar en segundo plano para que tu móvil no la cierre al bloquearlo.':
+    'Let Spotifree run in the background so your phone doesn’t close it when locked.',
+  'Permitir': 'Allow',
   'Muestra la línea de la letra que suena en Android Auto y en la pantalla del Bluetooth del coche.':
     'Shows the current lyric line in Android Auto and on the car’s Bluetooth display.',
 };

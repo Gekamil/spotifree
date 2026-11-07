@@ -56,6 +56,10 @@ public class SpotifreeAppIconPlugin extends Plugin {
             pm.setComponentEnabledSetting(aliasFor(ctx, id),
                 PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
         }
+        // Android Auto shows the media service's icon: switch it too
+        try {
+            SpotifreeMediaService.useIcon(ctx, name);
+        } catch (Throwable ignored) {}
         call.resolve();
     }
 

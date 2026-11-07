@@ -17,6 +17,7 @@ import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../uti
 import { toHDImage } from '../utils/formatters';
 import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
 import type { Playlist, Track } from '../types/spotify';
+import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
 
 interface MediaCommand {
   action:
@@ -44,6 +45,8 @@ interface SpotifreeMediaPlugin {
   updateNowPlaying(o: Record<string, unknown>): Promise<void>;
   stop(): Promise<void>;
   takePendingCommand(): Promise<{ command?: MediaCommand }>;
+  backgroundStatus(): Promise<{ unrestricted: boolean }>;
+  requestBackground(): Promise<void>;
   addListener(event: 'command', cb: (c: MediaCommand) => void): Promise<PluginListenerHandle>;
 }
 
@@ -63,6 +66,26 @@ export function setCarLyricsEnabled(on: boolean) {
     window.localStorage.setItem(CAR_LYRICS_KEY, on ? 'true' : 'false');
   } catch {}
   pushNowPlaying(true);
+}
+
+/**
+ * Music with the screen off: the app keeps playing by itself, but some phones (Samsung,
+ * Xiaomi…) still close apps in the background unless they are exempt from battery optimization.
+ * null = not the APK / unknown.
+ */
+export async function getBackgroundPlaybackAllowed(): Promise<boolean | null> {
+  if (!isNativeMediaAvailable()) return null;
+  try {
+    return (await SpotifreeMedia.backgroundStatus()).unrestricted;
+  } catch {
+    return null;
+  }
+}
+export async function requestBackgroundPlayback(): Promise<void> {
+  if (!isNativeMediaAvailable()) return;
+  try {
+    await SpotifreeMedia.requestBackground();
+  } catch {}
 }
 
 export function isNativeMediaAvailable(): boolean {
@@ -130,9 +153,18 @@ async function rasterize(url: string): Promise<string | null> {
     return null;
   }
 }
-function img(url?: string | null): string {
+/** Lists and grids in the car: 300 px covers load much faster than the 640 px ones */
+function thumb(url: string): string {
+  return toHDImage(url)
+    .replace('/ab67616d0000b273', '/ab67616d00001e02') // albums
+    .replace('/ab67706c0000bebb', '/ab67706c0000da84') // user playlists
+    .replace('/ab6761610000e5eb', '/ab67616100005174') // artists
+    .replace('mosaic.scdn.co/640/', 'mosaic.scdn.co/300/')
+    .replace('600x600bb', '300x300bb');
+}
+function img(url?: string | null, hd = false): string {
   if (!url) return '';
-  if (url.startsWith('https://')) return toHDImage(url);
+  if (url.startsWith('https://')) return hd ? toHDImage(url) : thumb(url);
   if (url.startsWith('http://')) return '';
   const done = localImages.get(url);
   if (done) return done;
@@ -147,7 +179,7 @@ function img(url?: string | null): string {
   }
   return '';
 }
-const coverOf = (t?: Track | null) => img(t?.album?.images?.[0]?.url);
+const coverOf = (t?: Track | null, hd = false) => img(t?.album?.images?.[0]?.url, hd);
 const tracksOf = (p?: Playlist | null): Track[] =>
   ((p?.tracks?.items || []) as any[]).map((x) => x?.track || x).filter((t: any) => t?.id && t?.name);
 const carTrack = (t: Track): CarTrack => ({
@@ -168,30 +200,26 @@ const playlistItem = (p: Playlist): CarItem => ({
   image: img(p.images?.[0]?.url),
 });
 
-// ----------------------------------------------------------------- Explorar (genre tiles)
-const GENRES: { id: string; es: string; en: string; q: string; color: string }[] = [
-  { id: 'reggaeton', es: 'Reggaetón', en: 'Reggaeton', q: 'reggaeton', color: '#E8115B' },
-  { id: 'latino', es: 'Latino', en: 'Latin', q: 'latino exitos', color: '#E1118C' },
-  { id: 'bachata', es: 'Bachata', en: 'Bachata', q: 'bachata', color: '#BC5900' },
-  { id: 'pop', es: 'Pop', en: 'Pop', q: 'pop hits', color: '#148A08' },
-  { id: 'urbano', es: 'Urbano', en: 'Urban', q: 'urbano latino', color: '#503750' },
-  { id: 'rap', es: 'Hip hop', en: 'Hip-Hop', q: 'hip hop', color: '#BA5D07' },
-  { id: 'electronica', es: 'Electrónica', en: 'Dance/Electronic', q: 'electronica dance', color: '#7358FF' },
-  { id: 'fiesta', es: 'Fiesta', en: 'Party', q: 'fiesta', color: '#AF2896' },
-  { id: 'romanticas', es: 'Románticas', en: 'Love', q: 'canciones romanticas', color: '#DC148C' },
-  { id: 'chill', es: 'Chill', en: 'Chill', q: 'chill', color: '#477D95' },
-  { id: 'entrenamiento', es: 'Entrenamiento', en: 'Workout', q: 'gym workout', color: '#777777' },
-  { id: 'rock', es: 'Rock', en: 'Rock', q: 'rock clasico', color: '#E91429' },
-  { id: 'dosmil', es: 'Éxitos de los 2000', en: '2000s hits', q: 'exitos 2000', color: '#8D67AB' },
-  { id: 'coche', es: 'Para el coche', en: 'Driving', q: 'canciones para el coche', color: '#1E3264' },
-];
-const genreTiles = new Map<string, string>(); // genre id -> local:key
+// ----------------------------------------------------------------- Explorar (category tiles)
+// The phone's "Explorar todo" tiles (same colours and photos): colour, name, tilted photo
+const catName = (c: BrowseCategory) => (en() ? c.titleEn : c.title);
+const genreTiles = new Map<string, string>(); // category id -> local:key
 let genreLang = '';
+function loadImage(src: string): Promise<HTMLImageElement | null> {
+  return new Promise((ok) => {
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    im.onload = () => ok(im);
+    im.onerror = () => ok(null);
+    im.src = src;
+  });
+}
 async function makeGenreTiles() {
   const lang = useLanguageStore.getState().language;
-  if (genreLang === lang && genreTiles.size === GENRES.length) return;
+  if (genreLang === lang && genreTiles.size === BROWSE_CATEGORIES.length) return;
   genreLang = lang;
-  for (const g of GENRES) {
+  genreTiles.clear();
+  for (const g of BROWSE_CATEGORIES) {
     try {
       const size = 320;
       const c = document.createElement('canvas');
@@ -199,31 +227,37 @@ async function makeGenreTiles() {
       c.height = size;
       const ctx = c.getContext('2d');
       if (!ctx) continue;
-      ctx.fillStyle = g.color;
+      ctx.fillStyle = g.bgColor;
       ctx.fillRect(0, 0, size, size);
-      // Spotify browse tile: bold name top-left, a tilted shape bottom-right
-      ctx.save();
-      ctx.translate(size * 0.72, size * 0.74);
-      ctx.rotate((25 * Math.PI) / 180);
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.fillRect(-60, -60, 130, 130);
-      ctx.restore();
+      // The photo, tilted in the bottom-right corner like on the phone
+      const photo = await loadImage(g.imgSrc.replace('600x600bb', '300x300bb'));
+      if (photo) {
+        ctx.save();
+        ctx.translate(size * 0.74, size * 0.74);
+        ctx.rotate((25 * Math.PI) / 180);
+        ctx.shadowColor = 'rgba(0,0,0,0.45)';
+        ctx.shadowBlur = 18;
+        ctx.shadowOffsetY = 6;
+        const p = size * 0.5;
+        ctx.drawImage(photo, -p / 2, -p / 2, p, p);
+        ctx.restore();
+      }
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 40px "SpotifyMixUI", "Helvetica Neue", Arial, sans-serif';
-      const name = lang === 'en' ? g.en : g.es;
-      const words = name.split(' ');
+      ctx.shadowColor = 'transparent';
+      ctx.font = 'bold 38px "SpotifyMixUI", "Helvetica Neue", Arial, sans-serif';
+      const words = catName(g).split(' ');
       let line = '';
-      let y = 62;
+      let y = 58;
       for (const w of words) {
         const test = line ? `${line} ${w}` : w;
-        if (ctx.measureText(test).width > size - 44 && line) {
-          ctx.fillText(line, 22, y);
+        if (ctx.measureText(test).width > size - 40 && line) {
+          ctx.fillText(line, 20, y);
           line = w;
-          y += 46;
+          y += 44;
         } else line = test;
       }
-      ctx.fillText(line, 22, y);
-      const key = `genre_${g.id}_${lang}`;
+      ctx.fillText(line, 20, y);
+      const key = `cat_${g.id}_${lang}`;
       await SpotifreeMedia.cacheImage({ key, base64: c.toDataURL('image/png').split(',')[1] });
       genreTiles.set(g.id, `local:${key}`);
     } catch {}
@@ -231,16 +265,36 @@ async function makeGenreTiles() {
   lastLibrarySig = '';
   pushLibrary();
 }
+// Until a tile is drawn, the category's photo itself
 const exploreItems = (): CarItem[] =>
-  GENRES.map((g) => ({ id: g.id, name: en() ? g.en : g.es, image: genreTiles.get(g.id) || '' }));
+  BROWSE_CATEGORIES.map((g) => ({ id: g.id, name: catName(g), image: genreTiles.get(g.id) || thumb(g.imgSrc) }));
 
+// What to search for more playlists of each category (the bare name finds few real playlists)
+const CATEGORY_QUERY: Record<string, string> = {
+  'cat-musica': 'éxitos del momento',
+  'cat-eventos': 'en directo live',
+  'cat-para-ti': 'mix',
+  'cat-novedades': 'novedades viernes',
+  'cat-latina': 'éxitos latinos',
+  'cat-pop': 'pop hits',
+  'cat-rock': 'rock clásico',
+  'cat-futbol': 'fútbol estadio',
+  'cat-listas': 'top 50',
+  'cat-urbano': 'urbano latino',
+  'cat-indie': 'indie',
+  'cat-dance': 'dance electrónica',
+};
+
+/** A category: its playlist (the one the phone opens) and more playlists of that style */
 async function answerLoadCategory(id: string) {
-  const g = GENRES.find((x) => x.id === id);
-  const { playlists } = await runSearch(g ? g.q : id);
-  SpotifreeMedia.setCategoryItems({
-    id,
-    items: playlists.map((p) => ({ ...p, subtitle: p.subtitle ? `Playlist • ${p.subtitle}` : 'Playlist' })),
-  }).catch(() => {});
+  const g = BROWSE_CATEGORIES.find((x) => x.id === id);
+  const { playlists } = await runSearch(CATEGORY_QUERY[id] || (g ? g.title : id));
+  const items: CarItem[] = [];
+  if (g) items.push({ id: g.playlistId, name: catName(g), subtitle: 'Playlist • Spotify', image: thumb(g.imgSrc) });
+  for (const p of playlists) {
+    if (!items.some((x) => x.id === p.id)) items.push({ ...p, subtitle: p.subtitle ? `Playlist • ${p.subtitle}` : 'Playlist' });
+  }
+  SpotifreeMedia.setCategoryItems({ id, items }).catch(() => {});
 }
 
 /** The song a car item (tr:/q:/st:) points to */
@@ -309,11 +363,11 @@ function pushLibrary() {
       .map((c) => known.get(c.id) || { id: c.id, name: c.name, image: img(c.image) })
       .filter((c) => !recent.some((r) => r.id === c.id));
     if (quick.length) home.push({ title: en() ? 'Your favourites' : 'Tus favoritos', items: quick.slice(0, 8) });
-    for (const shelf of (st.dynamicShelves || []).slice(0, 8)) {
-      if (shelf.type === 'artist') continue; // artist pages are not playlists
+    // A few short rows, like the Spotify car app (a long Inicio is slow and hard to use driving)
+    for (const shelf of (st.dynamicShelves || []).filter((s) => s.type !== 'artist').slice(0, 4)) {
       const items = (shelf.cards || [])
         .filter((c) => c.id && !c.id.startsWith('art-'))
-        .slice(0, 10)
+        .slice(0, 8)
         .map((c) => known.get(c.id) || { id: c.id, name: c.title, subtitle: c.subtitle, image: img(c.image) });
       if (items.length) home.push({ title: shelf.title, items });
     }
@@ -436,7 +490,7 @@ function pushNowPlaying(force = false) {
     title: t.name || '',
     artist: artistOf(t),
     album: t.album?.name || '',
-    artworkUrl: coverOf(t),
+    artworkUrl: coverOf(t, true), // the big background of the car's player: HD
     durationMs: s.durationMs || t.duration_ms || 0,
     positionMs: s.progressMs || 0,
     isPlaying: Boolean(s.isPlaying),

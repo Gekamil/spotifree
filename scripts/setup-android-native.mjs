@@ -72,6 +72,8 @@ const PERMS = [
   'android.permission.WAKE_LOCK',
   'android.permission.POST_NOTIFICATIONS',
   'android.permission.MODIFY_AUDIO_SETTINGS',
+  // "Allow Spotifree to always run in the background?" (Ajustes → Reproducción en segundo plano)
+  'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
 ];
 for (const p of PERMS) {
   if (!manifest.includes(`"${p}"`)) {
@@ -81,16 +83,26 @@ for (const p of PERMS) {
 const START = '<!-- spotifree-media:start -->';
 const END = '<!-- spotifree-media:end -->';
 manifest = manifest.replace(new RegExp(`\\s*${START}[\\s\\S]*?${END}`), '');
-const media = `        ${START}
-        <service
-            android:name=".SpotifreeMediaService"
+// One media service per app icon (Android Auto shows the service's icon); only the one of the
+// chosen icon is enabled (SpotifreeMediaService.useIcon). Keep in sync with ICONS in
+// setup-android-app-icons.mjs and VARIANTS in SpotifreeMediaService.java.
+const ICON_IDS = ['default', 'disco-2026', 'anniversary-20', 'black-2024', 'classic-2015', 'retro-2013', 'original-2008'];
+const suffix = (id) => id.split('-').map((p) => p[0].toUpperCase() + p.slice(1)).join('');
+const services = ICON_IDS.map(
+  (id) => `        <service
+            android:name=".SpotifreeMediaService$Icon${suffix(id)}"
+            android:enabled="${id === 'default' ? 'true' : 'false'}"
             android:exported="true"
+            android:icon="@mipmap/ic_launcher_app_${id.replace(/-/g, '_')}"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
             </intent-filter>
-        </service>
+        </service>`
+).join('\n');
+const media = `        ${START}
+${services}
         <provider
             android:name=".SpotifreeArtProvider"
             android:authorities="\${applicationId}.art"

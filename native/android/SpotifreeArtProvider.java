@@ -29,7 +29,8 @@ import java.security.MessageDigest;
 public class SpotifreeArtProvider extends ContentProvider {
 
     private static final String[] ALLOWED_HOST_SUFFIXES = {
-        "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com"
+        "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com",
+        "mzstatic.com" // photos of the Explorar categories
     };
 
     /** Images made by the app itself (e.g. an SVG cover turned into PNG): "local:<key>" */

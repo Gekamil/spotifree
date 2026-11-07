@@ -117,5 +117,11 @@ const aliases = ICONS.map(
 ).join('\n');
 
 manifest = manifest.replace(/<\/application>/, `        ${START}\n${aliases}\n        ${END}\n    </application>`);
+
+// The app's own icon (Android Auto, Settings → Apps, the install screen) was still Capacitor's
+// placeholder: use Spotifree's default icon
+manifest = manifest
+  .replace(/(<application[^>]*?android:icon=")[^"]*(")/, `$1@mipmap/${resName('default')}$2`)
+  .replace(/(<application[^>]*?android:roundIcon=")[^"]*(")/, `$1@mipmap/${resName('default')}$2`);
 fs.writeFileSync(manifestPath, manifest, 'utf8');
 console.log(`[app-icons] ${ICONS.length} iconos instalados en el proyecto Android.`);

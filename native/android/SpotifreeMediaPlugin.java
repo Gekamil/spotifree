@@ -2,6 +2,13 @@ package com.spotifree.music;
 
 import android.content.Context;
 import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.PowerManager;
+import android.os.SystemClock;
+import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
 
@@ -28,6 +35,7 @@ public class SpotifreeMediaPlugin extends Plugin {
 
     private static SpotifreeMediaPlugin instance;
     private static JSObject pending;
+    private final Handler keepAliveCheck = new Handler(Looper.getMainLooper());
 
     @Override
     public void load() {
@@ -78,7 +86,7 @@ public class SpotifreeMediaPlugin extends Plugin {
 
     private void kickService(boolean foreground) {
         Context ctx = getContext();
-        Intent i = new Intent(ctx, SpotifreeMediaService.class).setAction(SpotifreeMediaService.ACTION_UPDATE);
+        Intent i = new Intent(ctx, SpotifreeMediaService.activeClass(ctx)).setAction(SpotifreeMediaService.ACTION_UPDATE);
         try {
             if (SpotifreeMediaService.current != null) {
                 SpotifreeMediaService.current.refresh();
@@ -190,7 +198,15 @@ public class SpotifreeMediaPlugin extends Plugin {
         SpotifreeMediaService.durationMs = dur == null ? 0 : dur.longValue();
         SpotifreeMediaService.positionMs = pos == null ? 0 : pos.longValue();
         boolean playing = Boolean.TRUE.equals(call.getBoolean("isPlaying", false));
+        boolean wasPlaying = SpotifreeMediaService.playing;
         SpotifreeMediaService.playing = playing;
+        if (playing || wasPlaying) SpotifreeMediaService.lastPlayingAt = SystemClock.elapsedRealtime();
+        // Screen off / app in the background: the page keeps running while there is music
+        SpotifreeWebView.sync();
+        if (!playing && wasPlaying) {
+            keepAliveCheck.removeCallbacksAndMessages(null);
+            keepAliveCheck.postDelayed(SpotifreeWebView::sync, SpotifreeMediaService.KEEP_ALIVE_MS + 1000);
+        }
         JSONArray q = arr(call, "queue");
         if (q != null) {
             SpotifreeMediaService.queue = q;
@@ -204,6 +220,42 @@ public class SpotifreeMediaPlugin extends Plugin {
     public void stop(PluginCall call) {
         SpotifreeMediaService.playing = false;
         if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.refresh();
+        SpotifreeWebView.sync();
+        call.resolve();
+    }
+
+    /** Can the app keep playing with the screen off? (not restricted by battery optimization) */
+    @PluginMethod
+    public void backgroundStatus(PluginCall call) {
+        JSObject ret = new JSObject();
+        boolean unrestricted = true;
+        if (Build.VERSION.SDK_INT >= 23) {
+            PowerManager pm = (PowerManager) getContext().getSystemService(Context.POWER_SERVICE);
+            unrestricted = pm == null || pm.isIgnoringBatteryOptimizations(getContext().getPackageName());
+        }
+        ret.put("unrestricted", unrestricted);
+        call.resolve(ret);
+    }
+
+    /** System dialog: "Allow Spotifree to always run in the background?" */
+    @PluginMethod
+    public void requestBackground(PluginCall call) {
+        Context ctx = getContext();
+        try {
+            Intent i = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + ctx.getPackageName()));
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            ctx.startActivity(i);
+        } catch (Exception e) {
+            try {
+                // Some phones don't have the dialog: open the battery optimization list
+                Intent i = new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(i);
+            } catch (Exception ignored) {
+                call.reject("not available");
+                return;
+            }
+        }
         call.resolve();
     }
 }

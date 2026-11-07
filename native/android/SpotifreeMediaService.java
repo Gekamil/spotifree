@@ -4,10 +4,14 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
+import android.net.wifi.WifiManager;
+import android.os.PowerManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
@@ -47,13 +51,84 @@ import java.util.concurrent.Executors;
  * events). Everything shown in the car has its cover (SpotifreeArtProvider).
  *
  * Browse tree (tabs):
- *   home   "Inicio"           sections (recent, made for you, shelves) -> pl:<id>
- *   lib    "Tu biblioteca"    Liked Songs + playlists                  -> pl:<id>
- *   queue  "A continuación"   upcoming songs                           -> q:<index>
+ *   home    "Inicio"           sections (recent, favourites, shelves) -> pl:<id>
+ *   lib     "Tu biblioteca"    Liked Songs + playlists                 -> pl:<id>
+ *   explore "Explorar"         categories (same as the phone's)        -> ex:<id> -> pl:<id>
  *   pl:<id> -> shuf:<id> ("Reproducir en aleatorio") + tr:<id>:<index>
  *   search  -> st:<requestId>:<index> songs, pl:<id> playlists
+ *   The queue ("A continuación") is the session queue: the queue button of the car's player.
+ *
+ * Declared once per app icon (the Icon* subclasses below, see scripts/setup-android-native.mjs):
+ * Android Auto shows the icon of the media service, and only the one matching the icon chosen
+ * in Ajustes is enabled. activeClass() is the one to start.
  */
 public class SpotifreeMediaService extends MediaBrowserServiceCompat {
+
+    // Keep in sync with ICON_IDS in SpotifreeAppIconPlugin.java / setup-android-native.mjs
+    public static class IconDefault extends SpotifreeMediaService {}
+    public static class IconDisco2026 extends SpotifreeMediaService {}
+    public static class IconAnniversary20 extends SpotifreeMediaService {}
+    public static class IconBlack2024 extends SpotifreeMediaService {}
+    public static class IconClassic2015 extends SpotifreeMediaService {}
+    public static class IconRetro2013 extends SpotifreeMediaService {}
+    public static class IconOriginal2008 extends SpotifreeMediaService {}
+
+    private static final Class<?>[] VARIANTS = {
+        IconDefault.class, IconDisco2026.class, IconAnniversary20.class, IconBlack2024.class,
+        IconClassic2015.class, IconRetro2013.class, IconOriginal2008.class
+    };
+
+    private static Class<?> variantFor(String iconId) {
+        String suffix = "Icon" + SpotifreeAppIconPlugin.aliasSuffix(iconId == null ? "default" : iconId);
+        for (Class<?> c : VARIANTS) if (c.getSimpleName().equals(suffix)) return c;
+        return IconDefault.class;
+    }
+
+    /** The enabled media service (the one for the current app icon) */
+    static Class<?> activeClass(Context ctx) {
+        PackageManager pm = ctx.getPackageManager();
+        for (Class<?> c : VARIANTS) {
+            try {
+                int st = pm.getComponentEnabledSetting(new ComponentName(ctx, c));
+                if (st == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return c;
+            } catch (Exception ignored) {}
+        }
+        return IconDefault.class; // enabled in the manifest
+    }
+
+    /** The app icon changed: the car shows the media service with that icon */
+    static void useIcon(Context ctx, String iconId) {
+        Class<?> want = variantFor(iconId);
+        if (want == activeClass(ctx)) return;
+        PackageManager pm = ctx.getPackageManager();
+        try {
+            pm.setComponentEnabledSetting(new ComponentName(ctx, want),
+                PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
+            // Then the others: there is always exactly one (Android Auto and media buttons find it)
+            for (Class<?> c : VARIANTS) {
+                if (c == want) continue;
+                pm.setComponentEnabledSetting(new ComponentName(ctx, c),
+                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
+            }
+        } catch (Exception ignored) {}
+        // The old one is stopped by the system: bring the notification / car session back
+        if (playing || (title != null && !title.isEmpty())) {
+            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    Intent i = new Intent(ctx, activeClass(ctx)).setAction(ACTION_UPDATE);
+                    if (playing) androidx.core.content.ContextCompat.startForegroundService(ctx, i);
+                    else ctx.startService(i);
+                } catch (Exception ignored) {}
+            }, 800);
+        }
+    }
+
+    /** Keep the page running as if on screen: while playing and for 10 min after a pause */
+    static volatile long lastPlayingAt = 0;
+    static final long KEEP_ALIVE_MS = 10 * 60 * 1000L;
+    static boolean keepAlive() {
+        return playing || (lastPlayingAt > 0 && SystemClock.elapsedRealtime() - lastPlayingAt < KEEP_ALIVE_MS);
+    }
 
     public static final String ACTION_UPDATE = "com.spotifree.music.MEDIA_UPDATE";
     private static final String CHANNEL_ID = "spotifree_playback";
@@ -121,6 +196,49 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private final Map<String, Result<List<MediaBrowserCompat.MediaItem>>> pendingSearch = new ConcurrentHashMap<>();
     private int searchSeq = 0;
 
+    // Screen off: keep the CPU and Wi-Fi awake while music plays (and between songs)
+    private PowerManager.WakeLock wakeLock;
+    private WifiManager.WifiLock wifiLock;
+    private final Runnable releaseLocks = this::releaseLocksNow;
+
+    @SuppressWarnings("deprecation")
+    private void holdLocks(boolean on) {
+        if (!on) {
+            // A pause, or the gap between two songs: release a bit later
+            main.removeCallbacks(releaseLocks);
+            if ((wakeLock != null && wakeLock.isHeld()) || (wifiLock != null && wifiLock.isHeld())) {
+                main.postDelayed(releaseLocks, 3 * 60 * 1000L);
+            }
+            return;
+        }
+        main.removeCallbacks(releaseLocks);
+        try {
+            if (wakeLock == null) {
+                PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+                if (pm != null) {
+                    wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Spotifree:playback");
+                    wakeLock.setReferenceCounted(false);
+                }
+            }
+            if (wakeLock != null) wakeLock.acquire(6 * 60 * 60 * 1000L);
+        } catch (Exception ignored) {}
+        try {
+            if (wifiLock == null) {
+                WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+                if (wm != null) {
+                    wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "Spotifree:stream");
+                    wifiLock.setReferenceCounted(false);
+                }
+            }
+            if (wifiLock != null && !wifiLock.isHeld()) wifiLock.acquire();
+        } catch (Exception ignored) {}
+    }
+
+    private void releaseLocksNow() {
+        try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch (Exception ignored) {}
+        try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception ignored) {}
+    }
+
     private boolean en() { return "en".equals(language); }
     private String tr(String es, String enText) { return en() ? enText : es; }
 
@@ -173,7 +291,11 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             @Override public void onSkipToQueueItem(long id) { send("playQueueIndex", obj("index", id)); }
             @Override public void onSetShuffleMode(int mode) { send(ACT_SHUFFLE, null); }
             @Override public void onSetRepeatMode(int mode) { send(ACT_REPEAT, null); }
-            @Override public void onCustomAction(String action, Bundle extras) { send(action, null); }
+            // "toggleShuffle:on" -> "toggleShuffle" (one id per state, see refresh())
+            @Override public void onCustomAction(String action, Bundle extras) {
+                int cut = action == null ? -1 : action.indexOf(':');
+                send(cut > 0 ? action.substring(0, cut) : action, null);
+            }
             @Override public void onPlayFromMediaId(String mediaId, Bundle extras) {
                 if ("noop".equals(mediaId)) { openApp(); return; }
                 sendOrOpen("playFromMediaId", obj("mediaId", mediaId));
@@ -296,14 +418,16 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
                 positionMs, playing ? 1f : 0f, SystemClock.elapsedRealtime())
             .setActiveQueueItemId(-1);
-        // Spotify-style buttons on the car's "now playing" screen
-        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_LIKE,
+        // Spotify-style buttons on the car's "now playing" screen. Each state has its own action
+        // id: Android Auto keeps the icon of an id it already knows, so with a single id the
+        // shuffle / repeat / like buttons did not show the phone's state.
+        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_LIKE + (liked ? ":on" : ":off"),
             liked ? tr("Quitar de Me gusta", "Remove from Liked Songs") : tr("Me gusta", "Like"),
             liked ? R.drawable.ic_car_heart_filled : R.drawable.ic_car_heart).build());
-        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_SHUFFLE,
+        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_SHUFFLE + (shuffle ? ":on" : ":off"),
             shuffle ? tr("Desactivar aleatorio", "Shuffle off") : tr("Aleatorio", "Shuffle"),
             shuffle ? R.drawable.ic_car_shuffle_on : R.drawable.ic_car_shuffle).build());
-        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_REPEAT,
+        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_REPEAT + ":" + repeat,
             "one".equals(repeat) ? tr("Repetir una", "Repeat one") : "all".equals(repeat) ? tr("Repetir todo", "Repeat all") : tr("Repetir", "Repeat"),
             "one".equals(repeat) ? R.drawable.ic_car_repeat_one : "all".equals(repeat) ? R.drawable.ic_car_repeat_on : R.drawable.ic_car_repeat).build());
         session.setPlaybackState(sb.build());
@@ -311,6 +435,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         session.setRepeatMode("one".equals(repeat) ? PlaybackStateCompat.REPEAT_MODE_ONE
             : "all".equals(repeat) ? PlaybackStateCompat.REPEAT_MODE_ALL : PlaybackStateCompat.REPEAT_MODE_NONE);
 
+        holdLocks(playing);
         maybeLoadArt();
         updateNotification();
     }
@@ -519,7 +644,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 out.add(tabItem("home", tr("Inicio", "Home"), R.drawable.ic_car_tab_home, STYLE_GRID));
                 out.add(tabItem("lib", tr("Tu biblioteca", "Your Library"), R.drawable.ic_car_tab_library, STYLE_GRID));
                 out.add(tabItem("explore", tr("Explorar", "Browse"), R.drawable.ic_car_tab_explore, STYLE_GRID));
-                out.add(tabItem("queue", tr("A continuación", "Up next"), R.drawable.ic_car_tab_queue, STYLE_LIST));
+                // "A continuación" is the queue button of the player (session queue), like Spotify
             } else if ("explore".equals(parentId)) {
                 JSONArray ex = explore;
                 for (int i = 0; ex != null && i < ex.length(); i++) {
@@ -729,7 +854,9 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
 
     @Override
     public void onDestroy() {
-        current = null;
+        main.removeCallbacks(releaseLocks);
+        releaseLocksNow();
+        if (current == this) current = null;
         if (session != null) {
             session.setActive(false);
             session.release();

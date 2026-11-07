@@ -2,7 +2,13 @@ import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
-import { getCarLyricsEnabled, isNativeMediaAvailable, setCarLyricsEnabled } from '../../services/nativeMedia';
+import {
+  getBackgroundPlaybackAllowed,
+  getCarLyricsEnabled,
+  isNativeMediaAvailable,
+  requestBackgroundPlayback,
+  setCarLyricsEnabled,
+} from '../../services/nativeMedia';
 import { getAppIconPlatform } from '../../utils/appIcon';
 import React, { useState, useEffect } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -62,6 +68,24 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   });
 
   const [carLyrics, setCarLyrics] = useState(() => getCarLyricsEnabled());
+
+  // APK: can music keep playing with the screen off? (battery optimization exemption)
+  const [bgAllowed, setBgAllowed] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!isNativeMediaAvailable()) return;
+    const check = () => void getBackgroundPlaybackAllowed().then(setBgAllowed);
+    check();
+    // Coming back from the system dialog
+    const onVis = () => {
+      if (!document.hidden) check();
+    };
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
   const [autoplaySimilar, setAutoplaySimilar] = useState(() => {
     if (typeof window !== 'undefined') {
       return window.localStorage.getItem('spotifree_autoplay') !== 'false';
@@ -567,6 +591,41 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                 >
                   <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${carLyrics ? 'left-[18px]' : 'left-0.5'}`} />
                 </button>
+              </div>
+            )}
+
+            {/* APK: música con la pantalla apagada */}
+            {isNativeMediaAvailable() && bgAllowed !== null && (
+              <div className="pt-3 border-t border-white/5 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-white">Música con la pantalla apagada</p>
+                  <p className="text-xs text-[#b3b3b3] leading-snug">
+                    {bgAllowed
+                      ? 'Activado: la música sigue con el móvil bloqueado y en el coche.'
+                      : 'Permite a Spotifree funcionar en segundo plano para que tu móvil no la cierre al bloquearlo.'}
+                  </p>
+                </div>
+                {bgAllowed ? (
+                  <span className="shrink-0 text-xs font-bold text-[#1ed760]">Activado</span>
+                ) : (
+                  <button
+                    onClick={() => {
+                      void requestBackgroundPlayback();
+                      // While music plays the page never goes "hidden": check for the answer for a while
+                      let tries = 0;
+                      const timer = window.setInterval(() => {
+                        tries += 1;
+                        void getBackgroundPlaybackAllowed().then((ok) => {
+                          setBgAllowed(ok);
+                          if (ok || tries >= 30) window.clearInterval(timer);
+                        });
+                      }, 2000);
+                    }}
+                    className="shrink-0 px-4 py-1.5 rounded-full bg-[#1ed760] text-black text-xs font-bold active:scale-95 transition-transform"
+                  >
+                    Permitir
+                  </button>
+                )}
               </div>
             )}
           </div>
