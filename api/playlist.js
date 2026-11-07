@@ -1,5 +1,6 @@
 const MEMORY_PLAYLIST_CACHE = new Map();
 import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './_lib/extract-session.js';
+import { readExternalPlaylist } from './_lib/import-playlist.js';
 
 function stripHtml(text) {
   if (!text) return '';
@@ -1084,6 +1085,17 @@ export default async function handler(req, res) {
   try {
     const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
     const action = url.searchParams.get('action') || '';
+
+    // ACTION: IMPORT A PLAYLIST FROM YOUTUBE MUSIC / YOUTUBE / APPLE MUSIC (songs to look up)
+    if (action === 'import') {
+      try {
+        const result = await readExternalPlaylist(url.searchParams.get('url') || '');
+        return res.status(200).json({ success: true, ...result });
+      } catch (e) {
+        const reason = String(e?.message || e);
+        return res.status(reason === 'unsupported' ? 400 : 502).json({ success: false, reason });
+      }
+    }
 
     // ACTION: RECOMMENDATIONS FOR PLAYLIST
     if (action === 'recommendations') {

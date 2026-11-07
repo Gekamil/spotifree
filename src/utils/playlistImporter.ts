@@ -1,16 +1,145 @@
 import type { Playlist, Track } from '../types/spotify';
 import { saveSharedPlaylist } from './userStorage';
 import { stripHtml } from './formatters';
+import { searchSpotify } from '../services/spotifyApi';
 
 export interface ImportResult {
   success: boolean;
   playlist?: Playlist;
   error?: string;
+  /** Songs found in the catalog / songs read */
+  matched?: number;
+  total?: number;
 }
+
+/** Progress while each song is looked up: (done, total) */
+export type ImportProgress = (done: number, total: number) => void;
+
+interface ExternalSong {
+  title: string;
+  artist: string;
+  durationSec?: number;
+  videoId?: string;
+}
+
+const FALLBACK_COVER = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+const norm = (s: string) =>
+  String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\(.*?\)|\[.*?\]/g, ' ')
+    .replace(/[^a-z0-9ñ ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+const artistsOf = (s: string) =>
+  String(s || '')
+    .split(/\s*(?:,|&| y | and | x | feat\.?| ft\.?| con )\s*/i)
+    .map(norm)
+    .filter(Boolean);
+const hasWord = (hay: string, needle: string) => (` ${hay} `).includes(` ${needle} `);
+
+/** The catalog song that is really this song (same title, same performer), or null */
+async function findInCatalog(song: ExternalSong): Promise<Track | null> {
+  const wanted = artistsOf(song.artist);
+  const q = `${song.title} ${wanted[0] || ''}`.trim();
+  const search = async (): Promise<Track[]> => {
+    let res: any = null;
+    try {
+      res = await Promise.race([searchSpotify(q), new Promise((r) => setTimeout(() => r(null), 8000))]);
+    } catch {
+      res = null;
+    }
+    return (Array.isArray(res?.tracks) ? res.tracks : res?.tracks?.items || []).filter((t: any) => t?.id && t?.name);
+  };
+  let list = await search();
+  // Many searches in a row sometimes come back empty: try once more
+  if (!list.length) {
+    await new Promise((r) => setTimeout(r, 700));
+    list = await search();
+  }
+  const title = norm(song.title);
+  let best: Track | null = null;
+  let bestScore = 0;
+  for (const t of list.slice(0, 10)) {
+    const tName = norm(t.name);
+    const tArtists = (t.artists || []).map((a) => norm(a.name));
+    let score = 0;
+    if (tName === title) score += 5;
+    else if (tName.startsWith(title) || title.startsWith(tName)) score += 3;
+    else if (tName.includes(title) || title.includes(tName)) score += 2;
+    else continue;
+    if (wanted.some((w) => tArtists.some((a) => a === w || hasWord(a, w) || hasWord(w, a)))) score += 4;
+    else if (wanted.length) score -= 2;
+    if (song.durationSec && t.duration_ms && Math.abs(t.duration_ms / 1000 - song.durationSec) <= 8) score += 1;
+    if (score > bestScore) {
+      best = t;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 5 ? best : null;
+}
+
+/** A song that is not in the catalog: still playable (the player finds it by name and artist) */
+function looseTrack(song: ExternalSong, idx: number, cover: string): Track {
+  return {
+    id: `imported-${Date.now().toString(36)}-${idx}`,
+    name: song.title,
+    duration_ms: (song.durationSec || 210) * 1000,
+    artists: artistsOf(song.artist).length
+      ? song.artist.split(/\s*(?:,|&| y )\s*/).filter(Boolean).map((n, i) => ({ id: `imp-art-${idx}-${i}`, name: n.trim() }))
+      : [{ id: `imp-art-${idx}`, name: song.artist || 'Desconocido' }],
+    album: {
+      id: `imp-alb-${idx}`,
+      name: song.title,
+      images: [{ url: song.videoId ? `https://i.ytimg.com/vi/${song.videoId}/hqdefault.jpg` : cover }],
+    },
+  } as Track;
+}
+
+async function matchAll(songs: ExternalSong[], cover: string, onProgress?: ImportProgress) {
+  const out: (Track | null)[] = new Array(songs.length).fill(null);
+  let done = 0;
+  let matched = 0;
+  let next = 0;
+  onProgress?.(0, songs.length);
+  const worker = async () => {
+    while (next < songs.length) {
+      const i = next++;
+      const found = await findInCatalog(songs[i]);
+      if (found) matched++;
+      out[i] = found || looseTrack(songs[i], i, cover);
+      done++;
+      onProgress?.(done, songs.length);
+    }
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  // The same song twice (it happens in YouTube playlists): keep the first
+  const seen = new Set<string>();
+  const tracks = (out.filter(Boolean) as Track[]).filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+  return { tracks, matched };
+}
+
+function finish(pl: Playlist, userId: string, userName: string): void {
+  saveSharedPlaylist({
+    id: pl.id,
+    name: pl.name,
+    description: stripHtml(pl.description),
+    coverUrl: pl.images?.[0]?.url,
+    ownerId: userId,
+    ownerName: userName,
+    tracks: pl.tracks.items || [],
+    isCollaborative: true,
+    updatedAt: Date.now(),
+  });
+}
+
+const SOURCE_NAME: Record<string, string> = { ytmusic: 'YouTube Music', youtube: 'YouTube', apple: 'Apple Music' };
 
 export async function importExternalPlaylist(
   urlOrText: string,
-  user?: { id?: string; display_name?: string }
+  user?: { id?: string; display_name?: string },
+  onProgress?: ImportProgress
 ): Promise<ImportResult> {
   const input = urlOrText.trim();
   if (!input) {
@@ -22,7 +151,7 @@ export async function importExternalPlaylist(
 
   try {
     // 1. Spotify playlist URL: open.spotify.com/playlist/ID
-    const spotifyMatch = input.match(/open\.spotify\.com\/playlist\/([a-zA-Z0-9]+)/i);
+    const spotifyMatch = input.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?playlist\/([a-zA-Z0-9]+)/i);
     if (spotifyMatch) {
       const playlistId = spotifyMatch[1];
       const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistId)}`);
@@ -32,248 +161,74 @@ export async function importExternalPlaylist(
           id: `imported-sp-${playlistId}`,
           name: data.name || 'Playlist de Spotify Importada',
           description: stripHtml(data.description) || `Importada desde Spotify por ${userName}`,
-          images: data.images?.length > 0 ? data.images : [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+          images: data.images?.length > 0 ? data.images : [{ url: FALLBACK_COVER }],
           owner: { display_name: userName, id: userId },
           tracks: {
             total: data.tracks?.items?.length || 0,
-            items: (data.tracks?.items || []).map((t: Track) => ({
-              ...t,
-              added_by: userName,
-              added_at: 'Hoy',
-            })),
+            items: (data.tracks?.items || []).map((t: Track) => ({ ...t, added_by: userName, added_at: 'Hoy' })),
           },
         };
-        saveSharedPlaylist({
-          id: pl.id,
-          name: pl.name,
-          description: stripHtml(pl.description),
-          coverUrl: pl.images?.[0]?.url,
-          ownerId: userId,
-          ownerName: userName,
-          tracks: pl.tracks.items || [],
-          isCollaborative: true,
-          updatedAt: Date.now(),
-        });
-        return { success: true, playlist: pl };
+        finish(pl, userId, userName);
+        return { success: true, playlist: pl, matched: pl.tracks.total, total: pl.tracks.total };
       }
+      return { success: false, error: 'No se pudo leer esa playlist de Spotify. ¿Es pública?' };
     }
 
-    // 2. YouTube playlist or mix URL: youtube.com/playlist?list=... or youtu.be/...
-    const isYouTube = input.includes('youtube.com') || input.includes('youtu.be');
-    if (isYouTube) {
-      const listMatch = input.match(/[?&]list=([a-zA-Z0-9_-]+)/i);
-      const listId = listMatch ? listMatch[1] : '';
-
-      if (listId) {
-        try {
-          const ytRes = await fetch(`/api/playlist?id=${encodeURIComponent(listId)}&type=youtube`);
-          if (ytRes.ok) {
-            const ytData = await ytRes.json();
-            if (ytData && ytData.tracks?.items?.length > 0) {
-              const pl: Playlist = {
-                id: `imported-yt-${listId}`,
-                name: ytData.name || 'Playlist de YouTube',
-                description: `Importada desde YouTube (${ytData.tracks.items.length} canciones)`,
-                images: ytData.images?.length > 0 ? ytData.images : [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-                owner: { display_name: userName, id: userId },
-                tracks: {
-                  total: ytData.tracks.items.length,
-                  items: ytData.tracks.items.map((t: Track) => ({
-                    ...t,
-                    added_by: userName,
-                    added_at: 'Hoy',
-                  })),
-                },
-              };
-              saveSharedPlaylist({
-                id: pl.id,
-                name: pl.name,
-                description: pl.description,
-                coverUrl: pl.images?.[0]?.url,
-                ownerId: userId,
-                ownerName: userName,
-                tracks: pl.tracks?.items || [],
-                isCollaborative: true,
-                updatedAt: Date.now(),
-              });
-              return { success: true, playlist: pl };
-            }
-          }
-        } catch (ytErr) {
-          console.warn('[PlaylistImporter] YouTube extraction error:', ytErr);
-        }
-      }
-
-      let playlistTitle = 'Playlist de YouTube';
-      try {
-        const oembedRes = await fetch(`https://noembed.com/embed?url=${encodeURIComponent(input)}`);
-        if (oembedRes.ok) {
-          const oembedData = await oembedRes.json();
-          if (oembedData.title) playlistTitle = oembedData.title;
-        }
-      } catch {}
-
-      const searchRes = await fetch(`/api/search?q=${encodeURIComponent(playlistTitle)}&type=track&limit=25`).catch(() => null);
-      let tracks: Track[] = [];
-
-      if (searchRes && searchRes.ok) {
-        const searchData = await searchRes.json();
-        const items = searchData.tracks?.items || (Array.isArray(searchData) ? searchData : []);
-        if (Array.isArray(items) && items.length > 0) {
-          tracks = items.map((item: any, idx: number) => ({
-            id: `yt-trk-${item.id || idx}`,
-            name: item.name || item.title || `Tema ${idx + 1}`,
-            duration_ms: item.duration_ms || (item.duration || 210) * 1000,
-            artists: item.artists || [{ id: `art-${idx}`, name: item.author || item.artist || 'YouTube Music' }],
-            album: {
-              id: `alb-${idx}`,
-              name: playlistTitle,
-              images: item.album?.images || [{ url: item.thumbnail || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-            },
-            added_by: userName,
-            added_at: 'Hoy',
-          }));
-        }
-      }
-
-      if (tracks.length === 0) {
-        // Fallback default rich music tracks
-        tracks = [
-          {
-            id: `yt-trk-1`,
-            name: playlistTitle,
-            duration_ms: 220000,
-            artists: [{ id: 'art-yt', name: 'YouTube Music' }],
-            album: {
-              id: 'alb-yt',
-              name: playlistTitle,
-              images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-            },
-            added_by: userName,
-            added_at: 'Hoy',
-          },
-        ];
-      }
-
-      const pl: Playlist = {
-        id: `imported-yt-${listId}`,
-        name: playlistTitle,
-        description: `Importada desde YouTube por ${userName}`,
-        images: [{ url: tracks[0]?.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-        owner: { display_name: userName, id: userId },
-        tracks: { total: tracks.length, items: tracks },
-      };
-
-      saveSharedPlaylist({
-        id: pl.id,
-        name: pl.name,
-        description: pl.description,
-        coverUrl: pl.images?.[0]?.url,
-        ownerId: userId,
-        ownerName: userName,
-        tracks,
-        isCollaborative: true,
-        updatedAt: Date.now(),
-      });
-
-      return { success: true, playlist: pl };
-    }
-
-    // 3. SoundCloud playlist or track URL
-    const isSoundCloud = input.includes('soundcloud.com');
-    if (isSoundCloud) {
-      const parts = input.split('soundcloud.com/')[1]?.split('/') || [];
-      const titleCandidate = parts[parts.length - 1]?.replace(/[-_]/g, ' ') || 'SoundCloud Mix';
-      const plTitle = titleCandidate.charAt(0).toUpperCase() + titleCandidate.slice(1);
-
-      const pl: Playlist = {
-        id: `imported-sc-${Date.now()}`,
-        name: plTitle,
-        description: `Importada desde SoundCloud por ${userName}`,
-        images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-        owner: { display_name: userName, id: userId },
-        tracks: {
-          total: 1,
-          items: [
-            {
-              id: `sc-trk-${Date.now()}`,
-              name: plTitle,
-              duration_ms: 240000,
-              artists: [{ id: 'art-sc', name: 'SoundCloud Artist' }],
-              album: {
-                id: 'alb-sc',
-                name: plTitle,
-                images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-              },
-              added_by: userName,
-              added_at: 'Hoy',
-            },
-          ],
-        },
-      };
-
-      saveSharedPlaylist({
-        id: pl.id,
-        name: pl.name,
-        description: pl.description,
-        coverUrl: pl.images?.[0]?.url,
-        ownerId: userId,
-        ownerName: userName,
-        tracks: pl.tracks.items || [],
-        isCollaborative: true,
-        updatedAt: Date.now(),
-      });
-
-      return { success: true, playlist: pl };
-    }
-
-    // 4. Multi-line track list fallback (e.g. "Song 1 - Artist\nSong 2 - Artist")
-    const lines = input.split('\n').map((l) => l.trim()).filter(Boolean);
-    if (lines.length > 0) {
-      const tracks: Track[] = lines.map((line, idx) => {
-        const parts = line.split(/[-–—]/);
-        const trackName = parts[0]?.trim() || `Canción ${idx + 1}`;
-        const artistName = parts[1]?.trim() || userName;
+    // 2. YouTube Music, YouTube and Apple Music: read the real songs, then find each one
+    if (/youtube\.com|youtu\.be|music\.apple\.com|itunes\.apple\.com/i.test(input)) {
+      const res = await fetch(`/api/import-playlist?url=${encodeURIComponent(input)}`);
+      const data = await res.json().catch(() => null);
+      if (!res.ok || !data?.success) {
         return {
-          id: `custom-trk-${Date.now()}-${idx}`,
-          name: trackName,
-          duration_ms: 210000,
-          artists: [{ id: `art-${idx}`, name: artistName }],
-          album: {
-            id: `alb-${idx}`,
-            name: 'Lista importada',
-            images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
-          },
-          added_by: userName,
-          added_at: 'Hoy',
+          success: false,
+          error:
+            data?.reason === 'unsupported'
+              ? 'Ese enlace no es de una playlist o un álbum. Copia el enlace de la playlist (en YouTube, el que lleva "list=").'
+              : 'No se pudo leer la playlist. Comprueba que es pública.',
         };
-      });
+      }
+      const songs: ExternalSong[] = (data.tracks || []).filter((t: ExternalSong) => t?.title);
+      if (!songs.length) return { success: false, error: 'La playlist está vacía o es privada.' };
+      const cover = data.image || FALLBACK_COVER;
+      const { tracks, matched } = await matchAll(songs, cover, onProgress);
+      const from = SOURCE_NAME[data.source] || 'otra app';
+      const pl: Playlist = {
+        id: `imported-${data.source}-${Date.now().toString(36)}`,
+        name: data.name || `Playlist de ${from}`,
+        description: `Importada desde ${from}`,
+        images: [{ url: tracks.find((t) => t.album?.images?.[0]?.url && !String(t.id).startsWith('imported-'))?.album?.images?.[0]?.url || cover }],
+        owner: { display_name: userName, id: userId },
+        tracks: { total: tracks.length, items: tracks.map((t) => ({ ...t, added_by: userName, added_at: 'Hoy' })) },
+      };
+      finish(pl, userId, userName);
+      return { success: true, playlist: pl, matched, total: songs.length };
+    }
 
+    if (/soundcloud\.com|deezer\.com|tidal\.com|amazon\./i.test(input)) {
+      return { success: false, error: 'De momento se puede importar desde Spotify, YouTube, YouTube Music y Apple Music.' };
+    }
+
+    // 3. A list of songs, one per line: "Song - Artist"
+    const lines = input.split('\n').map((l) => l.trim()).filter(Boolean);
+    if (lines.length > 0 && !/^https?:\/\//i.test(lines[0])) {
+      const songs: ExternalSong[] = lines.map((line) => {
+        const parts = line.split(/\s+[-–—]\s+|\s*[-–—]\s*/);
+        return { title: (parts[0] || line).trim(), artist: (parts[1] || '').trim() };
+      });
+      const { tracks, matched } = await matchAll(songs, FALLBACK_COVER, onProgress);
       const pl: Playlist = {
         id: `imported-custom-${Date.now()}`,
-        name: lines.length === 1 ? lines[0] : `Mix Importado (${tracks.length} temas)`,
+        name: lines.length === 1 ? lines[0] : `Mix importado (${tracks.length} temas)`,
         description: `Importado por ${userName}`,
-        images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
+        images: [{ url: tracks[0]?.album?.images?.[0]?.url || FALLBACK_COVER }],
         owner: { display_name: userName, id: userId },
-        tracks: { total: tracks.length, items: tracks },
+        tracks: { total: tracks.length, items: tracks.map((t) => ({ ...t, added_by: userName, added_at: 'Hoy' })) },
       };
-
-      saveSharedPlaylist({
-        id: pl.id,
-        name: pl.name,
-        description: pl.description,
-        coverUrl: pl.images?.[0]?.url,
-        ownerId: userId,
-        ownerName: userName,
-        tracks,
-        isCollaborative: true,
-        updatedAt: Date.now(),
-      });
-
-      return { success: true, playlist: pl };
+      finish(pl, userId, userName);
+      return { success: true, playlist: pl, matched, total: songs.length };
     }
 
-    return { success: false, error: 'Formato no reconocido. Usa un enlace de Spotify, YouTube, SoundCloud o una lista de canciones.' };
+    return { success: false, error: 'Formato no reconocido. Pega un enlace de Spotify, YouTube, YouTube Music o Apple Music, o una lista de canciones.' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Error al importar la playlist.' };
   }

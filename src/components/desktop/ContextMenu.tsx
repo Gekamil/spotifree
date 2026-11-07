@@ -4,6 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
+import { openStoryCard } from '../../utils/storyCard';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -548,6 +549,24 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
               </svg>
               <span>Cambiar fuente de audio</span>
+            </button>
+          )}
+
+          {/* Tarjeta para stories (portada + letra) */}
+          {targetTrack && (
+            <button
+              onClick={() => {
+                openStoryCard(targetTrack);
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                <rect x="6" y="2" width="12" height="20" rx="3" />
+                <path d="M9.5 15h5M9.5 18h3" />
+                <rect x="9" y="5.5" width="6" height="6" rx="1" />
+              </svg>
+              <span>Compartir en stories</span>
             </button>
           )}
 

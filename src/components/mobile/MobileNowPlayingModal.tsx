@@ -22,6 +22,7 @@ import { formatDuration } from '../../utils/formatters';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openCarMode } from '../../utils/carMode';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
+import { openStoryCard } from '../../utils/storyCard';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
@@ -1115,6 +1116,27 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-sm text-white">Modo coche</p>
                   <p className="text-xs text-[#b3b3b3] truncate">Botones grandes, Canvas y letra</p>
+                </div>
+              </button>
+
+              {/* Option: stories card */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (currentTrack) openStoryCard(currentTrack);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="6" y="2" width="12" height="20" rx="3" />
+                    <path d="M9.5 15h5M9.5 18h3" />
+                    <rect x="9" y="5.5" width="6" height="6" rx="1" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Compartir en stories</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">Imagen con la portada y la letra</p>
                 </div>
               </button>
 

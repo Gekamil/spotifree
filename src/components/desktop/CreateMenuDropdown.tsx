@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { openImportPlaylistDialog } from '../common/ImportPlaylistDialog';
 
 export const CreateMenuDropdown: React.FC = () => {
   const { isCreateMenuOpen, closeCreateMenu } = useUIStore();
@@ -44,6 +45,27 @@ export const CreateMenuDropdown: React.FC = () => {
           <h5 className="font-bold text-sm text-white leading-tight">Lista</h5>
           <p className="text-xs text-[#b3b3b3] mt-0.5 leading-snug">
             Crea una lista con canciones o episodios
+          </p>
+        </div>
+      </button>
+
+      {/* Importar playlist de YouTube Music / YouTube / Apple Music / Spotify */}
+      <button
+        onClick={() => {
+          closeCreateMenu();
+          openImportPlaylistDialog();
+        }}
+        className="w-full flex items-center gap-3.5 p-2.5 rounded-md hover:bg-white/10 transition-colors text-left group"
+      >
+        <div className="w-10 h-10 rounded-full bg-black/40 flex items-center justify-center shrink-0 text-[#b3b3b3] group-hover:text-white">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 3a1 1 0 0 1 1 1v9.59l3.3-3.3a1 1 0 1 1 1.4 1.42l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.42l3.3 3.3V4a1 1 0 0 1 1-1zM5 19a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H6a1 1 0 0 1-1-1z" />
+          </svg>
+        </div>
+        <div>
+          <h5 className="font-bold text-sm text-white leading-tight">Importar playlist</h5>
+          <p className="text-xs text-[#b3b3b3] mt-0.5 leading-snug">
+            Desde YouTube Music, YouTube, Apple Music o Spotify
           </p>
         </div>
       </button>

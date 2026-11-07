@@ -116,6 +116,26 @@ ${services}
             android:name=".SpotifreeArtProvider"
             android:authorities="\${applicationId}.art"
             android:exported="true" />
+        <provider
+            android:name=".SpotifreeShareProvider"
+            android:authorities="\${applicationId}.share"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/spotifree_share_paths" />
+        </provider>
+        <receiver
+            android:name=".SpotifreeWidget"
+            android:exported="false"
+            android:label="Spotifree">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spotifree_widget_info" />
+        </receiver>
         <receiver
             android:name="androidx.media.session.MediaButtonReceiver"
             android:exported="true">

@@ -451,6 +451,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         holdLocks(playing);
         maybeLoadArt();
         updateNotification();
+        SpotifreeWidget.update(this);
     }
 
     /** Upcoming songs as the session queue (the car's queue button) */
@@ -489,6 +490,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             main.post(() -> {
                 if (url.equals(loadedArtUrl)) {
                     art = result;
+                    SpotifreeWidget.setArt(result);
                     refresh();
                 }
             });
@@ -871,6 +873,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         main.removeCallbacks(releaseLocks);
         releaseLocksNow();
         if (current == this) current = null;
+        SpotifreeWidget.update(this); // the widget's buttons open the app again
         if (session != null) {
             session.setActive(false);
             session.release();

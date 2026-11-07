@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { importExternalPlaylist } from '../../utils/playlistImporter';
+import { showGlobalToast } from '../../utils/globalToast';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import type { Playlist } from '../../types/spotify';
 
@@ -26,6 +27,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
   const [importUrl, setImportUrl] = useState('');
   const [importLoading, setImportLoading] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
+  const [importProgress, setImportProgress] = useState<[number, number] | null>(null);
 
   // Fluid swipe-to-dismiss drag gesture (1:1 Spotify Mobile Sheet)
   const [dragY, setDragY] = useState(0);
@@ -79,10 +81,15 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
     setImportLoading(true);
     setImportError(null);
 
-    const result = await importExternalPlaylist(importUrl.trim(), user || undefined);
+    setImportProgress(null);
+    const result = await importExternalPlaylist(importUrl.trim(), user || undefined, (done, total) => setImportProgress([done, total]));
     setImportLoading(false);
+    setImportProgress(null);
 
     if (result.success && result.playlist) {
+      if (typeof result.total === 'number' && typeof result.matched === 'number') {
+        showGlobalToast(`«${result.playlist.name}»: ${result.matched} de ${result.total} canciones encontradas`);
+      }
       if (onImportPlaylist) {
         onImportPlaylist(result.playlist);
       } else {
@@ -258,7 +265,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
               Importar playlist
             </h3>
             <p className="text-xs text-[#b3b3b3] text-center max-w-xs mx-auto">
-              Pega un enlace de YouTube, SoundCloud, Spotify o escribe canciones línea por línea.
+              Pega el enlace de una playlist de YouTube Music, YouTube, Apple Music o Spotify, o escribe canciones línea por línea («Canción - Artista»).
             </p>
             <div className="relative border-b-2 border-white/40 focus-within:border-[#1ed760] transition-colors pb-1">
               <textarea
@@ -273,6 +280,20 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
 
             {importError && (
               <p className="text-xs text-red-400 text-center font-medium">{importError}</p>
+            )}
+
+            {importLoading && (
+              <div className="space-y-1.5">
+                <div className="h-1 w-full rounded-full bg-white/15 overflow-hidden">
+                  <div
+                    className="h-full bg-[#1ed760] transition-all duration-300"
+                    style={{ width: importProgress ? `${(importProgress[0] / Math.max(1, importProgress[1])) * 100}%` : '8%' }}
+                  />
+                </div>
+                <p className="text-[11px] text-[#b3b3b3] text-center tabular-nums">
+                  {importProgress ? `Buscando canciones ${importProgress[0]} de ${importProgress[1]}` : 'Leyendo la playlist…'}
+                </p>
+              </div>
             )}
 
             <div className="flex items-center justify-center gap-4 pt-2">

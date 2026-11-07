@@ -13,6 +13,8 @@ import GlobalToast from './components/common/GlobalToast';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
 import CarModeView from './components/common/CarModeView';
 import SleepTimerSheet from './components/common/SleepTimerSheet';
+import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
+import StoryCardSheet from './components/common/StoryCardSheet';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { usePlayerStore } from './store/usePlayerStore';
@@ -171,6 +173,8 @@ function App() {
       <AudioSourceSheet />
       <CarModeView />
       <SleepTimerSheet />
+      <ImportPlaylistDialog />
+      <StoryCardSheet />
       <GlobalToast />
     </ErrorBoundary>
   );

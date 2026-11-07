@@ -78,6 +78,10 @@
       "destination": "/api/audio?action=$1"
     },
     {
+      "source": "/api/import-playlist",
+      "destination": "/api/playlist?action=import"
+    },
+    {
       "source": "/api/spotify/playlist/(.*)",
       "destination": "/api/playlist?id=$1"
     },

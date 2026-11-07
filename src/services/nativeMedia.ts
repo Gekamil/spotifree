@@ -47,6 +47,7 @@ interface SpotifreeMediaPlugin {
   takePendingCommand(): Promise<{ command?: MediaCommand }>;
   backgroundStatus(): Promise<{ unrestricted: boolean }>;
   requestBackground(): Promise<void>;
+  shareImage(o: { base64: string; text?: string; title?: string }): Promise<void>;
   addListener(event: 'command', cb: (c: MediaCommand) => void): Promise<PluginListenerHandle>;
 }
 
@@ -86,6 +87,17 @@ export async function requestBackgroundPlayback(): Promise<void> {
   try {
     await SpotifreeMedia.requestBackground();
   } catch {}
+}
+
+/** APK: Android's share menu with an image (the WebView has no Web Share). False if it failed. */
+export async function shareImageNative(base64Png: string, text?: string): Promise<boolean> {
+  if (!isNativeMediaAvailable()) return false;
+  try {
+    await SpotifreeMedia.shareImage({ base64: base64Png, text, title: en() ? 'Share' : 'Compartir' });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isNativeMediaAvailable(): boolean {

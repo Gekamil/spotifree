@@ -57,6 +57,12 @@ public class SpotifreeMediaPlugin extends Plugin {
         return ev;
     }
 
+    /** The app (its web player) is running and can take commands */
+    static boolean isAppRunning() {
+        SpotifreeMediaPlugin p = instance;
+        return p != null && p.getBridge() != null;
+    }
+
     /** Sends a command to the web layer. False when the app UI is not running. */
     static boolean emit(String action, JSONObject data) {
         SpotifreeMediaPlugin p = instance;
@@ -214,6 +220,43 @@ public class SpotifreeMediaPlugin extends Plugin {
         if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.refresh();
         SpotifreeWebView.sync();
         call.resolve();
+    }
+
+    /** base64 (PNG), text, title: Android's share menu with the image (stories card) */
+    @PluginMethod
+    public void shareImage(PluginCall call) {
+        String b64 = call.getString("base64", "");
+        if (b64 == null || b64.isEmpty()) {
+            call.reject("missing image");
+            return;
+        }
+        try {
+            Context ctx = getContext();
+            java.io.File dir = new java.io.File(ctx.getCacheDir(), "share");
+            if (!dir.exists() && !dir.mkdirs()) throw new java.io.IOException("no share folder");
+            java.io.File f = new java.io.File(dir, "spotifree-cancion.png");
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                out.write(android.util.Base64.decode(b64, android.util.Base64.DEFAULT));
+            }
+            Uri uri = androidx.core.content.FileProvider.getUriForFile(ctx, ctx.getPackageName() + ".share", f);
+            Intent send = new Intent(Intent.ACTION_SEND)
+                .setType("image/png")
+                .putExtra(Intent.EXTRA_STREAM, uri)
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            String text = call.getString("text", "");
+            if (text != null && !text.isEmpty()) send.putExtra(Intent.EXTRA_TEXT, text);
+            send.setClipData(android.content.ClipData.newRawUri("", uri));
+            Intent chooser = Intent.createChooser(send, call.getString("title", "Compartir"));
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            if (getActivity() != null) getActivity().startActivity(chooser);
+            else {
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                ctx.startActivity(chooser);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("share failed");
+        }
     }
 
     /** Can the app keep playing with the screen off? (not restricted by battery optimization) */

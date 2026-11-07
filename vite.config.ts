@@ -9,6 +9,8 @@ import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
 // @ts-ignore
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 // @ts-ignore
+import { readExternalPlaylist } from './api/_lib/import-playlist.js';
+// @ts-ignore
 import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
 import metadataHandler from './api/metadata.js';
@@ -543,6 +545,21 @@ function dynamicSpotifyPlugin(): Plugin {
 
       server.middlewares.use('/api/spotify/extract-session', handleExtractSession);
       server.middlewares.use('/api/extract-session', handleExtractSession);
+
+      // "Importar playlist" (same code as api/playlist.js?action=import in production)
+      server.middlewares.use('/api/import-playlist', async (req, res) => {
+        res.setHeader('Content-Type', 'application/json');
+        try {
+          const u = new URL(req.url || '', 'http://localhost');
+          const result = await readExternalPlaylist(u.searchParams.get('url') || '');
+          res.statusCode = 200;
+          res.end(JSON.stringify({ success: true, ...result }));
+        } catch (e: any) {
+          const reason = String(e?.message || e);
+          res.statusCode = reason === 'unsupported' ? 400 : 502;
+          res.end(JSON.stringify({ success: false, reason }));
+        }
+      });
 
       // 1. Dynamic Playlist Details Endpoint (/api/spotify/playlist/:id)
       server.middlewares.use('/api/spotify/playlist', async (req, res) => {
