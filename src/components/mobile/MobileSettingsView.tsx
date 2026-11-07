@@ -254,6 +254,35 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </p>
         </div>
 
+        {/* Instalar la app: página /instalar (APK, iPhone, ordenador). En la APK ya está instalada. */}
+        {getAppIconPlatform() !== 'native' && (
+          <a
+            href="/instalar.html"
+            className="flex items-center gap-3 p-4 rounded-2xl bg-[#181818] border border-white/[0.06] active:scale-[0.98] active:bg-[#202020] transition-all"
+          >
+            <span className="w-11 h-11 rounded-xl bg-[#1ed760] flex items-center justify-center shrink-0">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="none" stroke="#000" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M12 3v12" />
+                <path d="m7 10 5 5 5-5" />
+                <path d="M5 21h14" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-bold text-white">
+                {language === 'en' ? 'Install the app' : 'Instalar la app'}
+              </span>
+              <span className="block text-xs text-[#b3b3b3] leading-snug mt-0.5">
+                {language === 'en'
+                  ? 'Android APK with Android Auto, iPhone and computer'
+                  : 'APK para Android con Android Auto, iPhone y ordenador'}
+              </span>
+            </span>
+            <svg viewBox="0 0 16 16" className="w-4 h-4 shrink-0 fill-[#b3b3b3]" aria-hidden="true">
+              <path d="M5.47 2.47a.75.75 0 0 1 1.06 0l5 5a.75.75 0 0 1 0 1.06l-5 5a.75.75 0 1 1-1.06-1.06L9.94 8 5.47 3.53a.75.75 0 0 1 0-1.06z" />
+            </svg>
+          </a>
+        )}
+
         {/* Tu Cuenta Spotifree */}
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1 mb-1">
