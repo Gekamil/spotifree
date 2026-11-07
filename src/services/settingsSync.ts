@@ -54,32 +54,47 @@ export function applyRemoteSettings(remote?: SyncedSettings | null) {
   if (!(remote.updatedAt > localStamp)) return;
   for (const [k, v] of Object.entries(remote.values)) {
     if (!(SYNCED_SETTING_KEYS as readonly string[]).includes(k)) continue;
+    // Only real values: a setting nobody changed (null) never erases this device's one
+    if (v === null || v === undefined) continue;
     try {
-      if (v === null || v === undefined) window.localStorage.removeItem(k);
-      else window.localStorage.setItem(k, v);
+      window.localStorage.setItem(k, v);
     } catch {}
   }
   try {
     window.localStorage.setItem(STAMP_KEY, String(remote.updatedAt));
   } catch {}
-  lastSig = JSON.stringify(snapshot());
+  lastSnap = snapshot();
+  lastSig = JSON.stringify(lastSnap);
   window.dispatchEvent(new CustomEvent(SETTINGS_SYNCED_EVENT, { detail: remote.values }));
 }
+
+let lastSnap: Record<string, string | null> = {};
+const changedKeys = new Set<string>();
 
 function pushIfChanged() {
   const snap = snapshot();
   const sig = JSON.stringify(snap);
   if (sig === lastSig) return;
+  for (const k of SYNCED_SETTING_KEYS) if (snap[k] !== lastSnap[k] && snap[k] !== null) changedKeys.add(k);
   lastSig = sig;
+  lastSnap = snap;
   const acc = getSavedSpotifreeAccount();
-  if (!acc?.email) return;
+  if (!acc?.email || changedKeys.size === 0) return;
   window.clearTimeout(pushTimer);
   pushTimer = window.setTimeout(() => {
     const updatedAt = Date.now();
     try {
       window.localStorage.setItem(STAMP_KEY, String(updatedAt));
     } catch {}
-    syncSpotifreeAccount({ settings: { values: snap, updatedAt } } as any).catch(() => {});
+    // Merge: what the account already has from other devices + only what changed here
+    const current = getSavedSpotifreeAccount();
+    const both = [current?.settings, (current as any)?.stats?.appSettings].filter((x) => x && x.values);
+    const newest = both.sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+    const cloud = newest?.values || {};
+    const values: Record<string, string | null> = { ...cloud };
+    for (const k of changedKeys) values[k] = lastSnap[k];
+    changedKeys.clear();
+    syncSpotifreeAccount({ settings: { values, updatedAt } }).catch(() => {});
   }, 2500);
 }
 
@@ -87,7 +102,8 @@ let started = false;
 export function startSettingsSync() {
   if (started || typeof window === 'undefined') return;
   started = true;
-  lastSig = JSON.stringify(snapshot());
+  lastSnap = snapshot();
+  lastSig = JSON.stringify(lastSnap);
   // Settings are written from many screens: compare a snapshot every few seconds
   window.setInterval(pushIfChanged, 4000);
   document.addEventListener('visibilitychange', () => {

@@ -10,7 +10,7 @@ import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
-import { effectiveEqGains } from '../utils/eqSettings';
+import { EQ_CHANGED_EVENT, effectiveEqGains } from '../utils/eqSettings';
 import { analyzeTrackAudio } from './trackAnalysisService';
 import { showGlobalToast } from '../utils/globalToast';
 import { cancelNativeTransitionFx, nativeTransitionFx } from './nativeAudioFx';
@@ -206,6 +206,7 @@ class AudioEngine {
   public lastCrossfadeFinishTime = 0;
   public lastTrackStartTime = 0;
   private lastObservedSec = -1;
+  private lastPreloadAttempt = 0;
   private lastObservedAdvanceTime = 0;
   private stuckRecoveryAttempts = 0;
 
@@ -366,8 +367,15 @@ class AudioEngine {
     const remaining = Math.max(0, effectiveTrackEndSec - curSec);
 
     // Have the next song resolved and cued well before the mix (a mix waiting for the search
-    // used to be skipped and the song simply ended)
-    if (!this.preloadedNext && !this.isPreloadingNext && remaining <= Math.max(45, effectiveCrossfade + 30)) {
+    // used to be skipped and the song simply ended). At most one attempt every 5 s, so a
+    // failing search is not repeated on every tick.
+    if (
+      !this.preloadedNext &&
+      !this.isPreloadingNext &&
+      remaining <= Math.max(45, effectiveCrossfade + 30) &&
+      Date.now() - this.lastPreloadAttempt > 5000
+    ) {
+      this.lastPreloadAttempt = Date.now();
       this.preloadUpcomingTracks();
     }
 
@@ -380,9 +388,6 @@ class AudioEngine {
     if (djConfig && !this.isCrossfading && curAnalysis && barAlignedStart !== null) {
       const bar = 240 / curAnalysis.tempo;
       const onBar = barAlignedStart;
-      if (remaining > effectiveCrossfade + 8 && remaining <= Math.max(20, effectiveCrossfade + 8 + bar) && !this.preloadedNext && !this.isPreloadingNext) {
-        this.preloadUpcomingTracks();
-      }
       if (onBar > 10 && curSec >= onBar && remaining > 0) {
         this.executeCrossfade(Math.min(effectiveCrossfade, Math.max(1.5, remaining)), djConfig);
         return;
@@ -390,17 +395,7 @@ class AudioEngine {
       if (remaining > effectiveCrossfade + bar) return; // wait for the bar line
     }
 
-    // 1. Preload upcoming songs in the background before crossfade starts
-    if (
-      !this.preloadedNext &&
-      !this.isPreloadingNext &&
-      remaining <= Math.max(20, effectiveCrossfade + 8) &&
-      remaining > effectiveCrossfade
-    ) {
-      this.preloadUpcomingTracks();
-    }
-
-    // 2. Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
+    // Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
     // If remaining time is shorter than calculated phrase, clamp duration without altering preset
     if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
       const clampedDuration = Math.min(effectiveCrossfade, Math.max(1.5, remaining));
@@ -1482,6 +1477,14 @@ class AudioEngine {
       // Handle visibility changes: when the user comes back to the app,
       // ensure audio is still playing and not muted (mobile browsers sometimes
       // mute or pause the YT iframe when returning from background).
+      // Equalizer changed here or synced from another device
+      // (only once the audio graph exists: it reads the saved EQ when it is created)
+      window.addEventListener(EQ_CHANGED_EVENT, () => {
+        try {
+          if (this.audioContext) this.applyEqualizerGains(effectiveEqGains());
+        } catch {}
+      });
+
       document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {
           // Tab/app became visible again — restore playback if it was supposed to be playing

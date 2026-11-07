@@ -109,7 +109,11 @@ public class SpotifreeMediaPlugin extends Plugin {
         if (explore != null) SpotifreeMediaService.explore = explore;
         SpotifreeMediaService.loggedIn = Boolean.TRUE.equals(call.getBoolean("loggedIn", true));
         SpotifreeMediaService.saveLibrary(getContext(), playlists != null ? playlists : new JSONArray(), home);
-        if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.notifyLibraryChanged();
+        if (SpotifreeMediaService.current != null) {
+            SpotifreeMediaService.current.notifyLibraryChanged();
+            // e.g. just signed in: clear the "sign in" message in the car
+            SpotifreeMediaService.current.refresh();
+        }
         call.resolve();
     }
 

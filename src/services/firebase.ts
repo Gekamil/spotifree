@@ -253,7 +253,24 @@ export async function saveUserDataToFirestore(uid: string, data: Partial<CloudUs
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const userRef = doc(db, 'users', uid);
-    const cleaned = cleanDataForFirestore({ ...data, updatedAt: Date.now() });
+    // firestore.rules only accept these fields (hasOnly): any other key makes the whole save
+    // fail. App settings travel inside the free-form "stats" map.
+    const ALLOWED = [
+      'uid', 'id', 'email', 'displayName', 'avatarUrl', 'photoURL', 'bannerUrl', 'spotifyCookie',
+      'playlists', 'likedTracks', 'history', 'deletedPlaylistIds', 'stats', 'customTransitions',
+      'theme', 'createdAt', 'updatedAt',
+    ];
+    const src: Record<string, any> = { ...(data as any) };
+    if (src.settings) {
+      src.stats = { ...(src.stats && typeof src.stats === 'object' ? src.stats : {}), appSettings: src.settings };
+    }
+    const payload: Record<string, any> = {};
+    for (const k of ALLOWED) if (src[k] !== undefined) payload[k] = src[k];
+    if (Array.isArray(payload.history) && payload.history.length > 500) payload.history = payload.history.slice(0, 500);
+    if (Array.isArray(payload.deletedPlaylistIds) && payload.deletedPlaylistIds.length > 1000) {
+      payload.deletedPlaylistIds = payload.deletedPlaylistIds.slice(-1000);
+    }
+    const cleaned = cleanDataForFirestore({ ...payload, updatedAt: Date.now() });
     await setDoc(userRef, cleaned, { merge: true });
     return true;
   } catch (err) {

@@ -918,4 +918,13 @@ export const EN_DICTIONARY: Record<string, string> = {
   'Normales': 'Normal',
   'Intensos': 'Intense',
   'Golpe, subidas y redobles que suenan en cada transición del DJ.': 'Impacts, risers and rolls that play on every DJ transition.',
+  'Golpes, subidas y redobles que suenan cuando el DJ cambia de canción.': 'Impacts, risers and rolls that play when the DJ changes songs.',
+  // Audio source / car
+  'Cambiar fuente de audio': 'Change audio source',
+  'Si no suena la canción correcta': "If the right song isn't playing",
+  'Modo coche': 'Car mode',
+  'Botones grandes, Canvas y letra': 'Big buttons, Canvas and lyrics',
+  'Letra en el coche': 'Lyrics in the car',
+  'Muestra la línea de la letra que suena en Android Auto y en la pantalla del Bluetooth del coche.':
+    'Shows the current lyric line in Android Auto and on the car’s Bluetooth display.',
 };

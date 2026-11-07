@@ -39,6 +39,16 @@ type Panel = 'lyrics' | 'queue' | 'lists';
  */
 export default function CarModeView() {
   const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const onOpen = (e: Event) => setOpen((e as CustomEvent).detail?.open !== false);
+    window.addEventListener(CAR_MODE_EVENT, onOpen);
+    return () => window.removeEventListener(CAR_MODE_EVENT, onOpen);
+  }, []);
+  // The screen (and its subscription to the player) only exists while open
+  return open ? <CarModeScreen onClose={() => setOpen(false)} /> : null;
+}
+
+function CarModeScreen({ onClose }: { onClose: () => void }) {
   const [panel, setPanel] = useState<Panel>('lyrics');
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [lines, setLines] = useState<SyncedLine[]>([]);
@@ -53,18 +63,11 @@ export default function CarModeView() {
   const wakeRef = useRef<any>(null);
 
   useEffect(() => {
-    const onOpen = (e: Event) => setOpen((e as CustomEvent).detail?.open !== false);
-    window.addEventListener(CAR_MODE_EVENT, onOpen);
-    return () => window.removeEventListener(CAR_MODE_EVENT, onOpen);
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
     const onResize = () => setLandscape(window.innerWidth > window.innerHeight);
     const tick = window.setInterval(() => setClock(new Date()), 15000);
     const onBack = (e: Event) => {
       (e as CustomEvent).detail?.setHandled?.();
-      setOpen(false);
+      onClose();
     };
     window.addEventListener('resize', onResize);
     window.addEventListener('spotifree_android_back', onBack);
@@ -80,11 +83,11 @@ export default function CarModeView() {
       } catch {}
       wakeRef.current = null;
     };
-  }, [open]);
+  }, []);
 
   // Canvas + lyrics of the current song
   useEffect(() => {
-    if (!open || !t) return;
+    if (!t) return;
     let cancelled = false;
     setCanvasUrl(null);
     setLines([]);
@@ -103,7 +106,7 @@ export default function CarModeView() {
     return () => {
       cancelled = true;
     };
-  }, [open, t?.id]);
+  }, [t?.id]);
 
   const activeLine = useMemo(() => {
     let idx = -1;
@@ -119,8 +122,6 @@ export default function CarModeView() {
     const el = box?.querySelector<HTMLElement>(`[data-line="${activeLine}"]`);
     if (box && el) box.scrollTo({ top: el.offsetTop - box.clientHeight * 0.38, behavior: 'smooth' });
   }, [activeLine, panel]);
-
-  if (!open) return null;
 
   const liked = Boolean(t && (p.likedTrackIds || []).includes(t.id));
   const cover = t?.album?.images?.[0]?.url || '';
@@ -147,20 +148,20 @@ export default function CarModeView() {
   ];
 
   const controls = (
-    <div className="flex items-center justify-between gap-2 w-full max-w-[560px]">
-      <button onClick={() => p.toggleShuffle()} aria-label="Shuffle" className={`h-14 w-14 grid place-items-center rounded-full ${p.isShuffle ? 'text-[#1ed760]' : 'text-white/80'}`}>
+    <div className="flex items-center justify-between gap-1 w-full max-w-[560px]">
+      <button onClick={() => p.toggleShuffle()} aria-label="Shuffle" className={`h-10 w-10 sm:h-14 sm:w-14 shrink-0 grid place-items-center rounded-full ${p.isShuffle ? 'text-[#1ed760]' : 'text-white/80'}`}>
         <Icon d={I.shuffle} size={28} />
       </button>
-      <button onClick={() => p.previousTrack()} aria-label="Previous" className="h-[72px] w-[72px] grid place-items-center rounded-full bg-white/10 active:scale-95 text-white">
+      <button onClick={() => p.previousTrack()} aria-label="Previous" className="h-12 w-12 sm:h-[72px] sm:w-[72px] shrink-0 grid place-items-center rounded-full bg-white/10 active:scale-95 text-white">
         <Icon d={I.prev} size={30} />
       </button>
-      <button onClick={() => p.togglePlay()} aria-label="Play" className="h-[104px] w-[104px] grid place-items-center rounded-full bg-[#1ed760] text-black active:scale-95 shadow-[0_8px_30px_rgba(30,215,96,.35)]">
+      <button onClick={() => p.togglePlay()} aria-label="Play" className="h-[72px] w-[72px] sm:h-[104px] sm:w-[104px] shrink-0 grid place-items-center rounded-full bg-[#1ed760] text-black active:scale-95 shadow-[0_8px_30px_rgba(30,215,96,.35)]">
         <Icon d={p.isPlaying ? I.pause : I.play} size={44} />
       </button>
-      <button onClick={() => p.nextTrack()} aria-label="Next" className="h-[72px] w-[72px] grid place-items-center rounded-full bg-white/10 active:scale-95 text-white">
+      <button onClick={() => p.nextTrack()} aria-label="Next" className="h-12 w-12 sm:h-[72px] sm:w-[72px] shrink-0 grid place-items-center rounded-full bg-white/10 active:scale-95 text-white">
         <Icon d={I.next} size={30} />
       </button>
-      <button onClick={() => p.toggleRepeat()} aria-label="Repeat" className={`relative h-14 w-14 grid place-items-center rounded-full ${p.repeatMode !== 'off' ? 'text-[#1ed760]' : 'text-white/80'}`}>
+      <button onClick={() => p.toggleRepeat()} aria-label="Repeat" className={`relative h-10 w-10 sm:h-14 sm:w-14 shrink-0 grid place-items-center rounded-full ${p.repeatMode !== 'off' ? 'text-[#1ed760]' : 'text-white/80'}`}>
         <Icon d={I.repeat} size={28} />
         {p.repeatMode === 'one' && <span className="absolute top-2 right-2 text-[10px] font-bold">1</span>}
       </button>
@@ -168,13 +169,13 @@ export default function CarModeView() {
   );
 
   const side = (
-    <div className={`flex flex-col min-h-0 rounded-2xl bg-black/45 backdrop-blur-md ${landscape ? 'h-full' : 'flex-1'}`}>
-      <div className="flex gap-2 p-3 pb-2">
+    <div className={`flex flex-col min-h-0 min-w-0 w-full rounded-2xl bg-black/45 backdrop-blur-md ${landscape ? 'h-full' : 'flex-1'}`}>
+      <div className="flex gap-2 p-3 pb-2 overflow-x-auto no-scrollbar shrink-0">
         {tabs.map((x) => (
           <button
             key={x.id}
             onClick={() => setPanel(x.id)}
-            className={`px-4 py-2 rounded-full text-[15px] font-bold ${panel === x.id ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
+            className={`px-4 py-2 rounded-full text-[15px] font-bold whitespace-nowrap shrink-0 ${panel === x.id ? 'bg-white text-black' : 'bg-white/10 text-white'}`}
           >
             {x.label}
           </button>
@@ -192,7 +193,7 @@ export default function CarModeView() {
                     audioEngine.seek(l.timeMs / 1000);
                     p.setProgress(l.timeMs);
                   }}
-                  className={`text-[24px] leading-tight font-bold transition-colors cursor-pointer ${
+                  className={`text-[22px] sm:text-[24px] leading-tight font-bold break-words transition-colors cursor-pointer ${
                     i === activeLine ? 'text-white' : i < activeLine ? 'text-white/45' : 'text-white/30'
                   }`}
                 >
@@ -248,12 +249,12 @@ export default function CarModeView() {
       <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-black/30 to-black/85" />
 
       <div
-        className={`relative h-full flex ${landscape ? 'flex-row gap-6' : 'flex-col gap-4'} p-5`}
+        className={`relative h-full flex ${landscape ? 'flex-row gap-6' : 'flex-col gap-4'} p-4 sm:p-5`}
         style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 16px)', paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
       >
         <div className={`flex flex-col ${landscape ? 'flex-[1.25] min-w-0' : 'shrink-0'}`}>
           <div className="flex items-center justify-between">
-            <button onClick={() => setOpen(false)} aria-label={en ? 'Close' : 'Cerrar'} className="h-12 w-12 grid place-items-center rounded-full bg-black/40">
+            <button onClick={onClose} aria-label={en ? 'Close' : 'Cerrar'} className="h-12 w-12 grid place-items-center rounded-full bg-black/40">
               <Icon d={I.close} size={20} />
             </button>
             <span className="text-[13px] font-bold uppercase tracking-[.18em] text-white/80">{en ? 'Car mode' : 'Modo coche'}</span>
@@ -262,12 +263,12 @@ export default function CarModeView() {
             </span>
           </div>
 
-          <div className={`flex ${landscape ? 'flex-1 items-center' : 'items-end mt-6'} gap-5 min-h-0`}>
+          <div className={`flex ${landscape ? 'flex-1 items-center' : 'items-center mt-5'} gap-3 sm:gap-5 min-h-0`}>
             {!canvasUrl && cover && (
-              <img src={cover} alt="" className={`${landscape ? 'h-[min(34vh,220px)] w-[min(34vh,220px)]' : 'h-28 w-28'} rounded-xl object-cover shadow-2xl shrink-0`} />
+              <img src={cover} alt="" className={`${landscape ? 'h-[min(34vh,220px)] w-[min(34vh,220px)]' : 'h-20 w-20 sm:h-28 sm:w-28'} rounded-xl object-cover shadow-2xl shrink-0`} />
             )}
             <div className="min-w-0 flex-1">
-              <p className="text-[clamp(28px,5vw,46px)] font-bold leading-tight line-clamp-2">{t?.name || 'Spotifree'}</p>
+              <p className="text-[clamp(24px,5vw,46px)] font-bold leading-tight line-clamp-2 break-words">{t?.name || 'Spotifree'}</p>
               <p className="text-[clamp(18px,2.6vw,24px)] text-white/75 truncate mt-1">{t?.artists?.map((a) => a.name).join(', ')}</p>
               {lines[activeLine] && panel !== 'lyrics' && (
                 <p className="text-[20px] text-[#1ed760] font-bold mt-2 line-clamp-2">♪ {lines[activeLine].text}</p>
@@ -276,7 +277,7 @@ export default function CarModeView() {
             <button
               onClick={() => t && p.toggleLike(t.id, t)}
               aria-label={en ? 'Like' : 'Me gusta'}
-              className={`h-14 w-14 grid place-items-center rounded-full shrink-0 ${liked ? 'text-[#1ed760]' : 'text-white'}`}
+              className={`h-12 w-12 sm:h-14 sm:w-14 grid place-items-center rounded-full shrink-0 ${liked ? 'text-[#1ed760]' : 'text-white'}`}
             >
               {liked ? <Icon d={I.heart} size={30} /> : <Icon d={I.heartLine} size={30} view={24} />}
             </button>
@@ -297,7 +298,7 @@ export default function CarModeView() {
           <div className="mt-4 flex justify-center">{controls}</div>
         </div>
 
-        <div className={landscape ? 'flex-1 min-w-0 min-h-0' : 'flex-1 min-h-0 flex'}>{side}</div>
+        <div className={landscape ? 'flex-1 min-w-0 min-h-0' : 'flex-1 min-h-0 min-w-0 flex'}>{side}</div>
       </div>
     </div>
   );

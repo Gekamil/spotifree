@@ -423,7 +423,11 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   }
 
   // 1a. Settings saved by another device (equalizer, DJ, language...)
-  if (acc.settings) applyRemoteSettings(acc.settings);
+  // (in the cloud they are stored as stats.appSettings, see saveUserDataToFirestore)
+  // The local copy of the account and the cloud document may both carry them: newest wins
+  const candidates = [acc.settings, (acc as any).stats?.appSettings].filter((x) => x && x.values);
+  const syncedSettings = candidates.sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+  if (syncedSettings) applyRemoteSettings(syncedSettings);
 
   // 1b. Sync deleted playlist IDs if present in cloud account
   if (Array.isArray(acc.deletedPlaylistIds) && typeof window !== 'undefined') {
