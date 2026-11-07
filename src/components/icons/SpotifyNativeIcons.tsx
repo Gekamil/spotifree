@@ -393,6 +393,14 @@ export const ImportNativeIcon: React.FC<IconProps> = ({ size = 24, className = '
   </svg>
 );
 
+/** "Copiar enlace" */
+export const LinkNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M10 13.5a4.5 4.5 0 0 0 6.36.3l2.83-2.83a4.5 4.5 0 0 0-6.36-6.36L11.5 5.94" />
+    <path d="M14 10.5a4.5 4.5 0 0 0-6.36-.3L4.81 13.03a4.5 4.5 0 0 0 6.36 6.36l1.33-1.33" />
+  </svg>
+);
+
 /** "Pegar" (paste from clipboard) */
 export const PasteNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>

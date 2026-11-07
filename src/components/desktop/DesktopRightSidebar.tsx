@@ -8,12 +8,13 @@ import {
   CheckTrackNativeIcon,
   VideoSwitchNativeIcon,
   AudioSwitchNativeIcon,
+  CloseNativeIcon,
 } from '../icons/SpotifyNativeIcons';
+import { SharedSessionPanel } from '../common/SharedSessionPanel';
 import { toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { useSharedSessionStore } from '../../services/sharedSessionService';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 
@@ -151,348 +152,25 @@ function getArtistInfo(artistName: string = '', fallbackImage?: string) {
   };
 }
 
-const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const {
-    isInSession,
-    isHost,
-    sessionId,
-    sessionLink,
-    hostName,
-    participants,
-    myParticipantId,
-    libraryViewMode,
-    setLibraryViewMode,
-    updateMyName,
-    createSession,
-    joinSession,
-    leaveSession,
-    terminateSession,
-  } = useSharedSessionStore();
-
-  const user = useSpotifyDataStore((s) => s.user);
-  const [userName, setUserName] = useState(() => user?.display_name || 'Amigo');
-  const [joinCodeInput, setJoinCodeInput] = useState('');
-  const [isCopied, setIsCopied] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [editingName, setEditingName] = useState(false);
-  const [newNameInput, setNewNameInput] = useState('');
-
-  const handleCopyLink = () => {
-    if (!sessionLink) return;
-    navigator.clipboard.writeText(sessionLink).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    });
-  };
-
-  const handleStart = async () => {
-    setIsSubmitting(true);
-    await createSession(userName);
-    setIsSubmitting(false);
-  };
-
-  const handleJoin = async () => {
-    if (!joinCodeInput.trim()) return;
-    setIsSubmitting(true);
-    await joinSession(joinCodeInput.trim(), userName);
-    setIsSubmitting(false);
-  };
-
-  return (
-    <div className="flex flex-col h-full overflow-hidden font-['SpotifyMixUI']">
-      {/* Header */}
-      <div className="px-4 py-3 flex items-center justify-between border-b border-white/5 bg-[#121212] shrink-0 z-10">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-sm text-white font-['SpotifyMixUITitle']">
-            Sesión compartida
-          </span>
-        </div>
-        <button
-          onClick={onClose}
-          className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          title="Cerrar"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {!isInSession ? (
-          <div className="flex flex-col items-center text-center space-y-4 pt-2">
-            <div className="w-14 h-14 rounded-full bg-[#1ed760]/15 text-[#1ed760] flex items-center justify-center shadow-lg">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                <path d="M4.5 10c1.38 0 2.5-1.12 2.5-2.5S5.88 5 4.5 5 2 6.12 2 7.5 3.12 10 4.5 10zm-1.5 3.5C1.84 14.16 0 15.33 0 17v2h6v-2c0-1.67-1.84-2.84-3-3.5z"/>
-                <path d="M19.5 10c1.38 0 2.5-1.12 2.5-2.5S20.88 5 19.5 5 17 6.12 17 7.5s1.12 2.5 2.5 2.5zm1.5 3.5c1.16.66 3 1.83 3 3.5v2h-6v-2c0-1.67 1.84-2.84 3-3.5z"/>
-              </svg>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="font-bold text-base text-white font-['SpotifyMixUITitle']">
-                Escucha con tus amigos
-              </h3>
-              <p className="text-xs text-[#b3b3b3] leading-relaxed">
-                Comparte un enlace para escuchar la misma canción al segundo, ver sus cursores en vivo y elegir música juntos.
-              </p>
-            </div>
-
-            <div className="w-full text-left space-y-1.5">
-              <label className="text-xs font-bold text-white block">
-                Tu nombre
-              </label>
-              <input
-                type="text"
-                value={userName}
-                onChange={(e) => setUserName(e.target.value)}
-                placeholder="Nombre para mostrar"
-                className="w-full px-3.5 py-2.5 rounded-md bg-[#242424] focus:bg-[#2a2a2a] border border-transparent focus:border-[#535353] text-white text-xs outline-none transition-all placeholder:text-[#727272]"
-              />
-            </div>
-
-            <button
-              onClick={handleStart}
-              disabled={isSubmitting}
-              className="w-full py-2.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] text-black font-extrabold text-xs tracking-normal hover:scale-102 active:scale-98 transition-all shadow-md cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? 'Iniciando...' : 'Iniciar sesión compartida'}
-            </button>
-
-            <div className="w-full pt-3 border-t border-white/5 text-left space-y-2">
-              <label className="text-xs font-bold text-white block">
-                O únete con un código
-              </label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={joinCodeInput}
-                  onChange={(e) => setJoinCodeInput(e.target.value.toUpperCase())}
-                  placeholder="CÓDIGO (EJ. 2SACKT)"
-                  maxLength={8}
-                  className="flex-1 px-3 py-2 rounded-md bg-[#242424] focus:bg-[#2a2a2a] border border-transparent focus:border-[#535353] text-white text-xs uppercase tracking-widest font-mono text-center outline-none transition-all placeholder:text-[#727272]"
-                />
-                <button
-                  onClick={handleJoin}
-                  disabled={isSubmitting || !joinCodeInput.trim()}
-                  className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs cursor-pointer hover:scale-104 active:scale-95 transition-all disabled:opacity-30 disabled:scale-100 shadow-sm"
-                >
-                  Unirse
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {/* Status card */}
-            <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-bold text-white flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-                  Sala en vivo
-                </span>
-                <span className="text-[10px] text-[#b3b3b3] uppercase font-bold px-2.5 py-0.5 rounded-full bg-white/10">
-                  {isHost ? 'Anfitrión' : 'Invitado'}
-                </span>
-              </div>
-              <div className="text-xs text-[#b3b3b3] flex items-center justify-between pt-1">
-                <span>Código de sala:</span>
-                <span className="font-mono font-bold text-white tracking-widest bg-black/40 px-2 py-0.5 rounded text-xs select-all">
-                  {sessionId}
-                </span>
-              </div>
-            </div>
-
-            {/* Link sharing */}
-            <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
-              <span className="text-xs font-bold text-white block">
-                Enlace para tus amigos
-              </span>
-              <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={sessionLink || ''}
-                  className="flex-1 px-3 py-2 rounded-md bg-[#282828] text-xs text-white/90 font-mono truncate select-all outline-none border border-transparent focus:border-[#535353]"
-                  onClick={(e) => (e.target as HTMLInputElement).select()}
-                />
-                <button
-                  onClick={handleCopyLink}
-                  className={`px-4 py-2 rounded-full text-xs font-bold transition-all cursor-pointer shrink-0 ${
-                    isCopied
-                      ? 'bg-[#1ed760] text-black shadow-md'
-                      : 'bg-white text-black hover:scale-104 active:scale-95'
-                  }`}
-                >
-                  {isCopied ? 'Copiado' : 'Copiar'}
-                </button>
-              </div>
-            </div>
-
-            {/* Participants list */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between px-0.5">
-                <span className="text-xs font-bold text-white">
-                  Participantes ({participants.length})
-                </span>
-              </div>
-              <div className="space-y-1 max-h-56 overflow-y-auto pr-0.5">
-                {participants.map((p) => (
-                  <div
-                    key={p.id}
-                    className="flex items-center justify-between px-3 py-2 rounded-lg bg-[#181818] hover:bg-[#202020] transition-colors text-xs"
-                  >
-                    {p.id === myParticipantId && editingName ? (
-                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                        <input
-                          type="text"
-                          value={newNameInput}
-                          onChange={(e) => setNewNameInput(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              updateMyName(newNameInput);
-                              setEditingName(false);
-                            } else if (e.key === 'Escape') {
-                              setEditingName(false);
-                            }
-                          }}
-                          autoFocus
-                          maxLength={24}
-                          className="px-2 py-0.5 rounded bg-[#282828] border border-[#535353] focus:border-white text-xs text-white outline-none w-28"
-                        />
-                        <button
-                          onClick={() => {
-                            updateMyName(newNameInput);
-                            setEditingName(false);
-                          }}
-                          className="text-[#1ed760] hover:text-white px-1 font-bold cursor-pointer"
-                          title="Guardar nombre"
-                        >
-                          ✓
-                        </button>
-                        <button
-                          onClick={() => setEditingName(false)}
-                          className="text-[#b3b3b3] hover:text-white px-1 cursor-pointer"
-                          title="Cancelar"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0 shadow-sm"
-                          style={{ backgroundColor: p.color }}
-                        />
-                        <span className="font-semibold text-white truncate text-xs">{p.name}</span>
-                        {p.id === myParticipantId && (
-                          <button
-                            onClick={() => {
-                              setNewNameInput(p.name);
-                              setEditingName(true);
-                            }}
-                            className="p-1 text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
-                            title="Cambiar mi nombre"
-                          >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                            </svg>
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    <span className="text-[10px] text-[#b3b3b3] shrink-0 font-medium ml-2">
-                      {p.isHost ? 'Anfitrión' : 'Invitado'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Library / Desktop Switcher (Solo para invitados: el anfitrión siempre gestiona su propia biblioteca) */}
-            {!isHost ? (
-              <>
-                <div className="p-3.5 rounded-lg bg-[#181818] space-y-2">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="font-bold text-white flex items-center gap-1.5 font-['SpotifyMixUITitle']">
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" className="text-[#1ed760]">
-                        <path d="M3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1zM15.5 2.1a1 1 0 0 0-1.2.7l-4.2 16a1 1 0 0 0 .7 1.2 1 1 0 0 0 1.2-.7l4.2-16a1 1 0 0 0-.7-1.2zM21 4a1 1 0 0 0-1 1v14a1 1 0 0 0 2 0V5a1 1 0 0 0-1-1z" />
-                      </svg>
-                      Música y Biblioteca
-                    </span>
-                    <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">
-                      {libraryViewMode === 'host' ? 'Anfitrión' : 'Mi música'}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 p-1 bg-black/40 rounded-lg gap-1 border border-white/5 text-xs font-bold">
-                    <button
-                      onClick={() => setLibraryViewMode('host')}
-                      className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
-                        libraryViewMode === 'host'
-                          ? 'bg-[#1ed760] text-black font-extrabold shadow'
-                          : 'text-[#b3b3b3] hover:text-white'
-                      }`}
-                    >
-                      Anfitrión
-                    </button>
-                    <button
-                      onClick={() => setLibraryViewMode('my')}
-                      className={`py-1.5 rounded-md transition-all cursor-pointer text-center ${
-                        libraryViewMode === 'my'
-                          ? 'bg-white text-black font-extrabold shadow'
-                          : 'text-[#b3b3b3] hover:text-white'
-                      }`}
-                    >
-                      Mi biblioteca
-                    </button>
-                  </div>
-
-                  <p className="text-[11px] text-[#b3b3b3] leading-tight">
-                    {libraryViewMode === 'host'
-                      ? `Escuchando la cola y listas de ${hostName || 'el anfitrión'}.`
-                      : 'Navega por tus propias listas y canciones. Lo que elijas sonará para todos en vivo.'}
-                  </p>
-                </div>
-
-                {/* Guest note */}
-                <div className="p-3 rounded-lg bg-[#181818] text-xs text-[#b3b3b3] leading-relaxed">
-                  Estás participando como <span className="text-white font-bold">invitado</span>. Puedes cambiar canciones y abrir playlists. La configuración está protegida por el anfitrión.
-                </div>
-              </>
-            ) : (
-              <div className="p-3 rounded-lg bg-[#181818] text-xs text-[#b3b3b3] leading-relaxed flex items-center gap-2.5">
-                <span className="w-2 h-2 rounded-full bg-[#1ed760] shrink-0" />
-                <span>
-                  Eres el <span className="text-white font-bold">anfitrión</span> de la sesión. Todos los participantes están escuchando tu música y cola en tiempo real.
-                </span>
-              </div>
-            )}
-
-            {/* Action button */}
-            <div className="pt-2">
-              {isHost ? (
-                <button
-                  onClick={terminateSession}
-                  className="w-full py-2.5 rounded-full border border-red-500/40 hover:border-red-500 text-red-200 hover:text-white font-bold text-xs transition-all cursor-pointer hover:bg-red-500/10 active:scale-98"
-                >
-                  Finalizar sesión para todos
-                </button>
-              ) : (
-                <button
-                  onClick={leaveSession}
-                  className="w-full py-2.5 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs transition-all cursor-pointer active:scale-98"
-                >
-                  Salir de la sesión
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-      </div>
+/** Computer: "Escuchar juntos" in the right panel (same content as the phone's sheet) */
+const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }) => (
+  <div className="flex flex-col h-full overflow-hidden font-['SpotifyMixUI']">
+    <div className="px-4 pt-4 pb-2 flex items-center justify-between shrink-0">
+      <span className="font-bold text-[16px] text-white">Escuchar juntos</span>
+      <button
+        onClick={onClose}
+        className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+        title="Cerrar"
+        aria-label="Cerrar"
+      >
+        <CloseNativeIcon size={16} />
+      </button>
     </div>
-  );
-};
+    <div className="flex-1 overflow-y-auto px-4 pt-3 pb-6">
+      <SharedSessionPanel surface="#121212" compact />
+    </div>
+  </div>
+);
 
 export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSelectPlaylistById }) => {
   const { activeRightSidebar, closeRightSidebar } = useUIStore();

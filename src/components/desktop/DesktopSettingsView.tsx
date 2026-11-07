@@ -338,10 +338,14 @@ export const DesktopSettingsView: React.FC = () => {
           Estás participando en una sesión compartida como invitado. Por motivos de seguridad y privacidad del anfitrión, el panel de configuración está bloqueado.
         </p>
         <button
-          onClick={() => useSharedSessionStore.getState().setModalOpen(true)}
-          className="px-6 py-2.5 rounded-full bg-[#1ed760] text-black font-black text-xs hover:scale-105 active:scale-95 transition-all cursor-pointer shadow-lg shadow-[#1ed760]/20"
+          onClick={() => {
+            // On the computer the session lives in the right panel
+            const ui = useUIStore.getState();
+            if (ui.activeRightSidebar !== 'friends') ui.toggleRightSidebar('friends');
+          }}
+          className="h-12 px-8 rounded-full bg-white text-black font-bold text-[15px] hover:scale-[1.04] active:scale-95 transition-transform cursor-pointer"
         >
-          Ver participantes de la sesión
+          Ver la sesión
         </button>
       </div>
     );
