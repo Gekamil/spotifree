@@ -8,12 +8,14 @@ import {
   EQ_MIN,
   EQ_PRESETS,
   clampDb,
+  EQ_CHANGED_EVENT,
   detectPreset,
   loadEqBands,
   loadEqEnabled,
   loadEqPreset,
   saveEq,
 } from '../../utils/eqSettings';
+import { NATIVE_FX_STATUS_EVENT, nativeFxStatus, type NativeFxStatus } from '../../services/nativeAudioFx';
 
 /**
  * Spotify-style equalizer: on/off switch, preset picker, a smooth curve with 6 draggable
@@ -57,11 +59,28 @@ export const SpotifyEqualizer: React.FC<Props> = ({ variant = 'desktop' }) => {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const currentTrackId = usePlayerStore((s) => s.currentTrack?.id);
   const [processing, setProcessing] = useState(true);
+  const [fx, setFx] = useState<NativeFxStatus>(() => nativeFxStatus());
   const chipsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     setProcessing(audioEngine.isProcessingAudio());
   }, [isPlaying, currentTrackId]);
+
+  // APK: phone equalizer status; any device: equalizer synced from the account
+  useEffect(() => {
+    const onFx = () => setFx({ ...nativeFxStatus() });
+    const onEq = () => {
+      setEnabled(loadEqEnabled());
+      setValues(loadEqBands());
+      setPreset(loadEqPreset());
+    };
+    window.addEventListener(NATIVE_FX_STATUS_EVENT, onFx);
+    window.addEventListener(EQ_CHANGED_EVENT, onEq);
+    return () => {
+      window.removeEventListener(NATIVE_FX_STATUS_EVENT, onFx);
+      window.removeEventListener(EQ_CHANGED_EVENT, onEq);
+    };
+  }, []);
 
   // Keep the selected preset chip in view (mobile row scrolls horizontally)
   useEffect(() => {
@@ -330,7 +349,26 @@ export const SpotifyEqualizer: React.FC<Props> = ({ variant = 'desktop' }) => {
           </div>
         )}
 
-        {!processing && enabled && (
+        {fx.native && fx.checked && enabled && (
+          <p className={`mt-3 text-[12px] leading-snug flex gap-2 ${fx.available ? 'text-[#1ed760]' : 'text-[#a7a7a7]'}`}>
+            <svg className="shrink-0 mt-[1px]" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              {fx.available ? (
+                <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+              ) : (
+                <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm7.25-3.25h1.5v1.5h-1.5v-1.5zm0 3h1.5v4.5h-1.5v-4.5z" />
+              )}
+            </svg>
+            {fx.available
+              ? isEn
+                ? 'Applied to everything Spotifree plays, through your phone’s equalizer. DJ filters also sound on the real songs.'
+                : 'Se aplica a todo lo que suena en Spotifree con el ecualizador de tu móvil. Los filtros del DJ también suenan en las canciones.'
+              : isEn
+                ? 'Your phone does not let apps use its equalizer, so the songs play unchanged.'
+                : 'Tu móvil no deja que las apps usen su ecualizador, así que las canciones suenan sin cambios.'}
+          </p>
+        )}
+
+        {!fx.native && !processing && enabled && (
           <p className="mt-3 text-[12px] text-[#a7a7a7] leading-snug flex gap-2">
             <svg className="shrink-0 mt-[1px]" width="14" height="14" viewBox="0 0 16 16" fill="#a7a7a7">
               <path d="M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM0 8a8 8 0 1116 0A8 8 0 010 8zm7.25-3.25h1.5v1.5h-1.5v-1.5zm0 3h1.5v4.5h-1.5v-4.5z" />

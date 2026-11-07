@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#121212" />
+<title>Spotifree sin conexión</title>
+<style>
+  :root { --bg: #121212; --text: #fff; --sub: #b3b3b3; --green: #1ed760; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 24px 16px; box-sizing: border-box; }
+  img { width: 72px; height: 72px; border-radius: 16px; margin-bottom: 24px; }
+  h1 { font-size: 26px; margin: 0 0 10px; }
+  p { color: var(--sub); font-size: 15px; line-height: 1.5; max-width: 320px; margin: 0 0 28px; }
+  button { appearance: none; border: 0; border-radius: 999px; background: var(--green); color: #000; font-weight: 700; font-size: 16px; padding: 14px 34px; cursor: pointer; }
+</style>
+</head>
+<body>
+<main>
+  <img src="icon-192.png" alt="" />
+  <h1>Sin conexión</h1>
+  <p>Spotifree necesita internet para cargar tu música. Comprueba la conexión e inténtalo de nuevo.</p>
+  <button onclick="location.href='https://spotifreeweb.vercel.app/'">Reintentar</button>
+</main>
+</body>
+</html>

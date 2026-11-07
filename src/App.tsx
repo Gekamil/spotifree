@@ -11,6 +11,7 @@ import { SharedSessionModal } from './components/common/SharedSessionModal';
 import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
+import CarModeView from './components/common/CarModeView';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { usePlayerStore } from './store/usePlayerStore';
@@ -167,6 +168,7 @@ function App() {
       {isMobile && <SharedSessionModal />}
       <SharedSessionCursors />
       <AudioSourceSheet />
+      <CarModeView />
       <GlobalToast />
     </ErrorBoundary>
   );

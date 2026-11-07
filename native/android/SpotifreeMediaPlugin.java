@@ -105,6 +105,8 @@ public class SpotifreeMediaPlugin extends Plugin {
     public void setLibrary(PluginCall call) {
         JSONArray playlists = arr(call, "playlists");
         JSONArray home = arr(call, "home");
+        JSONArray explore = arr(call, "explore");
+        if (explore != null) SpotifreeMediaService.explore = explore;
         SpotifreeMediaService.loggedIn = Boolean.TRUE.equals(call.getBoolean("loggedIn", true));
         SpotifreeMediaService.saveLibrary(getContext(), playlists != null ? playlists : new JSONArray(), home);
         if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.notifyLibraryChanged();
@@ -144,6 +146,18 @@ public class SpotifreeMediaPlugin extends Plugin {
         call.resolve();
     }
 
+    /** id, items: [{id,name,subtitle,image}] playlists of an Explorar category ("loadCategory") */
+    @PluginMethod
+    public void setCategoryItems(PluginCall call) {
+        String id = call.getString("id", "");
+        JSONArray items = arr(call, "items");
+        if (id != null && !id.isEmpty() && items != null) {
+            if (SpotifreeMediaService.current != null) SpotifreeMediaService.current.onCategoryItems(id, items);
+            else SpotifreeMediaService.categoryItems.put(id, items);
+        }
+        call.resolve();
+    }
+
     /** requestId, tracks: [...], playlists: [...] (answer to a "search" command) */
     @PluginMethod
     public void setSearchResults(PluginCall call) {
@@ -166,6 +180,7 @@ public class SpotifreeMediaPlugin extends Plugin {
         SpotifreeMediaService.repeat = call.getString("repeat", "off");
         SpotifreeMediaService.liked = Boolean.TRUE.equals(call.getBoolean("liked", false));
         SpotifreeMediaService.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
+        SpotifreeMediaService.explicit = Boolean.TRUE.equals(call.getBoolean("explicit", false));
         Double dur = call.getDouble("durationMs");
         Double pos = call.getDouble("positionMs");
         SpotifreeMediaService.durationMs = dur == null ? 0 : dur.longValue();

@@ -15,6 +15,7 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
+import { applyRemoteSettings } from './settingsSync';
 
 export interface SpotifreeAccount {
   uid?: string;
@@ -29,6 +30,8 @@ export interface SpotifreeAccount {
   history?: Track[];
   stats?: any;
   customTransitions?: Record<string, any>;
+  /** App settings that follow the account (see settingsSync.ts) */
+  settings?: { values: Record<string, string | null>; updatedAt: number };
   theme?: 'standard' | 'oled' | 'platinum';
   createdAt?: number;
   updatedAt?: number;
@@ -418,6 +421,9 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       useSpotifyDataStore.getState().initialize?.();
     }
   }
+
+  // 1a. Settings saved by another device (equalizer, DJ, language...)
+  if (acc.settings) applyRemoteSettings(acc.settings);
 
   // 1b. Sync deleted playlist IDs if present in cloud account
   if (Array.isArray(acc.deletedPlaylistIds) && typeof window !== 'undefined') {

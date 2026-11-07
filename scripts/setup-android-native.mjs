@@ -42,7 +42,7 @@ function copyDir(src, dst) {
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
 
 // 3. MainActivity: every plugin of the app
-const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin'].filter((p) =>
+const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin'].filter((p) =>
   fs.existsSync(path.join(javaDir, `${p}.java`))
 );
 fs.writeFileSync(
@@ -71,6 +71,7 @@ const PERMS = [
   'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
   'android.permission.WAKE_LOCK',
   'android.permission.POST_NOTIFICATIONS',
+  'android.permission.MODIFY_AUDIO_SETTINGS',
 ];
 for (const p of PERMS) {
   if (!manifest.includes(`"${p}"`)) {

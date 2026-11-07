@@ -23,7 +23,7 @@ interface MediaCommand {
     | 'play' | 'pause' | 'next' | 'previous' | 'seek'
     | 'playFromMediaId' | 'playFromSearch' | 'playQueueIndex'
     | 'toggleLike' | 'toggleShuffle' | 'cycleRepeat'
-    | 'loadPlaylist' | 'search';
+    | 'loadPlaylist' | 'loadCategory' | 'search' | 'addToQueue' | 'likeItem';
   positionMs?: number;
   mediaId?: string;
   query?: string;
@@ -33,11 +33,12 @@ interface MediaCommand {
 }
 
 interface CarItem { id: string; name: string; subtitle?: string; image?: string }
-interface CarTrack { id: string; title: string; artist: string; image?: string }
+interface CarTrack { id: string; title: string; artist: string; image?: string; explicit?: boolean }
 
 interface SpotifreeMediaPlugin {
-  setLibrary(o: { playlists: CarItem[]; home: { title: string; items: CarItem[] }[]; loggedIn: boolean }): Promise<void>;
+  setLibrary(o: { playlists: CarItem[]; home: { title: string; items: CarItem[] }[]; explore: CarItem[]; loggedIn: boolean }): Promise<void>;
   setPlaylistTracks(o: { id: string; tracks: CarTrack[] }): Promise<void>;
+  setCategoryItems(o: { id: string; items: CarItem[] }): Promise<void>;
   cacheImage(o: { key: string; base64: string }): Promise<void>;
   setSearchResults(o: { requestId: string; tracks: CarTrack[]; playlists: CarItem[] }): Promise<void>;
   updateNowPlaying(o: Record<string, unknown>): Promise<void>;
@@ -149,16 +150,114 @@ function img(url?: string | null): string {
 const coverOf = (t?: Track | null) => img(t?.album?.images?.[0]?.url);
 const tracksOf = (p?: Playlist | null): Track[] =>
   ((p?.tracks?.items || []) as any[]).map((x) => x?.track || x).filter((t: any) => t?.id && t?.name);
-const carTrack = (t: Track): CarTrack => ({ id: t.id, title: t.name, artist: artistOf(t), image: coverOf(t) });
+const carTrack = (t: Track): CarTrack => ({
+  id: t.id,
+  title: t.name,
+  artist: artistOf(t),
+  image: coverOf(t),
+  ...((t as any).explicit ? { explicit: true } : {}),
+});
 const playlistItem = (p: Playlist): CarItem => ({
   id: p.id,
   name: p.name || '',
+  // Same subtitles as the Spotify car app: "Playlist • Owner"
   subtitle:
     p.id === 'liked-songs'
-      ? `${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
-      : p.owner?.display_name || '',
+      ? `Playlist • ${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
+      : `Playlist • ${p.owner?.display_name || 'Spotify'}`,
   image: img(p.images?.[0]?.url),
 });
+
+// ----------------------------------------------------------------- Explorar (genre tiles)
+const GENRES: { id: string; es: string; en: string; q: string; color: string }[] = [
+  { id: 'reggaeton', es: 'Reggaetón', en: 'Reggaeton', q: 'reggaeton', color: '#E8115B' },
+  { id: 'latino', es: 'Latino', en: 'Latin', q: 'latino exitos', color: '#E1118C' },
+  { id: 'bachata', es: 'Bachata', en: 'Bachata', q: 'bachata', color: '#BC5900' },
+  { id: 'pop', es: 'Pop', en: 'Pop', q: 'pop hits', color: '#148A08' },
+  { id: 'urbano', es: 'Urbano', en: 'Urban', q: 'urbano latino', color: '#503750' },
+  { id: 'rap', es: 'Hip hop', en: 'Hip-Hop', q: 'hip hop', color: '#BA5D07' },
+  { id: 'electronica', es: 'Electrónica', en: 'Dance/Electronic', q: 'electronica dance', color: '#7358FF' },
+  { id: 'fiesta', es: 'Fiesta', en: 'Party', q: 'fiesta', color: '#AF2896' },
+  { id: 'romanticas', es: 'Románticas', en: 'Love', q: 'canciones romanticas', color: '#DC148C' },
+  { id: 'chill', es: 'Chill', en: 'Chill', q: 'chill', color: '#477D95' },
+  { id: 'entrenamiento', es: 'Entrenamiento', en: 'Workout', q: 'gym workout', color: '#777777' },
+  { id: 'rock', es: 'Rock', en: 'Rock', q: 'rock clasico', color: '#E91429' },
+  { id: 'dosmil', es: 'Éxitos de los 2000', en: '2000s hits', q: 'exitos 2000', color: '#8D67AB' },
+  { id: 'coche', es: 'Para el coche', en: 'Driving', q: 'canciones para el coche', color: '#1E3264' },
+];
+const genreTiles = new Map<string, string>(); // genre id -> local:key
+let genreLang = '';
+async function makeGenreTiles() {
+  const lang = useLanguageStore.getState().language;
+  if (genreLang === lang && genreTiles.size === GENRES.length) return;
+  genreLang = lang;
+  for (const g of GENRES) {
+    try {
+      const size = 320;
+      const c = document.createElement('canvas');
+      c.width = size;
+      c.height = size;
+      const ctx = c.getContext('2d');
+      if (!ctx) continue;
+      ctx.fillStyle = g.color;
+      ctx.fillRect(0, 0, size, size);
+      // Spotify browse tile: bold name top-left, a tilted shape bottom-right
+      ctx.save();
+      ctx.translate(size * 0.72, size * 0.74);
+      ctx.rotate((25 * Math.PI) / 180);
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      ctx.fillRect(-60, -60, 130, 130);
+      ctx.restore();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 40px "SpotifyMixUI", "Helvetica Neue", Arial, sans-serif';
+      const name = lang === 'en' ? g.en : g.es;
+      const words = name.split(' ');
+      let line = '';
+      let y = 62;
+      for (const w of words) {
+        const test = line ? `${line} ${w}` : w;
+        if (ctx.measureText(test).width > size - 44 && line) {
+          ctx.fillText(line, 22, y);
+          line = w;
+          y += 46;
+        } else line = test;
+      }
+      ctx.fillText(line, 22, y);
+      const key = `genre_${g.id}_${lang}`;
+      await SpotifreeMedia.cacheImage({ key, base64: c.toDataURL('image/png').split(',')[1] });
+      genreTiles.set(g.id, `local:${key}`);
+    } catch {}
+  }
+  lastLibrarySig = '';
+  pushLibrary();
+}
+const exploreItems = (): CarItem[] =>
+  GENRES.map((g) => ({ id: g.id, name: en() ? g.en : g.es, image: genreTiles.get(g.id) || '' }));
+
+async function answerLoadCategory(id: string) {
+  const g = GENRES.find((x) => x.id === id);
+  const { playlists } = await runSearch(g ? g.q : id);
+  SpotifreeMedia.setCategoryItems({
+    id,
+    items: playlists.map((p) => ({ ...p, subtitle: p.subtitle ? `Playlist • ${p.subtitle}` : 'Playlist' })),
+  }).catch(() => {});
+}
+
+/** The song a car item (tr:/q:/st:) points to */
+async function trackForMediaId(mediaId: string): Promise<Track | null> {
+  const player = usePlayerStore.getState();
+  if (mediaId.startsWith('tr:')) {
+    const [plId, idx] = splitId(mediaId.slice(3));
+    const tracks = sentTracks.get(plId) || (await loadPlaylistTracks(plId));
+    return tracks[idx] || null;
+  }
+  if (mediaId.startsWith('q:')) return (player.getUpcomingTracks?.(30) || [])[Number(mediaId.slice(2))] || null;
+  if (mediaId.startsWith('st:')) {
+    const [req, idx] = splitId(mediaId.slice(3));
+    return (searchTracks.get(req) || [])[idx] || null;
+  }
+  return null;
+}
 
 // ----------------------------------------------------------------- recently played (for "Inicio")
 const RECENT_KEY = 'spotifree_car_recent';
@@ -219,10 +318,10 @@ function pushLibrary() {
       if (items.length) home.push({ title: shelf.title, items });
     }
 
-    const sig = JSON.stringify([lib.map((l) => l.id + l.name + l.image), home.map((h) => h.title + h.items.map((i) => i.id).join())]);
+    const sig = JSON.stringify([lib.map((l) => l.id + l.name + l.image), home.map((h) => h.title + h.items.map((i) => i.id + i.image).join()), exploreItems().map((g) => g.name + g.image)]);
     if (sig === lastLibrarySig) return;
     lastLibrarySig = sig;
-    SpotifreeMedia.setLibrary({ playlists: lib, home, loggedIn: Boolean(st.isAuthenticated) }).catch(() => {});
+    SpotifreeMedia.setLibrary({ playlists: lib, home, explore: exploreItems(), loggedIn: Boolean(st.isAuthenticated) }).catch(() => {});
   }, 1200);
 }
 
@@ -345,6 +444,7 @@ function pushNowPlaying(force = false) {
     liked,
     shuffle,
     repeat,
+    explicit: Boolean((t as any).explicit),
     language: useLanguageStore.getState().language,
     ...(sendQueue ? { queue: upcoming.map(carTrack) } : {}),
   }).catch(() => {});
@@ -402,6 +502,19 @@ async function runCommand(c: MediaCommand) {
     case 'search':
       if (c.requestId) await answerSearch(c.requestId, c.query || '');
       return;
+    case 'loadCategory':
+      if (c.id) await answerLoadCategory(c.id);
+      return;
+    case 'addToQueue': {
+      const t = await trackForMediaId(c.mediaId || '');
+      if (t) player.addToQueue(t);
+      break;
+    }
+    case 'likeItem': {
+      const t = await trackForMediaId(c.mediaId || '');
+      if (t && !(player.likedTrackIds || []).includes(t.id)) player.toggleLike(t.id, t);
+      break;
+    }
     case 'playFromMediaId':
       await playMediaId(c.mediaId || '');
       break;
@@ -498,6 +611,7 @@ export function initNativeMedia() {
   }, 1500);
 
   pushLibrary();
+  void makeGenreTiles();
   useSpotifyDataStore.subscribe((s, prev) => {
     if (
       s.playlists !== prev.playlists ||
@@ -535,6 +649,7 @@ export function initNativeMedia() {
   });
   useLanguageStore.subscribe(() => {
     lastLibrarySig = '';
+    void makeGenreTiles();
     pushLibrary();
     pushNowPlaying(true);
   });

@@ -13,6 +13,7 @@ import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { effectiveEqGains } from '../utils/eqSettings';
 import { analyzeTrackAudio } from './trackAnalysisService';
 import { showGlobalToast } from '../utils/globalToast';
+import { cancelNativeTransitionFx, nativeTransitionFx } from './nativeAudioFx';
 import { useLanguageStore } from '../utils/i18n';
 import { computeTransitionGains, djFxLevelGain, recordTransitionUsed, transitionFXLayers } from './djMixPlanner';
 import {
@@ -758,6 +759,8 @@ class AudioEngine {
             const layers = transitionFXLayers(djConfig, crossfadeSec);
             this.activeAuxFX = playTransitionLayers(this.audioContext, layers, safeTempo, masterVolume * djFxLevelGain());
           }
+          // APK: the filter move on the real audio (phone equalizer)
+          if (djConfig) nativeTransitionFx(djConfig, crossfadeSec);
         }
       }
 
@@ -1341,6 +1344,10 @@ class AudioEngine {
         this.audioContext.currentTime + leadInSec
       );
     }
+    // APK: same filter move on the real audio, when the mix part of the preview starts
+    window.setTimeout(() => {
+      if (this.isAuditioning) nativeTransitionFx(config, transitionDur);
+    }, leadInSec * 1000);
 
     let startedB = false;
     let lastRate = 1;
@@ -1397,6 +1404,7 @@ class AudioEngine {
       stopAuxiliaryTransitionFX(this.activeAuxFX);
       this.activeAuxFX = null;
     }
+    cancelNativeTransitionFx();
   }
 
   public stopTransitionAudition(): void {

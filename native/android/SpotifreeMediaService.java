@@ -69,6 +69,26 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static final String ACT_SHUFFLE = "toggleShuffle";
     static final String ACT_REPEAT = "cycleRepeat";
 
+    // Android Auto "browse custom actions" (buttons on each song of a list) and other extras
+    // (androidx.media.utils.MediaConstants)
+    private static final String CBA_ROOT_LIST = "androidx.media.utils.extras.CUSTOM_BROWSER_ACTION_ROOT_LIST";
+    private static final String CBA_ID = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_ID";
+    private static final String CBA_LABEL = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_LABEL";
+    private static final String CBA_ICON = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_ICON_URI";
+    private static final String CBA_ITEM_IDS = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_ID_LIST";
+    private static final String CBA_MEDIA_ID = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_MEDIA_ITEM_ID";
+    private static final String CBA_RESULT_MESSAGE = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_MESSAGE";
+    private static final String IS_EXPLICIT = "android.media.IS_EXPLICIT";
+    private static final String ERROR_ACTION_LABEL = "android.media.extras.ERROR_RESOLUTION_ACTION_LABEL";
+    private static final String ERROR_ACTION_INTENT = "android.media.extras.ERROR_RESOLUTION_ACTION_INTENT";
+    static final String CBA_QUEUE = "spotifree.addToQueue";
+    static final String CBA_LIKE = "spotifree.likeItem";
+    static final String CBA_SHUFFLE = "spotifree.shufflePlaylist";
+
+    static volatile JSONArray explore = null;   // [{id,name,image}] genre tiles
+    static final Map<String, JSONArray> categoryItems = new ConcurrentHashMap<>(); // ex id -> playlists
+    static volatile boolean explicit = false;
+
     // ---- state pushed by the web layer (SpotifreeMediaPlugin)
     static volatile JSONArray library = null;  // [{id,name,subtitle,image}]
     static volatile JSONArray home = null;     // [{title, items:[{id,name,subtitle,image}]}]
@@ -199,11 +219,24 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         setError(tr("Abre Spotifree en el móvil", "Open Spotifree on your phone"));
     }
 
+    /** Error on the car screen, with an "Abrir Spotifree" button that opens the app on the phone */
     private void setError(String msg) {
+        setError(msg, PlaybackStateCompat.ERROR_CODE_APP_ERROR);
+    }
+
+    private void setError(String msg, int code) {
+        Bundle extras = new Bundle();
+        Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
+        if (launch != null) {
+            extras.putString(ERROR_ACTION_LABEL, tr("Abrir Spotifree", "Open Spotifree"));
+            extras.putParcelable(ERROR_ACTION_INTENT, PendingIntent.getActivity(this, 1, launch,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        }
         session.setPlaybackState(new PlaybackStateCompat.Builder()
             .setActions(PlaybackStateCompat.ACTION_PLAY_FROM_MEDIA_ID | PlaybackStateCompat.ACTION_PLAY_FROM_SEARCH)
             .setState(PlaybackStateCompat.STATE_ERROR, 0, 0f)
-            .setErrorMessage(PlaybackStateCompat.ERROR_CODE_APP_ERROR, msg)
+            .setErrorMessage(code, msg)
+            .setExtras(extras)
             .build());
     }
 
@@ -221,6 +254,11 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     /** Re-reads the static state into the session, the notification and the foreground status. */
     void refresh() {
         if (session == null) return;
+        if (!loggedIn && (title == null || title.isEmpty())) {
+            setError(tr("Inicia sesión en Spotifree en el móvil", "Sign in to Spotifree on your phone"),
+                PlaybackStateCompat.ERROR_CODE_AUTHENTICATION_EXPIRED);
+            return;
+        }
         boolean hasLyric = lyricLine != null && !lyricLine.trim().isEmpty();
         // Car screens / Bluetooth stereos show title + artist: the lyric line goes in the artist slot
         String shownArtist = hasLyric ? "♪ " + lyricLine.trim() : artist;
@@ -235,7 +273,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_SUBTITLE, shownArtist)
             .putString(MediaMetadataCompat.METADATA_KEY_ALBUM, shownAlbum)
             .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_DESCRIPTION, shownAlbum)
-            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs);
+            .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, durationMs)
+            .putLong(IS_EXPLICIT, explicit ? 1L : 0L);
         if (artUri != null) {
             mb.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, artUri.toString());
             mb.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, artUri.toString());
@@ -388,7 +427,53 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         extras.putInt(BROWSABLE_HINT, STYLE_GRID);
         extras.putInt(PLAYABLE_HINT, STYLE_LIST);
         extras.putBoolean("android.media.browse.SEARCH_SUPPORTED", true);
+        // Buttons on the items of a list: queue / like on songs, shuffle on playlists
+        ArrayList<Bundle> actions = new ArrayList<>();
+        actions.add(browseAction(CBA_QUEUE, tr("Añadir a la cola", "Add to queue"), R.drawable.ic_car_queue_add));
+        actions.add(browseAction(CBA_LIKE, tr("Me gusta", "Like"), R.drawable.ic_car_heart));
+        actions.add(browseAction(CBA_SHUFFLE, tr("Reproducir en aleatorio", "Shuffle play"), R.drawable.ic_car_shuffle));
+        extras.putParcelableArrayList(CBA_ROOT_LIST, actions);
         return new BrowserRoot("root", extras);
+    }
+
+    private Bundle browseAction(String id, String label, int iconRes) {
+        Bundle b = new Bundle();
+        b.putString(CBA_ID, id);
+        b.putString(CBA_LABEL, label);
+        b.putString(CBA_ICON, "android.resource://" + getPackageName() + "/" + iconRes);
+        return b;
+    }
+
+    /** A browse button was pressed on an item (Android Auto) */
+    @Override
+    public void onCustomAction(@NonNull String action, Bundle extras, @NonNull Result<Bundle> result) {
+        String mediaId = extras != null ? extras.getString(CBA_MEDIA_ID, "") : "";
+        Bundle out = new Bundle();
+        if (CBA_QUEUE.equals(action)) {
+            send("addToQueue", obj("mediaId", mediaId));
+            out.putString(CBA_RESULT_MESSAGE, tr("Añadida a la cola", "Added to queue"));
+        } else if (CBA_LIKE.equals(action)) {
+            send("likeItem", obj("mediaId", mediaId));
+            out.putString(CBA_RESULT_MESSAGE, tr("Guardada en Canciones que te gustan", "Saved to Liked Songs"));
+        } else if (CBA_SHUFFLE.equals(action)) {
+            sendOrOpen("playFromMediaId", obj("mediaId", "shuf:" + (mediaId.startsWith("pl:") ? mediaId.substring(3) : mediaId)));
+        } else {
+            result.sendError(null);
+            return;
+        }
+        result.sendResult(out);
+    }
+
+    /** A song in a list: cover, explicit badge, queue / like buttons */
+    private MediaBrowserCompat.MediaItem trackItem(String mediaId, JSONObject t, @Nullable String group) {
+        Bundle ex = new Bundle();
+        if (t.optBoolean("explicit", false)) ex.putLong(IS_EXPLICIT, 1L);
+        ArrayList<String> ids = new ArrayList<>();
+        ids.add(CBA_QUEUE);
+        ids.add(CBA_LIKE);
+        ex.putStringArrayList(CBA_ITEM_IDS, ids);
+        if (group != null) ex.putString(GROUP_TITLE, group);
+        return item(mediaId, t.optString("title"), t.optString("artist"), t.optString("image", null), false, ex);
     }
 
     private MediaBrowserCompat.MediaItem item(String id, String t, String sub, @Nullable String image, boolean browsable, @Nullable Bundle extras) {
@@ -415,6 +500,9 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         Bundle ex = new Bundle();
         ex.putInt(PLAYABLE_HINT, STYLE_LIST);
         if (group != null) ex.putString(GROUP_TITLE, group);
+        ArrayList<String> ids = new ArrayList<>();
+        ids.add(CBA_SHUFFLE);
+        ex.putStringArrayList(CBA_ITEM_IDS, ids);
         return item("pl:" + p.optString("id"), p.optString("name"), p.optString("subtitle", null), p.optString("image", null), true, ex);
     }
 
@@ -430,7 +518,37 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             if ("root".equals(parentId)) {
                 out.add(tabItem("home", tr("Inicio", "Home"), R.drawable.ic_car_tab_home, STYLE_GRID));
                 out.add(tabItem("lib", tr("Tu biblioteca", "Your Library"), R.drawable.ic_car_tab_library, STYLE_GRID));
+                out.add(tabItem("explore", tr("Explorar", "Browse"), R.drawable.ic_car_tab_explore, STYLE_GRID));
                 out.add(tabItem("queue", tr("A continuación", "Up next"), R.drawable.ic_car_tab_queue, STYLE_LIST));
+            } else if ("explore".equals(parentId)) {
+                JSONArray ex = explore;
+                for (int i = 0; ex != null && i < ex.length(); i++) {
+                    JSONObject g = ex.optJSONObject(i);
+                    if (g == null) continue;
+                    Bundle b = new Bundle();
+                    b.putInt(BROWSABLE_HINT, STYLE_GRID);
+                    out.add(item("ex:" + g.optString("id"), g.optString("name"), null, g.optString("image", null), true, b));
+                }
+                if (out.isEmpty()) out.add(hint(tr("Cargando…", "Loading…")));
+            } else if (parentId.startsWith("ex:")) {
+                String exId = parentId.substring(3);
+                JSONArray items = categoryItems.get(exId);
+                if (items == null && SpotifreeMediaPlugin.emit("loadCategory", obj("id", exId))) {
+                    result.detach();
+                    List<Result<List<MediaBrowserCompat.MediaItem>>> list = pendingChildren.get(parentId);
+                    if (list == null) {
+                        list = new ArrayList<>();
+                        pendingChildren.put(parentId, list);
+                    }
+                    list.add(result);
+                    main.postDelayed(() -> resolvePending(parentId), 9000);
+                    return;
+                }
+                for (int i = 0; items != null && i < items.length(); i++) {
+                    JSONObject p = items.optJSONObject(i);
+                    if (p != null) out.add(playlistItem(p, null));
+                }
+                if (out.isEmpty()) out.add(hint(tr("No se pudo cargar", "Could not load")));
             } else if ("home".equals(parentId)) {
                 JSONArray h = home;
                 for (int s = 0; h != null && s < h.length(); s++) {
@@ -454,7 +572,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 JSONArray q = queue;
                 for (int j = 0; q != null && j < q.length() && j < 40; j++) {
                     JSONObject t = q.optJSONObject(j);
-                    if (t != null) out.add(item("q:" + j, t.optString("title"), t.optString("artist"), t.optString("image", null), false, null));
+                    if (t != null) out.add(trackItem("q:" + j, t, null));
                 }
                 if (out.isEmpty()) out.add(item("noop", tr("No hay nada en la cola", "Nothing up next"), tr("Elige una playlist", "Pick a playlist"), null, false, null));
             } else if (parentId.startsWith("pl:")) {
@@ -491,7 +609,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         }
         for (int j = 0; j < tracks.length() && j < 300; j++) {
             JSONObject t = tracks.optJSONObject(j);
-            if (t != null) out.add(item("tr:" + plId + ":" + j, t.optString("title"), t.optString("artist"), t.optString("image", null), false, null));
+            if (t != null) out.add(trackItem("tr:" + plId + ":" + j, t, null));
         }
         if (out.isEmpty()) out.add(item("noop", tr("Esta playlist está vacía", "This playlist is empty"), "", null, false, null));
         return out;
@@ -503,14 +621,29 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         main.post(() -> resolvePending("pl:" + plId));
     }
 
+    /** Playlists of an Explorar category arrived from the app */
+    void onCategoryItems(String exId, JSONArray items) {
+        categoryItems.put(exId, items);
+        main.post(() -> resolvePending("ex:" + exId));
+    }
+
     private void resolvePending(String parentId) {
         List<Result<List<MediaBrowserCompat.MediaItem>>> list = pendingChildren.remove(parentId);
         if (list == null) return;
-        String plId = parentId.substring(3);
-        JSONArray tracks = playlistTracks.get(plId);
-        List<MediaBrowserCompat.MediaItem> out = tracks != null ? playlistChildren(plId, tracks)
-            : new ArrayList<>();
-        if (tracks == null) out.add(hint(tr("No se pudieron cargar las canciones", "Could not load the songs")));
+        String id = parentId.substring(3);
+        List<MediaBrowserCompat.MediaItem> out = new ArrayList<>();
+        if (parentId.startsWith("ex:")) {
+            JSONArray items = categoryItems.get(id);
+            for (int i = 0; items != null && i < items.length(); i++) {
+                JSONObject p = items.optJSONObject(i);
+                if (p != null) out.add(playlistItem(p, null));
+            }
+            if (out.isEmpty()) out.add(hint(tr("No se pudo cargar", "Could not load")));
+        } else {
+            JSONArray tracks = playlistTracks.get(id);
+            if (tracks != null) out.addAll(playlistChildren(id, tracks));
+            else out.add(hint(tr("No se pudieron cargar las canciones", "Could not load the songs")));
+        }
         for (Result<List<MediaBrowserCompat.MediaItem>> r : list) {
             try { r.sendResult(out); } catch (Exception ignored) {}
         }
@@ -547,9 +680,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             for (int i = 0; tracks != null && i < tracks.length() && i < 25; i++) {
                 JSONObject t = tracks.optJSONObject(i);
                 if (t == null) continue;
-                Bundle ex = new Bundle();
-                ex.putString(GROUP_TITLE, songs);
-                out.add(item("st:" + reqId + ":" + i, t.optString("title"), t.optString("artist"), t.optString("image", null), false, ex));
+                out.add(trackItem("st:" + reqId + ":" + i, t, songs));
             }
             for (int i = 0; playlists != null && i < playlists.length() && i < 15; i++) {
                 JSONObject p = playlists.optJSONObject(i);
@@ -572,7 +703,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             for (int j = 0; j < tracks.length() && out.size() < 40; j++) {
                 JSONObject t = tracks.optJSONObject(j);
                 if (t != null && (t.optString("title") + " " + t.optString("artist")).toLowerCase().contains(q)) {
-                    out.add(item("tr:" + e.getKey() + ":" + j, t.optString("title"), t.optString("artist"), t.optString("image", null), false, null));
+                    out.add(trackItem("tr:" + e.getKey() + ":" + j, t, null));
                 }
             }
         }
@@ -583,6 +714,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     void notifyLibraryChanged() {
         notifyChildrenChanged("home");
         notifyChildrenChanged("lib");
+        notifyChildrenChanged("explore");
     }
 
     @Override

@@ -5,11 +5,25 @@ import App from './App.tsx';
 import './utils/adaptiveLogo';
 import { initDomTranslator } from './utils/domTranslator';
 import { initNativeMedia } from './services/nativeMedia';
+import { initNativeAudioFx } from './services/nativeAudioFx';
+import { startSettingsSync, SETTINGS_SYNCED_EVENT } from './services/settingsSync';
+import { useLanguageStore } from './utils/i18n';
+import { EQ_CHANGED_EVENT } from './utils/eqSettings';
 
 // Whole-interface English/Spanish switch (Settings → Language)
 initDomTranslator();
 // APK: Android Auto, playback notification, lock screen and car/Bluetooth controls
 initNativeMedia();
+// APK: real equalizer / DJ filters on the phone's audio output
+initNativeAudioFx();
+// Settings follow the Spotifree account (web <-> APK <-> other devices)
+startSettingsSync();
+window.addEventListener(SETTINGS_SYNCED_EVENT, (e) => {
+  const v = ((e as CustomEvent).detail || {}) as Record<string, string | null>;
+  const lang = v.spotifree_language;
+  if (lang === 'en' || lang === 'es') useLanguageStore.getState().setLanguage(lang);
+  window.dispatchEvent(new Event(EQ_CHANGED_EVENT));
+});
 
 console.log('Spotifree: main.tsx mounting root...');
 const rootElement = document.getElementById('root');

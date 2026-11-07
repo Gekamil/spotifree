@@ -20,6 +20,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
+import { openCarMode } from '../../utils/carMode';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
@@ -701,6 +702,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             <div className="flex items-center gap-2.5 sm:gap-4 text-[#b3b3b3] shrink-0">
               <button
+                onClick={() => openCarMode()}
+                className="hover:text-white transition-colors active:scale-90 text-[#b3b3b3] cursor-pointer"
+                title="Modo coche"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zm2.2-1h9.6l-1-3H8.2zM7.5 15a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
+                </svg>
+              </button>
+              <button
                 onClick={() => {
                   if (navigator.share) {
                     navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
@@ -1084,6 +1094,25 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-sm text-white">Ir al artista</p>
                   <p className="text-xs text-[#b3b3b3] truncate">{artistName}</p>
+                </div>
+              </button>
+
+              {/* Option: car mode */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  openCarMode();
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M5 11l1.5-4.5A2 2 0 0 1 8.4 5h7.2a2 2 0 0 1 1.9 1.5L19 11v7a1 1 0 0 1-1 1h-1a1 1 0 0 1-1-1v-1H8v1a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1zm2.2-1h9.6l-1-3H8.2zM7.5 15a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Modo coche</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">Botones grandes, Canvas y letra</p>
                 </div>
               </button>
 

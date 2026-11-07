@@ -81,11 +81,17 @@ export function loadEqPreset(): string {
   }
 }
 
+/** Fired when the equalizer changes (here, or synced from another device) */
+export const EQ_CHANGED_EVENT = 'spotifree:eq-changed';
+
 export function saveEq(values: number[], enabled: boolean, preset: string) {
   try {
     window.localStorage.setItem(BANDS_KEY, JSON.stringify(values));
     window.localStorage.setItem(ENABLED_KEY, String(enabled));
     window.localStorage.setItem(PRESET_KEY, preset);
+  } catch {}
+  try {
+    window.dispatchEvent(new Event(EQ_CHANGED_EVENT));
   } catch {}
 }
 
