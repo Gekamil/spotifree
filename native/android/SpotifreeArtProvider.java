@@ -32,9 +32,17 @@ public class SpotifreeArtProvider extends ContentProvider {
         "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com"
     };
 
+    /** Images made by the app itself (e.g. an SVG cover turned into PNG): "local:<key>" */
+    static File localFile(Context ctx, String key) {
+        File dir = new File(ctx.getCacheDir(), "car_art");
+        if (!dir.exists()) dir.mkdirs();
+        return new File(dir, "local_" + key.replaceAll("[^A-Za-z0-9_-]", "_") + ".img");
+    }
+
     @Nullable
     static Uri uriFor(Context ctx, @Nullable String url) {
-        if (url == null || url.isEmpty() || !url.startsWith("https://")) return null;
+        if (url == null || url.isEmpty()) return null;
+        if (!url.startsWith("https://") && !url.startsWith("local:")) return null;
         return new Uri.Builder().scheme("content").authority(ctx.getPackageName() + ".art")
             .appendPath("img").appendQueryParameter("u", url).build();
     }
@@ -64,6 +72,10 @@ public class SpotifreeArtProvider extends ContentProvider {
     /** Downloads (once) and returns the cached file of an image URL, or null. */
     @Nullable
     static File cachedFile(Context ctx, String url) {
+        if (url != null && url.startsWith("local:")) {
+            File lf = localFile(ctx, url.substring(6));
+            return lf.exists() && lf.length() > 0 ? lf : null;
+        }
         if (url == null || !allowed(url)) return null;
         File dir = new File(ctx.getCacheDir(), "car_art");
         if (!dir.exists() && !dir.mkdirs()) return null;

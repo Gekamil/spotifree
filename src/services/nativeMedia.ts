@@ -38,6 +38,7 @@ interface CarTrack { id: string; title: string; artist: string; image?: string }
 interface SpotifreeMediaPlugin {
   setLibrary(o: { playlists: CarItem[]; home: { title: string; items: CarItem[] }[]; loggedIn: boolean }): Promise<void>;
   setPlaylistTracks(o: { id: string; tracks: CarTrack[] }): Promise<void>;
+  cacheImage(o: { key: string; base64: string }): Promise<void>;
   setSearchResults(o: { requestId: string; tracks: CarTrack[]; playlists: CarItem[] }): Promise<void>;
   updateNowPlaying(o: Record<string, unknown>): Promise<void>;
   stop(): Promise<void>;
@@ -73,7 +74,78 @@ export function isNativeMediaAvailable(): boolean {
 
 const en = () => useLanguageStore.getState().language === 'en';
 const artistOf = (t?: Track | null) => (t?.artists || []).map((a) => a.name).filter(Boolean).join(', ');
-const img = (url?: string | null) => (url ? toHDImage(url) : '');
+// Covers for the car: web images as they are (in HD); covers made by the app itself (SVG
+// data URIs, local files) are turned into PNG once and handed to the native side.
+const localImages = new Map<string, string>();
+const converting = new Set<string>();
+function hashKey(s: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36) + s.length.toString(36);
+}
+async function rasterize(url: string): Promise<string | null> {
+  try {
+    // Raw "data:image/svg+xml;utf8,<svg ...#1ed760...>" breaks at the first "#": re-encode it
+    let src = url;
+    const m = /^data:image\/svg\+xml(;[^,]*)?,([\s\S]*)$/.exec(url);
+    if (m && !/base64/.test(m[1] || '')) {
+      let svg = m[2];
+      try {
+        svg = decodeURIComponent(svg);
+      } catch {
+        // Mixed raw / percent-encoded text: decode only the valid %XX sequences
+        svg = svg.replace(/%[0-9A-Fa-f]{2}/g, (seq) => {
+          try {
+            return decodeURIComponent(seq);
+          } catch {
+            return seq;
+          }
+        });
+      }
+      src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+    const im = new Image();
+    im.crossOrigin = 'anonymous';
+    await new Promise<void>((ok, fail) => {
+      im.onload = () => ok();
+      im.onerror = () => fail(new Error('image'));
+      im.src = src;
+    });
+    const size = 320;
+    const c = document.createElement('canvas');
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext('2d');
+    if (!ctx) return null;
+    const r = Math.max(size / (im.naturalWidth || size), size / (im.naturalHeight || size));
+    const w = (im.naturalWidth || size) * r;
+    const h = (im.naturalHeight || size) * r;
+    ctx.drawImage(im, (size - w) / 2, (size - h) / 2, w, h);
+    const base64 = c.toDataURL('image/png').split(',')[1];
+    const key = hashKey(url);
+    await SpotifreeMedia.cacheImage({ key, base64 });
+    return key;
+  } catch {
+    return null;
+  }
+}
+function img(url?: string | null): string {
+  if (!url) return '';
+  if (url.startsWith('https://')) return toHDImage(url);
+  if (url.startsWith('http://')) return '';
+  const done = localImages.get(url);
+  if (done) return done;
+  if (!converting.has(url)) {
+    converting.add(url);
+    void rasterize(url).then((key) => {
+      if (!key) return;
+      localImages.set(url, `local:${key}`);
+      lastLibrarySig = '';
+      pushLibrary();
+    });
+  }
+  return '';
+}
 const coverOf = (t?: Track | null) => img(t?.album?.images?.[0]?.url);
 const tracksOf = (p?: Playlist | null): Track[] =>
   ((p?.tracks?.items || []) as any[]).map((x) => x?.track || x).filter((t: any) => t?.id && t?.name);
@@ -182,7 +254,21 @@ const searchTracks = new Map<string, Track[]>();
 async function runSearch(query: string): Promise<{ tracks: Track[]; playlists: CarItem[] }> {
   const res = await searchSpotify(query).catch(() => null);
   const list = (v: any): any[] => (Array.isArray(v) ? v : Array.isArray(v?.items) ? v.items : []);
-  const tracks: Track[] = (list(res?.tracks) as Track[]).filter((t) => t?.id && t?.name).slice(0, 25);
+  // Best matches first: songs BY the searched artist, then songs whose title matches
+  const words = query.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').split(/\s+/).filter(Boolean);
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const score = (t: Track) => {
+    const a = norm(artistOf(t));
+    const n = norm(t.name || '');
+    const all = norm(`${t.name} ${artistOf(t)}`);
+    return (words.every((w) => a.includes(w)) ? 4 : 0) + (words.every((w) => all.includes(w)) ? 2 : 0) + (words.every((w) => n.includes(w)) ? 1 : 0);
+  };
+  const tracks: Track[] = (list(res?.tracks) as Track[])
+    .filter((t) => t?.id && t?.name)
+    .map((t, i) => ({ t, i, s: score(t) }))
+    .sort((x, y) => y.s - x.s || x.i - y.i)
+    .map((x) => x.t)
+    .slice(0, 25);
   // Generated "radio" cards of the search page are not real playlists
   const playlists: CarItem[] = list(res?.playlists).filter((p) => p?.id && !String(p.id).startsWith('search-')).slice(0, 15).map((p) => ({
     id: p.id,

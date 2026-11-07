@@ -111,6 +111,27 @@ public class SpotifreeMediaPlugin extends Plugin {
         call.resolve();
     }
 
+    /** key, base64 (PNG): a cover made by the app, referenced as "local:<key>" */
+    @PluginMethod
+    public void cacheImage(PluginCall call) {
+        String key = call.getString("key", "");
+        String b64 = call.getString("base64", "");
+        if (key == null || key.isEmpty() || b64 == null || b64.isEmpty()) {
+            call.reject("missing key or data");
+            return;
+        }
+        try {
+            byte[] bytes = android.util.Base64.decode(b64, android.util.Base64.DEFAULT);
+            java.io.File f = SpotifreeArtProvider.localFile(getContext(), key);
+            try (java.io.FileOutputStream out = new java.io.FileOutputStream(f)) {
+                out.write(bytes);
+            }
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("could not save image");
+        }
+    }
+
     /** id, tracks: [{id,title,artist,image}] (answer to a "loadPlaylist" command) */
     @PluginMethod
     public void setPlaylistTracks(PluginCall call) {
