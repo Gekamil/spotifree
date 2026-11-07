@@ -376,6 +376,32 @@ export const SettingsNativeIcon: React.FC<IconProps> = ({ size = 22, className =
   </svg>
 );
 
+/** "Crear → Playlist": a music note (Spotify's create-menu style, 2 px outline) */
+export const PlaylistNoteNativeIcon: React.FC<IconProps> = ({ size = 24, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <circle cx="7.5" cy="17.5" r="3.5" />
+    <path d="M11 17.5V2.75l7.5 2.5v3.5L11 6.25" />
+  </svg>
+);
+
+/** "Importar playlist": arrow into a tray */
+export const ImportNativeIcon: React.FC<IconProps> = ({ size = 24, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <path d="M12 2.75v11.5" />
+    <path d="m7.25 9.75 4.75 4.75 4.75-4.75" />
+    <path d="M3.5 14.5v5.25c0 .55.45 1 1 1h15c.55 0 1-.45 1-1V14.5" />
+  </svg>
+);
+
+/** "Pegar" (paste from clipboard) */
+export const PasteNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+    <rect x="5" y="4" width="14" height="17.5" rx="2" />
+    <path d="M9 4V2.75h6V4" />
+    <path d="M9 11h6M9 15h4" />
+  </svg>
+);
+
 export const CloseNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'currentColor', ...props }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" className={className} {...props}>
     <path d="M2.47 2.47a.75.75 0 0 1 1.06 0L8 6.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L9.06 8l4.47 4.47a.75.75 0 1 1-1.06 1.06L8 9.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L6.94 8 2.47 3.53a.75.75 0 0 1 0-1.06Z" />

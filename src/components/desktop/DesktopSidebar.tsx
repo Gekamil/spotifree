@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { Playlist } from '../../types/spotify';
+import { openImportPlaylistDialog } from '../common/ImportPlaylistDialog';
 import {
+  CloseNativeIcon,
   CollapseLibraryNativeIcon,
   CreateNativeIcon,
   ExpandLibraryNativeIcon,
@@ -60,7 +62,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     toggleCreateMenu,
     toggleSortMenu,
     openContextMenu,
-    openImportModal,
     sortOrder,
     viewMode,
   } = useUIStore();
@@ -161,7 +162,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         <div className="flex items-center gap-1 relative">
           <button
             onClick={toggleCreateMenu}
-            title="Crea una lista o una carpeta"
+            title="Crea o importa una playlist"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white hover:bg-[#1f1f1f] hover:scale-104 active:scale-95 transition-all"
           >
             <CreateNativeIcon size={16} />
@@ -210,10 +211,11 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           {/* Close button X */}
           <button
             onClick={handleDismissImportCard}
-            className="absolute top-3 right-3 w-6 h-6 rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white flex items-center justify-center text-xs transition-colors cursor-pointer"
+            className="absolute top-3 right-3 w-6 h-6 rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             title="Descartar"
+            aria-label="Descartar"
           >
-            ✕
+            <CloseNativeIcon size={12} />
           </button>
 
           <div className="space-y-1 pr-6">
@@ -221,14 +223,14 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               Importa tu música
             </h4>
             <p className="text-[12px] text-[#b3b3b3] font-medium leading-snug">
-              Trae tus listas, canciones y artistas favoritos a tu biblioteca.
+              Trae tus playlists de YouTube Music, YouTube, Apple Music o Spotify.
             </p>
             <div className="pt-2">
               <button
-                onClick={() => openImportModal()}
+                onClick={() => openImportPlaylistDialog()}
                 className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
               >
-                Importar biblioteca
+                Importar playlist
               </button>
             </div>
           </div>
