@@ -123,11 +123,20 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         }
     }
 
-    /** Keep the page running as if on screen: while playing and for 10 min after a pause */
-    static volatile long lastPlayingAt = 0;
-    static final long KEEP_ALIVE_MS = 10 * 60 * 1000L;
+    /**
+     * Keep the page running as if on screen, with no time limit: from the first song until the
+     * user closes the player (swipes the notification away, or closes the app). A pause keeps it
+     * ready, so play from the car / Bluetooth / lock screen works hours later.
+     */
+    static volatile boolean sessionOpen = false;
     static boolean keepAlive() {
-        return playing || (lastPlayingAt > 0 && SystemClock.elapsedRealtime() - lastPlayingAt < KEEP_ALIVE_MS);
+        return playing || sessionOpen;
+    }
+
+    /** The user closed the player: back to a normal app in the background */
+    static void closeSession() {
+        sessionOpen = false;
+        SpotifreeWebView.sync();
     }
 
     public static final String ACTION_UPDATE = "com.spotifree.music.MEDIA_UPDATE";
@@ -284,7 +293,11 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         session.setCallback(new MediaSessionCompat.Callback() {
             @Override public void onPlay() { send("play", null); }
             @Override public void onPause() { send("pause", null); }
-            @Override public void onStop() { send("pause", null); }
+            // Notification swiped away (or "stop" from the car): pause and close the player
+            @Override public void onStop() {
+                send("pause", null);
+                closeSession();
+            }
             @Override public void onSkipToNext() { send("next", null); }
             @Override public void onSkipToPrevious() { send("previous", null); }
             @Override public void onSeekTo(long pos) { send("seek", obj("positionMs", pos)); }
@@ -847,6 +860,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         super.onTaskRemoved(rootIntent);
         // The app was swiped away: playback (in the web layer) is gone too
         playing = false;
+        sessionOpen = false;
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE);
         foreground = false;
         stopSelf();

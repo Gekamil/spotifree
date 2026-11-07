@@ -4,10 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.PowerManager;
-import android.os.SystemClock;
 import android.provider.Settings;
 
 import androidx.core.content.ContextCompat;
@@ -35,7 +32,6 @@ public class SpotifreeMediaPlugin extends Plugin {
 
     private static SpotifreeMediaPlugin instance;
     private static JSObject pending;
-    private final Handler keepAliveCheck = new Handler(Looper.getMainLooper());
 
     @Override
     public void load() {
@@ -198,15 +194,11 @@ public class SpotifreeMediaPlugin extends Plugin {
         SpotifreeMediaService.durationMs = dur == null ? 0 : dur.longValue();
         SpotifreeMediaService.positionMs = pos == null ? 0 : pos.longValue();
         boolean playing = Boolean.TRUE.equals(call.getBoolean("isPlaying", false));
-        boolean wasPlaying = SpotifreeMediaService.playing;
         SpotifreeMediaService.playing = playing;
-        if (playing || wasPlaying) SpotifreeMediaService.lastPlayingAt = SystemClock.elapsedRealtime();
-        // Screen off / app in the background: the page keeps running while there is music
+        // Screen off / app in the background: the page keeps running from the first song until
+        // the player is closed (no time limit, also while paused)
+        if (playing) SpotifreeMediaService.sessionOpen = true;
         SpotifreeWebView.sync();
-        if (!playing && wasPlaying) {
-            keepAliveCheck.removeCallbacksAndMessages(null);
-            keepAliveCheck.postDelayed(SpotifreeWebView::sync, SpotifreeMediaService.KEEP_ALIVE_MS + 1000);
-        }
         JSONArray q = arr(call, "queue");
         if (q != null) {
             SpotifreeMediaService.queue = q;

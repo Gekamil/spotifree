@@ -12,8 +12,9 @@ import com.getcapacitor.CapacitorWebView;
  *
  * Music keeps playing with the screen off or the app in the background: when the window is
  * hidden, the page would become "hidden" and the YouTube player pauses itself (and timers that
- * drive the mixes slow down). While music plays (and for a while after a pause, so a play from
- * the car / Bluetooth / notification works), the page keeps seeing itself as visible.
+ * drive the mixes slow down). From the first song until the player is closed (notification swiped
+ * away or app closed), also while paused, the page keeps seeing itself as visible, so play from
+ * the car / Bluetooth / lock screen works at any time.
  * Screen on with the app open, it behaves exactly like a normal WebView.
  */
 public class SpotifreeWebView extends CapacitorWebView {
