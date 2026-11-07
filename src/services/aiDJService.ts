@@ -94,6 +94,8 @@ interface IntentAnalysis {
 
 const lastUsedSpeechMap = new Map<string, string>();
 
+const isEnglishUI = () => useLanguageStore.getState().language === 'en';
+
 function pickDynamicSpeech(categoryKey: string, options: string[]): string {
   const lastUsed = lastUsedSpeechMap.get(categoryKey);
   const candidates = options.length > 1 ? options.filter((s) => s !== lastUsed) : options;
@@ -857,7 +859,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       if (typeof window !== 'undefined') {
         (window as any).speechRecognitionInstance = rec;
       }
-      rec.lang = 'es-ES';
+      rec.lang = isEnglishUI() ? 'en-US' : 'es-ES';
       rec.continuous = false;
       rec.interimResults = true;
 
@@ -1120,13 +1122,15 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const first = finalSet[0];
     if (first?.name && !finalSpeech.toLowerCase().includes(first.name.toLowerCase().slice(0, 12))) {
       const art = first.artists?.[0]?.name;
-      finalSpeech = `${finalSpeech} Empezamos con ${first.name}${art ? ` de ${art}` : ''}.`;
+      finalSpeech = isEnglishUI()
+        ? `${finalSpeech} Starting with ${first.name}${art ? ` by ${art}` : ''}.`
+        : `${finalSpeech} Empezamos con ${first.name}${art ? ` de ${art}` : ''}.`;
     }
 
     const requestSegment: DJSegment = {
       id: `seg-req-${Date.now()}`,
       kind: 'request',
-      title: finalTitle.replace(/^Sesi[oó]n:\s*/i, '') || 'Tu petición',
+      title: finalTitle.replace(/^(Sesi[oó]n|Session):\s*/i, '') || (isEnglishUI() ? 'Your request' : 'Tu petición'),
       reason: `lo que ha pedido: ${promptText}`,
       startIndex: 0,
       length: finalSet.length,
@@ -1218,12 +1222,21 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     if (nextSet.length < 3) {
       const currentTag = state.currentHashtag || getDominantUserHashtag();
       nextSet = filterMusicTracksOnly(await getCuratedSetForHashtag(currentTag, 15, previousIds));
-      const prevTitle = state.segments[0]?.title || state.currentSetTitle || 'Tu mezcla';
-      const speech = pickDynamicSpeech('set_more', [
-        `Seguimos con más de esto. ${nextSet[0]?.name ? `Ahora ${nextSet[0].name}.` : ''}`,
-        `La música no para. Más ${prevTitle.toLowerCase()} para ti.`,
-        `¿Otra ronda? Venga. ${nextSet[0]?.name ? `Suena ${nextSet[0].name}.` : ''}`,
-      ]).trim();
+      const prevTitle = state.segments[0]?.title || state.currentSetTitle || (isEnglishUI() ? 'Your mix' : 'Tu mezcla');
+      const speech = pickDynamicSpeech(
+        'set_more',
+        isEnglishUI()
+          ? [
+              `More of this coming up. ${nextSet[0]?.name ? `Here's ${nextSet[0].name}.` : ''}`,
+              `The music doesn't stop. More ${prevTitle.toLowerCase()} for you.`,
+              `Another round? Let's go. ${nextSet[0]?.name ? `Playing ${nextSet[0].name}.` : ''}`,
+            ]
+          : [
+              `Seguimos con más de esto. ${nextSet[0]?.name ? `Ahora ${nextSet[0].name}.` : ''}`,
+              `La música no para. Más ${prevTitle.toLowerCase()} para ti.`,
+              `¿Otra ronda? Venga. ${nextSet[0]?.name ? `Suena ${nextSet[0].name}.` : ''}`,
+            ]
+      ).trim();
       segments = nextSet.length
         ? [{ id: `seg-more-${Date.now()}`, kind: state.setMode === 'request' ? 'request' : 'liked', title: prevTitle, reason: 'más del mismo estilo', startIndex: 0, length: nextSet.length, intro: speech }]
         : [];

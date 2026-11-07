@@ -30,17 +30,7 @@ export const DesktopGuideView: React.FC = () => {
     setIsExtractingCookie(true);
     try {
       const session = await extractSpotifySessionFromCookie(val);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', val);
-        window.localStorage.setItem('spotify_extracted_session', JSON.stringify(session));
-      }
-      useSpotifyDataStore.setState({
-        isAuthenticated: true,
-        user: session.user,
-        playlists: session.playlists,
-        dynamicShelves: session.shelves,
-        quickAccessCards: session.quickAccess,
-      });
+      useSpotifyDataStore.getState().applyCookieSession(session, val);
       setCookieSaved(true);
       setTimeout(() => {
         setCookieSaved(false);

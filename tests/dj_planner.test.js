@@ -255,11 +255,30 @@ describe('Unified transition renderer (live mix == preview)', () => {
     assert.deepEqual([...rates].sort(), [0.25, 0.5, 0.75, 1]);
   });
 
-  it('R.4: only musical synthesized layers are allowed (noise riser), no buzzing tones', () => {
-    assert.equal(P.auxFXForPreset('filtro'), null);
-    assert.equal(P.auxFXForPreset('freno_vinilo'), null);
-    assert.equal(P.auxFXForPreset('eco_out'), null);
-    assert.equal(P.auxFXForPreset('crescendo'), 'repeticion_ritmo');
+  it('R.4: every DJ transition except a plain fade gets audible layers built around the swap', () => {
+    const base = { volumeEnvelope: 'curva_s', eqMode: 'intercambio_graves_central', fxMode: 'ninguno', tempoA: 124, intensity: 'smooth' };
+    assert.deepEqual(P.transitionFXLayers({ ...base, preset: 'fundido' }, 8), []);
+    for (const preset of ['automatica', 'crescendo', 'filtro', 'corte', 'mezcla_voces', 'eco_out']) {
+      const layers = P.transitionFXLayers({ ...base, preset }, 8);
+      assert.ok(layers.length > 0, preset);
+      for (const l of layers) assert.ok(l.at >= 0 && l.dur > 0 && l.level > 0 && l.level <= 1.5, `${preset} ${JSON.stringify(l)}`);
+    }
+    // The impact lands exactly where B takes over
+    const cres = { ...base, preset: 'crescendo', intensity: 'wow' };
+    const impact = P.transitionFXLayers(cres, 8).find((l) => l.kind === 'impact');
+    assert.ok(Math.abs(impact.at - P.transitionSwapPoint(cres) * 8) < 1e-9);
+    const roll = { ...base, preset: 'beat_roll', fxMode: 'repeticion_loop' };
+    assert.ok(P.transitionFXLayers(roll, 4).some((l) => l.kind === 'roll'));
+  });
+
+  it('R.5: build-ups breathe in right before the drop (tension gap), then B lands at full level', () => {
+    const cfg = { preset: 'crescendo', volumeEnvelope: 'curva_s', eqMode: 'intercambio_gradual', fxMode: 'ninguno', tempoA: 120 };
+    const swap = P.transitionSwapPoint(cfg);
+    const dur = 8;
+    const justBefore = P.computeTransitionGains(cfg, swap - 0.01, dur);
+    const after = P.computeTransitionGains(cfg, Math.min(1, swap + 0.1), dur);
+    assert.ok(justBefore.outVol < 0.2 && justBefore.inVol < 0.2, JSON.stringify(justBefore));
+    assert.ok(after.inVol > 0.6, JSON.stringify(after));
   });
 });
 

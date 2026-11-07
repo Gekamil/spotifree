@@ -3,6 +3,10 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App.tsx';
 import './utils/adaptiveLogo';
+import { initDomTranslator } from './utils/domTranslator';
+
+// Whole-interface English/Spanish switch (Settings → Language)
+initDomTranslator();
 
 console.log('Spotifree: main.tsx mounting root...');
 const rootElement = document.getElementById('root');

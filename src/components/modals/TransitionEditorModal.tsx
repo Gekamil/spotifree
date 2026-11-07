@@ -362,7 +362,13 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     }
   }
 
-  // Clean up audition on close
+  // Parents pass an inline onClose (new function every render). Keep it in a ref so the
+  // audition is NOT stopped every time the screen behind re-renders (it used to cut the
+  // preview after ~1 second, on the first progress tick of the player).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  // Stop the audition only when the editor closes / unmounts
   useEffect(() => {
     if (!isOpen) {
       audioEngine.stopTransitionAudition();
@@ -370,21 +376,18 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       setIsPlayingAudition(false);
       setIsAuditionLoading(false);
       setAuditionProgress(0);
+      return;
     }
-
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen) {
-        onClose();
-      }
+      if (e.key === 'Escape') onCloseRef.current();
     };
     window.addEventListener('keydown', handleKeyDown);
-
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {

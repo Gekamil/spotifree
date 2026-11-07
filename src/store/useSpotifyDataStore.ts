@@ -422,9 +422,91 @@ interface SpotifyDataState {
   updatePlaylist: (id: string, updates: Partial<Playlist>) => void;
   deletePlaylist: (id: string) => void;
   removeTrackFromPlaylist: (playlistId: string, trackId: string, trackObj?: Track) => void;
+  /** Re-reads the Spotify account with the saved cookie (once a day, or forced) and merges it. */
+  refreshSpotifySession: (force?: boolean) => Promise<boolean>;
+  /** A cookie was (re)saved: same account → merge, keeping the user's changes; other account → switch. */
+  applyCookieSession: (session: any, cookie: string, userOverride?: any) => void;
 }
 
 let isInitializing = false;
+let refreshInFlight: Promise<boolean> | null = null;
+let dailyRefreshTimer: number | null = null;
+
+/** While the app stays open, checks every 30 min (and on focus) whether a new day started. */
+function startDailySpotifyRefreshTimer() {
+  if (typeof window === 'undefined' || dailyRefreshTimer !== null) return;
+  const check = () => {
+    try {
+      useSpotifyDataStore.getState().refreshSpotifySession(false).catch(() => {});
+    } catch {}
+  };
+  dailyRefreshTimer = window.setInterval(check, 30 * 60 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) check();
+  });
+}
+
+/** Local calendar day (YYYY-MM-DD), used for the once-a-day Spotify refresh. */
+export function localDayStamp(d = new Date()): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Merges a fresh read of the Spotify account into what the user has now, without undoing
+ * anything they did here:
+ *  - the user's order, their own/imported lists and their edits (name, cover, description)
+ *    are kept (edits live in user_imported_playlists);
+ *  - deleted lists stay deleted;
+ *  - lists that appeared on Spotify since the last read are added; lists that are no
+ *    longer there are kept;
+ *  - untouched Spotify lists take the fresh cover/description and, when the fresh read has
+ *    them, the fresh songs (songs the user added/removed are separate overlays, so they
+ *    still apply on top).
+ */
+export function mergeFreshSpotifyPlaylists(
+  current: Playlist[],
+  fresh: Playlist[],
+  imported: Playlist[],
+  opts: { addEdits?: boolean } = {}
+): Playlist[] {
+  const addEdits = opts.addEdits !== false;
+  const deleted = getDeletedPlaylistIds();
+  const editedById = new Map<string, Playlist>();
+  for (const p of imported || []) if (p?.id) editedById.set(p.id, p);
+  const freshById = new Map<string, Playlist>();
+  for (const p of fresh || []) if (p?.id) freshById.set(p.id, p);
+  const out: Playlist[] = [];
+  const seen = new Set<string>();
+  const push = (p: Playlist) => {
+    if (!p?.id || seen.has(p.id) || deleted.has(p.id)) return;
+    seen.add(p.id);
+    out.push(p);
+  };
+  for (const p of current || []) {
+    if (!p?.id) continue;
+    const f = freshById.get(p.id);
+    const edited = editedById.get(p.id);
+    if (f) {
+      const freshTracks = f.tracks?.items?.length ? f.tracks : null;
+      push({
+        ...p,
+        ...(edited ? {} : { name: f.name || p.name, description: f.description ?? p.description, images: f.images?.length ? f.images : p.images }),
+        owner: f.owner || p.owner,
+        tracks: freshTracks || p.tracks,
+        ...(edited ? { name: edited.name || p.name, description: edited.description ?? p.description, images: edited.images?.length ? edited.images : p.images } : {}),
+      } as Playlist);
+    } else {
+      push(edited ? ({ ...p, ...edited, tracks: p.tracks?.items?.length ? p.tracks : edited.tracks } as Playlist) : p);
+    }
+  }
+  for (const f of fresh || []) {
+    const edited = editedById.get(f?.id);
+    push(edited ? ({ ...f, name: edited.name || f.name, description: edited.description ?? f.description, images: edited.images?.length ? edited.images : f.images } as Playlist) : f);
+  }
+  if (addEdits) for (const p of imported || []) push(p);
+  return addEdits ? deduplicateUserPlaylists(out) : out.filter((p) => !deleted.has(p.id));
+}
 
 // Cross-tab and cross-window instantaneous synchronization channel
 let crossTabSyncChannel: BroadcastChannel | null = null;
@@ -946,6 +1028,114 @@ const store = create<SpotifyDataState>((set, get) => ({
     });
   },
 
+  applyCookieSession: (session: any, cookie: string, userOverride?: any) => {
+    if (typeof window === 'undefined' || !session?.user) return;
+    let saved: any = null;
+    try {
+      saved = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
+    } catch {}
+    const sameAccount = !saved?.user?.id || !session.user.id || saved.user.id === session.user.id;
+    let imported: Playlist[] = [];
+    try {
+      imported = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
+    } catch {}
+    const freshPlaylists: Playlist[] = Array.isArray(session.playlists) ? session.playlists : [];
+    const savedPlaylists: Playlist[] = sameAccount && Array.isArray(saved?.playlists) ? saved.playlists : [];
+    const current = sameAccount ? get().playlists : [];
+    const today = localDayStamp();
+    window.localStorage.setItem('user_spotify_cookie', cookie);
+    window.localStorage.removeItem('spotify_logged_out');
+    window.localStorage.setItem(
+      'spotify_extracted_session',
+      JSON.stringify({
+        ...(sameAccount ? saved || {} : {}),
+        ...session,
+        playlists: mergeFreshSpotifyPlaylists(savedPlaylists, freshPlaylists, imported, { addEdits: false }),
+        _cookie: cookie,
+        _extractedDate: today,
+      })
+    );
+    if (session.user.id) window.localStorage.setItem('spotifree_active_user_id', session.user.id);
+    set({
+      isAuthenticated: true,
+      user: userOverride || session.user,
+      playlists: mergeFreshSpotifyPlaylists(current.length ? current : savedPlaylists, freshPlaylists, imported),
+      dynamicShelves: session.shelves?.length ? session.shelves : get().dynamicShelves,
+      quickAccessCards: session.quickAccess?.length ? session.quickAccess : get().quickAccessCards,
+      isLoading: false,
+    });
+    startDailySpotifyRefreshTimer();
+  },
+
+  refreshSpotifySession: async (force = false) => {
+    if (typeof window === 'undefined') return false;
+    const cookie = window.localStorage.getItem('user_spotify_cookie') || window.localStorage.getItem('spotify_sp_dc') || '';
+    if (!cookie || !validateSpotifyCookie(cookie).valid) return false;
+    let saved: any = null;
+    try {
+      saved = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
+    } catch {}
+    const today = localDayStamp();
+    if (!force && saved?._extractedDate === today) return false;
+    if (refreshInFlight) return refreshInFlight;
+    refreshInFlight = (async () => {
+      try {
+        const fresh: any = await extractSpotifySessionFromCookie(cookie);
+        if (!fresh || !fresh.user) return false;
+        // The same account? (a different cookie/account is a new login, handled elsewhere)
+        if (saved?.user?.id && fresh.user.id && saved.user.id !== fresh.user.id) return false;
+        let imported: Playlist[] = [];
+        try {
+          imported = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
+        } catch {}
+        const freshPlaylists: Playlist[] = Array.isArray(fresh.playlists) ? fresh.playlists : [];
+        const savedPlaylists: Playlist[] = Array.isArray(saved?.playlists) ? saved.playlists : [];
+        const current = get().playlists.length ? get().playlists : savedPlaylists;
+        const merged = mergeFreshSpotifyPlaylists(current, freshPlaylists, imported);
+
+        // Spotify's own list of the account: previous lists + the new ones (never drops any)
+        const sessionPlaylists = mergeFreshSpotifyPlaylists(savedPlaylists, freshPlaylists, imported, { addEdits: false });
+        window.localStorage.setItem(
+          'spotify_extracted_session',
+          JSON.stringify({ ...(saved || {}), ...fresh, user: saved?.user || fresh.user, playlists: sessionPlaylists, _cookie: cookie, _extractedDate: today })
+        );
+
+        // Fresh songs for lists the read brought with songs (overlays still apply on top)
+        const cache = { ...get().playlistDetailsCache };
+        for (const p of freshPlaylists) {
+          if (p?.id && p.tracks?.items?.length && cache[p.id]) cache[p.id] = { ...cache[p.id], tracks: p.tracks };
+        }
+        if (fresh.cachedPlaylistDetails) {
+          for (const [id, p] of Object.entries<any>(fresh.cachedPlaylistDetails)) {
+            if (p?.tracks?.items?.length) cache[id] = { ...(cache[id] || {}), ...p, ...(cache[id]?.name && imported.some((x) => x.id === id) ? { name: cache[id].name, images: cache[id].images } : {}) };
+          }
+        }
+        try {
+          const uid = get().user?.id || window.localStorage.getItem('spotifree_active_user_id') || 'active';
+          window.localStorage.setItem(`spotifree_playlist_cache_${uid}`, JSON.stringify(cache));
+          window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cache));
+        } catch {}
+
+        set({
+          playlists: merged,
+          playlistDetailsCache: cache,
+          // Recommendations are Spotify's, not the user's: they are replaced every day
+          dynamicShelves: fresh.shelves && fresh.shelves.length > 0 ? fresh.shelves : get().dynamicShelves,
+          quickAccessCards: fresh.quickAccess && fresh.quickAccess.length ? fresh.quickAccess : get().quickAccessCards,
+        });
+        console.info(`[Spotify] Cuenta actualizada (${today}): ${freshPlaylists.length} listas, ${merged.length} en tu biblioteca`);
+        return true;
+      } catch (e) {
+        console.warn('[Spotify] Daily refresh failed:', e);
+        if (!get().dynamicShelves.length) set({ dynamicShelves: buildExtractedShelves(get().user?.display_name || '') });
+        return false;
+      } finally {
+        refreshInFlight = null;
+      }
+    })();
+    return refreshInFlight;
+  },
+
   removeTrackFromPlaylist: (playlistId: string, trackId: string, trackObj?: Track) => {
     if (!playlistId || !trackId) return;
     const cleanPl = (playlistId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
@@ -1252,40 +1442,13 @@ const store = create<SpotifyDataState>((set, get) => ({
             try { useStatsStore.getState().loadStatsForUser(session.user.id); } catch {}
           }
 
-          // Daily automatic background sync when cookie is present:
-          // If the cached session is from a previous calendar day, re-fetch fresh shelves and recommendations in background
-          const todayDateStr = new Date().toISOString().slice(0, 10);
-          const isStaleDailySession = !session._extractedDate || session._extractedDate !== todayDateStr;
-
-          if (!session.playlists || session.playlists.length === 0 || isStaleDailySession) {
-            extractSpotifySessionFromCookie(userCookie).then((fresh) => {
-              if (fresh && fresh.user) {
-                // Preserve existing session playlists if fresh scrape returned empty or failed
-                const basePlaylists = (fresh.playlists && fresh.playlists.length > 0)
-                  ? fresh.playlists
-                  : (session.playlists && session.playlists.length > 0 ? session.playlists : []);
-
-                window.localStorage.setItem('spotify_extracted_session', JSON.stringify({
-                  ...session,
-                  ...fresh,
-                  playlists: basePlaylists,
-                  _cookie: userCookie,
-                  _extractedDate: todayDateStr,
-                }));
-                const freshCombined = deduplicateUserPlaylists([...basePlaylists, ...importedPlaylists]);
-                set({
-                  playlists: freshCombined,
-                  dynamicShelves: fresh.shelves && fresh.shelves.length > 0 ? fresh.shelves : buildExtractedShelves(fresh.user.display_name),
-                  quickAccessCards: fresh.quickAccess || [],
-                });
-              }
-            }).catch(() => {
-              // Fallback to dynamic daily rotation if network fails
-              set({
-                dynamicShelves: buildExtractedShelves(activeUser.display_name),
-              });
-            });
+          // Daily automatic refresh with the saved cookie: Spotify's recommendations (home
+          // shelves, mixes, new lists) follow the real account, merged without undoing the
+          // user's changes. Also re-checked while the app stays open across days.
+          if (!session.playlists || session.playlists.length === 0 || session._extractedDate !== localDayStamp()) {
+            get().refreshSpotifySession(true).catch(() => {});
           }
+          startDailySpotifyRefreshTimer();
           return;
         }
 

@@ -1,5 +1,7 @@
 import { SpotifreeAuthCard } from '../common/SpotifreeAuthCard';
 import { AppIconSelector } from '../common/AppIconSelector';
+import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
+import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -13,33 +15,6 @@ import { cleanSpDc } from '../../utils/userAccounts';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 import { useLanguageStore } from '../../utils/i18n';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
-
-interface FrequencyPoint {
-  label: string;
-  value: number; // dB from -12 to +12
-}
-
-const PRESETS: Record<string, number[]> = {
-  flat: [0, 0, 0, 0, 0, 0],
-  bassBoost: [6, 4.5, 2, 0, 0, 0],
-  acoustic: [3.5, 2.5, 0.5, 1.5, 3, 3.5],
-  electronic: [5, 4, 1, 2, 4.5, 5.5],
-  pop: [-1, 2, 4, 3, 1, -1],
-  rock: [4.5, 3, -1, 1.5, 3.5, 5],
-  vocal: [-2, 0.5, 3.5, 4, 2, -1],
-  custom: [0, 0, 0, 0, 0, 0],
-};
-
-const PRESET_LABELS: Record<string, string> = {
-  flat: 'Plano',
-  bassBoost: 'Refuerzo de graves',
-  acoustic: 'Acústico',
-  electronic: 'Electrónica',
-  pop: 'Pop',
-  rock: 'Rock',
-  vocal: 'Vocal',
-  custom: 'Personalizado',
-};
 
 const SpotifyToggle: React.FC<{
   checked: boolean;
@@ -188,11 +163,6 @@ export const DesktopSettingsView: React.FC = () => {
     setIsExtractingCookie(true);
     try {
       const session = await extractSpotifySessionFromCookie(val);
-      if (typeof window !== 'undefined') {
-        window.localStorage.setItem('user_spotify_cookie', val);
-        window.localStorage.setItem('spotify_extracted_session', JSON.stringify({ ...session, _cookie: val }));
-        window.localStorage.removeItem('spotify_logged_out');
-      }
 
       const cloudAcc = getSavedSpotifreeAccount();
       if (cloudAcc) {
@@ -203,9 +173,11 @@ export const DesktopSettingsView: React.FC = () => {
         });
       }
 
-      useSpotifyDataStore.setState({
-        isAuthenticated: true,
-        user: cloudAcc
+      // Re-saving the cookie never resets the library: same account → merged with your changes
+      useSpotifyDataStore.getState().applyCookieSession(
+        session,
+        val,
+        cloudAcc
           ? {
               id: cloudAcc.uid || session.user.id,
               display_name: cloudAcc.displayName,
@@ -213,12 +185,8 @@ export const DesktopSettingsView: React.FC = () => {
               images: cloudAcc.avatarUrl ? [{ url: cloudAcc.avatarUrl }] : session.user.images,
               followers: session.user.followers || { total: 0 },
             }
-          : session.user,
-        playlists: session.playlists,
-        dynamicShelves: session.shelves,
-        quickAccessCards: session.quickAccess,
-        isLoading: false,
-      });
+          : undefined
+      );
       setSavedSpotifyCookieSuccess(true);
       setTimeout(() => {
         setSavedSpotifyCookieSuccess(false);
@@ -334,121 +302,11 @@ export const DesktopSettingsView: React.FC = () => {
   };
 
 
-  // Equalizer 6-band State (-12 to +12 dB)
-  const [activePreset, setActivePreset] = useState<string>('flat');
-  const [draggingBandIndex, setDraggingBandIndex] = useState<number | null>(null);
-  const eqCanvasRef = useRef<HTMLDivElement>(null);
-  const [eqBands, setEqBands] = useState<FrequencyPoint[]>(() => {
-    const defaultBands: FrequencyPoint[] = [
-      { label: '60Hz', value: 0 },
-      { label: '150Hz', value: 0 },
-      { label: '400Hz', value: 0 },
-      { label: '1kHz', value: 0 },
-      { label: '2.4kHz', value: 0 },
-      { label: '15kHz', value: 0 },
-    ];
-    if (typeof window !== 'undefined') {
-      try {
-        const raw = window.localStorage.getItem('spotifree_eq_bands');
-        if (raw) {
-          const values: number[] = JSON.parse(raw);
-          return defaultBands.map((b, idx) => ({ ...b, value: values[idx] ?? 0 }));
-        }
-      } catch {}
-    }
-    return defaultBands;
-  });
-
-  const syncEqWithEngine = (bands: FrequencyPoint[]) => {
-    try {
-      audioEngine.setAllEqualizerBands(bands);
-    } catch {}
-  };
-
-  const handleBandChange = (index: number, newVal: number) => {
-    setActivePreset('custom');
-    setEqBands((prev) => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], value: newVal };
-      syncEqWithEngine(copy);
-      return copy;
-    });
-  };
-
-  useEffect(() => {
-    if (draggingBandIndex === null) return;
-
-    const onPointerMove = (e: MouseEvent | TouchEvent) => {
-      if (!eqCanvasRef.current) return;
-      const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
-      const rect = eqCanvasRef.current.getBoundingClientRect();
-      const padding = 16;
-      const availableHeight = rect.height - padding * 2;
-      const relY = Math.max(0, Math.min(availableHeight, clientY - (rect.top + padding)));
-      // relY = 0 is +12dB, relY = availableHeight is -12dB
-      const norm = 1 - relY / availableHeight; // 0 to 1
-      const db = Math.round(((norm * 24) - 12) * 2) / 2; // -12 to +12 in 0.5 steps
-      handleBandChange(draggingBandIndex, Math.max(-12, Math.min(12, db)));
-    };
-
-    const onPointerUp = () => {
-      setDraggingBandIndex(null);
-    };
-
-    window.addEventListener('mousemove', onPointerMove);
-    window.addEventListener('mouseup', onPointerUp);
-    window.addEventListener('touchmove', onPointerMove);
-    window.addEventListener('touchend', onPointerUp);
-
-    return () => {
-      window.removeEventListener('mousemove', onPointerMove);
-      window.removeEventListener('mouseup', onPointerUp);
-      window.removeEventListener('touchmove', onPointerMove);
-      window.removeEventListener('touchend', onPointerUp);
-    };
-  }, [draggingBandIndex]);
-
-  const handlePresetSelect = (presetKey: string) => {
-    setActivePreset(presetKey);
-    const values = PRESETS[presetKey] || PRESETS.flat;
-    const newBands = eqBands.map((b, idx) => ({ ...b, value: values[idx] ?? 0 }));
-    setEqBands(newBands);
-    syncEqWithEngine(newBands);
-  };
-
   const matchesSearch = (text: string) => {
     if (!searchQuery.trim()) return true;
     return text.toLowerCase().includes(searchQuery.toLowerCase());
   };
 
-  // Equalizer curve coordinates
-  const eqWidth = 700;
-  const eqHeight = 140;
-  const zeroY = eqHeight / 2;
-
-  const points = eqBands.map((band, idx) => {
-    const x = 50 + (idx / (eqBands.length - 1)) * (eqWidth - 100);
-    const y = zeroY - (band.value / 12) * (eqHeight / 2 - 15);
-    return { x, y, value: band.value, label: band.label };
-  });
-
-  let curvePath = '';
-  if (points.length > 0) {
-    curvePath = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const p0 = points[i === 0 ? 0 : i - 1];
-      const p1 = points[i];
-      const p2 = points[i + 1];
-      const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
-
-      const cp1x = p1.x + (p2.x - p0.x) / 5;
-      const cp1y = p1.y + (p2.y - p0.y) / 5;
-      const cp2x = p2.x - (p3.x - p1.x) / 5;
-      const cp2y = p2.y - (p3.y - p1.y) / 5;
-
-      curvePath += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
-    }
-  }
 
   const LANGUAGE_OPTIONS = [
     { value: 'es-ES', label: 'Español de España (European Spanish)' },
@@ -461,10 +319,6 @@ export const DesktopSettingsView: React.FC = () => {
     { value: 'ja-JP', label: '日本語 (Japanese)' },
   ];
 
-  const PRESET_OPTIONS = Object.keys(PRESET_LABELS).map((k) => ({
-    value: k,
-    label: PRESET_LABELS[k],
-  }));
 
   const isGuestInSession = useSharedSessionStore((s) => s.isInSession && !s.isHost);
   if (isGuestInSession) {
@@ -941,246 +795,14 @@ export const DesktopSettingsView: React.FC = () => {
               </div>
             </div>
 
-            {/* Ecualizador Gráfico */}
-            <div className="pt-2">
-              <div className="flex items-center justify-between mb-3">
-                <div>
-                  <h3 className="text-sm font-bold text-white">Ecualizador de audio</h3>
-                  <p className="text-xs text-[#a7a7a7] mt-0.5">
-                    Ajusta frecuencias y decibelios en tiempo real para todos los reproductores.
-                  </p>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-[#a7a7a7]">Preajuste:</span>
-                  <SpotifyCustomSelect
-                    value={activePreset}
-                    options={PRESET_OPTIONS}
-                    onChange={handlePresetSelect}
-                    minWidth="160px"
-                  />
-                </div>
-              </div>
-
-              {/* Modificadores Rápidos de Sonido (Estilo Spotify UI minimalista, sin emojis) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-4">
-                <button
-                  onClick={() => handlePresetSelect('vocal')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    activePreset === 'vocal'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'vocal' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
-                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/>
-                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                      <line x1="12" y1="19" x2="12" y2="22"/>
-                    </svg>
-                    <span className="text-xs font-bold text-white">Realzar voz</span>
-                  </div>
-                  <span className="block text-[10px] text-[#a7a7a7]">Frecuencias medias y voces claras</span>
-                </button>
-
-                <button
-                  onClick={() => handlePresetSelect('rock')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    activePreset === 'rock'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'rock' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
-                      <path d="M9 18V5l12-2v13"/>
-                      <circle cx="6" cy="18" r="3"/>
-                      <circle cx="18" cy="16" r="3"/>
-                    </svg>
-                    <span className="text-xs font-bold text-white">Realzar música</span>
-                  </div>
-                  <span className="block text-[10px] text-[#a7a7a7]">Armonías, brillo e instrumentos</span>
-                </button>
-
-                <button
-                  onClick={() => handlePresetSelect('bassBoost')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    activePreset === 'bassBoost'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'bassBoost' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
-                      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
-                      <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
-                      <path d="M19.07 4.93a10 10 0 0 1 0 14.14"/>
-                    </svg>
-                    <span className="text-xs font-bold text-white">Graves profundos</span>
-                  </div>
-                  <span className="block text-[10px] text-[#a7a7a7]">Subgraves y pegada potente</span>
-                </button>
-
-                <button
-                  onClick={() => handlePresetSelect('flat')}
-                  className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    activePreset === 'flat'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white shadow'
-                      : 'border-white/10 bg-[#181818] text-[#b3b3b3] hover:border-white/20 hover:text-white'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className={activePreset === 'flat' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'}>
-                      <line x1="3" y1="12" x2="21" y2="12"/>
-                      <circle cx="12" cy="12" r="2.5" fill="currentColor"/>
-                    </svg>
-                    <span className="text-xs font-bold text-white">Plano (Fidelidad)</span>
-                  </div>
-                  <span className="block text-[10px] text-[#a7a7a7]">Respuesta neutra de estudio (0 dB)</span>
-                </button>
-              </div>
+            {/* Efectos de DJ */}
+            <div className="py-3 border-b border-white/5">
+              <DJEffectsSelector />
             </div>
 
-            {/* Equalizer Container Card */}
-            <div className="bg-[#181818] rounded-xl p-6 border border-white/5 shadow-2xl relative select-none">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-sm font-bold text-white font-['SpotifyMixUITitle']">
-                  Curva de ecualización
-                </span>
-                <button
-                  onClick={() => handlePresetSelect('flat')}
-                  className="text-xs text-[#b3b3b3] hover:text-white hover:underline transition-colors cursor-pointer"
-                >
-                  Restablecer a plano (0 dB)
-                </button>
-              </div>
-
-              {/* Flex container: dB Axis Scale + Canvas */}
-              <div className="flex gap-2 items-center">
-                {/* dB Scale Axis */}
-                <div className="h-[180px] flex flex-col justify-between text-[10px] font-mono text-[#727272] select-none text-right shrink-0 w-11 pb-6 pt-1">
-                  <span>+12 dB</span>
-                  <span>+6 dB</span>
-                  <span className="text-[#a7a7a7] font-bold">0 dB</span>
-                  <span>-6 dB</span>
-                  <span>-12 dB</span>
-                </div>
-
-                {/* Interactive Curve Canvas & Draggable Nodes */}
-                <div
-                  ref={eqCanvasRef}
-                  className="relative flex-1 h-[180px] bg-[#121212] rounded-lg p-4 border border-white/10 overflow-hidden shadow-inner"
-                >
-                  {/* Horizontal dB Grid Lines */}
-                  <div className="absolute inset-x-4 top-4 bottom-4 flex flex-col justify-between pointer-events-none">
-                    <div className="border-b border-dashed border-white/10 w-full" />
-                    <div className="border-b border-dashed border-white/10 w-full" />
-                    <div className="border-b border-white/25 w-full" />
-                    <div className="border-b border-dashed border-white/10 w-full" />
-                    <div className="border-b border-dashed border-white/10 w-full" />
-                  </div>
-
-                  {/* SVG Curve Background */}
-                  <svg
-                    viewBox={`0 0 ${eqWidth} ${eqHeight}`}
-                    preserveAspectRatio="none"
-                    className="absolute inset-x-4 inset-y-4 w-[calc(100%-32px)] h-[calc(100%-32px)] pointer-events-none"
-                  >
-                    <defs>
-                      <linearGradient id="eqGradient2" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#1ed760" stopOpacity="0.3" />
-                        <stop offset="100%" stopColor="#1ed760" stopOpacity="0.0" />
-                      </linearGradient>
-                    </defs>
-
-                    {/* Area fill */}
-                    <path
-                      d={`${curvePath} L ${points[points.length - 1].x} ${zeroY} L ${points[0].x} ${zeroY} Z`}
-                      fill="url(#eqGradient2)"
-                    />
-
-                    {/* Frequency Curve */}
-                    <path
-                      d={curvePath}
-                      fill="none"
-                      stroke="#1ed760"
-                      strokeWidth="3.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-
-                  {/* Vertical frequency guide tracks + Draggable Circular Handles */}
-                  <div className="absolute inset-x-4 inset-y-4 flex justify-between pointer-events-none">
-                    {eqBands.map((band, idx) => {
-                      const norm = (band.value + 12) / 24; // 0 to 1
-                      const topPercent = (1 - norm) * 100;
-                      const isDraggingThis = draggingBandIndex === idx;
-
-                      return (
-                        <div
-                          key={idx}
-                          className="relative h-full flex flex-col items-center pointer-events-auto"
-                          style={{ width: `${100 / eqBands.length}%` }}
-                        >
-                          {/* Vertical line track */}
-                          <div
-                            onClick={(e) => {
-                              if (!eqCanvasRef.current) return;
-                              const rect = eqCanvasRef.current.getBoundingClientRect();
-                              const padding = 16;
-                              const availH = rect.height - padding * 2;
-                              const relY = Math.max(0, Math.min(availH, e.clientY - (rect.top + padding)));
-                              const n = 1 - relY / availH;
-                              const db = Math.round(((n * 24) - 12) * 2) / 2;
-                              handleBandChange(idx, Math.max(-12, Math.min(12, db)));
-                            }}
-                            className="absolute inset-y-0 w-1 bg-white/[0.06] hover:bg-white/20 transition-colors cursor-pointer rounded-full"
-                          />
-
-                          {/* Draggable Circle Handle */}
-                          <div
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              setDraggingBandIndex(idx);
-                            }}
-                            onTouchStart={() => setDraggingBandIndex(idx)}
-                            style={{ top: `${topPercent}%` }}
-                            className="absolute -translate-y-1/2 cursor-grab active:cursor-grabbing z-30 group"
-                          >
-                            {/* Floating dB Badge */}
-                            <div
-                              className={`absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded-full bg-black/95 text-[#1ed760] border border-[#1ed760]/40 font-mono font-black text-[10px] whitespace-nowrap shadow-2xl pointer-events-none transition-all ${
-                                isDraggingThis ? 'opacity-100 scale-110' : 'opacity-0 group-hover:opacity-100 scale-95'
-                              }`}
-                            >
-                              {band.value > 0 ? `+${band.value.toFixed(1)}` : band.value.toFixed(1)} dB
-                            </div>
-
-                            {/* Control Node */}
-                            <div
-                              className={`w-5 h-5 rounded-full border-[3px] transition-all duration-150 ${
-                                isDraggingThis
-                                  ? 'scale-125 bg-[#1ed760] border-white shadow-[0_0_14px_#1ed760]'
-                                  : 'bg-white border-[#1ed760] group-hover:scale-125 shadow-md'
-                              }`}
-                            />
-                          </div>
-
-                          {/* Frequency label at bottom */}
-                          <span className="absolute -bottom-6 text-[11px] font-mono text-[#b3b3b3] pointer-events-none font-medium">
-                            {band.label}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center mt-7 pt-3 border-t border-white/5 text-xs text-[#a7a7a7]">
-                <span>Haz clic o arrastra los puntos directamente en la curva para ajustar frecuencias.</span>
-              </div>
+            {/* Ecualizador (estilo Spotify) */}
+            <div className="pt-4">
+              <SpotifyEqualizer variant="desktop" />
             </div>
           </section>
         )}

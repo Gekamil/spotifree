@@ -353,6 +353,46 @@ async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '
   throw new Error('YT search: no confident videoId found');
 }
 
+function normForMatch(s = '') {
+  return String(s)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s*[([].*?[)\]]/g, '')
+    .replace(/\b(feat|ft)\.?\s.*$/i, '')
+    .replace(/[^a-z0-9 ]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Deezer's official 30 s MP3 preview of a song (bytes), or null. */
+async function getDeezerPreview(title, artist) {
+  const t = normForMatch(title);
+  const a = normForMatch(artist);
+  if (!t) return null;
+  const queries = a ? [`artist:"${a}" track:"${t}"`, `${a} ${t}`] : [t];
+  for (const q of queries) {
+    try {
+      const sRes = await fetchWithTimeout(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=5`, { headers: { 'User-Agent': 'Spotifree/1.0' } }, 5000);
+      if (!sRes.ok) continue;
+      const data = await sRes.json();
+      const hits = (data?.data || []).filter((h) => h?.preview);
+      const hit =
+        hits.find((h) => {
+          const ht = normForMatch(h.title);
+          const ha = normForMatch(h.artist?.name);
+          return (ht.includes(t) || t.includes(ht)) && (!a || ha.includes(a) || a.includes(ha));
+        }) || (a ? null : hits[0]);
+      if (!hit) continue;
+      const pRes = await fetchWithTimeout(hit.preview, {}, 8000);
+      if (!pRes.ok) continue;
+      const buf = Buffer.from(await pRes.arrayBuffer());
+      if (buf.length > 60000) return buf;
+    } catch {}
+  }
+  return null;
+}
+
 async function getInvidiousAudioUrl(videoId) {
   for (const base of INVIDIOUS_INSTANCES) {
     try {
@@ -408,28 +448,53 @@ export default async function handler(req, res) {
 
   // 1b. CHUNK ACTION: first ~3 MB of the audio, same-origin + CORS, for in-browser analysis
   // of BPM / key / structure (the decoded chunk usually covers the whole song at 128 kbps).
+  // YouTube blocks most server IPs ("confirm you're not a bot"), so when the full audio is
+  // not reachable we fall back to Deezer's official 30 s preview of the same song: enough
+  // for a real BPM / key / energy measurement (but not for positions inside the song, so it
+  // is flagged with X-Audio-Source: preview).
   if (action === 'chunk') {
     const id = (req.query?.id || '').trim();
     const q = (req.query?.q || '').trim();
-    if (!id && !q) return res.status(400).json({ error: 'Missing id or q' });
+    const title = (req.query?.title || '').trim();
+    const artist = (req.query?.artist || '').trim();
+    if (!id && !q && !title) return res.status(400).json({ error: 'Missing id or q' });
+    res.setHeader('Access-Control-Expose-Headers', 'X-Audio-Source');
     try {
       let videoId = /^[\w-]{11}$/.test(id) ? id : null;
-      if (!videoId) {
+      if (!videoId && q && !title) {
         try {
           videoId = (await resolveViaYouTubeMusic(q))?.videoId || null;
         } catch {
-          videoId = (await resolveViaYouTubeSearch(q))?.videoId || null;
+          try { videoId = (await resolveViaYouTubeSearch(q))?.videoId || null; } catch {}
         }
       }
-      if (!videoId) return res.status(404).json({ error: 'Video not found' });
-      const audioUrl = await getInvidiousAudioUrl(videoId);
-      if (!audioUrl) return res.status(404).json({ error: 'Audio stream not found' });
-      const upstream = await fetchWithTimeout(audioUrl, { headers: { Range: 'bytes=0-3145727' } }, 15000);
-      if (!upstream.ok) return res.status(502).json({ error: `Upstream ${upstream.status}` });
-      const buf = Buffer.from(await upstream.arrayBuffer());
-      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/webm');
-      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
-      return res.status(200).send(buf);
+      if (videoId) {
+        // Bounded: public instances are usually down, don't make the preview fallback wait
+        const audioUrl = await Promise.race([
+          getInvidiousAudioUrl(videoId).catch(() => null),
+          new Promise((r) => setTimeout(() => r(null), 6000)),
+        ]);
+        if (audioUrl) {
+          const upstream = await fetchWithTimeout(audioUrl, { headers: { Range: 'bytes=0-3145727' } }, 15000).catch(() => null);
+          if (upstream && upstream.ok) {
+            const buf = Buffer.from(await upstream.arrayBuffer());
+            if (buf.length > 60000) {
+              res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/webm');
+              res.setHeader('X-Audio-Source', 'full');
+              res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+              return res.status(200).send(buf);
+            }
+          }
+        }
+      }
+      const preview = await getDeezerPreview(title || q, artist);
+      if (preview) {
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('X-Audio-Source', 'preview');
+        res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+        return res.status(200).send(preview);
+      }
+      return res.status(404).json({ error: 'Audio stream not found' });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

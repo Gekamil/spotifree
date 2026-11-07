@@ -502,7 +502,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         {activeTab === 'todo' && (
           <section className="space-y-3 pt-2">
             <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
-              Your own personal DJ
+              Tu DJ personal
             </h2>
             <div
               onClick={() => onSelectPlaylistById('spotify-dj')}

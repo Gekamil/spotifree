@@ -112,12 +112,14 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
   if (already?.tempoSource === 'analysis') return already;
 
   const q = `${track.name || ''} ${track.artists?.[0]?.name || ''}`.trim();
-  const url = videoId && /^[\w-]{11}$/.test(videoId)
-    ? `${API_BASE}/api/audio/chunk?id=${encodeURIComponent(videoId)}`
-    : `${API_BASE}/api/audio/chunk?q=${encodeURIComponent(q)}`;
+  const params = new URLSearchParams({ q, title: track.name || '', artist: track.artists?.[0]?.name || '' });
+  if (videoId && /^[\w-]{11}$/.test(videoId)) params.set('id', videoId);
+  const url = `${API_BASE}/api/audio/chunk?${params.toString()}`;
 
-  // YouTube's media servers fail intermittently (403/5xx): retry once after a short pause
+  // YouTube's media servers fail intermittently (403/5xx): retry once after a short pause.
+  // The server falls back to the song's official 30 s preview when the full audio is blocked.
   let buf: ArrayBuffer | null = null;
+  let isPreview = false;
   let lastErr = '';
   for (let attempt = 0; attempt < 2 && !buf; attempt++) {
     if (attempt > 0) await new Promise((r) => setTimeout(r, 2500));
@@ -125,6 +127,7 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
       const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(30000) : undefined });
       if (!res.ok) {
         lastErr = `chunk ${res.status}`;
+        if (res.status === 404) break;
         continue;
       }
       const b = await res.arrayBuffer();
@@ -132,6 +135,7 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
         lastErr = 'chunk too small';
         continue;
       }
+      isPreview = res.headers.get('X-Audio-Source') === 'preview';
       buf = b;
     } catch (e: any) {
       lastErr = e?.message || 'network';
@@ -149,7 +153,7 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
   const r = await runAnalysis(channels, audio.sampleRate);
   const trackDur = track.duration_ms ? track.duration_ms / 1000 : 0;
   // The chunk may not reach the end of long songs: only keep outro info if it does
-  const coversEnd = !trackDur || r.durationSec >= trackDur - 4;
+  const coversEnd = !isPreview && (!trackDur || r.durationSec >= trackDur - 4);
   const prev = getTrackAnalysis(id);
   const tempoOk = r.tempoConfidence >= 0.12 || !prev;
   let tempo = tempoOk ? r.tempo : prev!.tempo;
@@ -184,6 +188,8 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
     }
   }
   if (r.tempoConfidence < 0.2) gridUnreliable = true;
+  // A 30 s preview is cut from the middle of the song: its times are not song times
+  if (isPreview) gridUnreliable = true;
 
   const data: TrackAnalysisData = {
     tempo,
@@ -192,8 +198,9 @@ async function doAnalyze(track: AnalyzableTrack, id: string, videoId?: string | 
     energy: r.energy,
     beatOffsetSec: gridUnreliable ? undefined : r.beatOffsetSec,
     downbeatOffsetSec: gridUnreliable ? undefined : r.downbeatOffsetSec,
-    audioStartSec: r.audioStartSec,
-    introEndSec: r.introEndSec,
+    audioStartSec: isPreview ? undefined : r.audioStartSec,
+    introEndSec: isPreview ? undefined : r.introEndSec,
+    audioSource: isPreview ? 'preview' : 'full',
     outroStartSec: coversEnd ? r.outroStartSec : undefined,
     musicEndSec: coversEnd ? r.musicEndSec : undefined,
     durationSec: r.durationSec,

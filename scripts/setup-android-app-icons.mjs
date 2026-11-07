@@ -60,7 +60,8 @@ public class MainActivity extends BridgeActivity {
   }
 }
 
-// 3. Adaptive icons: foreground = full-bleed official icon inset to the 72dp visible area
+// 3. Adaptive icons: foreground = the maskable icon (logo already padded on its background,
+//    like the real Spotify icon) inset 10% so the logo is ~60% of the visible icon
 const res = path.join(androidMain, 'res');
 const anydpi = path.join(res, 'mipmap-anydpi-v26');
 const xxxhdpi = path.join(res, 'mipmap-xxxhdpi');
@@ -78,7 +79,7 @@ for (const icon of ICONS) {
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@android:color/black" />
     <foreground>
-        <inset android:drawable="@mipmap/${name}_fg" android:inset="16.67%" />
+        <inset android:drawable="@mipmap/${name}_fg" android:inset="10%" />
     </foreground>
 </adaptive-icon>
 `,

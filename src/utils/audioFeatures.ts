@@ -131,6 +131,8 @@ export interface TrackAnalysisData {
   durationSec?: number;
   /** Relative difference between our measured tempo and Deezer's (when both exist) */
   tempoRelErr?: number;
+  /** 'full' = the song's own audio; 'preview' = official 30 s clip (BPM/key only, no positions) */
+  audioSource?: 'full' | 'preview';
   analyzedAt: number;
 }
 

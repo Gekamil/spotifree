@@ -224,7 +224,8 @@ function candidatesFor(t: TempoRelation, k: KeyRelation, energyUp: number): Cand
     }
   } else if (t === 'close') {
     list.push(C('automatica', 2, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'mezcla corta de 2 compases para que la pequeña diferencia de tempo no se note', 3));
-    list.push(C('fundido', 2, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido', 'fundido cruzado sencillo', 2.5));
+    list.push(C('fundido', 2, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido', 'fundido cruzado sencillo', 1.2));
+    list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión y B entra de golpe', 1 + up * 4, true));
     list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte limpio justo en el primer tiempo del compás', 2 + up * 3, true));
     list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera hasta soltar B', 1.2 + up * 2, true));
   } else if (t === 'moderate') {
@@ -291,7 +292,7 @@ export function planTransition(
     let w = c.weight * intensityBias(flavour, c.intensity);
     if (last && last.preset === c.preset) w *= 0.12;
     else if (last3.includes(c.preset)) w *= 0.55;
-    if (c.intensity === 'wow') w *= wowRecently ? 0.25 : wowStarved ? 1.9 : 1;
+    if (c.intensity === 'wow') w *= wowRecently ? 0.4 : wowStarved ? 2.2 : 1.15;
     // If the BPM is only estimated, long overlapping blends are risky: prefer short moves
     if (!a.tempoReliable || !b.tempoReliable) {
       if (c.compases >= 4 && c.preset !== 'crescendo') w *= 0.5;
@@ -376,6 +377,24 @@ export interface TransitionGains {
 }
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+type GainsConfig = Pick<DJTransitionConfig, 'preset' | 'volumeEnvelope' | 'eqMode' | 'fxMode' | 'tempoA'>;
+
+/**
+ * Point of the transition (0..1) where song B "takes over" (the drop / the swap). The
+ * volume shapes and the FX layers (impact, riser, roll) are all built around it, so the
+ * moment is felt: tension before, impact on it.
+ */
+export function transitionSwapPoint(config: GainsConfig): number {
+  const preset = config.preset;
+  const isCut = config.volumeEnvelope === 'corte_directo' || preset === 'corte' || config.eqMode === 'corte_instantaneo';
+  if (config.fxMode === 'repeticion_loop' || preset === 'beat_roll') return 0.97;
+  if (config.fxMode === 'freno_vinilo' || preset === 'freno_vinilo') return 0.92;
+  if (config.fxMode === 'eco' || preset === 'eco_out') return 0.45;
+  if (preset === 'crescendo') return 0.85;
+  if (isCut) return preset === 'corte' ? 0.94 : 0.5;
+  return 0.5;
+}
 
 /**
  * Volume/rate of each deck at progress `p` (0..1) of a transition lasting `durationSec`.
@@ -484,7 +503,101 @@ export function computeTransitionGains(
     if (p > 0.4) out *= 0.7 + 0.3 * Math.sin(((elapsed % (beat / 2)) / (beat / 2)) * 2 * Math.PI);
   }
 
+  // 5. Tension before the drop: on build-ups the music "breathes in" for the last half beat
+  // before B lands (the classic DJ gap), so the swap is felt instead of being a plain fade.
+  if (preset === 'crescendo' || preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+    const swap = transitionSwapPoint(config);
+    const gap = Math.min(0.08, (beat * 0.5) / Math.max(0.5, durationSec));
+    if (p >= swap - gap && p < swap) {
+      out *= 0.12;
+      inn *= 0.12;
+    }
+  }
+
   return { outVol: clamp01(out), inVol: clamp01(inn), rateOut };
+}
+
+// ---------------------------------------------------------------------------
+// Synthesized DJ FX layered over the songs (YouTube decks cannot be filtered, so these
+// layers are what make a transition sound like a DJ and not like a fade).
+// ---------------------------------------------------------------------------
+export type TransitionFXKind = 'riser' | 'roll' | 'impact' | 'reverse' | 'downlifter' | 'brake';
+
+export interface TransitionFXLayer {
+  kind: TransitionFXKind;
+  /** start, seconds from the beginning of the transition */
+  at: number;
+  /** length in seconds (impact: decay length) */
+  dur: number;
+  /** 0..1.4 relative level */
+  level: number;
+}
+
+export function transitionFXLayers(
+  config: GainsConfig & Pick<DJTransitionConfig, 'intensity'>,
+  durationSec: number
+): TransitionFXLayer[] {
+  const preset = config.preset;
+  if (preset === 'fundido') return [];
+  const tempo = config.tempoA && config.tempoA > 40 && config.tempoA < 240 ? config.tempoA : 120;
+  const beat = 60 / tempo;
+  const d = Math.max(1, durationSec);
+  const swapAt = transitionSwapPoint(config) * d;
+  const intensity = config.intensity || 'smooth';
+  const k = intensity === 'wow' ? 1.15 : intensity === 'basic' ? 0.7 : 1;
+  const layers: TransitionFXLayer[] = [];
+  const reverseInto = (t: number, level: number) => {
+    const len = Math.min(beat * 2, t);
+    if (len > 0.2) layers.push({ kind: 'reverse', at: t - len, dur: len, level: level * k });
+  };
+  const impact = (t: number, level: number) => layers.push({ kind: 'impact', at: t, dur: 1.6, level: level * k });
+
+  if (preset === 'crescendo') {
+    layers.push({ kind: 'riser', at: 0, dur: swapAt, level: 1 * k });
+    layers.push({ kind: 'roll', at: swapAt * 0.45, dur: swapAt * 0.55, level: 0.9 * k });
+    impact(swapAt, 1);
+  } else if (preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+    layers.push({ kind: 'roll', at: 0.25 * d, dur: swapAt - 0.25 * d, level: 1 * k });
+    layers.push({ kind: 'riser', at: 0.5 * d, dur: swapAt - 0.5 * d, level: 0.6 * k });
+    impact(swapAt, 1);
+  } else if (preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
+    layers.push({ kind: 'brake', at: 0.55 * d, dur: swapAt - 0.55 * d, level: 1 * k });
+    impact(swapAt, 0.8);
+  } else if (preset === 'eco_out' || config.fxMode === 'eco') {
+    layers.push({ kind: 'downlifter', at: 0.2 * d, dur: 0.6 * d, level: 0.8 * k });
+    reverseInto(swapAt, 0.5);
+  } else if (preset === 'corte') {
+    reverseInto(swapAt, 0.9);
+    impact(swapAt, 0.85);
+  } else if (preset === 'filtro') {
+    layers.push({ kind: 'riser', at: 0, dur: swapAt, level: 0.75 * k });
+    impact(swapAt, 0.6);
+  } else if (preset === 'repeticion_ritmo' || preset === 'distorsion_wash' || config.fxMode === 'distorsion_wash') {
+    layers.push({ kind: 'riser', at: 0, dur: 0.9 * d, level: 0.8 * k });
+    impact(0.9 * d, 0.7);
+  } else if (preset === 'mezcla_voces') {
+    reverseInto(swapAt, 0.5);
+  } else {
+    // Blends (automática, relevo de graves, mezcla larga): a reverse cymbal into the swap and
+    // a soft low "thump" when B takes the bass.
+    reverseInto(swapAt, 0.7);
+    impact(swapAt, 0.45);
+  }
+  return layers.filter((l) => l.dur > 0.05 && l.at >= 0 && l.at < d + 2);
+}
+
+/** User setting "Efectos de DJ": off / soft / normal / intense. */
+export type DJFxLevel = 'off' | 'soft' | 'normal' | 'intense';
+export const DJ_FX_LEVEL_KEY = 'spotifree_dj_fx_level';
+export function getDJFxLevel(): DJFxLevel {
+  try {
+    const v = typeof window !== 'undefined' ? window.localStorage.getItem(DJ_FX_LEVEL_KEY) : null;
+    if (v === 'off' || v === 'soft' || v === 'normal' || v === 'intense') return v;
+  } catch {}
+  return 'normal';
+}
+export function djFxLevelGain(level: DJFxLevel = getDJFxLevel()): number {
+  return level === 'off' ? 0 : level === 'soft' ? 0.55 : level === 'intense' ? 1.45 : 1;
 }
 
 /** Synthesized layer that is allowed on top of the music (only musical, noise-based risers). */

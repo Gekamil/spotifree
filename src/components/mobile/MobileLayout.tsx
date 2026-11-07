@@ -557,7 +557,7 @@ export const MobileLayout: React.FC = () => {
                 {/* YOUR OWN PERSONAL DJ CARD (Photo 3) */}
                 <div className="px-4 mb-6">
                   <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2.5">
-                    Your own personal DJ
+                    Tu DJ personal
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}

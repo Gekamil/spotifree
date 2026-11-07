@@ -620,6 +620,217 @@ export function triggerAuxiliaryTransitionFX(
   return null;
 }
 
+// ---------------------------------------------------------------------------
+// DJ transition layers (riser, snare roll, impact, reverse cymbal, downlifter, brake).
+// Noise-based and short, mixed on top of the songs at a musical level.
+// ---------------------------------------------------------------------------
+export interface FXLayerSpec {
+  kind: 'riser' | 'roll' | 'impact' | 'reverse' | 'downlifter' | 'brake';
+  at: number;
+  dur: number;
+  level: number;
+}
+
+const noiseCache = new WeakMap<BaseAudioContext, AudioBuffer>();
+function getNoise(ctx: BaseAudioContext): AudioBuffer {
+  let b = noiseCache.get(ctx);
+  if (b) return b;
+  const len = Math.floor(ctx.sampleRate * 2);
+  b = ctx.createBuffer(1, len, ctx.sampleRate);
+  const d = b.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+  noiseCache.set(ctx, b);
+  return b;
+}
+
+/**
+ * Schedules the transition layers. `startTime` is the AudioContext time of progress 0.
+ * Returns a handle that stops everything still sounding.
+ */
+export function playTransitionLayers(
+  ctx: AudioContext,
+  layers: FXLayerSpec[],
+  bpm: number,
+  masterVol: number,
+  startTime?: number
+): ActiveAuxFX | null {
+  if (!ctx || ctx.state === 'closed' || !layers.length || masterVol <= 0) return null;
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+  const t0 = startTime !== undefined ? startTime : ctx.currentTime;
+  const beat = 60 / (bpm > 40 && bpm < 240 ? bpm : 120);
+  const bus = ctx.createGain();
+  bus.gain.value = Math.max(0, Math.min(1.5, masterVol));
+  // Gentle glue so stacked layers never clip on top of the music
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -14;
+  comp.ratio.value = 4;
+  comp.attack.value = 0.003;
+  comp.release.value = 0.2;
+  bus.connect(comp);
+  comp.connect(ctx.destination);
+  const sources: AudioScheduledSourceNode[] = [];
+  const noiseSrc = (at: number, stop: number) => {
+    const s = ctx.createBufferSource();
+    s.buffer = getNoise(ctx);
+    s.loop = true;
+    s.start(at, Math.random() * 1.5);
+    s.stop(stop);
+    sources.push(s);
+    return s;
+  };
+
+  for (const l of layers) {
+    const at = t0 + l.at;
+    const end = at + l.dur;
+    const lv = Math.max(0.001, l.level);
+    try {
+      if (l.kind === 'riser') {
+        const s = noiseSrc(at, end + 0.05);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.Q.value = 1.4;
+        bp.frequency.setValueAtTime(300, at);
+        bp.frequency.exponentialRampToValueAtTime(9000, end);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.16 * lv, end - 0.03);
+        g.gain.linearRampToValueAtTime(0.0001, end + 0.04);
+        s.connect(bp);
+        bp.connect(g);
+        g.connect(bus);
+      } else if (l.kind === 'roll') {
+        // Snare roll that speeds up (1/4 → 1/8 → 1/16) and grows, like a build-up
+        const s = noiseSrc(at, end + 0.1);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 900;
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'peaking';
+        bp.frequency.value = 2400;
+        bp.gain.value = 6;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0, at);
+        let t = at;
+        while (t < end - 0.01) {
+          const q = (t - at) / Math.max(0.01, l.dur);
+          const step = q < 0.5 ? beat / 2 : q < 0.8 ? beat / 4 : beat / 8;
+          const amp = (0.05 + 0.11 * q) * lv;
+          g.gain.setValueAtTime(amp, t);
+          g.gain.exponentialRampToValueAtTime(0.0005, t + Math.min(0.09, step * 0.8));
+          t += step;
+        }
+        g.gain.setValueAtTime(0, end);
+        s.connect(hp);
+        hp.connect(bp);
+        bp.connect(g);
+        g.connect(bus);
+      } else if (l.kind === 'impact') {
+        // Sub drop + a body thump (audible on phone speakers) + a washy crash tail
+        const sub = ctx.createOscillator();
+        sub.type = 'sine';
+        sub.frequency.setValueAtTime(78, at);
+        sub.frequency.exponentialRampToValueAtTime(34, at + 0.9);
+        const sg = ctx.createGain();
+        sg.gain.setValueAtTime(0.0001, at);
+        sg.gain.exponentialRampToValueAtTime(0.5 * lv, at + 0.012);
+        sg.gain.exponentialRampToValueAtTime(0.0001, at + l.dur);
+        sub.connect(sg);
+        sg.connect(bus);
+        sub.start(at);
+        sub.stop(at + l.dur + 0.05);
+        sources.push(sub);
+
+        const body = ctx.createOscillator();
+        body.type = 'triangle';
+        body.frequency.setValueAtTime(160, at);
+        body.frequency.exponentialRampToValueAtTime(70, at + 0.18);
+        const bg = ctx.createGain();
+        bg.gain.setValueAtTime(0.0001, at);
+        bg.gain.exponentialRampToValueAtTime(0.22 * lv, at + 0.008);
+        bg.gain.exponentialRampToValueAtTime(0.0001, at + 0.3);
+        body.connect(bg);
+        bg.connect(bus);
+        body.start(at);
+        body.stop(at + 0.35);
+        sources.push(body);
+
+        const n = noiseSrc(at, at + l.dur + 0.1);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.value = 3500;
+        const ng = ctx.createGain();
+        ng.gain.setValueAtTime(0.0001, at);
+        ng.gain.exponentialRampToValueAtTime(0.1 * lv, at + 0.01);
+        ng.gain.exponentialRampToValueAtTime(0.0001, at + l.dur);
+        n.connect(hp);
+        hp.connect(ng);
+        ng.connect(bus);
+      } else if (l.kind === 'reverse') {
+        // Reverse cymbal: swells up and stops dead on the swap
+        const s = noiseSrc(at, end + 0.01);
+        const hp = ctx.createBiquadFilter();
+        hp.type = 'highpass';
+        hp.frequency.setValueAtTime(2500, at);
+        hp.frequency.exponentialRampToValueAtTime(6000, end);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.13 * lv, end - 0.01);
+        g.gain.linearRampToValueAtTime(0, end);
+        s.connect(hp);
+        hp.connect(g);
+        g.connect(bus);
+      } else if (l.kind === 'downlifter') {
+        const s = noiseSrc(at, end + 0.05);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.Q.value = 1.2;
+        bp.frequency.setValueAtTime(7000, at);
+        bp.frequency.exponentialRampToValueAtTime(180, end);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.13 * lv, at);
+        g.gain.exponentialRampToValueAtTime(0.0001, end);
+        s.connect(bp);
+        bp.connect(g);
+        g.connect(bus);
+      } else if (l.kind === 'brake') {
+        // Turntable stopping: a low whoosh falling in pitch while the song slows down
+        const s = noiseSrc(at, end + 0.05);
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass';
+        lp.Q.value = 6;
+        lp.frequency.setValueAtTime(2200, at);
+        lp.frequency.exponentialRampToValueAtTime(60, end);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.0001, at);
+        g.gain.exponentialRampToValueAtTime(0.18 * lv, at + Math.min(0.15, l.dur / 3));
+        g.gain.exponentialRampToValueAtTime(0.0001, end);
+        s.connect(lp);
+        lp.connect(g);
+        g.connect(bus);
+      }
+    } catch (err) {
+      console.warn('[djAudioNodes] layer failed', l.kind, err);
+    }
+  }
+
+  return {
+    stop: () => {
+      const now = ctx.currentTime;
+      try {
+        bus.gain.cancelScheduledValues(now);
+        bus.gain.setValueAtTime(bus.gain.value, now);
+        bus.gain.linearRampToValueAtTime(0, now + 0.05);
+      } catch {}
+      setTimeout(() => {
+        for (const s of sources) {
+          try { s.stop(); } catch {}
+        }
+        try { bus.disconnect(); comp.disconnect(); } catch {}
+      }, 80);
+    },
+  };
+}
+
 /**
  * Stops any actively running auxiliary transition effect.
  */

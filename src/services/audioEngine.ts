@@ -10,8 +10,9 @@ import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
+import { effectiveEqGains } from '../utils/eqSettings';
 import { analyzeTrackAudio } from './trackAnalysisService';
-import { auxFXForPreset, computeTransitionGains, recordTransitionUsed } from './djMixPlanner';
+import { computeTransitionGains, djFxLevelGain, recordTransitionUsed, transitionFXLayers } from './djMixPlanner';
 import {
   createDJChannelStrip,
   scheduleBassSwap,
@@ -20,7 +21,7 @@ import {
   scheduleBeatDelay,
   scheduleLoopStutter,
   cancelScheduledAutomations,
-  triggerAuxiliaryTransitionFX,
+  playTransitionLayers,
   stopAuxiliaryTransitionFX,
   type DJChannelStrip,
   type ActiveAuxFX,
@@ -120,6 +121,7 @@ class AudioEngine {
   private crossfadeInterval: number | null = null;
   private auditionInterval: number | null = null;
   private isAuditioning = false;
+  private auditionRestore: { videoId: string; sec: number; playerIndex: 0 | 1 } | null = null;
   private lastEndedTimestamp = 0;
   private consecutiveEndedCount = 0;
   public lastCrossfadeFinishTime = 0;
@@ -653,18 +655,12 @@ class AudioEngine {
         } else {
           isDeckBReady = true;
           lastTick = now;
-          // Only musical synthesized layers (a soft noise riser) are added on top of the songs;
-          // the old oscillator tones (saw/square/triangle buzz) made transitions sound broken.
-          const aux = djConfig ? auxFXForPreset(djConfig.preset) : null;
-          if (this.activeEngine === 'youtube' && this.audioContext && aux) {
+          // DJ layers on top of the songs (riser, roll, impact on the swap...). YouTube decks
+          // can't be filtered, so these are what make the transition feel like a DJ mix.
+          if (djConfig && this.audioContext) {
             this.stopAuxiliaryTransitionFX();
-            this.activeAuxFX = triggerAuxiliaryTransitionFX(
-              this.audioContext,
-              aux,
-              crossfadeSec,
-              safeTempo,
-              masterVolume
-            );
+            const layers = transitionFXLayers(djConfig, crossfadeSec);
+            this.activeAuxFX = playTransitionLayers(this.audioContext, layers, safeTempo, masterVolume * djFxLevelGain());
           }
         }
       }
@@ -1071,14 +1067,7 @@ class AudioEngine {
 
     // Trigger auxiliary DJ preset effect during the mix window
     this.stopAuxiliaryTransitionFX();
-    this.activeAuxFX = triggerAuxiliaryTransitionFX(
-      ctx,
-      config.preset,
-      transitionDur,
-      safeTempo,
-      1.0,
-      now + leadInSec
-    );
+    this.activeAuxFX = playTransitionLayers(ctx, transitionFXLayers(config, transitionDur), safeTempo, djFxLevelGain(), now + leadInSec);
 
     this.auditionInterval = window.setInterval(() => {
       if (!this.isAuditioning) {
@@ -1113,6 +1102,23 @@ class AudioEngine {
     onEnded: () => void
   ): Promise<boolean> {
     this.stopTransitionAudition();
+
+    // Remember where the main song was, so it can be put back after the preview
+    try {
+      const mainSec =
+        this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function'
+          ? Number(this.ytPlayer.getCurrentTime()) || 0
+          : (usePlayerStore.getState().progressMs || 0) / 1000;
+      this.auditionRestore =
+        this.activeEngine === 'youtube' && this.currentVideoId
+          ? { videoId: this.currentVideoId, sec: mainSec, playerIndex: this.activeYtIndex }
+          : null;
+    } catch {
+      this.auditionRestore = null;
+    }
+    // A real pause (store + explicit flag) so no watchdog / keep-alive resumes the main song
+    // on top of the preview
+    if (usePlayerStore.getState().isPlaying) this.pause();
 
     // Pause regular playback so audio doesn't clash
     if (this.crossfadeInterval !== null) {
@@ -1229,19 +1235,15 @@ class AudioEngine {
       if (this.audioContext.state === 'suspended') {
         this.audioContext.resume().catch(() => {});
       }
-      // Only musical synthesized layers (noise riser), exactly like the live mix
+      // Same DJ layers as the live mix
       this.stopAuxiliaryTransitionFX();
-      const aux = auxFXForPreset(config.preset);
-      if (aux) {
-        this.activeAuxFX = triggerAuxiliaryTransitionFX(
-          this.audioContext,
-          aux,
-          transitionDur,
-          safeTempo,
-          1.0,
-          this.audioContext.currentTime + leadInSec
-        );
-      }
+      this.activeAuxFX = playTransitionLayers(
+        this.audioContext,
+        transitionFXLayers(config, transitionDur),
+        safeTempo,
+        djFxLevelGain(),
+        this.audioContext.currentTime + leadInSec
+      );
     }
 
     let startedB = false;
@@ -1302,11 +1304,13 @@ class AudioEngine {
   }
 
   public stopTransitionAudition(): void {
+    const wasAuditioning = this.isAuditioning;
     this.isAuditioning = false;
     if (this.auditionInterval !== null) {
       clearInterval(this.auditionInterval);
       this.auditionInterval = null;
     }
+    if (!wasAuditioning) return;
     this.stopAuxiliaryTransitionFX();
     if (this.audioContext) {
       const now = this.audioContext.currentTime;
@@ -1325,10 +1329,25 @@ class AudioEngine {
     for (const a of this.audios) {
       if (a) {
         try {
-          a.volume = 0;
           a.pause();
+          a.volume = this.getEffectiveVolume();
         } catch {}
       }
+    }
+    // Put the main song back where it was (paused), so "play" continues it
+    const restore = this.auditionRestore;
+    this.auditionRestore = null;
+    if (restore) {
+      const p = this.ytPlayers[restore.playerIndex];
+      this.activeYtIndex = restore.playerIndex;
+      try {
+        if (p && typeof p.cueVideoById === 'function') {
+          p.cueVideoById({ videoId: restore.videoId, startSeconds: Math.max(0, restore.sec) });
+        }
+        const { isMuted } = usePlayerStore.getState();
+        if (p && typeof p.setVolume === 'function') p.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
+      } catch {}
+      usePlayerStore.getState().setProgress(Math.max(0, restore.sec) * 1000);
     }
   }
 
@@ -1956,8 +1975,7 @@ class AudioEngine {
 
         let savedBands: number[] = [0, 0, 0, 0, 0, 0];
         try {
-          const raw = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_eq_bands') : null;
-          if (raw) savedBands = JSON.parse(raw);
+          if (typeof window !== 'undefined') savedBands = effectiveEqGains();
         } catch {}
 
         let lastNode: AudioNode = this.masterGain;
@@ -2792,6 +2810,20 @@ class AudioEngine {
         this.filterNodes[index].gain.value = gainDb;
       }
     }
+  }
+
+  /** Applies EQ gains (dB per band) without touching the saved settings. */
+  public applyEqualizerGains(gains: number[]) {
+    this.initAudioContext();
+    if (this.audioContext && this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
+    gains.forEach((g, i) => this.setEqualizerBand(i, g));
+  }
+
+  /** True when the current song plays through the app's own audio path (EQ and DJ filters apply). */
+  public isProcessingAudio(): boolean {
+    return this.activeEngine === 'html5';
   }
 
   public setVolumeNormalization(enabled: boolean) {

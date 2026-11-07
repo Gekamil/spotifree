@@ -174,7 +174,11 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       waveConfigs.forEach((cfg) => {
         // Compute points along the organic wave
         const points: Array<{ x: number; y: number }> = [];
-        for (let x = 0; x <= width; x += 8) {
+        // Sample up to the exact right edge (the last sample used to stop a few px short,
+        // leaving a faint rectangle where the fill was closed straight down to the corner)
+        const step = 8;
+        for (let i = 0, n = Math.ceil(width / step); i <= n; i++) {
+          const x = Math.min(width, i * step);
           const wave1 = Math.sin(x * cfg.frequency + time + cfg.speedOffset) * cfg.amplitude;
           const wave2 = Math.cos(x * (cfg.frequency * 1.8) - time * 0.8 + cfg.phaseShift) * (cfg.amplitude * 0.45);
           points.push({ x, y: cfg.yCenter + wave1 + wave2 });

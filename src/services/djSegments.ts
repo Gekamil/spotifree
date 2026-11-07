@@ -11,6 +11,7 @@ import { useStatsStore } from '../store/useStatsStore';
 import { getCustomLikedSongs } from '../utils/userStorage';
 import { filterMusicTracksOnly, isNonMusicOrNoise } from '../utils/trackFilter';
 import { searchSpotify } from './spotifyApi';
+import { useLanguageStore } from '../utils/i18n';
 
 export type DJSegmentKind = 'heavy-rotation' | 'throwback' | 'artist-focus' | 'discovery' | 'liked' | 'request';
 
@@ -116,9 +117,41 @@ function topArtistsOf(entries: LibraryEntry[], limit = 6): string[] {
 // ---------------------------------------------------------------------------
 // Local DJ lines (used instantly; the AI may replace them when it answers in time)
 // ---------------------------------------------------------------------------
+function buildSegmentIntroEn(seg: Pick<DJSegment, 'kind' | 'focusArtist'>, song: string, artist: string, userName: string, isFirst: boolean): string {
+  const hey = isFirst
+    ? pick([`Hey${userName ? ` ${userName}` : ''}! Your DJ here.`, `What's up${userName ? ` ${userName}` : ''}! Your DJ is in the booth.`, `Hi${userName ? ` ${userName}` : ''}! Let's go.`]) + ' '
+    : '';
+  const s = song && artist ? `${song} by ${artist}` : song || artist;
+  const focus = seg.focusArtist || artist;
+  switch (seg.kind) {
+    case 'heavy-rotation':
+      return hey + pick([`Starting with what you've had on repeat lately. ${s}.`, `You've got this one on loop and I don't blame you. Here's ${s}.`, `${userName ? `${userName}, ` : ''}let's go with your current essentials. ${s}.`]);
+    case 'throwback':
+      return hey + pick([`Now a trip back in time. ${s}, you haven't played it in a while.`, `Remember this one? It's been ages. ${s}.`, `Digging up some gems you forgot about. Starting with ${s}.`]);
+    case 'artist-focus':
+      return hey + pick([`You've been really into ${focus} lately. Here's ${song || 'one of theirs'}.`, `A block dedicated to ${focus}. Kicking off with ${song || 'a banger'}.`, `A little more ${focus}, I know you love it. ${song}.`]);
+    case 'discovery':
+      return hey + pick([`Here's something new that fits you. Check out ${s}.`, `Time to discover. If you like what you hear, this will click. ${s}.`, `Something that's not in your library yet. ${s}. Give it a chance.`]);
+    case 'liked':
+      return hey + pick([`Pulling from your Liked Songs. ${s}.`, `Songs you saved for a reason. Starting with ${s}.`]);
+    default:
+      return hey + (s ? `Here's ${s}.` : "Let's go!");
+  }
+}
+
+export const SEGMENT_TITLES_EN: Record<DJSegmentKind, string> = {
+  'heavy-rotation': 'Your heavy rotation',
+  throwback: 'Throwbacks',
+  'artist-focus': 'More by',
+  discovery: 'Discoveries for you',
+  liked: 'From your Liked Songs',
+  request: 'Your request',
+};
+
 export function buildSegmentIntro(seg: Pick<DJSegment, 'kind' | 'focusArtist'>, first: Track | undefined, userName: string, isFirst: boolean): string {
   const song = first?.name ? first.name.replace(/\s*[([].*?[)\]]\s*/g, ' ').replace(/\s+-\s+.*$/, '').trim() : '';
   const artist = first?.artists?.[0]?.name || '';
+  if (useLanguageStore.getState().language === 'en') return buildSegmentIntroEn(seg, song, artist, userName, isFirst);
   const hi = userName ? `${userName}, ` : '';
   const hey = isFirst
     ? pick([`¡Hola${userName ? ` ${userName}` : ''}! Aquí tu DJ.`, `¡Muy buenas${userName ? ` ${userName}` : ''}! Tu DJ en cabina.`, `¡Hey${userName ? ` ${userName}` : ''}! Empezamos.`]) + ' '
