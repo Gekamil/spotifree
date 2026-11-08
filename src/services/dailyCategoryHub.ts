@@ -139,16 +139,28 @@ export function curatedShelvesForDay(categoryId: string, day = todayKey()): HubS
 export function searchesForDay(categoryId: string, day = todayKey()) {
   const list = CATEGORY_SEARCHES[categoryId] || CATEGORY_SEARCHES['cat-musica'];
   const start = hashString(day) % list.length;
-  return [list[start], list[(start + 1) % list.length]].filter((x, i, a) => a.indexOf(x) === i);
+  // Four of the category's searches each day (more playlists, like Spotify's category pages)
+  return [0, 1, 2, 3].map((k) => list[(start + k) % list.length]).filter((x, i, a) => a.indexOf(x) === i);
 }
 
-const CACHE_PREFIX = 'spotifree_cat_hub_';
+const CACHE_PREFIX = 'spotifree_cat_hub2_';
+
+const artistSlug = (name: string) =>
+  name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 async function liveShelves(categoryId: string, day: string, exclude: Set<string>): Promise<HubShelf[]> {
   const shelves: HubShelf[] = [];
-  for (const s of searchesForDay(categoryId, day)) {
+  const artists = new Map<string, HubCard>();
+  const results = await Promise.all(searchesForDay(categoryId, day).map((s) => searchSpotify(s.q).catch(() => null)));
+  for (const [idx, s] of searchesForDay(categoryId, day).entries()) {
     try {
-      const data = await searchSpotify(s.q);
+      const data: any = results[idx];
+      // Artists of the category (round cards; they open the artist page)
+      for (const a of data?.artists?.items || []) {
+        const image = a?.images?.[0]?.url;
+        if (!a?.name || !image || artists.has(artistSlug(a.name))) continue;
+        artists.set(artistSlug(a.name), { id: `art-${artistSlug(a.name)}`, title: a.name, subtitle: 'Artista', image });
+      }
       const items: any[] = data?.playlists?.items || [];
       const cards: HubCard[] = [];
       for (const p of items) {
@@ -168,6 +180,9 @@ async function liveShelves(categoryId: string, day: string, exclude: Set<string>
       if (cards.length >= 3) shelves.push({ title: s.title, cards: seededShuffle(cards, hashString(`${day}:${s.q}`)) });
     } catch {}
   }
+  // "Artistas populares" right after the first live shelf, like Spotify's category pages
+  const artistCards = seededShuffle([...artists.values()], hashString(`${day}:artists:${categoryId}`)).slice(0, 14);
+  if (artistCards.length >= 4) shelves.splice(Math.min(1, shelves.length), 0, { title: 'Artistas populares', cards: artistCards });
   return shelves;
 }
 

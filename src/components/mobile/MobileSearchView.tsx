@@ -139,9 +139,9 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                       alt={card.title}
                       loading="lazy"
                       onError={handleImageError}
-                      className="w-[132px] h-[132px] rounded-md object-cover shadow-lg bg-[#282828]"
+                      className={`w-[132px] h-[132px] ${card.subtitle === 'Artista' ? 'rounded-full' : 'rounded-md'} object-cover shadow-lg bg-[#282828]`}
                     />
-                    <p className="mt-2 text-[13px] font-semibold text-white line-clamp-1">{card.title}</p>
+                    <p className={`mt-2 text-[13px] font-semibold text-white line-clamp-1 ${card.subtitle === 'Artista' ? 'text-center' : ''}`}>{card.title}</p>
                     <p className="text-xs text-[#a7a7a7] line-clamp-2 leading-snug">{card.subtitle}</p>
                   </button>
                 ))}
