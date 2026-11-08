@@ -15,7 +15,7 @@
 import { create } from 'zustand';
 import type { Playlist, Track } from '../types/spotify';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { useSpotifyDataStore, type DynamicShelf } from '../store/useSpotifyDataStore';
+import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../store/useSpotifyDataStore';
 import { useStatsStore } from '../store/useStatsStore';
 import { getRecentSearches } from '../utils/recentSearches';
 
@@ -558,6 +558,20 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
   const userName = useSpotifyDataStore.getState().user?.display_name || '';
   const randDay = rng(hash(`${uid()}:${day}`));
 
+  // Names already on Home / in the library (Spotify's own "Mix diario 1-6", "Descubrimiento
+  // semanal", "Mix de X"…): ours never take the same name, so nothing looks repeated
+  const store = useSpotifyDataStore.getState();
+  const homeShelves =
+    store.dynamicShelves && store.dynamicShelves.length
+      ? store.dynamicShelves
+      : buildDynamicShelves(store.user, store.playlists, store.featuredMessage);
+  const taken = new Set<string>([
+    ...homeShelves.flatMap((s) => s.cards.map((c) => norm(c.title))),
+    ...(store.playlists || []).map((p) => norm(p.name)),
+  ]);
+  let dailyNumber = Math.max(0, ...[...taken].map((t) => Number(t.match(/^mix diario (\d+)$/)?.[1] || 0)));
+  const nameFor = (preferred: string, alternative: string) => (taken.has(norm(preferred)) ? alternative : preferred);
+
   // New music around the user's top artists (recent taste counts more)
   const ranked = [...profile.artists].sort((a, b) => b.score + b.recent * 2 - (a.score + a.recent * 2));
   const seeds = ranked.slice(0, 10);
@@ -596,7 +610,9 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const desc = `${[...grp, ...relNames].slice(0, 3).join(', ')} y más`;
     const style = pickStyle(`daily${i}`);
     const imgs = style === 'artist' ? [pictureOf(shuffle(grp, r)[0])] : shuffle(items.map(coverOf).filter(Boolean), r);
-    const title = `Mix diario ${out.filter((m) => m.sfKind === 'daily').length + 1}`;
+    // Numbered after Spotify's own daily mixes (if the user has 1-6, ours are 7, 8…)
+    dailyNumber += 1;
+    const title = `Mix diario ${dailyNumber}`;
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
     out.push(mix(`sf-daily-${out.filter((m) => m.sfKind === 'daily').length + 1}`, 'daily', title, desc, items, cover, userName));
   }
@@ -613,8 +629,9 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const items = dedupe(tracks, profile.known, 2).slice(0, 30);
     if (items.length >= 10) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), r);
-      const cover = (await makeCover('Descubrimiento semanal', hash(week) % 2 ? 'collage' : 'single', imgs, '#3d2b66')) || imgs[0] || '';
-      out.push(mix('sf-discover-weekly', 'discover', 'Descubrimiento semanal', 'Música nueva elegida para ti. Cambia cada lunes.', items, cover, userName));
+      const name = nameFor('Descubrimiento semanal', 'Tu descubrimiento semanal');
+      const cover = (await makeCover(name, hash(week) % 2 ? 'collage' : 'single', imgs, '#3d2b66')) || imgs[0] || '';
+      out.push(mix('sf-discover-weekly', 'discover', name, 'Música nueva elegida para ti. Cambia cada lunes.', items, cover, userName));
     }
   }
 
@@ -624,8 +641,9 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const items = dedupe(fresh, undefined, 5).slice(0, 30);
     if (items.length >= 5) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), randDay);
-      const cover = (await makeCover('Radar de novedades', 'collage', imgs, '#7a2d3a')) || imgs[0] || '';
-      out.push(mix('sf-release-radar', 'radar', 'Radar de novedades', 'Lo último de los artistas que escuchas.', items, cover, userName));
+      const name = nameFor('Radar de novedades', 'Tu radar de novedades');
+      const cover = (await makeCover(name, 'collage', imgs, '#7a2d3a')) || imgs[0] || '';
+      out.push(mix('sf-release-radar', 'radar', name, 'Lo último de los artistas que escuchas.', items, cover, userName));
     }
   }
 
@@ -634,8 +652,9 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const items = profile.tracks.filter((t) => t.recent > 0).sort((a, b) => b.recent - a.recent).map((t) => t.track).slice(0, 30);
     if (items.length >= 8) {
       const imgs = items.map(coverOf).filter(Boolean);
-      const cover = (await makeCover('En repeat', pickStyle('repeat'), pickStyle('repeat') === 'artist' ? [pictureOf(firstArtist(items[0]))] : imgs, '#1f5f4a')) || imgs[0] || '';
-      out.push(mix('sf-on-repeat', 'repeat', 'En repeat', 'Las canciones que más te gustan ahora mismo.', items, cover, userName));
+      const name = nameFor('En repeat', 'Lo que más escuchas');
+      const cover = (await makeCover(name, pickStyle('repeat'), pickStyle('repeat') === 'artist' ? [pictureOf(firstArtist(items[0]))] : imgs, '#1f5f4a')) || imgs[0] || '';
+      out.push(mix('sf-on-repeat', 'repeat', name, 'Las canciones que más te gustan ahora mismo.', items, cover, userName));
     }
   }
 
@@ -648,8 +667,9 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     ).slice(0, 30);
     if (items.length >= 10) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), randDay);
-      const cover = (await makeCover('Tus clásicos', 'collage', imgs, '#5a4a1c')) || imgs[0] || '';
-      out.push(mix('sf-classics', 'classics', 'Tus clásicos', 'Canciones que siempre vuelven. Hace tiempo que no suenan.', items, cover, userName));
+      const name = nameFor('Tus clásicos', 'Tus clásicos de siempre');
+      const cover = (await makeCover(name, 'collage', imgs, '#5a4a1c')) || imgs[0] || '';
+      out.push(mix('sf-classics', 'classics', name, 'Canciones que siempre vuelven. Hace tiempo que no suenan.', items, cover, userName));
     }
   }
 
@@ -661,6 +681,8 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const items = shuffle(dedupe([...d.top.slice(0, 12), ...ownByArtist(a.name).slice(0, 8), ...d.related.flatMap((x) => x.top.slice(0, 2))], undefined, 12), r).slice(0, 35);
     if (items.length < 10) continue;
     const title = `Mix de ${d.artist?.name || a.name}`;
+    // Spotify already gives this user a "Mix de X": that one stays, ours would only repeat it
+    if (taken.has(norm(title))) continue;
     const style: CoverStyle = hash(`${a.name}:${day}`) % 3 === 0 ? 'collage' : 'artist';
     const imgs = style === 'artist' ? [pictureOf(a.name)] : shuffle(items.map(coverOf).filter(Boolean), r);
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
@@ -687,7 +709,8 @@ function publish(mixes: SpotifreeMix[], builtDay: string | null) {
   }));
 }
 
-const storeKey = () => `mixes:${uid()}`;
+// v2: mixes built before names were kept apart from Spotify's own are rebuilt
+const storeKey = () => `mixes2:${uid()}`;
 let building: Promise<void> | null = null;
 
 /** Rebuilds the account's playlists (once a day, or when asked) */
@@ -747,26 +770,70 @@ export function initSpotifreeMixes() {
 const cardOf = (m: SpotifreeMix) => ({ id: m.id, title: m.name, subtitle: m.description, image: m.images?.[0]?.url || '' });
 
 /**
- * Home with Spotifree's playlists: "Hecho para <name>" near the top, "Tus artistas, en mix" and
- * the daily mixes added at the end of Spotify's own mixes shelf (no duplicates).
+ * No playlist twice on Home: the first section that shows it keeps it, later sections drop it
+ * (a section left empty disappears; one left with 1-2 cards is shown as featured cards).
+ */
+export function dedupeHomeShelves(shelves: DynamicShelf[]): DynamicShelf[] {
+  // Two sections with the same name are one section
+  const merged: DynamicShelf[] = [];
+  const byTitle = new Map<string, number>();
+  for (const s of shelves) {
+    const key = norm(`${s.prefix || ''} ${s.title}`);
+    const at = key ? byTitle.get(key) : undefined;
+    if (at !== undefined) merged[at] = { ...merged[at], cards: [...merged[at].cards, ...s.cards] };
+    else {
+      if (key) byTitle.set(key, merged.length);
+      merged.push(s);
+    }
+  }
+  // The same playlist (same id, same picture or same name) only the first time it appears
+  const seenIds = new Set<string>();
+  const seenImages = new Set<string>();
+  const seenTitles = new Set<string>();
+  const out: DynamicShelf[] = [];
+  for (const s of merged) {
+    const cards = s.cards.filter((c) => {
+      const img = (c.image || '').split('?')[0];
+      const title = norm(c.title);
+      if (seenIds.has(c.id) || (img && seenImages.has(img)) || (title && seenTitles.has(title))) return false;
+      seenIds.add(c.id);
+      if (img) seenImages.add(img);
+      if (title) seenTitles.add(title);
+      return true;
+    });
+    if (cards.length) out.push(cards.length === s.cards.length ? s : { ...s, cards });
+  }
+  return out;
+}
+
+/**
+ * Home with Spotifree's playlists, each shown ONCE:
+ *  - the daily mixes, Descubrimiento, Radar… go into Spotify's own "Hecho para" section when
+ *    there is one (extending it), otherwise into our own "Hecho para <name>" near the top
+ *  - "Tus artistas, en mix" as its own section
+ *  - then no card may repeat anywhere on Home (they used to be added to every mixes section)
  */
 export function withSpotifreeShelves(base: DynamicShelf[], mixes: SpotifreeMix[], userName?: string): DynamicShelf[] {
-  if (!mixes.length) return base;
-  const made = mixes.filter((m) => m.sfKind !== 'artist');
-  const artists = mixes.filter((m) => m.sfKind === 'artist');
+  if (!mixes.length) return dedupeHomeShelves(base);
+  const made = mixes.filter((m) => m.sfKind !== 'artist').map(cardOf);
+  const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
   const name = (userName || '').split(' ')[0];
+
+  // Extend Spotify's first "Hecho para / Made for" section, only that one
+  const madeForIdx = base.findIndex((s) => s.type === 'made_for' || /hecho para|made for/i.test(`${s.prefix || ''} ${s.title}`));
+  let shelves = base.slice();
   const ours: DynamicShelf[] = [];
   if (made.length) {
-    ours.push({ id: 'sf-made-for', title: name ? `Hecho para ${name}` : 'Hecho para ti', subtitle: 'Por Spotifree, con lo que escuchas', type: 'made_for', cards: made.map(cardOf), hasSeeAll: true });
+    if (madeForIdx >= 0) {
+      const s = shelves[madeForIdx];
+      shelves[madeForIdx] = { ...s, cards: [...made, ...s.cards], hasSeeAll: true };
+    } else {
+      ours.push({ id: 'sf-made-for', title: name ? `Hecho para ${name}` : 'Hecho para ti', subtitle: 'Por Spotifree, con lo que escuchas', type: 'made_for', cards: made, hasSeeAll: true });
+    }
   }
   if (artists.length) {
-    ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists.map(cardOf), hasSeeAll: true });
+    ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
   }
-  const daily = mixes.filter((m) => m.sfKind === 'daily').map(cardOf);
-  const extended = base.map((s) => {
-    if (s.type !== 'mixes' && s.type !== 'made_for') return s;
-    const have = new Set(s.cards.map((c) => c.id));
-    return { ...s, cards: [...s.cards, ...daily.filter((c) => !have.has(c.id))] };
-  });
-  return [...extended.slice(0, 1), ...ours, ...extended.slice(1)];
+  shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];
+  return dedupeHomeShelves(shelves);
 }

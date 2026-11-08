@@ -158,6 +158,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       color: resolveVibrantColor(item.id, item.name, item.color),
     }));
   }, [storeQuickAccess, isAuthenticated]);
+  const shortcutIds = useMemo(() => new Set(currentShortcuts.map((s) => s.id)), [currentShortcuts]);
 
   // Keep background on the last hovered color smoothly
   const [extractedColors, setExtractedColors] = useState<Record<string, string>>({});
@@ -276,9 +277,10 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .map((shelf) => ({
         ...shelf,
-        cards: shelf.cards.filter((c) => !deletedIds.has(c.id) && !isDJCard(c)),
+        // Nothing already in the shortcuts at the top (no playlist shown twice)
+        cards: shelf.cards.filter((c) => !deletedIds.has(c.id) && !isDJCard(c) && !shortcutIds.has(c.id)),
       }));
-  }, [activeTab, dynamicShelves, user, playlists, featuredMessage, sfMixes]);
+  }, [activeTab, dynamicShelves, user, playlists, featuredMessage, sfMixes, shortcutIds]);
 
   const handleQuickPlay = async (
     e: React.MouseEvent | undefined,

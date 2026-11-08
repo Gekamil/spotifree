@@ -8,7 +8,7 @@ import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { LocalFilesCover, LocalFilesView } from '../common/LocalFilesView';
 import { LOCAL_FILES_EVENT, LOCAL_FILES_PLAYLIST_ID, listLocalTracks } from '../../utils/localFiles';
 import { deviceTracks, scanDeviceMusic } from '../../utils/nativeLocalMusic';
-import { useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
+import { dedupeHomeShelves, useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -354,6 +354,9 @@ export const MobileLayout: React.FC = () => {
   // Comprehensive shelves: user's playlists from current session + recommended feeds
   const shelves = useMemo(() => {
     if (!isAuthenticated) return [];
+    const shortcutIds = new Set(shortcuts.map((s: any) => s.id));
+    const withoutShortcuts = <T extends { cards: Array<{ id: string }> }>(l: T[]): T[] =>
+      l.map((s) => ({ ...s, cards: s.cards.filter((c) => !shortcutIds.has(c.id)) })).filter((s) => s.cards.length > 0);
     const list: Array<{
       id: string;
       title: string;
@@ -414,11 +417,12 @@ export const MobileLayout: React.FC = () => {
       });
 
     if (homeFilter === 'musica') {
-      return list.filter((s) => !s.title.toLowerCase().includes('noticias'));
+      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias')) as any) as typeof list);
     }
 
-    return list;
-  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes]);
+    // No playlist twice on Home ("Tus playlists" + every section + the shortcuts at the top)
+    return withoutShortcuts(dedupeHomeShelves(list as any) as typeof list);
+  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, shortcuts]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
