@@ -8,6 +8,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
+import { getLocalTrackUrl, isLocalTrackId } from '../utils/localFiles';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { EQ_CHANGED_EVENT, effectiveEqGains } from '../utils/eqSettings';
@@ -317,6 +318,8 @@ class AudioEngine {
 
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
+    // Songs from the phone's files play on their own: the next one starts when this one ends
+    if (isLocalTrackId(curTrack?.id) || isLocalTrackId(nextTrack?.id)) return;
 
     let djConfig: DJTransitionConfig | null = null;
     let effectiveCrossfade = crossfadeSec;
@@ -437,6 +440,8 @@ class AudioEngine {
         if (t1) upcoming.push(t1);
       }
 
+      // Local files need no resolving or pre-cueing
+      upcoming = upcoming.filter((t) => !isLocalTrackId(t.id));
       if (upcoming.length === 0) return;
 
       // 1. Process track N+1 (pre-cue into inactive player without stealing audio focus)
@@ -2548,9 +2553,16 @@ class AudioEngine {
     }
 
     try {
-      // 0. Check offline storage ("musica-spotifree")
+      // 0. Songs from the user's own files ("Archivos locales"), then offline storage ("musica-spotifree")
       try {
-        const offlineBlobUrl = await getDownloadedTrackBlobUrl(trackId);
+        const offlineBlobUrl = isLocalTrackId(trackId) ? await getLocalTrackUrl(trackId) : await getDownloadedTrackBlobUrl(trackId);
+        if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) return;
+        if (isLocalTrackId(trackId) && !offlineBlobUrl) {
+          console.warn('[AudioEngine] Local file not found on this device:', trackId);
+          usePlayerStore.setState({ isPlaying: false });
+          this.isTransitioning = false;
+          return;
+        }
         if (offlineBlobUrl || (typeof navigator !== 'undefined' && !navigator.onLine)) {
           if (offlineBlobUrl) {
             this.activeEngine = 'html5';

@@ -9,35 +9,92 @@
  *  - SW must proactively tell clients to resume audio when they were suspended
  */
 
-const CACHE_NAME = 'spotifree-v2';
+// App shell cache: lets the app open with no connection (airplane mode), so the songs in
+// "Archivos locales" can be played. Only this cache's own older versions are ever deleted:
+// "musica-spotifree" (downloads) and other caches are left alone.
+const CACHE_NAME = 'spotifree-shell-v3';
+const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png'];
+const MAX_ASSETS = 160;
 
-// On install, activate immediately (no waiting)
 self.addEventListener('install', (event) => {
-  self.skipWaiting();
+  event.waitUntil(
+    caches
+      .open(CACHE_NAME)
+      .then((cache) => Promise.all(SHELL.map((u) => cache.add(u).catch(() => {}))))
+      .then(() => self.skipWaiting())
+  );
 });
 
-// Take control of all clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     Promise.all([
       self.clients.claim(),
-      // Clean old caches
-      caches.keys().then(keys =>
-        Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))
+      caches.keys().then((keys) =>
+        Promise.all(keys.filter((k) => (k.startsWith('spotifree-v') || k.startsWith('spotifree-shell-')) && k !== CACHE_NAME).map((k) => caches.delete(k)))
       ),
     ])
   );
 });
 
-// Pass through cross-origin requests natively so CDNs, images, and streams are never blocked
-self.addEventListener('fetch', (event) => {
-  // Only handle same-origin requests; never intercept cross-origin image CDNs or audio streams
-  if (!event.request.url.startsWith(self.location.origin)) {
-    return;
+async function trimAssets(cache) {
+  const keys = (await cache.keys()).filter((r) => new URL(r.url).pathname.startsWith('/assets/'));
+  for (let i = 0; i < keys.length - MAX_ASSETS; i++) await cache.delete(keys[i]);
+}
+
+/** Pages: network first (always the latest app), the saved copy when offline */
+async function handleNavigation(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) cache.put('/', res.clone()).catch(() => {});
+    return res;
+  } catch {
+    return (await cache.match('/')) || (await cache.match(request)) || new Response('Sin conexión', { status: 503 });
   }
-  event.respondWith(
-    fetch(event.request).catch(() => new Response('', { status: 503 }))
-  );
+}
+
+/** Built files (/assets/... have a hash in the name): saved copy first */
+async function handleAsset(request) {
+  const cache = await caches.open(CACHE_NAME);
+  const hit = await cache.match(request);
+  if (hit) return hit;
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) {
+      cache.put(request, res.clone()).then(() => trimAssets(cache)).catch(() => {});
+    }
+    return res;
+  } catch {
+    return new Response('', { status: 503 });
+  }
+}
+
+/** Fonts, icons, manifest: network first, saved copy when offline */
+async function handleStatic(request) {
+  const cache = await caches.open(CACHE_NAME);
+  try {
+    const res = await fetch(request);
+    if (res && res.ok) cache.put(request, res.clone()).catch(() => {});
+    return res;
+  } catch {
+    return (await cache.match(request)) || new Response('', { status: 503 });
+  }
+}
+
+// Cross-origin requests (CDNs, images, audio streams) are never intercepted
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
+  const path = new URL(req.url).pathname;
+  if (req.mode === 'navigate') {
+    event.respondWith(handleNavigation(req));
+  } else if (path.startsWith('/assets/')) {
+    event.respondWith(handleAsset(req));
+  } else if (/\.(woff2?|ttf|otf|png|svg|ico|webmanifest|json)$/i.test(path) && !/^\/(api|src|node_modules|@)/.test(path)) {
+    event.respondWith(handleStatic(req));
+  } else {
+    event.respondWith(fetch(req).catch(() => new Response('', { status: 503 })));
+  }
 });
 
 // Track whether audio is currently playing (updated by main thread messages)

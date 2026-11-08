@@ -13,6 +13,8 @@ import { ImportLibraryModal } from '../modals/ImportLibraryModal';
 import { DesktopSettingsView } from './DesktopSettingsView';
 import { DesktopGuideView } from './DesktopGuideView';
 import { DesktopProfileView } from './DesktopProfileView';
+import { LocalFilesView } from '../common/LocalFilesView';
+import { LOCAL_FILES_PLAYLIST_ID } from '../../utils/localFiles';
 import { AIDJView } from '../dj/AIDJView';
 import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
@@ -56,6 +58,10 @@ export const DesktopLayout: React.FC = () => {
       customName?.toLowerCase().trim() === 'dj'
     ) {
       setActiveMainTab('dj');
+      return;
+    }
+    if (cleanId === LOCAL_FILES_PLAYLIST_ID) {
+      setActiveMainTab('local');
       return;
     }
 
@@ -260,6 +266,12 @@ export const DesktopLayout: React.FC = () => {
                   playlist={activePlaylist}
                   onSelectPlaylistById={handleSelectPlaylistById}
                 />
+              </div>
+            )}
+
+            {activeMainTab === 'local' && (
+              <div key="local" className="spf-page-push min-h-full">
+                <LocalFilesView />
               </div>
             )}
 

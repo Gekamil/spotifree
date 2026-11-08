@@ -5,6 +5,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
+import { LocalFilesCover, LocalFilesView } from '../common/LocalFilesView';
+import { LOCAL_FILES_EVENT, LOCAL_FILES_PLAYLIST_ID, listLocalTracks } from '../../utils/localFiles';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -37,7 +39,14 @@ import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 
 export const MobileLayout: React.FC = () => {
-  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj'>('home');
+  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local'>('home');
+  const [localCount, setLocalCount] = useState(0);
+  useEffect(() => {
+    const load = () => listLocalTracks().then((t) => setLocalCount(t.length));
+    load();
+    window.addEventListener(LOCAL_FILES_EVENT, load);
+    return () => window.removeEventListener(LOCAL_FILES_EVENT, load);
+  }, []);
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
@@ -258,7 +267,7 @@ export const MobileLayout: React.FC = () => {
       setToastMessage(
         res.downloaded > 0
           ? `${res.downloaded} de ${res.total} canciones disponibles sin conexión`
-          : 'No se ha podido descargar el audio de estas canciones'
+          : 'No se ha podido descargar. Para escuchar sin conexión, añade tus canciones en Archivos locales'
       );
       setTimeout(() => setToastMessage(null), 3500);
       return;
@@ -403,6 +412,10 @@ export const MobileLayout: React.FC = () => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
     if (cleanId === 'spotify-dj' || cleanId === 'dj' || customName?.toLowerCase().trim() === 'dj') {
       setMobileTab('dj');
+      return;
+    }
+    if (cleanId === LOCAL_FILES_PLAYLIST_ID) {
+      setMobileTab('local');
       return;
     }
     const color = resolveVibrantColor(cleanId, customName || cleanId);
@@ -870,6 +883,23 @@ export const MobileLayout: React.FC = () => {
               })}
             </div>
 
+            {/* Archivos locales: always there (also signed out / offline) */}
+            {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
+              <div
+                onClick={() => setMobileTab('local')}
+                className="flex items-center gap-3 p-2 mt-2 -mb-1 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+              >
+                <LocalFilesCover size={48} className="rounded-[4px]" />
+                <div className="flex flex-col min-w-0">
+                  <span className="font-bold text-white text-sm truncate">Archivos locales</span>
+                  <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
+                    <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                    Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                  </span>
+                </div>
+              </div>
+            )}
+
             {/* Library Items List */}
             {!isAuthenticated ? (
               <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
@@ -1108,6 +1138,12 @@ export const MobileLayout: React.FC = () => {
           </div>
         )}
 
+        {mobileTab === 'local' && (
+          <div className="spf-page-push min-h-full">
+            <LocalFilesView isMobile onBack={() => setMobileTab('library')} />
+          </div>
+        )}
+
         {/* TAB 7: DEDICATED SPOTIFY AI DJ VIEW */}
         {mobileTab === 'dj' && (
           <div className="h-full w-full overflow-hidden flex flex-col">
@@ -1144,7 +1180,7 @@ export const MobileLayout: React.FC = () => {
           activeTab={
             mobileTab === 'search'
               ? 'search'
-              : mobileTab === 'library'
+              : mobileTab === 'library' || mobileTab === 'local'
               ? 'library'
               : 'home'
           }

@@ -955,7 +955,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           setToastMessage(`¡${res.downloaded} canciones guardadas en «musica-spotifree» para escuchar sin conexión!`);
         } else {
           setIsDownloaded(false);
-          setToastMessage('No se pudo descargar el audio. Comprueba tu conexión a internet.');
+          setToastMessage('No se ha podido descargar. Para escuchar sin conexión, añade tus canciones en Archivos locales');
         }
       } catch {
         setToastMessage('Error al descargar canciones');
