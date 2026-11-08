@@ -307,18 +307,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               viewMode === 'cuadricula-compacta' ? 'grid-cols-3' : 'grid-cols-2'
             }`}
           >
-            <div
-              onClick={() => useUIStore.getState().setActiveMainTab('local')}
-              className={`p-2 rounded-md cursor-pointer transition-colors flex flex-col ${
-                activeMainTab === 'local' ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a] active:bg-[#121212]'
-              }`}
-            >
-              <div className="relative aspect-square w-full rounded overflow-hidden shadow mb-1.5">
-                <LocalFilesCover size={200} className="!w-full !h-full" />
-              </div>
-              <p className="text-[14px] text-white truncate font-['SpotifyMixUI',sans-serif]">Archivos locales</p>
-              {viewMode === 'cuadricula' && <p className="text-[12px] text-[#b3b3b3] truncate mt-0.5">Lista • En este dispositivo</p>}
-            </div>
             {processedPlaylists.map((playlist) => {
               const isSelected = selectedPlaylistId === playlist.id;
               const isLikedSongs =
@@ -429,25 +417,23 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 </div>
               );
             })}
+            {/* Archivos locales (at the bottom of library playlists) */}
+            <div
+              onClick={() => useUIStore.getState().setActiveMainTab('local')}
+              className={`p-2 rounded-md cursor-pointer transition-colors flex flex-col ${
+                activeMainTab === 'local' ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a] active:bg-[#121212]'
+              }`}
+            >
+              <div className="relative aspect-square w-full rounded overflow-hidden shadow mb-1.5">
+                <LocalFilesCover size={200} className="!w-full !h-full" />
+              </div>
+              <p className="text-[14px] text-white truncate font-['SpotifyMixUI',sans-serif]">Archivos locales</p>
+              {viewMode === 'cuadricula' && <p className="text-[12px] text-[#b3b3b3] truncate mt-0.5">Lista • En este dispositivo</p>}
+            </div>
           </div>
         ) : (
           /* Standard list rows (Compacta or Lista) */
           <div className="space-y-0.5">
-            {/* Archivos locales (songs stored in this browser / app) */}
-            <div
-              onClick={() => useUIStore.getState().setActiveMainTab('local')}
-              className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
-                activeMainTab === 'local' ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a] active:bg-[#121212]'
-              } ${viewMode === 'compacta' ? 'py-1' : 'py-2'}`}
-            >
-              {viewMode !== 'compacta' && <LocalFilesCover size={48} className="rounded" />}
-              <div className="min-w-0">
-                <p className={`text-[14px] truncate font-['SpotifyMixUI',sans-serif] ${activeMainTab === 'local' ? 'text-[#1ed760]' : 'text-white'}`}>
-                  Archivos locales
-                </p>
-                <p className="text-[12px] text-[#b3b3b3] truncate">Lista • En este dispositivo</p>
-              </div>
-            </div>
             {processedPlaylists.map((playlist) => {
               const isSelected = selectedPlaylistId === playlist.id;
               const isLikedSongs =
@@ -579,6 +565,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 </div>
               );
             })}
+            {/* Archivos locales (at the bottom of library list) */}
+            <div
+              onClick={() => useUIStore.getState().setActiveMainTab('local')}
+              className={`flex items-center gap-3 p-2 rounded-md cursor-pointer transition-colors ${
+                activeMainTab === 'local' ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a] active:bg-[#121212]'
+              } ${viewMode === 'compacta' ? 'py-1' : 'py-2'}`}
+            >
+              {viewMode !== 'compacta' && <LocalFilesCover size={48} className="rounded" />}
+              <div className="min-w-0">
+                <p className={`text-[14px] truncate font-['SpotifyMixUI',sans-serif] ${activeMainTab === 'local' ? 'text-[#1ed760]' : 'text-white'}`}>
+                  Archivos locales
+                </p>
+                <p className="text-[12px] text-[#b3b3b3] truncate">Lista • En este dispositivo</p>
+              </div>
+            </div>
           </div>
         )}
       </div>

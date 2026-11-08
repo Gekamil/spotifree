@@ -8,6 +8,8 @@ import {
   VerifiedArtistNativeIcon,
   CheckCircleNativeIcon,
   PlusCircleNativeIcon,
+  DownloadActiveCircleNativeIcon,
+  DownloadCircleNativeIcon,
   AutomixNativeIcon,
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
@@ -20,7 +22,15 @@ import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
-import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
+import {
+  isPlaylistDownloaded,
+  downloadPlaylist,
+  deleteDownloadedPlaylist,
+  downloadTrackAudio,
+  deleteDownloadedTrack,
+  getAllDownloadedTrackIds,
+  onDownloadsChanged,
+} from '../../utils/offlineStorage';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { djTransitionService } from '../../services/djTransitionService';
 import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
@@ -81,6 +91,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
+  const [downloadedTrackIds, setDownloadedTrackIds] = useState<Set<string>>(new Set());
+  const [downloadingTrackIds, setDownloadingTrackIds] = useState<Set<string>>(new Set());
 
 
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
@@ -386,7 +398,59 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   };
   useEffect(() => {
     setIsDownloaded(isPlaylistDownloaded(dynamicPlaylist.id));
+    getAllDownloadedTrackIds().then(setDownloadedTrackIds);
+    const unsubscribe = onDownloadsChanged(() => {
+      getAllDownloadedTrackIds().then(setDownloadedTrackIds);
+      setIsDownloaded(isPlaylistDownloaded(dynamicPlaylist.id));
+    });
+    return unsubscribe;
   }, [dynamicPlaylist.id]);
+
+  const handleToggleTrackDownload = async (track: Track) => {
+    const clean = cleanTrackId(track.id);
+    if (downloadedTrackIds.has(clean)) {
+      await deleteDownloadedTrack(track.id);
+      try {
+        window.dispatchEvent(
+          new CustomEvent('spotifree:toast', {
+            detail: { message: `Descarga eliminada: ${track.name}` },
+          })
+        );
+      } catch {}
+    } else {
+      setDownloadingTrackIds((prev) => new Set(prev).add(clean));
+      try {
+        window.dispatchEvent(
+          new CustomEvent('spotifree:toast', {
+            detail: { message: `Descargando «${track.name}» para escuchar sin conexión...` },
+          })
+        );
+      } catch {}
+      const ok = await downloadTrackAudio(track);
+      setDownloadingTrackIds((prev) => {
+        const next = new Set(prev);
+        next.delete(clean);
+        return next;
+      });
+      if (ok) {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('spotifree:toast', {
+              detail: { message: `¡«${track.name}» descargada para modo avión!` },
+            })
+          );
+        } catch {}
+      } else {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('spotifree:toast', {
+              detail: { message: `No se pudo descargar «${track.name}».` },
+            })
+          );
+        } catch {}
+      }
+    }
+  };
 
   const handleToggleDownload = async () => {
     if (isDownloaded) {
@@ -1726,6 +1790,35 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                           <PlusCircleNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
                         )}
                       </button>
+
+                      {/* Download status / trigger */}
+                      {downloadingTrackIds.has(cleanId) ? (
+                        <div className="w-4 h-4 border-2 border-white/20 border-t-[#1ed760] rounded-full animate-spin shrink-0" title="Descargando audio para modo avión..." />
+                      ) : downloadedTrackIds.has(cleanId) ? (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTrackDownload(track);
+                          }}
+                          className="text-[#1ed760] hover:scale-110 active:scale-95 transition-transform shrink-0 cursor-pointer"
+                          title="Descargada en este dispositivo (Modo avión). Clic para eliminar."
+                        >
+                          <DownloadActiveCircleNativeIcon size={16} className="text-[#1ed760]" />
+                        </button>
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleTrackDownload(track);
+                          }}
+                          className={`text-[#b3b3b3] hover:text-white hover:scale-110 active:scale-95 transition-all shrink-0 cursor-pointer ${
+                            isHovered ? 'opacity-100' : 'opacity-0'
+                          }`}
+                          title="Descargar para escuchar sin conexión (Modo avión)"
+                        >
+                          <DownloadCircleNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
+                        </button>
+                      )}
 
                       <span className="font-['SpotifyMixUI'] tabular-nums w-10 text-right">
                         {formatDuration(track.duration_ms)}

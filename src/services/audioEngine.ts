@@ -2574,7 +2574,7 @@ class AudioEngine {
           this.isTransitioning = false;
           return;
         }
-        if (offlineBlobUrl || (typeof navigator !== 'undefined' && !navigator.onLine)) {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
           if (offlineBlobUrl) {
             this.activeEngine = 'html5';
             this.audio.src = offlineBlobUrl;
@@ -2584,7 +2584,29 @@ class AudioEngine {
             usePlayerStore.setState({ isPlaying: true });
             this.isTransitioning = false;
             return;
+          } else {
+            console.warn('[AudioEngine] Offline / Modo avión: pista no descargada:', trackId);
+            usePlayerStore.setState({ isPlaying: false });
+            this.isTransitioning = false;
+            try {
+              window.dispatchEvent(
+                new CustomEvent('spotifree:toast', {
+                  detail: { message: 'Modo avión: esta canción no está descargada para escuchar sin conexión' }
+                })
+              );
+            } catch {}
+            return;
           }
+        }
+        if (offlineBlobUrl) {
+          this.activeEngine = 'html5';
+          this.audio.src = offlineBlobUrl;
+          this.audio.currentTime = startSeconds;
+          await this.audio.play();
+          this.startCarrier();
+          usePlayerStore.setState({ isPlaying: true });
+          this.isTransitioning = false;
+          return;
         }
       } catch {}
 

@@ -33,6 +33,7 @@ import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
+import { isTrackDownloaded, downloadTrackAudio, deleteDownloadedTrack, saveTrackAsMp3File } from '../../utils/offlineStorage';
 import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface MobileNowPlayingModalProps {
@@ -124,6 +125,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isTrackDownloadedState, setIsTrackDownloadedState] = useState(false);
+  const [isDownloadingTrackState, setIsDownloadingTrackState] = useState(false);
+
+  useEffect(() => {
+    if (currentTrack?.id) {
+      isTrackDownloaded(currentTrack.id).then(setIsTrackDownloadedState);
+    }
+  }, [currentTrack?.id, isMenuOpen]);
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(false);
@@ -1127,6 +1136,104 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <div className="text-left flex-1 min-w-0">
                   <p className="font-bold text-sm text-white">Cambiar fuente de audio</p>
                   <p className="text-xs text-[#b3b3b3] truncate">Si no suena la canción correcta</p>
+                </div>
+              </button>
+
+              {/* Option: Descargar canción (offline) */}
+              <button
+                onClick={async () => {
+                  if (isTrackDownloadedState) {
+                    await deleteDownloadedTrack(currentTrack.id);
+                    setIsTrackDownloadedState(false);
+                    try {
+                      window.dispatchEvent(
+                        new CustomEvent('spotifree:toast', {
+                          detail: { message: `Descarga eliminada: ${currentTrack.name}` }
+                        })
+                      );
+                    } catch {}
+                  } else {
+                    setIsDownloadingTrackState(true);
+                    try {
+                      window.dispatchEvent(
+                        new CustomEvent('spotifree:toast', {
+                          detail: { message: `Descargando «${currentTrack.name}» para escuchar sin conexión...` }
+                        })
+                      );
+                    } catch {}
+                    const ok = await downloadTrackAudio(currentTrack);
+                    setIsDownloadingTrackState(false);
+                    if (ok) {
+                      setIsTrackDownloadedState(true);
+                      try {
+                        window.dispatchEvent(
+                          new CustomEvent('spotifree:toast', {
+                            detail: { message: `¡«${currentTrack.name}» descargada para modo avión!` }
+                          })
+                        );
+                      } catch {}
+                    } else {
+                      try {
+                        window.dispatchEvent(
+                          new CustomEvent('spotifree:toast', {
+                            detail: { message: `No se pudo descargar «${currentTrack.name}».` }
+                          })
+                        );
+                      } catch {}
+                    }
+                  }
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className={`w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
+                  {isTrackDownloadedState ? (
+                    <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m11.748-1.97a.75.75 0 0 0-1.06-1.06l-4.47 4.47-1.405-1.406a.75.75 0 1 0-1.061 1.06l2.466 2.467 5.53-5.53z" />
+                    </svg>
+                  ) : (
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="7 10 12 15 17 10" />
+                      <line x1="12" y1="15" x2="12" y2="3" />
+                    </svg>
+                  )}
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className={`font-bold text-sm ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
+                    {isTrackDownloadedState ? 'Eliminar descarga sin conexión' : isDownloadingTrackState ? 'Descargando...' : 'Descargar canción (modo avión)'}
+                  </p>
+                  <p className="text-xs text-[#b3b3b3] truncate">
+                    {isTrackDownloadedState ? 'Guardada en este dispositivo' : 'Escucha esta canción sin internet'}
+                  </p>
+                </div>
+              </button>
+
+              {/* Option: Guardar archivo MP3 */}
+              <button
+                onClick={async () => {
+                  setIsMenuOpen(false);
+                  try {
+                    window.dispatchEvent(
+                      new CustomEvent('spotifree:toast', {
+                        detail: { message: `Guardando MP3 de «${currentTrack.name}»...` }
+                      })
+                    );
+                  } catch {}
+                  await saveTrackAsMp3File(currentTrack);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="8 12 12 16 16 12" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">Guardar archivo MP3</p>
+                  <p className="text-xs text-[#b3b3b3] truncate">Descarga el archivo a la memoria de tu móvil</p>
                 </div>
               </button>
 

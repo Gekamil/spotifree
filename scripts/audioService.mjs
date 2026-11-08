@@ -239,7 +239,7 @@ export async function resolveAudio(target) {
   return promise;
 }
 
-export function streamAudioDirect(target, req, res, startSeconds = 0) {
+export function streamAudioDirect(target, req, res, startSeconds = 0, options = {}) {
   let cleanTarget = (target || '').trim();
   if (/^[a-zA-Z0-9_-]{11}$/.test(cleanTarget)) {
     cleanTarget = `https://www.youtube.com/watch?v=${cleanTarget}`;
@@ -247,18 +247,21 @@ export function streamAudioDirect(target, req, res, startSeconds = 0) {
     cleanTarget = `ytsearch1:${cleanTarget}`;
   }
 
-  res.writeHead(200, {
-    'Content-Type': 'audio/webm',
+  const headers = {
+    'Content-Type': options.contentType || 'audio/webm',
     'Transfer-Encoding': 'chunked',
     'Accept-Ranges': 'none',
     'Access-Control-Allow-Origin': '*',
     'Cache-Control': 'no-cache',
-  });
+    ...(options.headers || {}),
+  };
+
+  res.writeHead(200, headers);
 
   const pythonCmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
   const args = [
     '-m', 'yt_dlp',
-    '-f', 'ba[ext=webm]/ba/b',
+    '-f', options.format || 'ba[ext=webm]/ba/b',
     '-o', '-',
     '--no-warnings',
     '-q',

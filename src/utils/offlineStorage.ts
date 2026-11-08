@@ -5,23 +5,66 @@
 
 import type { Playlist, Track } from '../types/spotify';
 import { API_BASE } from '../config';
+import { cleanTrackId } from './audioFeatures';
 
 const CACHE_NAME = 'musica-spotifree';
 const METADATA_KEY_PREFIX = 'spotifree_offline_meta_';
 const PLAYLISTS_LIST_KEY = 'spotifree_downloaded_playlists_list';
+const TRACK_META_PREFIX = 'spotifree_offline_track_';
+
+export const DOWNLOADS_CHANGED_EVENT = 'spotifree:downloads-changed';
 
 /**
- * Check if a track is downloaded locally
+ * Dispatch an event when downloads change so all UI components update reactively
+ */
+export function notifyDownloadsChanged(trackId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(
+      new CustomEvent(DOWNLOADS_CHANGED_EVENT, {
+        detail: { trackId: trackId ? cleanTrackId(trackId) : null, timestamp: Date.now() },
+      })
+    );
+  } catch {}
+}
+
+/**
+ * Subscribe to download state changes
+ */
+export function onDownloadsChanged(callback: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  const handler = () => callback();
+  window.addEventListener(DOWNLOADS_CHANGED_EVENT, handler);
+  return () => window.removeEventListener(DOWNLOADS_CHANGED_EVENT, handler);
+}
+
+/**
+ * Check if a track is downloaded locally in CacheStorage or OPFS
  */
 export async function isTrackDownloaded(trackId: string): Promise<boolean> {
   if (typeof window === 'undefined') return false;
+  const clean = cleanTrackId(trackId);
+  if (!clean) return false;
+
   try {
     if ('caches' in window) {
       const cache = await caches.open(CACHE_NAME);
-      const match = await cache.match(`/musica-spotifree/tracks/${trackId}.mp3`);
+      const match = (await cache.match(`/musica-spotifree/tracks/${clean}.mp3`)) ||
+                    (await cache.match(`/musica-spotifree/tracks/${trackId}.mp3`));
       if (match) return true;
     }
   } catch {}
+
+  // Check OPFS
+  try {
+    if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
+      const root = await (navigator.storage as any).getDirectory();
+      const spotifreeDir = await root.getDirectoryHandle('musica-spotifree');
+      const fileHandle = await spotifreeDir.getFileHandle(`${clean}.mp3`);
+      if (fileHandle) return true;
+    }
+  } catch {}
+
   return false;
 }
 
@@ -30,28 +73,85 @@ export async function isTrackDownloaded(trackId: string): Promise<boolean> {
  */
 export async function getDownloadedTrackBlobUrl(trackId: string): Promise<string | null> {
   if (typeof window === 'undefined') return null;
+  const clean = cleanTrackId(trackId);
+  if (!clean) return null;
+
+  // 1. Check CacheStorage
   try {
     if ('caches' in window) {
       const cache = await caches.open(CACHE_NAME);
-      const cacheKey = `/musica-spotifree/tracks/${trackId}.mp3`;
-      const res = await cache.match(cacheKey);
+      const cacheKeyClean = `/musica-spotifree/tracks/${clean}.mp3`;
+      let res = await cache.match(cacheKeyClean);
+      if (!res && clean !== trackId) {
+        res = await cache.match(`/musica-spotifree/tracks/${trackId}.mp3`);
+      }
       if (res && res.ok) {
         const blob = await res.blob();
-        // Discard truncated / 30-second preview audio snippets (< 1.2 MB)
-        if (blob && blob.size < 1_200_000) {
-          try { await cache.delete(cacheKey); } catch {}
+        // Discard corrupted or tiny 0-byte clips (< 400 KB)
+        if (blob && blob.size < 400_000) {
+          try { await cache.delete(cacheKeyClean); } catch {}
           return null;
         }
         return URL.createObjectURL(blob);
       }
     }
+  } catch (err) {
+    console.warn('[offlineStorage] CacheStorage lookup failed:', err);
+  }
+
+  // 2. Check OPFS
+  try {
+    if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
+      const root = await (navigator.storage as any).getDirectory();
+      const spotifreeDir = await root.getDirectoryHandle('musica-spotifree');
+      const fileHandle = await spotifreeDir.getFileHandle(`${clean}.mp3`);
+      const file = await fileHandle.getFile();
+      if (file && file.size >= 400_000) {
+        return URL.createObjectURL(file);
+      }
+    }
   } catch {}
+
   return null;
 }
 
 /**
+ * Get the set of all downloaded track IDs
+ */
+export async function getAllDownloadedTrackIds(): Promise<Set<string>> {
+  const result = new Set<string>();
+  if (typeof window === 'undefined') return result;
+
+  try {
+    if ('caches' in window) {
+      const cache = await caches.open(CACHE_NAME);
+      const requests = await cache.keys();
+      for (const req of requests) {
+        const url = req.url;
+        const match = url.match(/\/musica-spotifree\/tracks\/([^/]+)\.mp3$/);
+        if (match && match[1]) {
+          result.add(cleanTrackId(match[1]));
+        }
+      }
+    }
+  } catch {}
+
+  // Also include tracks registered in localStorage
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(TRACK_META_PREFIX)) {
+        const id = key.substring(TRACK_META_PREFIX.length);
+        if (id) result.add(cleanTrackId(id));
+      }
+    }
+  } catch {}
+
+  return result;
+}
+
+/**
  * Purges any corrupted or short 30-second preview clips from CacheStorage.
- * Full studio tracks are always > 1.2 MB.
  */
 export async function purgeCorruptedPreviewAudio(): Promise<number> {
   if (typeof window === 'undefined' || !('caches' in window)) return 0;
@@ -64,7 +164,7 @@ export async function purgeCorruptedPreviewAudio(): Promise<number> {
         const res = await cache.match(req);
         if (res && res.ok) {
           const blob = await res.blob();
-          if (blob && blob.size < 1_200_000) {
+          if (blob && blob.size < 400_000) {
             await cache.delete(req);
             purgedCount++;
           }
@@ -77,35 +177,43 @@ export async function purgeCorruptedPreviewAudio(): Promise<number> {
 
 /**
  * Download a single track audio stream and store in musica-spotifree cache.
- * Strictly downloads full studio audio stream — NEVER caches 30-second previews.
+ * Strictly downloads full studio audio stream and saves into CacheStorage & OPFS.
  */
 export async function downloadTrackAudio(track: Track): Promise<boolean> {
-  if (typeof window === 'undefined') return false;
+  if (typeof window === 'undefined' || !track) return false;
+  const clean = cleanTrackId(track.id);
+  if (!clean) return false;
+
   try {
     const artist = track.artists?.[0]?.name || '';
     const query = `${track.name} ${artist}`.trim();
     let res: Response | null = null;
 
     try {
-      const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}`;
-      res = await fetch(streamUrl, { signal: AbortSignal.timeout?.(25000) });
-    } catch {}
+      const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(clean)}`;
+      const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+        ? AbortSignal.timeout(60000)
+        : undefined;
+      res = await fetch(streamUrl, { signal: timeoutSignal });
+    } catch (e) {
+      console.warn(`[offlineStorage] Network fetch failed for ${track.name}:`, e);
+    }
 
     if (!res || !res.ok) return false;
 
     const blob = await res.blob();
-    // Strictly require >= 1.2 MB to guarantee full audio rather than previews
-    if (!blob || blob.size < 1_200_000) return false;
+    // Strictly require >= 400 KB to guarantee full audio rather than tiny errors/previews
+    if (!blob || blob.size < 400_000) return false;
 
     // 1. Store in CacheStorage
     if ('caches' in window) {
       const cache = await caches.open(CACHE_NAME);
-      const cacheKey = `/musica-spotifree/tracks/${track.id}.mp3`;
+      const cacheKey = `/musica-spotifree/tracks/${clean}.mp3`;
       const responseToCache = new Response(blob, {
         headers: {
           'Content-Type': 'audio/mpeg',
           'Content-Length': String(blob.size),
-          'X-Track-Id': track.id,
+          'X-Track-Id': clean,
           'X-Track-Title': encodeURIComponent(track.name),
         },
       });
@@ -114,19 +222,112 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
 
     // 2. Try OPFS directory "musica-spotifree"
     try {
-      if (navigator.storage && (navigator.storage as any).getDirectory) {
+      if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
         const root = await (navigator.storage as any).getDirectory();
         const spotifreeDir = await root.getDirectoryHandle('musica-spotifree', { create: true });
-        const fileHandle = await spotifreeDir.getFileHandle(`${track.id}.mp3`, { create: true });
+        const fileHandle = await spotifreeDir.getFileHandle(`${clean}.mp3`, { create: true });
         const writable = await fileHandle.createWritable();
         await writable.write(blob);
         await writable.close();
       }
     } catch {}
 
+    // 3. Save track metadata in localStorage
+    try {
+      window.localStorage.setItem(`${TRACK_META_PREFIX}${clean}`, JSON.stringify(track));
+    } catch {}
+
+    notifyDownloadsChanged(clean);
     return true;
   } catch (e) {
     console.warn(`[offlineStorage] Failed to download track ${track.name}:`, e);
+    return false;
+  }
+}
+
+/**
+ * Delete a single downloaded track from musica-spotifree
+ */
+export async function deleteDownloadedTrack(trackId: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const clean = cleanTrackId(trackId);
+  if (!clean) return;
+
+  try {
+    if ('caches' in window) {
+      const cache = await caches.open(CACHE_NAME);
+      await cache.delete(`/musica-spotifree/tracks/${clean}.mp3`);
+      if (clean !== trackId) {
+        await cache.delete(`/musica-spotifree/tracks/${trackId}.mp3`);
+      }
+    }
+  } catch {}
+
+  try {
+    if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
+      const root = await (navigator.storage as any).getDirectory();
+      const spotifreeDir = await root.getDirectoryHandle('musica-spotifree');
+      await spotifreeDir.removeEntry(`${clean}.mp3`);
+    }
+  } catch {}
+
+  try {
+    window.localStorage.removeItem(`${TRACK_META_PREFIX}${clean}`);
+  } catch {}
+
+  notifyDownloadsChanged(clean);
+}
+
+/**
+ * Save / Export track as a real MP3 file download on user's device
+ */
+export async function saveTrackAsMp3File(track: Track): Promise<boolean> {
+  if (typeof window === 'undefined' || !track) return false;
+  const clean = cleanTrackId(track.id);
+  const artist = track.artists?.[0]?.name || 'Artista';
+  const rawName = `${artist} - ${track.name}`.trim();
+  const safeFilename = rawName.replace(/[/\\?%*:|"<>]/g, '_') + '.mp3';
+
+  // 1. If already downloaded in CacheStorage, export direct blob
+  try {
+    if ('caches' in window) {
+      const cache = await caches.open(CACHE_NAME);
+      const res = (await cache.match(`/musica-spotifree/tracks/${clean}.mp3`)) ||
+                  (await cache.match(`/musica-spotifree/tracks/${track.id}.mp3`));
+      if (res && res.ok) {
+        const blob = await res.blob();
+        if (blob && blob.size >= 400_000) {
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = safeFilename;
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(() => {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+          }, 1000);
+          return true;
+        }
+      }
+    }
+  } catch {}
+
+  // 2. Otherwise trigger direct download via backend /api/audio/download
+  try {
+    const query = `${track.name} ${artist}`.trim();
+    const downloadUrl = `${API_BASE}/api/audio/download?q=${encodeURIComponent(query)}&filename=${encodeURIComponent(safeFilename)}`;
+    const a = document.createElement('a');
+    a.href = downloadUrl;
+    a.download = safeFilename;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      document.body.removeChild(a);
+    }, 1000);
+    return true;
+  } catch (err) {
+    console.error('[offlineStorage] saveTrackAsMp3File failed:', err);
     return false;
   }
 }
@@ -189,6 +390,7 @@ export async function downloadPlaylist(
     } catch {}
   }
 
+  notifyDownloadsChanged();
   return { total, downloaded: successful };
 }
 
@@ -212,10 +414,17 @@ export async function deleteDownloadedPlaylist(playlistId: string, trackIds?: st
     if (trackIds && 'caches' in window) {
       const cache = await caches.open(CACHE_NAME);
       for (const id of trackIds) {
-        await cache.delete(`/musica-spotifree/tracks/${id}.mp3`);
+        const clean = cleanTrackId(id);
+        await cache.delete(`/musica-spotifree/tracks/${clean}.mp3`);
+        if (clean !== id) {
+          await cache.delete(`/musica-spotifree/tracks/${id}.mp3`);
+        }
+        window.localStorage.removeItem(`${TRACK_META_PREFIX}${clean}`);
       }
     }
   } catch {}
+
+  notifyDownloadsChanged();
 }
 
 /**
@@ -300,10 +509,13 @@ export async function clearOfflineCache(): Promise<void> {
       (k) =>
         k.startsWith(METADATA_KEY_PREFIX) ||
         k.startsWith('spotifree_downloaded_') ||
-        k.startsWith('spotifree_offline_playlist_')
+        k.startsWith('spotifree_offline_playlist_') ||
+        k.startsWith(TRACK_META_PREFIX)
     );
     keysToRemove.forEach((k) => window.localStorage.removeItem(k));
   } catch (e) {
     console.warn('[offlineStorage] clearOfflineCache error:', e);
   }
+
+  notifyDownloadsChanged();
 }

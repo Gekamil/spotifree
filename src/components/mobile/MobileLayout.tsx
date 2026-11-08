@@ -886,23 +886,6 @@ export const MobileLayout: React.FC = () => {
               })}
             </div>
 
-            {/* Archivos locales: always there (also signed out / offline) */}
-            {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
-              <div
-                onClick={() => setMobileTab('local')}
-                className="flex items-center gap-3 p-2 mt-2 -mb-1 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
-              >
-                <LocalFilesCover size={48} className="rounded-[4px]" />
-                <div className="flex flex-col min-w-0">
-                  <span className="font-bold text-white text-sm truncate">Archivos locales</span>
-                  <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
-                    <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
-                    Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
-                  </span>
-                </div>
-              </div>
-            )}
-
             {/* Library Items List */}
             {!isAuthenticated ? (
               <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
@@ -916,6 +899,21 @@ export const MobileLayout: React.FC = () => {
                 >
                   Iniciar sesión
                 </button>
+
+                {/* Archivos locales also accessible when signed out */}
+                <div
+                  onClick={() => setMobileTab('local')}
+                  className="w-full flex items-center gap-3 p-3 mt-6 rounded-lg bg-white/5 hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors text-left"
+                >
+                  <LocalFilesCover size={48} className="rounded-[4px] shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-bold text-white text-sm truncate">Archivos locales</span>
+                    <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
+                      <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                      Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                    </span>
+                  </div>
+                </div>
               </div>
             ) : (
               <div className="space-y-1.5 pt-2">
@@ -1080,6 +1078,23 @@ export const MobileLayout: React.FC = () => {
                       </div>
                     );
                   })}
+
+                {/* Archivos locales (at the bottom of playlists list) */}
+                {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
+                  <div
+                    onClick={() => setMobileTab('local')}
+                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                  >
+                    <LocalFilesCover size={48} className="rounded-[4px] shrink-0" />
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-white text-sm truncate">Archivos locales</span>
+                      <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
+                        <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                        Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Spotify Native "Añadir a tu biblioteca" Row */}
                 <div

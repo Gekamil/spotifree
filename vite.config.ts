@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 // @ts-ignore
-import { resolveAudio, streamAudioFromUrl } from './scripts/audioService.mjs';
+import { resolveAudio, streamAudioDirect, streamAudioFromUrl } from './scripts/audioService.mjs';
 // @ts-ignore
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 // @ts-ignore
@@ -700,16 +700,48 @@ function dynamicSpotifyPlugin(): Plugin {
           return res.end(JSON.stringify({ error: 'Missing audio query or id' }));
         }
 
+        const startSec = parseFloat(url.searchParams.get('start') || '0') || 0;
         try {
-          const info = await resolveAudio(target);
-          if (!info || !info.url) {
-            res.statusCode = 404;
-            return res.end(JSON.stringify({ error: 'Stream URL not found' }));
-          }
-          currentPlayingTrackId = info.id;
-          streamAudioFromUrl(info.url, req, res);
+          streamAudioDirect(target, req, res, startSec);
         } catch (err: any) {
           console.error('[AudioStream error]:', err.message);
+          if (!res.headersSent) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+        }
+      });
+
+      // 2b-download. Direct MP3 File Download (/api/audio/download)
+      server.middlewares.use('/api/audio/download', async (req, res) => {
+        res.setHeader('Access-Control-Allow-Origin', '*');
+
+        if (req.method === 'OPTIONS') {
+          res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+          res.statusCode = 204;
+          return res.end();
+        }
+
+        const url = new URL(req.url || '', 'http://localhost');
+        const target = url.searchParams.get('id') || url.searchParams.get('q') || url.searchParams.get('v') || '';
+        const rawFilename = url.searchParams.get('filename') || url.searchParams.get('title') || 'musica';
+        const cleanFilename = (rawFilename.replace(/[/\\?%*:|"<>]/g, '_').trim() + (rawFilename.toLowerCase().endsWith('.mp3') ? '' : '.mp3'));
+
+        if (!target.trim()) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: 'Missing audio query or id' }));
+        }
+
+        try {
+          streamAudioDirect(target, req, res, 0, {
+            contentType: 'audio/mpeg',
+            format: 'ba/b',
+            headers: {
+              'Content-Disposition': `attachment; filename="${encodeURIComponent(cleanFilename)}"; filename*=UTF-8''${encodeURIComponent(cleanFilename)}`,
+            },
+          });
+        } catch (err: any) {
+          console.error('[AudioDownload error]:', err.message);
           if (!res.headersSent) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: err.message }));
