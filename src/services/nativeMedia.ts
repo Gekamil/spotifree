@@ -24,7 +24,9 @@ interface MediaCommand {
     | 'play' | 'pause' | 'next' | 'previous' | 'seek'
     | 'playFromMediaId' | 'playFromSearch' | 'playQueueIndex'
     | 'toggleLike' | 'toggleShuffle' | 'cycleRepeat'
-    | 'loadPlaylist' | 'loadCategory' | 'search' | 'addToQueue' | 'likeItem';
+    | 'loadPlaylist' | 'loadCategory' | 'search' | 'addToQueue' | 'likeItem'
+    | 'openUrl';
+  url?: string;
   positionMs?: number;
   mediaId?: string;
   query?: string;
@@ -587,6 +589,16 @@ async function runCommand(c: MediaCommand) {
     case 'playFromSearch':
       await playVoiceSearch(c.query || '');
       break;
+    case 'openUrl':
+      if (c.url) {
+        try {
+          const { handleDeepLink } = await import('../utils/deepLinkHandler');
+          await handleDeepLink(c.url);
+        } catch (err) {
+          console.warn('[NativeMedia] Failed to handle openUrl:', c.url, err);
+        }
+      }
+      break;
   }
   window.setTimeout(() => pushNowPlaying(true), 500);
 }
@@ -624,7 +636,7 @@ async function playMediaId(mediaId: string) {
 }
 
 /** "Hey Google, play <x> on Spotifree": your playlists first, then any song / playlist */
-async function playVoiceSearch(query: string) {
+export async function playVoiceSearch(query: string) {
   const q = query.trim().toLowerCase();
   const st = useSpotifyDataStore.getState();
   if (!q) {

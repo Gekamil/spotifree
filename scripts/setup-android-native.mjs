@@ -41,7 +41,7 @@ function copyDir(src, dst) {
 }
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
 
-// 3. MainActivity: every plugin of the app
+// 3. MainActivity: every plugin of the app + voice intent & deep links handling
 const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeSpeechPlugin', 'SpotifreeLocalMusicPlugin'].filter((p) =>
   fs.existsSync(path.join(javaDir, `${p}.java`))
 );
@@ -49,14 +49,79 @@ fs.writeFileSync(
   path.join(javaDir, 'MainActivity.java'),
   `package ${PKG};
 
+import android.app.SearchManager;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Bundle;
+import android.provider.MediaStore;
 import com.getcapacitor.BridgeActivity;
+import org.json.JSONObject;
 
 public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
 ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
         super.onCreate(savedInstanceState);
+        handleIncomingIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleIncomingIntent(intent);
+    }
+
+    private void handleIncomingIntent(Intent intent) {
+        if (intent == null) return;
+        String action = intent.getAction();
+        if (action == null) return;
+
+        // 1. Voice playback: Google Assistant, Gemini & Android AI ("Pon música en Spotifree", "Reproduce Bad Bunny en Spotifree")
+        if (MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH.equals(action)
+                || "android.media.action.MEDIA_PLAY_FROM_SEARCH".equals(action)
+                || "android.media.action.PLAY_FROM_SEARCH".equals(action)
+                || "android.intent.action.MEDIA_SEARCH".equals(action)) {
+
+            String query = intent.getStringExtra(SearchManager.QUERY);
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra(MediaStore.EXTRA_MEDIA_TITLE);
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra(MediaStore.EXTRA_MEDIA_ARTIST);
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra(MediaStore.EXTRA_MEDIA_ALBUM);
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("query");
+            }
+            if (query == null) query = "";
+
+            JSONObject data = new JSONObject();
+            try {
+                data.put("query", query);
+            } catch (Exception ignored) {}
+
+            if (!SpotifreeMediaPlugin.emit("playFromSearch", data)) {
+                SpotifreeMediaPlugin.setPending("playFromSearch", data);
+            }
+        }
+        // 2. Open link: open.spotify.com, spotify: URI, or spotifree: link
+        else if (Intent.ACTION_VIEW.equals(action)) {
+            Uri uri = intent.getData();
+            if (uri != null) {
+                String uriStr = uri.toString();
+                JSONObject payload = new JSONObject();
+                try {
+                    payload.put("url", uriStr);
+                } catch (Exception ignored) {}
+
+                if (!SpotifreeMediaPlugin.emit("openUrl", payload)) {
+                    SpotifreeMediaPlugin.setPending("openUrl", payload);
+                }
+            }
+        }
     }
 }
 `,
@@ -164,6 +229,74 @@ ${services}
             android:resource="@drawable/ic_stat_spotifree" />
         ${END}`;
 manifest = manifest.replace(/<\/application>/, `${media}\n    </application>`);
+
+// Activity Intent Filters & Meta-Data for Voice Commands & Deep Links
+const ACT_START = '<!-- spotifree-activity-intents:start -->';
+const ACT_END = '<!-- spotifree-activity-intents:end -->';
+manifest = manifest.replace(new RegExp(`\\s*${ACT_START}[\\s\\S]*?${ACT_END}`), '');
+
+const activityIntents = `            ${ACT_START}
+            <!-- 1. Voice playback via Google Assistant, Gemini & Android AI: "Pon música en Spotifree", "Reproduce Bad Bunny en Spotifree" -->
+            <intent-filter>
+                <action android:name="android.media.action.MEDIA_PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.MEDIA_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.media.action.PLAY_FROM_SEARCH" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+
+            <!-- 2. Custom URI schemes: spotifree:// and spotify:// (spotify:track:..., spotify:playlist:...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="spotifree" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="spotify" />
+            </intent-filter>
+
+            <!-- 3. Web App Links: spotifreeweb.vercel.app (verified App Links) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="spotifreeweb.vercel.app" />
+                <data android:scheme="http" android:host="spotifreeweb.vercel.app" />
+            </intent-filter>
+
+            <!-- 4. Open Spotify web links in Spotifree: open.spotify.com -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="open.spotify.com" />
+                <data android:scheme="http" android:host="open.spotify.com" />
+            </intent-filter>
+
+            <!-- Google Assistant App Actions & In-App Searchable -->
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
+            <meta-data
+                android:name="android.app.searchable"
+                android:resource="@xml/searchable" />
+            ${ACT_END}`;
+
+manifest = manifest.replace(/(<activity\b[^>]*android:name="\.MainActivity"[^>]*>[\s\S]*?)(<\/activity>)/, `$1\n${activityIntents}\n        $2`);
+
+if (!manifest.includes('android.app.default_searchable')) {
+  manifest = manifest.replace(/<\/application>/, `        <meta-data android:name="android.app.default_searchable" android:value=".MainActivity" />\n    </application>`);
+}
+
 fs.writeFileSync(manifestPath, manifest, 'utf8');
 
 // 5. Gradle dependency

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Google Assistant, Gemini & Android AI: "Pon música en Spotifree", "Reproduce <canción/artista> en Spotifree" -->
+    <capability android:name="actions.intent.PLAY_MUSIC">
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="song.name"
+                android:key="query" />
+        </intent>
+    </capability>
+
+    <!-- In-app voice feature navigation -->
+    <capability android:name="actions.intent.OPEN_APP_FEATURE">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="feature"
+                android:key="feature" />
+        </intent>
+    </capability>
+</shortcuts>

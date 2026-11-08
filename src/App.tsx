@@ -21,6 +21,7 @@ import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
 import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
 import { initSpotifreeMixes } from './services/spotifreeMixes';
+import { initDeepLinks, handleDeepLink } from './utils/deepLinkHandler';
 
 if (typeof window !== 'undefined') {
   (window as any).__useUIStore = useUIStore;
@@ -58,6 +59,21 @@ function App() {
         }
       } catch {}
     }
+
+    // Initialize Deep Links & Voice playback commands (Android AI / Gemini / Assistant / Links)
+    initDeepLinks();
+    let removeUrlListener: (() => void) | null = null;
+    try {
+      if (Capacitor.isPluginAvailable('App')) {
+        CapApp.addListener('appUrlOpen', (event) => {
+          if (event?.url) {
+            void handleDeepLink(event.url);
+          }
+        }).then((handle) => {
+          removeUrlListener = () => handle.remove();
+        }).catch(() => {});
+      }
+    } catch {}
 
     // Synchronize local playback changes to active shared session (preventing echo loops)
     const unsubscribePlayer = usePlayerStore.subscribe((state, prevState) => {
@@ -159,6 +175,7 @@ function App() {
 
     return () => {
       removeBackListener?.();
+      removeUrlListener?.();
       unsubscribeAuth();
       unsubscribePlayer();
       window.removeEventListener('focus', handleFocus);

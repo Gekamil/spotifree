@@ -43,7 +43,24 @@
       "type": "image/png"
     }
   ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+spotifree",
+      "url": "/?play=%s"
+    },
+    {
+      "protocol": "web+spotify",
+      "url": "/?play=%s"
+    }
+  ],
   "shortcuts": [
+    {
+      "name": "Reproducir música",
+      "short_name": "Reproducir",
+      "description": "Reproducir música al instante en Spotifree",
+      "url": "/?play=random",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
     {
       "name": "Buscar",
       "short_name": "Buscar",
