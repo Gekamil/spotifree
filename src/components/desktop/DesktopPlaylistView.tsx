@@ -883,13 +883,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       (dynamicPlaylist.name || '').trim()
     );
 
-  const isArtist =
+  // A playlist saved in the library (e.g. imported) is never shown as an artist page
+  const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
+  const isArtist = !isLibraryPlaylist && (
     dynamicPlaylist.id === '3x7gz85amxEplGx7LQxE7Z' ||
     dynamicPlaylist.id === '5lwmRuXgjX8xIwlnauTZIP' ||
     dynamicPlaylist.id === 'romeo-santos' ||
     dynamicPlaylist.description?.toLowerCase() === 'artista' ||
     (dynamicPlaylist as any).type === 'artist' ||
-    dynamicPlaylist.id.startsWith('art-');
+    dynamicPlaylist.id.startsWith('art-'));
 
   const isFolder =
     dynamicPlaylist.id === 'nueva-carpeta' ||
