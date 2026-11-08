@@ -420,6 +420,93 @@ async function handleMotionCover(req, res) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Discovery for the Spotifree playlists (Deezer's public API; the browser can't call it: no CORS).
+// ?artist=Name -> the artist (the real one: same name, most fans), their top songs, similar
+// artists with a few songs each, and songs from their releases of the last weeks.
+// ---------------------------------------------------------------------------
+const DISCOVER_CACHE = new Map();
+
+const dzNorm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+
+async function dz(path) {
+  const r = await fetch(`https://api.deezer.com${path}`, { headers: { 'User-Agent': 'Spotifree/1.0' } });
+  if (!r.ok) throw new Error(`deezer ${r.status}`);
+  const j = await r.json();
+  if (j?.error) throw new Error(j.error.message || 'deezer error');
+  return j;
+}
+
+function dzTrack(t, fallbackArtist) {
+  if (!t?.id || !t.title) return null;
+  return {
+    id: `dz-${t.id}`,
+    name: t.title,
+    duration_ms: (t.duration || 200) * 1000,
+    artists: [{ id: `dz-art-${t.artist?.id || ''}`, name: t.artist?.name || fallbackArtist || '' }],
+    album: {
+      id: `dz-alb-${t.album?.id || ''}`,
+      name: t.album?.title || '',
+      images: t.album?.cover_xl || t.album?.cover_big ? [{ url: t.album.cover_xl || t.album.cover_big }] : [],
+    },
+    rank: t.rank || 0,
+    explicit: Boolean(t.explicit_lyrics),
+  };
+}
+
+async function handleDiscover(req, res) {
+  const name = String(req.query?.artist || '').trim();
+  if (!name) return res.status(400).json({ error: 'Missing artist' });
+  const key = dzNorm(name);
+  if (DISCOVER_CACHE.has(key)) {
+    res.setHeader('Cache-Control', 'public, max-age=21600, s-maxage=86400');
+    return res.status(200).json(DISCOVER_CACHE.get(key));
+  }
+  try {
+    const found = await dz(`/search/artist?q=${encodeURIComponent(name)}&limit=8`);
+    const candidates = (found.data || []).filter((a) => dzNorm(a.name) === key);
+    const artist = (candidates.length ? candidates : found.data || []).sort((a, b) => (b.nb_fan || 0) - (a.nb_fan || 0))[0];
+    if (!artist) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      return res.status(200).json({ artist: null, top: [], related: [], recent: [] });
+    }
+    const [top, related, albums] = await Promise.all([
+      dz(`/artist/${artist.id}/top?limit=15`).catch(() => ({ data: [] })),
+      dz(`/artist/${artist.id}/related?limit=8`).catch(() => ({ data: [] })),
+      dz(`/artist/${artist.id}/albums?limit=12`).catch(() => ({ data: [] })),
+    ]);
+    const rel = (related.data || []).slice(0, 6);
+    const relTops = await Promise.all(rel.map((r) => dz(`/artist/${r.id}/top?limit=6`).catch(() => ({ data: [] }))));
+    // Releases of the last 8 weeks
+    const since = Date.now() - 56 * 24 * 3600 * 1000;
+    const fresh = (albums.data || []).filter((a) => a.release_date && Date.parse(a.release_date) >= since).slice(0, 3);
+    const freshTracks = await Promise.all(fresh.map((a) => dz(`/album/${a.id}/tracks?limit=6`).catch(() => ({ data: [] }))));
+    const out = {
+      artist: { id: artist.id, name: artist.name, picture: artist.picture_xl || artist.picture_big || null, fans: artist.nb_fan || 0 },
+      top: (top.data || []).map((t) => dzTrack(t, artist.name)).filter(Boolean),
+      related: rel.map((r, i) => ({
+        name: r.name,
+        picture: r.picture_xl || r.picture_big || null,
+        fans: r.nb_fan || 0,
+        top: (relTops[i].data || []).map((t) => dzTrack(t, r.name)).filter(Boolean),
+      })),
+      recent: fresh.map((a, i) => ({
+        title: a.title,
+        date: a.release_date,
+        cover: a.cover_xl || a.cover_big || null,
+        tracks: (freshTracks[i].data || [])
+          .map((t) => dzTrack({ ...t, album: { id: a.id, title: a.title, cover_xl: a.cover_xl, cover_big: a.cover_big } }, artist.name))
+          .filter(Boolean),
+      })),
+    };
+    DISCOVER_CACHE.set(key, out);
+    res.setHeader('Cache-Control', 'public, max-age=21600, s-maxage=86400');
+    return res.status(200).json(out);
+  } catch (e) {
+    return res.status(200).json({ artist: null, top: [], related: [], recent: [], error: String(e?.message || e) });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -433,5 +520,6 @@ export default async function handler(req, res) {
   if (action === 'canvas') return handleCanvas(req, res, url);
   if (action === 'artist-image') return handleArtistImage(req, res);
   if (action === 'motion-cover') return handleMotionCover(req, res);
+  if (action === 'discover') return handleDiscover(req, res);
   return handleAudioFeatures(req, res);
 }

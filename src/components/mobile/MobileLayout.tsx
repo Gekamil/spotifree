@@ -8,6 +8,7 @@ import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { LocalFilesCover, LocalFilesView } from '../common/LocalFilesView';
 import { LOCAL_FILES_EVENT, LOCAL_FILES_PLAYLIST_ID, listLocalTracks } from '../../utils/localFiles';
 import { deviceTracks, scanDeviceMusic } from '../../utils/nativeLocalMusic';
+import { useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -318,6 +319,7 @@ export const MobileLayout: React.FC = () => {
   };
 
   const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
+  const sfMixes = useSpotifreeMixes((s) => s.mixes);
   const { openLoginModal } = useUIStore();
 
   const handleCreatePlaylist = (name: string) => {
@@ -378,10 +380,12 @@ export const MobileLayout: React.FC = () => {
       });
     }
 
-    // 2. Base dynamic shelves (Emisoras recomendadas, Tus mixes más escuchados, etc.)
-    const base = dynamicShelves && dynamicShelves.length > 0
-      ? dynamicShelves
-      : buildDynamicShelves(user, playlists, featuredMessage);
+    // 2. Base dynamic shelves (Emisoras recomendadas, Tus mixes más escuchados, etc.) + Spotifree's own
+    const base = withSpotifreeShelves(
+      dynamicShelves && dynamicShelves.length > 0 ? dynamicShelves : buildDynamicShelves(user, playlists, featuredMessage),
+      sfMixes,
+      user?.display_name
+    );
 
     base
       // "Tus listas creadas" repeats what "Tus playlists" already shows on mobile
@@ -409,7 +413,7 @@ export const MobileLayout: React.FC = () => {
     }
 
     return list;
-  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter]);
+  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];

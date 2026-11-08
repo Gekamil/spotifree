@@ -36,12 +36,10 @@ import {
   downloadPlaylist,
   deleteDownloadedPlaylist,
   isPlaylistDownloaded,
-  downloadTrackAudio,
-  deleteDownloadedTrack,
-  saveTrackAsMp3File,
   getAllDownloadedTrackIds,
   onDownloadsChanged,
 } from '../../utils/offlineStorage';
+import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
@@ -2094,47 +2092,18 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     <DownloadCircleNativeIcon size={22} className="text-white" />
                   )
                 }
-                label={
+                label={downloadedTrackIds.has(cleanTrackId(activeTrackMenu.id)) ? 'Eliminar descarga' : 'Descargar'}
+                sublabel={
                   downloadedTrackIds.has(cleanTrackId(activeTrackMenu.id))
-                    ? 'Eliminar descarga sin conexión'
-                    : 'Descargar canción (modo avión)'
+                    ? 'Suena sin conexión y está en tu dispositivo'
+                    : 'Sin conexión y guardada en tu dispositivo'
                 }
                 onClick={async () => {
+                  // One option: kept in the app for airplane mode + saved as a file on the phone
                   const trk = activeTrackMenu;
                   setActiveTrackMenu(null);
-                  const clean = cleanTrackId(trk.id);
-                  if (downloadedTrackIds.has(clean)) {
-                    await deleteDownloadedTrack(trk.id);
-                    setToastMessage(`Descarga eliminada: ${trk.name}`);
-                  } else {
-                    setToastMessage(`Descargando «${trk.name}»...`);
-                    const ok = await downloadTrackAudio(trk);
-                    if (ok) {
-                      setToastMessage(`¡«${trk.name}» descargada para modo avión!`);
-                    } else {
-                      setToastMessage(`No se pudo descargar «${trk.name}».`);
-                    }
-                  }
-                  setTimeout(() => setToastMessage(null), 3000);
-                }}
-              />
-
-              {/* Guardar archivo MP3 */}
-              <SheetItem
-                icon={
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                }
-                label="Guardar archivo MP3"
-                onClick={async () => {
-                  const trk = activeTrackMenu;
-                  setActiveTrackMenu(null);
-                  setToastMessage(`Guardando MP3 de «${trk.name}»...`);
-                  await saveTrackAsMp3File(trk);
-                  setTimeout(() => setToastMessage(null), 2500);
+                  if (downloadedTrackIds.has(cleanTrackId(trk.id))) await removeTrackDownload(trk);
+                  else await downloadTrackEverywhere(trk);
                 }}
               />
 

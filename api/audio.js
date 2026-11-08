@@ -67,12 +67,34 @@ function fetchWithTimeout(url, opts, ms = 3500) {
   return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
 }
 
-const INVIDIOUS_INSTANCES = [
-  'https://invidious.privacyredirect.com',
-  'https://inv.nadeko.net',
+let INVIDIOUS_INSTANCES = [
+  'https://yt.chocolatemoo53.com',
+  'https://invidious.tiekoetter.com',
   'https://invidious.nerdvpn.de',
-  'https://yt.drgnz.club',
+  'https://inv.nadeko.net',
+  'https://invidious.privacyredirect.com',
 ];
+let LAST_INSTANCES_FETCH = 0;
+
+async function getHealthyInvidiousInstances() {
+  if (Date.now() - LAST_INSTANCES_FETCH < 3600000 && INVIDIOUS_INSTANCES.length > 2) {
+    return INVIDIOUS_INSTANCES;
+  }
+  try {
+    const res = await fetchWithTimeout('https://api.invidious.io/instances.json?sort_by=health', {}, 3500);
+    if (res.ok) {
+      const data = await res.json();
+      const healthy = (data || [])
+        .filter(([domain, meta]) => meta?.type === 'https' && meta?.health > 80 && meta?.uri)
+        .map(([domain, meta]) => meta.uri);
+      if (healthy.length > 0) {
+        INVIDIOUS_INSTANCES = [...new Set(['https://yt.chocolatemoo53.com', ...healthy])];
+        LAST_INSTANCES_FETCH = Date.now();
+      }
+    }
+  } catch {}
+  return INVIDIOUS_INSTANCES;
+}
 
 function parseDurationSec(durStr) {
   if (!durStr) return 0;
@@ -528,15 +550,27 @@ async function getDeezerPreview(title, artist) {
 }
 
 async function getInvidiousAudioUrl(videoId) {
-  for (const base of INVIDIOUS_INSTANCES) {
+  const instances = await getHealthyInvidiousInstances();
+  for (const base of instances) {
     try {
-      const res = await fetchWithTimeout(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats`, {}, 5000);
+      const res = await fetchWithTimeout(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {}, 4000);
       if (!res.ok) continue;
       const data = await res.json();
-      const formats = data.adaptiveFormats || [];
+      const formats = [...(data.adaptiveFormats || []), ...(data.formatStreams || [])];
       const audio = formats
-        .filter(f => f.type?.startsWith('audio/') && f.url)
+        .filter((f) => (f.type?.startsWith('audio/') || f.container === 'm4a' || f.container === 'webm') && f.url)
         .sort((a, b) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0));
+
+      for (const f of audio) {
+        if (!f.url) continue;
+        try {
+          const probe = await fetchWithTimeout(f.url, { headers: { Range: 'bytes=0-1024' } }, 3000);
+          if (probe.ok || probe.status === 206) {
+            return f.url;
+          }
+        } catch {}
+      }
+      // If probe was throttled, still return highest bitrate url as strong candidate
       if (audio[0]?.url) return audio[0].url;
     } catch {}
   }
@@ -546,34 +580,68 @@ async function getInvidiousAudioUrl(videoId) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Disposition');
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const action = req.query?.action || (url.pathname.includes('/stream') ? 'stream' : 'resolve');
+  const action = req.query?.action || (url.pathname.includes('/stream') ? 'stream' : url.pathname.includes('/download') ? 'download' : 'resolve');
 
-  // 1. STREAM ACTION
-  if (action === 'stream') {
-    const q = (req.query?.q || '').trim();
-    if (!q) return res.status(400).json({ error: 'Missing query q' });
+  // 1. STREAM OR DOWNLOAD ACTION
+  if (action === 'stream' || action === 'download') {
+    const q = (req.query?.q || req.query?.query || '').trim();
+    const explicitId = (req.query?.videoId || req.query?.id || '').trim();
+    const filename = req.query?.filename ? decodeURIComponent(req.query.filename) : 'cancion.mp3';
+
+    if (!q && !explicitId) return res.status(400).json({ error: 'Missing query q or videoId' });
 
     try {
-      let videoId = null;
-      try {
-        const result = await resolveViaYouTubeMusic(q);
-        videoId = result?.videoId;
-      } catch {
-        const result = await resolveViaYouTubeSearch(q);
-        videoId = result?.videoId;
+      let videoId = /^[\w-]{11}$/.test(explicitId) ? explicitId : null;
+      if (!videoId) {
+        try {
+          const result = await resolveViaYouTubeMusic(q);
+          videoId = result?.videoId;
+        } catch {
+          const result = await resolveViaYouTubeSearch(q);
+          videoId = result?.videoId;
+        }
       }
 
       if (!videoId) return res.status(404).json({ error: 'Video not found' });
       const audioUrl = await getInvidiousAudioUrl(videoId);
       if (!audioUrl) return res.status(404).json({ error: 'Audio stream not found' });
 
+      // Support direct audio piping if requested or for downloads requiring inline bytes
+      const shouldPipe = req.query?.pipe === 'true';
+      if (shouldPipe) {
+        try {
+          const upstream = await fetch(audioUrl, {
+            headers: { Range: req.headers.range || 'bytes=0-' },
+          });
+          if (upstream.ok || upstream.status === 206) {
+            res.status(upstream.status);
+            res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg');
+            if (action === 'download') {
+              res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            }
+            const cl = upstream.headers.get('content-length');
+            if (cl) res.setHeader('Content-Length', cl);
+            const cr = upstream.headers.get('content-range');
+            if (cr) res.setHeader('Content-Range', cr);
+            res.setHeader('Accept-Ranges', 'bytes');
+            const body = Buffer.from(await upstream.arrayBuffer());
+            return res.send(body);
+          }
+        } catch {}
+      }
+
+      // Default high-performance path: 302 redirect directly to the audio stream CDN
+      if (action === 'download') {
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      }
       return res.redirect(302, audioUrl);
     } catch (err) {
       return res.status(500).json({ error: err.message });

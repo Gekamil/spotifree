@@ -41,6 +41,8 @@ export function motionCoversAllowed(): boolean {
 export interface MotionCover {
   video: string;
   poster: string | null;
+  /** 'hls' = Apple Music animated cover (.m3u8); 'mp4' = the song's Spotify Canvas */
+  kind?: 'hls' | 'mp4';
 }
 
 const TTL = 7 * 24 * 3600 * 1000;
@@ -80,35 +82,84 @@ function albumKey(t: Track): string {
   return `${norm(t.artists?.[0]?.name)}|${norm(t.album?.name || t.name)}`;
 }
 
-async function appleAlbumId(t: Track): Promise<string | null> {
-  const artist = t.artists?.[0]?.name || '';
-  const term = encodeURIComponent(`${artist} ${t.name}`.trim());
+const artistIdMem = new Map<string, string | null>();
+
+/** Apple's id for the artist (exact name), to list their own albums */
+async function appleArtistId(artist: string): Promise<string | null> {
+  const key = norm(artist);
+  if (artistIdMem.has(key)) return artistIdMem.get(key) || null;
   try {
-    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=8&country=es`);
+    const r = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(artist)}&entity=musicArtist&limit=5&country=es`);
     if (!r.ok) return null;
     const data = await r.json();
-    // Exactly this song: same artist (whole name) and same title, or the same album name.
-    // Never "the artist's first album": that showed covers of other albums.
-    const artistN = norm(artist);
-    const title = norm(t.name);
-    const album = norm(t.album?.name);
-    const results: any[] = (data.results || []).filter((x: any) => {
-      const xa = norm(x.artistName);
-      return artistN && xa && (xa.includes(artistN) || artistN.includes(xa));
-    });
-    const hit =
-      (album && results.find((x) => norm(x.collectionName) === album)) ||
-      results.find((x) => norm(x.trackName) === title) ||
-      null;
+    const hit = (data.results || []).find((x: any) => norm(x.artistName) === key);
+    const id = hit?.artistId ? String(hit.artistId) : null;
+    artistIdMem.set(key, id);
+    return id;
+  } catch {
+    return null;
+  }
+}
+
+/** The album, found in the artist's own catalogue (titles like "EoO" are not found by search) */
+async function albumFromArtistCatalogue(artist: string, album: string): Promise<string | null> {
+  const want = norm(album);
+  if (!want) return null;
+  const artistId = await appleArtistId(artist);
+  if (!artistId) return null;
+  try {
+    const r = await fetch(`https://itunes.apple.com/lookup?id=${artistId}&entity=album&limit=200&country=es`);
+    if (!r.ok) return null;
+    const data = await r.json();
+    const albums: any[] = (data.results || []).filter((x: any) => x.wrapperType === 'collection');
+    const strip = (s: string) => norm(s).replace(/\s+(single|ep|deluxe|deluxe edition|edicion deluxe)$/, '');
+    const hit = albums.find((x) => norm(x.collectionName) === want) || albums.find((x) => strip(x.collectionName) === strip(album));
     return hit?.collectionId ? String(hit.collectionId) : null;
   } catch {
     return null;
   }
 }
 
-/** Animated cover of the track's album, or null (most albums have none) */
-export function getMotionCover(t: Track | null | undefined): Promise<MotionCover | null> {
-  if (!t?.name || !t.artists?.[0]?.name) return Promise.resolve(null);
+async function appleAlbumId(t: Track): Promise<string | null> {
+  const artist = t.artists?.[0]?.name || '';
+  const term = encodeURIComponent(`${artist} ${t.name}`.trim());
+  try {
+    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=8&country=es`);
+    if (r.ok) {
+      const data = await r.json();
+      // Exactly this song: same artist (whole name) and same title, or the same album name.
+      // Never "the artist's first album": that showed covers of other albums.
+      const artistN = norm(artist);
+      const title = norm(t.name);
+      const album = norm(t.album?.name);
+      const results: any[] = (data.results || []).filter((x: any) => {
+        const xa = norm(x.artistName);
+        return artistN && xa && (xa.includes(artistN) || artistN.includes(xa));
+      });
+      const hit =
+        (album && results.find((x) => norm(x.collectionName) === album)) ||
+        results.find((x) => norm(x.trackName) === title) ||
+        null;
+      if (hit?.collectionId) return String(hit.collectionId);
+    }
+  } catch {}
+  // Second try: the album by name in the artist's catalogue
+  return t.album?.name ? albumFromArtistCatalogue(artist, t.album.name) : null;
+}
+
+/** The song's own Spotify Canvas (looping video), used when Apple has no animated cover */
+async function canvasFor(t: Track): Promise<MotionCover | null> {
+  try {
+    const { fetchTrackCanvas } = await import('./spotifyApi');
+    const url = await fetchTrackCanvas(t.id, t.name, t.artists?.[0]?.name);
+    return url ? { video: url, poster: null, kind: 'mp4' } : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Apple Music animated cover of the track's album (cached per album), or null */
+function appleMotion(t: Track): Promise<MotionCover | null> {
   const key = albumKey(t);
   if (mem.has(key)) return Promise.resolve(mem.get(key) || null);
   const s = stored[key];
@@ -121,12 +172,12 @@ export function getMotionCover(t: Track | null | undefined): Promise<MotionCover
   const p = (async () => {
     try {
       const id = await appleAlbumId(t);
-      // No exact album found: no animated cover (a wrong one is worse than none)
+      // No exact album found: no Apple cover (a wrong one is worse than none)
       if (!id) return null;
       const r = await fetch(`/api/motion-cover?id=${id}&country=es`);
       if (!r.ok) return null;
       const data = await r.json();
-      const v: MotionCover | null = data?.square?.video ? { video: data.square.video, poster: data.square.poster || null } : null;
+      const v: MotionCover | null = data?.square?.video ? { video: data.square.video, poster: data.square.poster || null, kind: 'hls' } : null;
       // Only remember answers that really came back (not network errors)
       if (data && !data.error) save(key, v);
       return v;
@@ -138,4 +189,13 @@ export function getMotionCover(t: Track | null | undefined): Promise<MotionCover
   })();
   pending.set(key, p);
   return p;
+}
+
+/**
+ * Moving cover for the playing song: the album's Apple Music animated cover, or else the
+ * song's own Spotify Canvas (e.g. the eye of Bad Bunny's "EoO"), or null.
+ */
+export async function getMotionCover(t: Track | null | undefined): Promise<MotionCover | null> {
+  if (!t?.name || !t.artists?.[0]?.name) return null;
+  return (await appleMotion(t)) || (await canvasFor(t));
 }

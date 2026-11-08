@@ -6,7 +6,8 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openStoryCard } from '../../utils/storyCard';
-import { isTrackDownloaded, downloadTrackAudio, deleteDownloadedTrack, saveTrackAsMp3File } from '../../utils/offlineStorage';
+import { isTrackDownloaded } from '../../utils/offlineStorage';
+import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -550,45 +551,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
           {targetTrack && (
             <button
               onClick={async () => {
+                // One option: kept in the app for airplane mode + saved as a file on the device
                 if (isTrackOffline) {
-                  await deleteDownloadedTrack(targetTrack.id);
+                  await removeTrackDownload(targetTrack);
                   setIsTrackOffline(false);
-                  try {
-                    window.dispatchEvent(
-                      new CustomEvent('spotifree:toast', {
-                        detail: { message: `Descarga eliminada: ${targetTrack.name}` }
-                      })
-                    );
-                  } catch {}
                 } else {
                   setIsDownloadingTrack(true);
-                  try {
-                    window.dispatchEvent(
-                      new CustomEvent('spotifree:toast', {
-                        detail: { message: `Descargando «${targetTrack.name}» para escuchar sin conexión...` }
-                      })
-                    );
-                  } catch {}
-                  const ok = await downloadTrackAudio(targetTrack);
+                  const ok = await downloadTrackEverywhere(targetTrack);
                   setIsDownloadingTrack(false);
-                  if (ok) {
-                    setIsTrackOffline(true);
-                    try {
-                      window.dispatchEvent(
-                        new CustomEvent('spotifree:toast', {
-                          detail: { message: `¡«${targetTrack.name}» descargada para escuchar en modo avión!` }
-                        })
-                      );
-                    } catch {}
-                  } else {
-                    try {
-                      window.dispatchEvent(
-                        new CustomEvent('spotifree:toast', {
-                          detail: { message: `No se pudo descargar «${targetTrack.name}». Inténtalo de nuevo.` }
-                        })
-                      );
-                    } catch {}
-                  }
+                  if (ok) setIsTrackOffline(true);
                 }
                 closeContextMenu();
               }}
@@ -601,30 +572,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                   <path d="M8 1.5a.75.75 0 0 1 .75.75v7.19l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 1 1 1.06-1.06l2.72 2.72V2.25A.75.75 0 0 1 8 1.5M2 13a1 1 0 0 1 1-1h10a1 1 0 1 1 0 2H3a1 1 0 0 1-1-1" />
                 )}
               </svg>
-              <span>{isTrackOffline ? 'Eliminar descarga sin conexión' : isDownloadingTrack ? 'Descargando...' : 'Descargar canción (modo avión)'}</span>
-            </button>
-          )}
-
-          {/* Guardar archivo MP3 en el ordenador */}
-          {targetTrack && (
-            <button
-              onClick={async () => {
-                closeContextMenu();
-                try {
-                  window.dispatchEvent(
-                    new CustomEvent('spotifree:toast', {
-                      detail: { message: `Guardando MP3 de «${targetTrack.name}»...` }
-                    })
-                  );
-                } catch {}
-                await saveTrackAsMp3File(targetTrack);
-              }}
-              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                <path d="M.5 9.9a.75.75 0 0 1 .75.75v2.6a1 1 0 0 0 1 1h11.5a1 1 0 0 0 1-1v-2.6a.75.75 0 0 1 1.5 0v2.6A2.5 2.5 0 0 1 13.75 15.75H2.25A2.5 2.5 0 0 1-.25 13.25v-2.6A.75.75 0 0 1 .5 9.9M8 .25a.75.75 0 0 1 .75.75v8.69l2.72-2.72a.75.75 0 1 1 1.06 1.06l-4 4a.75.75 0 0 1-1.06 0l-4-4a.75.75 0 0 1 1.06-1.06l2.72 2.72V1a.75.75 0 0 1 .75-.75" />
-              </svg>
-              <span>Guardar archivo MP3</span>
+              <span>{isTrackOffline ? 'Eliminar descarga' : isDownloadingTrack ? 'Descargando…' : 'Descargar'}</span>
             </button>
           )}
 

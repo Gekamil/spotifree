@@ -70,6 +70,10 @@
       "destination": "/api/metadata?action=motion-cover"
     },
     {
+      "source": "/api/discover",
+      "destination": "/api/metadata?action=discover"
+    },
+    {
       "source": "/api/audio/stream",
       "destination": "/api/audio?action=stream"
     },

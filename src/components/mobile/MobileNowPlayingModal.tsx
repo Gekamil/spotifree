@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MotionCover } from '../common/MotionCover';
+
+/** Transparent 1×1 poster: Android's WebView draws a grey "play" icon for videos without one */
+const TRANSPARENT_PIXEL = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -33,7 +36,8 @@ import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
-import { isTrackDownloaded, downloadTrackAudio, deleteDownloadedTrack, saveTrackAsMp3File } from '../../utils/offlineStorage';
+import { isTrackDownloaded } from '../../utils/offlineStorage';
+import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { parseTrackArtists } from '../../utils/trackArtists';
 
 interface MobileNowPlayingModalProps {
@@ -137,6 +141,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
+  const [canvasReady, setCanvasReady] = useState(false);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
   const [extractedModalColor, setExtractedModalColor] = useState<string>(() =>
@@ -250,6 +255,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       // Reset media/canvas state synchronously
       setIsCanvasMode(false);
       setCanvasUrl(null);
+      setCanvasReady(false);
       setLyrics(null);
       setSyncedLines([]);
       setVideoId(null);
@@ -396,18 +402,22 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     audioEngine.seek(newMs / 1000);
   };
 
+  // The Canvas only takes over once its video is really playing (it loads in the background as
+  // soon as the song has one): no black screen / Android's default video icon in between
+  const showCanvas = Boolean(isCanvasMode && canvasUrl && canvasReady);
+
   return (
     <div
       className="fixed inset-0 z-[100] flex flex-col select-none font-['SpotifyMixUI'] animate-slide-up-modal overflow-hidden"
       style={{
-        background: isCanvasMode && canvasUrl
+        background: showCanvas
           ? '#080808'
           : `linear-gradient(180deg, ${extractedModalColor} 0%, rgba(18, 18, 18, 1) 500px, #121212 100%)`,
       }}
     >
       {/* Canvas Full-Screen Looping Video in Background with smooth crossfade */}
       <div className={`absolute inset-0 pointer-events-none z-0 overflow-hidden transition-opacity duration-700 ease-in-out ${
-        isCanvasMode && canvasUrl ? 'opacity-100' : 'opacity-0'
+        showCanvas ? 'opacity-100' : 'opacity-0'
       }`}>
         {canvasUrl && (
           <video
@@ -417,6 +427,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             loop
             muted
             playsInline
+            preload="auto"
+            // The song's cover until the first frame (never the WebView's grey video icon)
+            poster={displayCover || TRANSPARENT_PIXEL}
+            onPlaying={() => setCanvasReady(true)}
+            onError={() => setCanvasReady(false)}
             className="absolute inset-0 w-full h-full object-cover"
           />
         )}
@@ -502,7 +517,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               transition: touchStartX !== null ? 'none' : 'transform 0.3s cubic-bezier(0.25, 1, 0.5, 1)',
             }}
             className={`w-full max-w-[min(74vw,300px)] sm:max-w-[320px] aspect-square rounded-2xl overflow-hidden shadow-[0_16px_45px_rgba(0,0,0,0.7)] bg-[#181818] relative transition-all duration-700 ease-in-out ${
-            isCanvasMode && canvasUrl
+            showCanvas
               ? 'opacity-0 scale-95 pointer-events-none'
               : 'opacity-100 scale-100'
           }`}>
@@ -534,7 +549,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               onClick={() => setIsCanvasMode(!isCanvasMode)}
               className="flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all active:scale-95 cursor-pointer border border-white/10 shadow-sm backdrop-blur-md"
             >
-              {isCanvasMode ? (
+              {isCanvasMode && !canvasReady ? (
+                <>
+                  <span className="w-3 h-3 border-2 border-white/25 border-t-white rounded-full animate-spin" />
+                  <span>Cargando Canvas…</span>
+                </>
+              ) : isCanvasMode ? (
                 <>
                   <AudioSwitchNativeIcon size={14} className="text-[#1ed760]" />
                   <span>Cambiar a carátula</span>
@@ -555,7 +575,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <div className="min-w-0 flex-1 mr-4 flex items-center">
               {/* Mini cover thumbnail with smooth width & opacity transition */}
               <div className={`overflow-hidden transition-all duration-500 ease-in-out shrink-0 ${
-                isCanvasMode && canvasUrl && displayCover ? 'w-12 h-12 opacity-100 mr-3' : 'w-0 h-12 opacity-0 mr-0'
+                showCanvas && displayCover ? 'w-12 h-12 opacity-100 mr-3' : 'w-0 h-12 opacity-0 mr-0'
               }`}>
                 {displayCover && (
                   <img
@@ -1142,47 +1162,17 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* Option: Descargar canción (offline) */}
               <button
                 onClick={async () => {
+                  // One option: kept in the app for airplane mode + saved as a file on the phone
+                  setIsMenuOpen(false);
                   if (isTrackDownloadedState) {
-                    await deleteDownloadedTrack(currentTrack.id);
+                    await removeTrackDownload(currentTrack);
                     setIsTrackDownloadedState(false);
-                    try {
-                      window.dispatchEvent(
-                        new CustomEvent('spotifree:toast', {
-                          detail: { message: `Descarga eliminada: ${currentTrack.name}` }
-                        })
-                      );
-                    } catch {}
                   } else {
                     setIsDownloadingTrackState(true);
-                    try {
-                      window.dispatchEvent(
-                        new CustomEvent('spotifree:toast', {
-                          detail: { message: `Descargando «${currentTrack.name}» para escuchar sin conexión...` }
-                        })
-                      );
-                    } catch {}
-                    const ok = await downloadTrackAudio(currentTrack);
+                    const ok = await downloadTrackEverywhere(currentTrack);
                     setIsDownloadingTrackState(false);
-                    if (ok) {
-                      setIsTrackDownloadedState(true);
-                      try {
-                        window.dispatchEvent(
-                          new CustomEvent('spotifree:toast', {
-                            detail: { message: `¡«${currentTrack.name}» descargada para modo avión!` }
-                          })
-                        );
-                      } catch {}
-                    } else {
-                      try {
-                        window.dispatchEvent(
-                          new CustomEvent('spotifree:toast', {
-                            detail: { message: `No se pudo descargar «${currentTrack.name}».` }
-                          })
-                        );
-                      } catch {}
-                    }
+                    if (ok) setIsTrackDownloadedState(true);
                   }
-                  setIsMenuOpen(false);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
               >
@@ -1201,39 +1191,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 </div>
                 <div className="text-left flex-1 min-w-0">
                   <p className={`font-bold text-sm ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
-                    {isTrackDownloadedState ? 'Eliminar descarga sin conexión' : isDownloadingTrackState ? 'Descargando...' : 'Descargar canción (modo avión)'}
+                    {isTrackDownloadedState ? 'Eliminar descarga' : isDownloadingTrackState ? 'Descargando…' : 'Descargar'}
                   </p>
                   <p className="text-xs text-[#b3b3b3] truncate">
-                    {isTrackDownloadedState ? 'Guardada en este dispositivo' : 'Escucha esta canción sin internet'}
+                    {isTrackDownloadedState ? 'Suena sin conexión y está en tu dispositivo' : 'Sin conexión y guardada en tu dispositivo'}
                   </p>
-                </div>
-              </button>
-
-              {/* Option: Guardar archivo MP3 */}
-              <button
-                onClick={async () => {
-                  setIsMenuOpen(false);
-                  try {
-                    window.dispatchEvent(
-                      new CustomEvent('spotifree:toast', {
-                        detail: { message: `Guardando MP3 de «${currentTrack.name}»...` }
-                      })
-                    );
-                  } catch {}
-                  await saveTrackAsMp3File(currentTrack);
-                }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <polyline points="8 12 12 16 16 12" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                  </svg>
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Guardar archivo MP3</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">Descarga el archivo a la memoria de tu móvil</p>
                 </div>
               </button>
 

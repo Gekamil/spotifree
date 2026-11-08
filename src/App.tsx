@@ -20,6 +20,7 @@ import { usePlayerStore } from './store/usePlayerStore';
 import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
 import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
+import { initSpotifreeMixes } from './services/spotifreeMixes';
 
 if (typeof window !== 'undefined') {
   (window as any).__useUIStore = useUIStore;
@@ -31,6 +32,9 @@ function App() {
 
   useEffect(() => {
     initializeSpotify();
+
+    // Spotifree's own playlists: learns from what each account plays and refreshes daily
+    initSpotifreeMixes();
 
     // Initialize real-time cloud session listener
     const unsubscribeAuth = initAuthListener();

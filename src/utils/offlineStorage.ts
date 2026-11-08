@@ -189,6 +189,7 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
     const query = `${track.name} ${artist}`.trim();
     let res: Response | null = null;
 
+    // Strategy 1: Primary audio stream endpoint
     try {
       const streamUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(clean)}`;
       const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
@@ -196,14 +197,40 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
         : undefined;
       res = await fetch(streamUrl, { signal: timeoutSignal });
     } catch (e) {
-      console.warn(`[offlineStorage] Network fetch failed for ${track.name}:`, e);
+      console.warn(`[offlineStorage] Strategy 1 failed for ${track.name}:`, e);
+    }
+
+    // Strategy 2: Download action endpoint
+    if (!res || !res.ok) {
+      try {
+        const downloadUrl = `${API_BASE}/api/audio/download?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(clean)}`;
+        const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+          ? AbortSignal.timeout(60000)
+          : undefined;
+        res = await fetch(downloadUrl, { signal: timeoutSignal });
+      } catch (e) {
+        console.warn(`[offlineStorage] Strategy 2 failed for ${track.name}:`, e);
+      }
+    }
+
+    // Strategy 3: Piped direct bytes fallback
+    if (!res || !res.ok) {
+      try {
+        const pipeUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&pipe=true`;
+        const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
+          ? AbortSignal.timeout(60000)
+          : undefined;
+        res = await fetch(pipeUrl, { signal: timeoutSignal });
+      } catch (e) {
+        console.warn(`[offlineStorage] Strategy 3 failed for ${track.name}:`, e);
+      }
     }
 
     if (!res || !res.ok) return false;
 
     const blob = await res.blob();
-    // Strictly require >= 400 KB to guarantee full audio rather than tiny errors/previews
-    if (!blob || blob.size < 400_000) return false;
+    // Strictly require >= 250 KB to guarantee full audio rather than tiny errors/previews
+    if (!blob || blob.size < 250_000) return false;
 
     // 1. Store in CacheStorage
     if ('caches' in window) {

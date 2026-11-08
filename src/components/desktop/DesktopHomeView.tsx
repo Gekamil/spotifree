@@ -3,6 +3,7 @@ import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore, buildDynamicShelves, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
+import { useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
@@ -64,6 +65,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     quickAccessCards: storeQuickAccess,
     featuredMessage,
   } = useSpotifyDataStore();
+  const sfMixes = useSpotifreeMixes((s) => s.mixes);
 
   const currentShortcuts = useMemo(() => {
     if (!isAuthenticated) return [];
@@ -173,9 +175,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       ];
     }
     const deletedIds = getDeletedPlaylistIds();
-    const base = dynamicShelves && dynamicShelves.length > 0
-      ? dynamicShelves
-      : buildDynamicShelves(user, playlists, featuredMessage);
+    const base = withSpotifreeShelves(
+      dynamicShelves && dynamicShelves.length > 0 ? dynamicShelves : buildDynamicShelves(user, playlists, featuredMessage),
+      sfMixes,
+      user?.display_name
+    );
     const isDJCard = (c: { id: string; title?: string }) =>
       c.id === 'spotify-dj' ||
       c.id === 'dj' ||
@@ -191,7 +195,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         ...shelf,
         cards: shelf.cards.filter((c) => !deletedIds.has(c.id) && !isDJCard(c)),
       }));
-  }, [activeTab, dynamicShelves, user, playlists, featuredMessage]);
+  }, [activeTab, dynamicShelves, user, playlists, featuredMessage, sfMixes]);
 
   const handleQuickPlay = async (
     e: React.MouseEvent | undefined,
