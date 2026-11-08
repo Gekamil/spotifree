@@ -223,7 +223,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               Importa tu música
             </h4>
             <p className="text-[12px] text-[#b3b3b3] font-medium leading-snug">
-              Trae tus playlists de YouTube Music, YouTube, Apple Music o Spotify.
+              Trae tus playlists de YouTube Music, YouTube, Apple Music, Deezer o Spotify.
             </p>
             <div className="pt-2">
               <button

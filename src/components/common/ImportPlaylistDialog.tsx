@@ -9,7 +9,7 @@ export function openImportPlaylistDialog() {
   window.dispatchEvent(new CustomEvent(IMPORT_PLAYLIST_EVENT));
 }
 
-const SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Spotify'];
+const SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Deezer', 'Spotify'];
 
 /** Desktop "Importar playlist", styled like Spotify's "Editar información" dialog */
 export default function ImportPlaylistDialog() {

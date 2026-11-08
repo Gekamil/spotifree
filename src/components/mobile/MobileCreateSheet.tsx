@@ -14,7 +14,7 @@ interface MobileCreateSheetProps {
   defaultPlaylistNumber?: number;
 }
 
-const IMPORT_SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Spotify'];
+const IMPORT_SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Deezer', 'Spotify'];
 
 /**
  * "Crear" (mobile, like Spotify's): Playlist, Importar playlist and Escuchar juntos. Naming a
@@ -277,7 +277,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
         <Option
           icon={<ImportNativeIcon size={24} />}
           title="Importar playlist"
-          subtitle="Desde YouTube Music, YouTube, Apple Music o Spotify"
+          subtitle="Desde YouTube Music, YouTube, Apple Music, Deezer o Spotify"
           onClick={() => {
             setImportError(null);
             setViewMode('importing');

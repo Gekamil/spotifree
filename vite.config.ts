@@ -556,7 +556,7 @@ function dynamicSpotifyPlugin(): Plugin {
           res.end(JSON.stringify({ success: true, ...result }));
         } catch (e: any) {
           const reason = String(e?.message || e);
-          res.statusCode = reason === 'unsupported' ? 400 : 502;
+          res.statusCode = reason === 'unsupported' || reason === 'amazon' ? 400 : 502;
           res.end(JSON.stringify({ success: false, reason }));
         }
       });

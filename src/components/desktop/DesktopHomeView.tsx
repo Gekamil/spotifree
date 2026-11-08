@@ -591,8 +591,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             prefix={shelf.prefix}
             title={shelf.title}
             subtitle={shelf.subtitle}
-            items={shelf.cards}
-            onShowAll={shelf.hasSeeAll ? () => setExpandedShelf(shelf) : undefined}
+            // A row shows the first 12, like Spotify; "Mostrar todos" opens the whole section
+            items={shelf.cards.slice(0, 12)}
+            onShowAll={shelf.hasSeeAll || shelf.cards.length > 6 ? () => setExpandedShelf(shelf) : undefined}
             onCardClick={(card) => {
               onSelectPlaylistById(card.id);
             }}

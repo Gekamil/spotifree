@@ -705,7 +705,7 @@ export const MobileLayout: React.FC = () => {
                         ) : (
                           /* Multi-Card Horizontal Carousel */
                           <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
-                            {shelf.cards.map((card) => (
+                            {shelf.cards.slice(0, 20).map((card) => (
                               <div
                                 key={card.id}
                                 onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}

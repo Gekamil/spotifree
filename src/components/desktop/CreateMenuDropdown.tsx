@@ -61,7 +61,7 @@ export const CreateMenuDropdown: React.FC = () => {
       <Item
         icon={<ImportNativeIcon size={24} />}
         title="Importar playlist"
-        subtitle="Desde YouTube Music, YouTube, Apple Music o Spotify"
+        subtitle="Desde YouTube Music, YouTube, Apple Music, Deezer o Spotify"
         onClick={() => {
           closeCreateMenu();
           openImportPlaylistDialog();

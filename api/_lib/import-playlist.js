@@ -57,7 +57,49 @@ export function detectSource(raw) {
   if (host === 'music.apple.com' || host === 'itunes.apple.com') {
     if (/\/(playlist|album)\//.test(u.pathname)) return { source: 'apple', url: u.toString() };
   }
+  // Deezer: deezer.com/es/playlist/123, deezer.com/album/123; short links are followed first
+  if (host === 'deezer.com') {
+    const m = /\/(playlist|album)\/(\d+)/.exec(u.pathname);
+    if (m) return { source: 'deezer', kind: m[1], id: m[2] };
+    return null;
+  }
+  if (host === 'link.deezer.com' || host === 'deezer.page.link' || host === 'dzr.page.link') {
+    return { source: 'deezer-short', url: u.toString() };
+  }
+  // Amazon Music doesn't publish its playlists in a readable form
+  if (/(^|\.)music\.amazon\./.test(host) || host.startsWith('amazon.') || host === 'amzn.to') {
+    return { source: 'amazon' };
+  }
   return null;
+}
+
+/** Deezer's public API (https://api.deezer.com): a playlist's or album's songs */
+async function readDeezer({ kind, id }) {
+  const r = await fetch(`https://api.deezer.com/${kind}/${id}`, { headers: { 'User-Agent': UA } });
+  if (!r.ok) throw new Error(`Deezer answered ${r.status}`);
+  const data = await r.json();
+  if (data?.error) throw new Error(data.error.message || 'Deezer error');
+  const tracks = [];
+  const add = (list) => {
+    for (const t of list || []) {
+      if (tracks.length >= MAX_TRACKS) break;
+      if (!t?.title) continue;
+      tracks.push({ title: t.title, artist: t.artist?.name || data.artist?.name || '', durationSec: Number(t.duration) || 0 });
+    }
+  };
+  add(data.tracks?.data);
+  // Long playlists come in pages
+  let next = data.tracks?.next;
+  for (let page = 0; next && tracks.length < MAX_TRACKS && page < 6; page++) {
+    const p = await (await fetch(next, { headers: { 'User-Agent': UA } })).json();
+    add(p?.data);
+    next = p?.next;
+  }
+  return {
+    name: data.title || 'Playlist de Deezer',
+    image: data.picture_xl || data.cover_xl || data.picture_big || data.cover_big || '',
+    tracks,
+  };
 }
 
 async function ytmBrowse(body) {
@@ -142,9 +184,17 @@ async function readAppleMusic({ url }) {
 
 /** { source, name, image, tracks: [{ title, artist, durationSec, videoId? }] } */
 export async function readExternalPlaylist(rawUrl) {
-  const src = detectSource(rawUrl);
+  let src = detectSource(rawUrl);
   if (!src) throw new Error('unsupported');
+  if (src.source === 'amazon') throw new Error('amazon');
+  // Deezer short link: follow it to the real playlist / album address
+  if (src.source === 'deezer-short') {
+    const r = await fetch(src.url, { redirect: 'follow', headers: { 'User-Agent': UA } });
+    src = detectSource(r.url);
+    if (!src || src.source !== 'deezer') throw new Error('unsupported');
+  }
   if (src.source === 'spotify') return { source: 'spotify', spotify: { kind: src.kind, id: src.id }, name: '', image: '', tracks: [] };
-  const res = src.source === 'apple' ? await readAppleMusic(src) : await readYouTubeMusic(src);
+  const res =
+    src.source === 'apple' ? await readAppleMusic(src) : src.source === 'deezer' ? await readDeezer(src) : await readYouTubeMusic(src);
   return { source: src.source, ...res };
 }

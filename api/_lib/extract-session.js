@@ -350,6 +350,9 @@ export function cleanSpDcString(raw) {
   return str.replace(/^[\s"'“”‘’]+|[\s"'“”‘’;]+$/g, '').trim();
 }
 
+/** Cards per home section (Spotify's web player asks for 10; "Mostrar todos" shows them all) */
+export const HOME_SECTION_LIMIT = 40;
+
 export async function extractSpotifySession(spDcCookie) {
   const cookie = cleanSpDcString(spDcCookie);
   if (!cookie || !cookie.startsWith('AQ') || cookie.length < 30) {
@@ -467,6 +470,37 @@ export async function extractSpotifySession(spDcCookie) {
     return await res.json();
   }
 
+  // Home with up to HOME_SECTION_LIMIT cards per section ("Mostrar todos" shows them all, like
+  // Spotify); if Spotify refuses the bigger request, the web player's own 10 per section
+  const homeQuery = (sectionItemsLimit) =>
+    queryPathfinder({
+      operationName: 'home',
+      variables: {
+        includeHomeChapterVideoCards: false,
+        homeEndUserIntegration: 'INTEGRATION_WEB_PLAYER',
+        timeZone: 'Europe/Madrid',
+        sp_t: '5db861f9-bb72-47f7-8b37-898a5d83024b',
+        facet: '',
+        sectionItemsLimit,
+        includeEpisodeContentRatingsV2: true,
+      },
+      extensions: {
+        persistedQuery: {
+          version: 1,
+          sha256Hash: '5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1',
+        },
+      },
+    });
+  const homeWithFallback = async () => {
+    try {
+      const big = await homeQuery(HOME_SECTION_LIMIT);
+      if ((big?.data?.home?.sectionContainer?.sections?.items || []).length > 0) return big;
+    } catch (e) {
+      console.warn('[Extractor] Home with more cards per section failed, using 10:', e.message);
+    }
+    return homeQuery(10);
+  };
+
   // 3. Query Profile, Library and Home in parallel
   const [profileResult, libraryResult, homeResult] = await Promise.allSettled([
     queryPathfinder({
@@ -499,24 +533,7 @@ export async function extractSpotifySession(spDcCookie) {
         },
       },
     }),
-    queryPathfinder({
-      operationName: 'home',
-      variables: {
-        includeHomeChapterVideoCards: false,
-        homeEndUserIntegration: 'INTEGRATION_WEB_PLAYER',
-        timeZone: 'Europe/Madrid',
-        sp_t: '5db861f9-bb72-47f7-8b37-898a5d83024b',
-        facet: '',
-        sectionItemsLimit: 10,
-        includeEpisodeContentRatingsV2: true,
-      },
-      extensions: {
-        persistedQuery: {
-          version: 1,
-          sha256Hash: '5fb7da7a03ee2776c0670856609cb85a189a3cecc36cc160b91cde79063b9cf1',
-        },
-      },
-    }),
+    homeWithFallback(),
   ]);
 
   // Parse User Profile
@@ -801,6 +818,8 @@ export async function extractSpotifySession(spDcCookie) {
     shelves,
     quickAccess,
     accessToken,
+    // The app re-reads older sessions once, to get the longer "Mostrar todos" lists
+    homeSectionLimit: HOME_SECTION_LIMIT,
   };
 }
 

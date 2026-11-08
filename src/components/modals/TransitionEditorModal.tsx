@@ -264,6 +264,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   const [isAuditionLoading, setIsAuditionLoading] = useState(false);
   const [isPlayingAudition, setIsPlayingAudition] = useState(false);
   const [auditionProgress, setAuditionProgress] = useState(0.0);
+  const auditionRunRef = useRef(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Responsive ResizeObserver for canvas width
@@ -457,6 +458,8 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
   // Toggle Audition with Real Songs Audio
   const handleToggleAudition = async () => {
     if (!trackA || !trackB) return;
+    auditionRunRef.current += 1;
+    const run = auditionRunRef.current;
     if (isPlayingAudition || isAuditionLoading) {
       audioEngine.stopTransitionAudition();
       djTransitionService.stopAudition();
@@ -498,10 +501,11 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
           }
         );
 
-        if (!playedReal) {
+        // Stopped by hand (or closed) while loading: nothing to report
+        if (!playedReal && run === auditionRunRef.current) {
           setIsAuditionLoading(false);
           setIsPlayingAudition(false);
-          setToastMessage('No se pudo precargar el audio para la preescucha.');
+          setToastMessage('No se pudieron cargar las dos canciones. Comprueba la conexión e inténtalo otra vez.');
           setTimeout(() => setToastMessage(null), 3000);
         }
       } catch {

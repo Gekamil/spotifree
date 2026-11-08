@@ -13,6 +13,7 @@ import {
 import {
   validateSpotifyCookie,
   extractSpotifySessionFromCookie,
+  EXPECTED_HOME_SECTION_LIMIT,
 } from '../services/spotifyCookieService';
 import {
   cleanSpDc,
@@ -1076,7 +1077,9 @@ const store = create<SpotifyDataState>((set, get) => ({
       saved = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
     } catch {}
     const today = localDayStamp();
-    if (!force && saved?._extractedDate === today) return false;
+    // Also once for sessions read before the home rows had their full "Mostrar todos" lists
+    const hasFullHome = (saved?.homeSectionLimit || 0) >= EXPECTED_HOME_SECTION_LIMIT;
+    if (!force && saved?._extractedDate === today && hasFullHome) return false;
     if (refreshInFlight) return refreshInFlight;
     refreshInFlight = (async () => {
       try {
@@ -1445,7 +1448,12 @@ const store = create<SpotifyDataState>((set, get) => ({
           // Daily automatic refresh with the saved cookie: Spotify's recommendations (home
           // shelves, mixes, new lists) follow the real account, merged without undoing the
           // user's changes. Also re-checked while the app stays open across days.
-          if (!session.playlists || session.playlists.length === 0 || session._extractedDate !== localDayStamp()) {
+          if (
+            !session.playlists ||
+            session.playlists.length === 0 ||
+            session._extractedDate !== localDayStamp() ||
+            (session.homeSectionLimit || 0) < EXPECTED_HOME_SECTION_LIMIT
+          ) {
             get().refreshSpotifySession(true).catch(() => {});
           }
           startDailySpotifyRefreshTimer();

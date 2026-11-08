@@ -368,7 +368,7 @@ const store = create<PlayerState>((set, get) => ({
       (usePlayerStore as any).isSkippingLock = false;
     }, 120);
 
-    const { queue, currentTrack, isPlaying } = get();
+    const { queue, currentTrack } = get();
     if (queue.length === 0) return;
 
     const nextTrackCandidate = get().getNextTrack();
@@ -416,29 +416,10 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    const isMobile =
-      typeof window !== 'undefined' &&
-      (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768);
-    const isDjMode =
-      typeof window !== 'undefined' &&
-      (window.localStorage.getItem('spotifree_dj_mode') === 'true' ||
-        window.localStorage.getItem('spotifree_dj_mode_desktop') === 'true');
-    const isCrossfade =
-      typeof window !== 'undefined' &&
-      window.localStorage.getItem('spotifree_crossfade_enabled') !== 'false';
-    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
-
-    // Dual-deck crossfade or DJ Automix transition (Desktop only: mobile browsers block background secondary deck playback)
-    if (!isMobile && isPlaying && (isDjMode || isCrossfade) && engine && typeof engine.transitionToNextTrack === 'function') {
-      if (engine.isCrossfading || engine.isTransitioning || (engine.lastCrossfadeFinishTime && Date.now() - engine.lastCrossfadeFinishTime < 4000)) {
-        console.warn('[PlayerStore] Skipping redundant nextTrack transition during active transition window');
-        return;
-      }
-      engine.transitionToNextTrack(nextTrackCandidate);
-      return;
-    }
-
-    // Direct, instant, high-reliability track playback (mobile / car controls / standard)
+    // "Siguiente" changes song at once, like Spotify: the crossfade / DJ mix is only for songs that
+    // end by themselves. (On the computer it used to start a crossfade: both songs played together
+    // for several seconds and further presses were ignored meanwhile.) playTrack stops the deck
+    // that was fading in, if any.
     get().playTrack(nextTrackCandidate);
     if (get().shuffleMode === 'smart') {
       get().triggerSmartShuffleRecommendation(nextTrackCandidate);
@@ -720,6 +701,10 @@ const store = create<PlayerState>((set, get) => ({
 
   previousTrack: () => {
     const { queue, currentTrack, progressMs, isShuffle, history, playedInShuffle } = get();
+    // Pressed during the automatic fade at the end of a song: stop the incoming song first, or it
+    // kept playing on top of the restarted one
+    const eng = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+    if (eng?.isCrossfading && typeof eng.resetTransitionState === 'function') eng.resetTransitionState();
     if (progressMs > 3000) {
       set({ progressMs: 0 });
       if (typeof window !== 'undefined' && (window as any).__audioEngine) {

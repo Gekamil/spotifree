@@ -8,7 +8,12 @@ export interface ExtractedSession {
   shelves: DynamicShelf[];
   quickAccess: Array<{ id: string; name: string; image: string; color: string }>;
   accessToken?: string;
+  /** Cards per home section the server asked Spotify for (older sessions: none = 10) */
+  homeSectionLimit?: number;
 }
+
+/** Sessions read with fewer cards per home section are refreshed once ("Mostrar todos") */
+export const EXPECTED_HOME_SECTION_LIMIT = 40;
 
 export function validateSpotifyCookie(cookie: string): { valid: boolean; error?: string } {
   const cleaned = cleanSpDc(cookie);

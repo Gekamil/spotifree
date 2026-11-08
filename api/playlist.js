@@ -1093,7 +1093,7 @@ export default async function handler(req, res) {
         return res.status(200).json({ success: true, ...result });
       } catch (e) {
         const reason = String(e?.message || e);
-        return res.status(reason === 'unsupported' ? 400 : 502).json({ success: false, reason });
+        return res.status(reason === 'unsupported' || reason === 'amazon' ? 400 : 502).json({ success: false, reason });
       }
     }
 

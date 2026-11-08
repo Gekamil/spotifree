@@ -134,7 +134,7 @@ function finish(pl: Playlist, userId: string, userName: string): void {
   });
 }
 
-const SOURCE_NAME: Record<string, string> = { ytmusic: 'YouTube Music', youtube: 'YouTube', apple: 'Apple Music' };
+const SOURCE_NAME: Record<string, string> = { ytmusic: 'YouTube Music', youtube: 'YouTube', apple: 'Apple Music', deezer: 'Deezer' };
 
 export async function importExternalPlaylist(
   urlOrText: string,
@@ -174,17 +174,19 @@ export async function importExternalPlaylist(
       return { success: false, error: 'No se pudo leer esa playlist de Spotify. ¿Es pública?' };
     }
 
-    // 2. YouTube Music, YouTube and Apple Music: read the real songs, then find each one
-    if (/youtube\.com|youtu\.be|music\.apple\.com|itunes\.apple\.com/i.test(input)) {
+    // 2. YouTube Music, YouTube, Apple Music and Deezer: read the real songs, then find each one
+    if (/youtube\.com|youtu\.be|music\.apple\.com|itunes\.apple\.com|deezer\.com|deezer\.page\.link|dzr\.page\.link|amazon\.|amzn\.to/i.test(input)) {
       const res = await fetch(`/api/import-playlist?url=${encodeURIComponent(input)}`);
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
         return {
           success: false,
           error:
-            data?.reason === 'unsupported'
-              ? 'Ese enlace no es de una playlist o un álbum. Copia el enlace de la playlist (en YouTube, el que lleva "list=").'
-              : 'No se pudo leer la playlist. Comprueba que es pública.',
+            data?.reason === 'amazon'
+              ? 'Amazon Music no deja leer sus playlists desde fuera de su app. Copia los nombres de las canciones y pégalos aquí, una por línea («Canción - Artista»).'
+              : data?.reason === 'unsupported'
+                ? 'Ese enlace no es de una playlist o un álbum. Copia el enlace de la playlist (en YouTube, el que lleva "list=").'
+                : 'No se pudo leer la playlist. Comprueba que es pública.',
         };
       }
       const songs: ExternalSong[] = (data.tracks || []).filter((t: ExternalSong) => t?.title);
@@ -204,8 +206,11 @@ export async function importExternalPlaylist(
       return { success: true, playlist: pl, matched, total: songs.length };
     }
 
-    if (/soundcloud\.com|deezer\.com|tidal\.com|amazon\./i.test(input)) {
-      return { success: false, error: 'De momento se puede importar desde Spotify, YouTube, YouTube Music y Apple Music.' };
+    if (/soundcloud\.com|tidal\.com/i.test(input)) {
+      return {
+        success: false,
+        error: 'De momento se puede importar desde Spotify, YouTube, YouTube Music, Apple Music y Deezer. También puedes pegar las canciones, una por línea.',
+      };
     }
 
     // 3. A list of songs, one per line: "Song - Artist"

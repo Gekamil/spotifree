@@ -414,6 +414,9 @@ class AudioEngine {
     if (this.isPreloadingNext) return;
     // Never re-cue the secondary deck while it is audibly fading in (would restart the incoming song)
     if (this.isCrossfading) return;
+    // A transition preview owns both decks: cueing the next song here replaced one of the
+    // preview's songs with another song of the playlist
+    if (this.isAuditioning) return;
     this.isPreloadingNext = true;
     // Snapshot of the playing track: if it changes while we await the resolver, the result is stale
     const ownerTrackId = this.currentTrackId;
@@ -451,6 +454,7 @@ class AudioEngine {
         // changed while resolving. Otherwise the next crossfade would play a different song than the UI.
         const expectedNext = tracksToPreload && tracksToPreload.length > 0 ? next1 : usePlayerStore.getState().getNextTrack?.();
         if (
+          this.isAuditioning ||
           this.currentTrackId !== ownerTrackId ||
           this.playSequenceId !== ownerSeq ||
           this.isCrossfading ||
@@ -572,7 +576,7 @@ class AudioEngine {
     }
 
     // A manual skip / new song started while we were resolving: abandon this crossfade
-    if (this.currentTrackId !== ownerTrackId || this.playSequenceId !== ownerSeq || !this.isCrossfading) {
+    if (this.isAuditioning || this.currentTrackId !== ownerTrackId || this.playSequenceId !== ownerSeq || !this.isCrossfading) {
       return;
     }
 
@@ -1242,15 +1246,21 @@ class AudioEngine {
     const queryA = `${trackA.name} ${trackA.artists?.[0]?.name || ''}`.trim();
     const queryB = `${trackB.name} ${trackB.artists?.[0]?.name || ''}`.trim();
 
+    // Same lookup as normal playback (title, artist and length pick the right upload)
+    const durOf = (t: Track) => (t.duration_ms ? t.duration_ms / 1000 : undefined);
     let videoIdA =
       trackA.id === this.currentTrackId && this.currentVideoId
         ? this.currentVideoId
-        : await this.resolveVideoId(queryA, trackA.id);
+        : await this.resolveVideoId(queryA, trackA.id, trackA.name, trackA.artists?.[0]?.name || '', durOf(trackA));
 
-    let videoIdB = await this.resolveVideoId(queryB, trackB.id);
+    let videoIdB = await this.resolveVideoId(queryB, trackB.id, trackB.name, trackB.artists?.[0]?.name || '', durOf(trackB));
+    // Closed (or another preview started) while resolving
+    if (!this.isAuditioning) return false;
 
     if (!videoIdA || !videoIdB) {
-      return this.startAcousticAudition(config, onProgress, onEnded);
+      // Never a synthetic demo instead of the real songs: report it
+      this.stopTransitionAudition();
+      return false;
     }
 
     // Same timing as the live mix: duration from the measured BPM and bars, A heard from just
@@ -1276,7 +1286,9 @@ class AudioEngine {
     const p1 = this.ytPlayers[1];
 
     if (!p0 || !p1) {
-      return this.startAcousticAudition(config, onProgress, onEnded);
+      // Never a synthetic demo instead of the real songs: report it
+      this.stopTransitionAudition();
+      return false;
     }
 
     // Reset playback rates
@@ -1307,7 +1319,9 @@ class AudioEngine {
     // Wait until Deck A actually begins playing audio before starting the transition timeline
     let isP0Playing = false;
     const waitStart = Date.now();
-    while (!isP0Playing && Date.now() - waitStart < 4000) {
+    // Up to 10 s: on mobile data the first song can take a while; giving up early played the
+    // synthetic demo instead of the real songs
+    while (!isP0Playing && Date.now() - waitStart < 10000) {
       if (!this.isAuditioning) return false;
       try {
         const state0 = typeof p0.getPlayerState === 'function' ? p0.getPlayerState() : -1;
@@ -1321,7 +1335,9 @@ class AudioEngine {
     }
 
     if (!isP0Playing) {
-      return this.startAcousticAudition(config, onProgress, onEnded);
+      // Never a synthetic demo instead of the real songs: report it
+      this.stopTransitionAudition();
+      return false;
     }
 
     const startTime = Date.now();
