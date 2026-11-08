@@ -12,6 +12,7 @@
  * (or ancestors) with translate="no" / class "notranslate" are skipped.
  */
 import { EN_DICTIONARY } from './i18nDictionary';
+import { EN_DICTIONARY_EXTRA } from './i18nDictionaryExtra';
 import { TRANSLATIONS, useLanguageStore, type Language } from './i18n';
 
 type Pattern = { re: RegExp; to: string };
@@ -40,6 +41,7 @@ function build() {
   if (built) return;
   built = true;
   for (const [es, en] of Object.entries(EN_DICTIONARY)) addEntry(es, en);
+  for (const [es, en] of Object.entries(EN_DICTIONARY_EXTRA)) addEntry(es, en);
   // Keys of the small i18n table too (same texts, used by t())
   const es = TRANSLATIONS.es as Record<string, string>;
   const en = TRANSLATIONS.en as Record<string, string>;

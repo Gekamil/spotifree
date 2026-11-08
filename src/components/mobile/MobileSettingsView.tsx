@@ -264,22 +264,6 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         )}
 
-        {/* Plan / Suscripción */}
-        <div className="p-4 rounded-2xl bg-gradient-to-br from-[#181818] to-[#121212] border border-white/[0.08] relative overflow-hidden">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">Tu Plan</span>
-            <span className="px-2 py-0.5 rounded-full bg-[#1ed760] text-black font-black text-[10px] tracking-wider">
-              PREMIUM
-            </span>
-          </div>
-          <h3 className="text-lg font-black text-white font-['SpotifyMixUITitle']">
-            Spotifree Premium Ilimitado
-          </h3>
-          <p className="text-xs text-[#b3b3b3] mt-1 leading-relaxed">
-            Música sin anuncios, saltos de canciones ilimitados y reproducción de máxima fidelidad en segundo plano.
-          </p>
-        </div>
-
         {/* Instalar la app: página /instalar (APK, iPhone, ordenador). En la APK ya está instalada. */}
         {getAppIconPlatform() !== 'native' && (
           <a
