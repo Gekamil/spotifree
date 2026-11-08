@@ -26,27 +26,14 @@ export const KNOWN_PLAYLIST_COLORS: Record<string, string> = {
   'prince-royce': '#EAB308',
   'prince-royce-radio': '#EAB308',
 
-  // Romeo & Prince (Warm terracotta / orange)
-  'romeo-prince': '#C45028',
-  'romeo---prince': '#C45028',
-  '43GWp9FbN9nHihudedyVQM': '#C45028',
-
   // Liked Songs
   'liked-songs': '#5018F0',
   'collection-tracks': '#5018F0',
   'tracks': '#5018F0',
 
-  // Spidey
-  'spidey': '#D11B24',
-
   // Top Tracks / Wrapped
-  'my-top-tracks-playlist': '#5E3D82',
-  '4Jf0fa5p0ajOnSriA9cYGS': '#5E3D82',
   'tus-canciones-mas-escuchadas-2025': '#E05A36',
   'your-top-songs-2025': '#E05A36',
-
-  // Random
-  'random': '#2D6852',
 
   // Editorial Playlists & Live Feed Shelves
   '37i9dQZF1DWZdsS73T1ogG': '#1A4B4C', // el nuevo urbano
