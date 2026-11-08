@@ -79,6 +79,16 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
 
   if (!isOpen) return null;
 
+  // Closing slides the sheet down and fades the background (it used to vanish at once)
+  const closeAnimated = () => {
+    setIsDragging(false);
+    setDragY(450);
+    setTimeout(() => {
+      onClose();
+      setDragY(0);
+    }, 200);
+  };
+
   const handleSubmitPlaylist = (e: React.FormEvent) => {
     e.preventDefault();
     onCreatePlaylist(playlistName.trim() || `Mi playlist n.º ${defaultPlaylistNumber}`);
@@ -246,8 +256,9 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 animate-in fade-in duration-200 select-none font-['SpotifyMixUI']"
-      onClick={onClose}
+      className="fixed inset-0 z-50 flex items-end justify-center animate-in fade-in duration-200 select-none font-['SpotifyMixUI'] transition-colors duration-200"
+      style={{ backgroundColor: dragY >= 450 ? 'rgba(0,0,0,0)' : 'rgba(0,0,0,0.6)' }}
+      onClick={closeAnimated}
     >
       <div
         className="w-full bg-[#282828] rounded-t-xl pt-1 pb-[calc(env(safe-area-inset-bottom,0px)+16px)] animate-slide-up-modal touch-pan-y"
@@ -288,7 +299,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
           title="Escuchar juntos"
           subtitle="Pon música con tus amigos en tiempo real"
           onClick={() => {
-            onClose();
+            closeAnimated();
             useSharedSessionStore.getState().setModalOpen(true);
           }}
         />

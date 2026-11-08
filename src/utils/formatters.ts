@@ -19,6 +19,10 @@ export const formatDuration = (ms: number): string => {
 
 export const toHDImage = (url: string | null | undefined): string => {
   if (!url) return '';
+  // Collages (mosaic.scdn.co/<size>/<4 ids>): only the size, never the ids inside
+  if (url.includes('mosaic.scdn.co')) {
+    return url.replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/').replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/');
+  }
 
   let cleaned = url
     // Album covers (640x640: b273)

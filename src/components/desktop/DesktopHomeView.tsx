@@ -149,6 +149,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     featuredMessage,
   } = useSpotifyDataStore();
   const sfMixes = useSpotifreeMixes((s) => s.mixes);
+  const sfArtists = useSpotifreeMixes((s) => s.suggestedArtists);
 
   const currentShortcuts = useMemo(() => {
     if (!isAuthenticated) return [];
@@ -262,7 +263,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     const base = withSpotifreeShelves(
       dynamicShelves && dynamicShelves.length > 0 ? dynamicShelves : buildDynamicShelves(user, playlists, featuredMessage),
       sfMixes,
-      user?.display_name
+      user?.display_name,
+      sfArtists
     );
     const isDJCard = (c: { id: string; title?: string }) =>
       c.id === 'spotify-dj' ||
@@ -280,7 +282,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         // Nothing already in the shortcuts at the top (no playlist shown twice)
         cards: shelf.cards.filter((c) => !deletedIds.has(c.id) && !isDJCard(c) && !shortcutIds.has(c.id)),
       }));
-  }, [activeTab, dynamicShelves, user, playlists, featuredMessage, sfMixes, shortcutIds]);
+  }, [activeTab, dynamicShelves, user, playlists, featuredMessage, sfMixes, sfArtists, shortcutIds]);
 
   const handleQuickPlay = async (
     e: React.MouseEvent | undefined,

@@ -18,6 +18,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../store/useSpotifyDataStore';
 import { useStatsStore } from '../store/useStatsStore';
 import { getRecentSearches } from '../utils/recentSearches';
+import { getSavedSpotifreeAccount, syncSpotifreeAccount } from './spotifreeAuth';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -156,6 +157,9 @@ function logSignal(s: Omit<Signal, 'ts'> & { ts?: number }) {
   list.push({ ...s, ts: s.ts || Date.now() });
   writeSignals(list);
   newSignals++;
+  queueCloudPush();
+  // A new account without Spotify data: its first playlists after a few plays
+  if (newSignals === 5 && !useSpotifreeMixes.getState().mixes.length) scheduleRefresh(1500);
 }
 function firstSeen(): number {
   try {
@@ -549,10 +553,10 @@ function mix(id: string, kind: SpotifreeMix['sfKind'], name: string, description
   } as any;
 }
 
-async function buildMixes(): Promise<SpotifreeMix[]> {
+async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: SuggestedArtist[] }> {
   importSpotifyRecent();
   const profile = buildTasteProfile();
-  if (profile.artists.length === 0) return [];
+  if (profile.artists.length === 0) return { mixes: [], artists: [] };
   const day = today();
   const week = isoWeek();
   const userName = useSpotifyDataStore.getState().user?.display_name || '';
@@ -688,7 +692,24 @@ async function buildMixes(): Promise<SpotifreeMix[]> {
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${d.artist?.name || a.name} y artistas parecidos`, items, cover, userName));
   }
-  return out;
+
+  // "Artistas que te pueden gustar": similar to several of the user's artists, not heard yet
+  const relCount = new Map<string, { name: string; picture: string | null; n: number; fans: number }>();
+  for (const s of seeds) {
+    for (const r of disc.get(norm(s.name))?.related || []) {
+      const k = norm(r.name);
+      if (!k || profile.knownArtists.has(k)) continue;
+      const cur = relCount.get(k) || { name: r.name, picture: r.picture, n: 0, fans: (r as any).fans || 0 };
+      cur.n += 1;
+      relCount.set(k, cur);
+    }
+  }
+  const artists = [...relCount.values()]
+    .filter((a) => a.picture)
+    .sort((a, b) => b.n - a.n || b.fans - a.fans)
+    .slice(0, 14)
+    .map(({ name, picture }) => ({ name, picture }));
+  return { mixes: out, artists };
 }
 
 // ---------------------------------------------------------------------------
@@ -698,11 +719,17 @@ interface MixesState {
   mixes: SpotifreeMix[];
   builtDay: string | null;
   building: boolean;
+  /** "Artistas que te pueden gustar": similar artists the user doesn't listen to yet */
+  suggestedArtists: SuggestedArtist[];
 }
-export const useSpotifreeMixes = create<MixesState>(() => ({ mixes: [], builtDay: null, building: false }));
+export interface SuggestedArtist {
+  name: string;
+  picture: string | null;
+}
+export const useSpotifreeMixes = create<MixesState>(() => ({ mixes: [], builtDay: null, building: false, suggestedArtists: [] }));
 
-function publish(mixes: SpotifreeMix[], builtDay: string | null) {
-  useSpotifreeMixes.setState({ mixes, builtDay });
+function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtists: SuggestedArtist[] = []) {
+  useSpotifreeMixes.setState({ mixes, builtDay, suggestedArtists });
   // So the playlist pages open them like any other playlist
   useSpotifyDataStore.setState((s) => ({
     playlistDetailsCache: { ...s.playlistDetailsCache, ...Object.fromEntries(mixes.map((m) => [m.id, m])) },
@@ -718,17 +745,18 @@ export function refreshSpotifreeMixes(force = false): Promise<void> {
   if (building) return building;
   building = (async () => {
     try {
-      const saved = await kvGet<{ day: string; week: string; mixes: SpotifreeMix[] }>(storeKey());
-      if (saved?.mixes?.length) publish(saved.mixes, saved.day);
+      const saved = await kvGet<{ day: string; week: string; mixes: SpotifreeMix[]; artists?: SuggestedArtist[] }>(storeKey());
+      if (saved?.mixes?.length) publish(saved.mixes, saved.day, saved.artists || []);
       // Like Spotify they stay the same during the day, unless there was a lot of new listening
-      if (!force && saved?.day === today() && newSignals < 40) return;
+      // (mixes saved by an older version, without suggested artists, are rebuilt once)
+      if (!force && saved?.day === today() && saved.artists && newSignals < 40) return;
       useSpotifreeMixes.setState({ building: true });
-      const mixes = await buildMixes();
+      const { mixes, artists } = await buildMixes();
       if (mixes.length) {
-        publish(mixes, today());
-        await kvSet(storeKey(), { day: today(), week: isoWeek(), mixes });
+        publish(mixes, today(), artists);
+        await kvSet(storeKey(), { day: today(), week: isoWeek(), mixes, artists });
+        newSignals = 0;
       }
-      newSignals = 0;
     } catch (e) {
       console.warn('[SpotifreeMixes] build failed', e);
     } finally {
@@ -739,6 +767,53 @@ export function refreshSpotifreeMixes(force = false): Promise<void> {
   return building;
 }
 
+let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleRefresh(ms: number) {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  refreshTimer = setTimeout(() => {
+    refreshTimer = null;
+    void refreshSpotifreeMixes();
+  }, ms);
+}
+
+// ---------------------------------------------------------------------------
+// Taste in the cloud: the same account learns on every device (Spotifree account / Firestore)
+// ---------------------------------------------------------------------------
+const CLOUD_MAX = 1500;
+const sigKey = (s: Signal) => `${s.k}|${s.t}|${s.a}|${s.ts}`;
+
+/** Signals saved in the account (other devices) joined with this device's */
+function mergeCloudTaste() {
+  try {
+    const acc: any = getSavedSpotifreeAccount();
+    const cloud: Signal[] = acc?.taste?.signals || [];
+    if (!cloud.length) return;
+    const local = readSignals();
+    const have = new Set(local.map(sigKey));
+    const add = cloud.filter((s) => s && s.a && !have.has(sigKey(s)));
+    if (add.length) {
+      writeSignals([...local, ...add].sort((a, b) => a.ts - b.ts));
+      newSignals += add.length;
+    }
+    const since = Number(acc.taste.since) || 0;
+    if (since && since < firstSeen()) localStorage.setItem(firstSeenKey(), String(since));
+  } catch {}
+}
+
+let cloudTimer: ReturnType<typeof setTimeout> | null = null;
+let unsyncedSignals = 0;
+/** Saves the latest signals to the account (a few at a time, not on every play) */
+function queueCloudPush() {
+  unsyncedSignals += 1;
+  if (cloudTimer || unsyncedSignals < 5) return;
+  cloudTimer = setTimeout(() => {
+    cloudTimer = null;
+    if (!getSavedSpotifreeAccount()) return;
+    unsyncedSignals = 0;
+    syncSpotifreeAccount({ taste: { signals: readSignals().slice(-CLOUD_MAX), since: firstSeen() } } as any).catch(() => {});
+  }, 20000);
+}
+
 let started = false;
 /** Starts listening to the account's activity and builds / loads its playlists */
 export function initSpotifreeMixes() {
@@ -747,19 +822,28 @@ export function initSpotifreeMixes() {
   // For checking from the console: window.__spotifreeMixes.refresh(true)
   (window as any).__spotifreeMixes = { refresh: refreshSpotifreeMixes, store: useSpotifreeMixes, profile: buildTasteProfile };
   installSignalHooks();
+  mergeCloudTaste();
   firstSeen();
   // First build a few seconds after start (Spotify data arrives first)
   setTimeout(() => void refreshSpotifreeMixes(), 6000);
-  // Another account signs in: its own playlists
+  // Another account signs in: its own playlists (and its taste from the cloud)
   let lastUser = uid();
+  let lastDataSize = 0;
   useSpotifyDataStore.subscribe((s) => {
     const u = s.user?.id || 'local';
     if (u !== lastUser) {
       lastUser = u;
-      useSpotifreeMixes.setState({ mixes: [], builtDay: null });
+      useSpotifreeMixes.setState({ mixes: [], builtDay: null, suggestedArtists: [] });
+      mergeCloudTaste();
       firstSeen();
-      setTimeout(() => void refreshSpotifreeMixes(), 3000);
+      scheduleRefresh(3000);
+      return;
     }
+    // The account's music arrived (it can come after the first try): build right away instead of
+    // waiting for the next periodic check
+    const size = (s.topArtists?.length || 0) + (s.topTracks?.length || 0) + (s.playlists?.length || 0);
+    if (size > 0 && lastDataSize === 0 && !useSpotifreeMixes.getState().mixes.length) scheduleRefresh(2500);
+    lastDataSize = size;
   });
   // New day while the app stays open
   setInterval(() => {
@@ -813,7 +897,12 @@ export function dedupeHomeShelves(shelves: DynamicShelf[]): DynamicShelf[] {
  *  - "Tus artistas, en mix" as its own section
  *  - then no card may repeat anywhere on Home (they used to be added to every mixes section)
  */
-export function withSpotifreeShelves(base: DynamicShelf[], mixes: SpotifreeMix[], userName?: string): DynamicShelf[] {
+export function withSpotifreeShelves(
+  base: DynamicShelf[],
+  mixes: SpotifreeMix[],
+  userName?: string,
+  suggestedArtists: SuggestedArtist[] = []
+): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
   const made = mixes.filter((m) => m.sfKind !== 'artist').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
@@ -835,5 +924,21 @@ export function withSpotifreeShelves(base: DynamicShelf[], mixes: SpotifreeMix[]
     ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
   }
   shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];
+  // Like Spotify, a bit further down: artists similar to yours that you don't listen to yet
+  if (suggestedArtists.length >= 3) {
+    const at = Math.min(shelves.length, 5);
+    shelves.splice(at, 0, {
+      id: 'sf-suggested-artists',
+      title: 'Artistas que te pueden gustar',
+      type: 'artist',
+      cards: suggestedArtists.map((a) => ({
+        id: `art-${norm(a.name).replace(/\s+/g, '-')}`,
+        title: a.name,
+        subtitle: 'Artista',
+        image: a.picture || '',
+      })),
+      hasSeeAll: true,
+    });
+  }
   return dedupeHomeShelves(shelves);
 }

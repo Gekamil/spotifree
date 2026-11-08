@@ -898,7 +898,7 @@ const store = create<PlayerState>((set, get) => ({
         ? state.likedTrackIds.filter(
             (id) => id !== trackId && id !== cleanId && id !== `spotify:track:${cleanId}`
           )
-        : [...state.likedTrackIds, trackId, cleanId];
+        : [...new Set([...state.likedTrackIds, trackId, cleanId])];
 
       if (typeof window !== 'undefined') {
         try {

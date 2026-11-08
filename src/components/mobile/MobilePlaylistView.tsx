@@ -42,6 +42,7 @@ import {
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
+import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
 import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
@@ -108,6 +109,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle }))
   );
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
+  useAutoCovers((s) => s.version); // repaint when the songs' collage is ready
 
   const [activePlaylist, setActivePlaylist] = useState<Playlist>(playlist);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -880,7 +882,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const coverUrl =
     isLikedPlaylist
       ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-      : (resolvedBanner || activePlaylist.images?.[0]?.url || tracks[0]?.album?.images?.[0]?.url);
+      : (resolvedBanner ||
+          activePlaylist.images?.[0]?.url ||
+          // No photo of its own: collage of its songs (or the first song's cover), like Spotify
+          (getAutoPlaylistCover(tracks) !== EMPTY_PLAYLIST_COVER ? getAutoPlaylistCover(tracks) : undefined));
 
   useEffect(() => {
     let cancelled = false;

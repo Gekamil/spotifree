@@ -62,6 +62,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 import { toHDImage } from '../../utils/formatters';
+import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
 import { fetchPlaylistRecommendations } from '../../services/spotifyApi';
 
@@ -88,6 +89,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const { openContextMenu, openEditPlaylistModal, openAddToPlaylistModal } = useUIStore();
   const { user, playlists: allUserPlaylists } = useSpotifyDataStore();
+  useAutoCovers((s) => s.version); // repaint when the songs' collage is ready
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({ current: 0, total: 0 });
@@ -1241,6 +1243,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
                 </svg>
               </div>
+            ) : getAutoPlaylistCover(tracks) !== EMPTY_PLAYLIST_COVER ? (
+              // No photo of its own: collage of its songs (or the first song's cover), like Spotify
+              <img
+                src={toHDImage(getAutoPlaylistCover(tracks))}
+                alt={dynamicPlaylist.name}
+                onError={handleImageError}
+                className="w-full h-full object-cover shadow-2xl"
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
                 <svg width="64" height="64" viewBox="0 0 24 24" fill="currentColor">

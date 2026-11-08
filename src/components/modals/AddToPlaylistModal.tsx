@@ -57,8 +57,14 @@ export const AddToPlaylistModal: React.FC = () => {
     // Modal open animation
     const raf = requestAnimationFrame(() => setIsAnimatingIn(true));
 
-    // When clicking (+) to add to playlist, Spotify defaults "Canciones que te gustan" to checked:
-    setIsLikedState(true);
+    // "Canciones que te gustan" shows whether the song is really liked. (The (+) buttons like the
+    // song before opening this, so there it is ticked; "Añadir a playlist" never likes it by itself.)
+    const cleanTrackId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    setIsLikedState(
+      likedTrackIds.includes(track.id) ||
+        likedTrackIds.includes(cleanTrackId) ||
+        likedTrackIds.includes(`spotify:track:${cleanTrackId}`)
+    );
 
     const initialMatches = new Set<string>();
     userPlaylists.forEach((pl) => {
@@ -117,7 +123,8 @@ export const AddToPlaylistModal: React.FC = () => {
       id: newId,
       name: finalName,
       description: '',
-      images: track.album?.images?.[0]?.url ? [{ url: track.album.images[0].url }] : [],
+      // No photo of its own: the automatic cover follows its songs
+      images: [],
       owner: { display_name: user?.display_name || 'Tú', id: user?.id || 'user' },
       tracks: { total: 1, items: [{ ...track, added_at: track.added_at || 'Hoy' }] },
       is_custom: true,
@@ -163,7 +170,8 @@ export const AddToPlaylistModal: React.FC = () => {
         if (currentPl) {
           const existing = currentPl.tracks?.items || [];
           if (!existing.some((t) => t.id === track.id)) {
-            const updated = [track, ...existing];
+            // Like Spotify: a new song goes to the end of the playlist
+            const updated = [...existing, { ...track, added_at: new Date().toISOString() }];
             useSpotifyDataStore.getState().updatePlaylist(plId, {
               tracks: { total: updated.length, items: updated },
             });

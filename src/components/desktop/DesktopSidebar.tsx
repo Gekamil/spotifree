@@ -18,6 +18,7 @@ import { stripHtml, toHDImage } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
 import { SortMenuDropdown } from './SortMenuDropdown';
 import { LocalFilesCover } from '../common/LocalFilesView';
+import { EMPTY_PLAYLIST_COVER, getPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 
 interface DesktopSidebarProps {
   playlists: Playlist[];
@@ -62,6 +63,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying }))
   );
   const { isAuthenticated } = useSpotifyDataStore();
+  useAutoCovers((s) => s.version); // repaint when a playlist's collage is ready
   const {
     toggleCreateMenu,
     toggleSortMenu,
@@ -166,6 +168,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
         <div className="flex items-center gap-1 relative">
           <button
+            data-create-button
             onClick={toggleCreateMenu}
             title="Crea o importa una playlist"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white hover:bg-[#1f1f1f] hover:scale-104 active:scale-95 transition-all"
@@ -322,7 +325,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               const isArtist =
                 playlist.type === 'artist' ||
                 playlist.description?.toLowerCase() === 'artista';
-              const coverUrl = toHDImage(playlist.images?.[0]?.url);
+              // Own photo, or the automatic one from its songs (collage / first song's cover)
+              const autoCover = getPlaylistCover(playlist);
+              const coverUrl = autoCover === EMPTY_PLAYLIST_COVER ? '' : toHDImage(autoCover);
 
               const isPlayingThis =
                 isPlaying &&
@@ -449,7 +454,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               const isArtist =
                 playlist.type === 'artist' ||
                 playlist.description?.toLowerCase() === 'artista';
-              const coverUrl = toHDImage(playlist.images?.[0]?.url);
+              // Own photo, or the automatic one from its songs (collage / first song's cover)
+              const autoCover = getPlaylistCover(playlist);
+              const coverUrl = autoCover === EMPTY_PLAYLIST_COVER ? '' : toHDImage(autoCover);
 
               const isPlayingThis =
                 isPlaying &&

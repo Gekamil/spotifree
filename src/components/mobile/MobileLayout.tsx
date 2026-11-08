@@ -36,7 +36,7 @@ import {
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
-import { getPlaylistCover } from '../../utils/playlistCover';
+import { getPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 
@@ -320,6 +320,8 @@ export const MobileLayout: React.FC = () => {
 
   const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
   const sfMixes = useSpotifreeMixes((s) => s.mixes);
+  const sfArtists = useSpotifreeMixes((s) => s.suggestedArtists);
+  const autoCoverVersion = useAutoCovers((s) => s.version); // playlist collages ready → repaint
   // "Mostrar todo" of a Home section (a grid page; closes when leaving Home)
   const [seeAllShelf, setSeeAllShelf] = useState<{ title: string; prefix?: string; cards: Array<{ id: string; title: string; subtitle: string; image: string }> } | null>(null);
   useEffect(() => {
@@ -392,7 +394,8 @@ export const MobileLayout: React.FC = () => {
     const base = withSpotifreeShelves(
       dynamicShelves && dynamicShelves.length > 0 ? dynamicShelves : buildDynamicShelves(user, playlists, featuredMessage),
       sfMixes,
-      user?.display_name
+      user?.display_name,
+      sfArtists
     );
 
     base
@@ -422,7 +425,7 @@ export const MobileLayout: React.FC = () => {
 
     // No playlist twice on Home ("Tus playlists" + every section + the shortcuts at the top)
     return withoutShortcuts(dedupeHomeShelves(list as any) as typeof list);
-  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, shortcuts]);
+  }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, sfArtists, shortcuts, autoCoverVersion]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
