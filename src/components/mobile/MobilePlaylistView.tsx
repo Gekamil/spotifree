@@ -1199,7 +1199,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         <>
           {/* Dynamic Top Floating Navigation Bar (becomes opaque sticky header on scroll) */}
           <div
-            className={`sticky top-0 z-30 px-4 py-3 flex items-center justify-between transition-colors duration-200 ${
+            className={`sticky top-0 z-30 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between transition-colors duration-200 ${
               scrollY > 160
                 ? 'bg-[#121212]/95 backdrop-blur-md border-b border-white/5 shadow-md'
                 : 'bg-transparent'
@@ -1207,16 +1207,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           >
             <button
               onClick={onBack}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer bg-black/40 backdrop-blur-sm"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer bg-black/40 backdrop-blur-sm shrink-0"
               title="Atrás"
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M15.54 21.15L6.39 12l9.15-9.15.71.71L7.81 12l8.44 8.44-.71.71z" />
               </svg>
             </button>
 
             <span
-              className={`font-bold text-sm text-white truncate max-w-[200px] transition-opacity duration-200 ${
+              className={`font-bold text-xs sm:text-sm text-white truncate max-w-[170px] sm:max-w-[220px] transition-opacity duration-200 ${
                 scrollY > 160 ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
             >
@@ -1225,10 +1225,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
             <button
               onClick={() => setIsOptionsOpen(true)}
-              className="w-9 h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 cursor-pointer active:scale-90 transition-transform bg-black/40 backdrop-blur-sm"
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-white hover:text-white/80 cursor-pointer active:scale-90 transition-transform bg-black/40 backdrop-blur-sm shrink-0"
               title="Más opciones de la playlist"
             >
-              <OptionsNativeIcon size={20} className="text-white" />
+              <OptionsNativeIcon size={18} className="text-white" />
             </button>
           </div>
 
@@ -1313,9 +1313,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       )}
 
       {/* Action Row matching Spotify Mobile */}
-      <div className="px-5 py-2 flex items-center justify-between">
+      <div className="px-3 sm:px-5 py-2 flex items-center justify-between gap-1 flex-nowrap">
         {/* Left cluster: 1) Slides/Clips preview, 2) Add/Check (+ / ✓) to library, 3) Share (+ Download) */}
-        <div className="flex items-center gap-3.5">
+        <div className="flex items-center gap-2 sm:gap-3.5 shrink-0">
           {/* 1. Slides / Previews / Clips of songs on the far left */}
           {displayTracks.length > 0 && (
             <button
@@ -1325,7 +1325,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 setClipsInitialIndex(rotatingTrackIndex);
                 setIsClipsModalOpen(true);
               }}
-              className="group/thumb relative w-9 h-9 rounded-lg overflow-hidden shadow-md bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
+              className="group/thumb relative w-8 h-8 sm:w-9 sm:h-9 rounded-lg overflow-hidden shadow-md bg-[#282828] shrink-0 border border-white/20 active:scale-90 transition-all cursor-pointer ring-1 ring-white/10"
               title="Ver clips y avances de la playlist"
             >
               <img
@@ -1351,7 +1351,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           {isArtist ? (
             <button
               onClick={handleToggleLibrary}
-              className="px-4 py-1.5 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white active:scale-95 transition-all cursor-pointer"
+              className="px-2.5 py-1 sm:px-4 sm:py-1.5 rounded-full border border-white/30 text-white font-bold text-[11px] sm:text-xs uppercase hover:border-white active:scale-95 transition-all cursor-pointer whitespace-nowrap"
             >
               {isSavedInLibrary ? 'Siguiendo' : 'Seguir'}
             </button>
@@ -1362,9 +1362,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               title={isSavedInLibrary ? 'Guardada en tu biblioteca (clic para eliminar)' : 'Añadir a tu biblioteca'}
             >
               {isSavedInLibrary ? (
-                <CheckCircleNativeIcon size={25} className="text-[#1ed760]" />
+                <CheckCircleNativeIcon size={24} className="text-[#1ed760]" />
               ) : (
-                <PlusCircleNativeIcon size={25} className="text-white/80 hover:text-white" />
+                <PlusCircleNativeIcon size={24} className="text-white/80 hover:text-white" />
               )}
             </button>
           )}
@@ -1375,7 +1375,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer p-0.5"
             title="Compartir playlist"
           >
-            <ShareNativeIcon size={21} className="text-white/80 hover:text-white" />
+            <ShareNativeIcon size={20} className="text-white/80 hover:text-white" />
           </button>
 
           {/* Download button (compact beside share) */}
@@ -1388,23 +1388,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               {isDownloading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-[#1ed760] rounded-full animate-spin" />
               ) : isDownloaded ? (
-                <DownloadActiveCircleNativeIcon size={22} className="text-[#1ed760]" />
+                <DownloadActiveCircleNativeIcon size={21} className="text-[#1ed760]" />
               ) : (
-                <DownloadCircleNativeIcon size={22} className="text-white/80 hover:text-white" />
+                <DownloadCircleNativeIcon size={21} className="text-white/80 hover:text-white" />
               )}
             </button>
           )}
         </div>
 
         {/* Subtle spacing gap between left tools and playback controls */}
-        <div className="flex-1 min-w-[10px]" />
+        <div className="flex-1 min-w-[6px]" />
 
         {/* Right cluster: 4) DJ Mode, 5) Shuffle selector, 6) Large Play */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-1 sm:gap-2.5 shrink-0">
           {/* 4. DJ Mixer Faders Toggle Button */}
           <button
             onClick={handleToggleAutomix}
-            className={`p-2 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
+            className={`p-1.5 sm:p-2 rounded-full transition-all cursor-pointer relative flex items-center justify-center active:scale-90 ${
               isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
             }`}
             title={
@@ -1414,7 +1414,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             }
           >
             <AutomixNativeIcon
-              size={24}
+              size={22}
               className={isAutomixActive ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'}
             />
           </button>
@@ -1422,15 +1422,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           {/* 5. Shuffle button (dos flechitas) */}
           <button
             onClick={toggleShuffle}
-            className={`p-2 transition-colors relative flex flex-col items-center active:scale-90 cursor-pointer ${
+            className={`p-1.5 sm:p-2 transition-colors relative flex flex-col items-center active:scale-90 cursor-pointer ${
               shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-white/70 hover:text-white'
             }`}
             title="Reproducción aleatoria"
           >
             {shuffleMode === 'smart' ? (
-              <SmartShuffleNativeIcon size={24} className="text-[#1ed760]" />
+              <SmartShuffleNativeIcon size={22} className="text-[#1ed760]" />
             ) : (
-              <ShuffleNativeIcon size={24} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-white/70'} />
+              <ShuffleNativeIcon size={22} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-white/70'} />
             )}
           </button>
 
@@ -1438,7 +1438,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           {isAutomixActive ? (
             <button
               onClick={handlePlayAll}
-              className="relative w-14 h-14 rounded-full p-[2.5px] bg-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
+              className="relative w-12 h-12 sm:w-14 sm:h-14 rounded-full p-[2px] sm:p-[2.5px] bg-[#1ed760] shadow-[0_0_20px_rgba(30,215,96,0.7)] hover:scale-105 active:scale-95 transition-all flex items-center justify-center cursor-pointer group shrink-0"
               title={isCurrentPlaylistPlaying ? 'Pausar (Modo DJ)' : 'Reproducir con transiciones DJ'}
             >
               {/* Outer vinyl chassis */}
@@ -1460,11 +1460,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <div className="absolute inset-[18px] rounded-full border border-white/[0.07] pointer-events-none" />
                 </div>
 
-                <div className="relative z-10 w-7 h-7 rounded-full bg-[#181818] border border-white/15 flex items-center justify-center shadow-lg pointer-events-none">
+                <div className="relative z-10 w-6 h-6 sm:w-7 sm:h-7 rounded-full bg-[#181818] border border-white/15 flex items-center justify-center shadow-lg pointer-events-none">
                   {isCurrentPlaylistPlaying ? (
-                    <PauseNativeIcon size={16} className="text-white drop-shadow-md" />
+                    <PauseNativeIcon size={14} className="text-white drop-shadow-md" />
                   ) : (
-                    <PlayNativeIcon size={16} className="text-white ml-0.5 drop-shadow-md" />
+                    <PlayNativeIcon size={14} className="text-white ml-0.5 drop-shadow-md" />
                   )}
                 </div>
               </div>
@@ -1472,13 +1472,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           ) : (
             <button
               onClick={handlePlayAll}
-              className="w-14 h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all cursor-pointer shrink-0"
+              className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-[#1ed760] hover:scale-106 active:scale-95 shadow-2xl flex items-center justify-center text-black transition-all cursor-pointer shrink-0"
               title={isCurrentPlaylistPlaying ? 'Pausar' : 'Reproducir'}
             >
               {isCurrentPlaylistPlaying ? (
-                <PauseNativeIcon size={24} className="text-black" />
+                <PauseNativeIcon size={22} className="text-black" />
               ) : (
-                <PlayNativeIcon size={24} className="text-black ml-1" />
+                <PlayNativeIcon size={22} className="text-black ml-0.5" />
               )}
             </button>
           )}

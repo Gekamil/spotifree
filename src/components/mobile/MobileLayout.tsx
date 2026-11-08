@@ -862,11 +862,11 @@ export const MobileLayout: React.FC = () => {
         {mobileTab === 'library' && (
           <div className="p-4 space-y-4 spf-page-enter">
             {/* Header */}
-            <div className="flex items-center justify-between pt-2">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center justify-between pt-1 gap-2 flex-nowrap">
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <button
                   onClick={isAuthenticated ? () => setMobileTab('profile') : openLoginModal}
-                  className="w-8 h-8 rounded-full bg-[#242424] overflow-hidden flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-95 transition-transform"
+                  className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#242424] overflow-hidden flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-95 transition-transform shrink-0"
                 >
                   {user?.images?.[0]?.url ? (
                     <img src={user.images[0].url} alt={user.display_name} className="w-full h-full object-cover" />
@@ -876,13 +876,13 @@ export const MobileLayout: React.FC = () => {
                     </span>
                   )}
                 </button>
-                <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+                <h1 className="text-xl sm:text-2xl font-black text-white font-['SpotifyMixUITitle'] truncate">
                   Tu biblioteca
                 </h1>
               </div>
 
               {/* Real Spotify Mobile Library Header Controls: Search Lupa + Create Button */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   onClick={() => setIsLibrarySearching(!isLibrarySearching)}
                   className={`w-9 h-9 flex items-center justify-center rounded-full transition-colors cursor-pointer ${
