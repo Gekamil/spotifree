@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore, buildDynamicShelves, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
@@ -52,7 +53,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     };
   }, []);
 
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore();
+  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay }))
+  );
   const {
     isAuthenticated,
     user,

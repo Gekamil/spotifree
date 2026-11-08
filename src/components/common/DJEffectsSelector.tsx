@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { DJ_FX_LEVEL_KEY, getDJFxLevel, type DJFxLevel } from '../../services/djMixPlanner';
 import { useLanguageStore } from '../../utils/i18n';
 
-/** "Efectos de DJ": how strong the impacts / risers / rolls on DJ transitions are. */
+/** "Efectos de DJ": how strong the build-up riser and the APK's real filter moves are. */
 export const DJEffectsSelector: React.FC<{ compact?: boolean }> = ({ compact }) => {
   const isEn = useLanguageStore((s) => s.language === 'en');
   const [level, setLevel] = useState<DJFxLevel>(() => getDJFxLevel());
@@ -23,8 +23,8 @@ export const DJEffectsSelector: React.FC<{ compact?: boolean }> = ({ compact }) 
       <p className={`${compact ? 'text-[15px]' : 'text-sm'} text-white font-medium`}>{isEn ? 'DJ effects' : 'Efectos de DJ'}</p>
       <p className="text-[13px] text-[#a7a7a7] mt-0.5 leading-snug">
         {isEn
-          ? 'Impacts, risers and rolls that play when the DJ changes song.'
-          : 'Golpes, subidas y redobles que suenan cuando el DJ cambia de canción.'}
+          ? 'The riser before a build-up and, in the app, the real bass and filter moves in each change.'
+          : 'La subida antes de un Subidón y, en la app, el movimiento real de graves y filtro en cada cambio.'}
       </p>
       <div className="mt-3 inline-flex p-1 rounded-full bg-[#2a2a2a]">
         {opts.map((o) => (

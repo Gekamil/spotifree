@@ -5,6 +5,7 @@ import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
 import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
@@ -99,7 +100,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     likedTrackIds,
     toggleLike,
     queue,
-  } = usePlayerStore();
+  } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, progressMs: s.progressMs, durationMs: s.durationMs, playTrack: s.playTrack, togglePlay: s.togglePlay, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, queue: s.queue }))
+  );
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
   const [isQueueRendered, setIsQueueRendered] = useState(false);

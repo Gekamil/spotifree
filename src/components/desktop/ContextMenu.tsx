@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
@@ -12,7 +13,9 @@ interface ContextMenuProps {
 
 export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }) => {
   const { contextMenu, closeContextMenu, openEditPlaylistModal, setActiveMainTab } = useUIStore();
-  const { toggleLike, likedTrackIds } = usePlayerStore();
+  const { toggleLike, likedTrackIds } = usePlayerStore(
+    useShallow((s) => ({ toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds }))
+  );
   const { playlists, deletePlaylist } = useSpotifyDataStore();
   const menuRef = useRef<HTMLDivElement>(null);
 

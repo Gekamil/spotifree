@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { PlayNativeIcon, PauseNativeIcon, CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { searchSpotify } from '../../services/spotifyApi';
@@ -640,7 +641,9 @@ interface DesktopSearchViewProps {
 
 export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPlaylistById }) => {
   const { searchQuery } = useUIStore();
-  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore(
+    useShallow((s) => ({ playTrack: s.playTrack, currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay }))
+  );
   const [selectedCategory, setSelectedCategory] = useState<typeof officialCategories[0] | null>(null);
   const [searchFilter, setSearchFilter] = useState<'todo' | 'canciones' | 'artistas' | 'albumes' | 'playlists'>('todo');
   const [searchResults, setSearchResults] = useState<FullSearchResults>({

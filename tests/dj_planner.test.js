@@ -132,11 +132,11 @@ describe('Transition planner', () => {
     assert.ok(seen.size >= 3, `only ${[...seen].join(',')}`);
   });
 
-  it('P.3: big tempo gaps never use long overlapping blends', () => {
+  it('P.3: big tempo gaps never overlap two rhythms (cut, one-bar fade or build only)', () => {
     for (let s = 1; s <= 60; s++) {
       const p = P.planTransition(info('a', 96, '8A', 0.5), info('b', 128, '8A', 0.7), { seed: s, recent: [] });
-      assert.ok(['eco_out', 'corte', 'freno_vinilo', 'crescendo'].includes(p.preset), p.preset);
-      assert.ok(!(p.preset === 'automatica' && p.compases >= 4));
+      assert.ok(['corte', 'fundido', 'crescendo'].includes(p.preset), p.preset);
+      if (p.preset === 'fundido') assert.ok(p.compases <= 1, `fade of ${p.compases} bars`);
     }
   });
 
@@ -248,37 +248,83 @@ describe('Unified transition renderer (live mix == preview)', () => {
     assert.equal(P.computeTransitionGains(cfg, 0.99, 2).inVol, 1);
   });
 
-  it('R.3: vinyl brake slows A down in steps (0.75 → 0.5 → 0.25)', () => {
-    const cfg = { preset: 'freno_vinilo', volumeEnvelope: 'corte_directo', eqMode: 'intercambio_graves_central', fxMode: 'freno_vinilo', tempoA: 120 };
-    const rates = new Set();
-    for (let i = 0; i <= 100; i++) rates.add(P.computeTransitionGains(cfg, i / 100, 2).rateOut);
-    assert.deepEqual([...rates].sort(), [0.25, 0.5, 0.75, 1]);
-  });
-
-  it('R.4: every DJ transition except a plain fade gets audible layers built around the swap', () => {
-    const base = { volumeEnvelope: 'curva_s', eqMode: 'intercambio_graves_central', fxMode: 'ninguno', tempoA: 124, intensity: 'smooth' };
-    assert.deepEqual(P.transitionFXLayers({ ...base, preset: 'fundido' }, 8), []);
-    for (const preset of ['automatica', 'crescendo', 'filtro', 'corte', 'mezcla_voces', 'eco_out']) {
-      const layers = P.transitionFXLayers({ ...base, preset }, 8);
-      assert.ok(layers.length > 0, preset);
-      for (const l of layers) assert.ok(l.at >= 0 && l.dur > 0 && l.level > 0 && l.level <= 1.5, `${preset} ${JSON.stringify(l)}`);
+  it('R.3: no fake effects: the playback speed of the songs is never touched', () => {
+    for (const preset of presets) {
+      for (const volumeEnvelope of envelopes) {
+        const cfg = { preset, volumeEnvelope, eqMode: 'intercambio_graves_central', fxMode: preset === 'freno_vinilo' ? 'freno_vinilo' : 'ninguno', tempoA: 120 };
+        for (let i = 0; i <= 100; i++) assert.equal(P.computeTransitionGains(cfg, i / 100, 4).rateOut, 1, `${preset}/${volumeEnvelope}`);
+      }
     }
-    // The impact lands exactly where B takes over
-    const cres = { ...base, preset: 'crescendo', intensity: 'wow' };
-    const impact = P.transitionFXLayers(cres, 8).find((l) => l.kind === 'impact');
-    assert.ok(Math.abs(impact.at - P.transitionSwapPoint(cres) * 8) < 1e-9);
-    const roll = { ...base, preset: 'beat_roll', fxMode: 'repeticion_loop' };
-    assert.ok(P.transitionFXLayers(roll, 4).some((l) => l.kind === 'roll'));
   });
 
-  it('R.5: build-ups breathe in right before the drop (tension gap), then B lands at full level', () => {
+  it('R.4: only a "Subidón" gets a synthesized sweep (ending on the drop); every other style stays clean', () => {
+    const base = { volumeEnvelope: 'curva_s', eqMode: 'intercambio_graves_central', fxMode: 'ninguno', tempoA: 124, intensity: 'smooth' };
+    for (const preset of ['automatica', 'fundido', 'corte', 'filtro', 'mezcla_voces', 'eco_out', 'beat_roll', 'freno_vinilo']) {
+      assert.deepEqual(P.transitionFXLayers({ ...base, preset }, 8), [], preset);
+    }
+    const cres = { ...base, preset: 'crescendo', intensity: 'wow' };
+    const layers = P.transitionFXLayers(cres, 8);
+    assert.equal(layers.length, 1);
+    assert.equal(layers[0].kind, 'riser');
+    assert.ok(Math.abs(layers[0].at + layers[0].dur - P.transitionSwapPoint(cres) * 8) < 1e-9, 'the sweep ends exactly on the drop');
+    assert.ok(layers[0].level <= 0.6, 'soft');
+  });
+
+  it('R.5: "Subidón": A holds (at most -4 dB) and B stays silent until the drop, then B takes over at full level', () => {
     const cfg = { preset: 'crescendo', volumeEnvelope: 'curva_s', eqMode: 'intercambio_gradual', fxMode: 'ninguno', tempoA: 120 };
     const swap = P.transitionSwapPoint(cfg);
     const dur = 8;
-    const justBefore = P.computeTransitionGains(cfg, swap - 0.01, dur);
-    const after = P.computeTransitionGains(cfg, Math.min(1, swap + 0.1), dur);
-    assert.ok(justBefore.outVol < 0.2 && justBefore.inVol < 0.2, JSON.stringify(justBefore));
-    assert.ok(after.inVol > 0.6, JSON.stringify(after));
+    for (let i = 0; i < Math.floor(swap * 100); i++) {
+      const g = P.computeTransitionGains(cfg, i / 100, dur);
+      assert.ok(g.outVol >= 0.63 && g.inVol === 0, `${i}% ${JSON.stringify(g)}`);
+    }
+    const after = P.computeTransitionGains(cfg, Math.min(1, swap + 0.06), dur);
+    assert.ok(after.inVol > 0.99 && after.outVol < 0.01, JSON.stringify(after));
+  });
+
+  it('R.6: "Mezcla": both songs are loud only for a short moment around the middle', () => {
+    const cfg = { preset: 'automatica', volumeEnvelope: 'superposicion', eqMode: 'intercambio_graves_central', fxMode: 'ninguno', tempoA: 124 };
+    let both = 0;
+    for (let i = 0; i <= 100; i++) {
+      const g = P.computeTransitionGains(cfg, i / 100, 8);
+      if (g.outVol > 0.5 && g.inVol > 0.5) both++;
+    }
+    assert.ok(both <= 20, `both loud during ${both}% of the mix`);
+    // B rises steadily and never drops back; A only goes down
+    let prevIn = -1;
+    let prevOut = 2;
+    for (let i = 0; i <= 100; i++) {
+      const g = P.computeTransitionGains(cfg, i / 100, 8);
+      assert.ok(g.inVol >= prevIn - 1e-9 && g.outVol <= prevOut + 1e-9, `step ${i}`);
+      prevIn = g.inVol;
+      prevOut = g.outVol;
+    }
+  });
+
+  it('R.7: "Fundido" keeps the total loudness constant (constant power)', () => {
+    const cfg = { preset: 'fundido', volumeEnvelope: 'curva_s', eqMode: 'sin_filtro', fxMode: 'ninguno', tempoA: 124 };
+    for (let i = 0; i <= 100; i++) {
+      const g = P.computeTransitionGains(cfg, i / 100, 6);
+      assert.ok(Math.abs(g.outVol ** 2 + g.inVol ** 2 - 1) < 1e-9, `step ${i}`);
+    }
+  });
+
+  it('R.8: where B enters: its intro ends when the blend ends; on a cut its strong part lands on the swap', () => {
+    const b = {
+      id: 'b',
+      tempo: 120,
+      tempoReliable: true,
+      keyReliable: false,
+      analysis: { tempo: 120, tempoSource: 'analysis', tempoConfidence: 0.6, downbeatOffsetSec: 0, audioStartSec: 1, introEndSec: 18, durationSec: 200, analyzedAt: 1 },
+    };
+    const dur = 8; // 4 bars at 120 BPM
+    const blendIn = P.alignEntry(b, 'blend', dur);
+    assert.ok(Math.abs(blendIn + dur - 18) < 0.01, `blend entry ${blendIn}`);
+    const swap = 0.92;
+    const cutIn = P.alignEntry(b, 'cut', 2, swap);
+    assert.ok(Math.abs(cutIn + swap * 2 - 18) < 0.01, `cut entry ${cutIn}`);
+    // Unknown structure: B just skips its silent start
+    assert.equal(P.alignEntry({ ...b, analysis: { ...b.analysis, introEndSec: undefined } }, 'blend', dur), 1);
   });
 });
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useStatsStore } from '../../store/useStatsStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { Playlist, Track } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
@@ -22,7 +23,9 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
 }) => {
   const { user, playlists, isAuthenticated, logout } = useSpotifyDataStore();
   const { getTopArtists, getTopTracks } = useStatsStore();
-  const { playTrack } = usePlayerStore();
+  const { playTrack } = usePlayerStore(
+    useShallow((s) => ({ playTrack: s.playTrack }))
+  );
 
 
   const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';

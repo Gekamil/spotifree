@@ -18,6 +18,7 @@ import {
   FullscreenNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
@@ -51,7 +52,9 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     toggleRepeat,
     toggleLike,
     queue,
-  } = usePlayerStore();
+  } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, progressMs: s.progressMs, durationMs: s.durationMs, volume: s.volume, isMuted: s.isMuted, shuffleMode: s.shuffleMode, repeatMode: s.repeatMode, likedTrackIds: s.likedTrackIds, nextTrack: s.nextTrack, previousTrack: s.previousTrack, setProgress: s.setProgress, setVolume: s.setVolume, toggleMute: s.toggleMute, toggleShuffle: s.toggleShuffle, toggleRepeat: s.toggleRepeat, toggleLike: s.toggleLike, queue: s.queue }))
+  );
 
   const [resolvedDesktopCover, setResolvedDesktopCover] = useState<string | undefined>(() => {
     return currentTrack ? getTrackCoverUrl(currentTrack) : undefined;

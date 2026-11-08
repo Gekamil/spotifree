@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useStatsStore } from '../../store/useStatsStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { Playlist, Track } from '../../types/spotify';
 import { PlayNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
@@ -58,7 +59,9 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
 }) => {
   const { user, playlists } = useSpotifyDataStore();
   const { totalSeconds, totalTracksPlayed, getTopArtists, getTopTracks } = useStatsStore();
-  const { playTrack } = usePlayerStore();
+  const { playTrack } = usePlayerStore(
+    useShallow((s) => ({ playTrack: s.playTrack }))
+  );
 
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 

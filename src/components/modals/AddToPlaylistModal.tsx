@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useLanguageStore, useTranslation } from '../../utils/i18n';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
@@ -10,7 +11,9 @@ import type { Track, Playlist } from '../../types/spotify';
 
 export const AddToPlaylistModal: React.FC = () => {
   const { isAddToPlaylistModalOpen, trackForAddToPlaylist, closeAddToPlaylistModal } = useUIStore();
-  const { likedTrackIds, toggleLike } = usePlayerStore();
+  const { likedTrackIds, toggleLike } = usePlayerStore(
+    useShallow((s) => ({ likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike }))
+  );
   const { playlists, user } = useSpotifyDataStore();
   const { t } = useTranslation();
   const { language } = useLanguageStore();

@@ -11,6 +11,7 @@ import {
   PinNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore, SPOTIFY_DJ_PLAYLIST, getDeletedPlaylistIds, deduplicateUserPlaylists } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { stripHtml, toHDImage } from '../../utils/formatters';
@@ -56,7 +57,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     }
   };
 
-  const { currentTrack, isPlaying } = usePlayerStore();
+  const { currentTrack, isPlaying } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying }))
+  );
   const { isAuthenticated } = useSpotifyDataStore();
   const {
     toggleCreateMenu,

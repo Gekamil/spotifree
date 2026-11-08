@@ -79,7 +79,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
     const numPoints = mini ? 70 : 160;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 
-    const render = () => {
+    const draw = () => {
       const currentState = stateRef.current;
       const targetVoice = voiceLevelRef.current;
 
@@ -187,13 +187,27 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       ctx.stroke();
       ctx.restore();
 
-      animId = requestAnimationFrame(render);
     };
 
-    render();
+    // Only while visible (on screen, tab shown), at most 30 frames per second: these slow
+    // organic shapes look the same and the page stays smooth (they used to draw every frame
+    // forever, also off screen)
+    let onScreen = true;
+    const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; }) : null;
+    io?.observe(canvas);
+    let lastDraw = 0;
+    const render = (now: number) => {
+      animId = requestAnimationFrame(render);
+      if (!onScreen || document.hidden || now - lastDraw < 32) return;
+      lastDraw = now;
+      draw();
+    };
+    draw();
+    animId = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(animId);
+      io?.disconnect();
     };
   }, [size, mini]);
 

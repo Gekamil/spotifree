@@ -13,6 +13,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { formatDuration, stripHtml } from '../../utils/formatters';
@@ -22,7 +23,7 @@ import { audioEngine } from '../../services/audioEngine';
 import { isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { djTransitionService } from '../../services/djTransitionService';
-import { buildDJSetOrder, getSessionFlavour, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
+import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
 import { prepareDJAnalyses } from '../../services/trackAnalysisService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { AIDJView } from '../dj/AIDJView';
@@ -71,7 +72,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     toggleLike,
     shuffleMode,
     toggleShuffle,
-  } = usePlayerStore();
+  } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, likedTrackIds: s.likedTrackIds, playTrack: s.playTrack, togglePlay: s.togglePlay, toggleLike: s.toggleLike, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle }))
+  );
 
   const { openContextMenu, openEditPlaylistModal, openAddToPlaylistModal } = useUIStore();
   const { user, playlists: allUserPlaylists } = useSpotifyDataStore();
@@ -1749,21 +1752,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   {/* DJ Transition Connector between tracks */}
                   {isAutomixActive && index < tracks.length - 1 && (() => {
                     const nextTrack = tracks[index + 1];
-                    const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-                    const nextFeat: AudioFeature =
-                      audioFeatures[nextCleanId] ||
-                      audioFeatures[nextTrack?.id] ||
-                      resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
-
-                    const smartTrans = djTransitionService.getTransitionConfig(
-                      track.id,
-                      nextTrack.id,
-                      feat?.tempo,
-                      nextFeat?.tempo,
-                      feat?.camelot,
-                      nextFeat?.camelot,
-                      index
-                    );
+                    // Same plan the live mix and the editor use
+                    const plannedTrans = djTransitionService.getPlannedTransition(track, nextTrack);
+                    const smartTrans = {
+                      title: mixStyleName(mixStyleOf(plannedTrans)),
+                      detail: plannedTrans.reason || plannedTrans.detail || '',
+                    };
 
                     return (
                       <div className="relative pl-14 py-1 flex items-center my-0.5">

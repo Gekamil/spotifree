@@ -91,7 +91,7 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
       }
     }
 
-    const render = () => {
+    const draw = () => {
       const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
       const targetW = Math.round((canvas.clientWidth || canvas.parentElement?.clientWidth || 300) * dpr);
       const targetH = Math.round((canvas.clientHeight || canvas.parentElement?.clientHeight || 150) * dpr);
@@ -212,13 +212,27 @@ export const InteractiveMusicWaves: React.FC<InteractiveMusicWavesProps> = ({
 
       ctx.restore();
 
-      animId = requestAnimationFrame(render);
     };
 
-    render();
+    // Only while visible (on screen, tab shown), at most 30 frames per second: these slow
+    // organic shapes look the same and the page stays smooth (they used to draw every frame
+    // forever, also off screen)
+    let onScreen = true;
+    const io = typeof IntersectionObserver !== 'undefined' ? new IntersectionObserver(([e]) => { onScreen = e.isIntersecting; }) : null;
+    io?.observe(canvas);
+    let lastDraw = 0;
+    const render = (now: number) => {
+      animId = requestAnimationFrame(render);
+      if (!onScreen || document.hidden || now - lastDraw < 32) return;
+      lastDraw = now;
+      draw();
+    };
+    draw();
+    animId = requestAnimationFrame(render);
 
     return () => {
       cancelAnimationFrame(animId);
+      io?.disconnect();
       window.removeEventListener('resize', resize);
       if (ro) ro.disconnect();
     };

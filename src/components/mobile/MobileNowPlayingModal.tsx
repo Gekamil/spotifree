@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { audioEngine } from '../../services/audioEngine';
 import {
@@ -63,7 +64,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     playTrack,
     queue,
     currentContextId,
-  } = usePlayerStore();
+  } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId }))
+  );
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const [queueDragY, setQueueDragY] = useState(0);

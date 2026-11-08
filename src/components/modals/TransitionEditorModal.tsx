@@ -6,7 +6,36 @@ import {
   resolveClientSideRealFeature,
   TRACK_ANALYSIS_EVENT,
 } from '../../utils/audioFeatures';
-import { getDJSessionSeed, getMixTrackInfo, planTransition, type PlannedTransition } from '../../services/djMixPlanner';
+import {
+  alignEntry,
+  computeTransitionGains,
+  fitBars,
+  getDJSessionSeed,
+  getMixTrackInfo,
+  mixStyleName,
+  mixStyleOf,
+  planTransition,
+  transitionSwapPoint,
+  type MixStyle,
+  type PlannedTransition,
+} from '../../services/djMixPlanner';
+import { nativeFxStatus } from '../../services/nativeAudioFx';
+
+/** The four mixing styles offered in the editor (older saved styles map onto them) */
+const STYLE_CHIPS: Array<{ id: Exclude<MixStyle, 'linear'>; label: string }> = [
+  { id: 'blend', label: 'Mezcla' },
+  { id: 'fade', label: 'Fundido' },
+  { id: 'cut', label: 'Corte en el 1' },
+  { id: 'build', label: 'Subidón' },
+];
+const STYLE_TEXT: Record<MixStyle, string> = {
+  blend:
+    'B entra desde lejos sobre el final de A y va subiendo. A aguanta y luego se va, y las dos solo suenan fuerte un momento. La intro de B termina justo cuando acaba la música de A.',
+  fade: 'Fundido cruzado de potencia constante: el volumen total no baja ni sube mientras una canción da paso a la otra.',
+  linear: 'Fundido lineal: una canción baja mientras la otra sube al mismo ritmo.',
+  cut: 'A suena entera hasta el compás. B ya va sonando en silencio y entra justo en su parte fuerte, sin solapar ritmos.',
+  build: 'A sostiene y deja hueco, sube un barrido suave durante los dos últimos compases y B entra de golpe en su parte fuerte.',
+};
 import { analyzeTrackAudio } from '../../services/trackAnalysisService';
 
 /** Human label for where a track's BPM / key come from. */
@@ -88,7 +117,8 @@ function computeTimelineCoordinates(
   width: number,
   height: number,
   tempo: number,
-  compases: number
+  compases: number,
+  swapPoint = 0.5
 ): TimelineCoordinates {
   const safeTempo = tempo > 40 && tempo < 240 ? tempo : 128;
   const barSec = 240 / safeTempo;
@@ -106,7 +136,7 @@ function computeTimelineCoordinates(
 
   const X_mixStart = W_leadIn;
   const X_mixEnd = W_leadIn + W_mix;
-  const X_crossover = W_leadIn + 0.5 * W_mix;
+  const X_crossover = W_leadIn + swapPoint * W_mix;
 
   const N_beats = (compases || 2) * 4;
   const stepBeat = W_mix / N_beats;
@@ -256,9 +286,6 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
 
   // Dropdown menus
   const [isCompasesMenuOpen, setIsCompasesMenuOpen] = useState(false);
-  const [isVolumeMenuOpen, setIsVolumeMenuOpen] = useState(false);
-  const [isEqMenuOpen, setIsEqMenuOpen] = useState(false);
-  const [isFxMenuOpen, setIsFxMenuOpen] = useState(false);
 
   // Audition playback state
   const [isAuditionLoading, setIsAuditionLoading] = useState(false);
@@ -389,6 +416,38 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
       djTransitionService.stopAudition();
     };
   }, [isOpen]);
+
+  // The style being edited (any saved / older preset maps onto one of the four)
+  const currentStyle: MixStyle = mixStyleOf({ preset, volumeEnvelope });
+
+  /** Pick one of the four styles: sets its shape, length and where B enters */
+  const handleSelectStyle = (style: Exclude<MixStyle, 'linear'> | 'auto') => {
+    if (!trackA || !trackB) return;
+    if (style === 'auto') {
+      handleSelectPreset('automatica');
+      return;
+    }
+    const a = getMixTrackInfo(trackA);
+    const b = getMixTrackInfo(trackB);
+    const shape =
+      style === 'blend'
+        ? { preset: 'automatica' as TransitionPreset, env: 'superposicion' as VolumeEnvelope, eq: 'intercambio_graves_central' as EQFilterMode, bars: 4, intensity: 'smooth' as const }
+        : style === 'fade'
+          ? { preset: 'fundido' as TransitionPreset, env: 'curva_s' as VolumeEnvelope, eq: 'sin_filtro' as EQFilterMode, bars: 2, intensity: 'basic' as const }
+          : style === 'cut'
+            ? { preset: 'corte' as TransitionPreset, env: 'corte_directo' as VolumeEnvelope, eq: 'intercambio_graves_central' as EQFilterMode, bars: 1, intensity: 'basic' as const }
+            : { preset: 'crescendo' as TransitionPreset, env: 'curva_s' as VolumeEnvelope, eq: 'intercambio_gradual' as EQFilterMode, bars: 2, intensity: 'wow' as const };
+    const bars = fitBars(shape.bars, a.tempo);
+    const dur = bars * (240 / (a.tempo > 40 && a.tempo < 240 ? a.tempo : 120));
+    setPreset(shape.preset);
+    setVolumeEnvelope(shape.env);
+    setEqMode(shape.eq);
+    setFxMode('ninguno');
+    setCompases(bars);
+    setMixInSec(alignEntry(b, style, dur, transitionSwapPoint({ preset: shape.preset, volumeEnvelope: shape.env })));
+    setPlanReason(null);
+    setPlanIntensity(shape.intensity);
+  };
 
   // Handle Preset selection with dynamic smart calculations for Automática
   const handleSelectPreset = (p: TransitionPreset) => {
@@ -604,13 +663,21 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.clearRect(0, 0, width, height);
 
     // Compute unified temporal coordinates
-    const coords = computeTimelineCoordinates(width, height, featA.tempo, compases);
+    const coords = computeTimelineCoordinates(
+      width,
+      height,
+      featA.tempo,
+      compases,
+      transitionSwapPoint({ preset, volumeEnvelope })
+    );
+    // Same gains the live mix and the preview play
+    const gainsCfg = { preset, volumeEnvelope, eqMode, fxMode, tempoA: featA.tempo };
+    const gainsAt = (p: number) => computeTransitionGains(gainsCfg, p, coords.T_mix);
     const {
       W_leadIn,
       W_mix,
       W_leadOut,
       X_mixStart,
-      X_mixEnd,
       X_crossover,
       N_beats,
       stepBeat,
@@ -648,6 +715,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.textAlign = 'left';
     for (let b = 1; b <= compases; b++) {
       const barX = W_leadIn + (b - 1) * 4 * stepBeat;
+      if (Math.abs(barX + 18 - X_crossover) < 52) continue; // the change marker sits there
       ctx.font = 'bold 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
       ctx.fillText(`Bar ${b}`, barX + 5, 12);
@@ -680,7 +748,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.font = 'bold 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
     ctx.fillStyle = '#facc15';
     ctx.textAlign = 'center';
-    ctx.fillText('◆ CRUCE', X_crossover, 12);
+    ctx.fillText('◆ CAMBIO', X_crossover, 12);
 
     // 4. "Solo B" badge in lead-out
     const soloBW = Math.min(48, Math.max(36, W_leadOut * 0.55));
@@ -746,55 +814,10 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
         // Zone 2: Mix Window
         const pMix = Math.max(0, Math.min(1, (x - W_leadIn) / W_mix));
 
-        // 1. Deck A Volume Envelope
-        if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
-          volA = pMix <= 0.5 ? 1.0 : Math.cos((pMix - 0.5) * Math.PI);
-        } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-          volA = pMix < 0.4 ? 1.0 : pMix < 0.6 ? Math.cos(((pMix - 0.4) / 0.2) * 0.5 * Math.PI) : Math.max(0, (1 - pMix) * 0.25);
-        } else if (preset === 'crescendo') {
-          volA = Math.cos(pMix * 0.5 * Math.PI);
-        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
-          volA = 0.5 * (1.0 + Math.cos(pMix * Math.PI));
-        } else {
-          volA = Math.max(0, 1.0 - pMix);
-        }
-
-        // 2. Deck B Volume Envelope
-        if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
-          volB = pMix;
-        } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-          volB = pMix < 0.4 ? (pMix / 0.4) * 0.4 : pMix < 0.6 ? Math.sin((0.4 + ((pMix - 0.4) / 0.2) * 0.6) * 0.5 * Math.PI) : 1.0;
-        } else if (preset === 'crescendo') {
-          volB = Math.pow(pMix, 1.8);
-        } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
-          volB = 0.5 * (1.0 - Math.cos(pMix * Math.PI));
-        } else {
-          volB = Math.min(1, pMix);
-        }
-
-        // 3. Bass Swap Modulation
-        if (eqMode === 'intercambio_graves_central' || ['automatica', 'corte'].includes(preset)) {
-          bassA = pMix < 0.50 ? 1.0 : 0.08;
-          bassB = pMix < 0.50 ? 0.05 : 1.0;
-        } else if (eqMode === 'intercambio_gradual') {
-          bassA = 1.0 - pMix;
-          bassB = pMix;
-        } else if (eqMode === 'filtro_paso_alto') {
-          bassA = Math.max(0.08, 1.0 - pMix * 2.0);
-          bassB = Math.min(1.0, pMix * 2.0);
-        }
-
-        // 4. Filter / FX Modulation
-        if (preset === 'filtro' || eqMode === 'filtro_paso_bajo') {
-          highsA = Math.pow(Math.max(0, 1 - pMix), 1.8);
-          midsA = Math.pow(Math.max(0, 1 - pMix), 1.2);
-        }
-        if (fxMode === 'repeticion_loop' || preset === 'beat_roll') {
-          const stutterTick = Math.floor(pMix * 24);
-          if (stutterTick % 2 === 1 && pMix > 0.35) {
-            volA *= 0.25;
-          }
-        }
+        // The exact volumes the mix plays at this point (no fake EQ / FX drawn)
+        const g = gainsAt(pMix);
+        volA = g.outVol;
+        volB = g.inVol;
       }
 
       // Render Deck A Slice
@@ -956,26 +979,6 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.fill();
     ctx.shadowBlur = 0;
 
-    // Bass EQ Step Lines in Hub
-    if (eqMode === 'intercambio_graves_central' || preset === 'automatica' || preset === 'corte') {
-      ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
-      ctx.lineWidth = 1.5;
-      // Deck A step: High -> Low
-      ctx.beginPath();
-      ctx.moveTo(X_mixStart, Y_1 + 3);
-      ctx.lineTo(X_crossover, Y_1 + 3);
-      ctx.lineTo(X_crossover, Y_0 - 3);
-      ctx.lineTo(X_mixEnd, Y_0 - 3);
-      ctx.stroke();
-
-      // Deck B step: Low -> High
-      ctx.beginPath();
-      ctx.moveTo(X_mixStart, Y_0 - 3);
-      ctx.lineTo(X_crossover, Y_0 - 3);
-      ctx.lineTo(X_crossover, Y_1 + 3);
-      ctx.lineTo(X_mixEnd, Y_1 + 3);
-      ctx.stroke();
-    }
 
     // Deck A Volume Curve (Cyan #38bdf8)
     ctx.strokeStyle = '#38bdf8';
@@ -990,24 +993,11 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.moveTo(0, Y_1);
     ctx.lineTo(X_mixStart, Y_1);
 
-    // Mix window
-    const curveSteps = 32;
+    // Mix window: the exact gains the live mix and the preview play
+    const curveSteps = 64;
     for (let s = 0; s <= curveSteps; s++) {
       const p = s / curveSteps;
-      const cx = X_mixStart + p * W_mix;
-      let valA = 1.0;
-      if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
-        valA = p <= 0.5 ? 1.0 : Math.cos((p - 0.5) * Math.PI);
-      } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-        valA = p < 0.4 ? 1.0 : p < 0.6 ? Math.cos(((p - 0.4) / 0.2) * 0.5 * Math.PI) : Math.max(0, (1 - p) * 0.25);
-      } else if (preset === 'crescendo') {
-        valA = Math.cos(p * 0.5 * Math.PI);
-      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
-        valA = 0.5 * (1.0 + Math.cos(p * Math.PI));
-      } else {
-        valA = Math.max(0, 1.0 - p);
-      }
-      ctx.lineTo(cx, yFromLevel(valA));
+      ctx.lineTo(X_mixStart + p * W_mix, yFromLevel(gainsAt(p).outVol));
     }
 
     // Lead-out: muted (0%)
@@ -1031,20 +1021,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     // Mix window
     for (let s = 0; s <= curveSteps; s++) {
       const p = s / curveSteps;
-      const cx = X_mixStart + p * W_mix;
-      let valB = 0.0;
-      if (volumeEnvelope === 'superposicion' || preset === 'automatica' || preset === 'mezcla_voces') {
-        valB = p;
-      } else if (volumeEnvelope === 'corte_directo' || preset === 'corte') {
-        valB = p < 0.4 ? (p / 0.4) * 0.4 : p < 0.6 ? Math.sin((0.4 + ((p - 0.4) / 0.2) * 0.6) * 0.5 * Math.PI) : 1.0;
-      } else if (preset === 'crescendo') {
-        valB = Math.pow(p, 1.8);
-      } else if (volumeEnvelope === 'curva_s' || preset === 'eco_out' || preset === 'beat_roll' || preset === 'repeticion_ritmo') {
-        valB = 0.5 * (1.0 - Math.cos(p * Math.PI));
-      } else {
-        valB = Math.min(1, p);
-      }
-      ctx.lineTo(cx, yFromLevel(valB));
+      ctx.lineTo(X_mixStart + p * W_mix, yFromLevel(gainsAt(p).inVol));
     }
 
     // Lead-out: full groove (100%)
@@ -1053,29 +1030,15 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
     ctx.shadowBlur = 0;
 
     // Filter Sweep / FX Overlays (Purple #c084fc)
-    if (fxMode !== 'ninguno' || ['filtro', 'eco_out', 'freno_vinilo', 'beat_roll', 'distorsion_wash', 'repeticion_ritmo'].includes(preset)) {
+    // Only the build-up (Subidón) has an effect: a rising sweep that ends on the drop
+    if (mixStyleOf({ preset, volumeEnvelope }) === 'build') {
       ctx.strokeStyle = '#c084fc';
       ctx.lineWidth = 2.0;
       ctx.beginPath();
-
-      if (preset === 'freno_vinilo' || fxMode === 'freno_vinilo') {
-        ctx.moveTo(X_mixStart, Y_1);
-        ctx.lineTo(X_crossover, Y_1);
-        ctx.quadraticCurveTo(X_crossover + W_mix * 0.25, Y_0 - 4, X_mixEnd - 4, Y_0);
-        ctx.lineTo(X_mixEnd, Y_0);
-      } else if (preset === 'beat_roll' || preset === 'repeticion_ritmo' || fxMode === 'repeticion_loop' || fxMode === 'distorsion_wash') {
-        ctx.moveTo(X_mixStart, HUB_Y_MID);
-        const stutterStart = X_mixStart + W_mix * 0.25;
-        ctx.lineTo(stutterStart, HUB_Y_MID);
-        for (let sx = stutterStart; sx < X_mixEnd - 6; sx += (X_mixEnd - stutterStart) / 10) {
-          ctx.lineTo(sx, Y_1 + 4);
-          ctx.lineTo(sx + 4, Y_0 - 4);
-        }
-        ctx.lineTo(X_mixEnd, Y_0);
-      } else {
-        ctx.moveTo(X_mixStart, Y_1 + 4);
-        ctx.bezierCurveTo(X_crossover, Y_1 + 4, X_crossover + W_mix * 0.2, Y_0 - 2, X_mixEnd, Y_0);
-      }
+      const riseStart = Math.max(X_mixStart, X_crossover - stepBeat * 8);
+      ctx.moveTo(riseStart, Y_0 - 2);
+      ctx.quadraticCurveTo(X_crossover - (X_crossover - riseStart) * 0.25, Y_0 - 4, X_crossover, Y_1 + 2);
+      ctx.lineTo(X_crossover, Y_0 - 2);
       ctx.stroke();
     }
 
@@ -1231,12 +1194,14 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-sm bg-[#facc15]" />
-                <span className="text-xs text-[#facc15] font-semibold">Cruce de Bombo/Bajo</span>
+                <span className="text-xs text-[#facc15] font-semibold">Punto de cambio</span>
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-sm bg-[#c084fc]" />
-                <span className="text-xs text-[#c084fc] font-semibold">Filtro / FX</span>
-              </div>
+              {currentStyle === 'build' && (
+                <div className="flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-sm bg-[#c084fc]" />
+                  <span className="text-xs text-[#c084fc] font-semibold">Subida</span>
+                </div>
+              )}
             </div>
             <div className="flex items-center gap-2 font-medium">
               <span className="text-[#1ed760] flex items-center gap-1">
@@ -1371,25 +1336,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               <div className="flex items-center gap-2">
                 <div className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
                 <span className="text-xs font-bold text-white font-['SpotifyMixUITitle']">
-                  {preset === 'mezcla_voces'
-                    ? '✦ Fusión Vocal Armónica'
-                    : preset === 'repeticion_ritmo'
-                    ? '✦ Ritmo & Distorsión Progresiva'
-                    : preset === 'automatica'
-                    ? '✦ Mezcla Adaptativa Inteligente'
-                    : preset === 'filtro'
-                    ? '✦ Filtro Resonante Pasa-Altos'
-                    : preset === 'eco_out'
-                    ? '✦ Eco Espacial y Filtro'
-                    : preset === 'freno_vinilo'
-                    ? '✦ Freno de Tornamesa Analógico'
-                    : preset === 'beat_roll'
-                    ? '✦ Beat Roll Rítmico'
-                    : preset === 'crescendo'
-                    ? '✦ Crescendo Exponencial'
-                    : preset === 'corte'
-                    ? '✦ Drop de Impacto'
-                    : '✦ Fundido Dinámico'}
+                  {`✦ ${mixStyleName(currentStyle)}`}
                 </span>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-white/10 text-[#b3b3b3]">
                   {compases} {compases === 1 ? 'compás' : 'compases'} ({djTransitionService.calculateDurationSeconds(featA.tempo || 128, compases).toFixed(1)}s)
@@ -1408,25 +1355,7 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
               </p>
             )}
             <p className={`text-xs text-[#b3b3b3] leading-relaxed ${planReason ? 'hidden' : ''}`}>
-              {preset === 'mezcla_voces'
-                ? 'Aísla las frecuencias vocales suprimiendo el bajo en ambas pistas (-36dB) para entrelazar las voces con nitidez total. Al llegar al compás central, el bombo de la pista entrante toma el control sin choques ni silencios.'
-                : preset === 'repeticion_ritmo'
-                ? 'Repite el compás de la base rítmica acelerando en 1/4 y 1/8 con saturación armónica y barrido de frecuencias, adaptando progresivamente el pulso hasta encajar perfectamente en el drop de la nueva pista.'
-                : preset === 'automatica'
-                ? 'Analiza el tempo y la clave armónica para un intercambio quirúrgico de graves en el punto central, manteniendo la energía y eliminando silencios o choques de sonido.'
-                : preset === 'eco_out'
-                ? 'Aplica un retardo espacial sincronizado al compás con filtro pasa-bajos, disolviendo suavemente la pista saliente en una nube de reverberación.'
-                : preset === 'freno_vinilo'
-                ? 'Decelera la rotación del plato como en una tornamesa de vinilo analógica mientras la pista entrante entra gradualmente sin silencios bruscos.'
-                : preset === 'beat_roll'
-                ? 'Crea un redoble rítmico acelerado sobre el tiempo antes del drop para construir tensión en la transición.'
-                : preset === 'crescendo'
-                ? 'Incrementa progresivamente la energía y frecuencias agudas antes de lanzar la nueva pista con máxima potencia.'
-                : preset === 'filtro'
-                ? 'Barrido resonante de frecuencias para disolver disonancias antes de dar paso limpio a la siguiente pista.'
-                : preset === 'corte'
-                ? 'Cruce enérgico con rampa rápida anti-clic para pasar directamente a la pegada del bombo de la nueva pista sin pausas.'
-                : 'Cruce suave de volumen para conectar ambas canciones de forma balanceada.'}
+              {STYLE_TEXT[currentStyle]}
             </p>
 
             {/* Where the data comes from + "another idea" */}
@@ -1486,317 +1415,42 @@ export const TransitionEditorModal: React.FC<TransitionEditorModalProps> = ({
             </div>
           </div>
 
-          {/* Lower Controls: Responsive side-by-side on desktop */}
+          {/* Style of the transition: four clean styles that really sound like that */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1 border-t border-white/5">
-            {/* Left: Ajustes predefinidos */}
             <div className="space-y-2">
-              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">
-                Ajustes predefinidos
-              </h5>
-
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar flex-wrap">
-                {/* ✦ Automática */}
+              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">Estilo</h5>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
-                  onClick={() => handleSelectPreset('automatica')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    preset === 'automatica'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
+                  onClick={() => handleSelectStyle('auto')}
+                  className="px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/10"
+                  title="El DJ elige según el tempo, el tono y la energía de las dos canciones"
                 >
                   <span>✦</span>
                   <span>Automática</span>
                 </button>
-
-                {/* ✦ Fusión Vocal */}
-                <button
-                  onClick={() => handleSelectPreset('mezcla_voces')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    preset === 'mezcla_voces'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  <span>✦</span>
-                  <span>Fusión Vocal</span>
-                </button>
-
-                {/* ✦ Ritmo & Distorsión */}
-                <button
-                  onClick={() => handleSelectPreset('repeticion_ritmo')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
-                    preset === 'repeticion_ritmo'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  <span>✦</span>
-                  <span>Ritmo & Distorsión</span>
-                </button>
-
-                {/* Fundido */}
-                <button
-                  onClick={() => handleSelectPreset('fundido')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'fundido'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Fundido
-                </button>
-
-                {/* Crescendo */}
-                <button
-                  onClick={() => handleSelectPreset('crescendo')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'crescendo'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Crescendo
-                </button>
-
-                {/* Filtro */}
-                <button
-                  onClick={() => handleSelectPreset('filtro')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'filtro'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Filtro
-                </button>
-
-                {/* Corte */}
-                <button
-                  onClick={() => handleSelectPreset('corte')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'corte'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Corte
-                </button>
-
-                {/* Eco Out */}
-                <button
-                  onClick={() => handleSelectPreset('eco_out')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'eco_out'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Eco Out
-                </button>
-
-                {/* Freno Vinilo */}
-                <button
-                  onClick={() => handleSelectPreset('freno_vinilo')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'freno_vinilo'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Freno Vinilo
-                </button>
-
-                {/* Beat Roll */}
-                <button
-                  onClick={() => handleSelectPreset('beat_roll')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'beat_roll'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Beat Roll
-                </button>
-
-                {/* Saturación */}
-                <button
-                  onClick={() => handleSelectPreset('distorsion_wash')}
-                  className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
-                    preset === 'distorsion_wash'
-                      ? 'bg-white text-black shadow-md'
-                      : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
-                  }`}
-                >
-                  Saturación
-                </button>
+                {STYLE_CHIPS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSelectStyle(s.id)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                      currentStyle === s.id ? 'bg-white text-black shadow-md' : 'bg-[#242424] hover:bg-[#2e2e2e] text-white border border-white/5'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Right: Detailed Parameter Rows (Volumen & EQ) */}
             <div className="space-y-2">
-              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">
-                Parámetros de mezcla
-              </h5>
-
-              <div className="bg-[#181818] p-2 sm:p-2.5 rounded-xl space-y-2 border border-white/5">
-                {/* Row 1: | Volumen */}
-                <div className="flex items-center justify-between relative">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1 h-3.5 bg-[#38bdf8] rounded-full inline-block" />
-                    <span className="text-xs font-semibold text-white">Volumen</span>
-                  </div>
-
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsVolumeMenuOpen(!isVolumeMenuOpen)}
-                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <span className="capitalize">
-                        {volumeEnvelope === 'superposicion'
-                          ? 'Superposición'
-                          : volumeEnvelope === 'lineal'
-                          ? 'Fundido lineal'
-                          : volumeEnvelope === 'curva_s'
-                          ? 'Curva en S'
-                          : 'Corte directo'}
-                      </span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-
-                    {isVolumeMenuOpen && (
-                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-44 shadow-2xl z-40">
-                        {[
-                          { id: 'superposicion', label: 'Superposición' },
-                          { id: 'lineal', label: 'Fundido lineal' },
-                          { id: 'curva_s', label: 'Curva en S' },
-                          { id: 'corte_directo', label: 'Corte directo' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              setVolumeEnvelope(opt.id as VolumeEnvelope);
-                              setIsVolumeMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                              volumeEnvelope === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Row 2: | EQ */}
-                <div className="flex items-center justify-between relative">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1 h-3.5 bg-[#facc15] rounded-full inline-block" />
-                    <span className="text-xs font-semibold text-white">EQ</span>
-                  </div>
-
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsEqMenuOpen(!isEqMenuOpen)}
-                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <span>
-                        {eqMode === 'intercambio_graves_central'
-                          ? 'Intercambio de graves central'
-                          : eqMode === 'intercambio_gradual'
-                          ? 'Intercambio gradual'
-                          : eqMode === 'filtro_paso_bajo'
-                          ? 'Filtro paso bajo'
-                          : 'Sin filtro EQ'}
-                      </span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-
-                    {isEqMenuOpen && (
-                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-52 shadow-2xl z-40">
-                        {[
-                          { id: 'intercambio_graves_central', label: 'Intercambio de graves central' },
-                          { id: 'intercambio_gradual', label: 'Intercambio gradual' },
-                          { id: 'filtro_paso_bajo', label: 'Filtro paso bajo' },
-                          { id: 'sin_filtro', label: 'Sin filtro EQ' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              setEqMode(opt.id as EQFilterMode);
-                              setIsEqMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                              eqMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Row 3: | FX */}
-                <div className="flex items-center justify-between relative">
-                  <div className="flex items-center gap-2">
-                    <span className="w-1 h-3.5 bg-[#a855f7] rounded-full inline-block" />
-                    <span className="text-xs font-semibold text-white">Efectos FX</span>
-                  </div>
-
-                  <div className="relative">
-                    <button
-                      onClick={() => setIsFxMenuOpen(!isFxMenuOpen)}
-                      className="text-xs font-medium text-[#b3b3b3] hover:text-white flex items-center gap-1.5 py-1 px-2 rounded-md hover:bg-white/5 transition-colors cursor-pointer"
-                    >
-                      <span>
-                        {fxMode === 'ninguno'
-                          ? 'Sin efectos FX'
-                          : fxMode === 'eco'
-                          ? 'Eco / Delay Out'
-                          : fxMode === 'freno_vinilo'
-                          ? 'Freno de vinilo'
-                          : fxMode === 'repeticion_loop'
-                          ? 'Loop Roll / Stutter'
-                          : 'Saturación & Wash'}
-                      </span>
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-
-                    {isFxMenuOpen && (
-                      <div className="absolute right-0 bottom-full mb-1 bg-[#282828] border border-white/10 rounded-xl py-1 w-52 shadow-2xl z-40">
-                        {[
-                          { id: 'ninguno', label: 'Sin efectos FX' },
-                          { id: 'eco', label: 'Eco / Delay Out' },
-                          { id: 'freno_vinilo', label: 'Freno de vinilo' },
-                          { id: 'repeticion_loop', label: 'Loop Roll / Stutter' },
-                          { id: 'distorsion_wash', label: 'Saturación & Wash' },
-                        ].map((opt) => (
-                          <button
-                            key={opt.id}
-                            onClick={() => {
-                              setFxMode(opt.id as DJFXMode);
-                              setIsFxMenuOpen(false);
-                            }}
-                            className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
-                              fxMode === opt.id ? 'text-[#1ed760] font-bold bg-white/5' : 'text-white hover:bg-white/10'
-                            }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
+              <h5 className="text-[11px] font-semibold text-[#a7a7a7] px-1 uppercase tracking-wider">Qué va a pasar</h5>
+              <div className="bg-[#181818] p-3 rounded-xl border border-white/5 text-xs text-[#d6d6d6] leading-relaxed">
+                {STYLE_TEXT[currentStyle]}
+                {nativeFxStatus().available && currentStyle !== 'fade' && currentStyle !== 'linear' && (
+                  <span className="block mt-1.5 text-[#1ed760]">
+                    En el móvil, además, el ecualizador mueve los graves de verdad en el cambio.
+                  </span>
+                )}
               </div>
             </div>
           </div>

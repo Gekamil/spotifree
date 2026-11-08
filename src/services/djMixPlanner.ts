@@ -197,49 +197,108 @@ const C = (
   enterAtDrop = false
 ): Candidate => ({ preset, compases, volumeEnvelope, eqMode, fxMode, intensity, title, what, weight, enterAtDrop });
 
+/*
+ * How the DJ mixes (redesigned). The songs play in YouTube players: only their volume can be
+ * moved, and each one starts with an unpredictable delay, so two beats can never be locked
+ * together. What sounds good under those limits (as in Mixxx's Auto DJ "full intro + outro"):
+ *  - choose WHERE to mix: B's intro plays over A's ending, and B's first strong part lands when
+ *    A's music ends; silent starts / ends are skipped;
+ *  - keep the moment where both songs are loud short (no long flamming drums);
+ *  - smooth volume curves in decibels (how the ear hears), and real cuts on A's bar line with B
+ *    already running silently, so B enters exactly at its strong part.
+ * No fake effects made with volume (echo, roll, vinyl, bass swap) and no synthesized hits: those
+ * are what made the old transitions sound bad. Only one optional soft sweep before a "Subidón".
+ * Four styles: Mezcla (blend), Fundido (fade), Corte en el 1 (cut), Subidón (build into the drop).
+ */
 function candidatesFor(t: TempoRelation, k: KeyRelation, energyUp: number): Candidate[] {
   const up = Math.max(0, energyUp);
-  const down = Math.max(0, -energyUp);
   const list: Candidate[] = [];
-  if (t === 'same') {
-    if (k === 'compatible' || k === 'boost') {
-      list.push(C('automatica', 8, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Mezcla larga', 'mezcla larga de 8 compases con cruce de graves a mitad', 5));
-      list.push(C('mezcla_voces', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Fusión vocal', 'las dos canciones conviven 4 compases antes del relevo', 3));
-      list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión con barrido y entrada de B en su parte fuerte', 1.5 + up * 6, true));
-      list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera (1/4 → 1/8 → 1/16) hasta soltar B', 1.2 + up * 3, true));
-    } else if (k === 'unknown') {
-      // Same pulse, key not known: blend, but keep the overlap moderate and swap the bass
-      // (two bass lines in different keys is what clashes most)
-      list.push(C('automatica', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'mezcla de 4 compases: B entra sin graves y a mitad se intercambian', 3.5));
-      list.push(C('automatica', 8, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Mezcla larga', 'mezcla larga de 8 compases con cruce de graves a mitad', 1.6));
-      list.push(C('filtro', 4, 'superposicion', 'filtro_paso_alto', 'ninguno', 'smooth', 'Filtro', 'A se va vaciando con un filtro mientras entra B', 2.4));
-      list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión y B entra en su parte fuerte', 1.2 + up * 5, true));
-      list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera hasta soltar B', 1 + up * 3, true));
-      list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte limpio justo en el primer tiempo del compás', 1 + up * 2, true));
+  const blend = (bars: number, title: string, what: string, w: number) =>
+    list.push(C('automatica', bars, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', title, what, w));
+  const fade = (bars: number, what: string, w: number) =>
+    list.push(C('fundido', bars, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido', what, w));
+  const cut = (what: string, w: number) =>
+    list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', what, w, true));
+  const build = (what: string, w: number) =>
+    list.push(C('crescendo', 2, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', what, w, true));
+
+  if (t === 'same' || t === 'close') {
+    const keysOk = k === 'compatible' || k === 'boost' || k === 'unknown';
+    if (keysOk) {
+      blend(8, 'Mezcla larga', 'la intro de B suena sobre el final de A y B toma el relevo justo cuando A termina', t === 'same' ? 3 : 1);
+      blend(4, 'Mezcla', 'B entra desde lejos sobre el final de A y se queda con la pista en el último compás', 3);
     } else {
-      list.push(C('automatica', 4, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'cruce corto: el ritmo encaja pero los tonos no, así que no se solapan mucho', 3.5));
-      list.push(C('filtro', 4, 'superposicion', 'filtro_paso_alto', 'ninguno', 'smooth', 'Filtro', 'A se va vaciando mientras entra B, para que los tonos no choquen', 3));
-      list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte limpio justo en el primer tiempo del compás', 1.5 + up * 3, true));
-      list.push(C('eco_out', 2, 'curva_s', 'filtro_paso_bajo', 'eco', 'wow', 'Eco', 'A se despide con un eco a tempo y B entra limpia', 1.3));
+      // Keys that clash: overlap as little as possible
+      blend(4, 'Mezcla corta', 'mezcla corta para que los tonos apenas coincidan', 1.5);
     }
-  } else if (t === 'close') {
-    list.push(C('automatica', 2, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', 'Relevo de graves', 'mezcla corta de 2 compases para que la pequeña diferencia de tempo no se note', 3));
-    list.push(C('fundido', 2, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido', 'fundido cruzado sencillo', 1.2));
-    list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'subida de tensión y B entra de golpe', 1 + up * 4, true));
-    list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte limpio justo en el primer tiempo del compás', 2 + up * 3, true));
-    list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble que se acelera hasta soltar B', 1.2 + up * 2, true));
+    fade(2, 'fundido cruzado de dos compases', 1.2);
+    cut('A suena entera hasta el compás y B entra justo en su parte fuerte', 1 + up * 2);
+    if (up >= 0.1) build('B tiene más energía: A sostiene, sube la tensión y B entra en su parte fuerte', 1.2 + up * 6);
   } else if (t === 'moderate') {
-    list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'corte en el primer tiempo: con tempos distintos es mejor no solapar', 3.5, true));
-    list.push(C('eco_out', 2, 'curva_s', 'filtro_paso_bajo', 'eco', 'smooth', 'Eco', 'A se despide con un eco a su tempo y B entra sin pelearse con el ritmo', 3));
-    list.push(C('fundido', 1, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido rápido', 'fundido de un compás, sin solapar ritmos', 2));
-    list.push(C('beat_roll', 2, 'curva_s', 'intercambio_gradual', 'repeticion_loop', 'wow', 'Beat roll', 'redoble acelerado que rompe el ritmo de A antes de B', 1.5 + up * 2, true));
+    cut('con tempos distintos es mejor no solapar: B entra en el primer tiempo de su parte fuerte', 3);
+    fade(1, 'fundido corto de un compás, sin solapar ritmos', 2.5);
+    if (up >= 0.1) build('B tiene más energía: A sostiene y B entra de golpe en su parte fuerte', 1 + up * 5);
   } else {
-    list.push(C('eco_out', 2, 'curva_s', 'filtro_paso_bajo', 'eco', 'smooth', 'Eco', 'cambio grande de tempo: A se apaga en eco y B arranca limpia', 3.5));
-    list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', 'cambio grande de tempo: corte seco en el primer tiempo', 2.5, true));
-    list.push(C('freno_vinilo', 1, 'corte_directo', 'intercambio_graves_central', 'freno_vinilo', 'wow', 'Freno de vinilo', 'A se frena como un vinilo y entra B', 1 + down * 4));
-    list.push(C('crescendo', 4, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', 'barrido de tensión y B entra en su parte fuerte', 0.6 + up * 5, true));
+    cut('corte limpio en el compás y B arranca en su parte fuerte', 3);
+    fade(1, 'fundido corto para no mezclar ritmos', 2.5);
+    if (up >= 0.1) build('B tiene más energía: A sostiene y B entra de golpe', 0.8 + up * 5);
   }
   return list;
+}
+
+/** The four mixing styles (any saved / older preset maps onto one of them) */
+export type MixStyle = 'blend' | 'fade' | 'linear' | 'cut' | 'build';
+export function mixStyleOf(config: Pick<DJTransitionConfig, 'preset' | 'volumeEnvelope'>): MixStyle {
+  const preset = config.preset;
+  const env = config.volumeEnvelope;
+  if (preset === 'crescendo') return 'build';
+  if (preset === 'corte' || preset === 'beat_roll' || preset === 'freno_vinilo' || env === 'corte_directo') return 'cut';
+  if (preset === 'fundido' || preset === 'eco_out') return env === 'lineal' ? 'linear' : 'fade';
+  if (env === 'lineal') return 'linear';
+  if (env === 'curva_s') return 'fade';
+  return 'blend';
+}
+
+/** Name of the style as shown to the user */
+export function mixStyleName(style: MixStyle): string {
+  if (style === 'build') return 'Subidón';
+  if (style === 'cut') return 'Corte en el 1';
+  if (style === 'fade' || style === 'linear') return 'Fundido';
+  return 'Mezcla';
+}
+
+/**
+ * Where song B starts so the mix lands right: for blends, B's intro ends when the mix ends
+ * (A's music ends there); for cuts / builds, B's strong part (or first downbeat) is exactly at
+ * the swap. B plays silently until it is heard, so its start delay doesn't matter.
+ */
+export function alignEntry(b: MixTrackInfo, style: MixStyle, durationSec: number, swap = 0.5): number {
+  const an = b.analysis;
+  const start = Math.max(0, an?.audioStartSec || 0);
+  let t = start;
+  if (style === 'cut' || style === 'build') {
+    let land = start;
+    if (an && typeof an.introEndSec === 'number' && an.introEndSec > start && an.introEndSec <= 45) land = an.introEndSec;
+    const snapped = an ? snapToBarGrid(an, land, 'round') : null;
+    if (snapped !== null && land > 0) land = snapped;
+    t = Math.max(0, land - swap * durationSec);
+  } else if (style === 'blend') {
+    // B's intro plays over A's ending (only when the intro is long enough to carry the mix)
+    if (an && typeof an.introEndSec === 'number' && an.introEndSec - start >= durationSec * 0.6 && an.introEndSec <= 60) {
+      t = Math.max(start, an.introEndSec - durationSec);
+      const snapped = snapToBarGrid(an, t, 'round');
+      if (snapped !== null && snapped >= start - 0.05) t = snapped;
+    }
+  }
+  return Math.round(t * 100) / 100;
+}
+
+/** Bars for a style that fit in the transition limits (1.5–16 s) at this tempo */
+export function fitBars(bars: number, tempo: number): number {
+  const bar = 240 / (tempo > 40 && tempo < 240 ? tempo : 120);
+  let b = bars;
+  while (b > 1 && b * bar > 16) b /= 2;
+  return b;
 }
 
 function intensityBias(flavour: SessionFlavour, intensity: MixIntensity) {
@@ -295,8 +354,14 @@ export function planTransition(
     if (c.intensity === 'wow') w *= wowRecently ? 0.4 : wowStarved ? 2.2 : 1.15;
     // If the BPM is only estimated, long overlapping blends are risky: prefer short moves
     if (!a.tempoReliable || !b.tempoReliable) {
-      if (c.compases >= 4 && c.preset !== 'crescendo') w *= 0.5;
+      if (c.compases >= 8) w *= 0.3;
+      else if (c.compases >= 4 && c.preset !== 'crescendo') w *= 0.6;
     }
+    // A long blend only makes sense if A really has an ending to blend over (or it's unknown)
+    const outroA = a.analysis && typeof a.analysis.outroStartSec === 'number' && typeof a.analysis.musicEndSec === 'number'
+      ? a.analysis.musicEndSec - a.analysis.outroStartSec
+      : null;
+    if (c.preset === 'automatica' && c.compases >= 8 && outroA !== null && outroA < (240 / Math.max(60, a.tempo)) * 6) w *= 0.25;
     return { c, w: Math.max(0.0001, w) };
   });
 
@@ -324,10 +389,14 @@ export function planTransition(
   const reason = `${capitalize(tempoTxt)}${keyTxt}${energyTxt}${estimated}: ${pick.what}.`;
 
   const h = calculateHarmonicCompatibility(a.camelot || '', b.camelot || '');
+  const compases = fitBars(pick.compases, a.tempo);
+  const durationSec = compases * (240 / (a.tempo > 40 && a.tempo < 240 ? a.tempo : 120));
+  const cfgForStyle = { preset: pick.preset, volumeEnvelope: pick.volumeEnvelope, eqMode: pick.eqMode, fxMode: pick.fxMode };
+  const style = mixStyleOf(cfgForStyle);
   return {
     trackAId: a.id,
     trackBId: b.id,
-    compases: pick.compases,
+    compases,
     preset: pick.preset,
     volumeEnvelope: pick.volumeEnvelope,
     eqMode: pick.eqMode,
@@ -345,7 +414,7 @@ export function planTransition(
     isOctaveSynced: tr.octave,
     intensity: pick.intensity,
     reason,
-    mixInSec: chooseMixInSec(b, Boolean(pick.enterAtDrop)),
+    mixInSec: alignEntry(b, style, durationSec, transitionSwapPoint(cfgForStyle)),
   };
 }
 
@@ -385,16 +454,16 @@ type GainsConfig = Pick<DJTransitionConfig, 'preset' | 'volumeEnvelope' | 'eqMod
  * volume shapes and the FX layers (impact, riser, roll) are all built around it, so the
  * moment is felt: tension before, impact on it.
  */
-export function transitionSwapPoint(config: GainsConfig): number {
-  const preset = config.preset;
-  const isCut = config.volumeEnvelope === 'corte_directo' || preset === 'corte' || config.eqMode === 'corte_instantaneo';
-  if (config.fxMode === 'repeticion_loop' || preset === 'beat_roll') return 0.97;
-  if (config.fxMode === 'freno_vinilo' || preset === 'freno_vinilo') return 0.92;
-  if (config.fxMode === 'eco' || preset === 'eco_out') return 0.45;
-  if (preset === 'crescendo') return 0.85;
-  if (isCut) return preset === 'corte' ? 0.94 : 0.5;
-  return 0.5;
+export function transitionSwapPoint(config: Pick<GainsConfig, 'preset' | 'volumeEnvelope'>): number {
+  const style = mixStyleOf(config);
+  return style === 'cut' || style === 'build' ? 0.92 : 0.5;
 }
+
+const dbToGain = (db: number) => (db <= -60 ? 0 : Math.pow(10, db / 20));
+const smooth = (t: number) => {
+  const x = clamp01(t);
+  return x * x * (3 - 2 * x);
+};
 
 /**
  * Volume/rate of each deck at progress `p` (0..1) of a transition lasting `durationSec`.
@@ -406,120 +475,44 @@ export function computeTransitionGains(
   durationSec: number
 ): TransitionGains {
   p = clamp01(p);
-  const tempo = config.tempoA && config.tempoA > 40 && config.tempoA < 240 ? config.tempoA : 120;
-  const beat = 60 / tempo;
-  const elapsed = p * durationSec;
-  const preset = config.preset;
-  const env = config.volumeEnvelope;
+  const style = mixStyleOf(config);
   let out = 1;
   let inn = 0;
-  let rateOut = 1;
 
-  // 1. Base volume envelope
-  const isCut = env === 'corte_directo' || preset === 'corte' || config.eqMode === 'corte_instantaneo';
-  if (isCut) {
-    // A keeps the floor until the last beat, then a 40 ms-style handoff on the downbeat
-    const cx = preset === 'corte' ? 0.94 : 0.5;
-    const w = 0.03;
-    if (p < cx) {
-      out = 1;
-      inn = 0;
-    } else if (p < cx + w) {
-      const q = (p - cx) / w;
-      out = 1 - q;
-      inn = q;
-    } else {
-      out = 0;
-      inn = 1;
-    }
-  } else if (env === 'lineal') {
-    out = 1 - p;
-    inn = p;
-  } else if (env === 'superposicion') {
-    out = p < 0.5 ? 1 : Math.cos(((p - 0.5) / 0.5) * 0.5 * Math.PI);
-    inn = Math.sin(Math.min(1, p / 0.5) * 0.5 * Math.PI);
-  } else {
-    // curva_s (equal power)
+  if (style === 'blend') {
+    // B comes in from far away (-36 dB) and is fully up at 65%; A holds, then leaves from 35%.
+    // Both are loud only around the middle, for a moment (the beats are never locked).
+    const bDb = -36 * (1 - smooth(p / 0.65));
+    const aDb = -50 * smooth((p - 0.35) / 0.65);
+    inn = dbToGain(bDb);
+    out = p >= 1 ? 0 : dbToGain(aDb);
+  } else if (style === 'fade') {
+    // Constant power: the overall loudness stays the same through the fade
     out = Math.cos(p * 0.5 * Math.PI);
     inn = Math.sin(p * 0.5 * Math.PI);
-  }
-
-  // 2. EQ behaviour emulated with volume (YouTube decks cannot be filtered)
-  if (!isCut) {
-    if (config.eqMode === 'intercambio_graves_central') {
-      if (p < 0.5) inn *= 0.6; // B enters "thin" (no bass) ...
-      else out *= 0.45; // ... and takes over the low end at the middle downbeat
-    } else if (config.eqMode === 'filtro_paso_alto' || config.eqMode === 'filtro_paso_bajo') {
-      out *= Math.pow(1 - p, 0.9); // A empties out faster
-    }
-  }
-
-  // 3. Preset-specific shapes
-  if (preset === 'crescendo') {
-    out = p < 0.85 ? 1 - 0.25 * (p / 0.85) : Math.max(0, (1 - p) / 0.15) * 0.75;
-    inn = p < 0.85 ? 0.12 * (p / 0.85) : 0.12 + 0.88 * ((p - 0.85) / 0.15);
-  } else if (preset === 'mezcla_voces') {
-    out = Math.cos(Math.pow(p, 1.3) * 0.5 * Math.PI);
-    inn = Math.sin(Math.pow(p, 0.75) * 0.5 * Math.PI);
-    if (p < 0.5) inn *= 0.85;
-  }
-
-  // 4. FX
-  if (config.fxMode === 'eco' || preset === 'eco_out') {
-    // Tempo-synced dotted-eighth echo: A is gated into decaying repeats, B fades in late
-    const period = beat * 0.75;
-    const phase = (elapsed % period) / period;
-    const decay = Math.pow(1 - p, 1.6);
-    const pulse = phase < 0.35 ? 1 : 0.18;
-    out = p < 0.25 ? 1 : decay * pulse;
-    inn = p < 0.45 ? 0 : Math.sin(((p - 0.45) / 0.55) * 0.5 * Math.PI);
-  } else if (config.fxMode === 'repeticion_loop' || preset === 'beat_roll') {
-    if (p >= 0.25 && p < 0.97) {
-      const div = p < 0.6 ? 1 : p < 0.82 ? 2 : 4; // 1/4 → 1/8 → 1/16
-      const step = beat / div;
-      const phase = (elapsed % step) / step;
-      out = phase < 0.5 ? 1 : 0.12;
-      inn = p < 0.82 ? 0.08 : 0.08 + 0.4 * ((p - 0.82) / 0.15);
-    } else if (p >= 0.97) {
-      out = 0;
-      inn = 1;
-    }
-  } else if (config.fxMode === 'freno_vinilo' || preset === 'freno_vinilo') {
-    if (p < 0.55) {
-      out = 1;
-      inn = 0;
-      rateOut = 1;
-    } else if (p < 0.92) {
-      const q = (p - 0.55) / 0.37;
-      rateOut = q < 0.34 ? 0.75 : q < 0.67 ? 0.5 : 0.25;
-      out = 1 - 0.6 * q;
-      inn = 0;
-    } else {
-      rateOut = 0.25;
-      out = Math.max(0, (1 - p) / 0.08) * 0.4;
-      inn = (p - 0.92) / 0.08;
-    }
-  } else if (config.fxMode === 'distorsion_wash') {
-    if (p > 0.4) out *= 0.7 + 0.3 * Math.sin(((elapsed % (beat / 2)) / (beat / 2)) * 2 * Math.PI);
-  }
-
-  // 5. Tension before the drop: on build-ups the music "breathes in" for the last half beat
-  // before B lands (the classic DJ gap), so the swap is felt instead of being a plain fade.
-  if (preset === 'crescendo' || preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
+  } else if (style === 'linear') {
+    out = 1 - p;
+    inn = p;
+  } else {
+    // cut / build: B already runs silently; the handover takes ~120 ms on the swap
     const swap = transitionSwapPoint(config);
-    const gap = Math.min(0.08, (beat * 0.5) / Math.max(0.5, durationSec));
-    if (p >= swap - gap && p < swap) {
-      out *= 0.12;
-      inn *= 0.12;
+    const w = Math.min(0.04, 0.12 / Math.max(0.5, durationSec));
+    const q = clamp01((p - swap) / w);
+    let aBefore = 1;
+    if (style === 'build') {
+      // A makes a little room for the rise before the drop (-4 dB at most)
+      aBefore = dbToGain(-4 * smooth((p - 0.55) / Math.max(0.01, swap - 0.55)));
     }
+    out = p < swap ? aBefore : aBefore * Math.cos(q * 0.5 * Math.PI);
+    inn = p < swap ? 0 : Math.sin(q * 0.5 * Math.PI);
   }
 
-  return { outVol: clamp01(out), inVol: clamp01(inn), rateOut };
+  return { outVol: clamp01(out), inVol: clamp01(inn), rateOut: 1 };
 }
 
 // ---------------------------------------------------------------------------
-// Synthesized DJ FX layered over the songs (YouTube decks cannot be filtered, so these
-// layers are what make a transition sound like a DJ and not like a fade).
+// Synthesized FX over the songs: only one soft sweep that rises into a "Subidón". Everything
+// else stays clean (synthesized hits / rolls / cymbals over arbitrary songs sounded fake).
 // ---------------------------------------------------------------------------
 export type TransitionFXKind = 'riser' | 'roll' | 'impact' | 'reverse' | 'downlifter' | 'brake';
 
@@ -537,53 +530,14 @@ export function transitionFXLayers(
   config: GainsConfig & Pick<DJTransitionConfig, 'intensity'>,
   durationSec: number
 ): TransitionFXLayer[] {
-  const preset = config.preset;
-  if (preset === 'fundido') return [];
+  if (mixStyleOf(config) !== 'build') return [];
   const tempo = config.tempoA && config.tempoA > 40 && config.tempoA < 240 ? config.tempoA : 120;
-  const beat = 60 / tempo;
+  const bar = 240 / tempo;
   const d = Math.max(1, durationSec);
   const swapAt = transitionSwapPoint(config) * d;
-  const intensity = config.intensity || 'smooth';
-  const k = intensity === 'wow' ? 1.15 : intensity === 'basic' ? 0.7 : 1;
-  const layers: TransitionFXLayer[] = [];
-  const reverseInto = (t: number, level: number) => {
-    const len = Math.min(beat * 2, t);
-    if (len > 0.2) layers.push({ kind: 'reverse', at: t - len, dur: len, level: level * k });
-  };
-  const impact = (t: number, level: number) => layers.push({ kind: 'impact', at: t, dur: 1.6, level: level * k });
-
-  if (preset === 'crescendo') {
-    layers.push({ kind: 'riser', at: 0, dur: swapAt, level: 1 * k });
-    layers.push({ kind: 'roll', at: swapAt * 0.45, dur: swapAt * 0.55, level: 0.9 * k });
-    impact(swapAt, 1);
-  } else if (preset === 'beat_roll' || config.fxMode === 'repeticion_loop') {
-    layers.push({ kind: 'roll', at: 0.25 * d, dur: swapAt - 0.25 * d, level: 1 * k });
-    layers.push({ kind: 'riser', at: 0.5 * d, dur: swapAt - 0.5 * d, level: 0.6 * k });
-    impact(swapAt, 1);
-  } else if (preset === 'freno_vinilo' || config.fxMode === 'freno_vinilo') {
-    layers.push({ kind: 'brake', at: 0.55 * d, dur: swapAt - 0.55 * d, level: 1 * k });
-    impact(swapAt, 0.8);
-  } else if (preset === 'eco_out' || config.fxMode === 'eco') {
-    layers.push({ kind: 'downlifter', at: 0.2 * d, dur: 0.6 * d, level: 0.8 * k });
-    reverseInto(swapAt, 0.5);
-  } else if (preset === 'corte') {
-    reverseInto(swapAt, 0.9);
-    impact(swapAt, 0.85);
-  } else if (preset === 'filtro') {
-    layers.push({ kind: 'riser', at: 0, dur: swapAt, level: 0.75 * k });
-    impact(swapAt, 0.6);
-  } else if (preset === 'repeticion_ritmo' || preset === 'distorsion_wash' || config.fxMode === 'distorsion_wash') {
-    layers.push({ kind: 'riser', at: 0, dur: 0.9 * d, level: 0.8 * k });
-    impact(0.9 * d, 0.7);
-  } else if (preset === 'mezcla_voces') {
-    reverseInto(swapAt, 0.5);
-  } else {
-    // Blends (automática, relevo de graves, mezcla larga): a reverse cymbal into the swap and
-    // a soft low "thump" when B takes the bass.
-    reverseInto(swapAt, 0.7);
-    impact(swapAt, 0.45);
-  }
-  return layers.filter((l) => l.dur > 0.05 && l.at >= 0 && l.at < d + 2);
+  // The rise covers the last two bars before the drop (or all the way, if shorter)
+  const len = Math.min(swapAt, bar * 2);
+  return [{ kind: 'riser', at: Math.max(0, swapAt - len), dur: len, level: 0.55 }];
 }
 
 /** User setting "Efectos de DJ": off / soft / normal / intense. */

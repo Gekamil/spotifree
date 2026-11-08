@@ -1,6 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import type { FeedCard } from '../../data/liveUserFeed';
 import { toHDImage } from '../../utils/formatters';
 
@@ -179,7 +180,9 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
     return null;
   }
 
-  const { currentTrack, isPlaying } = usePlayerStore();
+  const { currentTrack, isPlaying } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying }))
+  );
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);

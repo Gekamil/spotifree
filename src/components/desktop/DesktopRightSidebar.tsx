@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import {
   PlayNativeIcon,
@@ -174,7 +175,9 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
 
 export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSelectPlaylistById }) => {
   const { activeRightSidebar, closeRightSidebar } = useUIStore();
-  const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore();
+  const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, queue: s.queue, playTrack: s.playTrack, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds, progressMs: s.progressMs }))
+  );
   const playlists = useSpotifyDataStore((s) => s.playlists);
   const [isFollowing, setIsFollowing] = useState(true);
   const [isCanvasMode, setIsCanvasMode] = useState(false);

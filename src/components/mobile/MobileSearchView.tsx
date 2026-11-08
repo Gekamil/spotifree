@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { searchSpotify } from '../../services/spotifyApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { formatDuration } from '../../utils/formatters';
 import { handleImageError } from '../../utils/imageFallback';
 import {
@@ -32,7 +33,9 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
   const [isSearching, setIsSearching] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
 
-  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore();
+  const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore(
+    useShallow((s) => ({ playTrack: s.playTrack, currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay }))
+  );
 
   useEffect(() => {
     const handleRecentUpdate = () => {

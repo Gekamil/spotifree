@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -34,7 +35,7 @@ import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
-import { buildDJSetOrder, getSessionFlavour, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
+import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
 import { prepareDJAnalyses } from '../../services/trackAnalysisService';
 import { audioEngine } from '../../services/audioEngine';
 import { AIDJView } from '../dj/AIDJView';
@@ -94,7 +95,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     likedTrackIds,
     shuffleMode,
     toggleShuffle,
-  } = usePlayerStore();
+  } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle }))
+  );
   const { user, playlists: allUserPlaylists, updatePlaylist, deletePlaylist } = useSpotifyDataStore();
 
   const [activePlaylist, setActivePlaylist] = useState<Playlist>(playlist);
@@ -1747,21 +1750,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   {/* DJ Mode Transition Indicator between tracks */}
                   {isAutomixActive && idx < displayTracks.length - 1 && (() => {
                     const nextTrack = displayTracks[idx + 1];
-                    const nextCleanId = (nextTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-                    const nextFeat: AudioFeature =
-                      audioFeatures[nextCleanId] ||
-                      audioFeatures[nextTrack?.id] ||
-                      resolveClientSideRealFeature(nextCleanId, nextTrack?.name, nextTrack?.artists?.[0]?.name);
-
-                    const smartTrans = djTransitionService.getTransitionConfig(
-                      track.id,
-                      nextTrack.id,
-                      feat?.tempo,
-                      nextFeat?.tempo,
-                      feat?.camelot,
-                      nextFeat?.camelot,
-                      idx
-                    );
+                    // Same plan the live mix and the editor use
+                    const plannedTrans = djTransitionService.getPlannedTransition(track, nextTrack);
+                    const smartTrans = {
+                      title: mixStyleName(mixStyleOf(plannedTrans)),
+                      detail: plannedTrans.reason || plannedTrans.detail || '',
+                    };
 
                     return (
                       <div className="relative pl-7 py-1 flex items-center">

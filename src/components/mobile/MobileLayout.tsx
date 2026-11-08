@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSpotifyDataStore, buildDynamicShelves, SPOTIFY_DJ_COVER_IMAGE, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
@@ -261,7 +262,9 @@ export const MobileLayout: React.FC = () => {
     }
   }, []);
 
-  const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore();
+  const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, currentContextId: s.currentContextId, likedTrackIds: s.likedTrackIds }))
+  );
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);
 
   const isCardPlaying = (cardId: string, cardName: string) => {

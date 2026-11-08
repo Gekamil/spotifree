@@ -5,7 +5,7 @@
  */
 import { Capacitor, registerPlugin } from '@capacitor/core';
 import { EQ_CHANGED_EVENT, loadEqBands, loadEqEnabled } from '../utils/eqSettings';
-import { djFxLevelGain, transitionSwapPoint } from './djMixPlanner';
+import { djFxLevelGain, mixStyleOf, transitionSwapPoint } from './djMixPlanner';
 import type { DJTransitionConfig } from './djTransitionService';
 
 interface AudioFxPlugin {
@@ -46,23 +46,20 @@ function applyEq() {
 
 /**
  * The DJ filter move that goes with a transition, on the real audio:
- *  - build-ups (crescendo, roll, filter): lows filtered out more and more, released on the drop
- *  - echo / vinyl brake: the outgoing song loses its highs, as if going away
- *  - the rest (blends, bass swaps, cuts): the bass dips at the swap, like a DJ swapping basslines
+ *  - Subidón (build): lows filtered out more and more, released on the drop
+ *  - Mezcla and Corte: the bass dips at the swap, like a DJ swapping basslines
+ *  - Fundido: none, plain fades stay clean
  */
 export function nativeTransitionFx(config: DJTransitionConfig | null, durationSec: number) {
   if (!status.available || !config || durationSec <= 0) return;
   const level = djFxLevelGain();
   if (level <= 0) return;
-  const preset = String(config.preset || '');
-  const fx = String((config as any).fxMode || '');
-  const eqMode = String((config as any).eqMode || '');
+  // Real filter moves on the phone's output, one per mixing style
+  const style = mixStyleOf(config);
+  if (style === 'fade' || style === 'linear') return; // plain fades stay clean
   const swapAt = transitionSwapPoint(config);
-  let kind: 'build' | 'bassdip' | 'highcut' = 'bassdip';
-  if (['crescendo', 'beat_roll', 'filtro', 'repeticion_ritmo'].includes(preset) || fx === 'repeticion_loop' || eqMode === 'filtro_paso_alto') kind = 'build';
-  else if (['eco', 'eco_out', 'freno_vinilo'].includes(preset) || fx === 'eco' || eqMode === 'filtro_paso_bajo') kind = 'highcut';
-  else if (preset === 'fundido') return; // plain fade: no filter
-  const depth = Math.min(15, (kind === 'bassdip' ? 10 : 13) * level);
+  const kind: 'build' | 'bassdip' = style === 'build' ? 'build' : 'bassdip';
+  const depth = Math.min(15, (kind === 'bassdip' ? 9 : 13) * level);
   AudioFx.sweep({ kind, durationMs: Math.round(durationSec * 1000), swapAt, depthDb: depth }).catch(() => {});
 }
 
