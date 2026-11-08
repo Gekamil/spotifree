@@ -37,18 +37,44 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
     // 2. Spotifree custom scheme (e.g. spotifree://play?q=Bad+Bunny or spotifree://track/...)
     if (trimmed.startsWith('spotifree://')) {
       const pathAndQuery = trimmed.replace(/^spotifree:\/\//, '');
+      const lower = pathAndQuery.toLowerCase();
       if (
-        pathAndQuery === 'play' ||
-        pathAndQuery.startsWith('play?') ||
-        pathAndQuery.startsWith('play/') ||
-        pathAndQuery.startsWith('search?') ||
-        pathAndQuery.startsWith('search/')
+        lower === 'play' ||
+        lower.startsWith('play?') ||
+        lower.startsWith('play/') ||
+        lower.startsWith('search?') ||
+        lower.startsWith('search/')
       ) {
         const queryString = pathAndQuery.includes('?') ? pathAndQuery.split('?')[1] : '';
         const queryParams = new URLSearchParams(queryString || '');
         const q = queryParams.get('q') || queryParams.get('query') || '';
         await playVoiceSearch(q);
         showGlobalToast(q ? `Buscando y reproduciendo: ${q}` : 'Reproduciendo música');
+        return true;
+      }
+      if (lower === 'pause') {
+        const player = usePlayerStore.getState();
+        if (player.isPlaying) player.togglePlay();
+        showGlobalToast('Música pausada');
+        return true;
+      }
+      if (lower === 'next' || lower === 'skip') {
+        usePlayerStore.getState().nextTrack();
+        showGlobalToast('Siguiente canción');
+        return true;
+      }
+      if (lower === 'prev' || lower === 'previous') {
+        usePlayerStore.getState().previousTrack();
+        showGlobalToast('Canción anterior');
+        return true;
+      }
+      if (lower === 'toggle' || lower === 'togglepause') {
+        const player = usePlayerStore.getState();
+        if (player.currentTrack) {
+          player.togglePlay();
+        } else {
+          await playVoiceSearch('');
+        }
         return true;
       }
       const slashParts = pathAndQuery.split('?')[0].split('/');

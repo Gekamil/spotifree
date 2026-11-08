@@ -291,7 +291,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             session.setSessionActivity(PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         }
         session.setCallback(new MediaSessionCompat.Callback() {
-            @Override public void onPlay() { send("play", null); }
+            @Override public void onPlay() { sendOrOpen("play", null); }
             @Override public void onPause() { send("pause", null); }
             // Notification swiped away (or "stop" from the car): pause and close the player
             @Override public void onStop() {
@@ -304,6 +304,31 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             @Override public void onSkipToQueueItem(long id) { send("playQueueIndex", obj("index", id)); }
             @Override public void onSetShuffleMode(int mode) { send(ACT_SHUFFLE, null); }
             @Override public void onSetRepeatMode(int mode) { send(ACT_REPEAT, null); }
+            @Override public boolean onMediaButtonEvent(Intent mediaButtonEvent) {
+                if (mediaButtonEvent != null && Intent.ACTION_MEDIA_BUTTON.equals(mediaButtonEvent.getAction())) {
+                    android.view.KeyEvent ke = mediaButtonEvent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+                    if (ke != null && ke.getAction() == android.view.KeyEvent.ACTION_DOWN) {
+                        int code = ke.getKeyCode();
+                        if (code == android.view.KeyEvent.KEYCODE_MEDIA_PLAY) {
+                            sendOrOpen("play", null);
+                            return true;
+                        } else if (code == android.view.KeyEvent.KEYCODE_MEDIA_PAUSE) {
+                            send("pause", null);
+                            return true;
+                        } else if (code == android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == android.view.KeyEvent.KEYCODE_HEADSETHOOK) {
+                            if (playing) send("pause", null); else sendOrOpen("play", null);
+                            return true;
+                        } else if (code == android.view.KeyEvent.KEYCODE_MEDIA_NEXT) {
+                            send("next", null);
+                            return true;
+                        } else if (code == android.view.KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                            send("previous", null);
+                            return true;
+                        }
+                    }
+                }
+                return super.onMediaButtonEvent(mediaButtonEvent);
+            }
             // "toggleShuffle:on" -> "toggleShuffle" (one id per state, see refresh())
             @Override public void onCustomAction(String action, Bundle extras) {
                 int cut = action == null ? -1 : action.indexOf(':');
@@ -377,8 +402,21 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        if (intent != null && Intent.ACTION_MEDIA_BUTTON.equals(intent.getAction())) {
-            MediaButtonReceiver.handleIntent(session, intent);
+        if (intent != null) {
+            String action = intent.getAction();
+            if (Intent.ACTION_MEDIA_BUTTON.equals(action)) {
+                MediaButtonReceiver.handleIntent(session, intent);
+            } else if ("com.spotifree.music.ACTION_PLAY".equals(action) || "play".equalsIgnoreCase(intent.getStringExtra("command"))) {
+                sendOrOpen("play", null);
+            } else if ("com.spotifree.music.ACTION_PAUSE".equals(action) || "pause".equalsIgnoreCase(intent.getStringExtra("command"))) {
+                send("pause", null);
+            } else if ("com.spotifree.music.ACTION_NEXT".equals(action) || "next".equalsIgnoreCase(intent.getStringExtra("command"))) {
+                send("next", null);
+            } else if ("com.spotifree.music.ACTION_PREVIOUS".equals(action) || "previous".equalsIgnoreCase(intent.getStringExtra("command"))) {
+                send("previous", null);
+            } else if ("com.spotifree.music.ACTION_TOGGLE".equals(action) || "togglepause".equalsIgnoreCase(intent.getStringExtra("command"))) {
+                if (playing) send("pause", null); else sendOrOpen("play", null);
+            }
         }
         refresh();
         return START_NOT_STICKY;

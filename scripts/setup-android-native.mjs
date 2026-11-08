@@ -54,6 +54,7 @@ import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
+import android.view.KeyEvent;
 import com.getcapacitor.BridgeActivity;
 import org.json.JSONObject;
 
@@ -77,7 +78,47 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
         String action = intent.getAction();
         if (action == null) return;
 
-        // 1. Voice playback: Google Assistant, Gemini & Android AI ("Pon música en Spotifree", "Reproduce Bad Bunny en Spotifree")
+        // 1. Explicit media control commands from Automations / Routines (Samsung Modes & Routines, Tasker)
+        String cmd = intent.getStringExtra("command");
+        if (cmd == null) cmd = intent.getStringExtra("action");
+        if ("play".equalsIgnoreCase(cmd) || "com.spotifree.music.ACTION_PLAY".equals(action)) {
+            if (!SpotifreeMediaPlugin.emit("play", null)) SpotifreeMediaPlugin.setPending("play", null);
+            return;
+        } else if ("pause".equalsIgnoreCase(cmd) || "com.spotifree.music.ACTION_PAUSE".equals(action)) {
+            SpotifreeMediaPlugin.emit("pause", null);
+            return;
+        } else if ("next".equalsIgnoreCase(cmd) || "skip".equalsIgnoreCase(cmd) || "com.spotifree.music.ACTION_NEXT".equals(action)) {
+            SpotifreeMediaPlugin.emit("next", null);
+            return;
+        } else if ("previous".equalsIgnoreCase(cmd) || "prev".equalsIgnoreCase(cmd) || "com.spotifree.music.ACTION_PREVIOUS".equals(action)) {
+            SpotifreeMediaPlugin.emit("previous", null);
+            return;
+        } else if ("toggle".equalsIgnoreCase(cmd) || "togglepause".equalsIgnoreCase(cmd) || "com.spotifree.music.ACTION_TOGGLE".equals(action)) {
+            if (!SpotifreeMediaPlugin.emit("toggle", null)) SpotifreeMediaPlugin.setPending("toggle", null);
+            return;
+        }
+
+        // 2. Hardware media button intents (Bluetooth headset, car, routine key event)
+        if (Intent.ACTION_MEDIA_BUTTON.equals(action)) {
+            KeyEvent event = intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+            if (event != null && event.getAction() == KeyEvent.ACTION_DOWN) {
+                int code = event.getKeyCode();
+                if (code == KeyEvent.KEYCODE_MEDIA_PLAY) {
+                    if (!SpotifreeMediaPlugin.emit("play", null)) SpotifreeMediaPlugin.setPending("play", null);
+                } else if (code == KeyEvent.KEYCODE_MEDIA_PAUSE) {
+                    SpotifreeMediaPlugin.emit("pause", null);
+                } else if (code == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE || code == KeyEvent.KEYCODE_HEADSETHOOK) {
+                    if (!SpotifreeMediaPlugin.emit("toggle", null)) SpotifreeMediaPlugin.setPending("toggle", null);
+                } else if (code == KeyEvent.KEYCODE_MEDIA_NEXT) {
+                    SpotifreeMediaPlugin.emit("next", null);
+                } else if (code == KeyEvent.KEYCODE_MEDIA_PREVIOUS) {
+                    SpotifreeMediaPlugin.emit("previous", null);
+                }
+            }
+            return;
+        }
+
+        // 3. Voice playback: Google Assistant, Gemini & Android AI ("Pon música en Spotifree", "Reproduce Bad Bunny en Spotifree")
         if (MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH.equals(action)
                 || "android.media.action.MEDIA_PLAY_FROM_SEARCH".equals(action)
                 || "android.media.action.PLAY_FROM_SEARCH".equals(action)
@@ -124,7 +165,7 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
                 SpotifreeMediaPlugin.setPending("playFromSearch", data);
             }
         }
-        // 2. Open link: open.spotify.com, spotify: URI, or spotifree: link
+        // 4. Open link: open.spotify.com, spotify: URI, or spotifree: link
         else if (Intent.ACTION_VIEW.equals(action)) {
             Uri uri = intent.getData();
             if (uri != null) {
@@ -202,6 +243,11 @@ const services = ICON_IDS.map(
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action android:name="com.spotifree.music.ACTION_PLAY" />
+                <action android:name="com.spotifree.music.ACTION_PAUSE" />
+                <action android:name="com.spotifree.music.ACTION_NEXT" />
+                <action android:name="com.spotifree.music.ACTION_PREVIOUS" />
+                <action android:name="com.spotifree.music.ACTION_TOGGLE" />
             </intent-filter>
         </service>`
 ).join('\n');
@@ -297,6 +343,17 @@ const activityIntents = `            ${ACT_START}
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="https" android:host="open.spotify.com" />
                 <data android:scheme="http" android:host="open.spotify.com" />
+            </intent-filter>
+
+            <!-- 5. Media Control Intents for Automations & Routines (Samsung Modes & Routines, Tasker) -->
+            <intent-filter>
+                <action android:name="com.spotifree.music.ACTION_PLAY" />
+                <action android:name="com.spotifree.music.ACTION_PAUSE" />
+                <action android:name="com.spotifree.music.ACTION_NEXT" />
+                <action android:name="com.spotifree.music.ACTION_PREVIOUS" />
+                <action android:name="com.spotifree.music.ACTION_TOGGLE" />
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
 
             <!-- Google Assistant App Actions & In-App Searchable -->

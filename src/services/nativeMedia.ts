@@ -21,7 +21,7 @@ import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories
 
 interface MediaCommand {
   action:
-    | 'play' | 'pause' | 'next' | 'previous' | 'seek'
+    | 'play' | 'pause' | 'toggle' | 'next' | 'previous' | 'seek'
     | 'playFromMediaId' | 'playFromSearch' | 'playQueueIndex'
     | 'toggleLike' | 'toggleShuffle' | 'cycleRepeat'
     | 'loadPlaylist' | 'loadCategory' | 'search' | 'addToQueue' | 'likeItem'
@@ -532,10 +532,21 @@ async function runCommand(c: MediaCommand) {
   const player = usePlayerStore.getState();
   switch (c.action) {
     case 'play':
-      if (!player.isPlaying) player.togglePlay();
+      if (player.currentTrack) {
+        if (!player.isPlaying) player.togglePlay();
+      } else {
+        await playVoiceSearch('');
+      }
       break;
     case 'pause':
       if (player.isPlaying) player.togglePlay();
+      break;
+    case 'toggle':
+      if (player.currentTrack) {
+        player.togglePlay();
+      } else {
+        await playVoiceSearch('');
+      }
       break;
     case 'next':
       player.nextTrack();
