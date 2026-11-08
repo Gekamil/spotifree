@@ -63,6 +63,7 @@ export interface AIDJState {
   setDJThemeColor: (color: string) => void;
   setDJTracks: (tracks: Track[]) => void;
   startDJSession: (forceReset?: boolean) => Promise<void>;
+  cancelDJIntroIfNotStarted: () => void;
   stopDJSession: () => void;
   handleUserPrompt: (promptText: string) => Promise<void>;
   handleSetCompletion: () => Promise<void>;
@@ -184,12 +185,20 @@ async function resolveRecommendedTrack(title: string, artist: string): Promise<T
 }
 
 /** Speaks a DJ line over the music (ducked), with live captions. */
+// The session greeting: leaving the DJ before the voice is heard cancels it
+let introRun = 0;
+let introPending = false;
+let introVoiceHeard = false;
+
 async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   set({ visualizerState: 'speaking', currentMessage: text, displayedTranscript: '' });
   audioEngine.setDuckedVolume(0.18);
   await aiDJVoiceService.speak(text, {
     onWord: (_w, partial) => set({ displayedTranscript: partial }),
-    onVoiceLevel: (level) => set({ voiceLevel: level }),
+    onVoiceLevel: (level) => {
+      if (level > 0.06) introVoiceHeard = true;
+      set({ voiceLevel: level });
+    },
     onEnd: () => {
       audioEngine.restoreDuckedVolume(1200);
       set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
@@ -778,6 +787,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     const dominantTag = getDominantUserHashtag();
     const cleanName = firstName();
+    const run = ++introRun;
+    introPending = true;
+    introVoiceHeard = false;
 
     set({
       isDJModeActive: true,
@@ -801,8 +813,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     } catch (e) {
       console.warn('[AIDJ] Segmented set failed, using library remix:', e);
     }
+    if (run !== introRun) return; // the user left before the DJ started
     if (tracks.length < 3) {
       tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
+      if (run !== introRun) return;
       segments = tracks.length
         ? [{ id: `seg-${Date.now()}`, kind: 'liked', title: 'Tu mezcla', reason: 'canciones de su biblioteca', startIndex: 0, length: tracks.length, intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true) }]
         : [];
@@ -843,6 +857,24 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
     }
     await djSpeak(introText, set);
+    if (run === introRun) introPending = false;
+  },
+
+  /**
+   * Leaving the DJ screen before the greeting is heard: nothing more happens. While the set is
+   * still being prepared the whole start is called off; once the music is on, only the voice is.
+   */
+  cancelDJIntroIfNotStarted: () => {
+    if (!introPending || introVoiceHeard) return;
+    introRun++;
+    introPending = false;
+    aiDJVoiceService.stopSpeaking();
+    audioEngine.restoreDuckedVolume(300);
+    if (get().isThinking) {
+      set({ isDJModeActive: false, isThinking: false, visualizerState: 'idle', voiceLevel: 0, currentMessage: '', displayedTranscript: '' });
+    } else {
+      set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0, currentMessage: '', displayedTranscript: '' });
+    }
   },
 
   /**

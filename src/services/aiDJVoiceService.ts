@@ -157,6 +157,7 @@ class AIDJVoiceService {
   }
 
   public getSelectedVoice(): DJVoiceId {
+    if (this.previewOverride) return this.previewOverride;
     // Also picks up a voice synced from another device
     try {
       const v = localStorage.getItem(VOICE_KEY);
@@ -255,10 +256,27 @@ class AIDJVoiceService {
     } catch {}
   }
 
+  /** Lets you hear a voice without choosing it (the settings' ▶ buttons) */
+  private previewOverride: DJVoiceId | null = null;
+  private previewToken = 0;
+  public async previewVoice(voiceId: DJVoiceId): Promise<void> {
+    const token = ++this.previewToken;
+    this.previewOverride = voiceId;
+    try {
+      await this.speak(this.nextTestPhrase());
+    } finally {
+      if (token === this.previewToken) this.previewOverride = null;
+    }
+  }
+
   public async testVoice(voiceId?: DJVoiceId): Promise<void> {
     if (voiceId) {
       this.setSelectedVoice(voiceId);
     }
+    return this.speak(this.nextTestPhrase());
+  }
+
+  private nextTestPhrase(): string {
     const lang = useLanguageStore.getState().language;
     const isEn = lang === 'en';
     const phrases = isEn
@@ -274,7 +292,7 @@ class AIDJVoiceService {
         ];
     const phrase = phrases[this.testPhraseIndex % phrases.length];
     this.testPhraseIndex++;
-    return this.speak(phrase);
+    return phrase;
   }
 
   public resolveSpanishVoice(): SpeechSynthesisVoice | null {

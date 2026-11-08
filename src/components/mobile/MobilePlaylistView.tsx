@@ -33,6 +33,7 @@ import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spot
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
+import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
 import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
@@ -1472,9 +1473,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       {/* Track List */}
       <div className="px-4 pt-2 space-y-1">
         {loading ? (
-          <div className="p-8 text-center text-[#b3b3b3] text-sm flex items-center justify-center gap-2">
-            <div className="w-4 h-4 border-2 border-white/20 border-t-[#1ed760] rounded-full animate-spin" />
-            <span>Cargando canciones...</span>
+          <div className="space-y-1 py-1" aria-label="Cargando canciones">
+            {[0, 1, 2, 3, 4, 5, 6, 7].map((n) => (
+              <div key={n} className="flex items-center gap-3 py-1.5" style={{ opacity: 1 - n * 0.09 }}>
+                <div className="w-12 h-12 rounded spf-skeleton shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-3.5 rounded-full spf-skeleton" style={{ width: `${62 - (n % 3) * 12}%` }} />
+                  <div className="h-3 rounded-full spf-skeleton" style={{ width: `${38 - (n % 2) * 10}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
         ) : tracks.length === 0 ? (
           <div className="p-4 text-center space-y-4">
@@ -1912,78 +1920,53 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       </div>
 
       {/* Options Bottom Sheet Modal (Portaled to body to fix positioning) */}
-      {typeof document !== 'undefined' && isOptionsOpen && createPortal(
-        <div
-          className="fixed inset-0 z-[200] flex items-end justify-center bg-black/80 backdrop-blur-sm animate-in fade-in select-none"
-          onClick={() => setIsOptionsOpen(false)}
-        >
-          <div
-            className="w-full max-w-lg bg-[#181818] rounded-t-3xl p-6 pb-9 space-y-4 shadow-[0_-10px_40px_rgba(0,0,0,0.85)] border-t border-white/10"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-10 h-1.5 rounded-full bg-white/20 mx-auto -mt-1 mb-2" />
+      <MobileSheet open={isOptionsOpen} onClose={() => setIsOptionsOpen(false)} zIndex={200}>
+            <SheetHeader
+              image={coverUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
+              title={playlist.name}
+              subtitle={playlist.owner?.display_name || 'Spotify'}
+            />
 
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <img
-                src={coverUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
-                alt={playlist.name}
-                className="w-12 h-12 rounded object-cover shadow"
-              />
-              <div className="flex flex-col min-w-0">
-                <span className="font-bold text-white text-sm truncate">{playlist.name}</span>
-                <span className="text-xs text-[#b3b3b3] truncate">{playlist.owner?.display_name || 'Spotify'}</span>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              {/* Option: Compartir */}
-              <button
+            <SheetList>
+              <SheetItem
+                icon={<ShareNativeIcon size={20} className="text-white" />}
+                label="Compartir playlist"
                 onClick={() => {
                   setIsOptionsOpen(false);
                   handleSharePlaylist();
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-              >
-                <ShareNativeIcon size={20} className="text-white" />
-                <span className="font-bold text-white text-sm">Compartir playlist</span>
-              </button>
+              />
 
-              {/* Option: Guardar en biblioteca */}
-              <button
+              <SheetItem
+                icon={isSavedInLibrary ? <CheckTrackNativeIcon size={22} className="text-[#1ed760]" /> : <AddTrackNativeIcon size={22} className="text-white" />}
+                label={isSavedInLibrary ? 'Eliminar de tu biblioteca' : 'Añadir a tu biblioteca'}
                 onClick={() => {
                   handleToggleLibrary();
                   setIsOptionsOpen(false);
                   setToastMessage(isSavedInLibrary ? 'Eliminada de tu biblioteca' : 'Añadida a tu biblioteca');
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-              >
-                {isSavedInLibrary ? (
-                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
-                ) : (
-                  <AddTrackNativeIcon size={20} className="text-white" />
-                )}
-                <span className="font-bold text-white text-sm">
-                  {isSavedInLibrary ? 'Eliminar de tu biblioteca' : 'Añadir a tu biblioteca'}
-                </span>
-              </button>
+              />
 
-              {/* Option: Editar playlist */}
               {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
-                <button
+                <SheetItem
+                  icon={<EditNativeIcon size={20} className="text-white" />}
+                  label="Editar detalles de la playlist"
                   onClick={() => {
                     setIsOptionsOpen(false);
                     setIsEditModalOpen(true);
                   }}
-                  className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                >
-                  <EditNativeIcon size={20} className="text-white" />
-                  <span className="font-bold text-white text-sm">Editar detalles de la playlist</span>
-                </button>
+                />
               )}
 
-              {/* Option: Copiar enlace */}
-              <button
+              <SheetItem
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                  </svg>
+                }
+                label="Copiar enlace"
                 onClick={async () => {
                   setIsOptionsOpen(false);
                   const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
@@ -1995,23 +1978,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   }
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-              >
-                <ShareNativeIcon size={20} className="text-white" />
-                <span className="font-bold text-white text-sm">Copiar enlace</span>
-              </button>
+              />
 
-              {/* Option: Eliminar playlist (sin window.confirm modal) */}
               {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
                 <div>
                   {!isConfirmDeleteOpen ? (
-                    <button
-                      onClick={() => setIsConfirmDeleteOpen(true)}
-                      className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-red-400 hover:text-red-300 transition-colors text-left cursor-pointer"
-                    >
-                      <TrashNativeIcon size={20} />
-                      <span className="font-bold text-sm">Eliminar playlist</span>
-                    </button>
+                    <SheetItem danger icon={<TrashNativeIcon size={20} />} label="Eliminar playlist" onClick={() => setIsConfirmDeleteOpen(true)} />
                   ) : (
                     <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-2 mt-1">
                       <p className="text-xs text-white/90 font-medium">
@@ -2041,92 +2013,55 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   )}
                 </div>
               )}
-            </div>
-
-            <button
-              onClick={() => setIsOptionsOpen(false)}
-              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
+            </SheetList>
+      </MobileSheet>
 
       {/* Track 3-Dots Action Sheet */}
-      {activeTrackMenu && createPortal(
-        <div
-          className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex flex-col justify-end animate-fadeIn select-none"
-          onClick={() => setActiveTrackMenu(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-[#242424] rounded-t-3xl max-h-[85vh] overflow-y-auto p-5 pb-8 space-y-4 shadow-2xl border-t border-white/10"
-          >
-            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2" />
+      <MobileSheet open={!!activeTrackMenu} onClose={() => setActiveTrackMenu(null)}>
+        {activeTrackMenu && (
+          <>
+            <SheetHeader
+              image={getTrackCoverUrl(activeTrackMenu)}
+              title={activeTrackMenu.name}
+              subtitle={parseTrackArtists(activeTrackMenu.artists).map((a) => a.name).join(', ') || 'Artista'}
+            />
 
-            {/* Track Info Header */}
-            <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
-              <img
-                src={getTrackCoverUrl(activeTrackMenu)}
-                alt={activeTrackMenu.name}
-                onError={handleImageError}
-                className="w-12 h-12 rounded-[4px] object-cover shadow bg-[#181818] shrink-0"
-              />
-              <div className="flex-1 min-w-0">
-                <p className="font-bold text-white text-base truncate">{activeTrackMenu.name}</p>
-                <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                  {parseTrackArtists(activeTrackMenu.artists).map((a) => a.name).join(', ') || 'Artista'}
-                </p>
-              </div>
-            </div>
-
-            {/* Track Actions */}
-            <div className="space-y-1">
-              <button
+            <SheetList>
+              <SheetItem
+                icon={
+                  isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? (
+                    <CheckTrackNativeIcon size={24} className="text-[#1ed760]" />
+                  ) : (
+                    <AddTrackNativeIcon size={24} className="text-white" />
+                  )
+                }
+                label={isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? 'Eliminar de Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
                 onClick={() => {
                   handleToggleTrackLike(activeTrackMenu);
                   setActiveTrackMenu(null);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
-              >
-                {isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? (
-                  <CheckTrackNativeIcon size={22} className="text-[#1ed760] shrink-0" />
-                ) : (
-                  <AddTrackNativeIcon size={22} className="text-white/80 shrink-0" />
-                )}
-                <span className="font-bold text-sm">
-                  {isTrackLiked(activeTrackMenu.id, activeTrackMenu)
-                    ? 'Eliminar de Canciones que te gustan'
-                    : 'Añadir a Canciones que te gustan'}
-                </span>
-              </button>
+              />
 
-              <button
+              <SheetItem
+                icon={<QueueNativeIcon size={20} className="text-white" />}
+                label="Añadir a la cola"
                 onClick={() => {
                   usePlayerStore.getState().addToQueue(activeTrackMenu);
                   setActiveTrackMenu(null);
                   setToastMessage('Añadido a la cola');
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
-              >
-                <QueueNativeIcon size={22} className="text-white/80 shrink-0" />
-                <span className="font-bold text-sm">Añadir a la cola</span>
-              </button>
+              />
 
-              <button
-                onClick={() => {
-                  setIsAddToPlaylistModalOpen(true);
-                }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
-              >
-                <PlusCircleNativeIcon size={22} className="text-white/80 shrink-0" />
-                <span className="font-bold text-sm">Añadir a otra playlist</span>
-              </button>
+              <SheetItem
+                icon={<PlusCircleNativeIcon size={22} className="text-white" />}
+                label="Añadir a otra playlist"
+                onClick={() => setIsAddToPlaylistModalOpen(true)}
+              />
 
-              <button
+              <SheetItem
+                icon={<ShareNativeIcon size={20} className="text-white" />}
+                label="Compartir canción"
                 onClick={() => {
                   setActiveTrackMenu(null);
                   if (navigator.share) {
@@ -2141,27 +2076,27 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     setTimeout(() => setToastMessage(null), 2500);
                   }
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
-              >
-                <ShareNativeIcon size={20} className="text-white/80 shrink-0" />
-                <span className="font-bold text-sm">Compartir canción</span>
-              </button>
+              />
 
-              <button
+              <SheetItem
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
+                  </svg>
+                }
+                label="Cambiar fuente de audio"
+                sublabel="Si no suena la canción correcta"
                 onClick={() => {
                   const t = activeTrackMenu;
                   setActiveTrackMenu(null);
                   openAudioSourceSheet(t);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white"
-              >
-                <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" className="text-white/80 shrink-0">
-                  <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
-                </svg>
-                <span className="font-bold text-sm">Cambiar fuente de audio</span>
-              </button>
+              />
 
-              <button
+              <SheetItem
+                danger
+                icon={<TrashNativeIcon size={20} />}
+                label={cleanId === 'liked-songs' || isLikedPlaylist ? 'Eliminar de canciones que te gustan' : 'Eliminar de esta playlist'}
                 onClick={() => {
                   if (cleanId === 'liked-songs' || isLikedPlaylist) {
                     handleToggleTrackLike(activeTrackMenu);
@@ -2170,38 +2105,17 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   }
                   setActiveTrackMenu(null);
                 }}
-                className="w-full flex items-center gap-3.5 px-3 py-3 rounded-xl hover:bg-red-500/10 active:bg-red-500/20 text-left text-red-400"
-              >
-                <TrashNativeIcon size={20} className="shrink-0" />
-                <span className="font-bold text-sm">
-                  {cleanId === 'liked-songs' || isLikedPlaylist ? 'Eliminar de canciones que te gustan' : 'Eliminar de esta playlist'}
-                </span>
-              </button>
-            </div>
+              />
+            </SheetList>
+          </>
+        )}
+      </MobileSheet>
 
-            <button
-              onClick={() => setActiveTrackMenu(null)}
-              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {/* Add To Playlist Picker Modal */}
-      {isAddToPlaylistModalOpen && activeTrackMenu && createPortal(
-        <div
-          className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex flex-col justify-end select-none"
-          onClick={() => setIsAddToPlaylistModalOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="bg-[#242424] rounded-t-3xl max-h-[75vh] overflow-y-auto p-5 pb-8 space-y-4 shadow-2xl border-t border-white/10"
-          >
-            <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mb-2" />
-            <h3 className="text-base font-bold text-white text-center">Añadir a una playlist</h3>
+      {/* Add To Playlist Picker */}
+      <MobileSheet open={isAddToPlaylistModalOpen && !!activeTrackMenu} onClose={() => setIsAddToPlaylistModalOpen(false)} closeLabel="Cancelar" zIndex={130}>
+        {activeTrackMenu && (
+          <>
+            <h3 className="text-base font-bold text-white text-center font-['SpotifyMixUITitle']">Añadir a una playlist</h3>
             <div className="space-y-1">
               {allUserPlaylists
                 .filter((p) => p.id !== activePlaylist.id && p.id !== 'liked-songs')
@@ -2237,13 +2151,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       setToastMessage(`Añadido a «${targetPl.name}»`);
                       setTimeout(() => setToastMessage(null), 2500);
                     }}
-                    className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left"
+                    className="w-full flex items-center gap-4 py-2.5 px-2 rounded-xl hover:bg-white/10 active:scale-[0.98] transition-all text-left cursor-pointer"
                   >
                     <img
                       src={targetPl.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                       alt={targetPl.name}
                       onError={handleImageError}
-                      className="w-10 h-10 rounded-[4px] object-cover bg-[#181818] shrink-0"
+                      className="w-12 h-12 rounded-lg object-cover bg-[#181818] shrink-0"
                     />
                     <div className="min-w-0 flex-1">
                       <p className="font-bold text-sm text-white truncate">{targetPl.name}</p>
@@ -2252,16 +2166,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   </button>
                 ))}
             </div>
-            <button
-              onClick={() => setIsAddToPlaylistModalOpen(false)}
-              className="w-full py-3 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider mt-2 cursor-pointer"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>,
-        document.body
-      )}
+          </>
+        )}
+      </MobileSheet>
 
       {/* Edit Playlist Modal */}
       {isEditModalOpen && createPortal(

@@ -1507,15 +1507,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         {loading && tracks.length === 0 && (
           <div className="space-y-3 py-4">
             {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-              <div key={n} className="flex items-center gap-4 px-4 py-2 animate-pulse">
-                <div className="w-4 h-4 bg-white/10 rounded" />
-                <div className="w-10 h-10 bg-white/10 rounded" />
+              <div key={n} className="flex items-center gap-4 px-4 py-2">
+                <div className="w-4 h-4 spf-skeleton rounded" />
+                <div className="w-10 h-10 spf-skeleton rounded" />
                 <div className="flex-1 space-y-2">
-                  <div className="w-1/3 h-3 bg-white/10 rounded" />
-                  <div className="w-1/4 h-2 bg-white/5 rounded" />
+                  <div className="w-1/3 h-3 spf-skeleton rounded-full" />
+                  <div className="w-1/4 h-2 spf-skeleton rounded-full" />
                 </div>
-                <div className="w-1/4 h-3 bg-white/5 rounded" />
-                <div className="w-12 h-3 bg-white/10 rounded" />
+                <div className="w-1/4 h-3 spf-skeleton rounded-full" />
+                <div className="w-12 h-3 spf-skeleton rounded-full" />
               </div>
             ))}
           </div>

@@ -46,8 +46,9 @@
   }
 
   :root {
-    --sat: env(safe-area-inset-top, 0px);
-    --sab: env(safe-area-inset-bottom, 0px);
+    /* In the APK, Capacitor also injects --safe-area-inset-* (WebViews where env() is 0) */
+    --sat: max(env(safe-area-inset-top, 0px), var(--safe-area-inset-top, 0px));
+    --sab: max(env(safe-area-inset-bottom, 0px), var(--safe-area-inset-bottom, 0px));
     --sal: env(safe-area-inset-left, 0px);
     --sar: env(safe-area-inset-right, 0px);
   }
@@ -259,6 +260,63 @@
 
 .animate-spin-slow {
   animation: spinSlow 32s linear infinite;
+}
+
+/* Spotify-like navigation: tabs fade in quickly, opened pages slide in from the right */
+@keyframes spfPageEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+.spf-page-enter {
+  animation: spfPageEnter 0.22s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes spfPagePush {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+.spf-page-push {
+  animation: spfPagePush 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+/* Bottom bar icon when its tab is chosen */
+@keyframes spfTabPop {
+  0% { transform: scale(0.82); }
+  55% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+.spf-tab-pop {
+  animation: spfTabPop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Items of a list appearing one after another */
+.spf-stagger > * {
+  animation: spfPageEnter 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.spf-stagger > *:nth-child(2) { animation-delay: 0.03s; }
+.spf-stagger > *:nth-child(3) { animation-delay: 0.06s; }
+.spf-stagger > *:nth-child(4) { animation-delay: 0.09s; }
+.spf-stagger > *:nth-child(5) { animation-delay: 0.12s; }
+.spf-stagger > *:nth-child(6) { animation-delay: 0.15s; }
+.spf-stagger > *:nth-child(n + 7) { animation-delay: 0.18s; }
+
+/* Loading placeholders: grey blocks with a soft moving shine, like Spotify */
+@keyframes spfShimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+.spf-skeleton {
+  background: linear-gradient(90deg, #242424 0%, #242424 35%, #333333 50%, #242424 65%, #242424 100%);
+  background-size: 300% 100%;
+  animation: spfShimmer 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spf-page-enter,
+  .spf-page-push,
+  .spf-tab-pop,
+  .spf-stagger > *,
+  .spf-skeleton {
+    animation: none !important;
+  }
 }
 
 

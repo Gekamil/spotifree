@@ -40,7 +40,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   return (
     <header
-      style={{ paddingTop: 'calc(12px + env(safe-area-inset-top, 0px))' }}
+      style={{ paddingTop: '12px' }}
       className="sticky top-0 z-30 px-4 pb-3 flex items-center justify-between gap-3 select-none font-['SpotifyMixUI']"
     >
       {/* Left: Avatar / Profile */}

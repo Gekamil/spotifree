@@ -11,7 +11,6 @@ import { SharedSessionModal } from './components/common/SharedSessionModal';
 import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
-import CarModeView from './components/common/CarModeView';
 import SleepTimerSheet from './components/common/SleepTimerSheet';
 import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
 import StoryCardSheet from './components/common/StoryCardSheet';
@@ -171,7 +170,6 @@ function App() {
       {isMobile && <SharedSessionModal />}
       <SharedSessionCursors />
       <AudioSourceSheet />
-      <CarModeView />
       <SleepTimerSheet />
       <ImportPlaylistDialog />
       <StoryCardSheet />

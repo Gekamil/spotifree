@@ -79,8 +79,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     startVoiceListening,
     stopVoiceListening,
     handleUserPrompt,
-    displayedTranscript,
-    currentMessage,
     segments,
     activeSegmentId,
     isThinking,
@@ -248,6 +246,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     }
   }, [isDJModeActive, djTracks.length, startDJSession]);
 
+  // Leaving before the DJ starts talking calls the greeting off
+  useEffect(() => () => useAIDJStore.getState().cancelDJIntroIfNotStarted(), []);
+
   const toggleMic = () => {
     if (isMicListening) {
       stopVoiceListening();
@@ -412,10 +413,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 </span>
                 <span className="text-xs font-bold text-white/90">Preparando tu sesión</span>
               </div>
-            ) : isSpeaking && (displayedTranscript || currentMessage) && !isMicListening ? (
-              <p className="text-[15px] sm:text-base font-bold leading-snug text-white text-center font-['SpotifyMixUITitle'] drop-shadow-[0_2px_10px_rgba(0,0,0,0.6)] animate-in fade-in duration-300">
-                {displayedTranscript || currentMessage}
-              </p>
+            ) : isSpeaking ? (
+              // No subtitles: while the DJ talks, only the voice and the visualizer
+              null
             ) : activeSegment && !isMicListening ? (
               <div className="flex flex-col items-center gap-2 animate-in fade-in duration-500">
                 <span className="text-[11px] font-bold uppercase tracking-widest text-white/60">Ahora</span>

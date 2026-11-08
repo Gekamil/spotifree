@@ -4,6 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { MobileBottomNav } from './MobileBottomNav';
+import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -468,13 +469,17 @@ export const MobileLayout: React.FC = () => {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#121212] text-white overflow-hidden font-['SpotifyMixUI'] select-none relative">
+    <div
+      className="h-screen w-screen flex flex-col bg-[#121212] text-white overflow-hidden font-['SpotifyMixUI'] select-none relative"
+      // Nothing under the clock / battery: the whole app starts below the status bar
+      style={{ paddingTop: 'var(--sat)' }}
+    >
       {/* Scrollable Center Content */}
-      <div className={`flex-1 overflow-y-auto overflow-x-hidden ${mobileTab === 'dj' ? 'pb-0' : 'pb-32'}`}>
+      <div data-mobile-scroll className={`flex-1 overflow-y-auto overflow-x-hidden ${mobileTab === 'dj' ? 'pb-0' : 'pb-32'}`}>
         {/* TAB 1: HOME */}
         {mobileTab === 'home' && (
           <div
-            className="min-h-full transition-colors duration-500 animate-cascade-down"
+            className="min-h-full transition-colors duration-500 spf-page-enter"
             style={{
               background: `linear-gradient(180deg, ${lastVibrantColor}cc 0%, rgba(18, 18, 18, 0.98) 320px, #121212 100%)`,
             }}
@@ -750,14 +755,14 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 2: SEARCH */}
         {mobileTab === 'search' && (
-          <div className="p-4 space-y-4 animate-cascade-down">
+          <div className="p-4 space-y-4 spf-page-enter">
             <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
           </div>
         )}
 
         {/* TAB 3: LIBRARY */}
         {mobileTab === 'library' && (
-          <div className="p-4 space-y-4 animate-cascade-down">
+          <div className="p-4 space-y-4 spf-page-enter">
             {/* Header */}
             <div className="flex items-center justify-between pt-2">
               <div className="flex items-center gap-3">
@@ -1059,7 +1064,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 4: PLAYLIST VIEW */}
         {mobileTab === 'playlist' && selectedPlaylist && (
-          <div className="animate-cascade-down min-h-full">
+          <div key={selectedPlaylist.id} className="spf-page-push min-h-full">
             <MobilePlaylistView
               key={selectedPlaylist.id}
               playlist={selectedPlaylist}
@@ -1071,7 +1076,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 5: DEDICATED SPOTIFY MOBILE PROFILE VIEW */}
         {mobileTab === 'profile' && (
-          <div className="animate-cascade-down min-h-full">
+          <div className="spf-page-enter min-h-full">
             <MobileProfileView
               onBack={() => setMobileTab('home')}
               onOpenSettings={() => setMobileTab('settings')}
@@ -1085,7 +1090,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 6: DEDICATED SPOTIFY MOBILE SETTINGS VIEW */}
         {mobileTab === 'settings' && (
-          <div className="animate-cascade-down min-h-full">
+          <div className="spf-page-enter min-h-full">
             <MobileSettingsView
               onBack={() => setMobileTab('home')}
               onOpenProfile={() => setMobileTab('profile')}
@@ -1170,43 +1175,20 @@ export const MobileLayout: React.FC = () => {
       />
 
       {/* Mobile Playlist Long-Press Actions Bottom Sheet */}
-      {playlistMenuTarget && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm animate-in fade-in duration-200 select-none"
-          onClick={() => {
-            setIsEditingTarget(false);
-            setPlaylistMenuTarget(null);
-          }}
-        >
-          <div
-            className="w-full bg-[#242424] rounded-t-3xl p-5 pb-9 space-y-3.5 shadow-2xl animate-in slide-in-from-bottom duration-200 border-t border-white/10 max-h-[85vh] overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="w-10 h-1 bg-white/30 rounded-full mx-auto mb-1 cursor-pointer"
-              onClick={() => {
-                setIsEditingTarget(false);
-                setPlaylistMenuTarget(null);
-              }}
+      <MobileSheet
+        open={!!playlistMenuTarget}
+        onClose={() => {
+          setIsEditingTarget(false);
+          setPlaylistMenuTarget(null);
+        }}
+      >
+        {playlistMenuTarget && (
+          <>
+            <SheetHeader
+              image={editTargetCover || getPlaylistCover(playlistMenuTarget)}
+              title={playlistMenuTarget.name}
+              subtitle={playlistMenuTarget.owner?.display_name || user?.display_name || 'Spotify'}
             />
-
-            {/* Header: Cover + Title + Owner */}
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <img
-                src={editTargetCover || getPlaylistCover(playlistMenuTarget)}
-                alt={playlistMenuTarget.name}
-                onError={handleImageError}
-                className="w-14 h-14 rounded-[4px] object-cover shadow shrink-0 bg-[#181818]"
-              />
-              <div className="truncate flex-1">
-                <h4 className="text-base font-bold text-white truncate font-['SpotifyMixUITitle']">
-                  {playlistMenuTarget.name}
-                </h4>
-                <p className="text-xs text-[#a7a7a7] truncate mt-0.5">
-                  {playlistMenuTarget.owner?.display_name || user?.display_name || 'Spotify'}
-                </p>
-              </div>
-            </div>
 
             {isEditingTarget ? (
               /* Inline Edit Mode */
@@ -1266,84 +1248,42 @@ export const MobileLayout: React.FC = () => {
                 </div>
               </div>
             ) : (
-              /* Spotify Complete Options Actions */
-              <div className="space-y-1">
-                {/* 1. Añadir a la cola */}
-                <button
-                  onClick={handleAddToQueueTarget}
-                  className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                >
-                  <QueueNativeIcon size={20} className="text-white" />
-                  <span className="font-bold text-white text-sm">Añadir a la cola</span>
-                </button>
+              <SheetList>
+                <SheetItem icon={<QueueNativeIcon size={20} className="text-white" />} label="Añadir a la cola" onClick={handleAddToQueueTarget} />
 
-                {/* 2. Descargar / Eliminar descarga */}
-                <button
+                <SheetItem
+                  icon={
+                    isPlaylistDownloaded(playlistMenuTarget.id) ? (
+                      <DownloadActiveCircleNativeIcon size={22} className="text-[#1ed760]" />
+                    ) : (
+                      <DownloadCircleNativeIcon size={22} className="text-white" />
+                    )
+                  }
+                  label={isPlaylistDownloaded(playlistMenuTarget.id) ? 'Eliminar descarga' : 'Descargar'}
                   onClick={handleToggleDownloadTarget}
-                  className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                >
-                  {isPlaylistDownloaded(playlistMenuTarget.id) ? (
-                    <DownloadActiveCircleNativeIcon size={20} className="text-[#1ed760]" />
-                  ) : (
-                    <DownloadCircleNativeIcon size={20} className="text-white" />
-                  )}
-                  <span className="font-bold text-white text-sm">
-                    {isPlaylistDownloaded(playlistMenuTarget.id) ? 'Eliminar descarga' : 'Descargar'}
-                  </span>
-                </button>
+                />
 
-                {/* 3. Editar playlist */}
                 {playlistMenuTarget.id !== 'liked-songs' && !playlistMenuTarget.id.includes('collection:tracks') && (
-                  <button
-                    onClick={() => setIsEditingTarget(true)}
-                    className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                  >
-                    <EditNativeIcon size={20} className="text-white" />
-                    <span className="font-bold text-white text-sm">Editar detalles</span>
-                  </button>
+                  <SheetItem icon={<EditNativeIcon size={20} className="text-white" />} label="Editar detalles" onClick={() => setIsEditingTarget(true)} />
                 )}
 
-                {/* 4. Compartir playlist */}
-                <button
-                  onClick={handleSharePlaylistTarget}
-                  className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                >
-                  <ShareNativeIcon size={20} className="text-white" />
-                  <span className="font-bold text-white text-sm">Compartir playlist</span>
-                </button>
+                <SheetItem icon={<ShareNativeIcon size={20} className="text-white" />} label="Compartir playlist" onClick={handleSharePlaylistTarget} />
 
-                {/* 5. Copiar enlace */}
-                <button
-                  onClick={handleSharePlaylistTarget}
-                  className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors text-left cursor-pointer"
-                >
-                  <ShareNativeIcon size={20} className="text-white" />
-                  <span className="font-bold text-white text-sm">Copiar enlace</span>
-                </button>
-
-                {/* 6. Eliminar de tu biblioteca */}
-                <button
+                <SheetItem
+                  danger
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                    </svg>
+                  }
+                  label="Eliminar de tu biblioteca"
                   onClick={() => handleDeletePlaylist(playlistMenuTarget.id)}
-                  className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-red-400 font-bold text-sm cursor-pointer transition-colors"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="shrink-0">
-                    <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
-                  </svg>
-                  <span>Eliminar de tu biblioteca</span>
-                </button>
-
-                {/* 7. Cancelar */}
-                <button
-                  onClick={() => setPlaylistMenuTarget(null)}
-                  className="w-full p-2.5 rounded-full text-xs font-bold text-white/70 hover:text-white text-center cursor-pointer pt-2"
-                >
-                  Cancelar
-                </button>
-              </div>
+                />
+              </SheetList>
             )}
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </MobileSheet>
 
       {/* Toast Feedback */}
       {toastMessage && (

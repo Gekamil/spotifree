@@ -56,7 +56,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-md font-['SpotifyMixUI'] select-none animate-fade-in p-3 sm:p-4 overflow-y-auto pt-4 sm:pt-0">
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center bg-black/80 backdrop-blur-md font-['SpotifyMixUI'] select-none animate-fade-in p-3 sm:p-4 overflow-y-auto pt-[calc(16px+var(--sat))] sm:pt-0">
       <div className="relative w-full max-w-lg bg-[#242424] text-white rounded-2xl shadow-2xl border border-white/10 overflow-hidden flex flex-col max-h-[88vh] my-auto sm:my-0">
         {/* Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">

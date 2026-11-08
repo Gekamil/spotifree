@@ -30,7 +30,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           activeTab === 'home' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
         }`}
       >
-        <div className="w-6 h-6 flex items-center justify-center">
+        <div key={`home-${activeTab === 'home'}`} className={`w-6 h-6 flex items-center justify-center ${activeTab === 'home' ? 'spf-tab-pop' : ''}`}>
           {activeTab === 'home' ? (
             /* Active Filled Home (Official Spotify Mobile SVG) */
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
@@ -59,7 +59,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           activeTab === 'search' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
         }`}
       >
-        <div className="w-6 h-6 flex items-center justify-center">
+        <div key={`search-${activeTab === 'search'}`} className={`w-6 h-6 flex items-center justify-center ${activeTab === 'search' ? 'spf-tab-pop' : ''}`}>
           {activeTab === 'search' ? (
             /* Active Search with circle inside (matching user requirement & Spotify Mobile) */
             <SearchActiveNativeIcon size={24} className="text-white" />
@@ -86,7 +86,7 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           activeTab === 'library' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
         }`}
       >
-        <div className="w-6 h-6 flex items-center justify-center">
+        <div key={`library-${activeTab === 'library'}`} className={`w-6 h-6 flex items-center justify-center ${activeTab === 'library' ? 'spf-tab-pop' : ''}`}>
           {activeTab === 'library' ? (
             /* Active Filled Library (Official Spotify Mobile SVG) */
             <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">

@@ -292,7 +292,10 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
   const count = selectedMap.size;
 
   return (
-    <div className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] select-none animate-in slide-in-from-bottom duration-250">
+    <div
+      className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] select-none animate-in slide-in-from-bottom duration-250"
+      style={{ paddingTop: 'var(--sat)' }}
+    >
       {/* Top Header */}
       <div className="sticky top-0 z-20 px-4 pt-3 pb-2 bg-[#121212]/95 backdrop-blur-md border-b border-white/5 space-y-3">
         <div className="flex items-center justify-between">

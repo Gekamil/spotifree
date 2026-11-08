@@ -242,26 +242,44 @@ export const DesktopLayout: React.FC = () => {
             className="flex-1 overflow-y-auto overflow-x-hidden relative"
           >
             {activeMainTab === 'home' && (
-              <DesktopHomeView onSelectPlaylistById={handleSelectPlaylistById} />
+              <div key="home" className="spf-page-enter min-h-full">
+                <DesktopHomeView onSelectPlaylistById={handleSelectPlaylistById} />
+              </div>
             )}
 
             {activeMainTab === 'search' && (
-              <DesktopSearchView onSelectPlaylistById={handleSelectPlaylistById} />
+              <div key="search" className="spf-page-enter min-h-full">
+                <DesktopSearchView onSelectPlaylistById={handleSelectPlaylistById} />
+              </div>
             )}
 
             {activeMainTab === 'playlist' && activePlaylist && (
-              <DesktopPlaylistView
-                key={activePlaylist.id}
-                playlist={activePlaylist}
-                onSelectPlaylistById={handleSelectPlaylistById}
-              />
+              <div key={`pl-${activePlaylist.id}`} className="spf-page-push min-h-full">
+                <DesktopPlaylistView
+                  key={activePlaylist.id}
+                  playlist={activePlaylist}
+                  onSelectPlaylistById={handleSelectPlaylistById}
+                />
+              </div>
             )}
 
-            {activeMainTab === 'settings' && <DesktopSettingsView />}
+            {activeMainTab === 'settings' && (
+              <div key="settings" className="spf-page-enter min-h-full">
+                <DesktopSettingsView />
+              </div>
+            )}
 
-            {activeMainTab === 'guide' && <DesktopGuideView />}
+            {activeMainTab === 'guide' && (
+              <div key="guide" className="spf-page-enter min-h-full">
+                <DesktopGuideView />
+              </div>
+            )}
 
-            {activeMainTab === 'profile' && <DesktopProfileView onSelectPlaylist={handleSelectPlaylist} />}
+            {activeMainTab === 'profile' && (
+              <div key="profile" className="spf-page-enter min-h-full">
+                <DesktopProfileView onSelectPlaylist={handleSelectPlaylist} />
+              </div>
+            )}
 
             {activeMainTab === 'dj' && (
               <AIDJView

@@ -127,7 +127,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
       >
         <form
           onSubmit={isNaming ? handleSubmitPlaylist : handleImportSubmit}
-          className="flex-1 flex flex-col justify-center px-6 pt-[env(safe-area-inset-top,0px)] pb-[calc(env(safe-area-inset-bottom,0px)+24px)]"
+          className="flex-1 flex flex-col justify-center px-6 pt-[var(--sat)] pb-[calc(var(--sab)+24px)]"
         >
           <h2 className="text-[24px] font-bold text-white text-center font-['SpotifyMixUITitle'] tracking-tight">
             {isNaming ? 'Ponle nombre a tu playlist' : 'Importar playlist'}

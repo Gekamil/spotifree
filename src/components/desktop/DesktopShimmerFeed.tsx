@@ -35,16 +35,16 @@ export const DesktopShimmerFeed: React.FC = () => {
 
       {/* Quick Access Top 8 Grid Skeleton */}
       <div className="space-y-3">
-        <div className="h-6 w-44 bg-[#1f1f1f] rounded animate-pulse" />
+        <div className="h-6 w-44 spf-skeleton rounded-full" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <div
               key={`shimmer-quick-${i}`}
-              className="h-[48px] flex items-center bg-[#1f1f1f] rounded-[4px] overflow-hidden animate-pulse pr-3"
+              className="h-[48px] flex items-center bg-[#1f1f1f] rounded-[4px] overflow-hidden pr-3"
             >
-              <div className="w-[48px] h-[48px] shrink-0 bg-[#282828] aspect-square" />
+              <div className="w-[48px] h-[48px] shrink-0 spf-skeleton aspect-square" />
               <div className="ml-3 flex-1 space-y-1.5 min-w-0 pr-2">
-                <div className="h-3.5 w-3/4 bg-[#282828] rounded opacity-60" />
+                <div className="h-3.5 w-3/4 spf-skeleton rounded-full" />
               </div>
             </div>
           ))}
@@ -55,21 +55,21 @@ export const DesktopShimmerFeed: React.FC = () => {
       {Array.from({ length: 3 }).map((_, shelfIdx) => (
         <div key={`shimmer-shelf-${shelfIdx}`} className="space-y-3">
           {/* Shelf Title Shimmer */}
-          <div className="h-6 w-56 bg-[#1f1f1f] rounded animate-pulse mb-3" />
+          <div className="h-6 w-56 spf-skeleton rounded-full mb-3" />
 
           {/* Carousel Track Shimmer */}
           <div className="flex gap-4 overflow-hidden py-2">
             {Array.from({ length: 6 }).map((_, cardIdx) => (
               <div
                 key={`shimmer-card-${shelfIdx}-${cardIdx}`}
-                className="w-[180px] shrink-0 bg-[#181818] p-3 rounded-md animate-pulse flex flex-col"
+                className="w-[180px] shrink-0 bg-[#181818] p-3 rounded-md flex flex-col"
               >
                 {/* 1:1 Aspect Ratio Artwork Placeholder */}
-                <div className="aspect-square w-full rounded-[4px] bg-[#282828] mb-3" />
+                <div className="aspect-square w-full rounded-[4px] spf-skeleton mb-3" />
                 {/* Title Line Placeholder */}
-                <div className="h-3.5 w-3/4 bg-[#1f1f1f] rounded mb-2 opacity-70" />
+                <div className="h-3.5 w-3/4 spf-skeleton rounded-full mb-2" />
                 {/* Subtitle Line Placeholder */}
-                <div className="h-3 w-1/2 bg-[#1f1f1f] rounded opacity-50" />
+                <div className="h-3 w-1/2 spf-skeleton rounded-full opacity-70" />
               </div>
             ))}
           </div>

@@ -14,6 +14,7 @@ import {
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 import { BROWSE_CATEGORIES } from '../../data/browseCategories';
+import { useDailyCategoryHub } from '../../services/dailyCategoryHub';
 
 interface MobileSearchViewProps {
   onSelectPlaylistById: (id: string, name?: string, image?: string) => void;
@@ -32,6 +33,9 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
   const [filter, setFilter] = useState<'todo' | 'canciones' | 'artistas' | 'playlists'>('todo');
   const [isSearching, setIsSearching] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
+  const [selectedCat, setSelectedCat] = useState<(typeof MOBILE_CATEGORIES)[number] | null>(null);
+  // Changes every day: curated playlists reshuffled + today's live picks
+  const catShelves = useDailyCategoryHub(selectedCat?.id);
 
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore(
     useShallow((s) => ({ playTrack: s.playTrack, currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay }))
@@ -92,6 +96,62 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
 
     return () => clearTimeout(timer);
   }, [query]);
+
+  if (selectedCat) {
+    return (
+      <div className="select-none text-white font-['SpotifyMixUI'] pb-36 -mx-4 -mt-4 spf-page-enter">
+        <div
+          className="relative px-4 pt-3 pb-7 overflow-hidden"
+          style={{ backgroundColor: selectedCat.bgColor, backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0) 35%, #121212 100%)' }}
+        >
+          <button
+            onClick={() => setSelectedCat(null)}
+            className="w-9 h-9 -ml-1.5 flex items-center justify-center rounded-full active:bg-black/20 cursor-pointer"
+            aria-label="Volver"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M15.957 2.793a1 1 0 0 1 0 1.414L8.164 12l7.793 7.793a1 1 0 1 1-1.414 1.414L5.336 12l9.207-9.207a1 1 0 0 1 1.414 0z" />
+            </svg>
+          </button>
+          <h1 className="mt-6 text-[32px] leading-none font-black tracking-tight font-['SpotifyMixUITitle'] max-w-[70%]">
+            {selectedCat.title}
+          </h1>
+          <img
+            src={selectedCat.imgSrc}
+            alt=""
+            onError={handleImageError}
+            className="absolute right-3 bottom-3 w-24 h-24 rounded shadow-xl rotate-[18deg] object-cover pointer-events-none"
+          />
+        </div>
+        <div className="space-y-7 pt-2">
+          {catShelves.map((shelf, i) => (
+            <section key={`${shelf.title}-${i}`}>
+              <h2 className="px-4 mb-3 text-[19px] font-bold tracking-tight font-['SpotifyMixUITitle']">{shelf.title}</h2>
+              <div className="flex gap-3 overflow-x-auto px-4 scroll-px-4 no-scrollbar snap-x">
+                {shelf.cards.map((card) => (
+                  <button
+                    key={card.id}
+                    onClick={() => onSelectPlaylistById(card.id, card.title, card.image)}
+                    className="w-[132px] shrink-0 text-left snap-start active:scale-[0.97] transition-transform cursor-pointer"
+                  >
+                    <img
+                      src={card.image}
+                      alt={card.title}
+                      loading="lazy"
+                      onError={handleImageError}
+                      className="w-[132px] h-[132px] rounded-md object-cover shadow-lg bg-[#282828]"
+                    />
+                    <p className="mt-2 text-[13px] font-semibold text-white line-clamp-1">{card.title}</p>
+                    <p className="text-xs text-[#a7a7a7] line-clamp-2 leading-snug">{card.subtitle}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="select-none text-white font-['SpotifyMixUI'] pb-36">
@@ -372,7 +432,12 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
               {MOBILE_CATEGORIES.map((cat) => (
                 <div
                   key={cat.id}
-                  onClick={() => onSelectPlaylistById(cat.playlistId, cat.title, cat.imgSrc)}
+                  onClick={() => {
+                    setSelectedCat(cat);
+                    try {
+                      document.querySelector('[data-mobile-scroll]')?.scrollTo({ top: 0 });
+                    } catch {}
+                  }}
                   style={{ backgroundColor: cat.bgColor }}
                   className="relative h-24 rounded-lg p-3 overflow-hidden cursor-pointer active:scale-98 transition-transform shadow-md"
                 >
