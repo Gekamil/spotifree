@@ -27,6 +27,7 @@ export const EN_DICTIONARY_EXTRA: Record<string, string> = {
   'Canción añadida': 'Song added',
   'Tu música, sin conexión': 'Your music, offline',
   // Animated covers
+  'Animada': 'Animated',
   'Ver la portada animada': 'Show the animated cover',
   'Ver la portada fija': 'Show the still cover',
   'Los álbumes que tienen portada en movimiento en Apple Music la muestran en el reproductor.': 'Albums with a motion cover on Apple Music show it in the player.',
