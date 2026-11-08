@@ -68,7 +68,7 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
     }
 
     @Override
-    protected void onResume() {
+    public void onResume() {
         super.onResume();
         configureWebView();
     }
