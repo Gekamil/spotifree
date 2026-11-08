@@ -27,7 +27,22 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SpotifreeSpeechPlugin.class);
         registerPlugin(SpotifreeLocalMusicPlugin.class);
         super.onCreate(savedInstanceState);
+        configureWebView();
         handleIncomingIntent(getIntent());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        configureWebView();
+    }
+
+    private void configureWebView() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override

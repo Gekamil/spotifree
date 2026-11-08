@@ -46,7 +46,12 @@
         <intent
             android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
             android:targetPackage="com.spotifree.music"
-            android:targetClass="com.spotifree.music.MainActivity" />
+            android:targetClass="com.spotifree.music.MainActivity"
+            android:data="spotifree://play">
+            <extra android:name="play" android:value="true" />
+            <extra android:name="spotifree_play" android:value="true" />
+            <extra android:name="command" android:value="play" />
+        </intent>
         <capability-binding android:key="actions.intent.PLAY_MUSIC" />
     </shortcut>
 
@@ -60,7 +65,12 @@
         <intent
             android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
             android:targetPackage="com.spotifree.music"
-            android:targetClass="com.spotifree.music.MainActivity" />
+            android:targetClass="com.spotifree.music.MainActivity"
+            android:data="spotifree://play">
+            <extra android:name="play" android:value="true" />
+            <extra android:name="spotifree_play" android:value="true" />
+            <extra android:name="command" android:value="play" />
+        </intent>
         <capability-binding android:key="actions.intent.PLAY_MUSIC" />
     </shortcut>
 </shortcuts>

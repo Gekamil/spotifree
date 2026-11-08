@@ -25,6 +25,7 @@ public class SpotifreeWebView extends CapacitorWebView {
     public SpotifreeWebView(Context context, AttributeSet attrs) {
         super(context, attrs);
         instance = this;
+        getSettings().setMediaPlaybackRequiresUserGesture(false);
         if (Build.VERSION.SDK_INT >= 26) {
             // Don't let the system lower the page's process priority when it is not on screen
             setRendererPriorityPolicy(RENDERER_PRIORITY_IMPORTANT, false);

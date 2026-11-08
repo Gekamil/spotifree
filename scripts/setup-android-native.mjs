@@ -63,7 +63,22 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
 ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
         super.onCreate(savedInstanceState);
+        configureWebView();
         handleIncomingIntent(getIntent());
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        configureWebView();
+    }
+
+    private void configureWebView() {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override

@@ -649,21 +649,53 @@ async function playMediaId(mediaId: string) {
 /** "Hey Google, play <x> on Spotifree": your playlists first, then any song / playlist */
 export async function playVoiceSearch(query: string) {
   const q = query.trim().toLowerCase();
-  const st = useSpotifyDataStore.getState();
+  let st = useSpotifyDataStore.getState();
+
+  // If store is still hydrating on cold start, wait briefly up to ~1.2s
+  if (st.isLoading || (!st.playlists?.length && typeof window !== 'undefined')) {
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+      st = useSpotifyDataStore.getState();
+      if (!st.isLoading && (st.playlists?.length || 0) > 0) break;
+    }
+  }
+
   if (!q) {
-    // "Play music": continue, or the most recent list, or Liked Songs
+    // "Play music": continue, or the most recent list, or Liked Songs, or any library playlist
     const player = usePlayerStore.getState();
     if (player.currentTrack) {
       if (!player.isPlaying) player.togglePlay();
       return;
     }
-    const first = readRecent()[0] || 'liked-songs';
-    const tracks = await loadPlaylistTracks(first);
-    if (tracks.length) {
-      playList(tracks, tracks[0], first);
+
+    // 1. Try most recently listened playlist / context
+    const recentId = readRecent()[0];
+    if (recentId) {
+      const recentTracks = await loadPlaylistTracks(recentId);
+      if (recentTracks.length) {
+        playList(recentTracks, recentTracks[0], recentId);
+        return;
+      }
+    }
+
+    // 2. Try Liked Songs
+    const likedTracks = await loadPlaylistTracks('liked-songs');
+    if (likedTracks.length) {
+      playList(likedTracks, likedTracks[0], 'liked-songs');
       return;
     }
-    // Fallback: If library is currently empty, play popular / top tracks
+
+    // 3. Try any available playlist in user library with songs
+    for (const pl of st.playlists || []) {
+      if (!pl || pl.id === 'liked-songs') continue;
+      const tracks = tracksOf(pl).length ? tracksOf(pl) : await loadPlaylistTracks(pl.id);
+      if (tracks.length > 0) {
+        playList(tracks, tracks[0], pl.id);
+        return;
+      }
+    }
+
+    // 4. Fallback: If library is currently empty, play popular / top tracks
     const topResults = await runSearch('Top Hits').catch(() => null);
     if (topResults?.tracks?.length) {
       playList(topResults.tracks, topResults.tracks[0]);

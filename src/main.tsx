@@ -9,6 +9,12 @@ import { initNativeAudioFx } from './services/nativeAudioFx';
 import { startSettingsSync, SETTINGS_SYNCED_EVENT } from './services/settingsSync';
 import { useLanguageStore } from './utils/i18n';
 import { EQ_CHANGED_EVENT } from './utils/eqSettings';
+import { audioEngine } from './services/audioEngine';
+
+// Ensure audioEngine is immediately available for native media / routine playback
+if (typeof window !== 'undefined') {
+  (window as any).__audioEngine = audioEngine;
+}
 
 // Whole-interface English/Spanish switch (Settings → Language)
 initDomTranslator();
