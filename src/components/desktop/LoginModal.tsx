@@ -5,6 +5,7 @@ import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 
 export const LoginModal: React.FC = () => {
   const { isLoginModalOpen, closeLoginModal } = useUIStore();
+  const [spotifyStep, setSpotifyStep] = React.useState(false);
 
   if (!isLoginModalOpen) return null;
 
@@ -38,11 +39,20 @@ export const LoginModal: React.FC = () => {
 
         {/* Modal Body */}
         <div className="px-6 pb-6 pt-2 space-y-4">
-          <NativeSpotifyLoginButton onDone={() => setTimeout(closeLoginModal, 400)} />
-          <SpotifreeAuthCard
-            showCookieInput={false}
-            onAuthSuccess={() => setTimeout(closeLoginModal, 600)}
+          <NativeSpotifyLoginButton
+            onAskAccount={() => setSpotifyStep(true)}
+            onDone={() => {
+              setSpotifyStep(false);
+              setTimeout(closeLoginModal, 400);
+            }}
           />
+          {/* While the Spotify step asks for email + password, its own form is the only one */}
+          {!spotifyStep && (
+            <SpotifreeAuthCard
+              showCookieInput={false}
+              onAuthSuccess={() => setTimeout(closeLoginModal, 600)}
+            />
+          )}
         </div>
       </div>
     </div>

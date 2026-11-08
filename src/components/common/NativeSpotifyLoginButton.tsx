@@ -1,15 +1,29 @@
 import { useState } from 'react';
 import { isNativeSpotifyLoginAvailable, loginWithSpotifyNative } from '../../services/nativeSpotifyLogin';
+import { getSavedSpotifreeAccount, syncSpotifreeAccount } from '../../services/spotifreeAuth';
 import { showGlobalToast } from '../../utils/globalToast';
 import { useLanguageStore } from '../../utils/i18n';
+import { SpotifreeAuthCard } from './SpotifreeAuthCard';
 
 /**
- * "Continuar con Spotify" (APK only): opens Spotify's own login inside the app and loads the
- * account automatically. Renders nothing on the web, where the cookie is still pasted by hand.
+ * "Continuar con Spotify" (APK only): opens Spotify's own login inside the app and picks up the
+ * session cookie automatically. Then, if there is no Spotifree account yet, it asks for an email
+ * and password (like everyone else) so the same account, with its Spotify session, also works on
+ * the web. Renders nothing on the web, where the cookie is still pasted by hand.
  */
-export function NativeSpotifyLoginButton({ onDone, compact = false }: { onDone?: () => void; compact?: boolean }) {
+export function NativeSpotifyLoginButton({
+  onDone,
+  onAskAccount,
+  compact = false,
+}: {
+  onDone?: () => void;
+  /** The email + password step is showing (a screen can hide its own login form meanwhile) */
+  onAskAccount?: () => void;
+  compact?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [askAccount, setAskAccount] = useState(false);
   const en = useLanguageStore((s) => s.language) === 'en';
   if (!isNativeSpotifyLoginAvailable()) return null;
 
@@ -18,8 +32,12 @@ export function NativeSpotifyLoginButton({ onDone, compact = false }: { onDone?:
     setBusy(true);
     try {
       const { name } = await loginWithSpotifyNative(en ? 'en' : 'es');
-      showGlobalToast(en ? `Signed in${name ? ` as ${name}` : ''}` : `Sesión iniciada${name ? ` como ${name}` : ''}`);
-      onDone?.();
+      showGlobalToast(en ? `Spotify connected${name ? ` as ${name}` : ''}` : `Spotify conectado${name ? ` como ${name}` : ''}`);
+      // No Spotifree account yet: ask for email + password so the session also works on the web
+      if (!getSavedSpotifreeAccount()) {
+        setAskAccount(true);
+        onAskAccount?.();
+      } else onDone?.();
     } catch (e: any) {
       const msg = String(e?.message || e || '');
       if (!/cancel/i.test(msg)) setError(msg || (en ? 'Could not sign in.' : 'No se pudo iniciar sesión.'));
@@ -27,6 +45,37 @@ export function NativeSpotifyLoginButton({ onDone, compact = false }: { onDone?:
       setBusy(false);
     }
   };
+
+  if (askAccount) {
+    return (
+      <div translate="no" className="w-full rounded-xl bg-[#1f1f1f] border border-white/10 p-4 space-y-3 animate-in fade-in zoom-in-95 duration-200">
+        <div>
+          <p className="text-[15px] font-bold text-white">{en ? 'Last step: your Spotifree account' : 'Último paso: tu cuenta de Spotifree'}</p>
+          <p className="mt-1 text-[12px] text-[#a7a7a7] leading-snug">
+            {en
+              ? 'Your Spotify session is linked. Choose an email and password to sign in with the same account on the web.'
+              : 'Tu sesión de Spotify ya está vinculada. Elige un correo y una contraseña para entrar con la misma cuenta desde la web.'}
+          </p>
+        </div>
+        <SpotifreeAuthCard
+          showCookieInput={false}
+          initialMode="register"
+          onAuthSuccess={async () => {
+            // The freshly extracted cookie wins over an older one saved in the cloud
+            const acc = getSavedSpotifreeAccount();
+            const cookie = window.localStorage.getItem('user_spotify_cookie') || '';
+            if (acc && cookie) {
+              try {
+                await syncSpotifreeAccount({ email: acc.email, uid: acc.uid, spotifyCookie: cookie });
+              } catch {}
+            }
+            setAskAccount(false);
+            onDone?.();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div translate="no" className="w-full">
