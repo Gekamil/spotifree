@@ -3021,6 +3021,10 @@ class AudioEngine {
   }
 
   public getEffectiveVolume(): number {
+    // Muted or at zero: really silent everywhere (song changes call unMute() on the players and
+    // the DJ ducking kept a 2 % floor, so "zero" still let some sound through)
+    const st = usePlayerStore.getState();
+    if (st.isMuted || st.volume <= 0.001) return 0;
     if (this.currentFadingVolume !== null) {
       return this.currentFadingVolume;
     }
@@ -3082,12 +3086,19 @@ class AudioEngine {
   }
 
   public setMuted(muted: boolean) {
-    if (this.ytPlayer && typeof this.ytPlayer.mute === 'function') {
+    // Every deck, not only the main one (the DJ / crossfade deck kept playing)
+    const players = [this.ytPlayer, this.secondaryYtPlayer, ...(Array.isArray(this.ytPlayers) ? this.ytPlayers : [])];
+    for (const p of new Set(players)) {
+      if (!p) continue;
       try {
-        muted ? this.ytPlayer.mute() : this.ytPlayer.unMute();
+        if (muted && typeof p.mute === 'function') p.mute();
+        else if (!muted && typeof p.unMute === 'function') p.unMute();
       } catch {}
     }
-    this.audio.muted = muted;
+    for (const a of [this.audio, this.secondaryAudio, ...(Array.isArray(this.audios) ? this.audios : [])]) {
+      if (a) a.muted = muted;
+    }
+    this.applyCurrentVolume();
   }
 
   public setEqualizerBand(index: number, gainDb: number) {

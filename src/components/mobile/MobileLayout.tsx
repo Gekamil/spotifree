@@ -320,6 +320,11 @@ export const MobileLayout: React.FC = () => {
 
   const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
   const sfMixes = useSpotifreeMixes((s) => s.mixes);
+  // "Mostrar todo" of a Home section (a grid page; closes when leaving Home)
+  const [seeAllShelf, setSeeAllShelf] = useState<{ title: string; prefix?: string; cards: Array<{ id: string; title: string; subtitle: string; image: string }> } | null>(null);
+  useEffect(() => {
+    if (mobileTab !== 'home') setSeeAllShelf(null);
+  }, [mobileTab]);
   const { openLoginModal } = useUIStore();
 
   const handleCreatePlaylist = (name: string) => {
@@ -506,8 +511,47 @@ export const MobileLayout: React.FC = () => {
     >
       {/* Scrollable Center Content */}
       <div data-mobile-scroll className={`flex-1 overflow-y-auto overflow-x-hidden ${mobileTab === 'dj' ? 'pb-0' : 'pb-32'}`}>
+        {/* HOME → "Mostrar todo" of a section: the whole section in a grid */}
+        {mobileTab === 'home' && seeAllShelf && (
+          <div className="min-h-full spf-page-push pb-6">
+            <div className="sticky top-0 z-20 px-2 pt-2 pb-2 bg-[#121212]/95 backdrop-blur-md flex items-center gap-2">
+              <button
+                onClick={() => setSeeAllShelf(null)}
+                className="w-10 h-10 flex items-center justify-center rounded-full active:bg-white/10 cursor-pointer"
+                aria-label="Volver"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M15.957 2.793a1 1 0 0 1 0 1.414L8.164 12l7.793 7.793a1 1 0 1 1-1.414 1.414L5.336 12l9.207-9.207a1 1 0 0 1 1.414 0z" />
+                </svg>
+              </button>
+              <div className="min-w-0">
+                {seeAllShelf.prefix && <p className="text-[11px] font-semibold text-[#a7a7a7] leading-none">{seeAllShelf.prefix}</p>}
+                <h2 className="text-lg font-black tracking-tight font-['SpotifyMixUITitle'] truncate">{seeAllShelf.title}</h2>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-5 px-4 pt-3 spf-stagger">
+              {seeAllShelf.cards.map((card) => {
+                const round = card.id.startsWith('art-') || /^artista$/i.test(stripHtml(card.subtitle));
+                return (
+                  <button
+                    key={card.id}
+                    onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
+                    className="text-left active:scale-[0.97] transition-transform cursor-pointer"
+                  >
+                    <div className={`aspect-square w-full overflow-hidden bg-[#242424] shadow-lg ${round ? 'rounded-full' : 'rounded-md'}`}>
+                      <img src={card.image} alt={card.title} onError={handleImageError} referrerPolicy="no-referrer" loading="lazy" className="w-full h-full object-cover" />
+                    </div>
+                    <p className={`mt-2 text-[13px] font-bold text-white line-clamp-1 ${round ? 'text-center' : ''}`}>{card.title}</p>
+                    <p className={`text-xs text-[#a7a7a7] line-clamp-2 leading-snug ${round ? 'text-center' : ''}`}>{stripHtml(card.subtitle)}</p>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* TAB 1: HOME */}
-        {mobileTab === 'home' && (
+        {mobileTab === 'home' && !seeAllShelf && (
           <div
             className="min-h-full transition-colors duration-500 spf-page-enter"
             style={{
@@ -607,11 +651,8 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Top Bar: Beta Badge on left, Three Dots Menu on right (Photo 7) */}
-                    <div className="flex items-center justify-between relative z-20 w-full mb-2">
-                      <span className="bg-black/40 backdrop-blur-md text-[11px] font-bold text-white px-2.5 py-0.5 rounded-full border border-white/10 uppercase tracking-wider">
-                        Beta
-                      </span>
+                    {/* Top Bar: three dots menu on the right */}
+                    <div className="flex items-center justify-end relative z-20 w-full mb-2">
                       <div className="text-white/80 p-1">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                           <circle cx="12" cy="5" r="2" />
@@ -640,7 +681,14 @@ export const MobileLayout: React.FC = () => {
                         maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
                       }}
                     >
-                      <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700">
+                      <div
+                        className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700"
+                        // Round fade: no translucent square from the canvas corners while it spins
+                        style={{
+                          WebkitMaskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                          maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                        }}
+                      >
                         <SpotifyDJVisualizer size={210} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
                       </div>
                     </div>
@@ -694,15 +742,30 @@ export const MobileLayout: React.FC = () => {
 
                     return (
                       <div key={shelf.id} className="space-y-2.5">
-                        <div>
-                          {shelf.prefix && (
-                            <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block mb-0.5">
-                              {shelf.prefix}
-                            </span>
+                        <div className="flex items-end justify-between gap-3">
+                          <div className="min-w-0">
+                            {shelf.prefix && (
+                              <span className="text-[11px] font-bold text-[#b3b3b3] uppercase tracking-wider block mb-0.5">
+                                {shelf.prefix}
+                              </span>
+                            )}
+                            <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+                              {shelf.title}
+                            </h3>
+                          </div>
+                          {shelf.cards.length > 6 && (
+                            <button
+                              onClick={() => {
+                                setSeeAllShelf({ title: shelf.title, prefix: shelf.prefix, cards: shelf.cards });
+                                try {
+                                  document.querySelector('[data-mobile-scroll]')?.scrollTo({ top: 0 });
+                                } catch {}
+                              }}
+                              className="text-[13px] font-bold text-[#b3b3b3] active:text-white shrink-0 pb-0.5 cursor-pointer"
+                            >
+                              Mostrar todo
+                            </button>
                           )}
-                          <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
-                            {shelf.title}
-                          </h3>
                         </div>
 
                         {isSingleCard ? (

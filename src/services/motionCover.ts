@@ -147,16 +147,6 @@ async function appleAlbumId(t: Track): Promise<string | null> {
   return t.album?.name ? albumFromArtistCatalogue(artist, t.album.name) : null;
 }
 
-/** The song's own Spotify Canvas (looping video), used when Apple has no animated cover */
-async function canvasFor(t: Track): Promise<MotionCover | null> {
-  try {
-    const { fetchTrackCanvas } = await import('./spotifyApi');
-    const url = await fetchTrackCanvas(t.id, t.name, t.artists?.[0]?.name);
-    return url ? { video: url, poster: null, kind: 'mp4' } : null;
-  } catch {
-    return null;
-  }
-}
 
 /** Apple Music animated cover of the track's album (cached per album), or null */
 function appleMotion(t: Track): Promise<MotionCover | null> {
@@ -192,10 +182,10 @@ function appleMotion(t: Track): Promise<MotionCover | null> {
 }
 
 /**
- * Moving cover for the playing song: the album's Apple Music animated cover, or else the
- * song's own Spotify Canvas (e.g. the eye of Bad Bunny's "EoO"), or null.
+ * Moving cover for the playing song: only the album's Apple Music animated cover (the Spotify
+ * Canvas has its own button in the player, so it is not repeated here), or null.
  */
 export async function getMotionCover(t: Track | null | undefined): Promise<MotionCover | null> {
   if (!t?.name || !t.artists?.[0]?.name) return null;
-  return (await appleMotion(t)) || (await canvasFor(t));
+  return appleMotion(t);
 }

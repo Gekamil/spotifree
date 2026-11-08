@@ -14,7 +14,7 @@ import {
   LyricsNativeIcon,
   QueueNativeIcon,
   DeviceNativeIcon,
-  VolumeNativeIcon,
+  VolumeLevelNativeIcon,
   FullscreenNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -484,9 +484,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           <button
             onClick={toggleMute}
             className="text-[#b3b3b3] hover:text-white transition-colors p-1"
-            title={isMuted ? "Reactivar audio" : "Silenciar"}
+            title={isMuted || volume <= 0.001 ? 'Reactivar audio' : 'Silenciar'}
+            aria-pressed={isMuted}
           >
-            <VolumeNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
+            <VolumeLevelNativeIcon size={16} level={volume} muted={isMuted} className="text-[#b3b3b3] hover:text-white" />
           </button>
 
           <div

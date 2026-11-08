@@ -4,6 +4,7 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import type { FeedCard } from '../../data/liveUserFeed';
 import { toHDImage } from '../../utils/formatters';
+import { getArtistPicture } from '../../utils/artistImage';
 
 function cleanSubtitle(text?: string): string {
   if (!text) return '';
@@ -34,9 +35,11 @@ const CarouselCard: React.FC<{
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [radioBgColor, setRadioBgColor] = useState<string | null>(null);
+  const [retriedArtist, setRetriedArtist] = useState(false);
   const imgRef = useRef<HTMLImageElement>(null);
 
-  const isArtist = card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || (card as any).isArtist;
+  const isArtist =
+    card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || card.id.startsWith('art-') || (card as any).isArtist;
   const isRadioCard = card.image?.includes('/img/radio/') || card.id.startsWith('rad-') || (card as any).isRadio;
   const hasValidImage = !!card.image && card.image.trim().length > 0 && !imageError;
 
@@ -62,6 +65,7 @@ const CarouselCard: React.FC<{
 
   useEffect(() => {
     setImageError(false);
+    setRetriedArtist(false);
     if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
       handleImageLoad();
     }
@@ -108,6 +112,23 @@ const CarouselCard: React.FC<{
               referrerPolicy="no-referrer"
               onLoad={handleImageLoad}
               onError={() => {
+                // An artist whose photo link stopped working: their real photo, looked up once
+                if (isArtist && !retriedArtist && card.title) {
+                  setRetriedArtist(true);
+                  getArtistPicture(card.title)
+                    .then((url) => {
+                      if (url && imgRef.current && url !== imgRef.current.src) imgRef.current.src = url;
+                      else {
+                        setImageError(true);
+                        setImageLoaded(false);
+                      }
+                    })
+                    .catch(() => {
+                      setImageError(true);
+                      setImageLoaded(false);
+                    });
+                  return;
+                }
                 setImageError(true);
                 setImageLoaded(false);
               }}

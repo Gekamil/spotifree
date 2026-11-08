@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { getArtistPicture } from '../../utils/artistImage';
 import { MotionCover } from '../common/MotionCover';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -146,11 +147,13 @@ function getArtistInfo(artistName: string = '', fallbackImage?: string) {
     };
   }
 
+  // Unknown artist: no invented numbers, and never another artist's photo (the song's cover
+  // until the real artist photo arrives)
   return {
     name: artistName || 'Artista',
-    listeners: '12.450.800 oyentes mensuales',
-    image: fallbackImage || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
-    bio: `${artistName} es uno de los artistas destacados en las listas de éxitos mundiales, con millones de oyentes mensuales en Spotify.`,
+    listeners: '',
+    image: fallbackImage || '',
+    bio: 'Toca para ver su perfil: canciones populares, álbumes y más.',
   };
 }
 
@@ -244,7 +247,28 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
   const primaryArtist = currentTrack?.artists?.[0]?.name || '';
   const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
-  const artistInfo = getArtistInfo(primaryArtist, hdCover);
+  const artistInfoBase = getArtistInfo(primaryArtist, hdCover);
+  // The artist's real photo (looked up, cached); some hard-coded links had stopped working
+  const [artistPhoto, setArtistPhoto] = useState<string | null>(null);
+  const [artistPhotoFailed, setArtistPhotoFailed] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    setArtistPhoto(null);
+    setArtistPhotoFailed(false);
+    if (!primaryArtist) return;
+    getArtistPicture(primaryArtist)
+      .then((url) => {
+        if (alive && url) setArtistPhoto(url);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [primaryArtist]);
+  const artistInfo = {
+    ...artistInfoBase,
+    image: (!artistPhotoFailed && artistPhoto) || artistInfoBase.image || hdCover || '',
+  };
 
   // Extract real dynamic dominant artwork color with seamless gradient
   useEffect(() => {
@@ -692,11 +716,20 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               className="rounded-xl overflow-hidden bg-[#1f1f1f] shadow-lg relative group cursor-pointer hover:bg-[#252525] transition-colors"
             >
               <div className="relative h-44 w-full overflow-hidden bg-[#282828]">
-                <img
-                  src={toHDImage(artistInfo.image)}
-                  alt={artistInfo.name}
-                  className="w-full h-full object-cover group-hover:scale-104 transition-transform duration-500"
-                />
+                {artistInfo.image ? (
+                  <img
+                    key={artistInfo.image}
+                    src={toHDImage(artistInfo.image)}
+                    alt={artistInfo.name}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      // Broken photo: fall back to the song's cover (never a broken-image icon)
+                      if (artistPhoto && !artistPhotoFailed) setArtistPhotoFailed(true);
+                      else if (hdCover && (e.currentTarget as HTMLImageElement).src !== hdCover) (e.currentTarget as HTMLImageElement).src = hdCover;
+                    }}
+                    className="w-full h-full object-cover object-top group-hover:scale-104 transition-transform duration-500"
+                  />
+                ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-[#1f1f1f] via-transparent to-transparent" />
                 <span className="absolute top-3 left-3 text-xs font-bold text-white bg-black/60 backdrop-blur-sm px-2.5 py-1 rounded">
                   Información sobre el artista
@@ -709,9 +742,11 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                     <h4 className="font-bold text-lg text-white hover:underline cursor-pointer">
                       {artistInfo.name}
                     </h4>
-                    <p className="text-xs text-[#b3b3b3] mt-0.5">
-                      {artistInfo.listeners}
-                    </p>
+                    {artistInfo.listeners && (
+                      <p className="text-xs text-[#b3b3b3] mt-0.5">
+                        {artistInfo.listeners}
+                      </p>
+                    )}
                   </div>
                   <button
                     onClick={(e) => {

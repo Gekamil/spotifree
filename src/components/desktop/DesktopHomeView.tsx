@@ -10,6 +10,7 @@ import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
+import { getArtistPicture } from '../../utils/artistImage';
 import { stripHtml, toHDImage } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
@@ -29,6 +30,88 @@ const DEFAULT_SHORTCUTS = [
 interface DesktopHomeViewProps {
   onSelectPlaylistById: (id: string) => void;
 }
+
+type HomeCard = { id: string; title: string; subtitle: string; image: string; video?: string | null };
+type HomeShelf = { id: string; title: string; prefix?: string; subtitle?: string; cards: HomeCard[]; hasSeeAll?: boolean };
+type HomeBlock =
+  | { kind: 'shelf'; shelf: HomeShelf }
+  | { kind: 'spotlight'; key: string; items: Array<{ label: string; card: HomeCard }> };
+
+/**
+ * Sections with 1-2 cards become "featured" wide cards instead of an almost empty row; several
+ * of them in a row are grouped together (two per line).
+ */
+function groupHomeShelves(shelves: HomeShelf[]): HomeBlock[] {
+  const out: HomeBlock[] = [];
+  for (const s of shelves) {
+    if (s.cards.length >= 3) {
+      out.push({ kind: 'shelf', shelf: s });
+      continue;
+    }
+    const items = s.cards.map((card) => ({ label: [s.prefix, s.title].filter(Boolean).join(' '), card }));
+    const last = out[out.length - 1];
+    if (last && last.kind === 'spotlight') last.items.push(...items);
+    else out.push({ kind: 'spotlight', key: `spot-${s.id}`, items });
+  }
+  return out;
+}
+
+/** Wide featured card: big cover (round for artists) over its own blurred image or video */
+const SpotlightCard: React.FC<{ label: string; card: HomeCard; playing: boolean; onOpen: () => void; onPlay: () => void }> = ({
+  label,
+  card,
+  playing,
+  onOpen,
+  onPlay,
+}) => {
+  const isArtist = card.id.startsWith('art-') || card.id.startsWith('artist-') || /^artista$/i.test(stripHtml(card.subtitle));
+  // An artist without a picture (or whose link broke): their real photo
+  const [artistPhoto, setArtistPhoto] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isArtist || card.image) return;
+    let alive = true;
+    getArtistPicture(card.title).then((u) => alive && u && setArtistPhoto(u)).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isArtist, card.image, card.title]);
+  const img = toHDImage(card.image || artistPhoto || '');
+  return (
+    <div
+      onClick={onOpen}
+      className="relative h-[184px] rounded-xl overflow-hidden cursor-pointer group bg-[#1f1f1f] shadow-lg hover:shadow-2xl transition-shadow"
+    >
+      {card.video ? (
+        <video src={card.video} autoPlay loop muted playsInline className="absolute inset-0 w-full h-full object-cover opacity-60" />
+      ) : img ? (
+        <img src={img} alt="" referrerPolicy="no-referrer" className="absolute inset-0 w-full h-full object-cover scale-125 blur-2xl opacity-60 saturate-150" />
+      ) : null}
+      <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/45 to-black/20 group-hover:from-black/60 transition-colors" />
+      <div className="relative h-full flex items-center gap-5 p-5">
+        <div className={`h-full aspect-square shrink-0 overflow-hidden bg-[#282828] shadow-[0_8px_24px_rgba(0,0,0,0.55)] ${isArtist ? 'rounded-full' : 'rounded-md'}`}>
+          {img ? <img src={img} alt={card.title} onError={handleImageError} referrerPolicy="no-referrer" className="w-full h-full object-cover" /> : null}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-white/70 truncate">{label}</p>
+          <h3 className="mt-1.5 text-2xl font-black text-white tracking-tight leading-tight line-clamp-2 font-['SpotifyMixUITitle']">{card.title}</h3>
+          {card.subtitle && <p className="mt-1.5 text-sm text-white/75 line-clamp-2 leading-snug">{stripHtml(card.subtitle)}</p>}
+        </div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onPlay();
+          }}
+          className={`w-12 h-12 shrink-0 self-end rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-105 active:scale-95 shadow-xl flex items-center justify-center transition-all ${
+            playing ? 'opacity-100' : 'opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0'
+          }`}
+          title={playing ? 'Pausar' : `Reproducir ${card.title}`}
+        >
+          {playing ? <PauseNativeIcon size={20} className="text-black" /> : <PlayNativeIcon size={20} className="text-black ml-0.5" />}
+        </button>
+      </div>
+    </div>
+  );
+};
 
 export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlaylistById }) => {
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);
@@ -298,41 +381,53 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   if (expandedShelf) {
     const shelfAmbientColor = resolveVibrantColor(expandedShelf.id, expandedShelf.title);
     return (
-      <div
-        className="select-none min-h-full pb-20 relative bg-[#121212] p-8 space-y-6 animate-in fade-in duration-200"
-        style={{
-          backgroundColor: shelfAmbientColor,
-          backgroundImage: 'linear-gradient(180deg, rgba(0, 0, 0, 0.52) 0%, rgba(18, 18, 18, 0.88) 240px, #121212 380px)',
-          transition: 'background-color 1.2s cubic-bezier(0.2, 0, 0, 1)',
-        }}
-      >
+      <div className="select-none min-h-full pb-20 relative bg-[#121212] spf-page-push">
+        {/* Only a soft tint at the top, like Spotify's "Mostrar todo" pages */}
+        <div
+          className="absolute inset-x-0 top-0 h-[300px] pointer-events-none"
+          style={{ background: `linear-gradient(180deg, ${shelfAmbientColor}55 0%, ${shelfAmbientColor}14 55%, rgba(18,18,18,0) 100%)` }}
+        />
 
-        {/* Shelf Header - Authentic Spotify layout without redundant in-page back button */}
-        <div className="pt-2 pb-2 relative z-10">
-          {expandedShelf.prefix && (
-            <span className="text-xs uppercase font-bold text-[#b3b3b3] tracking-wider block mb-1">
-              {expandedShelf.prefix}
-            </span>
-          )}
-          <h1 className="text-3xl lg:text-4xl font-black text-white font-['SpotifyMixUITitle']">
-            {expandedShelf.title}
-          </h1>
-          {expandedShelf.subtitle && (
-            <p className="text-sm text-[#b3b3b3] mt-1">{expandedShelf.subtitle}</p>
-          )}
+        <div className="relative z-10 px-6 lg:px-8 pt-6 pb-4 flex items-end gap-4">
+          <button
+            onClick={() => setExpandedShelf(null)}
+            className="w-9 h-9 shrink-0 mb-1 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-colors cursor-pointer"
+            title="Volver"
+            aria-label="Volver"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.56 8l6.47 6.47a.75.75 0 1 1-1.06 1.06L2.44 8 9.97.47a.75.75 0 0 1 1.06 0" />
+            </svg>
+          </button>
+          <div className="min-w-0">
+            {expandedShelf.prefix && (
+              <span className="text-sm font-semibold text-[#b3b3b3] block">{expandedShelf.prefix}</span>
+            )}
+            <h1 className="text-[32px] lg:text-[40px] leading-tight font-black text-white tracking-tight font-['SpotifyMixUITitle'] truncate">
+              {expandedShelf.title}
+            </h1>
+            <p className="text-sm text-[#b3b3b3] mt-0.5">
+              {expandedShelf.subtitle ? `${stripHtml(expandedShelf.subtitle)} · ` : ''}
+              {expandedShelf.cards.length} {expandedShelf.cards.length === 1 ? 'elemento' : 'elementos'}
+            </p>
+          </div>
         </div>
 
-        {/* Full Responsive Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6 pt-2 relative z-10">
+        {/* Grid that fills the width (no fixed columns, no empty half page) */}
+        <div
+          className="relative z-10 grid gap-x-3 gap-y-2 px-4 lg:px-6 pt-2 spf-stagger"
+          style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(172px, 1fr))' }}
+        >
           {expandedShelf.cards.map((card) => {
             const isPlayingThis = isPlaying && currentTrack?.id === card.id;
+            const round = card.id.startsWith('art-') || card.id.startsWith('artist-') || /^artista$/i.test(stripHtml(card.subtitle));
             return (
               <div
                 key={card.id}
                 onClick={() => onSelectPlaylistById(card.id)}
-                className="p-3.5 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col shadow-md hover:shadow-2xl relative"
+                className="p-3 rounded-lg hover:bg-[#1f1f1f] active:bg-[#181818] transition-colors cursor-pointer group flex flex-col relative"
               >
-                <div className="relative aspect-square w-full rounded-md overflow-hidden mb-3 bg-[#242424] shadow-md">
+                <div className={`relative aspect-square w-full overflow-hidden mb-2.5 bg-[#242424] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${round ? 'rounded-full' : 'rounded-md'}`}>
                   {card.image ? (
                     <img
                       src={toHDImage(card.image)}
@@ -370,10 +465,10 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   </button>
                 </div>
 
-                <span className="font-bold text-white text-sm truncate font-['SpotifyMixUI']">
+                <span className={`font-bold text-white text-[15px] truncate font-['SpotifyMixUI'] ${round ? 'text-center' : ''}`}>
                   {card.title}
                 </span>
-                <span className="text-xs text-[#b3b3b3] line-clamp-2 mt-1 leading-snug">
+                <span className={`text-[13px] text-[#a7a7a7] line-clamp-2 mt-0.5 leading-snug ${round ? 'text-center' : ''}`}>
                   {stripHtml(card.subtitle)}
                 </span>
               </div>
@@ -535,11 +630,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 />
               </div>
 
-              {/* Top Bar: Beta Badge on left, Three Dots Menu on right (matching Spotify Photo 6) */}
-              <div className="flex items-center justify-between relative z-20 w-full mb-1">
-                <span className="bg-black/40 backdrop-blur-md text-[11px] font-bold text-white px-2.5 py-0.5 rounded-full border border-white/10 uppercase tracking-wider">
-                  Beta
-                </span>
+              {/* Top Bar: three dots menu on the right */}
+              <div className="flex items-center justify-end relative z-20 w-full mb-1">
                 <div className="text-white/80 p-1 hover:text-white transition-colors cursor-pointer">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                     <circle cx="12" cy="5" r="2" />
@@ -557,7 +649,15 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
                 }}
               >
-                <div className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700">
+                <div
+                  className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 group-hover:opacity-100 group-hover:scale-105 transition-all duration-700"
+                  // Round fade: the ring's glow never reaches the (square) canvas corners, which
+                  // showed as a translucent dark square while it spins
+                  style={{
+                    WebkitMaskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                    maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                  }}
+                >
                   <SpotifyDJVisualizer
                     size={220}
                     state={isPlaying ? 'playing' : 'idle'}
@@ -591,28 +691,44 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
           </section>
         )}
 
-        {/* Dynamic Section Shelves for Current Active Tab */}
-        {currentShelves.map((shelf) => (
-          <DesktopShelfCarousel
-            key={shelf.id}
-            prefix={shelf.prefix}
-            title={shelf.title}
-            subtitle={shelf.subtitle}
-            // A row shows the first 12, like Spotify; "Mostrar todos" opens the whole section
-            items={shelf.cards.slice(0, 12)}
-            onShowAll={shelf.hasSeeAll || shelf.cards.length > 6 ? () => setExpandedShelf(shelf) : undefined}
-            onCardClick={(card) => {
-              onSelectPlaylistById(card.id);
-            }}
-            onPlayClick={(card) => {
-              handleQuickPlay(undefined, {
-                id: card.id,
-                name: card.title,
-                image: card.image,
-              });
-            }}
-          />
-        ))}
+        {/* Dynamic Section Shelves for Current Active Tab. Sections with only 1-2 cards are shown
+            as wide "featured" cards (grouped two per row) instead of an almost empty row. */}
+        {groupHomeShelves(currentShelves).map((block) =>
+          block.kind === 'shelf' ? (
+            <DesktopShelfCarousel
+              key={block.shelf.id}
+              prefix={block.shelf.prefix}
+              title={block.shelf.title}
+              subtitle={block.shelf.subtitle}
+              // A row shows the first 12, like Spotify; "Mostrar todos" opens the whole section
+              items={block.shelf.cards.slice(0, 12)}
+              onShowAll={block.shelf.hasSeeAll || block.shelf.cards.length > 6 ? () => setExpandedShelf(block.shelf) : undefined}
+              onCardClick={(card) => {
+                onSelectPlaylistById(card.id);
+              }}
+              onPlayClick={(card) => {
+                handleQuickPlay(undefined, {
+                  id: card.id,
+                  name: card.title,
+                  image: card.image,
+                });
+              }}
+            />
+          ) : (
+            <section key={block.key} className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {block.items.map(({ label, card }) => (
+                <SpotlightCard
+                  key={`${label}-${card.id}`}
+                  label={label}
+                  card={card}
+                  playing={isPlaying && currentTrack?.id === card.id}
+                  onOpen={() => onSelectPlaylistById(card.id)}
+                  onPlay={() => handleQuickPlay(undefined, { id: card.id, name: card.title, image: card.image })}
+                />
+              ))}
+            </section>
+          )
+        )}
       </div>
     </div>
   );

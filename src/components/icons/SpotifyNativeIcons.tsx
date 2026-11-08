@@ -215,6 +215,32 @@ export const DeviceNativeIcon: React.FC<IconProps> = ({ size = 16, className = '
   </svg>
 );
 
+/** Speaker that shows the volume: X when muted / at zero, one wave when low, two when high */
+export const VolumeLevelNativeIcon: React.FC<IconProps & { level: number; muted?: boolean }> = ({
+  level,
+  muted,
+  size = 16,
+  className = 'text-[#b3b3b3]',
+  ...props
+}) => {
+  const speaker =
+    'M9.741.85a.75.75 0 0 1 .375.65v13a.75.75 0 0 1-1.125.65l-6.925-4a3.64 3.64 0 0 1-1.33-4.967 3.64 3.64 0 0 1 1.33-1.332l6.925-4a.75.75 0 0 1 .75 0zm-6.924 5.3a2.14 2.14 0 0 0 0 3.7l5.8 3.35V2.8z';
+  const silent = muted || level <= 0.001;
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" className={className} {...props}>
+      <path d={speaker} />
+      {silent ? (
+        <path d="M15.53 5.47a.75.75 0 0 0-1.06 0L13.25 6.69l-1.22-1.22a.75.75 0 1 0-1.06 1.06L12.19 7.75l-1.22 1.22a.75.75 0 1 0 1.06 1.06l1.22-1.22 1.22 1.22a.75.75 0 1 0 1.06-1.06L14.31 7.75l1.22-1.22a.75.75 0 0 0 0-1.06" />
+      ) : (
+        <>
+          <path d="M11.5 5.56a2.75 2.75 0 0 1 0 4.88z" />
+          {level > 0.5 && <path d="M11.5 13.614a5.752 5.752 0 0 0 0-11.228v1.55a4.252 4.252 0 0 1 0 8.127z" />}
+        </>
+      )}
+    </svg>
+  );
+};
+
 export const VolumeNativeIcon: React.FC<IconProps> = ({ size = 16, className = 'text-[#b3b3b3]', ...props }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="currentColor" className={className} {...props}>
     <path d="M9.741.85a.75.75 0 0 1 .375.65v13a.75.75 0 0 1-1.125.65l-6.925-4a3.64 3.64 0 0 1-1.33-4.967 3.64 3.64 0 0 1 1.33-1.332l6.925-4a.75.75 0 0 1 .75 0zm-6.924 5.3a2.14 2.14 0 0 0 0 3.7l5.8 3.35V2.8zm8.683 4.29V5.56a2.75 2.75 0 0 1 0 4.88" />
