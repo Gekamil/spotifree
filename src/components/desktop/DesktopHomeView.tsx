@@ -17,14 +17,11 @@ import { useAIDJStore } from '../../services/aiDJService';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
-  { id: 'mix-diario-1', name: 'Mix diario 1', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/daily/1/ab6761610000e5ebba3ed5da785f99ce7ea6fb0b/es', color: '#C45028' },
-  { id: 'romeo-prince', name: 'Romeo & Prince', image: 'https://image-cdn-ak.spotifycdn.com/image/ab67706c0000bebbfd28fd6f3ec5b7002c5649d7', color: '#C45028' },
-  { id: 'my-top-tracks-playlist', name: 'My top tracks playlist', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e02c019056033dfa6c6987f25ceab67616d00001e02d01f410ddd5776121c42bf59', color: '#5E3D82' },
-  { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb804d43e5cc7f6a6d0ac65ffc', color: '#8A654E' },
-  { id: 'radio-prince-royce', name: 'Prince Royce Radio', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/radio/artist/3MHaV05u0io8fQbZ2XPtlC/es', color: '#EAB308' },
-  { id: 'tus-canciones-mas-escuchadas-2025', name: 'Your Top Songs 2025', image: 'https://pickasso.spotifycdn.com/image/ab67c0de0000deef/dt/v1/img/wrapped25/yts/en', color: '#E05A36' },
-  { id: 'random', name: 'Random', image: 'https://mosaic.scdn.co/640/ab67616d00001e0274d62f9a88da68519fa864f4ab67616d00001e027c7a7bfadfaa801d3285455bab67616d00001e0281df105a4f0b2f6b07468179ab67616d00001e02c019056033dfa6c6987f25ce', color: '#2D6852' },
-  { id: 'spidey', name: 'Spidey', image: 'https://i.scdn.co/image/ab67616d000011ebe2e352d89826aef6dbd5ff8f', color: '#D11B24' },
+  { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Éxitos España', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b', color: '#1a4b4c' },
+  { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
+  { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541', color: '#bd2427' },
+  { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
+  { id: '37i9dQZF1DX4JAvHpjipBk', name: 'Novedades Viernes', image: 'https://i.scdn.co/image/ab67706f000000029b48c4df2e2d93e18a994770', color: '#2d4b68' },
 ];
 
 interface DesktopHomeViewProps {

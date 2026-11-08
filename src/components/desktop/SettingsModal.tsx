@@ -210,7 +210,7 @@ export const SettingsModal: React.FC = () => {
                   <p className="font-bold text-xs text-white">Spotify Web Live</p>
                 </div>
                 <p className="text-[11px] text-[#b3b3b3]">
-                  Usuario: <span className="text-white font-semibold">{user?.display_name || 'Jorgeperezvk'}</span>
+                  Usuario: <span className="text-white font-semibold">{user?.display_name || 'Invitado'}</span>
                 </p>
                 <p className="text-[11px] text-[#1ed760]">● Sincronizado en tiempo real</p>
                 <button

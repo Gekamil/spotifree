@@ -1,8 +1,6 @@
 import type { Track } from '../types/spotify';
 import { deduplicateTracks } from './trackDeduplication';
 
-export const JORGE_DEFAULT_USER_ID = 'e6yr34zzwnf1yybcw49po6nrw';
-
 /**
  * Returns the currently active Spotify user ID.
  * Returns 'guest' for unauthenticated visitors so no private user data ever leaks.

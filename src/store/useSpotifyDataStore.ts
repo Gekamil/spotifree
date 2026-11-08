@@ -24,8 +24,6 @@ import { stripHtml } from '../utils/formatters';
 import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage, getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { getPlaylistCover } from '../utils/playlistCover';
-import liveExtractedSession from '../data/liveExtractedSession.json';
-import liveExtractedFeed from '../data/liveExtractedFeed.json';
 
 export const SPOTIFY_DJ_COVER_IMAGE =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="djgrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231ed760"/><stop offset="50%" stop-color="%2300f2fe"/><stop offset="100%" stop-color="%231ed760"/></linearGradient></defs><rect width="300" height="300" fill="%230c52cc"/><circle cx="150" cy="150" r="80" fill="none" stroke="url(%23djgrad)" stroke-width="22" stroke-linecap="round"/><text x="150" y="270" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="900" font-size="26" letter-spacing="4">DJ</text></svg>';
@@ -160,22 +158,16 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
 }
 
 export const DEFAULT_SESSION_USER: UserProfile = {
-  id: liveExtractedSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
-  display_name: liveExtractedSession.user?.display_name || 'Jorgeperezvk',
+  id: 'guest',
+  display_name: 'Invitado',
   images: [],
-  email: 'jorgeperezvk@spotify.com',
+  email: '',
   followers: { total: 0 },
 };
 
-export const DEFAULT_SESSION_PLAYLISTS: Playlist[] = deduplicateUserPlaylists((liveExtractedSession.playlists as any[]) || []);
-export const DEFAULT_SESSION_QUICK_ACCESS = (liveExtractedSession.quickAccessCards as any[]) || [];
+export const DEFAULT_SESSION_PLAYLISTS: Playlist[] = [];
+export const DEFAULT_SESSION_QUICK_ACCESS: Array<{ id: string; name: string; image: string; color: string }> = [];
 export const DEFAULT_SESSION_CACHE: Record<string, Playlist> = {};
-DEFAULT_SESSION_PLAYLISTS.forEach((p) => {
-  DEFAULT_SESSION_CACHE[p.id] = p;
-});
-if ((liveExtractedSession as any).cachedPlaylistDetails) {
-  Object.assign(DEFAULT_SESSION_CACHE, (liveExtractedSession as any).cachedPlaylistDetails);
-}
 
 export interface DynamicShelfCard {
   id: string;
@@ -198,111 +190,84 @@ export interface DynamicShelf {
   hasSeeAll?: boolean;
 }
 
-export function buildExtractedShelves(userName: string = 'Para ti'): DynamicShelf[] {
-  const feed = (Array.isArray(liveExtractedFeed) ? liveExtractedFeed : (liveExtractedFeed as any).shelves || []) as any[];
+export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = [
+  {
+    id: 'shelf-popular-playlists',
+    title: 'Éxitos y novedades',
+    prefix: 'Listas populares',
+    type: 'featured',
+    hasSeeAll: true,
+    cards: [
+      {
+        id: '37i9dQZF1DXcBWIGoYBM5M',
+        title: 'Éxitos España',
+        subtitle: 'Los temas más escuchados en España',
+        image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b',
+      },
+      {
+        id: '37i9dQZF1DX10zKzsJ2jva',
+        title: 'Viva Latino',
+        subtitle: 'Los éxitos latinos que están marcando el ritmo',
+        image: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541',
+      },
+      {
+        id: '37i9dQZF1DWZdsS73T1ogG',
+        title: 'el nuevo urbano',
+        subtitle: 'Lo último de la música urbana y reggaeton',
+        image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426',
+      },
+      {
+        id: '37i9dQZF1DX4JAvHpjipBk',
+        title: 'Novedades Viernes España',
+        subtitle: 'Los mejores lanzamientos de la semana',
+        image: 'https://i.scdn.co/image/ab67706f000000029b48c4df2e2d93e18a994770',
+      },
+      {
+        id: '37i9dQZF1DX2EiUAL7Wdfc',
+        title: 'míticas',
+        subtitle: 'Canciones que nunca pasarán de moda',
+        image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+      },
+      {
+        id: '37i9dQZF1DX5om9DLiq9v8',
+        title: 'Pop con Ñ',
+        subtitle: 'El mejor pop en español',
+        image: 'https://i.scdn.co/image/ab67706f000000028e5d0f666f7f2b1d6e15d862',
+      },
+    ],
+  },
+  {
+    id: 'shelf-top-charts',
+    title: 'Top listas',
+    prefix: 'Rankings',
+    type: 'featured',
+    hasSeeAll: true,
+    cards: [
+      {
+        id: '37i9dQZEVXbNFJfN1Vw8d9',
+        title: 'Top 50: España',
+        subtitle: 'Tu actualización diaria de las canciones más escuchadas en España',
+        image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_es_default.jpg',
+      },
+      {
+        id: '37i9dQZEVXbMDoHDwVN2tF',
+        title: 'Top 50: Global',
+        subtitle: 'Tu actualización diaria de las canciones más escuchadas en el mundo',
+        image: 'https://charts-images.scdn.co/assets/locale_en/regional/daily/region_global_default.jpg',
+      },
+      {
+        id: '37i9dQZEVXbLiRSasKsNU9',
+        title: 'Top Canciones: Viral España',
+        subtitle: 'Las canciones más virales en España',
+        image: 'https://charts-images.scdn.co/assets/locale_en/viral/daily/region_es_default.jpg',
+      },
+    ],
+  },
+];
 
-  const now = new Date();
-  const dayOfWeek = now.getDay(); // 0 = Sunday, 1 = Monday, 5 = Friday, 6 = Saturday
-  const dateNum = now.getDate();
-
-  const processedShelves: DynamicShelf[] = [];
-  const isGuestOrGeneric = !userName || userName === 'Para ti' || userName === 'Jorgeperezvk' || userName === 'Invitado';
-
-  feed.forEach((shelf, idx) => {
-    // Exclude podcast / episodes per user request
-    if (shelf.title.toLowerCase().includes('episodio') || shelf.title.toLowerCase().includes('podcast')) {
-      return;
-    }
-    // Shelf 0 is the raw concatenated list, Shelf 1 is the 8-card "Mixes diarios" for user
-    if (idx === 0) return;
-
-    let title = shelf.title;
-    let prefix: string | undefined = undefined;
-    let type: DynamicShelf['type'] = 'mixes';
-
-    if (title === 'Jorgeperezvk' || title.toLowerCase().includes('jorge')) {
-      title = !isGuestOrGeneric ? userName : 'Para ti';
-      prefix = isGuestOrGeneric
-        ? 'Música recomendada'
-        : dayOfWeek === 0
-        ? 'Tu domingo con'
-        : dayOfWeek === 5 || dayOfWeek === 6
-        ? 'Fin de semana con'
-        : dayOfWeek === 1
-        ? 'Empieza la semana con'
-        : 'Hecho para';
-      type = 'made_for';
-    } else if (title.toLowerCase().includes('romeo')) {
-      prefix = 'Más como';
-      type = 'artist';
-    } else if (title.toLowerCase().includes('reciente') || title.toLowerCase().includes('sumérgete')) {
-      title = dayOfWeek === 0
-        ? 'Lo que has escuchado este finde'
-        : dayOfWeek === 1
-        ? 'Para arrancar el lunes'
-        : 'Recientes';
-      type = 'recent';
-    } else if (title.toLowerCase().includes('novedades populares')) {
-      title = dayOfWeek === 0
-        ? 'Éxitos de tu domingo'
-        : dayOfWeek === 5
-        ? 'Novedades de viernes'
-        : 'Novedades populares';
-      type = 'featured';
-    } else if (title.toLowerCase().includes('emisora') || title.toLowerCase().includes('petando') || title.toLowerCase().includes('urbano')) {
-      type = 'featured';
-    }
-
-    const deletedIds = getDeletedPlaylistIds();
-    const isDJCard = (c: any) =>
-      c.id === 'spotify-dj' ||
-      c.id === 'dj' ||
-      c.id === 'ai-dj' ||
-      (c.title || '').toLowerCase().trim() === 'dj' ||
-      (c.title || '').toLowerCase().includes('spotify dj') ||
-      (c.title || '').toLowerCase() === 'tu dj' ||
-      (c.title || '').toLowerCase().includes('personal dj');
-
-    const cards: DynamicShelfCard[] = shelf.cards
-      .filter((c: any) => !deletedIds.has(c.id) && !isDJCard(c))
-      .map((c: any) => ({
-        id: c.id,
-        title: c.title,
-        subtitle: stripHtml(c.subtitle || '')
-          .replace(/Jorgeperezvk/gi, !isGuestOrGeneric ? userName : 'Spotify')
-          .replace(/Hecha para Jorgeperezvk/gi, 'Hecha para ti'),
-        image: c.image || '',
-        isRadio: c.title.toLowerCase().startsWith('radio') || /radio/i.test(c.subtitle || ''),
-      }));
-
-    if (cards.length > 0) {
-      processedShelves.push({
-        id: `extracted-shelf-${idx}`,
-        title,
-        prefix,
-        type,
-        cards,
-        hasSeeAll: true,
-      });
-    }
-  });
-
-  // Dynamic daily rotation: on Sunday, weekend & chill shelves take priority;
-  // on weekdays, fresh mixes rotate so the home feed feels alive and changes every day
-  if (processedShelves.length > 1) {
-    // Determine rotation offset from day of year / day of week
-    const rotateOffset = dayOfWeek === 0 ? 0 : (dayOfWeek + (dateNum % 3)) % processedShelves.length;
-    const rotated = [
-      ...processedShelves.slice(rotateOffset),
-      ...processedShelves.slice(0, rotateOffset),
-    ];
-    return rotated;
-  }
-
-  return processedShelves;
+export function buildExtractedShelves(_userName: string = 'Para ti'): DynamicShelf[] {
+  return DEFAULT_PUBLIC_SHELVES;
 }
-
-export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = buildExtractedShelves('Para ti');
 
 export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
   {
@@ -336,23 +301,13 @@ export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [
     is_pinned: false,
   } as any,
   {
-    id: '4f0YTBqSbvM1iJpuY9r3yQ',
-    name: 'ZIZI',
-    description: 'Música pop y urbana destacada.',
-    images: [{ url: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31' }],
+    id: '37i9dQZF1DX10zKzsJ2jva',
+    name: 'Viva Latino',
+    description: 'Los éxitos de la música latina.',
+    images: [{ url: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541' }],
     owner: { display_name: 'Spotify', id: 'spotify' },
-    tracks: { total: 40, items: [] },
-    color: '#2e4a52',
-    is_pinned: false,
-  } as any,
-  {
-    id: '7b3MrCWtettvBKlfBSdorn',
-    name: 'J+L(2026)',
-    description: 'Selección de éxitos contemporáneos.',
-    images: [{ url: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000bebb' }],
-    owner: { display_name: 'Spotify', id: 'spotify' },
-    tracks: { total: 35, items: [] },
-    color: '#5a483a',
+    tracks: { total: 50, items: [] },
+    color: '#bd2427',
     is_pinned: false,
   } as any,
 ];
@@ -366,7 +321,7 @@ export function buildDynamicShelves(
   _topArtists: any[] = [],
   _recentlyPlayed: any[] = []
 ): DynamicShelf[] {
-  const displayName = (user?.display_name && user.display_name !== 'Jorgeperezvk') ? user.display_name : 'Para ti';
+  const displayName = user?.display_name || 'Para ti';
   const extracted = buildExtractedShelves(displayName);
 
   const deletedIds = getDeletedPlaylistIds();
@@ -1429,7 +1384,7 @@ const store = create<SpotifyDataState>((set, get) => ({
           });
 
           // Pre-warm initial top tracks in the background so audio playback starts instantaneously
-          const topCandidates = (uniquePlaylists[0]?.tracks?.items || DEFAULT_SESSION_PLAYLISTS[0]?.tracks?.items || []).slice(0, 6);
+          const topCandidates = (uniquePlaylists[0]?.tracks?.items || []).slice(0, 6);
           if (topCandidates.length > 0) {
             import('../services/audioEngine').then(({ audioEngine }) => {
               audioEngine.warmupInitialTracks(topCandidates);

@@ -127,18 +127,14 @@ const store = create<UIState>((set) => ({
       );
     const isEditorialOrAlbum =
       playlist.id.startsWith('37i9dQ') ||
-      playlist.id === '37i9dQZF1DWZdsS73T1ogG' ||
-      playlist.id === '37i9dQZF1DX2EiUAL7Wdfc' ||
-      playlist.id === '4f0YTBqSbvM1iJpuY9r3yQ' ||
-      playlist.id === 'zizi' ||
-      playlist.id === '3x7gz85amxEplGx7LQxE7Z' ||
-      playlist.id === 'romeo-santos' ||
-      playlist.id === 'el-nuevo-urbano' ||
-      playlist.id === 'miticas' ||
       playlist.id === 'nueva-carpeta' ||
       playlist.description?.toLowerCase() === 'artista' ||
       (playlist as any).type === 'artist' ||
       (playlist as any).type === 'album' ||
+      playlist.id.startsWith('art-') ||
+      playlist.id.startsWith('artist-') ||
+      playlist.id.startsWith('alb-') ||
+      playlist.id.startsWith('album-') ||
       playlist.owner?.id === 'spotify' ||
       playlist.owner?.display_name?.toLowerCase() === 'spotify';
 

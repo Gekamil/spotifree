@@ -78,17 +78,17 @@ function parseEmbedHtml(html: string, cleanId: string) {
     };
   });
 
-  const isArtistEntity = entity.type === 'artist' || cleanId === '3x7gz85amxEplGx7LQxE7Z' || cleanId === '5lwmRuXgjX8xIwlnauTZIP';
+  const isArtistEntity = entity.type === 'artist' || cleanId.startsWith('art-') || cleanId.startsWith('artist-');
 
   const playlistData = {
     id: cleanId,
     name: entity.name,
     description: entity.description || (isArtistEntity ? 'Artista' : ''),
-    type: entity.type || (cleanId === '4f0YTBqSbvM1iJpuY9r3yQ' ? 'album' : isArtistEntity ? 'artist' : 'playlist'),
+    type: entity.type || (cleanId.startsWith('alb-') ? 'album' : isArtistEntity ? 'artist' : 'playlist'),
     images: [{ url: coverUrl }],
     owner: {
-      display_name: isArtistEntity ? 'Spotify' : (entity.type === 'album' && entity.subtitle ? entity.subtitle : (entity.owner?.name || (cleanId === '7b3MrCWtettvBKlfBSdorn' ? 'Jorgeperezvk' : 'Spotify'))),
-      id: isArtistEntity ? 'spotify' : (cleanId === '7b3MrCWtettvBKlfBSdorn' ? 'user' : (entity.owner?.id || 'spotify')),
+      display_name: isArtistEntity ? 'Spotify' : (entity.type === 'album' && entity.subtitle ? entity.subtitle : (entity.owner?.name || 'Spotify')),
+      id: isArtistEntity ? 'spotify' : (entity.owner?.id || 'spotify'),
     },
     color: '#303030',
     tracks: {
@@ -104,28 +104,13 @@ function parseEmbedHtml(html: string, cleanId: string) {
 const ID_ALIASES: Record<string, string> = {
   'el-nuevo-urbano': '37i9dQZF1DWZdsS73T1ogG',
   '37i9dQZF1DWZdsS73T1ogG': '37i9dQZF1DWZdsS73T1ogG',
-  'jl-2026': '7b3MrCWtettvBKlfBSdorn',
-  'j-l-2026': '7b3MrCWtettvBKlfBSdorn',
-  'j-l-2026-': '7b3MrCWtettvBKlfBSdorn',
-  '7b3MrCWtettvBKlfBSdorn': '7b3MrCWtettvBKlfBSdorn',
-  'zizi': '4f0YTBqSbvM1iJpuY9r3yQ',
-  '4f0YTBqSbvM1iJpuY9r3yQ': '4f0YTBqSbvM1iJpuY9r3yQ',
   'miticas': '37i9dQZF1DX2EiUAL7Wdfc',
   '37i9dQZF1DX2EiUAL7Wdfc': '37i9dQZF1DX2EiUAL7Wdfc',
   'mix-diario-1': '37i9dQZF1E35QYVMBRlDph',
   'daily-mix-1': '37i9dQZF1E35QYVMBRlDph',
   '37i9dQZF1E35QYVMBRlDph': '37i9dQZF1E35QYVMBRlDph',
-  'romeo---prince': '43GWp9FbN9nHihudedyVQM',
-  'romeo-prince': '43GWp9FbN9nHihudedyVQM',
-  '43GWp9FbN9nHihudedyVQM': '43GWp9FbN9nHihudedyVQM',
-  '--nuestro-amor----2024-25-': '7HsL4sBaR3dJMa0UJ5e4zG',
-  'nuestro-amor': '7HsL4sBaR3dJMa0UJ5e4zG',
-  '7HsL4sBaR3dJMa0UJ5e4zG': '7HsL4sBaR3dJMa0UJ5e4zG',
   'tus-canciones-m-s-escuchadas-en-2025': 'tus-canciones-mas-escuchadas-2025',
   'tus-canciones-mas-escuchadas-2025': 'tus-canciones-mas-escuchadas-2025',
-  'romeo-santos': '5lwmRuXgjX8xIwlnauTZIP',
-  '3x7gz85amxEplGx7LQxE7Z': '3x7gz85amxEplGx7LQxE7Z',
-  '5lwmRuXgjX8xIwlnauTZIP': '5lwmRuXgjX8xIwlnauTZIP',
   'trueno': '1fctva4iZegL9J1oVff86V',
   '1fctva4iZegL9J1oVff86V': '1fctva4iZegL9J1oVff86V',
   'boza': '0b53P1eMhI1j9vKxR9sXF4',
@@ -161,7 +146,7 @@ async function scrapeSpotifyEmbed(playlistId: string) {
       name: 'Nueva carpeta',
       description: 'Carpeta',
       images: [],
-      owner: { display_name: 'Jorgeperezvk', id: 'user' },
+      owner: { display_name: 'Usuario', id: 'user' },
       color: '#282828',
       tracks: { total: 0, items: [] },
     };
@@ -197,9 +182,7 @@ async function scrapeSpotifyEmbed(playlistId: string) {
       const match =
         allTracks[cleanId] ||
         allTracks[canonicalId] ||
-        (canonicalId === '7b3MrCWtettvBKlfBSdorn' && (allTracks['jl-2026'] || allTracks['j-l-2026'])) ||
         (canonicalId === '37i9dQZF1DWZdsS73T1ogG' && allTracks['el-nuevo-urbano']) ||
-        (canonicalId === '4f0YTBqSbvM1iJpuY9r3yQ' && allTracks['zizi']) ||
         (canonicalId === '37i9dQZF1DX2EiUAL7Wdfc' && allTracks['miticas']) ||
         (canonicalId === '37i9dQZF1E35QYVMBRlDph' && (allTracks['mix-diario-1'] || allTracks['daily-mix-1']));
 
@@ -209,11 +192,11 @@ async function scrapeSpotifyEmbed(playlistId: string) {
           id: cleanId,
           name: match.name,
           description: match.description || '',
-          type: match.type || (cleanId === '4f0YTBqSbvM1iJpuY9r3yQ' ? 'album' : cleanId === '3x7gz85amxEplGx7LQxE7Z' ? 'artist' : 'playlist'),
+          type: match.type || (cleanId.startsWith('alb-') ? 'album' : cleanId.startsWith('art-') ? 'artist' : 'playlist'),
           images: [{ url: coverImg }],
           owner: {
-            display_name: match.owner?.display_name || (typeof match.owner === 'string' ? match.owner : canonicalId === '7b3MrCWtettvBKlfBSdorn' ? 'Jorgeperezvk' : 'Spotify'),
-            id: (canonicalId === '7b3MrCWtettvBKlfBSdorn' || canonicalId === '7HsL4sBaR3dJMa0UJ5e4zG') ? 'user' : (match.owner?.id || 'spotify'),
+            display_name: match.owner?.display_name || (typeof match.owner === 'string' ? match.owner : 'Spotify'),
+            id: match.owner?.id || 'spotify',
           },
           color: match.color || '#303030',
           tracks: {
@@ -237,8 +220,6 @@ async function scrapeSpotifyEmbed(playlistId: string) {
 
   // 3. Fallback to Spotify embed via HTTP fetch (clean, headless, zero browser tabs)
   const KNOWN_ARTIST_IDS = new Set([
-    '5lwmRuXgjX8xIwlnauTZIP', // Romeo Santos
-    '3x7gz85amxEplGx7LQxE7Z',
     '1fctva4iZegL9J1oVff86V', // Trueno
     '0b53P1eMhI1j9vKxR9sXF4', // Boza
     '4q3ewBCX7sLwd24euqV69X', // Bad Bunny
@@ -253,7 +234,6 @@ async function scrapeSpotifyEmbed(playlistId: string) {
   const isArtistEntity =
     KNOWN_ARTIST_IDS.has(cleanEmbedId) ||
     KNOWN_ARTIST_IDS.has(lookupId) ||
-    lookupId === 'romeo-santos' ||
     lookupId === 'trueno' ||
     lookupId === 'boza' ||
     lookupId === 'ozuna' ||
@@ -261,7 +241,7 @@ async function scrapeSpotifyEmbed(playlistId: string) {
     lookupId === 'feid' ||
     lookupId.startsWith('art-') ||
     lookupId.startsWith('artist-');
-  const isAlbum = lookupId === '4f0YTBqSbvM1iJpuY9r3yQ' || lookupId.startsWith('alb-');
+  const isAlbum = lookupId.startsWith('alb-');
   const embedType = isArtistEntity ? 'artist' : isAlbum ? 'album' : 'playlist';
   const url = `https://open.spotify.com/embed/${embedType}/${cleanEmbedId}`;
 
@@ -359,7 +339,7 @@ async function extractLiveFeedFromSpotify() {
       // 1. User
       const userBtn = doc.querySelector('[data-testid="user-widget-link"]') ||
                       doc.querySelector('[data-testid="username-first-letter"]');
-      const userName = userBtn ? (userBtn.getAttribute('aria-label') || userBtn.textContent) : 'Jorgeperezvk';
+      const userName = userBtn ? (userBtn.getAttribute('aria-label') || userBtn.textContent) : 'Usuario';
 
       // 2. Playback state
       const playPauseBtn = doc.querySelector('[data-testid="control-button-playpause"]');
@@ -1407,8 +1387,8 @@ function dynamicSpotifyPlugin(): Plugin {
           try {
             const fallbackSession = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
             feed = {
-              userName: fallbackSession.user?.display_name || 'Jorgeperezvk',
-              userId: fallbackSession.user?.id || 'e6yr34zzwnf1yybcw49po6nrw',
+              userName: fallbackSession.user?.display_name || 'Usuario',
+              userId: fallbackSession.user?.id || 'user',
               userPlaylists: fallbackSession.playlists || [],
               quickAccess: fallbackSession.quickAccess || [],
               shelves: fallbackSession.shelves || [],
@@ -1419,7 +1399,7 @@ function dynamicSpotifyPlugin(): Plugin {
           } catch {}
         }
 
-        const connectedUserName = feed?.userName || 'Jorgeperezvk';
+        const connectedUserName = feed?.userName || 'Usuario';
 
         // Real user playlists from profile & sidebar
         const realPlaylists = (feed?.userPlaylists && feed.userPlaylists.length > 0)
@@ -1478,7 +1458,7 @@ function dynamicSpotifyPlugin(): Plugin {
         const responseData = {
           connected: true,
           user: {
-            id: feed?.userId || 'e6yr34zzwnf1yybcw49po6nrw',
+            id: feed?.userId || 'user',
             display_name: connectedUserName,
             avatarLetter: connectedUserName.charAt(0).toUpperCase(),
           },

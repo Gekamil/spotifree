@@ -2,9 +2,20 @@ import React, { useRef, useState, useEffect } from 'react';
 import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
-import type { FeedCard } from '../../data/liveUserFeed';
 import { toHDImage } from '../../utils/formatters';
 import { getArtistPicture } from '../../utils/artistImage';
+
+export interface FeedCard {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  href?: string;
+  badge?: string;
+  badgeColor?: string;
+  isRadio?: boolean;
+  video?: string | null;
+}
 
 function cleanSubtitle(text?: string): string {
   if (!text) return '';

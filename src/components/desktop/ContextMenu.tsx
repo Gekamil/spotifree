@@ -70,9 +70,9 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
         name: foundQuick.name,
         description: '',
         images: [{ url: foundQuick.image }],
-        owner: {
-          display_name: foundQuick.id === '7b3MrCWtettvBKlfBSdorn' ? 'Jorgeperezvk' : 'Spotify',
-          id: foundQuick.id === '7b3MrCWtettvBKlfBSdorn' ? 'user' : 'spotify',
+        owner: (foundQuick as any).owner || {
+          display_name: 'Spotify',
+          id: 'spotify',
         },
         tracks: { total: 0, items: [] },
       } as any;
@@ -210,12 +210,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
 
   const isArtist = Boolean(
     targetPlaylist && (
-      targetPlaylist.id === '3x7gz85amxEplGx7LQxE7Z' ||
-      targetPlaylist.id === '5lwmRuXgjX8xIwlnauTZIP' ||
-      targetPlaylist.id === 'romeo-santos' ||
       targetPlaylist.description?.toLowerCase() === 'artista' ||
       (targetPlaylist as any).type === 'artist' ||
-      targetPlaylist.id?.startsWith('art-')
+      (targetPlaylist as any).is_artist === true ||
+      targetPlaylist.id?.startsWith('art-') ||
+      targetPlaylist.id?.startsWith('artist-')
     )
   );
 

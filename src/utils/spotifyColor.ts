@@ -39,11 +39,6 @@ export const KNOWN_PLAYLIST_COLORS: Record<string, string> = {
   // Spidey
   'spidey': '#D11B24',
 
-  // J+L (2026)
-  '7b3MrCWtettvBKlfBSdorn': '#8A654E',
-  'jl-2026': '#8A654E',
-  'j-l-2026': '#8A654E',
-
   // Top Tracks / Wrapped
   'my-top-tracks-playlist': '#5E3D82',
   '4Jf0fa5p0ajOnSriA9cYGS': '#5E3D82',
@@ -60,8 +55,6 @@ export const KNOWN_PLAYLIST_COLORS: Record<string, string> = {
   'miticas': '#9C3426',
   '37i9dQZF1DXcBWIGoYBM5M': '#1A4B4C', // Éxitos España
   '37i9dQZF1DXaxEKcoCdWHD': '#1A4B4C', // Éxitos España
-  '4f0YTBqSbvM1iJpuY9r3yQ': '#2D4B68', // ZIZI
-  'zizi': '#2D4B68',
   '37i9dQZF1E35QYVMBRlDph': '#B85228', // Mix diario 1
   '37i9dQZF1E39G7BcNRMw7W': '#2D46B9', // Mix diario 2
   '37i9dQZF1E38mn8YFuPgE2': '#C45028', // Mix diario 3

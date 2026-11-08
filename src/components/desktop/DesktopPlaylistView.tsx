@@ -886,22 +886,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   // A playlist saved in the library (e.g. imported) is never shown as an artist page
   const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
   const isArtist = !isLibraryPlaylist && (
-    dynamicPlaylist.id === '3x7gz85amxEplGx7LQxE7Z' ||
-    dynamicPlaylist.id === '5lwmRuXgjX8xIwlnauTZIP' ||
-    dynamicPlaylist.id === 'romeo-santos' ||
     dynamicPlaylist.description?.toLowerCase() === 'artista' ||
     (dynamicPlaylist as any).type === 'artist' ||
-    dynamicPlaylist.id.startsWith('art-'));
+    (dynamicPlaylist as any).is_artist === true ||
+    dynamicPlaylist.id.startsWith('art-') ||
+    dynamicPlaylist.id.startsWith('artist-'));
 
   const isFolder =
     dynamicPlaylist.id === 'nueva-carpeta' ||
     dynamicPlaylist.description?.toLowerCase().includes('listas');
 
   const isAlbum =
-    dynamicPlaylist.id === '4f0YTBqSbvM1iJpuY9r3yQ' ||
-    dynamicPlaylist.id === 'zizi' ||
     (dynamicPlaylist as any).type === 'album' ||
-    dynamicPlaylist.id.startsWith('alb-');
+    dynamicPlaylist.id.startsWith('alb-') ||
+    dynamicPlaylist.id.startsWith('album-');
 
   const isUserCreatedPlaylist =
     !isLikedPlaylist &&
@@ -917,11 +915,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     dynamicPlaylist.owner?.id !== 'spotify' &&
     (
       (dynamicPlaylist as any).is_custom === true ||
-      dynamicPlaylist.id === '7b3MrCWtettvBKlfBSdorn' ||
-      dynamicPlaylist.id === '7HsL4sBaR3dJMa0UJ5e4zG' ||
       dynamicPlaylist.owner?.id === 'user' ||
-      dynamicPlaylist.owner?.id === user?.id ||
-      dynamicPlaylist.owner?.display_name?.toLowerCase() === (user?.display_name || 'jorgeperezvk').toLowerCase()
+      (user?.id && dynamicPlaylist.owner?.id === user.id) ||
+      (user?.display_name && dynamicPlaylist.owner?.display_name?.toLowerCase() === user.display_name.toLowerCase())
     );
 
   const canAddTracksToThisList = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || isUserCreatedPlaylist);
@@ -1177,7 +1173,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 />
               </svg>
               <span>
-                Hecha para <span className="font-bold">{user?.display_name || 'Jorgeperezvk'}</span>
+                Hecha para <span className="font-bold">{user?.display_name || 'ti'}</span>
               </span>
               <span>•</span>
               <span>
@@ -1316,7 +1312,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </>
                 ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
                   <>
-                    <span className="font-bold text-white hover:underline cursor-pointer">Hecha para Jorgeperezvk</span>
+                    <span className="font-bold text-white hover:underline cursor-pointer">Hecha para {user?.display_name || 'ti'}</span>
                     <span>•</span>
                     <span className="text-white/90">
                       {loading

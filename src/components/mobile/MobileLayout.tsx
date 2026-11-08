@@ -311,8 +311,6 @@ export const MobileLayout: React.FC = () => {
       p.type === 'artist' ||
       p.is_artist === true ||
       p.description?.toLowerCase()?.trim() === 'artista' ||
-      p.id === '3x7gz85amxEplGx7LQxE7Z' ||
-      p.id === '5lwmRuXgjX8xIwlnauTZIP' ||
       p.id.startsWith('art-') ||
       p.id.startsWith('artist-')
     );
