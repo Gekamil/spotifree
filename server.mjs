@@ -1032,7 +1032,7 @@ const server = http.createServer(async (req, res) => {
       } catch {}
     }
 
-    const connectedUserName = isDevBridge ? (feed?.userName || 'Jorgeperezvk') : null;
+    const connectedUserName = isDevBridge ? (feed?.userName || 'Usuario') : null;
 
     const realPlaylists = (feed?.userPlaylists && feed.userPlaylists.length > 0)
       ? feed.userPlaylists.map((p) => ({
@@ -1056,8 +1056,8 @@ const server = http.createServer(async (req, res) => {
         }))
       : [
           { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
-          { id: '7b3MrCWtettvBKlfBSdorn', name: 'J+L(2026)', image: 'https://image-cdn-fa.spotifycdn.com/image/ab67706c0000d72c804d43e5cc7f6a6d0ac65ffc', color: '#5a483a' },
-          { id: '4f0YTBqSbvM1iJpuY9r3yQ', name: 'ZIZI', image: 'https://i.scdn.co/image/ab67616d0000b273eb31ebdbca6acd99c23b4d31', color: '#2e4a52' },
+          { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Éxitos España', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b', color: '#1a4b4c' },
+          { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541', color: '#bd2427' },
           { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
         ];
 
@@ -1082,13 +1082,14 @@ const server = http.createServer(async (req, res) => {
     const responseData = {
       connected: isDevBridge,
       user: isDevBridge ? {
-        id: feed?.userId || 'e6yr34zzwnf1yybcw49po6nrw',
+        id: feed?.userId || 'user',
         display_name: connectedUserName,
         avatarLetter: connectedUserName ? connectedUserName.charAt(0).toUpperCase() : 'U',
       } : null,
       accessToken: isDevBridge ? 'session-bridge-active' : null,
       playlists: isDevBridge ? realPlaylists : [],
-      publicPlaylists: realPlaylists,
+      // The bridge account's own playlists only go to the bridge (never to anonymous callers)
+      publicPlaylists: isDevBridge ? realPlaylists : [],
       quickAccess: quickAccessCards,
       shelves: realShelves,
       recentlyPlayed: [],

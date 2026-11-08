@@ -1363,43 +1363,16 @@ function dynamicSpotifyPlugin(): Plugin {
           return res.end();
         }
 
+        // Only a live Chrome session (remote debugging) connects. No saved account files are
+        // used as a fallback: otherwise every visitor of the dev server would get that account.
         const liveData = await extractLiveFeedFromSpotify();
-        const cacheFile = path.resolve('src/data/liveExtractedFeed.json');
-
-        const sessionFile = path.resolve('src/data/liveExtractedSession.json');
-
-        let feed: any = null;
-        if (liveData && liveData.shelves && liveData.shelves.length >= 5) {
-          feed = liveData;
-          try {
-            fs.writeFileSync(cacheFile, JSON.stringify(feed, null, 2));
-          } catch {}
-        } else if (fs.existsSync(cacheFile)) {
-          try {
-            const cached = JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
-            if (cached && cached.shelves && cached.shelves.length >= 5) {
-              feed = cached;
-            }
-          } catch {}
+        if (!liveData || !liveData.shelves || liveData.shelves.length < 5 || !liveData.userName) {
+          res.statusCode = 200;
+          return res.end(JSON.stringify({ connected: false, user: null, playlists: [], quickAccess: [], shelves: [] }));
         }
+        const feed: any = liveData;
 
-        if (!feed || !feed.shelves || feed.shelves.length < 5) {
-          try {
-            const fallbackSession = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
-            feed = {
-              userName: fallbackSession.user?.display_name || 'Usuario',
-              userId: fallbackSession.user?.id || 'user',
-              userPlaylists: fallbackSession.playlists || [],
-              quickAccess: fallbackSession.quickAccess || [],
-              shelves: fallbackSession.shelves || [],
-            };
-            try {
-              fs.writeFileSync(cacheFile, JSON.stringify(feed, null, 2));
-            } catch {}
-          } catch {}
-        }
-
-        const connectedUserName = feed?.userName || 'Usuario';
+        const connectedUserName = feed.userName;
 
         // Real user playlists from profile & sidebar
         const realPlaylists = (feed?.userPlaylists && feed.userPlaylists.length > 0)
@@ -1417,10 +1390,10 @@ function dynamicSpotifyPlugin(): Plugin {
               {
                 id: 'liked-songs',
                 name: 'Canciones que te gustan',
-                description: '23 canciones',
+                description: '',
                 images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
                 owner: { display_name: connectedUserName, id: 'user' },
-                tracks: { total: 23 },
+                tracks: { total: 0 },
                 color: '#5018F0',
                 is_pinned: true,
               },

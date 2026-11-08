@@ -171,7 +171,10 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     const sessionFile = path.resolve('src/data/liveExtractedSession.json');
     if (fs.existsSync(sessionFile)) {
       const sessionData = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
-      if (sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
+      // Only Spotify's editorial playlists (37i9dQZF1D…, the same for everyone). Personal lists of
+      // the account the file was extracted from (its mixes, its own playlists) are never served.
+      const isEditorial = /^37i9dQZF1D/.test(cleanId);
+      if (isEditorial && sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
         const cached = sessionData.cachedPlaylistDetails[cleanId];
         if (cached?.tracks?.items && cached.tracks.items.length > 0) {
           const cover = cached.images?.[0]?.url || '';
