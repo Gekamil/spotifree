@@ -460,7 +460,6 @@ function wrapTitle(ctx: CanvasRenderingContext2D, text: string, maxW: number): s
   return lines.slice(0, 2);
 }
 
-let appIcon: Promise<HTMLImageElement | null> | null = null;
 type CoverStyle = 'artist' | 'collage' | 'single';
 async function makeCover(title: string, style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
   try {
@@ -505,10 +504,6 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
     ctx.shadowBlur = style === 'artist' ? 0 : 8;
     lines.forEach((l, i) => ctx.fillText(l, 22, S - 22 - (lines.length - 1 - i) * 32));
     ctx.shadowBlur = 0;
-    // The app's own icon in the corner (same-origin file, the official app icon)
-    appIcon = appIcon || loadImg('/icon-192.png');
-    const icon = await appIcon;
-    if (icon) ctx.drawImage(icon, 14, 14, 30, 30);
     return c.toDataURL('image/jpeg', 0.8);
   } catch {
     return null; // a cross-origin image without CORS: the plain image is used instead
@@ -539,7 +534,16 @@ function dedupe(list: Track[], known?: Set<string>, perArtist = 99): Track[] {
   return out;
 }
 
-function mix(id: string, kind: SpotifreeMix['sfKind'], name: string, description: string, items: Track[], cover: string, userName: string): SpotifreeMix {
+/** Number of the current n-day period (mixes that change every n days keep the same songs inside it) */
+const every = (n: number): number => Math.floor(Date.now() / DAY / n);
+
+/** Tops a list up to `min` songs from `pool` (same dedupe rules), for mixes that came out short */
+function atLeast(items: Track[], pool: Track[], min: number, perArtist: number): Track[] {
+  return items.length >= min ? items : dedupe([...items, ...pool], undefined, perArtist);
+}
+
+function mix(
+id: string, kind: SpotifreeMix['sfKind'], name: string, description: string, items: Track[], cover: string, userName: string): SpotifreeMix {
   return {
     id,
     sfKind: kind,
@@ -608,8 +612,9 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const own = shuffle(grp.flatMap(ownByArtist), r).slice(0, 22);
     const theirs = shuffle(grp.flatMap((n) => disc.get(norm(n))?.top || []), r).slice(0, 12);
     const near = shuffle(grp.flatMap((n) => (disc.get(norm(n))?.related || []).flatMap((x) => x.top.slice(0, 3))), r).slice(0, 16);
-    const items = shuffle(dedupe([...own, ...theirs, ...near], undefined, 6), r).slice(0, 50);
-    if (items.length < 8) continue;
+    const extra = shuffle(grp.flatMap((n) => (disc.get(norm(n))?.related || []).flatMap((x) => x.top.slice(3, 6))), r);
+    const items = atLeast(shuffle(dedupe([...own, ...theirs, ...near], undefined, 6), r), extra, 25, 6).slice(0, 50);
+    if (items.length < 20) continue;
     const relNames = [...new Set(near.map((t) => firstArtist(t)))].slice(0, 2);
     const desc = `${[...grp, ...relNames].slice(0, 3).join(', ')} y más`;
     const style = pickStyle(`daily${i}`);
@@ -623,15 +628,15 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
 
   // Descubrimiento semanal: artists the user doesn't listen to yet (changes every Monday)
   {
-    const r = rng(hash(`${uid()}:${week}:discover`));
+    const r = rng(hash(`${uid()}:${week}:discover`)); // changes every week
     const pool = seeds.flatMap((s) => disc.get(norm(s.name))?.related || []).filter((x) => !profile.knownArtists.has(norm(x.name)));
     const freq = new Map<string, number>();
     pool.forEach((x) => freq.set(norm(x.name), (freq.get(norm(x.name)) || 0) + 1));
     const tracks = shuffle(pool, r)
       .sort((a, b) => (freq.get(norm(b.name)) || 0) - (freq.get(norm(a.name)) || 0))
-      .flatMap((x) => shuffle(x.top, r).slice(0, 2));
+      .flatMap((x) => shuffle(x.top, r).slice(0, 3));
     const items = dedupe(tracks, profile.known, 2).slice(0, 30);
-    if (items.length >= 10) {
+    if (items.length >= 20) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), r);
       const name = nameFor('Descubrimiento semanal', 'Tu descubrimiento semanal');
       const cover = (await makeCover(name, hash(week) % 2 ? 'collage' : 'single', imgs, '#3d2b66')) || imgs[0] || '';
@@ -642,7 +647,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
   // Radar de novedades: releases of the last weeks from the user's artists
   {
     const fresh = seeds.flatMap((s) => (disc.get(norm(s.name))?.recent || []).flatMap((a) => a.tracks.slice(0, 4)));
-    const items = dedupe(fresh, undefined, 5).slice(0, 30);
+    const items = shuffle(dedupe(fresh, undefined, 5), rng(hash(`${uid()}:${week}:radar`))).slice(0, 30); // weekly
     if (items.length >= 5) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), randDay);
       const name = nameFor('Radar de novedades', 'Tu radar de novedades');
@@ -667,7 +672,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const cutoff = Date.now() - 45 * DAY;
     const items = shuffle(
       profile.tracks.filter((t) => t.score > 1.2 && t.last < cutoff).slice(0, 80).map((t) => t.track),
-      randDay
+      rng(hash(`${uid()}:${every(3)}:classics`)) // every 3 days
     ).slice(0, 30);
     if (items.length >= 10) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), randDay);
@@ -681,13 +686,18 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
   for (const a of ranked.slice(0, 6)) {
     const d = disc.get(norm(a.name));
     if (!d) continue;
-    const r = rng(hash(`${uid()}:${day}:artist:${a.name}`));
-    const items = shuffle(dedupe([...d.top.slice(0, 12), ...ownByArtist(a.name).slice(0, 8), ...d.related.flatMap((x) => x.top.slice(0, 2))], undefined, 12), r).slice(0, 35);
-    if (items.length < 10) continue;
+    const r = rng(hash(`${uid()}:${every(2)}:artist:${a.name}`)); // changes every 2 days
+    const items = atLeast(
+      shuffle(dedupe([...d.top.slice(0, 12), ...ownByArtist(a.name).slice(0, 8), ...d.related.flatMap((x) => x.top.slice(0, 2))], undefined, 12), r),
+      shuffle(d.related.flatMap((x) => x.top.slice(2, 5)), r),
+      25,
+      12
+    ).slice(0, 35);
+    if (items.length < 20) continue;
     const title = `Mix de ${d.artist?.name || a.name}`;
     // Spotify already gives this user a "Mix de X": that one stays, ours would only repeat it
     if (taken.has(norm(title))) continue;
-    const style: CoverStyle = hash(`${a.name}:${day}`) % 3 === 0 ? 'collage' : 'artist';
+    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 3 === 0 ? 'collage' : 'artist';
     const imgs = style === 'artist' ? [pictureOf(a.name)] : shuffle(items.map(coverOf).filter(Boolean), r);
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${d.artist?.name || a.name} y artistas parecidos`, items, cover, userName));
@@ -731,8 +741,16 @@ export const useSpotifreeMixes = create<MixesState>(() => ({ mixes: [], builtDay
 function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtists: SuggestedArtist[] = []) {
   useSpotifreeMixes.setState({ mixes, builtDay, suggestedArtists });
   // So the playlist pages open them like any other playlist
+  // Mixes that older builds put in the library just by opening them leave it (unless really saved)
+  let saved: string[] = [];
+  try {
+    saved = JSON.parse(localStorage.getItem('spotifree_saved_library_playlists') || '[]');
+  } catch {}
   useSpotifyDataStore.setState((s) => ({
     playlistDetailsCache: { ...s.playlistDetailsCache, ...Object.fromEntries(mixes.map((m) => [m.id, m])) },
+    playlists: s.playlists.some((p) => p.id.startsWith('sf-') && !saved.includes(p.id))
+      ? s.playlists.filter((p) => !p.id.startsWith('sf-') || saved.includes(p.id))
+      : s.playlists,
   }));
 }
 

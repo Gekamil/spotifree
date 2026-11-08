@@ -823,13 +823,9 @@ const store = create<SpotifyDataState>((set, get) => ({
         }
         return p;
       });
-      if (!found) {
-        if (isTargetLiked) {
-          updatedPlaylists.unshift(updatedCacheEntry);
-        } else {
-          updatedPlaylists.unshift(updatedCacheEntry);
-        }
-      }
+      // Updating a playlist that is not in the library (a mix being viewed, its covers being
+      // resolved…) never saves it there: only the save button (addCustomPlaylist) does that.
+      if (!found && isTargetLiked) updatedPlaylists.unshift(updatedCacheEntry);
 
       if (typeof window !== 'undefined') {
         try {
