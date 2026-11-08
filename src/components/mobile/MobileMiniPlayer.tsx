@@ -11,6 +11,7 @@ import {
 import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { MotionCover } from '../common/MotionCover';
 import { useUIStore } from '../../store/useUIStore';
 import { parseTrackArtists } from '../../utils/trackArtists';
 
@@ -139,12 +140,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
       <div className="flex items-center min-w-0 flex-1 mr-1">
         <div className="w-10 h-10 rounded-[4px] shrink-0 overflow-hidden bg-[#181818] shadow-md ml-0.5">
           {coverUrl ? (
-            <img
-              src={coverUrl}
-              alt={currentTrack.name}
-              onError={handleImageError}
-              className="w-full h-full object-cover"
-            />
+            <MotionCover track={currentTrack} src={coverUrl} alt={currentTrack.name} onImgError={handleImageError} className="w-full h-full" />
           ) : (
             <div className="w-full h-full flex items-center justify-center text-white/40">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">

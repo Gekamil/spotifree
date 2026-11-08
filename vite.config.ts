@@ -919,6 +919,24 @@ function dynamicSpotifyPlugin(): Plugin {
         }
       });
 
+      // 2f-ter. Apple Music animated covers (/api/motion-cover)
+      server.middlewares.use('/api/motion-cover', async (req, res) => {
+        try {
+          const url = new URL(req.url || '', 'http://localhost');
+          (req as any).query = { ...Object.fromEntries(url.searchParams.entries()), action: 'motion-cover' };
+          const r: any = res;
+          if (typeof r.status !== 'function') {
+            r.status = (code: number) => { res.statusCode = code; return r; };
+            r.json = (obj: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); return r; };
+            r.send = (body: unknown) => { res.end(typeof body === 'string' ? body : JSON.stringify(body)); return r; };
+          }
+          await metadataHandler(req, res);
+        } catch (e: any) {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ square: null, tall: null, error: e?.message }));
+        }
+      });
+
       // 2g. Spotifree Cloud Account Auth (/api/auth)
       const handleAuth = async (req: any, res: any) => {
         try {

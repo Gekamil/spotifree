@@ -86,6 +86,8 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || !req.url.startsWith(self.location.origin)) return;
   const path = new URL(req.url).pathname;
+  // The phone's own files (APK, "Archivos locales") and media byte ranges go straight through
+  if (path.startsWith('/_capacitor_') || req.headers.has('range')) return;
   if (req.mode === 'navigate') {
     event.respondWith(handleNavigation(req));
   } else if (path.startsWith('/assets/')) {

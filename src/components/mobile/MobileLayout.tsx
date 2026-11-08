@@ -7,6 +7,7 @@ import { MobileBottomNav } from './MobileBottomNav';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { LocalFilesCover, LocalFilesView } from '../common/LocalFilesView';
 import { LOCAL_FILES_EVENT, LOCAL_FILES_PLAYLIST_ID, listLocalTracks } from '../../utils/localFiles';
+import { deviceTracks, scanDeviceMusic } from '../../utils/nativeLocalMusic';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -42,8 +43,10 @@ export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local'>('home');
   const [localCount, setLocalCount] = useState(0);
   useEffect(() => {
-    const load = () => listLocalTracks().then((t) => setLocalCount(t.length));
+    const load = () => listLocalTracks().then((t) => setLocalCount(t.length + deviceTracks().length));
     load();
+    // APK: the phone's music (only if the permission was already given; it is asked in Archivos locales)
+    void scanDeviceMusic(false);
     window.addEventListener(LOCAL_FILES_EVENT, load);
     return () => window.removeEventListener(LOCAL_FILES_EVENT, load);
   }, []);

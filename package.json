@@ -22,6 +22,7 @@
     "@distube/ytdl-core": "^4.16.12",
     "clsx": "^2.1.1",
     "firebase": "^13.1.0",
+    "hls.js": "1.7.3",
     "msedge-tts": "^2.1.1",
     "peerjs": "^1.5.5",
     "play-dl": "^1.9.7",

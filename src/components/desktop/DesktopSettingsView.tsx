@@ -4,6 +4,7 @@ import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
+import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -653,7 +654,7 @@ export const DesktopSettingsView: React.FC = () => {
         )}
 
         {/* 6. VÍDEOS Y CANVAS */}
-        {matchesSearch('vídeos canvas musicales') && (
+        {matchesSearch('vídeos canvas musicales portadas animadas') && (
           <section className="space-y-3">
             <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Vídeos y Canvas</h2>
             <div className="space-y-3">
@@ -683,6 +684,10 @@ export const DesktopSettingsView: React.FC = () => {
                   onChange={setCanvasEnabled}
                   ariaLabel="Canvas"
                 />
+              </div>
+
+              <div className="py-3 border-b border-white/5">
+                <MotionCoverSetting />
               </div>
             </div>
           </section>

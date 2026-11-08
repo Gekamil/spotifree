@@ -15,6 +15,7 @@ import {
   removeLocalTrack,
 } from '../../utils/localFiles';
 import { formatDuration } from '../../utils/formatters';
+import { DEVICE_PREFIX, devicePermissionGranted, deviceTracks, isDeviceMusicAvailable, scanDeviceMusic } from '../../utils/nativeLocalMusic';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from '../mobile/MobileSheet';
 
 export const LOCAL_FILES_COVER_GRADIENT = 'linear-gradient(135deg, #1e3264 0%, #1ed760 100%)';
@@ -48,7 +49,14 @@ interface LocalFilesViewProps {
 }
 
 export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile = false }) => {
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const onDevice = isDeviceMusicAvailable();
+  const [imported, setImported] = useState<Track[]>([]);
+  const [phoneTracks, setPhoneTracks] = useState<Track[]>(() => (onDevice ? deviceTracks() : []));
+  const [needsPermission, setNeedsPermission] = useState(false);
+  const [scanningPhone, setScanningPhone] = useState(false);
+  const folderRef = useRef<HTMLInputElement>(null);
+  // Imported songs first (newest), then the phone's music (newest first)
+  const tracks = React.useMemo(() => [...imported, ...phoneTracks], [imported, phoneTracks]);
   const [loaded, setLoaded] = useState(false);
   const [sizeBytes, setSizeBytes] = useState(0);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
@@ -62,13 +70,24 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
 
   const refresh = async () => {
     const [list, size] = await Promise.all([listLocalTracks(), getLocalFilesSize()]);
-    setTracks(list);
+    setImported(list);
     setSizeBytes(size);
+    if (onDevice) setPhoneTracks(deviceTracks());
     setLoaded(true);
+  };
+
+  const scanPhone = async (request: boolean) => {
+    setScanningPhone(true);
+    const ok = await scanDeviceMusic(request);
+    setScanningPhone(false);
+    setNeedsPermission(!ok && devicePermissionGranted() === false);
+    if (ok) setPhoneTracks(deviceTracks());
   };
 
   useEffect(() => {
     void refresh();
+    // APK: read the phone's music again each time the page opens (new songs, deleted ones)
+    if (onDevice) void scanPhone(false);
     const on = () => void refresh();
     window.addEventListener(LOCAL_FILES_EVENT, on);
     return () => window.removeEventListener(LOCAL_FILES_EVENT, on);
@@ -82,6 +101,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
   const onFiles = async (list: FileList | null) => {
     const files = Array.from(list || []);
     if (inputRef.current) inputRef.current.value = '';
+    if (folderRef.current) folderRef.current.value = '';
     if (!files.length) return;
     setProgress({ done: 0, total: files.length });
     const res = await addLocalFiles(files, (done, total) => setProgress({ done, total }));
@@ -126,6 +146,33 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
       onChange={(e) => void onFiles(e.target.files)}
     />
   );
+  // Computer: a whole folder at once (its audio files; other files are skipped)
+  const folderInput = (
+    <input
+      ref={(el) => {
+        folderRef.current = el;
+        if (el) {
+          el.setAttribute('webkitdirectory', '');
+          el.setAttribute('directory', '');
+        }
+      }}
+      type="file"
+      multiple
+      className="hidden"
+      onChange={(e) => void onFiles(e.target.files)}
+    />
+  );
+  const folderButton = !isMobile && (
+    <button
+      onClick={() => folderRef.current?.click()}
+      className="h-9 px-4 rounded-full text-sm font-bold flex items-center gap-2 cursor-pointer active:scale-95 transition-all border border-[#7c7c7c] text-white hover:border-white"
+    >
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+      </svg>
+      Añadir carpeta
+    </button>
+  );
 
   const addButton = (label: string, primary = false) => (
     <button
@@ -144,6 +191,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
   return (
     <div className="min-h-full text-white font-['SpotifyMixUI'] select-none pb-10">
       {fileInput}
+      {folderInput}
 
       {/* Header */}
       <div
@@ -164,7 +212,8 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
             <h1 className={`font-black tracking-tight font-['SpotifyMixUITitle'] ${isMobile ? 'text-2xl' : 'text-6xl my-3'}`}>Archivos locales</h1>
             <p className="text-sm text-white/70 mt-1">
               {tracks.length} {tracks.length === 1 ? 'canción' : 'canciones'}
-              {sizeBytes > 0 ? ` • ${formatSize(sizeBytes)} en este dispositivo` : ''} • Suenan sin conexión
+              {phoneTracks.length > 0 ? ` • ${phoneTracks.length} de tu móvil` : ''}
+              {sizeBytes > 0 ? ` • ${formatSize(sizeBytes)} guardados en la app` : ''} • Suenan sin conexión
             </p>
           </div>
         </div>
@@ -200,8 +249,31 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
           </svg>
         </button>
         <div className="flex-1" />
+        {tracks.length > 0 && folderButton}
         {tracks.length > 0 && addButton('Añadir')}
       </div>
+
+      {/* APK: access to the phone's music */}
+      {onDevice && needsPermission && (
+        <div className={`${isMobile ? 'mx-4' : 'mx-6'} mb-4 rounded-lg bg-[#242424] p-4 flex items-center gap-4 spf-page-enter`}>
+          <div className="w-11 h-11 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0">
+            <NoteIcon />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold">Muestra la música de tu móvil</p>
+            <p className="text-xs text-[#a7a7a7] leading-snug mt-0.5">Tus canciones (también las de Descargas) aparecen aquí y suenan sin conexión.</p>
+          </div>
+          <button
+            onClick={() => void scanPhone(true)}
+            className="h-8 px-4 rounded-full bg-white text-black text-xs font-bold shrink-0 active:scale-95 cursor-pointer"
+          >
+            Permitir
+          </button>
+        </div>
+      )}
+      {onDevice && scanningPhone && phoneTracks.length === 0 && (
+        <p className={`${isMobile ? 'px-4' : 'px-6'} pb-3 text-xs text-[#a7a7a7]`}>Buscando música en tu móvil…</p>
+      )}
 
       {/* Adding progress */}
       {progress && (
@@ -221,11 +293,16 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
           <div className="w-16 h-16 rounded-full bg-[#242424] text-white flex items-center justify-center mb-5">
             <NoteIcon />
           </div>
-          <h2 className="text-xl font-bold font-['SpotifyMixUITitle']">Añade canciones de tu dispositivo</h2>
+          <h2 className="text-xl font-bold font-['SpotifyMixUITitle']">{onDevice ? 'Tu música, sin conexión' : 'Añade canciones de tu dispositivo'}</h2>
           <p className="mt-2 text-sm text-[#a7a7a7] max-w-sm leading-relaxed">
-            Elige archivos de música (MP3, M4A, FLAC…). Se guardan dentro de la app y suenan sin conexión, también en modo avión.
+            {onDevice
+              ? 'Aquí sale la música que tengas en el móvil (MP3, M4A, FLAC…), también la de Descargas. Suena sin conexión, también en modo avión.'
+              : 'Elige archivos o una carpeta de música (MP3, M4A, FLAC…). Se guardan dentro de la app y suenan sin conexión, también en modo avión.'}
           </p>
-          <div className="mt-6">{addButton('Añadir archivos', true)}</div>
+          <div className="mt-6 flex items-center gap-3 flex-wrap justify-center">
+            {addButton('Añadir archivos', true)}
+            {folderButton}
+          </div>
         </div>
       ) : (
         <div className={`${isMobile ? 'px-2' : 'px-4'} spf-stagger`}>
@@ -283,7 +360,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
                 <div className="flex items-center justify-end gap-3">
                   <button
                     onClick={() => void removeLocalTrack(t.id).then(() => showToast('Eliminada de este dispositivo'))}
-                    className="opacity-0 group-hover:opacity-100 text-[#a7a7a7] hover:text-white transition-opacity cursor-pointer"
+                    className={`opacity-0 group-hover:opacity-100 text-[#a7a7a7] hover:text-white transition-opacity cursor-pointer ${t.id.startsWith(DEVICE_PREFIX) ? 'invisible' : ''}`}
                     title="Eliminar de este dispositivo"
                   >
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -317,6 +394,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
                   showToast('Añadida a la cola');
                 }}
               />
+              {!menuTrack.id.startsWith(DEVICE_PREFIX) && (
               <SheetItem
                 danger
                 icon={
@@ -332,6 +410,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
                   void removeLocalTrack(id).then(() => showToast('Eliminada de este dispositivo'));
                 }}
               />
+              )}
             </SheetList>
           </>
         )}

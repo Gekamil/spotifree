@@ -3,6 +3,7 @@ import { AppIconSelector } from '../common/AppIconSelector';
 import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
+import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import {
   getBackgroundPlaybackAllowed,
   getCarLyricsEnabled,
@@ -564,6 +565,11 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
                   }`}
                 />
               </button>
+            </div>
+
+            {/* Portadas animadas de Apple Music */}
+            <div className="pt-3 border-t border-white/5">
+              <MotionCoverSetting compact />
             </div>
 
             {/* Efectos de las transiciones del DJ */}

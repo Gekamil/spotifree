@@ -351,6 +351,69 @@ async function handleAudioFeatures(req, res) {
   return res.status(200).json({ audio_features: results });
 }
 
+// ---------------------------------------------------------------------------
+// Apple Music animated covers ("motion artwork"). The public album page of music.apple.com
+// lists them (motionDetailSquare / motionDetailTall: an HLS .m3u8 video + a still frame).
+// ?id=<Apple album id>&country=es, or ?title=&artist= (found with the iTunes Search API).
+// ---------------------------------------------------------------------------
+const MOTION_CACHE = new Map();
+
+function pickMotion(html, key) {
+  const i = html.indexOf(`"${key}":{`);
+  if (i < 0) return null;
+  const block = html.slice(i, i + 2500);
+  const video = block.match(/"video":"(https:[^"]+?\.m3u8)"/);
+  if (!video) return null;
+  const frame = block.match(/"previewFrame":\{[^}]*?"url":"(https:[^"]+?)"/);
+  return {
+    video: video[1].replace(/\\u002F/g, '/').replace(/\\\//g, '/'),
+    poster: frame ? frame[1].replace(/\\u002F/g, '/').replace('{w}x{h}bb.{f}', '600x600bb.jpg') : null,
+  };
+}
+
+async function findAppleAlbumId(title, artist, country) {
+  const term = encodeURIComponent(`${artist} ${title}`.trim());
+  const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=5&country=${country}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  const a = norm(artist).split(' ')[0];
+  const hit = (data.results || []).find((x) => !a || norm(x.artistName).includes(a)) || null;
+  return hit?.collectionId ? String(hit.collectionId) : null;
+}
+
+async function handleMotionCover(req, res) {
+  const country = /^[a-z]{2}$/.test(req.query?.country || '') ? req.query.country : 'es';
+  let id = /^\d{5,14}$/.test(req.query?.id || '') ? req.query.id : null;
+  try {
+    if (!id && (req.query?.title || req.query?.artist)) id = await findAppleAlbumId(req.query.title || '', req.query.artist || '', country);
+    if (!id) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      return res.status(200).json({ id: null, square: null, tall: null });
+    }
+    const key = `${country}:${id}`;
+    if (MOTION_CACHE.has(key)) {
+      res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+      return res.status(200).json(MOTION_CACHE.get(key));
+    }
+    const page = await fetch(`https://music.apple.com/${country}/album/${id}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+        'Accept-Language': 'es-ES,es;q=0.9',
+      },
+    });
+    const html = page.ok ? await page.text() : '';
+    const out = { id, square: pickMotion(html, 'motionDetailSquare'), tall: pickMotion(html, 'motionDetailTall') };
+    if (page.ok) MOTION_CACHE.set(key, out);
+    res.setHeader('Cache-Control', page.ok ? 'public, max-age=86400, s-maxage=604800' : 'no-store');
+    return res.status(200).json(out);
+  } catch (e) {
+    return res.status(200).json({ id, square: null, tall: null, error: String(e?.message || e) });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -363,5 +426,6 @@ export default async function handler(req, res) {
 
   if (action === 'canvas') return handleCanvas(req, res, url);
   if (action === 'artist-image') return handleArtistImage(req, res);
+  if (action === 'motion-cover') return handleMotionCover(req, res);
   return handleAudioFeatures(req, res);
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { MotionCover } from '../common/MotionCover';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -528,11 +529,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               : 'opacity-100 scale-100'
           }`}>
             {displayCover ? (
-              <img
+              // Comes alive with the album's Apple Music animated cover when there is one
+              <MotionCover
+                track={currentTrack}
                 src={displayCover}
                 alt={currentTrack.name}
-                onError={handleCoverError}
-                className="w-full h-full object-cover transition-opacity duration-500"
+                onImgError={handleCoverError}
+                className="w-full h-full"
+                imgClassName="transition-opacity duration-500"
               />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center text-white/40 gap-3">

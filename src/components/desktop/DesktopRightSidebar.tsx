@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { MotionCover } from '../common/MotionCover';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -520,10 +521,11 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               </div>
 
               {/* Cover Image with smooth fade and subtle hover zoom */}
-              <img
+              <MotionCover
+                track={currentTrack}
                 src={hdCover}
                 alt={currentTrack?.name || 'Portada'}
-                className={`w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-103 ${
+                className={`w-full h-full transition-all duration-700 ease-in-out group-hover:scale-103 ${
                   isCanvasMode && canvasUrl ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                 }`}
               />

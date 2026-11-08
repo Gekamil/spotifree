@@ -34,6 +34,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { downloadPlaylist, deleteDownloadedPlaylist, isPlaylistDownloaded } from '../../utils/offlineStorage';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
+import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { djTransitionService } from '../../services/djTransitionService';
 import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
@@ -1661,6 +1662,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                           {track.name}
                         </span>
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
+                          {findDeviceMatch(track) && (
+                            <span title="En tu móvil: suena sin conexión" className="shrink-0 -mr-0.5">
+                              <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                            </span>
+                          )}
                           <span className="truncate">
                             {parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'}
                           </span>

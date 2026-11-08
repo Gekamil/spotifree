@@ -9,6 +9,7 @@ import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
 import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
 import { getLocalTrackUrl, isLocalTrackId } from '../utils/localFiles';
+import { DEVICE_PREFIX, findDeviceMatch, getDeviceTrackUrl } from '../utils/nativeLocalMusic';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { EQ_CHANGED_EVENT, effectiveEqGains } from '../utils/eqSettings';
@@ -319,7 +320,7 @@ class AudioEngine {
     const curTrack = state.currentTrack;
     const nextTrack = state.getNextTrack?.();
     // Songs from the phone's files play on their own: the next one starts when this one ends
-    if (isLocalTrackId(curTrack?.id) || isLocalTrackId(nextTrack?.id)) return;
+    if (isLocalTrackId(curTrack?.id) || isLocalTrackId(nextTrack?.id) || findDeviceMatch(curTrack) || findDeviceMatch(nextTrack)) return;
 
     let djConfig: DJTransitionConfig | null = null;
     let effectiveCrossfade = crossfadeSec;
@@ -441,7 +442,7 @@ class AudioEngine {
       }
 
       // Local files need no resolving or pre-cueing
-      upcoming = upcoming.filter((t) => !isLocalTrackId(t.id));
+      upcoming = upcoming.filter((t) => !isLocalTrackId(t.id) && !findDeviceMatch(t));
       if (upcoming.length === 0) return;
 
       // 1. Process track N+1 (pre-cue into inactive player without stealing audio focus)
@@ -2555,7 +2556,17 @@ class AudioEngine {
     try {
       // 0. Songs from the user's own files ("Archivos locales"), then offline storage ("musica-spotifree")
       try {
-        const offlineBlobUrl = isLocalTrackId(trackId) ? await getLocalTrackUrl(trackId) : await getDownloadedTrackBlobUrl(trackId);
+        // A playlist song that is also on the phone plays from the phone (no internet needed)
+        const playing = usePlayerStore.getState().currentTrack;
+        const deviceCopy = !isLocalTrackId(trackId) && playing?.id === trackId ? findDeviceMatch(playing) : null;
+        if (deviceCopy) console.info('[AudioEngine] Playing the copy on this phone:', playing?.name);
+        const offlineBlobUrl = trackId.startsWith(DEVICE_PREFIX)
+          ? getDeviceTrackUrl(trackId)
+          : deviceCopy
+          ? getDeviceTrackUrl(deviceCopy)
+          : isLocalTrackId(trackId)
+          ? await getLocalTrackUrl(trackId)
+          : await getDownloadedTrackBlobUrl(trackId);
         if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) return;
         if (isLocalTrackId(trackId) && !offlineBlobUrl) {
           console.warn('[AudioEngine] Local file not found on this device:', trackId);

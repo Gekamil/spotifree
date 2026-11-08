@@ -66,6 +66,10 @@
       "destination": "/api/metadata?action=artist-image"
     },
     {
+      "source": "/api/motion-cover",
+      "destination": "/api/metadata?action=motion-cover"
+    },
+    {
       "source": "/api/audio/stream",
       "destination": "/api/audio?action=stream"
     },

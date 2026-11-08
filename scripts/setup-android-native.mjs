@@ -42,7 +42,7 @@ function copyDir(src, dst) {
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
 
 // 3. MainActivity: every plugin of the app
-const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeSpeechPlugin'].filter((p) =>
+const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeSpeechPlugin', 'SpotifreeLocalMusicPlugin'].filter((p) =>
   fs.existsSync(path.join(javaDir, `${p}.java`))
 );
 fs.writeFileSync(
@@ -76,11 +76,24 @@ const PERMS = [
   'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
   // The DJ's microphone (asked the first time it is used)
   'android.permission.RECORD_AUDIO',
+  // "Archivos locales": the music on the phone (Android 13+; asked when the user opens it)
+  'android.permission.READ_MEDIA_AUDIO',
 ];
 for (const p of PERMS) {
   if (!manifest.includes(`"${p}"`)) {
     manifest = manifest.replace(/<application/, `<uses-permission android:name="${p}" />\n    <application`);
   }
+}
+// Same, Android 12 and older
+if (!manifest.includes('"android.permission.READ_EXTERNAL_STORAGE"')) {
+  manifest = manifest.replace(
+    /<application/,
+    `<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n    <application`
+  );
+}
+// Android 10: read the songs straight from their files (later versions allow it with the permission)
+if (!manifest.includes('requestLegacyExternalStorage')) {
+  manifest = manifest.replace(/<application\b/, '<application android:requestLegacyExternalStorage="true"');
 }
 // Android 11+: the app must declare that it uses the speech recognition service to see it
 if (!manifest.includes('android.speech.RecognitionService')) {
