@@ -248,10 +248,20 @@ export const MobileLayout: React.FC = () => {
       await deleteDownloadedPlaylist(playlistMenuTarget.id);
       setToastMessage('Descarga eliminada');
     } else {
-      const cached = (useSpotifyDataStore.getState().playlistDetailsCache as any)[playlistMenuTarget.id];
-      const tracks = cached?.tracks?.items || playlistMenuTarget.tracks?.items || [];
-      await downloadPlaylist(playlistMenuTarget, tracks);
-      setToastMessage('Playlist descargada');
+      const target = playlistMenuTarget;
+      const cached = (useSpotifyDataStore.getState().playlistDetailsCache as any)[target.id];
+      const tracks = cached?.tracks?.items || target.tracks?.items || [];
+      // Close the menu right away and show what is happening
+      setPlaylistMenuTarget(null);
+      setToastMessage(`Descargando ${tracks.length} canciones…`);
+      const res = await downloadPlaylist(target, tracks, (done, total) => setToastMessage(`Descargando canciones (${done}/${total})…`));
+      setToastMessage(
+        res.downloaded > 0
+          ? `${res.downloaded} de ${res.total} canciones disponibles sin conexión`
+          : 'No se ha podido descargar el audio de estas canciones'
+      );
+      setTimeout(() => setToastMessage(null), 3500);
+      return;
     }
     setPlaylistMenuTarget(null);
     setTimeout(() => setToastMessage(null), 2500);
