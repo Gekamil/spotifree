@@ -378,9 +378,15 @@ async function findAppleAlbumId(title, artist, country) {
   });
   if (!r.ok) return null;
   const data = await r.json();
-  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  const a = norm(artist).split(' ')[0];
-  const hit = (data.results || []).find((x) => !a || norm(x.artistName).includes(a)) || null;
+  const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s*[([].*?[)\]]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+  // Same artist (whole name) and same song title, nothing looser
+  const a = norm(artist);
+  const t = norm(title);
+  const hit =
+    (data.results || []).find((x) => {
+      const xa = norm(x.artistName);
+      return a && xa && (xa.includes(a) || a.includes(xa)) && norm(x.trackName) === t;
+    }) || null;
   return hit?.collectionId ? String(hit.collectionId) : null;
 }
 

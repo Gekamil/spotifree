@@ -19,9 +19,15 @@ export function isPlaylistOrGenericCover(url?: string | null, playlistCover?: st
   return false;
 }
 
+// v2: the old cache could hold covers of other songs by the same artist (loose search). It is
+// dropped once; covers are found again with the exact-match rules below.
+const COVERS_KEY = 'spotifree_track_covers_v2';
 if (typeof window !== 'undefined') {
   try {
-    const saved = window.localStorage.getItem('spotifree_track_covers');
+    window.localStorage.removeItem('spotifree_track_covers');
+  } catch {}
+  try {
+    const saved = window.localStorage.getItem(COVERS_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
       let cleaned = false;
@@ -35,7 +41,7 @@ if (typeof window !== 'undefined') {
       });
       // Purge corrupt playlist covers from localStorage immediately
       if (cleaned) {
-        window.localStorage.setItem('spotifree_track_covers', JSON.stringify(parsed));
+        window.localStorage.setItem(COVERS_KEY, JSON.stringify(parsed));
       }
     }
   } catch {}
@@ -52,8 +58,84 @@ export function persistTrackCover(id: string, url: string, playlistCover?: strin
         obj[k] = v;
         if (++count > 1500) break;
       }
-      window.localStorage.setItem('spotifree_track_covers', JSON.stringify(obj));
+      window.localStorage.setItem(COVERS_KEY, JSON.stringify(obj));
     } catch {}
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exact cover search: the right song or nothing (a placeholder is better than a wrong cover)
+// ---------------------------------------------------------------------------
+const normCover = (s = '') =>
+  s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s*[([].*?[)\]]/g, '')
+    .replace(/\s+-\s+.*$/, '')
+    .replace(/\b(feat|ft|featuring|with)\b\.?.*$/, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+function sameTitle(a: string, b: string): boolean {
+  const x = normCover(a);
+  const y = normCover(b);
+  if (!x || !y) return false;
+  if (x === y) return true;
+  const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  return short.length >= 6 && long.startsWith(short);
+}
+
+function sameArtist(trackArtists: string[], candidate: string): boolean {
+  const c = normCover(candidate);
+  if (!c) return false;
+  return trackArtists.some((a) => {
+    const n = normCover(a);
+    return n.length >= 2 && (c.includes(n) || n.includes(c));
+  });
+}
+
+/** Artists of a track as plain names ("A, B & C" split too) */
+function artistNames(t: Track): string[] {
+  const out: string[] = [];
+  for (const a of t.artists || []) for (const p of String(a?.name || '').split(/\s*[,&]\s*/)) if (p) out.push(p);
+  return out;
+}
+
+/**
+ * The cover of exactly this song: Spotify's own (oEmbed) for Spotify tracks; otherwise an
+ * iTunes result with the same title and the same artist. Never "another song by the artist".
+ */
+export async function findExactCover(t: Track): Promise<string | null> {
+  if (!t?.name) return null;
+  const cleanId = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0];
+  if (/^[0-9a-zA-Z]{22}$/.test(cleanId)) {
+    try {
+      const res = await fetch(`https://open.spotify.com/oembed?url=https://open.spotify.com/track/${cleanId}`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.thumbnail_url && !isPlaylistOrGenericCover(data.thumbnail_url)) return data.thumbnail_url;
+      }
+    } catch {}
+  }
+  const artists = artistNames(t);
+  if (!artists.length || artists[0].toLowerCase() === 'spotify') return null;
+  try {
+    const q = `${normCover(t.name)} ${normCover(artists[0])}`.trim();
+    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=10`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const hits = (data.results || []).filter((r: any) => r?.artworkUrl100 && sameTitle(r.trackName, t.name) && sameArtist(artists, r.artistName));
+    if (!hits.length) return null;
+    const album = normCover(t.album?.name);
+    const best = (album && hits.find((r: any) => normCover(r.collectionName) === album)) || hits[0];
+    return String(best.artworkUrl100).replace('100x100bb', '600x600bb');
+  } catch {
+    return null;
   }
 }
 
@@ -64,20 +146,22 @@ export function persistTrackCover(id: string, url: string, playlistCover?: strin
  */
 export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): string | undefined {
   if (!track) return undefined;
+  // 1. The cover the song itself comes with (its real album) always wins
+  const albumCover = track.album?.images?.[0]?.url;
+  if (albumCover && !isPlaylistOrGenericCover(albumCover, fallbackPlaylistCover)) {
+    // If the cover is identical to the playlist cover, do not use it
+    if (!fallbackPlaylistCover || (albumCover !== fallbackPlaylistCover && !albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
+      return albumCover;
+    }
+  }
+
+  // 2. A cover found for this exact song
   if (TRACK_COVER_CACHE.has(track.id)) {
     const cached = TRACK_COVER_CACHE.get(track.id);
     if (cached && !isPlaylistOrGenericCover(cached, fallbackPlaylistCover)) {
       if (!fallbackPlaylistCover || (cached !== fallbackPlaylistCover && !cached.endsWith(fallbackPlaylistCover.slice(-25)))) {
         return cached;
       }
-    }
-  }
-
-  const albumCover = track.album?.images?.[0]?.url;
-  if (albumCover && !isPlaylistOrGenericCover(albumCover, fallbackPlaylistCover)) {
-    // If the cover is identical to the playlist cover, do not use it
-    if (!fallbackPlaylistCover || (albumCover !== fallbackPlaylistCover && !albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
-      return albumCover;
     }
   }
 
@@ -158,96 +242,13 @@ export async function resolveTrackCoversBatch(
           return { id: t.id, url: existingDirect };
         }
 
-        const cleanName = t.name
-          .replace(/\s*\(.*?\)/g, '')
-          .replace(/\s*\[.*?\]/g, '')
-          .replace(/\s*-\s*(remaster|remix|version|radio|edit|live).*$/i, '')
-          .trim();
-        const rawArtist = t.artists?.[0]?.name || '';
-        const primaryArtist = rawArtist.split(/[,&]/)[0].replace(/\s*(feat\.|ft\.).*$/i, '').trim();
-        const q1 = `${cleanName} ${primaryArtist}`.trim();
-
-        // 1. iTunes Search API (100% browser CORS compatible, 600x600 HD, ~120ms response)
-        try {
-          const itunesRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=4`,
-            { signal: AbortSignal.timeout(2500) }
-          );
-          if (itunesRes.ok) {
-            const itunesData = await itunesRes.json();
-            const results = itunesData.results || [];
-            const matched = results.find((r: any) => {
-              if (!primaryArtist || primaryArtist.toLowerCase() === 'spotify') return true;
-              const rArtist = (r.artistName || '').toLowerCase();
-              const pArtist = primaryArtist.toLowerCase();
-              return rArtist.includes(pArtist) || pArtist.includes(rArtist);
-            }) || results[0];
-
-            if (matched?.artworkUrl100) {
-              const hd = matched.artworkUrl100.replace('100x100bb', '600x600bb');
-              if (!isPlaylistOrGenericCover(hd, playlistCover)) {
-                persistTrackCover(t.id, hd, playlistCover);
-                return { id: t.id, url: hd };
-              }
-            }
-          }
-        } catch {}
-
-        // 2. Spotify oEmbed (100% official exact Spotify album cover for this exact track ID)
-        const isSpotifyId = /^[0-9a-zA-Z]{22}$/.test(t.id);
-        if (isSpotifyId) {
-          try {
-            const res = await fetch(
-              `https://open.spotify.com/oembed?url=https://open.spotify.com/track/${t.id}`,
-              { signal: AbortSignal.timeout(2000) }
-            );
-            if (res.ok) {
-              const data = await res.json();
-              if (data.thumbnail_url && !isPlaylistOrGenericCover(data.thumbnail_url, playlistCover)) {
-                persistTrackCover(t.id, data.thumbnail_url, playlistCover);
-                return { id: t.id, url: data.thumbnail_url };
-              }
-            }
-          } catch {}
+        // Exactly this song's cover (Spotify oEmbed, or iTunes with the same title AND artist).
+        // No "first result" fallbacks: those showed other songs' covers.
+        const exact = await findExactCover(t);
+        if (exact && !isPlaylistOrGenericCover(exact, playlistCover)) {
+          persistTrackCover(t.id, exact, playlistCover);
+          return { id: t.id, url: exact };
         }
-
-        // 3. iTunes Search with title only fallback (if artist was generic)
-        if (cleanName && cleanName.length > 2 && (!primaryArtist || primaryArtist.toLowerCase() === 'spotify')) {
-          try {
-            const itunesRes2 = await fetch(
-              `https://itunes.apple.com/search?term=${encodeURIComponent(cleanName)}&media=music&entity=song&limit=2`,
-              { signal: AbortSignal.timeout(2000) }
-            );
-            if (itunesRes2.ok) {
-              const itunesData2 = await itunesRes2.json();
-              const top = itunesData2.results?.[0];
-              if (top?.artworkUrl100) {
-                const hd = top.artworkUrl100.replace('100x100bb', '600x600bb');
-                if (!isPlaylistOrGenericCover(hd, playlistCover)) {
-                  persistTrackCover(t.id, hd, playlistCover);
-                  return { id: t.id, url: hd };
-                }
-              }
-            }
-          } catch {}
-        }
-
-        // 4. Server-side Audio Search Proxy fallback (no browser CORS restrictions)
-        try {
-          const srvRes = await fetch(`/api/audio/search?q=${encodeURIComponent(q1)}&limit=1`, {
-            signal: AbortSignal.timeout(2500),
-          });
-          if (srvRes.ok) {
-            const srvData = await srvRes.json();
-            const topSrv = Array.isArray(srvData) ? srvData[0] : srvData?.results?.[0];
-            const candidateCover = topSrv?.thumbnail || topSrv?.albumArt || topSrv?.image;
-            if (candidateCover && !isPlaylistOrGenericCover(candidateCover, playlistCover)) {
-              persistTrackCover(t.id, candidateCover, playlistCover);
-              return { id: t.id, url: candidateCover };
-            }
-          }
-        } catch {}
-
         return null;
       })
     );

@@ -24,7 +24,14 @@ function resolveTrackCover(track: any): string {
   const rawId = track.id || '';
   const cleanId = rawId.replace(/^spotify:track:/i, '').split('?')[0].trim();
 
-  // 1. High-priority dedicated cover cache
+  // 1. The song's own album images (its real cover) always win
+  if (track.album?.images && track.album.images.length > 0) {
+    for (const img of track.album.images) {
+      if (img && img.url && !isPlaylistOrGenericCover(img.url)) return img.url;
+    }
+  }
+
+  // 2. A cover found for this exact song (exact title + artist match, see trackCovers.tsx)
   if (rawId && TRACK_COVER_CACHE.has(rawId)) {
     const cached = TRACK_COVER_CACHE.get(rawId);
     if (cached && !isPlaylistOrGenericCover(cached)) return cached;
@@ -33,12 +40,7 @@ function resolveTrackCover(track: any): string {
     const cached = TRACK_COVER_CACHE.get(cleanId);
     if (cached && !isPlaylistOrGenericCover(cached)) return cached;
   }
-
-  // 2. Direct album images on track (filtering generic/playlist placeholders)
   if (track.album?.images && track.album.images.length > 0) {
-    for (const img of track.album.images) {
-      if (img && img.url && !isPlaylistOrGenericCover(img.url)) return img.url;
-    }
     const first = track.album.images[0]?.url;
     if (first && !first.includes('liked-songs') && !first.includes('mosaic.scdn.co')) return first;
   }
@@ -55,7 +57,7 @@ function resolveTrackCover(track: any): string {
   // 4. Check spotifree_track_covers in localStorage
   if (typeof window !== 'undefined') {
     try {
-      const rawCovers = window.localStorage.getItem('spotifree_track_covers');
+      const rawCovers = window.localStorage.getItem('spotifree_track_covers_v2');
       if (rawCovers) {
         const parsed = JSON.parse(rawCovers);
         if (parsed[rawId] && !isPlaylistOrGenericCover(parsed[rawId])) return parsed[rawId];

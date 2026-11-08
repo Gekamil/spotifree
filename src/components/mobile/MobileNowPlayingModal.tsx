@@ -28,7 +28,7 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
-import { getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
+import { findExactCover, getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
@@ -201,46 +201,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       return;
     }
 
-    const cleanTitle = currentTrack.name
-      .replace(/\s*\(.*?\)/g, '')
-      .replace(/\s*\[.*?\]/g, '')
-      .replace(/\s*-\s*(remaster|remix|version|radio|edit|live).*$/i, '')
-      .trim();
-    const primaryArtist = (currentTrack.artists?.[0]?.name || '').split(/[,&]/)[0].replace(/\s*(feat\.|ft\.).*$/i, '').trim();
-    const q1 = `${cleanTitle} ${primaryArtist}`.trim();
-
-    try {
-      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q1)}&media=music&entity=song&limit=1`, { signal: AbortSignal.timeout(2500) });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.results?.[0]?.artworkUrl100 && currentTrackIdRef.current === targetId) {
-          const hd = data.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
-          persistTrackCover(targetId, hd);
-          setDisplayCover(hd);
-          extractDominantColorFromImage(hd).then((hex) => {
-            if (hex && currentTrackIdRef.current === targetId) setExtractedModalColor(hex);
-          });
-          return;
-        }
-      }
-    } catch {}
-
-    if (cleanTitle && cleanTitle.length > 2) {
-      try {
-        const res2 = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(cleanTitle)}&media=music&entity=song&limit=1`, { signal: AbortSignal.timeout(2000) });
-        if (res2.ok) {
-          const data2 = await res2.json();
-          if (data2.results?.[0]?.artworkUrl100 && currentTrackIdRef.current === targetId) {
-            const hd = data2.results[0].artworkUrl100.replace('100x100bb', '600x600bb');
-            persistTrackCover(targetId, hd);
-            setDisplayCover(hd);
-            extractDominantColorFromImage(hd).then((hex) => {
-              if (hex && currentTrackIdRef.current === targetId) setExtractedModalColor(hex);
-            });
-            return;
-          }
-        }
-      } catch {}
+    // Only this exact song's cover (same title and artist), never another song's
+    const exact = await findExactCover(currentTrack);
+    if (exact && currentTrackIdRef.current === targetId) {
+      persistTrackCover(targetId, exact);
+      setDisplayCover(exact);
+      extractDominantColorFromImage(exact).then((hex) => {
+        if (hex && currentTrackIdRef.current === targetId) setExtractedModalColor(hex);
+      });
+      return;
     }
 
     // Fallback to reliable default cover

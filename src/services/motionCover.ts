@@ -44,7 +44,11 @@ export interface MotionCover {
 }
 
 const TTL = 7 * 24 * 3600 * 1000;
-const STORE_KEY = 'spotifree_motion_cover_cache_v1';
+// v2: v1 could hold animated covers of other albums by the same artist
+const STORE_KEY = 'spotifree_motion_cover_cache_v2';
+try {
+  localStorage.removeItem('spotifree_motion_cover_cache_v1');
+} catch {}
 const mem = new Map<string, MotionCover | null>();
 const pending = new Map<string, Promise<MotionCover | null>>();
 let stored: Record<string, { t: number; v: MotionCover | null }> = (() => {
@@ -83,14 +87,19 @@ async function appleAlbumId(t: Track): Promise<string | null> {
     const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=8&country=es`);
     if (!r.ok) return null;
     const data = await r.json();
-    const a = norm(artist).split(' ')[0];
+    // Exactly this song: same artist (whole name) and same title, or the same album name.
+    // Never "the artist's first album": that showed covers of other albums.
+    const artistN = norm(artist);
     const title = norm(t.name);
     const album = norm(t.album?.name);
-    const results: any[] = (data.results || []).filter((x: any) => !a || norm(x.artistName).includes(a));
+    const results: any[] = (data.results || []).filter((x: any) => {
+      const xa = norm(x.artistName);
+      return artistN && xa && (xa.includes(artistN) || artistN.includes(xa));
+    });
     const hit =
-      results.find((x) => album && norm(x.collectionName) === album) ||
+      (album && results.find((x) => norm(x.collectionName) === album)) ||
       results.find((x) => norm(x.trackName) === title) ||
-      results[0];
+      null;
     return hit?.collectionId ? String(hit.collectionId) : null;
   } catch {
     return null;
@@ -112,10 +121,9 @@ export function getMotionCover(t: Track | null | undefined): Promise<MotionCover
   const p = (async () => {
     try {
       const id = await appleAlbumId(t);
-      const q = id
-        ? `id=${id}`
-        : `title=${encodeURIComponent(t.name)}&artist=${encodeURIComponent(t.artists?.[0]?.name || '')}`;
-      const r = await fetch(`/api/motion-cover?${q}&country=es`);
+      // No exact album found: no animated cover (a wrong one is worse than none)
+      if (!id) return null;
+      const r = await fetch(`/api/motion-cover?id=${id}&country=es`);
       if (!r.ok) return null;
       const data = await r.json();
       const v: MotionCover | null = data?.square?.video ? { video: data.square.video, poster: data.square.poster || null } : null;

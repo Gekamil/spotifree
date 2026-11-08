@@ -1,78 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Home-screen widget (SpotifreeWidget.java): cover, song, artist, previous / play / next -->
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<!-- Widget, bar size (4x1): cover, song, artist, previous / play / next on the cover's colour.
+     SpotifreeWidget.java picks this one, spotifree_widget_large or spotifree_widget_small by size. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@drawable/spotifree_widget_bg"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="8dp">
+    android:layout_height="match_parent">
 
     <ImageView
-        android:id="@+id/widget_art"
-        android:layout_width="56dp"
-        android:layout_height="56dp"
+        android:id="@+id/widget_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
         android:contentDescription="@null"
-        android:scaleType="centerCrop"
-        android:src="@mipmap/ic_launcher_app_default" />
+        android:scaleType="fitXY"
+        android:src="@drawable/spotifree_widget_shape" />
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/spotifree_widget_shade" />
 
     <LinearLayout
-        android:id="@+id/widget_text"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="12dp"
-        android:layout_marginEnd="4dp"
-        android:layout_weight="1"
-        android:orientation="vertical">
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="8dp">
 
-        <TextView
-            android:id="@+id/widget_title"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text="Spotifree"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+        <ImageView
+            android:id="@+id/widget_art"
+            android:layout_width="58dp"
+            android:layout_height="58dp"
+            android:contentDescription="@null"
+            android:scaleType="fitCenter"
+            android:src="@mipmap/ic_launcher_app_default" />
 
-        <TextView
-            android:id="@+id/widget_artist"
-            android:layout_width="match_parent"
+        <LinearLayout
+            android:id="@+id/widget_text"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:text=""
-            android:textColor="#B3B3B3"
-            android:textSize="13sp" />
+            android:layout_marginStart="12dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_title"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="Spotifree"
+                android:textColor="#FFFFFF"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/widget_artist"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text=""
+                android:textColor="#D9FFFFFF"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <ImageView
+            android:id="@+id/widget_prev"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:contentDescription="Anterior"
+            android:padding="8dp"
+            android:src="@drawable/ic_stat_prev" />
+
+        <ImageView
+            android:id="@+id/widget_play"
+            android:layout_width="42dp"
+            android:layout_height="42dp"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="2dp"
+            android:background="@drawable/spotifree_widget_play_bg"
+            android:contentDescription="Reproducir"
+            android:padding="11dp"
+            android:src="@drawable/ic_stat_play" />
+
+        <ImageView
+            android:id="@+id/widget_next"
+            android:layout_width="38dp"
+            android:layout_height="38dp"
+            android:contentDescription="Siguiente"
+            android:padding="8dp"
+            android:src="@drawable/ic_stat_next" />
     </LinearLayout>
-
-    <ImageView
-        android:id="@+id/widget_prev"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:contentDescription="Anterior"
-        android:padding="9dp"
-        android:src="@drawable/ic_stat_prev" />
-
-    <ImageView
-        android:id="@+id/widget_play"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
-        android:layout_marginStart="2dp"
-        android:layout_marginEnd="2dp"
-        android:background="@drawable/spotifree_widget_play_bg"
-        android:contentDescription="Reproducir"
-        android:padding="11dp"
-        android:src="@drawable/ic_stat_play" />
-
-    <ImageView
-        android:id="@+id/widget_next"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:contentDescription="Siguiente"
-        android:padding="9dp"
-        android:src="@drawable/ic_stat_next" />
-</LinearLayout>
+</FrameLayout>
