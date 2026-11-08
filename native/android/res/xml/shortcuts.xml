@@ -7,7 +7,48 @@
             android:targetPackage="com.spotifree.music"
             android:targetClass="com.spotifree.music.MainActivity">
             <parameter
-                android:name="song.name"
+                android:name="audio.name"
+                android:key="query" />
+        </intent>
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="musicRecording.name"
+                android:key="query" />
+        </intent>
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="artist.name"
+                android:key="query" />
+        </intent>
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="album.name"
+                android:key="query" />
+        </intent>
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <parameter
+                android:name="playlist.name"
+                android:key="query" />
+        </intent>
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity">
+            <url-template android:value="spotifree://play?q={query}" />
+            <parameter
+                android:name="audio.name"
                 android:key="query" />
         </intent>
     </capability>
@@ -23,4 +64,32 @@
                 android:key="feature" />
         </intent>
     </capability>
+
+    <!-- Static Shortcut: Pon música -->
+    <shortcut
+        android:shortcutId="shortcut_play_music"
+        android:enabled="true"
+        android:icon="@drawable/ic_stat_spotifree"
+        android:shortLabel="@string/shortcut_play_music"
+        android:longLabel="@string/shortcut_play_music_long">
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity" />
+        <capability-binding android:key="actions.intent.PLAY_MUSIC" />
+    </shortcut>
+
+    <!-- Static Shortcut: Reproducir música -->
+    <shortcut
+        android:shortcutId="shortcut_reproducir_musica"
+        android:enabled="true"
+        android:icon="@drawable/ic_stat_spotifree"
+        android:shortLabel="@string/shortcut_reproducir_musica"
+        android:longLabel="@string/shortcut_reproducir_musica_long">
+        <intent
+            android:action="android.media.action.MEDIA_PLAY_FROM_SEARCH"
+            android:targetPackage="com.spotifree.music"
+            android:targetClass="com.spotifree.music.MainActivity" />
+        <capability-binding android:key="actions.intent.PLAY_MUSIC" />
+    </shortcut>
 </shortcuts>

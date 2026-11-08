@@ -40,11 +40,13 @@ public class MainActivity extends BridgeActivity {
         String action = intent.getAction();
         if (action == null) return;
 
-        // 1. Voice commands from Google Assistant, Gemini & Android AI
+        // 1. Voice commands from Google Assistant, Gemini & Android AI / Shortcuts
         if (MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH.equals(action)
                 || "android.media.action.MEDIA_PLAY_FROM_SEARCH".equals(action)
                 || "android.media.action.PLAY_FROM_SEARCH".equals(action)
-                || "android.intent.action.MEDIA_SEARCH".equals(action)) {
+                || "android.intent.action.MEDIA_SEARCH".equals(action)
+                || intent.getBooleanExtra("play", false)
+                || intent.hasExtra("spotifree_play")) {
 
             String query = intent.getStringExtra(SearchManager.QUERY);
             if (query == null || query.trim().isEmpty()) {
@@ -58,6 +60,21 @@ public class MainActivity extends BridgeActivity {
             }
             if (query == null || query.trim().isEmpty()) {
                 query = intent.getStringExtra("query");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("audio.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("musicRecording.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("artist.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("album.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("playlist.name");
             }
             if (query == null) query = "";
 

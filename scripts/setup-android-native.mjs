@@ -81,7 +81,9 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
         if (MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH.equals(action)
                 || "android.media.action.MEDIA_PLAY_FROM_SEARCH".equals(action)
                 || "android.media.action.PLAY_FROM_SEARCH".equals(action)
-                || "android.intent.action.MEDIA_SEARCH".equals(action)) {
+                || "android.intent.action.MEDIA_SEARCH".equals(action)
+                || intent.getBooleanExtra("play", false)
+                || intent.hasExtra("spotifree_play")) {
 
             String query = intent.getStringExtra(SearchManager.QUERY);
             if (query == null || query.trim().isEmpty()) {
@@ -95,6 +97,21 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
             }
             if (query == null || query.trim().isEmpty()) {
                 query = intent.getStringExtra("query");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("audio.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("musicRecording.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("artist.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("album.name");
+            }
+            if (query == null || query.trim().isEmpty()) {
+                query = intent.getStringExtra("playlist.name");
             }
             if (query == null) query = "";
 

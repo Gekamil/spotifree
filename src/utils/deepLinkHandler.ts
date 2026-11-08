@@ -37,8 +37,15 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
     // 2. Spotifree custom scheme (e.g. spotifree://play?q=Bad+Bunny or spotifree://track/...)
     if (trimmed.startsWith('spotifree://')) {
       const pathAndQuery = trimmed.replace(/^spotifree:\/\//, '');
-      if (pathAndQuery.startsWith('play?') || pathAndQuery.startsWith('search?')) {
-        const queryParams = new URLSearchParams(pathAndQuery.split('?')[1] || '');
+      if (
+        pathAndQuery === 'play' ||
+        pathAndQuery.startsWith('play?') ||
+        pathAndQuery.startsWith('play/') ||
+        pathAndQuery.startsWith('search?') ||
+        pathAndQuery.startsWith('search/')
+      ) {
+        const queryString = pathAndQuery.includes('?') ? pathAndQuery.split('?')[1] : '';
+        const queryParams = new URLSearchParams(queryString || '');
         const q = queryParams.get('q') || queryParams.get('query') || '';
         await playVoiceSearch(q);
         showGlobalToast(q ? `Buscando y reproduciendo: ${q}` : 'Reproduciendo música');
@@ -64,8 +71,8 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
     }
 
     // Query parameters: ?play=..., ?q=..., ?search=..., ?track=..., ?playlist=...
-    const playParam = parsedUrl.searchParams.get('play') || parsedUrl.searchParams.get('q') || parsedUrl.searchParams.get('search');
-    if (playParam) {
+    const playParam = parsedUrl.searchParams.get('play') ?? parsedUrl.searchParams.get('q') ?? parsedUrl.searchParams.get('search');
+    if (playParam !== null) {
       const decoded = decodeURIComponent(playParam).trim();
       if (decoded.startsWith('spotify:') || decoded.includes('open.spotify.com')) {
         return await handleDeepLink(decoded);

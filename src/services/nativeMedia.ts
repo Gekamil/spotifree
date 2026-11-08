@@ -648,7 +648,15 @@ export async function playVoiceSearch(query: string) {
     }
     const first = readRecent()[0] || 'liked-songs';
     const tracks = await loadPlaylistTracks(first);
-    playList(tracks, tracks[0], first);
+    if (tracks.length) {
+      playList(tracks, tracks[0], first);
+      return;
+    }
+    // Fallback: If library is currently empty, play popular / top tracks
+    const topResults = await runSearch('Top Hits').catch(() => null);
+    if (topResults?.tracks?.length) {
+      playList(topResults.tracks, topResults.tracks[0]);
+    }
     return;
   }
   const mine = st.playlists.find((p) => (p.name || '').toLowerCase().includes(q));
@@ -679,14 +687,14 @@ export function initNativeMedia() {
   SpotifreeMedia.addListener('command', (c) => {
     void runCommand(c);
   }).catch(() => {});
-  // A song chosen in the car while the app was closed
+  // A song chosen by voice command or the car while the app was closed
   window.setTimeout(() => {
     SpotifreeMedia.takePendingCommand()
       .then((r) => {
-        if (r?.command) window.setTimeout(() => void runCommand(r.command!), 2500);
+        if (r?.command) window.setTimeout(() => void runCommand(r.command!), 300);
       })
       .catch(() => {});
-  }, 1500);
+  }, 400);
 
   pushLibrary();
   void makeGenreTiles();

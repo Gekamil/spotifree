@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_play_music">Pon música</string>
+    <string name="shortcut_play_music_long">Pon música en Spotifree</string>
+    <string name="shortcut_reproducir_musica">Reproducir música</string>
+    <string name="shortcut_reproducir_musica_long">Reproducir música en Spotifree</string>
+</resources>
