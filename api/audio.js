@@ -166,7 +166,7 @@ function scoreCandidate(query, expectedTitle, expectedArtist, candTitle, candArt
   }
 
   // 3. Duration alignment with Spotify track (eliminates video clip intro skits and cut versions)
-  if (expectedDurationSec > 0 && candDurationSec > 0) {
+  if (expectedDurationSec > 35 && candDurationSec > 0) {
     const diff = candDurationSec - expectedDurationSec;
     const absDiff = Math.abs(diff);
 
@@ -741,7 +741,8 @@ export default async function handler(req, res) {
     const artist = (req.query?.artist || '').trim();
     const q = cleanQuery((req.query?.q || `${title} ${artist}`).trim());
     const rawDur = req.query?.duration;
-    const dur = rawDur ? (Number(rawDur) > 1000 ? Math.round(Number(rawDur) / 1000) : Math.round(Number(rawDur))) : 0;
+    let dur = rawDur ? (Number(rawDur) > 1000 ? Math.round(Number(rawDur) / 1000) : Math.round(Number(rawDur))) : 0;
+    if (dur <= 35) dur = 0; // Ignore iTunes / Apple 30s preview metadata
     if (!q) return res.status(400).json({ error: 'Missing query' });
     try {
       const list = await collectCandidates(q, title, artist, new Set(), dur);
@@ -760,7 +761,8 @@ export default async function handler(req, res) {
   const rawArtist = (req.query?.artist || '').trim();
 
   const rawDuration = req.query?.duration || req.query?.duration_ms || req.query?.durationSec;
-  const expectedDurationSec = rawDuration ? (Number(rawDuration) > 1000 ? Math.round(Number(rawDuration) / 1000) : Math.round(Number(rawDuration))) : 0;
+  let expectedDurationSec = rawDuration ? (Number(rawDuration) > 1000 ? Math.round(Number(rawDuration) / 1000) : Math.round(Number(rawDuration))) : 0;
+  if (expectedDurationSec <= 35) expectedDurationSec = 0; // Ignore iTunes / Apple 30s preview metadata
 
   if (!rawQ && !rawTitle) {
     return res.status(400).json({ error: 'Missing query' });

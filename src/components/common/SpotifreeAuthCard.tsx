@@ -9,6 +9,7 @@ import {
 } from '../../services/spotifreeAuth';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useUIStore } from '../../store/useUIStore';
 import { NativeSpotifyLoginButton } from './NativeSpotifyLoginButton';
 
 export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCookieInput?: boolean; initialMode?: 'login' | 'register' }> = ({
@@ -64,6 +65,7 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
         }
         setCurrentAccount(res.account);
         setMessage('¡Cuenta creada y sincronizada con Firebase!');
+        useUIStore.getState().openTasteOnboarding();
       } else {
         const res = await loginSpotifreeAccount(cleanEmail, cleanPass);
         if (!res.success || !res.account) {

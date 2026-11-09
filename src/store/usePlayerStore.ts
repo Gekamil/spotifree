@@ -11,12 +11,47 @@ import {
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } from '../utils/trackCovers';
 
-function matchTrackId(a?: string | null, b?: string | null): boolean {
+export function matchTrackId(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
   if (a === b) return true;
-  const ca = a.replace(/^spotify:track:/i, '').split('?')[0].trim();
-  const cb = b.replace(/^spotify:track:/i, '').split('?')[0].trim();
-  return ca === cb;
+  const ca = a.replace(/^spotify:track:/i, '').replace(/^(search-add-|artist-song-|imported-|itunes-|search-)/i, '').split('?')[0].trim().toLowerCase();
+  const cb = b.replace(/^spotify:track:/i, '').replace(/^(search-add-|artist-song-|imported-|itunes-|search-)/i, '').split('?')[0].trim().toLowerCase();
+  return Boolean(ca && cb && ca === cb);
+}
+
+export function findTrackIndexInQueue(queue: Track[], currentTrack: Track | null | undefined): number {
+  if (!currentTrack || !queue || queue.length === 0) return -1;
+  // 1. Direct ID or stripped ID match
+  let idx = queue.findIndex((t) => t && (t.id === currentTrack.id || matchTrackId(t.id, currentTrack.id)));
+  if (idx !== -1) return idx;
+
+  // 2. Normalized title + primary artist
+  const norm = (s?: string) =>
+    (s || '')
+      .toLowerCase()
+      .replace(/\s*\(.*?\)/g, '')
+      .replace(/\s*\[.*?\]/g, '')
+      .replace(/\s*-\s*(remaster|remix|version|radio|edit|live).*$/i, '')
+      .replace(/[^\p{L}\p{N}]/gu, '')
+      .trim();
+
+  const curTitle = norm(currentTrack.name);
+  const curArtist = norm(currentTrack.artists?.[0]?.name || (currentTrack as any)?.artist);
+
+  if (curTitle) {
+    idx = queue.findIndex((t) => {
+      if (!t) return false;
+      const tTitle = norm(t.name);
+      const tArtist = norm(t.artists?.[0]?.name || (t as any)?.artist);
+      if (tTitle === curTitle && (!curArtist || !tArtist || curArtist === tArtist)) {
+        return true;
+      }
+      return false;
+    });
+    if (idx !== -1) return idx;
+  }
+
+  return -1;
 }
 
 function resolveTrackCover(track: any): string {
@@ -265,7 +300,12 @@ const store = create<PlayerState>((set, get) => ({
         activeQueue = rawOriginal;
       }
     } else {
-      activeQueue = state.queue;
+      const exists = state.queue.some((t) => t && (t.id === track.id || matchTrackId(t.id, track.id)));
+      if (!exists && track) {
+        activeQueue = [track, ...state.queue];
+      } else {
+        activeQueue = state.queue;
+      }
     }
 
     if (cleanCur && cleanNew && cleanCur === cleanNew && state.isPlaying) {
@@ -399,9 +439,19 @@ const store = create<PlayerState>((set, get) => ({
         }
       }
 
+      const currentIndex = findTrackIndexInQueue(queue, currentTrack);
+      const isActuallyAtEndOfQueue = currentIndex >= queue.length - 1;
+
+      // Autoplay similar songs ONLY if we are legitimately at the very end of the playlist / queue
       const isAutoplay = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_autoplay') !== 'false' : true;
-      if (isAutoplay && currentTrack) {
+      if (isAutoplay && currentTrack && isActuallyAtEndOfQueue) {
         get().triggerAutoplaySimilar(currentTrack);
+        return;
+      }
+
+      // If not legitimately at end of queue (e.g. index glitch), play next sequential item in queue
+      if (currentIndex >= 0 && currentIndex < queue.length - 1) {
+        get().playTrack(queue[currentIndex + 1], queue, currentContextId || undefined);
         return;
       }
 
@@ -593,9 +643,7 @@ const store = create<PlayerState>((set, get) => ({
       return currentTrack;
     }
 
-    const currentIndex = currentTrack
-      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
-      : -1;
+    const currentIndex = findTrackIndexInQueue(queue, currentTrack);
 
     // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {
@@ -612,6 +660,12 @@ const store = create<PlayerState>((set, get) => ({
       return queue[0] || null;
     }
 
+    // If current track was not in queue (currentIndex === -1) and queue has tracks,
+    // play from start of queue rather than returning null!
+    if (currentIndex === -1 && queue.length > 0) {
+      return queue[0];
+    }
+
     return null;
   },
 
@@ -623,9 +677,7 @@ const store = create<PlayerState>((set, get) => ({
       return Array(count).fill(currentTrack);
     }
 
-    const currentIndex = currentTrack
-      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
-      : -1;
+    const currentIndex = findTrackIndexInQueue(queue, currentTrack);
     const result: Track[] = [];
 
     if (currentIndex >= 0) {
@@ -751,10 +803,9 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     // Normal sequential playback previous track
-    const currentIndex = currentTrack
-      ? queue.findIndex((t) => matchTrackId(t.id, currentTrack.id) || (t.name === currentTrack.name && t.artists?.[0]?.name === currentTrack.artists?.[0]?.name))
-      : 0;
-    const prevIndex = (currentIndex - 1 + queue.length) % queue.length;
+    const currentIndex = findTrackIndexInQueue(queue, currentTrack);
+    const safeIdx = currentIndex >= 0 ? currentIndex : 0;
+    const prevIndex = (safeIdx - 1 + queue.length) % queue.length;
     const prev = queue[prevIndex];
     if (prev) {
       get().playTrack(prev);

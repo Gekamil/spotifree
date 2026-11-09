@@ -168,29 +168,6 @@ function App() {
       } catch {}
     }
 
-    // Taste onboarding for new/guest accounts without a Spotify session/cookie
-    let tasteTimer: ReturnType<typeof setTimeout> | null = null;
-    if (typeof window !== 'undefined') {
-      const hasCookie = Boolean(
-        window.localStorage.getItem('user_spotify_cookie') ||
-        window.localStorage.getItem('spotify_sp_dc') ||
-        window.localStorage.getItem('spotify_access_token')
-      );
-      const isCompleted = window.localStorage.getItem('spotifree_taste_onboarding_completed') === 'true';
-
-      if (!hasCookie && !isCompleted) {
-        tasteTimer = setTimeout(() => {
-          const recheck = Boolean(
-            window.localStorage.getItem('user_spotify_cookie') ||
-            window.localStorage.getItem('spotify_sp_dc')
-          );
-          if (!recheck) {
-            useUIStore.getState().openTasteOnboarding();
-          }
-        }, 900);
-      }
-    }
-
     const handleFocus = () => {
       if (typeof window !== 'undefined' && window.location.search.includes('code=')) return;
       const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
@@ -206,7 +183,6 @@ function App() {
       removeUrlListener?.();
       unsubscribeAuth();
       unsubscribePlayer();
-      if (tasteTimer) clearTimeout(tasteTimer);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('spotifree_open_login_modal', handleOpenModal);
     };

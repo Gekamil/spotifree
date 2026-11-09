@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
-import { usePlayerStore } from '../../store/usePlayerStore';
+import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -673,10 +673,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }
 
   const handleTrackClick = (track: Track) => {
-    if (currentTrack?.id === track.id) {
+    if (currentTrack?.id === track.id || matchTrackId(currentTrack?.id, track.id)) {
       togglePlay();
     } else {
-      const clickedIndex = displayTracks.findIndex((t) => t.id === track.id);
+      const clickedIndex = findTrackIndexInQueue(displayTracks, track);
       const sequentialQueue = clickedIndex >= 0
         ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
         : displayTracks;

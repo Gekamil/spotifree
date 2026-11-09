@@ -173,7 +173,14 @@ async function readAppleMusic({ url }) {
       const key = `${o.title}|${o.artistName}`;
       if (seen.has(key)) return;
       seen.add(key);
-      tracks.push({ title: o.title, artist: o.artistName, durationSec: Math.round((Number(o.duration) || 0) / 1000) });
+      let durSec = 0;
+      if (typeof o.duration === 'number') {
+        durSec = o.duration > 1000 ? Math.round(o.duration / 1000) : Math.round(o.duration);
+      } else if (typeof o.durationInMillis === 'number') {
+        durSec = Math.round(o.durationInMillis / 1000);
+      }
+      if (durSec <= 35) durSec = 210; // Ignore 30s preview metadata, default to standard studio song length
+      tracks.push({ title: o.title, artist: o.artistName, durationSec: durSec });
     }
   });
   const og = /<meta property="og:title" content="([^"]*)"/.exec(html);

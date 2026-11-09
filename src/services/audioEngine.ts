@@ -351,9 +351,11 @@ class AudioEngine {
     // Silence Truncation & Outro Dead Air Elimination:
     // Spotify duration represents true studio audio length. YouTube videos often include
     // 5-25 seconds of outro cards, silent credits, or sponsors after the music ends.
-    const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 ? curTrack.duration_ms / 1000 : durSec;
+    // Guard against 30s preview metadata (e.g. from iTunes / Apple Music): previews are NOT full studio duration.
+    const isApplePreviewMs = Boolean(curTrack && curTrack.duration_ms > 0 && curTrack.duration_ms <= 35000);
+    const spotifyDurationSec = curTrack && curTrack.duration_ms > 0 && !isApplePreviewMs ? curTrack.duration_ms / 1000 : durSec;
     let effectiveTrackEndSec =
-      spotifyDurationSec > 25 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 120
+      spotifyDurationSec > 45 && spotifyDurationSec < durSec - 2.0 && (durSec - spotifyDurationSec) < 120
         ? spotifyDurationSec
         : durSec;
 
@@ -1848,6 +1850,13 @@ class AudioEngine {
         return;
       }
 
+      // Guard: If a crossfade or outro truncation just completed (< 3500ms), ignore this ENDED event
+      // from the outgoing player so we don't skip the incoming song!
+      if (Date.now() - this.lastCrossfadeFinishTime < 3500) {
+        console.warn('[AudioEngine] Ignored ENDED event right after crossfade/truncation');
+        return;
+      }
+
       // Circuit Breaker: If 2 or more consecutive rapid ENDED events occur (<1500ms),
       // halt automatic skipping to protect the mobile user from an infinite 0/1 loop!
       const now = Date.now();
@@ -1931,7 +1940,8 @@ class AudioEngine {
     const state = usePlayerStore.getState();
     if (!state.isPlaying || state.repeatMode === 'one') return;
     const curTrack = state.currentTrack;
-    if (!curTrack || !curTrack.duration_ms || curTrack.duration_ms <= 25000) return;
+    // Guard against 30s preview metadata (e.g. from iTunes / Apple Music): previews are NOT full studio duration.
+    if (!curTrack || !curTrack.duration_ms || curTrack.duration_ms <= 45000) return;
 
     const spotifyDurationSec = curTrack.duration_ms / 1000;
     // If YouTube duration has extra dead air (> 3s longer than studio audio, up to 120s)
@@ -1939,6 +1949,7 @@ class AudioEngine {
       if (curSec >= spotifyDurationSec) {
         console.log(`[AudioEngine] Truncating dead outro (${curSec.toFixed(1)}s >= ${spotifyDurationSec.toFixed(1)}s), advancing cleanly to next track`);
         this.lastCrossfadeFinishTime = Date.now();
+        this.lastEndedTimestamp = Date.now();
         state.nextTrack();
       }
     }

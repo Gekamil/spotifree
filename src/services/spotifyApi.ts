@@ -364,7 +364,7 @@ export async function searchSpotify(query: string): Promise<any | null> {
     const itunesTracks: Track[] = (songData.results || []).map((t: any, idx: number) => ({
       id: `search-${t.trackId || idx}`,
       name: t.trackName || 'Canción',
-      duration_ms: t.trackTimeMillis || 210000,
+      duration_ms: (t.trackTimeMillis && t.trackTimeMillis > 35000) ? t.trackTimeMillis : 210000,
       preview_url: t.previewUrl || null,
       artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
       album: {

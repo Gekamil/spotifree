@@ -14,7 +14,7 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
-import { usePlayerStore } from '../../store/usePlayerStore';
+import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -567,7 +567,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             const mapped: Track[] = data.results.map((t: any, idx: number) => ({
               id: `search-add-${t.trackId || idx}`,
               name: t.trackName || 'Canción',
-              duration_ms: t.trackTimeMillis || 210000,
+              duration_ms: (t.trackTimeMillis && t.trackTimeMillis > 35000) ? t.trackTimeMillis : 210000,
               artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || 'Artista' }],
               album: {
                 id: `alb-${t.collectionId || idx}`,
@@ -688,7 +688,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             const artistTracks: Track[] = (data.results || []).map((t: any, idx: number) => ({
               id: `artist-song-${t.trackId || idx}`,
               name: t.trackName || 'Canción',
-              duration_ms: t.trackTimeMillis || 210000,
+              duration_ms: (t.trackTimeMillis && t.trackTimeMillis > 35000) ? t.trackTimeMillis : 210000,
               artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
               album: {
                 id: `alb-${t.collectionId || idx}`,
@@ -1029,11 +1029,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   };
 
   const handleTrackClick = (track: Track) => {
-    if (currentTrack?.id === track.id) {
+    if (currentTrack?.id === track.id || matchTrackId(currentTrack?.id, track.id)) {
       togglePlay();
     } else {
       const clickedTrack = { ...track, playlistId: playlist.id };
-      const clickedIndex = tracksWithPlaylistId.findIndex((t) => t.id === track.id);
+      const clickedIndex = findTrackIndexInQueue(tracksWithPlaylistId, track);
       const sequentialQueue = clickedIndex >= 0
         ? [...tracksWithPlaylistId.slice(clickedIndex), ...tracksWithPlaylistId.slice(0, clickedIndex)]
         : tracksWithPlaylistId;
