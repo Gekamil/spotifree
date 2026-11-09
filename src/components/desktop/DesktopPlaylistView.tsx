@@ -18,6 +18,7 @@ import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store
 import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { formatDuration, stripHtml } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
@@ -111,10 +112,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
+  const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
   const rawBaseTracks = isLikedInitially
-    ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || [])])
+    ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || []), ...(sfMix?.tracks?.items || [])])
     : ((playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
+    : (sfMix?.tracks?.items && sfMix.tracks.items.length > 0)
+    ? sfMix.tracks.items
     : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
     ? storePl.tracks.items
     : customSaved);
@@ -728,6 +732,31 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         } finally {
           if (!cancelled) setLoading(false);
         }
+        return;
+      }
+
+      if (playlist.id.startsWith('sf-')) {
+        const foundMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
+        if (foundMix?.tracks?.items && foundMix.tracks.items.length > 0) {
+          setDynamicTracks(foundMix.tracks.items);
+          setDynamicPlaylist((prev) => ({ ...prev, ...foundMix, tracks: foundMix.tracks }));
+          setLoading(false);
+          return;
+        }
+        setLoading(true);
+        refreshSpotifreeMixes(true)
+          .then(() => {
+            if (cancelled) return;
+            const fresh = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
+            if (fresh?.tracks?.items && fresh.tracks.items.length > 0) {
+              setDynamicTracks(fresh.tracks.items);
+              setDynamicPlaylist((prev) => ({ ...prev, ...fresh, tracks: fresh.tracks }));
+            }
+            setLoading(false);
+          })
+          .catch(() => {
+            if (!cancelled) setLoading(false);
+          });
         return;
       }
 

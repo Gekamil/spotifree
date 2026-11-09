@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
 
@@ -20,6 +20,10 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   onOpenLogin,
 }) => {
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
+  const [isActivitySharing, setIsActivitySharing] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('spotifree_sharing_activity') !== 'false';
+  });
 
   // Close on Escape
   useEffect(() => {
@@ -49,6 +53,23 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   const displayName = user?.display_name || 'Jorgete';
   const initial = displayName.charAt(0).toUpperCase() || 'J';
 
+  const toggleActivity = () => {
+    const next = !isActivitySharing;
+    setIsActivitySharing(next);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_sharing_activity', String(next));
+      window.dispatchEvent(
+        new CustomEvent('spotifree:toast', {
+          detail: {
+            message: next
+              ? 'Actividad de escucha compartida con amigos'
+              : 'Actividad de escucha pausada',
+          },
+        })
+      );
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex font-['SpotifyMixUI'] select-none">
       {/* Darkened backdrop with smooth fade */}
@@ -69,13 +90,12 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
         <div className="space-y-4">
           {/* 1. Profile Header Card + Añadir Cuenta inside unified rounded panel matching Spotify */}
           <div className="bg-[#282828] rounded-xl overflow-hidden">
-            {/* Profile Row */}
+            {/* Profile Row: always navigates to profile view so the user can edit profile and see their music */}
             <button
               type="button"
               onClick={() => {
                 onClose();
-                if (isAuthenticated) onNavigate('profile');
-                else onOpenLogin();
+                onNavigate('profile');
               }}
               className="w-full flex items-center gap-3.5 p-3 text-left group active:bg-white/5 transition-colors cursor-pointer"
             >
@@ -96,10 +116,10 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
 
               <div className="min-w-0 flex-1">
                 <h2 className="text-[17px] font-bold text-white font-['SpotifyMixUITitle'] truncate leading-snug">
-                  {isAuthenticated ? displayName : 'Iniciar sesión'}
+                  {displayName}
                 </h2>
                 <span className="text-xs text-[#a7a7a7] group-hover:text-white transition-colors flex items-center font-normal">
-                  {isAuthenticated ? 'Ver perfil' : 'Toca para conectar tu cuenta'}
+                  Ver perfil
                 </span>
               </div>
             </button>
@@ -133,32 +153,8 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             </button>
           </div>
 
-          {/* 2. Main Navigation List (matching real Spotify mobile menu order and styling) */}
+          {/* 2. Main Navigation List (matching real Spotify mobile menu order and styling - "Tu Premium" removed) */}
           <div className="space-y-1 pt-1">
-            {/* Tu Premium with green 'Individual' badge */}
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('settings');
-              }}
-              className="w-full flex items-center justify-between py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
-            >
-              <div className="flex items-center gap-3.5">
-                <div className="w-6 h-6 flex items-center justify-center text-white shrink-0">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.494 17.306c-.215.353-.676.466-1.028.25-2.817-1.721-6.362-2.11-10.537-1.157-.404.093-.807-.156-.9-.56-.092-.404.157-.807.561-.9 4.568-1.044 8.49-.606 11.654 1.339.352.215.466.675.25 1.028zm1.467-3.264c-.27.44-.847.58-1.287.31-3.226-1.983-8.144-2.557-11.96-1.398-.498.15-1.03-.135-1.18-.633-.15-.498.136-1.03.634-1.18 4.364-1.324 9.782-.684 13.483 1.593.44.27.58.847.31 1.288zm.126-3.41c-3.868-2.296-10.248-2.508-13.94-1.387-.593.18-1.22-.16-1.4-.753-.18-.593.16-1.22.753-1.4 4.246-1.29 11.292-1.043 15.753 1.605.534.317.708 1.01.39 1.545-.317.534-1.01.708-1.545.39z" />
-                  </svg>
-                </div>
-                <span className="text-[15px] font-bold text-white tracking-tight">
-                  Tu Premium
-                </span>
-              </div>
-              <span className="bg-[#1ed760] text-black font-bold text-[11px] px-2.5 py-0.5 rounded-full tracking-wide">
-                Individual
-              </span>
-            </button>
-
             {/* Estadísticas de escucha with 'Novedad' blue label */}
             <button
               type="button"
@@ -248,18 +244,15 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             </button>
           </div>
 
-          {/* 3. Dual circular quick action badges (matching Image 1 exactly) */}
-          <div className="flex items-start gap-5 pt-3 px-1">
-            {/* Actividad circle */}
+          {/* 3. Dual circular quick action badges (1:1 Spotify Mobile layout) */}
+          <div className="flex items-start gap-6 pt-3 px-1">
+            {/* Actividad circle: toggles activity sharing with friends */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('stats');
-              }}
-              className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+              onClick={toggleActivity}
+              className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform group"
             >
-              <div className="w-12 h-12 rounded-full bg-[#3b82f6] text-white flex items-center justify-center font-bold text-lg overflow-hidden shadow shrink-0">
+              <div className="relative w-12 h-12 rounded-full bg-[#3b82f6] text-white flex items-center justify-center font-bold text-lg overflow-hidden shadow shrink-0">
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
@@ -271,33 +264,103 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
                 ) : (
                   <span>{initial}</span>
                 )}
+                {/* Active sharing green indicator dot */}
+                {isActivitySharing && (
+                  <div className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[#1ed760] border-2 border-[#1f1f1f]" />
+                )}
               </div>
               <span className="text-[12.5px] font-bold text-white leading-tight">Actividad</span>
-              <span className="text-[11px] text-[#a7a7a7] leading-tight font-normal">Activar</span>
+              <span className={`text-[11px] leading-tight font-medium ${isActivitySharing ? 'text-[#1ed760]' : 'text-[#a7a7a7]'}`}>
+                {isActivitySharing ? 'Compartiendo' : 'Activar'}
+              </span>
             </button>
 
-            {/* Invitar a amigos circle */}
+            {/* Escuchar con amigos circle (three human silhouettes group session icon) */}
             <button
               type="button"
               onClick={() => {
                 onClose();
                 onOpenSharedSession();
               }}
-              className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform"
+              className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform group"
             >
-              <div className="w-12 h-12 rounded-full bg-[#282828] active:bg-[#333333] flex items-center justify-center text-white shadow shrink-0">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="12" y1="5" x2="12" y2="19" />
-                  <line x1="5" y1="12" x2="19" y2="12" />
+              <div className="w-12 h-12 rounded-full bg-[#282828] group-hover:bg-[#333333] active:bg-[#383838] flex items-center justify-center text-white shadow shrink-0 transition-colors">
+                {/* 3 Human silhouettes icon */}
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  {/* Left Person */}
+                  <circle cx="5" cy="10" r="2.5" opacity="0.85" />
+                  <path d="M5 14c-2 0-3.5 1-3.5 2.5V18h7v-1.5C8.5 15 7 14 5 14z" opacity="0.85" />
+                  {/* Center Person (Prominent) */}
+                  <circle cx="12" cy="8" r="3" />
+                  <path d="M12 12.5c-2.6 0-5 1.3-5 3.2V18h10v-2.3c0-1.9-2.4-3.2-5-3.2z" />
+                  {/* Right Person */}
+                  <circle cx="19" cy="10" r="2.5" opacity="0.85" />
+                  <path d="M19 14c-2 0-3.5 1-3.5 2.5V18h7v-1.5C22.5 15 21 14 19 14z" opacity="0.85" />
                 </svg>
               </div>
-              <span className="text-[12.5px] font-bold text-white leading-tight">Invitar a</span>
-              <span className="text-[11px] text-[#a7a7a7] leading-tight font-normal">amigos</span>
+              <span className="text-[12.5px] font-bold text-white leading-tight text-center">Escuchar con</span>
+              <span className="text-[11px] text-[#a7a7a7] leading-tight font-normal text-center">amigos</span>
             </button>
+          </div>
+
+          {/* 4. Mensajes Section (matching Image 1) */}
+          <div className="pt-2 border-t border-white/[0.06] space-y-2.5">
+            <div className="flex items-center justify-between px-1">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenNotifications();
+                }}
+                className="flex items-center gap-1.5 text-[15px] font-bold text-white hover:text-white/80 transition-colors cursor-pointer"
+              >
+                <span>Mensajes</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#b3b3b3]">
+                  <path d="M5.47 13.03a.75.75 0 0 1 0-1.06L9.44 8 5.47 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0z" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenNotifications();
+                }}
+                className="w-7 h-7 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
+                title="Mensaje nuevo"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Quick action card for updates & notifications */}
+            <div className="bg-[#282828] rounded-xl p-3 flex items-center justify-between gap-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-[12px] text-white font-medium leading-snug">
+                  Novedades y avisos de Spotifree
+                </p>
+                <p className="text-[11px] text-[#a7a7a7] truncate">
+                  Toca para ver avisos y cambios
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenNotifications();
+                }}
+                className="shrink-0 bg-white text-black font-bold text-xs px-3 py-1.5 rounded-full hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+              >
+                Ver
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* 4. Bottom Footer: Cerrar sesión (if authenticated) */}
+        {/* 5. Bottom Footer: Cerrar sesión (if authenticated) */}
         {isAuthenticated && (
           <div className="pt-4 pb-1">
             <button

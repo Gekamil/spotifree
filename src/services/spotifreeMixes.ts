@@ -598,7 +598,23 @@ id: string, kind: SpotifreeMix['sfKind'], name: string, description: string, ite
 async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: SuggestedArtist[] }> {
   importSpotifyRecent();
   const profile = buildTasteProfile();
-  if (profile.artists.length === 0) return { mixes: [], artists: [] };
+  if (profile.artists.length === 0) {
+    const fallbackSeeds = [
+      'Bad Bunny',
+      'Quevedo',
+      'Feid',
+      'Myke Towers',
+      'Rauw Alejandro',
+      'Mora',
+      'Bizarrap',
+      'Rosalía',
+      'Duki',
+      'Aitana',
+    ];
+    for (const name of fallbackSeeds) {
+      profile.artists.push({ name, score: 3, recent: 2 });
+    }
+  }
   const day = today();
   const week = isoWeek();
   const userName = useSpotifyDataStore.getState().user?.display_name || '';
@@ -652,7 +668,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const near = shuffle(grp.flatMap((n) => (disc.get(norm(n))?.related || []).flatMap((x) => x.top.slice(0, 3))), r).slice(0, 16);
     const extra = shuffle(grp.flatMap((n) => (disc.get(norm(n))?.related || []).flatMap((x) => x.top.slice(3, 6))), r);
     const items = atLeast(shuffle(dedupe([...own, ...theirs, ...near], undefined, 6), r), extra, 25, 6).slice(0, 50);
-    if (items.length < 20) continue;
+    if (items.length < 5) continue;
     const relNames = [...new Set(near.map((t) => firstArtist(t)))].slice(0, 2);
     const desc = `${[...grp, ...relNames].slice(0, 3).join(', ')} y más`;
     const style = pickStyle(`daily${i}`);
@@ -674,7 +690,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
       .sort((a, b) => (freq.get(norm(b.name)) || 0) - (freq.get(norm(a.name)) || 0))
       .flatMap((x) => shuffle(x.top, r).slice(0, 3));
     const items = dedupe(tracks, profile.known, 2).slice(0, 30);
-    if (items.length >= 20) {
+    if (items.length >= 5) {
       const imgs = shuffle(items.map(coverOf).filter(Boolean), r);
       const name = nameFor('Descubrimiento semanal', 'Tu descubrimiento semanal');
       const cover = (await makeCover(name, hash(week) % 2 ? 'collage' : 'single', imgs, '#3d2b66')) || imgs[0] || '';
@@ -731,7 +747,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
       25,
       12
     ).slice(0, 35);
-    if (items.length < 20) continue;
+    if (items.length < 5) continue;
     const title = `Mix de ${d.artist?.name || a.name}`;
     // Spotify already gives this user a "Mix de X": that one stays, ours would only repeat it
     if (taken.has(norm(title))) continue;
@@ -881,8 +897,9 @@ export function initSpotifreeMixes() {
   installSignalHooks();
   mergeCloudTaste();
   firstSeen();
-  // First build a few seconds after start (Spotify data arrives first)
-  setTimeout(() => void refreshSpotifreeMixes(), 6000);
+  // Restore immediately from cache on startup, then refresh in background
+  void refreshSpotifreeMixes();
+  setTimeout(() => void refreshSpotifreeMixes(), 4000);
   // Another account signs in: its own playlists (and its taste from the cloud)
   let lastUser = uid();
   let lastDataSize = 0;

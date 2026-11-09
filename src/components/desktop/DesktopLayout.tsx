@@ -19,6 +19,7 @@ import { AIDJView } from '../dj/AIDJView';
 import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { useSpotifreeMixes } from '../../services/spotifreeMixes';
 
 export const DesktopLayout: React.FC = () => {
   const { activeMainTab, setActiveMainTab, activeRightSidebar, toggleRightSidebar } = useUIStore();
@@ -92,6 +93,13 @@ export const DesktopLayout: React.FC = () => {
                    useSpotifyDataStore.getState().playlistDetailsCache[id];
     if (cached) {
       handleSelectPlaylist(cached);
+      return;
+    }
+
+    // 0b. Check Spotifree personalized mixes
+    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === id);
+    if (sfMix) {
+      handleSelectPlaylist(sfMix);
       return;
     }
 

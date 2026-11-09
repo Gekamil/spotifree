@@ -1,5 +1,7 @@
 import type { Track } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { TRACK_COVER_CACHE } from '../utils/trackCovers';
+import { getPlaylistCover } from '../utils/playlistCover';
 
 export interface HistoryItem {
   id: string;
@@ -52,11 +54,12 @@ function seedFromStore(): HistoryItem[] {
       if (!track || !track.id) return;
       // Stagger timestamps across today and yesterday for realistic grouping
       const playedAt = item.played_at ? new Date(item.played_at).getTime() : now - idx * (3600000 * 3);
+      const trackImg = track.album?.images?.[0]?.url || TRACK_COVER_CACHE.get(track.id) || '';
       items.push({
         id: track.id,
         name: track.name || 'Canción',
         subtitle: track.artists?.[0]?.name ? `Canción • ${track.artists[0].name}` : 'Canción',
-        image: track.album?.images?.[0]?.url || '',
+        image: trackImg,
         type: 'track',
         playedAt: isNaN(playedAt) ? now - idx * 3600000 : playedAt,
         track,
@@ -71,7 +74,7 @@ function seedFromStore(): HistoryItem[] {
         id: pl.id,
         name: pl.name,
         subtitle: `Playlist • ${pl.tracks?.total || pl.tracks?.items?.length || 0} canciones`,
-        image: pl.images?.[0]?.url || '',
+        image: getPlaylistCover(pl) || pl.images?.[0]?.url || '',
         type: 'playlist',
         playedAt: now - (idx + 1) * (dayMs * 0.8),
       });
@@ -86,10 +89,20 @@ export function recordHistoryItem(item: Omit<HistoryItem, 'playedAt'> & { played
   try {
     const current = getListeningHistory();
     const playedAt = item.playedAt || Date.now();
+    let resolvedImage = item.image || '';
+    if (!resolvedImage && item.track) {
+      resolvedImage =
+        item.track.album?.images?.[0]?.url ||
+        TRACK_COVER_CACHE.get(item.track.id) ||
+        '';
+    }
+    if (!resolvedImage && TRACK_COVER_CACHE.has(item.id)) {
+      resolvedImage = TRACK_COVER_CACHE.get(item.id) || '';
+    }
 
     // Remove existing occurrence of this specific item so it jumps to top
     const filtered = current.filter((x) => x.id !== item.id);
-    const updated: HistoryItem[] = [{ ...item, playedAt }, ...filtered].slice(0, 100);
+    const updated: HistoryItem[] = [{ ...item, image: resolvedImage, playedAt }, ...filtered].slice(0, 100);
 
     window.localStorage.setItem(getKey(), JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent('spotifree:history_updated'));

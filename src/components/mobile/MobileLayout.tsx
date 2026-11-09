@@ -474,6 +474,13 @@ export const MobileLayout: React.FC = () => {
       return;
     }
 
+    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === id);
+    if (sfMix) {
+      setSelectedPlaylist(sfMix);
+      setMobileTab('playlist');
+      return;
+    }
+
     const found = playlists.find((p) => p.id === cleanId || p.id === id);
     if (found) {
       setSelectedPlaylist(found);
@@ -481,7 +488,7 @@ export const MobileLayout: React.FC = () => {
       return;
     }
 
-    const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('sf-artist-');
+    const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-');
     const resolvedName = customName || (isArtist ? resolveArtistName(cleanId) : cleanId === 'liked-songs' ? 'Canciones que te gustan' : 'Playlist');
 
     const placeholder: Playlist = {

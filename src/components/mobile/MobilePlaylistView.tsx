@@ -28,6 +28,7 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
+import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
 import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
@@ -169,6 +170,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       return cached.tracks.items.filter(isNotRemoved);
+    }
+    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === playlist.id);
+    if (sfMix?.tracks?.items && sfMix.tracks.items.length > 0) {
+      return sfMix.tracks.items.filter(isNotRemoved);
     }
     if (typeof window !== 'undefined') {
       try {
@@ -486,6 +491,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       return;
     }
 
+    // 1b. Check Spotifree mixes store
+    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === playlist.id);
+    if (sfMix?.tracks?.items && sfMix.tracks.items.length > 0) {
+      setTracks(mergeWithCustom(sfMix.tracks.items));
+      return;
+    }
+
     // 2. Check playlistDetailsCache
     const cached =
       useSpotifyDataStore.getState().playlistDetailsCache[cleanId] ||
@@ -512,6 +524,30 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const sharedPl = getSharedPlaylistById(cleanId);
     if (sharedPl && sharedPl.tracks && sharedPl.tracks.length > 0) {
       setTracks(mergeWithCustom(sharedPl.tracks));
+      return;
+    }
+
+    // 5c. If it's a Spotifree mix and wasn't loaded yet, build/refresh it
+    if (cleanId.startsWith('sf-')) {
+      setLoading(true);
+      refreshSpotifreeMixes(true)
+        .then(() => {
+          if (cancelled) return;
+          const fresh = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === playlist.id);
+          if (fresh?.tracks?.items && fresh.tracks.items.length > 0) {
+            const merged = mergeWithCustom(fresh.tracks.items);
+            setTracks(merged);
+            setActivePlaylist((prev) => ({
+              ...prev,
+              ...fresh,
+              tracks: { total: merged.length, items: merged },
+            }));
+          }
+          setLoading(false);
+        })
+        .catch(() => {
+          if (!cancelled) setLoading(false);
+        });
       return;
     }
 
