@@ -18,7 +18,7 @@ import {
 import { useStatsStore } from '../store/useStatsStore';
 import { isNonMusicOrNoise, filterMusicTracksOnly } from '../utils/trackFilter';
 import { getCustomLikedSongs } from '../utils/userStorage';
-import { searchSpotify } from './spotifyApi';
+import { searchSpotify, fetchPlaylistRecommendations } from './spotifyApi';
 import { fetchLyricsUnified, parseEnhancedLyrics } from '../utils/lyricsService';
 import { buildSegmentedDJSet, buildSegmentIntro, segmentAt, type DJSegment } from './djSegments';
 
@@ -31,6 +31,8 @@ export interface DJChatMessage {
   timestamp: string;
   curatedSetTitle?: string;
   trackCount?: number;
+  requestedTrack?: Track;
+  similarTracks?: Track[];
 }
 
 export interface AIDJState {
@@ -54,8 +56,15 @@ export interface AIDJState {
   isThinking: boolean;
   /** 'personal' = built from the user's library; 'request' = built from what they asked for */
   setMode: 'personal' | 'request';
+  /** Requested song information when user asks for a specific title */
+  requestedSongName: string | null;
+  requestedTrack: Track | null;
+  similarTracks: Track[];
+  showSimilarPanel: boolean;
 
   // Actions
+  setShowSimilarPanel: (show: boolean) => void;
+  clearSimilarTracks: () => void;
   setViewMode: (mode: 'chat' | 'playlist') => void;
   setVisualizerState: (state: AIDJVisualizerMode) => void;
   setVoiceLevel: (level: number) => void;
@@ -753,7 +762,13 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   activeSegmentId: null,
   isThinking: false,
   setMode: 'personal',
+  requestedSongName: null,
+  requestedTrack: null,
+  similarTracks: [],
+  showSimilarPanel: false,
 
+  setShowSimilarPanel: (showSimilarPanel) => set({ showSimilarPanel }),
+  clearSimilarTracks: () => set({ requestedSongName: null, requestedTrack: null, similarTracks: [], showSimilarPanel: false }),
   setViewMode: (viewMode) => set({ viewMode }),
   setVisualizerState: (visualizerState) => set({ visualizerState }),
   setVoiceLevel: (voiceLevel) => set({ voiceLevel }),
@@ -1136,11 +1151,206 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       } catch {}
     }
 
-    // 2. Resolve hashtag, construct listener profile, and query Groq in parallel
+    const userProfile = getUserListeningProfile();
+
+    // ─── 2. CHECK IF PROMPT IS A SPECIFIC SONG REQUEST (e.g. "Te Robaré", "ponme Columbia", etc.) ───
+    const isExplicitSongCmd =
+      /^(ponme|pon|reproduce|toca|escuchar|quiero\s+escuchar|la\s+canci[oó]n(\s+de)?|la\s+de|canci[oó]n|song|play|temazo)\b/i.test(pLow) ||
+      /\b(canci[oó]n\s+de|parecidas?\s+a|similares?\s+a|algo\s+como|del\s+estilo\s+de|titulos?\s+similares?)\b/i.test(pLow);
+
+    const isKnownMoodOnly =
+      /^(m[aá]s\s+movido|algo\s+chill|reggaet[oó]n|cl[aá]sicos|trap\s*\/\s*urbano|sorpr[eé]ndeme|gym|entrenar|fiesta|dormir|estudiar|triste|rock|pop|electr[oó]nica|salsa|bachata|descubrimiento)$/i.test(
+        pLow
+      );
+
+    const cleanedSongQuery = promptText
+      .replace(/^(por\s+fa(vor)?|oye|dj|hola|hey)\s*/i, '')
+      .replace(/^(ponme|pon|reproduce|toca|escuchar|quiero\s+escuchar|la\s+canci[oó]n(\s+de)?|la\s+de|canci[oó]n|song|play|temazo)\s+/i, '')
+      .replace(/\b(por\s+fa(vor)?|gracias)\b/gi, '')
+      .replace(/\b(y\s+similares|y\s+parecidas|canciones\s+similares|titulos\s+similares|similares|parecidas)\b/gi, '')
+      .trim();
+
+    let songTarget: Track | null = null;
+    if (!isKnownMoodOnly && cleanedSongQuery.length >= 2) {
+      // 1. First check local library tracks
+      const qLow = cleanedSongQuery.toLowerCase();
+      const localExact = allUserTracks.find((ut) => {
+        const utName = (ut.name || '').toLowerCase();
+        return utName === qLow || utName.includes(qLow) || qLow.includes(utName);
+      });
+
+      if (localExact) {
+        songTarget = localExact;
+      } else {
+        // 2. Query searchSpotify catalog
+        try {
+          const searchRes = await Promise.race([
+            searchSpotify(cleanedSongQuery),
+            new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+          ]);
+          const candidateList: Track[] = filterMusicTracksOnly(searchRes?.tracks || []);
+          if (candidateList.length > 0) {
+            const firstCand = candidateList[0];
+            const candTitle = (firstCand.name || '').toLowerCase();
+            const candArtist = (firstCand.artists?.[0]?.name || '').toLowerCase();
+            if (
+              isExplicitSongCmd ||
+              candTitle.includes(qLow) ||
+              qLow.includes(candTitle) ||
+              qLow.split(' ').some((w) => w.length > 3 && candTitle.includes(w)) ||
+              (candArtist && qLow.includes(candArtist))
+            ) {
+              songTarget = firstCand;
+            }
+          }
+        } catch {}
+      }
+    }
+
+    if (songTarget) {
+      const artistName = songTarget.artists?.[0]?.name || '';
+      const songTitle = songTarget.name;
+      const isEn = isEnglishUI();
+
+      // Query Spotify recommendations, Groq, and search in parallel
+      const [spotifyRecs, groqResult] = await Promise.all([
+        fetchPlaylistRecommendations(
+          songTarget.id,
+          songTarget.name,
+          [songTarget],
+          12
+        ).catch(() => []),
+        callGroqDJ(
+          {
+            action: 'recommend',
+            prompt: `Canciones similares y del mismo estilo y energía que "${songTitle}" de ${artistName}`,
+            userName: cleanName,
+            userProfile,
+          },
+          6500
+        ).catch(() => null),
+      ]);
+
+      const groqCandidates: Track[] = [];
+      if (groqResult && Array.isArray(groqResult.tracks)) {
+        const validCandidates = groqResult.tracks
+          .filter((gt: any) => gt && gt.title && !isNonMusicOrNoise(gt))
+          .slice(0, 10);
+        const resolved = await Promise.all(
+          validCandidates.map((gt: any) => resolveRecommendedTrack(String(gt.title), String(gt.artist || '')))
+        );
+        resolved.forEach((t) => {
+          if (t && !isNonMusicOrNoise(t)) groqCandidates.push(t);
+        });
+      }
+
+      let searchSimilar: Track[] = [];
+      if (spotifyRecs.length + groqCandidates.length < 6 && artistName) {
+        try {
+          const sRes = await searchSpotify(`${artistName} exitos similares`);
+          searchSimilar = filterMusicTracksOnly(sRes?.tracks || []);
+        } catch {}
+      }
+
+      const targetIdClean = (songTarget.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+      const targetTitleLower = songTitle.toLowerCase().trim();
+      const isNotTargetSong = (t: Track) => {
+        const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        const tName = (t.name || '').toLowerCase().trim();
+        return c !== targetIdClean && t.id !== songTarget?.id && tName !== targetTitleLower;
+      };
+
+      const seenTrackKeys = new Set<string>();
+      const dedupeList = (list: Track[]): Track[] => {
+        return list.filter((t) => {
+          if (!t || !t.id) return false;
+          const clean = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          const sig = t.name && t.artists?.[0]?.name ? `${t.name.toLowerCase().trim()}::${t.artists[0].name.toLowerCase().trim()}` : clean;
+          if (seenTrackKeys.has(clean) || seenTrackKeys.has(sig)) return false;
+          seenTrackKeys.add(clean);
+          seenTrackKeys.add(sig);
+          return true;
+        });
+      };
+
+      const rawSimilar = dedupeList([
+        ...groqCandidates.filter(isNotTargetSong),
+        ...spotifyRecs.filter(isNotTargetSong),
+        ...searchSimilar.filter(isNotTargetSong),
+        ...allUserTracks.filter(isNotTargetSong),
+      ]);
+
+      const similarTracks = filterMusicTracksOnly(rawSimilar).slice(0, 10);
+      const finalSet = [songTarget, ...similarTracks];
+
+      let customSpeech = groqResult?.speech ? cleanTextForNaturalTTS(groqResult.speech) : '';
+      if (!customSpeech || !customSpeech.toLowerCase().includes(songTitle.toLowerCase().slice(0, 8))) {
+        customSpeech = isEn
+          ? `Great choice! Here is ${songTitle}${artistName ? ` by ${artistName}` : ''}, and a list of similar titles you'll love.`
+          : `¡Temazo! Aquí tienes «${songTitle}»${artistName ? ` de ${artistName}` : ''} y una lista de títulos similares con el mismo estilo para ti.`;
+      }
+
+      const finalTitle = `Similares a ${songTitle}`;
+      const finalColor = groqResult?.vibeColor || '#1ed760';
+
+      const requestSegment: DJSegment = {
+        id: `seg-req-${Date.now()}`,
+        kind: 'request',
+        title: `Similares a ${songTitle}`,
+        reason: `petición: ${songTitle}`,
+        startIndex: 0,
+        length: finalSet.length,
+        intro: customSpeech,
+      };
+
+      announcedSegments.clear();
+      announcedSegments.add(requestSegment.id);
+
+      resolveTrackCoversBatch(finalSet).catch(() => {});
+      if (typeof window !== 'undefined' && (window as any).__audioEngine) {
+        try {
+          (window as any).__audioEngine.warmupInitialTracks(finalSet.slice(0, 6));
+        } catch {}
+      }
+
+      const djTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const djMsg: DJChatMessage = {
+        id: `msg-dj-${Date.now()}`,
+        sender: 'dj',
+        text: customSpeech,
+        timestamp: djTime,
+        curatedSetTitle: finalTitle,
+        trackCount: finalSet.length,
+        requestedTrack: songTarget,
+        similarTracks: similarTracks,
+      };
+
+      set((state) => ({
+        currentMessage: customSpeech,
+        displayedTranscript: '',
+        currentSetTitle: finalTitle,
+        djThemeColor: finalColor,
+        songsPlayedInSet: 0,
+        djTracks: finalSet,
+        requestedSongName: songTitle,
+        requestedTrack: songTarget,
+        similarTracks: similarTracks,
+        showSimilarPanel: true,
+        segments: [requestSegment],
+        activeSegmentId: requestSegment.id,
+        setMode: 'request',
+        isThinking: false,
+        chatHistory: [...state.chatHistory, djMsg],
+      }));
+
+      usePlayerStore.getState().playTrack(songTarget, finalSet, 'dj-session');
+      await djSpeak(customSpeech, set);
+      return;
+    }
+
+    // 3. General Mood / Hashtag Flow: Resolve hashtag and query Groq in parallel
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
-
-    const userProfile = getUserListeningProfile();
 
     const [hashtagSet, groqResult] = await Promise.all([
       getCuratedSetForHashtag(targetTag, 15),

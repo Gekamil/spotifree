@@ -246,7 +246,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
         return p.id === dynamicPlaylist.id || pClean === cleanCurrent;
       });
-      if (updated?.tracks?.items) {
+      if (updated?.tracks?.items && updated.tracks.items.length > 0) {
         const removedSet = getRemovedTrackIdsForPlaylist(cleanCurrent);
         const isNotRemoved = (t: Track) => {
           const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -254,12 +254,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
         };
         const filtered = updated.tracks.items.filter(isNotRemoved);
-        setDynamicTracks(filtered);
-        setDynamicPlaylist((prev) => ({
-          ...prev,
-          ...updated,
-          tracks: { total: filtered.length, items: filtered },
-        }));
+        if (filtered.length > 0) {
+          setDynamicTracks(filtered);
+          setDynamicPlaylist((prev) => ({
+            ...prev,
+            ...updated,
+            tracks: { total: filtered.length, items: filtered },
+          }));
+        }
       }
     };
 
@@ -268,7 +270,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       const cleanCurrent = (dynamicPlaylist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
       if (
         (dynamicPlaylist.id === updatedId || cleanCurrent === updatedCleanId) &&
-        updatedPlaylist?.tracks?.items
+        updatedPlaylist?.tracks?.items &&
+        updatedPlaylist.tracks.items.length > 0
       ) {
         const removedSet = getRemovedTrackIdsForPlaylist(cleanCurrent);
         const isNotRemoved = (t: Track) => {
@@ -277,12 +280,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
         };
         const filtered = updatedPlaylist.tracks.items.filter(isNotRemoved);
-        setDynamicTracks(filtered);
-        setDynamicPlaylist((prev) => ({
-          ...prev,
-          ...updatedPlaylist,
-          tracks: { total: filtered.length, items: filtered },
-        }));
+        if (filtered.length > 0) {
+          setDynamicTracks(filtered);
+          setDynamicPlaylist((prev) => ({
+            ...prev,
+            ...updatedPlaylist,
+            tracks: { total: filtered.length, items: filtered },
+          }));
+        }
       }
     };
 
@@ -506,13 +511,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setIsSavedInLibrary(next);
     if (typeof window !== 'undefined') {
       try {
+        const cleanId = dynamicPlaylist.id.replace(/^custom-|^playlist-/, '');
         const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
         let list: string[] = raw ? JSON.parse(raw) : [];
         if (next) {
           if (!list.includes(dynamicPlaylist.id)) list.push(dynamicPlaylist.id);
-          useSpotifyDataStore.getState().addCustomPlaylist(dynamicPlaylist);
+          const fullToSave: Playlist = {
+            ...dynamicPlaylist,
+            tracks: {
+              total: dynamicTracks.length,
+              items: dynamicTracks,
+            },
+          };
+          useSpotifyDataStore.getState().addCustomPlaylist(fullToSave);
+          try {
+            window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(dynamicTracks));
+          } catch {}
         } else {
-          list = list.filter((id) => id !== dynamicPlaylist.id);
+          list = list.filter((id) => id !== dynamicPlaylist.id && id !== cleanId);
           useSpotifyDataStore.getState().deletePlaylist(dynamicPlaylist.id);
         }
         window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));

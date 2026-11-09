@@ -373,6 +373,7 @@ REGLAS PARA QUE LA VOZ SINTÉTICA SUENE NATURAL:
       const recSystemPrompt = isEnglish
         ? `${DJ_SYSTEM_PROMPT}
 Build a personalized music session from the request and the listener's real taste.
+If the request mentions or asks for a specific song, place that EXACT song as the FIRST track in 'tracks', and place 10 to 14 fitting SIMILAR songs (matching genre, vibe, BPM, and energy) in the rest of the list. In 'speech', warmly introduce the song and mention that you have queued similar titles.
 Output ONLY valid JSON:
 {
   "speech": "short DJ intro (max 22 words) that names the first song",
@@ -383,6 +384,7 @@ Output ONLY valid JSON:
 Include 12 to 15 real, existing songs. Mix favourites of their artists with a few fitting discoveries. Order them so the energy flows.`
         : `${DJ_SYSTEM_PROMPT}
 Crea una sesión musical personalizada a partir de la petición y del gusto real del oyente.
+Si la petición menciona o pide una canción específica, pon esa canción EXACTA como la PRIMERA en 'tracks', y pon de 10 a 14 canciones SIMILARES (mismo género, ritmo, estilo y energía) en el resto de la lista. En 'speech', menciona la canción con entusiasmo y di que has preparado una selección de títulos similares.
 Devuelve SOLO un JSON válido:
 {
   "speech": "intro corta del DJ (máximo 22 palabras) que nombre la primera canción",

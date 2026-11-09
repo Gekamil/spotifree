@@ -662,19 +662,48 @@ const store = create<SpotifyDataState>((set, get) => ({
 
   addCustomPlaylist: (playlist: Playlist) => {
     set((s) => {
-      if (s.playlists.some((p) => p.id === playlist.id)) {
-        return s;
+      const cleanId = (playlist.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+      const existingCached = s.playlistDetailsCache[playlist.id] || s.playlistDetailsCache[cleanId];
+      const existingPl = s.playlists.find((p) => p.id === playlist.id || p.id === cleanId);
+
+      // Preserve tracks if incoming playlist object has empty items
+      const hasIncomingTracks = Array.isArray(playlist.tracks?.items) && playlist.tracks.items.length > 0;
+      const tracksToKeep = hasIncomingTracks
+        ? playlist.tracks
+        : (existingCached?.tracks?.items && existingCached.tracks.items.length > 0)
+        ? existingCached.tracks
+        : (existingPl?.tracks?.items && existingPl.tracks.items.length > 0)
+        ? existingPl.tracks
+        : playlist.tracks || { total: 0, items: [] };
+
+      const fullPlaylist: Playlist = {
+        ...playlist,
+        tracks: tracksToKeep,
+      };
+
+      // Also persist tracks in localStorage if available so it's immediately cached
+      if (typeof window !== 'undefined' && tracksToKeep.items && tracksToKeep.items.length > 0) {
+        try {
+          window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(tracksToKeep.items));
+        } catch {}
       }
-      const updatedPlaylists = [playlist, ...s.playlists];
+
+      const isAlreadyInPlaylists = s.playlists.some((p) => p.id === playlist.id || p.id === cleanId);
+      const updatedPlaylists = isAlreadyInPlaylists
+        ? s.playlists.map((p) => (p.id === playlist.id || p.id === cleanId ? fullPlaylist : p))
+        : [fullPlaylist, ...s.playlists];
 
       if (typeof window !== 'undefined') {
         try {
           // 1. user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           const list = rawImported ? JSON.parse(rawImported) : [];
-          if (!list.some((p: any) => p.id === playlist.id)) {
-            list.unshift(playlist);
+          if (!list.some((p: any) => p.id === playlist.id || p.id === cleanId)) {
+            list.unshift(fullPlaylist);
             window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
+          } else {
+            const updatedList = list.map((p: any) => (p.id === playlist.id || p.id === cleanId ? fullPlaylist : p));
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(updatedList));
           }
 
           // 2. spotifree_saved_library_playlists
@@ -698,7 +727,8 @@ const store = create<SpotifyDataState>((set, get) => ({
         playlists: updatedPlaylists,
         playlistDetailsCache: {
           ...s.playlistDetailsCache,
-          [playlist.id]: playlist,
+          [playlist.id]: fullPlaylist,
+          [cleanId]: fullPlaylist,
         },
       };
     });

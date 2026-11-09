@@ -83,6 +83,12 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     activeSegmentId,
     isThinking,
     nextSegment,
+    requestedSongName,
+    requestedTrack,
+    similarTracks,
+    chatHistory,
+    showSimilarPanel,
+    setShowSimilarPanel,
   } = useAIDJStore();
   const activeSegment = segments.find((s) => s.id === activeSegmentId) || null;
   const activeSegIdx = activeSegment ? segments.indexOf(activeSegment) : -1;
@@ -110,6 +116,16 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const djQueueStartYRef = useRef(0);
   const djQueueCurrentYRef = useRef(0);
   const djQueueScrollRef = useRef<HTMLDivElement>(null);
+
+  // Chat Drawer state
+  const [showChatDrawer, setShowChatDrawer] = useState(false);
+  const [isChatRendered, setIsChatRendered] = useState(false);
+  const [isChatAnimated, setIsChatAnimated] = useState(false);
+  const [chatDragY, setChatDragY] = useState(0);
+  const [isChatDragging, setIsChatDragging] = useState(false);
+  const djChatStartYRef = useRef(0);
+  const djChatCurrentYRef = useRef(0);
+  const djChatScrollRef = useRef<HTMLDivElement>(null);
 
   const handleDJQueueTouchStart = (e: React.TouchEvent) => {
     djQueueStartYRef.current = e.touches[0].clientY;
@@ -165,6 +181,63 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       return () => clearTimeout(timer);
     }
   }, [showQueueDrawer]);
+
+  const handleDJChatTouchStart = (e: React.TouchEvent) => {
+    djChatStartYRef.current = e.touches[0].clientY;
+    djChatCurrentYRef.current = e.touches[0].clientY;
+    setIsChatDragging(true);
+  };
+
+  const handleDJChatBodyTouchStart = (e: React.TouchEvent) => {
+    if (djChatScrollRef.current && djChatScrollRef.current.scrollTop <= 5) {
+      djChatStartYRef.current = e.touches[0].clientY;
+      djChatCurrentYRef.current = e.touches[0].clientY;
+      setIsChatDragging(true);
+    }
+  };
+
+  const handleDJChatTouchMove = (e: React.TouchEvent) => {
+    if (!isChatDragging) return;
+    const delta = e.touches[0].clientY - djChatStartYRef.current;
+    if (delta > 0) {
+      djChatCurrentYRef.current = e.touches[0].clientY;
+      setChatDragY(delta);
+    }
+  };
+
+  const handleDJChatTouchEnd = () => {
+    if (!isChatDragging) return;
+    setIsChatDragging(false);
+    const delta = djChatCurrentYRef.current - djChatStartYRef.current;
+    if (delta > 75) {
+      setShowChatDrawer(false);
+    }
+    setChatDragY(0);
+  };
+
+  // Smooth bottom sheet glide transition for the chat drawer
+  useEffect(() => {
+    if (showChatDrawer) {
+      setIsChatRendered(true);
+      const raf = requestAnimationFrame(() => {
+        setIsChatAnimated(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setIsChatAnimated(false);
+      const timer = setTimeout(() => {
+        setIsChatRendered(false);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [showChatDrawer]);
+
+  // Auto-scroll chat history to latest message when opened or new message arrives
+  useEffect(() => {
+    if (showChatDrawer && djChatScrollRef.current) {
+      djChatScrollRef.current.scrollTop = djChatScrollRef.current.scrollHeight;
+    }
+  }, [chatHistory, showChatDrawer]);
   const [ambientColor, setAmbientColor] = useState<string>('#0c52cc');
   const [gradientLayers, setGradientLayers] = useState<{ colorA: string; colorB: string; activeLayer: 'A' | 'B' }>({
     colorA: '#0c52cc',
@@ -377,8 +450,24 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </span>
         </div>
 
-        {/* Balance spacer */}
-        <div className="w-10 h-10" />
+        {/* Chat / Historial Drawer Button */}
+        <button
+          type="button"
+          onClick={() => setShowChatDrawer(true)}
+          className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
+            showChatDrawer ? 'bg-[#1ed760] text-black shadow-lg' : 'bg-black/25 hover:bg-black/45 text-white backdrop-blur-md'
+          }`}
+          title="Chat con la IA DJ e historial"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          {chatHistory.length > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[17px] h-[17px] px-1 rounded-full bg-[#1ed760] text-black text-[10px] font-black flex items-center justify-center shadow">
+              {chatHistory.length}
+            </span>
+          )}
+        </button>
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
@@ -441,6 +530,86 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             ) : null}
           </div>
         </div>
+
+        {/* =========================================================================
+            RECOMMENDED SIMILAR TITLES CAROUSEL / CARD ("Títulos similares")
+            ========================================================================= */}
+        {similarTracks && similarTracks.length > 0 && showSimilarPanel && (
+          <div className="w-full max-w-md sm:max-w-xl my-2 p-3 sm:p-3.5 rounded-2xl bg-white/[0.08] hover:bg-white/[0.11] border border-white/20 backdrop-blur-2xl shadow-[0_12px_36px_rgba(0,0,0,0.45)] text-left transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760] animate-pulse shrink-0" />
+                <h4 className="text-xs sm:text-[13px] font-black text-white font-['SpotifyMixUITitle'] truncate">
+                  Títulos similares a «{requestedSongName || currentTrack?.name}»
+                </h4>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setShowQueueDrawer(true)}
+                  className="text-[11px] font-bold text-[#1ed760] hover:underline cursor-pointer"
+                >
+                  Ver en cola ({similarTracks.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSimilarPanel(false)}
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-white/50 hover:text-white transition-colors cursor-pointer"
+                  title="Ocultar sugerencias"
+                >
+                  <CloseNativeIcon size={12} />
+                </button>
+              </div>
+            </div>
+
+            {/* Horizontal scroll cards */}
+            <div className="flex items-center gap-2.5 overflow-x-auto pb-1 scrollbar-none">
+              {similarTracks.map((tr) => {
+                const isThisPlaying = currentTrack?.id === tr.id;
+                const art = getBestTrackArtwork(tr);
+                return (
+                  <div
+                    key={tr.id}
+                    onClick={() => handleTrackClick(tr)}
+                    className={`group w-28 sm:w-32 shrink-0 p-2 rounded-xl transition-all cursor-pointer ${
+                      isThisPlaying
+                        ? 'bg-white/20 border border-[#1ed760]/60 shadow-[0_0_12px_rgba(30,215,96,0.25)]'
+                        : 'bg-white/5 hover:bg-white/15 border border-white/10'
+                    }`}
+                  >
+                    <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-[#242424] mb-2 shadow-md">
+                      <img
+                        src={art}
+                        alt={tr.name}
+                        onError={handleImageError}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div
+                        className={`absolute inset-0 flex items-center justify-center bg-black/40 transition-opacity ${
+                          isThisPlaying ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}
+                      >
+                        <div className="w-8 h-8 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-lg transform group-hover:scale-110 active:scale-95 transition-transform">
+                          {isThisPlaying && isPlaying ? (
+                            <PauseNativeIcon size={16} className="text-black" />
+                          ) : (
+                            <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[12px] font-bold text-white truncate font-['SpotifyMixUITitle'] leading-tight">
+                      {tr.name}
+                    </p>
+                    <p className="text-[10.5px] text-white/65 truncate mt-0.5">
+                      {tr.artists?.[0]?.name || 'Artista'}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
         <div className="w-full max-w-md sm:max-w-xl space-y-2 mt-auto">
@@ -652,6 +821,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 const isPlayingThis = isPlaying && currentTrack?.id === track.id;
                 const trackArt = getBestTrackArtwork(track);
                 const blockStart = tracksToDisplay === djTracks && segments.length > 1 ? segments.find((s) => s.startIndex === idx) : undefined;
+                const isRequested = requestedTrack && (track.id === requestedTrack.id || (track.name.toLowerCase() === requestedTrack.name.toLowerCase() && track.artists?.[0]?.name?.toLowerCase() === requestedTrack.artists?.[0]?.name?.toLowerCase()));
+                const isSimilar = similarTracks && similarTracks.some((st) => st.id === track.id || st.name.toLowerCase() === track.name.toLowerCase());
                 return (
                   <React.Fragment key={`${track.id}-${idx}`}>
                   {blockStart && (
@@ -686,10 +857,22 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                         loading="lazy"
                         className="w-10 h-10 rounded-md object-cover shrink-0 bg-[#282828]"
                       />
-                      <div className="truncate">
-                        <p className={`text-sm font-semibold truncate ${isPlayingThis ? 'text-[#1ed760]' : 'text-white'}`}>
-                          {track.name}
-                        </p>
+                      <div className="truncate flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 truncate">
+                          <p className={`text-sm font-semibold truncate ${isPlayingThis ? 'text-[#1ed760]' : 'text-white'}`}>
+                            {track.name}
+                          </p>
+                          {isRequested && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-[#1ed760] text-black shrink-0">
+                              Tu petición
+                            </span>
+                          )}
+                          {isSimilar && !isRequested && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-white/20 text-[#1ed760] shrink-0">
+                              Similar
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-[#a7a7a7] truncate">
                           {track.artists?.map((a) => a.name).join(', ')}
                         </p>
@@ -703,6 +886,223 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Sliding Chat / Historial Drawer */}
+      {isChatRendered && (
+        <div
+          className={`fixed inset-0 z-50 flex flex-col justify-end transition-colors duration-300 ${
+            isChatAnimated ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent pointer-events-none'
+          }`}
+          onClick={() => setShowChatDrawer(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              transform: chatDragY > 0 ? `translateY(${chatDragY}px)` : undefined,
+              transition: isChatDragging ? 'none' : undefined,
+            }}
+            className={`bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[82vh] sm:max-h-[580px] sm:w-[460px] sm:absolute sm:bottom-20 sm:right-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-6 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+              isChatAnimated
+                ? 'translate-y-0 opacity-100 scale-100'
+                : 'translate-y-full opacity-50 scale-[0.98] sm:translate-y-4 sm:opacity-0 sm:scale-95'
+            }`}
+          >
+            {/* Top Drag Indicator Pill (Mobile only) */}
+            <div
+              onTouchStart={handleDJChatTouchStart}
+              onTouchMove={handleDJChatTouchMove}
+              onTouchEnd={handleDJChatTouchEnd}
+              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3.5 cursor-grab active:cursor-grabbing active:scale-95 transition-all sm:hidden"
+              onClick={() => setShowChatDrawer(false)}
+              title="Cerrar chat"
+            />
+
+            {/* Header */}
+            <div
+              onTouchStart={handleDJChatTouchStart}
+              onTouchMove={handleDJChatTouchMove}
+              onTouchEnd={handleDJChatTouchEnd}
+              className="flex items-center justify-between pb-3.5 border-b border-white/10"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-[#1ed760] to-[#0c52cc] flex items-center justify-center text-black font-black text-xs shadow">
+                  DJ
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white font-['SpotifyMixUITitle']">
+                    Chat con tu DJ
+                  </h3>
+                  <p className="text-xs text-[#a7a7a7]">Peticiones y canciones similares</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowChatDrawer(false)}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer active:scale-90 transition-transform"
+                title="Cerrar chat"
+              >
+                <CloseNativeIcon size={16} />
+              </button>
+            </div>
+
+            {/* Chat Messages Body */}
+            <div
+              ref={djChatScrollRef}
+              onTouchStart={handleDJChatBodyTouchStart}
+              onTouchMove={handleDJChatTouchMove}
+              onTouchEnd={handleDJChatTouchEnd}
+              className="flex-1 overflow-y-auto space-y-3.5 my-3 pr-1"
+            >
+              {chatHistory.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-8 text-center px-4">
+                  <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center text-[#1ed760] mb-3">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                    </svg>
+                  </div>
+                  <p className="text-sm font-bold text-white mb-1">¡Habla con tu DJ personal!</p>
+                  <p className="text-xs text-[#a7a7a7] mb-4 max-w-xs">
+                    Pídele cualquier canción por su nombre, un género, o tu estado de ánimo actual. Te pondrá la canción y te recomendará títulos similares.
+                  </p>
+                  <div className="flex flex-wrap gap-2 justify-center max-w-xs">
+                    {['Ponme Feid', 'Algo de Bad Bunny', 'Música para entrenar', 'Pop de los 2000s'].map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => handleSendPrompt(suggestion)}
+                        className="px-3 py-1.5 rounded-full text-xs font-semibold bg-white/10 hover:bg-white/20 text-white border border-white/10 transition-all active:scale-95 cursor-pointer"
+                      >
+                        «{suggestion}»
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                chatHistory.map((msg) => {
+                  const isDJ = msg.sender === 'dj';
+                  return (
+                    <div
+                      key={msg.id}
+                      className={`flex flex-col ${isDJ ? 'items-start' : 'items-end'} text-left`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-2xl p-3 text-xs sm:text-sm leading-relaxed ${
+                          isDJ
+                            ? 'bg-[#242424] text-white rounded-tl-sm border border-white/5'
+                            : 'bg-[#1ed760] text-black font-medium rounded-tr-sm'
+                        }`}
+                      >
+                        <p>{msg.text}</p>
+
+                        {/* If this DJ response included a requested song */}
+                        {isDJ && msg.requestedTrack && (
+                          <div className="mt-2.5 pt-2 border-t border-white/10">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-[#1ed760] block mb-1.5">
+                              Canción solicitada
+                            </span>
+                            <div
+                              onClick={() => handleTrackClick(msg.requestedTrack!)}
+                              className="flex items-center gap-2.5 p-1.5 rounded-lg bg-black/40 hover:bg-black/60 cursor-pointer transition-all border border-white/10"
+                            >
+                              <img
+                                src={getBestTrackArtwork(msg.requestedTrack)}
+                                alt={msg.requestedTrack.name}
+                                className="w-9 h-9 rounded object-cover shrink-0 bg-[#333]"
+                                onError={handleImageError}
+                              />
+                              <div className="truncate flex-1 min-w-0">
+                                <p className="font-bold text-white text-xs truncate">
+                                  {msg.requestedTrack.name}
+                                </p>
+                                <p className="text-[11px] text-[#a7a7a7] truncate">
+                                  {msg.requestedTrack.artists?.map((a) => a.name).join(', ')}
+                                </p>
+                              </div>
+                              <div className="w-7 h-7 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0">
+                                <PlayNativeIcon size={12} className="ml-0.5 text-black" />
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* If this DJ response included similar tracks */}
+                        {isDJ && msg.similarTracks && msg.similarTracks.length > 0 && (
+                          <div className="mt-2.5 pt-2 border-t border-white/10">
+                            <span className="text-[10px] uppercase tracking-wider font-bold text-[#a7a7a7] block mb-1.5">
+                              Títulos similares recomendados
+                            </span>
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                              {msg.similarTracks.slice(0, 6).map((simTrack) => (
+                                <div
+                                  key={simTrack.id}
+                                  onClick={() => handleTrackClick(simTrack)}
+                                  className="flex items-center gap-2 p-1.5 rounded-md bg-black/30 hover:bg-black/50 cursor-pointer transition-colors"
+                                >
+                                  <img
+                                    src={getBestTrackArtwork(simTrack)}
+                                    alt={simTrack.name}
+                                    className="w-7 h-7 rounded object-cover shrink-0 bg-[#333]"
+                                    onError={handleImageError}
+                                  />
+                                  <div className="truncate flex-1 min-w-0">
+                                    <p className="font-semibold text-white text-[11px] truncate">
+                                      {simTrack.name}
+                                    </p>
+                                    <p className="text-[10px] text-[#a7a7a7] truncate">
+                                      {simTrack.artists?.map((a) => a.name).join(', ')}
+                                    </p>
+                                  </div>
+                                  <span className="text-[10px] text-[#727272] shrink-0 tabular-nums">
+                                    {formatDuration(simTrack.duration_ms || 180000)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-[9px] text-[#727272] mt-1 px-1">
+                        {msg.timestamp}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {/* In-drawer Prompt Input Form */}
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendPrompt();
+              }}
+              className="flex items-center gap-2 bg-[#282828] border border-white/10 focus-within:border-white/30 rounded-full px-3 py-1.5 transition-all mt-1"
+            >
+              <input
+                type="text"
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                placeholder="Escribe una canción o petición al DJ..."
+                className="flex-1 bg-transparent text-xs text-white placeholder-white/40 outline-none font-['SpotifyMixUI'] px-1"
+              />
+              <button
+                type="submit"
+                disabled={!promptInput.trim()}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  promptInput.trim()
+                    ? 'bg-[#1ed760] text-black hover:scale-105 active:scale-95'
+                    : 'text-white/30 bg-white/5 cursor-not-allowed'
+                }`}
+                title="Enviar mensaje"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+              </button>
+            </form>
           </div>
         </div>
       )}

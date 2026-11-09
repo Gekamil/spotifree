@@ -275,7 +275,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         const pClean = (p.id || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
         return p.id === activePlaylist.id || p.id === cleanId || pClean === currentClean;
       });
-      if (updated?.tracks?.items) {
+      if (updated?.tracks?.items && updated.tracks.items.length > 0) {
         const removedSet = getRemovedTrackIdsForPlaylist(currentClean);
         const isNotRemoved = (t: Track) => {
           const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -283,12 +283,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
         };
         const filtered = updated.tracks.items.filter(isNotRemoved);
-        setTracks(filtered);
-        setActivePlaylist((prev) => ({
-          ...prev,
-          ...updated,
-          tracks: { total: filtered.length, items: filtered },
-        }));
+        if (filtered.length > 0) {
+          setTracks(filtered);
+          setActivePlaylist((prev) => ({
+            ...prev,
+            ...updated,
+            tracks: { total: filtered.length, items: filtered },
+          }));
+        }
       }
     };
 
@@ -297,7 +299,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       const currentClean = (activePlaylist.id || cleanId || '').replace(/^spotify:playlist:/i, '').split('?')[0].trim();
       if (
         (activePlaylist.id === updatedId || cleanId === updatedId || currentClean === updatedCleanId) &&
-        updatedPlaylist?.tracks?.items
+        updatedPlaylist?.tracks?.items &&
+        updatedPlaylist.tracks.items.length > 0
       ) {
         const removedSet = getRemovedTrackIdsForPlaylist(currentClean);
         const isNotRemoved = (t: Track) => {
@@ -306,12 +309,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           return !removedSet.has(t.id) && !removedSet.has(c) && (!sig || !removedSet.has(sig));
         };
         const filtered = updatedPlaylist.tracks.items.filter(isNotRemoved);
-        setTracks(filtered);
-        setActivePlaylist((prev) => ({
-          ...prev,
-          ...updatedPlaylist,
-          tracks: { total: filtered.length, items: filtered },
-        }));
+        if (filtered.length > 0) {
+          setTracks(filtered);
+          setActivePlaylist((prev) => ({
+            ...prev,
+            ...updatedPlaylist,
+            tracks: { total: filtered.length, items: filtered },
+          }));
+        }
       }
     };
 
@@ -643,9 +648,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         let list: string[] = raw ? JSON.parse(raw) : [];
         if (next) {
           if (!list.includes(playlist.id)) list.push(playlist.id);
-          useSpotifyDataStore.getState().addCustomPlaylist(playlist);
+          // Pass the playlist with its loaded tracks preserved
+          const fullToSave: Playlist = {
+            ...playlist,
+            ...activePlaylist,
+            tracks: {
+              total: tracks.length,
+              items: tracks,
+            },
+          };
+          useSpotifyDataStore.getState().addCustomPlaylist(fullToSave);
+          try {
+            window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(tracks));
+          } catch {}
         } else {
-          list = list.filter((id) => id !== playlist.id);
+          list = list.filter((id) => id !== playlist.id && id !== cleanId);
           useSpotifyDataStore.getState().deletePlaylist(playlist.id);
         }
         window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
