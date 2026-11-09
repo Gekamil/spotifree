@@ -17,6 +17,7 @@ import { useLanguageStore } from '../utils/i18n';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../utils/lyricsService';
 import { toHDImage } from '../utils/formatters';
 import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
+import { fetchArtistTopTracks } from './artistService';
 import type { Playlist, Track } from '../types/spotify';
 import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
 
@@ -399,6 +400,20 @@ const sentTracks = new Map<string, Track[]>();
 async function loadPlaylistTracks(id: string): Promise<Track[]> {
   let p = findPlaylist(id);
   let tracks = tracksOf(p);
+
+  const isArtist =
+    id.startsWith('art-') ||
+    id.startsWith('artist-') ||
+    id.startsWith('sf-artist-') ||
+    p?.type === 'artist' ||
+    p?.description === 'Artista';
+
+  if (tracks.length === 0 && isArtist) {
+    try {
+      tracks = await fetchArtistTopTracks(id, p?.name);
+    } catch {}
+  }
+
   if (tracks.length === 0) {
     try {
       const fetched = await fetchPlaylistDetails(id);

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
 import { useStatsStore } from './useStatsStore';
+import { recordHistoryItem } from '../services/listeningHistory';
 import {
   saveCustomLikedSong,
   removeCustomLikedSong,
@@ -282,6 +283,14 @@ const store = create<PlayerState>((set, get) => ({
     const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
     try {
       useStatsStore.getState().recordTrackPlayed(track);
+      recordHistoryItem({
+        id: track.id,
+        name: track.name || 'Canción',
+        subtitle: track.artists?.[0]?.name ? `Canción • ${track.artists[0].name}` : 'Canción',
+        image: track.album?.images?.[0]?.url || '',
+        type: 'track',
+        track,
+      });
     } catch {}
 
     const updatedShuffle = state.isShuffle
@@ -656,6 +665,14 @@ const store = create<PlayerState>((set, get) => ({
     const updatedHistory = [track, ...state.history.filter((t) => t.id !== track.id)].slice(0, 50);
     try {
       useStatsStore.getState().recordTrackPlayed(track);
+      recordHistoryItem({
+        id: track.id,
+        name: track.name || 'Canción',
+        subtitle: track.artists?.[0]?.name ? `Canción • ${track.artists[0].name}` : 'Canción',
+        image: track.album?.images?.[0]?.url || '',
+        type: 'track',
+        track,
+      });
     } catch {}
 
     const updatedShuffle = state.isShuffle

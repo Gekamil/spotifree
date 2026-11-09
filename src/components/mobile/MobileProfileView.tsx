@@ -1,9 +1,6 @@
 import React, { useState } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
-import { useStatsStore } from '../../store/useStatsStore';
-import { usePlayerStore } from '../../store/usePlayerStore';
-import { useShallow } from 'zustand/react/shallow';
-import type { Playlist, Track } from '../../types/spotify';
+import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { syncUserProfileToServer } from '../../utils/userAccounts';
@@ -22,11 +19,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   onSelectPlaylist,
 }) => {
   const { user, playlists, isAuthenticated, logout } = useSpotifyDataStore();
-  const { getTopArtists, getTopTracks } = useStatsStore();
-  const { playTrack } = usePlayerStore(
-    useShallow((s) => ({ playTrack: s.playTrack }))
-  );
-
 
   const activeUserId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
   const [customProfile, setCustomProfile] = useState<{
@@ -65,9 +57,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   const userPlaylists = playlists.filter(
     (p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs' && p.type !== 'folder'
   );
-
-  const topArtists = getTopArtists(5);
-  const topTracks = getTopTracks(5);
 
   const avatarUrl = customProfile.avatarUrl || user?.images?.[0]?.url;
   const displayName = customProfile.displayName || user?.display_name || 'Usuario de Spotify';
@@ -112,21 +101,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         } as any,
       });
     }
-  };
-
-  const handleTrackClick = (trk: any) => {
-    const trackObj: Track = {
-      id: trk.id,
-      name: trk.name,
-      duration_ms: 180000,
-      artists: [{ id: `art-${trk.artist}`, name: trk.artist }],
-      album: {
-        id: `alb-${trk.id}`,
-        name: trk.name,
-        images: [{ url: trk.image }],
-      },
-    };
-    playTrack(trackObj);
   };
 
   return (
@@ -177,7 +151,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
         )}
 
         {/* Avatar */}
-        <div className="w-28 h-28 rounded-full overflow-hidden shadow-2xl bg-[#242424] border-2 border-white/10 flex items-center justify-center shrink-0 z-10">
+        <div className="w-28 h-28 rounded-full overflow-hidden shadow-2xl bg-[#535353] flex items-center justify-center shrink-0 z-10">
           {avatarUrl ? (
             <img
               src={avatarUrl}
@@ -186,7 +160,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-tr from-[#1ed760] to-[#121212] flex items-center justify-center text-black font-black text-3xl">
+            <div className="w-full h-full bg-[#535353] flex items-center justify-center text-white font-bold text-4xl">
               {displayName.charAt(0).toUpperCase()}
             </div>
           )}
@@ -270,80 +244,6 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
             </div>
           )}
         </div>
-
-        {/* SECTION 2: Artistas más escuchados */}
-        {topArtists.length > 0 && (
-          <div>
-            <h3 className="text-lg font-black text-white font-['SpotifyMixUITitle'] mb-3">
-              Artistas más escuchados este mes
-            </h3>
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
-              {topArtists.map((artist, idx) => (
-                <div
-                  key={artist.name}
-                  className="w-24 shrink-0 flex flex-col items-center text-center space-y-1.5 cursor-pointer active:scale-95 transition-transform"
-                >
-                  <div className="w-20 h-20 rounded-full overflow-hidden shadow-lg bg-[#242424] relative border border-white/5">
-                    {artist.image ? (
-                      <img
-                        src={artist.image}
-                        alt={artist.name}
-                        onError={handleImageError}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-[#333] flex items-center justify-center font-bold text-white text-lg">
-                        {(artist.name || 'A').charAt(0).toUpperCase()}
-                      </div>
-                    )}
-                    <span className="absolute bottom-0 right-0 w-5 h-5 rounded-full bg-black/80 text-[#1ed760] font-black text-[10px] flex items-center justify-center border border-black">
-                      #{idx + 1}
-                    </span>
-                  </div>
-                  <span className="font-bold text-white text-xs truncate w-full">
-                    {artist.name}
-                  </span>
-                  <span className="text-[10px] text-[#b3b3b3]">Artista</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* SECTION 3: Canciones más escuchadas */}
-        {topTracks.length > 0 && (
-          <div>
-            <h3 className="text-lg font-black text-white font-['SpotifyMixUITitle'] mb-3">
-              Canciones más escuchadas este mes
-            </h3>
-            <div className="space-y-1.5">
-              {topTracks.map((trk, idx) => (
-                <div
-                  key={trk.id}
-                  onClick={() => handleTrackClick(trk)}
-                  className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.03] active:bg-white/[0.1] cursor-pointer transition-colors"
-                >
-                  <span className="w-4 text-center font-bold text-xs text-[#b3b3b3]">
-                    {idx + 1}
-                  </span>
-                  <img
-                    src={trk.image}
-                    alt={trk.name}
-                    onError={handleImageError}
-                    className="w-11 h-11 rounded-[4px] object-cover bg-[#242424] shadow shrink-0"
-                  />
-                  <div className="flex flex-col min-w-0 flex-1">
-                    <span className="font-bold text-white text-sm truncate">{trk.name}</span>
-                    <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">{trk.artist}</span>
-                  </div>
-                  <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums shrink-0">
-                    {trk.plays} reps
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Botón de Cerrar Sesión */}
         {isAuthenticated && (

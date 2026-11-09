@@ -30,6 +30,7 @@ import {
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
+import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import {
@@ -425,53 +426,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
     if (isArtist) {
       setLoading(true);
-      const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
-
       (async () => {
         try {
-          let songs: Track[] = [];
-
-          // 1. Try Spotify search endpoint
-          try {
-            const sRes = await fetch(`/api/spotify/search?q=${encodeURIComponent(cleanArtistName)}`);
-            if (sRes.ok) {
-              const sData = await sRes.json();
-              if (Array.isArray(sData.tracks?.items) && sData.tracks.items.length > 0) {
-                songs = sData.tracks.items.filter((t: Track) =>
-                  t.artists.some((a) => a.name.toLowerCase().includes(cleanArtistName.toLowerCase()))
-                );
-                if (songs.length === 0) songs = sData.tracks.items.slice(0, 20);
-              }
-            }
-          } catch {}
-
-          // 2. iTunes search fallback for artist top tracks
-          if (songs.length === 0) {
-            try {
-              const itunesRes = await fetch(
-                `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
-              );
-              if (itunesRes.ok) {
-                const data = await itunesRes.json();
-                songs = (data.results || []).map((t: any, idx: number) => ({
-                  id: `artist-song-${t.trackId || idx}`,
-                  name: t.trackName || 'Canción',
-                  duration_ms: t.trackTimeMillis || 210000,
-                  artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
-                  album: {
-                    id: `alb-${t.collectionId || idx}`,
-                    name: t.collectionName || t.trackName,
-                    images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
-                  },
-                }));
-              }
-            } catch {}
-          }
-
+          const songs = await fetchArtistTopTracks(cleanId, playlist.name);
           if (!cancelled && songs.length > 0) {
             setTracks(songs);
             useSpotifyDataStore.getState().cachePlaylistDetails({
               ...playlist,
+              name: resolveArtistName(cleanId, playlist.name),
               tracks: { total: songs.length, items: songs },
             });
           }

@@ -9,6 +9,7 @@ import { LocalFilesCover, LocalFilesView } from '../common/LocalFilesView';
 import { LOCAL_FILES_EVENT, LOCAL_FILES_PLAYLIST_ID, listLocalTracks } from '../../utils/localFiles';
 import { deviceTracks, scanDeviceMusic } from '../../utils/nativeLocalMusic';
 import { dedupeHomeShelves, useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
+import { resolveArtistName } from '../../services/artistService';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
@@ -19,6 +20,8 @@ import { MobileSearchView } from './MobileSearchView';
 import { MobileCreateSheet } from './MobileCreateSheet';
 import { MobileProfileView } from './MobileProfileView';
 import { MobileSettingsView } from './MobileSettingsView';
+import { MobileRecentsView } from './MobileRecentsView';
+import { MobileStatsView } from './MobileStatsView';
 import { MobileAddLibraryItemsModal, type LibraryCandidateItem } from './MobileAddLibraryItemsModal';
 import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal';
 import { LoginModal } from '../desktop/LoginModal';
@@ -43,7 +46,7 @@ import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 
 export const MobileLayout: React.FC = () => {
-  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local'>('home');
+  const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local' | 'recents' | 'stats'>('home');
   const [localCount, setLocalCount] = useState(0);
   useEffect(() => {
     const load = () => listLocalTracks().then((t) => setLocalCount(t.length + deviceTracks().length));
@@ -53,7 +56,7 @@ export const MobileLayout: React.FC = () => {
     window.addEventListener(LOCAL_FILES_EVENT, load);
     return () => window.removeEventListener(LOCAL_FILES_EVENT, load);
   }, []);
-  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica' | string>('todo');
+  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
@@ -440,14 +443,6 @@ export const MobileLayout: React.FC = () => {
     if (homeFilter === 'musica') {
       return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias') && !s.title.toLowerCase().includes('podcast')) as any) as typeof list);
     }
-    if (homeFilter === 'podcasts') {
-      const p = list.filter((s) => s.title.toLowerCase().includes('podcast') || s.title.toLowerCase().includes('noticias') || s.title.toLowerCase().includes('episodio'));
-      return p.length > 0 ? withoutShortcuts(dedupeHomeShelves(p as any) as typeof list) : [];
-    }
-    if (homeFilter === 'audiolibros') {
-      const a = list.filter((s) => s.title.toLowerCase().includes('libro') || s.title.toLowerCase().includes('audio'));
-      return a.length > 0 ? withoutShortcuts(dedupeHomeShelves(a as any) as typeof list) : [];
-    }
 
     // No playlist twice on Home ("Tus playlists" + every section + the shortcuts at the top)
     return withoutShortcuts(dedupeHomeShelves(list as any) as typeof list);
@@ -486,11 +481,14 @@ export const MobileLayout: React.FC = () => {
       return;
     }
 
+    const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('sf-artist-');
+    const resolvedName = customName || (isArtist ? resolveArtistName(cleanId) : cleanId === 'liked-songs' ? 'Canciones que te gustan' : 'Playlist');
+
     const placeholder: Playlist = {
       id: cleanId,
-      name: customName || (cleanId === 'liked-songs' ? 'Canciones que te gustan' : 'Playlist'),
-      description: '',
-      type: cleanId.startsWith('art-') ? 'artist' : cleanId.startsWith('alb-') ? 'album' : 'playlist',
+      name: resolvedName,
+      description: isArtist ? 'Artista' : '',
+      type: isArtist ? 'artist' : cleanId.startsWith('alb-') ? 'album' : 'playlist',
       images: customImage ? [{ url: customImage }] : [],
       owner: { display_name: 'Spotify', id: 'spotify' },
       tracks: { total: 0, items: [] },
@@ -1470,6 +1468,32 @@ export const MobileLayout: React.FC = () => {
           </div>
         )}
 
+        {/* RECENTES VIEW */}
+        {mobileTab === 'recents' && (
+          <div className="spf-page-enter min-h-full">
+            <MobileRecentsView
+              onBack={() => setMobileTab('home')}
+              onSelectPlaylist={(pl) => {
+                setSelectedPlaylist(pl);
+                setMobileTab('playlist');
+              }}
+              onSelectPlaylistById={handleSelectPlaylistById}
+            />
+          </div>
+        )}
+
+        {/* ESTADÍSTICAS VIEW */}
+        {mobileTab === 'stats' && (
+          <div className="spf-page-enter min-h-full">
+            <MobileStatsView
+              onBack={() => setMobileTab('home')}
+              onSelectArtist={(artistName) => {
+                handleSelectPlaylistById(`art-${artistName.toLowerCase().replace(/\s+/g, '-')}`, artistName);
+              }}
+            />
+          </div>
+        )}
+
         {mobileTab === 'local' && (
           <div className="spf-page-push min-h-full">
             <LocalFilesView isMobile onBack={() => setMobileTab('library')} />
@@ -1775,10 +1799,6 @@ export const MobileLayout: React.FC = () => {
         onOpenSharedSession={() => {
           setIsProfileDrawerOpen(false);
           useSharedSessionStore.getState().setModalOpen(true);
-        }}
-        onOpenTaste={() => {
-          setIsProfileDrawerOpen(false);
-          useUIStore.getState().openTasteOnboarding();
         }}
         onOpenNotifications={() => {
           setIsProfileDrawerOpen(false);

@@ -3,8 +3,8 @@ import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
 
 interface MobileHeaderProps {
-  activeTab: 'todo' | 'musica' | string;
-  onTabChange: (tab: any) => void;
+  activeTab: 'todo' | 'musica';
+  onTabChange: (tab: 'todo' | 'musica') => void;
   onOpenProfile?: () => void;
   onOpenDrawer?: () => void;
   onOpenSettings?: () => void;
@@ -40,11 +40,9 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const avatarUrl = customAvatar || user?.images?.[0]?.url;
   const initial = (user?.display_name || 'J').charAt(0).toUpperCase();
 
-  const pills: Array<{ id: string; label: string }> = [
+  const pills: Array<{ id: 'todo' | 'musica'; label: string }> = [
     { id: 'todo', label: 'Todos' },
     { id: 'musica', label: 'Música' },
-    { id: 'podcasts', label: 'Pódcasts' },
-    { id: 'audiolibros', label: 'Audiolibros' },
   ];
 
   return (
@@ -56,7 +54,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       <button
         type="button"
         onClick={handleAvatarClick}
-        className="w-8 h-8 rounded-full bg-[#3b82f6] text-white shrink-0 overflow-hidden shadow-md flex items-center justify-center cursor-pointer active:scale-95 transition-transform border border-white/10"
+        className="w-8 h-8 rounded-full bg-[#535353] text-white shrink-0 overflow-hidden flex items-center justify-center cursor-pointer active:scale-95 transition-transform"
         title={isAuthenticated ? user?.display_name : 'Menú de perfil y ajustes'}
         aria-label="Abrir perfil y configuración"
       >
@@ -78,7 +76,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
       {/* 2. Center/Right: Spotify Filter Pills (Todos, Música, Pódcasts, Audiolibros - horizontally scrollable, zero right icons) */}
       <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none py-0.5 pr-2">
         {pills.map((p) => {
-          const isActive = activeTab === p.id || (p.id === 'todo' && activeTab === 'todos');
+          const isActive = activeTab === p.id;
           return (
             <button
               key={p.id}
