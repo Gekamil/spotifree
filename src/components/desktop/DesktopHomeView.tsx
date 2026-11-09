@@ -631,17 +631,6 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 />
               </div>
 
-              {/* Top Bar: three dots menu on the right */}
-              <div className="flex items-center justify-end relative z-20 w-full mb-1">
-                <div className="text-white/80 p-1 hover:text-white transition-colors cursor-pointer">
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <circle cx="12" cy="5" r="2" />
-                    <circle cx="12" cy="12" r="2" />
-                    <circle cx="12" cy="19" r="2" />
-                  </svg>
-                </div>
-              </div>
-
               {/* DJ Visualizer: Centered in the card, with smooth bottom half transparency fade */}
               <div
                 className="absolute left-1/2 -translate-x-1/2 -top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] md:w-[250px] md:h-[250px] z-10"

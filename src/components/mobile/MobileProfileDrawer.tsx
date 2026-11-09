@@ -25,6 +25,26 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
     return window.localStorage.getItem('spotifree_sharing_activity') !== 'false';
   });
 
+  const [shouldRender, setShouldRender] = useState(isOpen);
+  const [isAnimating, setIsAnimating] = useState(false);
+
+  // Smooth slide-in and slide-out lifecycle
+  useEffect(() => {
+    if (isOpen) {
+      setShouldRender(true);
+      const raf = requestAnimationFrame(() => {
+        setIsAnimating(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setIsAnimating(false);
+      const timer = setTimeout(() => {
+        setShouldRender(false);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [isOpen]);
+
   // Close on Escape
   useEffect(() => {
     if (!isOpen) return;
@@ -35,7 +55,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
     return () => window.removeEventListener('keydown', onKey);
   }, [isOpen, onClose]);
 
-  if (!isOpen) return null;
+  if (!shouldRender) return null;
 
   // Custom avatar per active account or user image
   const activeId = user?.id || (typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_active_user_id') : '') || 'default';
@@ -72,20 +92,24 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex font-['SpotifyMixUI'] select-none">
-      {/* Darkened backdrop with smooth fade */}
+      {/* Darkened backdrop with smooth fade in and out */}
       <div
         onClick={onClose}
-        className="fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity duration-300 animate-in fade-in"
+        className={`fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity duration-300 ease-out ${
+          isAnimating ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        }`}
         aria-hidden="true"
       />
 
-      {/* Drawer Container (Sliding in from the left, authentic Spotify Mobile layout) */}
+      {/* Drawer Container (Sliding smoothly in and out from the left) */}
       <aside
         style={{
           paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
         }}
-        className="relative z-10 w-[84%] max-w-[340px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] animate-in slide-in-from-left"
+        className={`relative z-10 w-[84%] max-w-[340px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          isAnimating ? 'translate-x-0' : '-translate-x-full'
+        }`}
       >
         <div className="space-y-4">
           {/* 1. Profile Header Card + Añadir Cuenta inside unified rounded panel matching Spotify */}
@@ -302,65 +326,9 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
               <span className="text-[11px] text-[#a7a7a7] leading-tight font-normal text-center">amigos</span>
             </button>
           </div>
-
-          {/* 4. Mensajes Section (matching Image 1) */}
-          <div className="pt-2 border-t border-white/[0.06] space-y-2.5">
-            <div className="flex items-center justify-between px-1">
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenNotifications();
-                }}
-                className="flex items-center gap-1.5 text-[15px] font-bold text-white hover:text-white/80 transition-colors cursor-pointer"
-              >
-                <span>Mensajes</span>
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#b3b3b3]">
-                  <path d="M5.47 13.03a.75.75 0 0 1 0-1.06L9.44 8 5.47 4.03a.75.75 0 0 1 1.06-1.06l4.5 4.5a.75.75 0 0 1 0 1.06l-4.5 4.5a.75.75 0 0 1-1.06 0z" />
-                </svg>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenNotifications();
-                }}
-                className="w-7 h-7 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 active:scale-95 transition-all cursor-pointer"
-                title="Mensaje nuevo"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Quick action card for updates & notifications */}
-            <div className="bg-[#282828] rounded-xl p-3 flex items-center justify-between gap-2.5">
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] text-white font-medium leading-snug">
-                  Novedades y avisos de Spotifree
-                </p>
-                <p className="text-[11px] text-[#a7a7a7] truncate">
-                  Toca para ver avisos y cambios
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenNotifications();
-                }}
-                className="shrink-0 bg-white text-black font-bold text-xs px-3 py-1.5 rounded-full hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-              >
-                Ver
-              </button>
-            </div>
-          </div>
         </div>
 
-        {/* 5. Bottom Footer: Cerrar sesión (if authenticated) */}
+        {/* 4. Bottom Footer: Cerrar sesión (if authenticated) */}
         {isAuthenticated && (
           <div className="pt-4 pb-1">
             <button

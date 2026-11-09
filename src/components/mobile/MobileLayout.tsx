@@ -332,7 +332,6 @@ export const MobileLayout: React.FC = () => {
   }, [mobileTab]);
   const { openLoginModal, sortOrder, setSortOrder, viewMode, setViewMode } = useUIStore();
   const [isMobileSortSheetOpen, setIsMobileSortSheetOpen] = useState(false);
-  const [isMobileViewSheetOpen, setIsMobileViewSheetOpen] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
 
   const getSortLabel = () => {
@@ -690,17 +689,6 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Top Bar: three dots menu on the right */}
-                    <div className="flex items-center justify-end relative z-20 w-full mb-2">
-                      <div className="text-white/80 p-1">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                          <circle cx="12" cy="5" r="2" />
-                          <circle cx="12" cy="12" r="2" />
-                          <circle cx="12" cy="19" r="2" />
-                        </svg>
-                      </div>
-                    </div>
-
                     {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
                     <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
                       <InteractiveMusicWaves
@@ -1008,10 +996,18 @@ export const MobileLayout: React.FC = () => {
                   <span className="truncate">{getSortLabel()}</span>
                 </button>
 
-                {/* Right: View Mode Toggle Button */}
+                {/* Right: Direct View Mode Toggle Button (Cycles lista -> cuadricula -> compacta -> lista) */}
                 <button
                   type="button"
-                  onClick={() => setIsMobileViewSheetOpen(true)}
+                  onClick={() => {
+                    if (viewMode === 'lista') {
+                      setViewMode('cuadricula');
+                    } else if (viewMode === 'cuadricula' || viewMode === 'cuadricula-compacta') {
+                      setViewMode('compacta');
+                    } else {
+                      setViewMode('lista');
+                    }
+                  }}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-all cursor-pointer"
                   aria-label="Cambiar vista de biblioteca"
                   title="Cambiar vista"
@@ -1453,7 +1449,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 5: DEDICATED SPOTIFY MOBILE PROFILE VIEW */}
         {mobileTab === 'profile' && (
-          <div className="spf-page-enter min-h-full">
+          <div className="spf-page-push min-h-full">
             <MobileProfileView
               onBack={() => setMobileTab('home')}
               onOpenSettings={() => setMobileTab('settings')}
@@ -1467,7 +1463,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 6: DEDICATED SPOTIFY MOBILE SETTINGS VIEW */}
         {mobileTab === 'settings' && (
-          <div className="spf-page-enter min-h-full">
+          <div className="spf-page-push min-h-full">
             <MobileSettingsView
               onBack={() => setMobileTab('home')}
               onOpenProfile={() => setMobileTab('profile')}
@@ -1477,7 +1473,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* RECENTES VIEW */}
         {mobileTab === 'recents' && (
-          <div className="spf-page-enter min-h-full">
+          <div className="spf-page-push min-h-full">
             <MobileRecentsView
               onBack={() => setMobileTab('home')}
               onSelectPlaylist={(pl) => {
@@ -1491,7 +1487,7 @@ export const MobileLayout: React.FC = () => {
 
         {/* ESTADÍSTICAS VIEW */}
         {mobileTab === 'stats' && (
-          <div className="spf-page-enter min-h-full">
+          <div className="spf-page-push min-h-full">
             <MobileStatsView
               onBack={() => setMobileTab('home')}
               onSelectArtist={(artistName) => {
@@ -1725,61 +1721,6 @@ export const MobileLayout: React.FC = () => {
                   onClick={() => {
                     setSortOrder(item.id as any);
                     setIsMobileSortSheetOpen(false);
-                  }}
-                />
-              );
-            })}
-          </SheetList>
-        </div>
-      </MobileSheet>
-
-      {/* Mobile View Mode Bottom Sheet (Spotify Official "Ver como") */}
-      <MobileSheet open={isMobileViewSheetOpen} onClose={() => setIsMobileViewSheetOpen(false)}>
-        <div className="pb-4">
-          <div className="px-5 pt-3 pb-2 border-b border-white/10">
-            <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Ver como</h3>
-          </div>
-          <SheetList>
-            {[
-              {
-                id: 'cuadricula',
-                label: 'Cuadrícula',
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M1 1h6v6H1zm1.5 1.5v3h3v-3zM1 9h6v6H1zm1.5 1.5v3h3v-3zM9 1h6v6H9zm1.5 1.5v3h3v-3zM9 9h6v6H9zm1.5 1.5v3h3v-3z" />
-                  </svg>
-                ),
-              },
-              {
-                id: 'lista',
-                label: 'Lista',
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
-                  </svg>
-                ),
-              },
-              {
-                id: 'compacta',
-                label: 'Compacto',
-                icon: (
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M15.5 13.5H.5V12h15zm0-4.75H.5v-1.5h15zm0-4.75H.5V2.5h15z" />
-                  </svg>
-                ),
-              },
-            ].map((item) => {
-              const isSelected = viewMode === item.id || (item.id === 'cuadricula' && viewMode === 'cuadricula-compacta');
-              return (
-                <SheetItem
-                  key={item.id}
-                  label={item.label}
-                  icon={item.icon}
-                  active={isSelected}
-                  sublabel={isSelected ? 'Seleccionado' : undefined}
-                  onClick={() => {
-                    setViewMode(item.id as any);
-                    setIsMobileViewSheetOpen(false);
                   }}
                 />
               );
