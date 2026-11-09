@@ -78,14 +78,14 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             className="w-full flex items-center gap-3.5 text-left group pt-2 active:opacity-80 transition-opacity cursor-pointer"
           >
             {/* Avatar Circle - Spotify clean circle, NO borders */}
-            <div className="w-13 h-13 rounded-full bg-[#535353] text-white flex items-center justify-center font-bold text-xl shrink-0 overflow-hidden shadow">
+            <div className="w-12 h-12 rounded-full bg-[#535353] text-white flex items-center justify-center font-bold text-xl shrink-0 overflow-hidden shadow">
               {avatarUrl ? (
                 <img
                   src={avatarUrl}
                   alt={displayName}
                   onError={handleImageError}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full max-w-full max-h-full object-cover rounded-full"
                 />
               ) : (
                 <span>{initial}</span>
@@ -233,14 +233,14 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
               }}
               className="flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
             >
-              <div className="w-13 h-13 rounded-full bg-[#535353] flex items-center justify-center text-white font-bold text-lg overflow-hidden shadow">
+              <div className="w-12 h-12 rounded-full bg-[#535353] flex items-center justify-center text-white font-bold text-lg overflow-hidden shadow shrink-0">
                 {avatarUrl ? (
                   <img
                     src={avatarUrl}
                     alt={displayName}
                     onError={handleImageError}
                     referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover"
+                    className="w-full h-full max-w-full max-h-full object-cover rounded-full"
                   />
                 ) : (
                   <span>{initial}</span>
@@ -259,7 +259,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
               }}
               className="flex flex-col items-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
             >
-              <div className="w-13 h-13 rounded-full bg-[#242424] hover:bg-[#2a2a2a] flex items-center justify-center text-[#b3b3b3] hover:text-white shadow">
+              <div className="w-12 h-12 rounded-full bg-[#242424] hover:bg-[#2a2a2a] flex items-center justify-center text-[#b3b3b3] hover:text-white shadow shrink-0">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="12" y1="5" x2="12" y2="19" />
                   <line x1="5" y1="12" x2="19" y2="12" />
