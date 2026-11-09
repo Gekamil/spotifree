@@ -325,7 +325,24 @@ export const MobileLayout: React.FC = () => {
   useEffect(() => {
     if (mobileTab !== 'home') setSeeAllShelf(null);
   }, [mobileTab]);
-  const { openLoginModal } = useUIStore();
+  const { openLoginModal, sortOrder, setSortOrder, viewMode, setViewMode } = useUIStore();
+  const [isMobileSortSheetOpen, setIsMobileSortSheetOpen] = useState(false);
+  const [isMobileViewSheetOpen, setIsMobileViewSheetOpen] = useState(false);
+
+  const getSortLabel = () => {
+    switch (sortOrder) {
+      case 'recientes':
+        return 'Recientes';
+      case 'anadidos':
+        return 'Añadidos recientemente';
+      case 'alfabetico':
+        return 'Alfabético';
+      case 'creador':
+        return 'Creador';
+      default:
+        return 'Recientes';
+    }
+  };
 
   const handleCreatePlaylist = (name: string) => {
     // Same path as desktop: saved in every storage layer + cloud account, marked as the user's own
@@ -958,6 +975,47 @@ export const MobileLayout: React.FC = () => {
               })}
             </div>
 
+            {/* Subheader Toolbar: Sort (< | > rotated 90deg / Up-Down arrows) & View Mode (4-squares) */}
+            {isAuthenticated && (
+              <div className="flex items-center justify-between pt-2 pb-1.5 px-1 select-none">
+                {/* Left: Sort Button with Spotify's official Up/Down arrows icon */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSortSheetOpen(true)}
+                  className="flex items-center gap-2 text-white/90 hover:text-white active:scale-95 transition-all text-xs font-bold cursor-pointer group"
+                  aria-label="Ordenar biblioteca"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-white/80 group-hover:text-white shrink-0">
+                    <path d="M11 1.75a.75.75 0 0 1 .75.75v8.69l1.72-1.72a.75.75 0 1 1 1.06 1.06l-3 3a.75.75 0 0 1-1.06 0l-3-3a.75.75 0 1 1 1.06-1.06l1.72 1.72V2.5a.75.75 0 0 1 .75-.75m-6 12.5a.75.75 0 0 1-.75-.75V4.81L2.53 6.53a.75.75 0 0 1-1.06-1.06l3-3a.75.75 0 0 1 1.06 0l3 3a.75.75 0 0 1-1.06 1.06L5.75 4.81v8.69a.75.75 0 0 1-.75.75" />
+                  </svg>
+                  <span className="truncate">{getSortLabel()}</span>
+                </button>
+
+                {/* Right: View Mode Toggle Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileViewSheetOpen(true)}
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white active:scale-90 transition-all cursor-pointer"
+                  aria-label="Cambiar vista de biblioteca"
+                  title="Cambiar vista"
+                >
+                  {viewMode === 'cuadricula' || viewMode === 'cuadricula-compacta' ? (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M1 1h6v6H1zm1.5 1.5v3h3v-3zM1 9h6v6H1zm1.5 1.5v3h3v-3zM9 1h6v6H9zm1.5 1.5v3h3v-3zM9 9h6v6H9zm1.5 1.5v3h3v-3z" />
+                    </svg>
+                  ) : viewMode === 'compacta' ? (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M15.5 13.5H.5V12h15zm0-4.75H.5v-1.5h15zm0-4.75H.5V2.5h15z" />
+                    </svg>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
+            )}
+
             {/* Library Items List */}
             {!isAuthenticated ? (
               <div className="py-14 text-center flex flex-col items-center justify-center space-y-3">
@@ -987,105 +1045,274 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="space-y-1.5 pt-2">
-                {/* Liked songs item */}
-                {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
-                  <div
-                    onClick={() =>
-                      handleSelectPlaylistById(
-                        'liked-songs',
-                        'Canciones que te gustan',
-                        'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
-                      )
-                    }
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
-                  >
-                    <img
-                      src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
-                      alt="Canciones que te gustan"
-                      onError={handleImageError}
-                      className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-white text-sm truncate">
-                        Canciones que te gustan
-                      </span>
-                      <span className="text-xs text-[#b3b3b3] mt-0.5">
-                        Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Spotify Official DJ Playlist Card */}
-                {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
-                  <div
-                    onClick={() => setMobileTab('dj')}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
-                  >
-                    <img
-                      src={SPOTIFY_DJ_COVER_IMAGE}
-                      alt="DJ"
-                      onError={handleImageError}
-                      className="w-12 h-12 rounded-[4px] object-cover shadow shrink-0"
-                    />
-                    <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-white text-sm truncate flex items-center gap-1.5">
-                        <span>DJ</span>
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-                      </span>
-                      <span className="text-xs text-[#b3b3b3] mt-0.5">
-                        Playlist • Hecho para ti
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Outside Dismiss Backdrop when any item is long-pressed */}
-                {longPressedPlaylistId && (
-                  <div
-                    className="fixed inset-0 z-20 bg-transparent"
-                    onClick={() => setLongPressedPlaylistId(null)}
-                  />
-                )}
-
-                {/* All user playlists and artists strictly filtered */}
-                {(() => {
-                  const deletedIds = getDeletedPlaylistIds();
-                  let list = playlists.filter((p) => !deletedIds.has(p.id));
-                  if (libraryFilter === 'downloaded') {
-                    const downloaded = getDownloadedPlaylists();
-                    const existingIds = new Set(list.map((p) => p.id));
-                    const extra = downloaded.filter((d) => !existingIds.has(d.id));
-                    list = [...list, ...extra];
+            ) : (() => {
+              const isGrid = viewMode === 'cuadricula' || viewMode === 'cuadricula-compacta';
+              const isCompact = viewMode === 'compacta';
+              const deletedIds = getDeletedPlaylistIds();
+              let list = playlists.filter((p) => !deletedIds.has(p.id));
+              if (libraryFilter === 'downloaded') {
+                const downloaded = getDownloadedPlaylists();
+                const existingIds = new Set(list.map((p) => p.id));
+                const extra = downloaded.filter((d) => !existingIds.has(d.id));
+                list = [...list, ...extra];
+              }
+              list = list
+                .filter(
+                  (p) =>
+                    !deletedIds.has(p.id) &&
+                    !p.id.includes('collection:tracks') &&
+                    !p.id.includes('collection-tracks') &&
+                    p.id !== 'liked-songs' &&
+                    p.id !== 'user-liked-songs' &&
+                    p.id !== 'tracks' &&
+                    !/^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|favoritas|favorites)$/i.test((p.name || '').trim()) &&
+                    p.id !== 'spotify-dj' &&
+                    p.id !== 'dj' &&
+                    p.name?.toLowerCase().trim() !== 'dj'
+                )
+                .filter((p) => {
+                  if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
+                    return false;
                   }
-                  return list
-                    .filter(
-                      (p) =>
-                        !deletedIds.has(p.id) &&
-                        !p.id.includes('collection:tracks') &&
-                        !p.id.includes('collection-tracks') &&
-                        p.id !== 'liked-songs' &&
-                        p.id !== 'user-liked-songs' &&
-                        p.id !== 'tracks' &&
-                        !/^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|favoritas|favorites)$/i.test((p.name || '').trim()) &&
-                        p.id !== 'spotify-dj' &&
-                        p.id !== 'dj' &&
-                        p.name?.toLowerCase().trim() !== 'dj'
-                    )
-                    .filter((p) => {
-                      if (librarySearchQuery && !p.name.toLowerCase().includes(librarySearchQuery.toLowerCase())) {
-                        return false;
+                  const isArt = checkIsMobileArtist(p);
+                  if (libraryFilter === 'artists') return isArt;
+                  if (libraryFilter === 'playlists') return !isArt;
+                  if (libraryFilter === 'downloaded') return isPlaylistDownloaded(p.id);
+                  return true;
+                });
+
+              if (sortOrder === 'alfabetico') {
+                list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+              } else if (sortOrder === 'creador') {
+                list.sort((a, b) =>
+                  (a.owner?.display_name || '').localeCompare(b.owner?.display_name || '')
+                );
+              } else if (sortOrder === 'anadidos') {
+                list.reverse();
+              }
+
+              if (isGrid) {
+                return (
+                  <div className="grid grid-cols-2 gap-3 pt-2 pb-6">
+                    {/* Liked songs card */}
+                    {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
+                      <div
+                        onClick={() =>
+                          handleSelectPlaylistById(
+                            'liked-songs',
+                            'Canciones que te gustan',
+                            'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+                          )
+                        }
+                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors group select-none"
+                      >
+                        <img
+                          src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+                          alt="Canciones que te gustan"
+                          onError={handleImageError}
+                          className="w-full aspect-square rounded-[6px] object-cover shadow-md shrink-0"
+                        />
+                        <span className="font-bold text-white text-sm truncate mt-2">
+                          Canciones que te gustan
+                        </span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                          Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Spotify Official DJ Playlist Card */}
+                    {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
+                      <div
+                        onClick={() => setMobileTab('dj')}
+                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors group select-none"
+                      >
+                        <img
+                          src={SPOTIFY_DJ_COVER_IMAGE}
+                          alt="DJ"
+                          onError={handleImageError}
+                          className="w-full aspect-square rounded-[6px] object-cover shadow-md shrink-0"
+                        />
+                        <span className="font-bold text-white text-sm truncate mt-2 flex items-center gap-1.5">
+                          <span>DJ</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                        </span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                          Playlist • Hecho para ti
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Playlists and Artists in Grid */}
+                    {list.map((pl) => {
+                      const isArt = checkIsMobileArtist(pl);
+                      const isLongPressed = longPressedPlaylistId === pl.id;
+
+                      return (
+                        <div
+                          key={pl.id}
+                          onTouchStart={() => startLongPress(pl)}
+                          onTouchEnd={cancelLongPress}
+                          onTouchMove={cancelLongPress}
+                          onMouseDown={() => startLongPress(pl)}
+                          onMouseUp={cancelLongPress}
+                          onMouseLeave={cancelLongPress}
+                          onClick={() => {
+                            if (longPressedPlaylistId) {
+                              setLongPressedPlaylistId(null);
+                              return;
+                            }
+                            cancelLongPress();
+                            handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
+                          }}
+                          className={`p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors relative group select-none ${
+                            isLongPressed ? 'bg-white/15 z-30' : ''
+                          }`}
+                        >
+                          <img
+                            src={getPlaylistCover(pl)}
+                            alt={pl.name}
+                            onError={onPlaylistCoverError(pl)}
+                            className={`w-full aspect-square object-cover bg-[#242424] shadow-md shrink-0 ${
+                              isArt ? 'rounded-full' : 'rounded-[6px]'
+                            }`}
+                          />
+                          <div className="flex items-center justify-between mt-2 min-w-0">
+                            <span className="font-bold text-white text-sm truncate">
+                              {pl.name}
+                            </span>
+                            {isLongPressed && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPlaylistOptions(pl);
+                                }}
+                                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white shrink-0 ml-1"
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                  <circle cx="5" cy="12" r="2" />
+                                  <circle cx="12" cy="12" r="2" />
+                                  <circle cx="19" cy="12" r="2" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                          <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                            {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
+                          </span>
+                        </div>
+                      );
+                    })}
+
+                    {/* Archivos locales in Grid */}
+                    {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
+                      <div
+                        onClick={() => setMobileTab('local')}
+                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors select-none"
+                      >
+                        <div
+                          className="w-full aspect-square rounded-[6px] flex items-center justify-center shadow-md overflow-hidden"
+                          style={{ background: 'linear-gradient(135deg, #1e3264 0%, #1ed760 100%)' }}
+                        >
+                          <svg width="40%" height="40%" viewBox="0 0 24 24" fill="white">
+                            <path d="M3 5a2 2 0 0 1 2-2h4.6l2 2H19a2 2 0 0 1 2 2v1H3zm-0 4h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm11 2v4.27A2 2 0 1 0 15 17v-4h2v-2z" />
+                          </svg>
+                        </div>
+                        <span className="font-bold text-white text-sm truncate mt-2">Archivos locales</span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
+                          <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                          <span>Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}</span>
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Spotify Native "Añadir a tu biblioteca" Card in Grid */}
+                    <div
+                      onClick={() => setIsAddLibraryModalOpen(true)}
+                      className="p-2 rounded-lg hover:bg-white/5 active:bg-white/10 cursor-pointer flex flex-col items-center justify-center text-center aspect-square rounded-[6px] border border-dashed border-white/20 select-none transition-colors"
+                    >
+                      <div className="w-12 h-12 rounded-full bg-[#242424] flex items-center justify-center text-white/80 mb-2 shadow-sm">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
+                        </svg>
+                      </div>
+                      <span className="text-xs font-bold text-white/80">Añadir más</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // List / Compact rendering
+              return (
+                <div className={`pt-1 ${isCompact ? 'space-y-0.5' : 'space-y-1.5'}`}>
+                  {/* Liked songs item */}
+                  {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
+                    <div
+                      onClick={() =>
+                        handleSelectPlaylistById(
+                          'liked-songs',
+                          'Canciones que te gustan',
+                          'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
+                        )
                       }
-                      const isArt = checkIsMobileArtist(p);
-                      if (libraryFilter === 'artists') return isArt;
-                      if (libraryFilter === 'playlists') return !isArt;
-                      if (libraryFilter === 'downloaded') return isPlaylistDownloaded(p.id);
-                      return true;
-                    });
-                })()
-                  .map((pl) => {
+                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
+                        isCompact ? 'p-1.5' : 'p-2'
+                      }`}
+                    >
+                      <img
+                        src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
+                        alt="Canciones que te gustan"
+                        onError={handleImageError}
+                        className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-[4px] object-cover shadow shrink-0`}
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-white text-sm truncate">
+                          Canciones que te gustan
+                        </span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5">
+                          Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spotify Official DJ Playlist Card */}
+                  {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
+                    <div
+                      onClick={() => setMobileTab('dj')}
+                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
+                        isCompact ? 'p-1.5' : 'p-2'
+                      }`}
+                    >
+                      <img
+                        src={SPOTIFY_DJ_COVER_IMAGE}
+                        alt="DJ"
+                        onError={handleImageError}
+                        className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-[4px] object-cover shadow shrink-0`}
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-white text-sm truncate flex items-center gap-1.5">
+                          <span>DJ</span>
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                        </span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5">
+                          Playlist • Hecho para ti
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Outside Dismiss Backdrop when any item is long-pressed */}
+                  {longPressedPlaylistId && (
+                    <div
+                      className="fixed inset-0 z-20 bg-transparent"
+                      onClick={() => setLongPressedPlaylistId(null)}
+                    />
+                  )}
+
+                  {/* Playlists and Artists in List */}
+                  {list.map((pl) => {
                     const isArt = checkIsMobileArtist(pl);
                     const isLongPressed = longPressedPlaylistId === pl.id;
 
@@ -1106,16 +1333,16 @@ export const MobileLayout: React.FC = () => {
                           cancelLongPress();
                           handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
                         }}
-                        className={`flex items-center justify-between p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors relative group select-none ${
-                          isLongPressed ? 'bg-white/15 z-30' : ''
-                        }`}
+                        className={`flex items-center justify-between rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors relative group select-none ${
+                          isCompact ? 'p-1.5' : 'p-2'
+                        } ${isLongPressed ? 'bg-white/15 z-30' : ''}`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
                           <img
                             src={getPlaylistCover(pl)}
                             alt={pl.name}
                             onError={onPlaylistCoverError(pl)}
-                            className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
+                            className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} object-cover bg-[#242424] shadow shrink-0 ${
                               isArt ? 'rounded-full' : 'rounded-[4px]'
                             }`}
                           />
@@ -1129,7 +1356,7 @@ export const MobileLayout: React.FC = () => {
                           </div>
                         </div>
 
-                        {/* Animated 3-Dots on Long Press (Photo/Requirement) */}
+                        {/* Animated 3-Dots on Long Press */}
                         {isLongPressed && (
                           <button
                             type="button"
@@ -1151,44 +1378,47 @@ export const MobileLayout: React.FC = () => {
                     );
                   })}
 
-                {/* Archivos locales (at the bottom of playlists list) */}
-                {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
+                  {/* Archivos locales in List */}
+                  {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
+                    <div
+                      onClick={() => setMobileTab('local')}
+                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
+                        isCompact ? 'p-1.5' : 'p-2'
+                      }`}
+                    >
+                      <LocalFilesCover size={isCompact ? 40 : 56} className="rounded-[4px] shrink-0" />
+                      <div className="flex flex-col min-w-0">
+                        <span className="font-bold text-white text-sm truncate">Archivos locales</span>
+                        <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
+                          <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
+                          Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Spotify Native "Añadir a tu biblioteca" Row in List */}
                   <div
-                    onClick={() => setMobileTab('local')}
-                    className="flex items-center gap-3 p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors"
+                    onClick={() => setIsAddLibraryModalOpen(true)}
+                    className="mt-3 p-2.5 rounded-xl flex items-center gap-3.5 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group bg-white/[0.02]"
                   >
-                    <LocalFilesCover size={48} className="rounded-[4px] shrink-0" />
+                    <div className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5`}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
+                      </svg>
+                    </div>
                     <div className="flex flex-col min-w-0">
-                      <span className="font-bold text-white text-sm truncate">Archivos locales</span>
-                      <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
-                        <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
-                        Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                      <span className="font-bold text-white text-sm font-['SpotifyMixUITitle'] truncate">
+                        Añadir artistas o playlists
+                      </span>
+                      <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                        Busca y añade música a tu biblioteca
                       </span>
                     </div>
                   </div>
-                )}
-
-                {/* Spotify Native "Añadir a tu biblioteca" Row */}
-                <div
-                  onClick={() => setIsAddLibraryModalOpen(true)}
-                  className="mt-3 p-2.5 rounded-xl flex items-center gap-3.5 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group bg-white/[0.02]"
-                >
-                  <div className="w-12 h-12 rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
-                    </svg>
-                  </div>
-                  <div className="flex flex-col min-w-0">
-                    <span className="font-bold text-white text-sm font-['SpotifyMixUITitle'] truncate">
-                      Añadir artistas o playlists
-                    </span>
-                    <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      Busca y añade música a tu biblioteca
-                    </span>
-                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
 
@@ -1419,6 +1649,100 @@ export const MobileLayout: React.FC = () => {
             )}
           </>
         )}
+      </MobileSheet>
+
+      {/* Mobile Sort Bottom Sheet (Spotify Official "Ordenar por") */}
+      <MobileSheet open={isMobileSortSheetOpen} onClose={() => setIsMobileSortSheetOpen(false)}>
+        <div className="pb-4">
+          <div className="px-5 pt-3 pb-2 border-b border-white/10">
+            <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Ordenar por</h3>
+          </div>
+          <SheetList>
+            {[
+              { id: 'recientes', label: 'Recientes' },
+              { id: 'anadidos', label: 'Añadidos recientemente' },
+              { id: 'alfabetico', label: 'Alfabético' },
+              { id: 'creador', label: 'Creador' },
+            ].map((item) => {
+              const isSelected = sortOrder === item.id;
+              return (
+                <SheetItem
+                  key={item.id}
+                  label={item.label}
+                  active={isSelected}
+                  icon={
+                    isSelected ? (
+                      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
+                        <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+                      </svg>
+                    ) : (
+                      <div className="w-5 h-5" />
+                    )
+                  }
+                  onClick={() => {
+                    setSortOrder(item.id as any);
+                    setIsMobileSortSheetOpen(false);
+                  }}
+                />
+              );
+            })}
+          </SheetList>
+        </div>
+      </MobileSheet>
+
+      {/* Mobile View Mode Bottom Sheet (Spotify Official "Ver como") */}
+      <MobileSheet open={isMobileViewSheetOpen} onClose={() => setIsMobileViewSheetOpen(false)}>
+        <div className="pb-4">
+          <div className="px-5 pt-3 pb-2 border-b border-white/10">
+            <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Ver como</h3>
+          </div>
+          <SheetList>
+            {[
+              {
+                id: 'cuadricula',
+                label: 'Cuadrícula',
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M1 1h6v6H1zm1.5 1.5v3h3v-3zM1 9h6v6H1zm1.5 1.5v3h3v-3zM9 1h6v6H9zm1.5 1.5v3h3v-3zM9 9h6v6H9zm1.5 1.5v3h3v-3z" />
+                  </svg>
+                ),
+              },
+              {
+                id: 'lista',
+                label: 'Lista',
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
+                  </svg>
+                ),
+              },
+              {
+                id: 'compacta',
+                label: 'Compacto',
+                icon: (
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M15.5 13.5H.5V12h15zm0-4.75H.5v-1.5h15zm0-4.75H.5V2.5h15z" />
+                  </svg>
+                ),
+              },
+            ].map((item) => {
+              const isSelected = viewMode === item.id || (item.id === 'cuadricula' && viewMode === 'cuadricula-compacta');
+              return (
+                <SheetItem
+                  key={item.id}
+                  label={item.label}
+                  icon={item.icon}
+                  active={isSelected}
+                  sublabel={isSelected ? 'Seleccionado' : undefined}
+                  onClick={() => {
+                    setViewMode(item.id as any);
+                    setIsMobileViewSheetOpen(false);
+                  }}
+                />
+              );
+            })}
+          </SheetList>
+        </div>
       </MobileSheet>
 
       {/* Toast Feedback */}
