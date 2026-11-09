@@ -4,6 +4,11 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.database.Cursor;
+import android.database.MatrixCursor;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
+import android.provider.OpenableColumns;
 import android.net.Uri;
 import android.os.ParcelFileDescriptor;
 
@@ -32,6 +37,50 @@ public class SpotifreeArtProvider extends ContentProvider {
         "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com",
         "mzstatic.com" // photos of the Explorar categories
     };
+
+    /** A drawable of the app (tab icons) served as a PNG: content://<pkg>.art/res/<id> */
+    @Nullable
+    static Uri resUri(Context ctx, int resId) {
+        if (resId == 0) return null;
+        return new Uri.Builder().scheme("content").authority(ctx.getPackageName() + ".art")
+            .appendPath("res").appendPath(String.valueOf(resId)).build();
+    }
+
+    /** The app's logo: shown when a cover cannot be downloaded, so the car never shows a blank */
+    @Nullable
+    static Uri logoUri(Context ctx) {
+        return new Uri.Builder().scheme("content").authority(ctx.getPackageName() + ".art").appendPath("logo").build();
+    }
+
+    @Nullable
+    private static File renderDrawable(Context ctx, @Nullable Drawable d, String name, int size) {
+        if (d == null) return null;
+        File dir = new File(ctx.getCacheDir(), "car_art");
+        if (!dir.exists() && !dir.mkdirs()) return null;
+        File f = new File(dir, name);
+        if (f.exists() && f.length() > 0) return f;
+        try {
+            Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas cv = new Canvas(b);
+            d.setBounds(0, 0, size, size);
+            d.draw(cv);
+            try (OutputStream out = new FileOutputStream(f)) {
+                b.compress(Bitmap.CompressFormat.PNG, 100, out);
+            }
+            return f.length() > 0 ? f : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Nullable
+    private static File logoFile(Context ctx) {
+        try {
+            return renderDrawable(ctx, ctx.getPackageManager().getApplicationIcon(ctx.getPackageName()), "app_logo.png", 512);
+        } catch (Exception e) {
+            return null;
+        }
+    }
 
     /** Images made by the app itself (e.g. an SVG cover turned into PNG): "local:<key>" */
     static File localFile(Context ctx, String key) {
@@ -85,6 +134,7 @@ public class SpotifreeArtProvider extends ContentProvider {
         File tmp = new File(dir, f.getName() + ".tmp" + Thread.currentThread().getId());
         try {
             HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
+            c.setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) Spotifree");
             c.setConnectTimeout(7000);
             c.setReadTimeout(10000);
             c.setInstanceFollowRedirects(true);
@@ -113,10 +163,23 @@ public class SpotifreeArtProvider extends ContentProvider {
     @Override
     public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode) throws FileNotFoundException {
         Context ctx = getContext();
-        String url = uri.getQueryParameter("u");
-        if (ctx == null || url == null) throw new FileNotFoundException("no url");
-        File f = cachedFile(ctx, url);
-        if (f == null) throw new FileNotFoundException("not available: " + url);
+        if (ctx == null) throw new FileNotFoundException("no context");
+        String first = uri.getPathSegments().isEmpty() ? "" : uri.getPathSegments().get(0);
+        File f = null;
+        if ("res".equals(first) && uri.getPathSegments().size() > 1) {
+            try {
+                int id = Integer.parseInt(uri.getPathSegments().get(1));
+                f = renderDrawable(ctx, ctx.getDrawable(id), "res_" + id + ".png", 192);
+            } catch (Exception ignored) {}
+        } else if ("logo".equals(first)) {
+            f = logoFile(ctx);
+        } else {
+            String url = uri.getQueryParameter("u");
+            if (url == null) throw new FileNotFoundException("no url");
+            f = cachedFile(ctx, url);
+            if (f == null) f = logoFile(ctx); // cover not available: the app's logo instead of nothing
+        }
+        if (f == null) throw new FileNotFoundException("not available: " + uri);
         return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
@@ -129,7 +192,13 @@ public class SpotifreeArtProvider extends ContentProvider {
     @Nullable
     @Override
     public Cursor query(@NonNull Uri uri, @Nullable String[] projection, @Nullable String selection, @Nullable String[] selectionArgs, @Nullable String sortOrder) {
-        return null;
+        // Some car / media apps ask for the openable columns before opening the image
+        String[] cols = projection != null ? projection : new String[] { OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE };
+        MatrixCursor mc = new MatrixCursor(cols);
+        Object[] row = new Object[cols.length];
+        for (int i = 0; i < cols.length; i++) if (OpenableColumns.DISPLAY_NAME.equals(cols[i])) row[i] = "cover.img";
+        mc.addRow(row);
+        return mc;
     }
 
     @Nullable

@@ -200,6 +200,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private final Handler main = new Handler(Looper.getMainLooper());
     private String loadedArtUrl = null;
     private Bitmap art = null;
+    private int artRetries = 0;
     private boolean foreground = false;
     private final Map<String, List<Result<List<MediaBrowserCompat.MediaItem>>>> pendingChildren = new ConcurrentHashMap<>();
     private final Map<String, Result<List<MediaBrowserCompat.MediaItem>>> pendingSearch = new ConcurrentHashMap<>();
@@ -437,6 +438,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         String shownArtist = hasLyric ? "♪ " + lyricLine.trim() : artist;
         String shownAlbum = hasLyric ? artist : album;
         Uri artUri = SpotifreeArtProvider.uriFor(this, artworkUrl);
+        if (artUri == null) artUri = SpotifreeArtProvider.logoUri(this);
 
         MediaMetadataCompat.Builder mb = new MediaMetadataCompat.Builder()
             .putString(MediaMetadataCompat.METADATA_KEY_MEDIA_ID, trackId)
@@ -527,6 +529,9 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             final Bitmap result = bmp;
             main.post(() -> {
                 if (url.equals(loadedArtUrl)) {
+                    // Failed download: forget it so the next refresh tries again (a few times)
+                    if (result == null && artRetries++ < 3) main.postDelayed(() -> { if (url.equals(loadedArtUrl) && art == null) loadedArtUrl = ""; }, 5000);
+                    else if (result != null) artRetries = 0;
                     art = result;
                     SpotifreeWidget.setArt(result);
                     refresh();
@@ -657,6 +662,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private MediaBrowserCompat.MediaItem item(String id, String t, String sub, @Nullable String image, boolean browsable, @Nullable Bundle extras) {
         MediaDescriptionCompat.Builder d = new MediaDescriptionCompat.Builder().setMediaId(id).setTitle(t).setSubtitle(sub);
         Uri icon = SpotifreeArtProvider.uriFor(this, image);
+        if (icon == null && !"noop".equals(id)) icon = SpotifreeArtProvider.logoUri(this);
         if (icon != null) d.setIconUri(icon);
         if (extras != null) d.setExtras(extras);
         return new MediaBrowserCompat.MediaItem(d.build(), browsable ? MediaBrowserCompat.MediaItem.FLAG_BROWSABLE : MediaBrowserCompat.MediaItem.FLAG_PLAYABLE);
@@ -668,7 +674,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         ex.putInt(PLAYABLE_HINT, STYLE_LIST);
         MediaDescriptionCompat d = new MediaDescriptionCompat.Builder()
             .setMediaId(id).setTitle(t)
-            .setIconUri(Uri.parse("android.resource://" + getPackageName() + "/" + iconRes))
+            .setIconUri(SpotifreeArtProvider.resUri(this, iconRes))
             .setExtras(ex).build();
         return new MediaBrowserCompat.MediaItem(d, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
     }

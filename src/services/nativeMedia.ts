@@ -12,6 +12,7 @@
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { getPlaylistCover } from '../utils/playlistCover';
 import { useLanguageStore } from '../utils/i18n';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../utils/lyricsService';
 import { toHDImage } from '../utils/formatters';
@@ -211,7 +212,7 @@ const playlistItem = (p: Playlist): CarItem => ({
     p.id === 'liked-songs'
       ? `Playlist • ${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
       : `Playlist • ${p.owner?.display_name || 'Spotify'}`,
-  image: img(p.images?.[0]?.url),
+  image: img(getPlaylistCover(p)),
 });
 
 // ----------------------------------------------------------------- Explorar (category tiles)
@@ -441,7 +442,7 @@ async function runSearch(query: string): Promise<{ tracks: Track[]; playlists: C
     id: p.id,
     name: p.name,
     subtitle: p.owner?.display_name || '',
-    image: img(p.images?.[0]?.url),
+    image: img(getPlaylistCover(p)),
   }));
   return { tracks, playlists };
 }

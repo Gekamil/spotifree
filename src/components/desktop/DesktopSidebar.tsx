@@ -18,7 +18,7 @@ import { stripHtml, toHDImage } from '../../utils/formatters';
 import { CreateMenuDropdown } from './CreateMenuDropdown';
 import { SortMenuDropdown } from './SortMenuDropdown';
 import { LocalFilesCover } from '../common/LocalFilesView';
-import { EMPTY_PLAYLIST_COVER, getPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
+import { EMPTY_PLAYLIST_COVER, getPlaylistCover, onPlaylistCoverError, useAutoCovers } from '../../utils/playlistCover';
 
 interface DesktopSidebarProps {
   playlists: Playlist[];
@@ -363,6 +363,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                       <img
                         src={coverUrl || 'https://i.scdn.co/image/ab6761610000e5ebc8be3c6e5a824360d1bffc03'}
                         alt={playlist.name}
+                        onError={onPlaylistCoverError(playlist)}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover rounded-full"
                       />
@@ -370,6 +371,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                       <img
                         src={coverUrl}
                         alt={playlist.name}
+                        onError={onPlaylistCoverError(playlist)}
                         referrerPolicy="no-referrer"
                         className="w-full h-full object-cover"
                       />
@@ -497,6 +499,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                         <img
                           src={coverUrl || 'https://i.scdn.co/image/ab6761610000e5ebc8be3c6e5a824360d1bffc03'}
                           alt={playlist.name}
+                          onError={onPlaylistCoverError(playlist)}
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover rounded-full"
                         />
@@ -504,6 +507,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                         <img
                           src={coverUrl}
                           alt={playlist.name}
+                          onError={onPlaylistCoverError(playlist)}
                           referrerPolicy="no-referrer"
                           className="w-full h-full object-cover"
                         />

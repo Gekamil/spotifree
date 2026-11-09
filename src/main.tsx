@@ -31,6 +31,13 @@ window.addEventListener(SETTINGS_SYNCED_EVENT, (e) => {
   window.dispatchEvent(new Event(EQ_CHANGED_EVENT));
 });
 
+// APK launch animation (index.html): fades out once the first screen has painted
+requestAnimationFrame(() =>
+  requestAnimationFrame(() => {
+    const wait = Math.max(0, 1100 - (Date.now() - ((window as any).__sfSplashStart || Date.now())));
+    setTimeout(() => (window as any).__sfHideSplash?.(), wait);
+  })
+);
 console.log('Spotifree: main.tsx mounting root...');
 const rootElement = document.getElementById('root');
 if (rootElement) {

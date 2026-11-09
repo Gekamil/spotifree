@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SyntheticEvent } from 'react';
 import type { Playlist } from '../types/spotify';
 
 /**
@@ -95,4 +96,28 @@ export function getPlaylistCover(p: Partial<Playlist> | null | undefined): strin
   // Older builds saved the Liked Songs heart as the cover of brand-new playlists: ignore it there
   if (own && !(own === LIKED_COVER && p.id !== 'liked-songs')) return own;
   return getAutoPlaylistCover(p.tracks?.items);
+}
+
+/**
+ * onError for a playlist's cover <img>: a dead link falls back to the first song's cover and then
+ * to the empty-playlist cover, so a playlist never shows a broken image.
+ */
+export function onPlaylistCoverError(p: Partial<Playlist> | null | undefined) {
+  return (e: SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const step = Number(img.dataset.coverStep || '0');
+    img.dataset.coverStep = String(step + 1);
+    if (step === 0) {
+      const first = (p?.tracks?.items || [])
+        .map((x: any) => (x?.track && x.track.name ? x.track : x)?.album?.images?.[0]?.url)
+        .find((u: string | undefined) => u && u !== img.src);
+      if (first) {
+        img.referrerPolicy = 'no-referrer';
+        img.src = first;
+        return;
+      }
+    }
+    img.onerror = null;
+    img.src = EMPTY_PLAYLIST_COVER;
+  };
 }

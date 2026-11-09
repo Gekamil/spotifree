@@ -36,7 +36,7 @@ import {
   QueueNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { handleImageError } from '../../utils/imageFallback';
-import { getPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
+import { getPlaylistCover, onPlaylistCoverError, useAutoCovers } from '../../utils/playlistCover';
 import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 
@@ -1114,7 +1114,7 @@ export const MobileLayout: React.FC = () => {
                           <img
                             src={getPlaylistCover(pl)}
                             alt={pl.name}
-                            onError={handleImageError}
+                            onError={onPlaylistCoverError(pl)}
                             className={`w-12 h-12 object-cover bg-[#242424] shadow shrink-0 ${
                               isArt ? 'rounded-full' : 'rounded-[4px]'
                             }`}
