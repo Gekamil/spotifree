@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
 
@@ -26,34 +26,135 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   });
 
   const [shouldRender, setShouldRender] = useState(isOpen);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [isExiting, setIsExiting] = useState(false);
+  const [dragOffset, setDragOffset] = useState<number | null>(null);
 
-  // Smooth slide-in and slide-out lifecycle
+  const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchStartTime = useRef(0);
+  const isDragging = useRef(false);
+
+  // Synchronize rendering state when parent changes isOpen
   useEffect(() => {
     if (isOpen) {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
       setShouldRender(true);
-      const raf = requestAnimationFrame(() => {
-        setIsAnimating(true);
-      });
-      return () => cancelAnimationFrame(raf);
-    } else {
-      setIsAnimating(false);
-      const timer = setTimeout(() => {
+      setIsExiting(false);
+      setDragOffset(null);
+    } else if (shouldRender && !isExiting) {
+      // Trigger smooth exit animation before unmounting
+      setIsExiting(true);
+      exitTimerRef.current = setTimeout(() => {
         setShouldRender(false);
-      }, 300);
-      return () => clearTimeout(timer);
+        setIsExiting(false);
+      }, 280);
     }
-  }, [isOpen]);
+  }, [isOpen, shouldRender, isExiting]);
 
-  // Close on Escape
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
+      if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+    };
+  }, []);
+
+  // Smooth dismiss handler (plays exit animation then notifies parent)
+  const handleDismiss = useCallback(() => {
+    if (isExiting) return;
+    setIsExiting(true);
+    setDragOffset(null);
+    exitTimerRef.current = setTimeout(() => {
+      onClose();
+      setShouldRender(false);
+      setIsExiting(false);
+    }, 280);
+  }, [isExiting, onClose]);
+
+  // Close on Escape key
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
+      if (e.key === 'Escape') handleDismiss();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [isOpen, onClose]);
+  }, [isOpen, handleDismiss]);
+
+  // Action handler with visible exit slide-out before navigation
+  const handleAction = useCallback(
+    (action: () => void) => {
+      if (isExiting) return;
+      setIsExiting(true);
+      setDragOffset(null);
+
+      // Trigger the action / navigation while the drawer slides smoothly off-screen
+      actionTimerRef.current = setTimeout(() => {
+        action();
+      }, 180);
+
+      // Finalize unmount and notify parent
+      exitTimerRef.current = setTimeout(() => {
+        onClose();
+        setShouldRender(false);
+        setIsExiting(false);
+      }, 290);
+    },
+    [isExiting, onClose]
+  );
+
+  // Swipe to dismiss gestures
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (isExiting) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchStartTime.current = Date.now();
+    isDragging.current = false;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (isExiting) return;
+    const currentX = e.touches[0].clientX;
+    const currentY = e.touches[0].clientY;
+    const deltaX = currentX - touchStartX.current;
+    const deltaY = currentY - touchStartY.current;
+
+    // Detect horizontal swipe to the left
+    if (!isDragging.current) {
+      if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY) && deltaX < 0) {
+        isDragging.current = true;
+      }
+    }
+
+    if (isDragging.current && deltaX <= 0) {
+      setDragOffset(deltaX);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    if (!isDragging.current || dragOffset === null) {
+      setDragOffset(null);
+      isDragging.current = false;
+      return;
+    }
+
+    const duration = Date.now() - touchStartTime.current;
+    const velocity = Math.abs(dragOffset) / (duration || 1);
+
+    // If dragged more than 48px or swiped quickly to the left:
+    if (dragOffset < -48 || (velocity > 0.35 && dragOffset < -20)) {
+      isDragging.current = false;
+      handleDismiss();
+    } else {
+      // Smooth snap back
+      setDragOffset(null);
+      isDragging.current = false;
+    }
+  };
 
   if (!shouldRender) return null;
 
@@ -91,24 +192,44 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex font-['SpotifyMixUI'] select-none">
-      {/* Darkened backdrop with smooth fade in and out */}
+    <div
+      className={`fixed inset-0 z-50 flex font-['SpotifyMixUI'] select-none ${
+        isExiting ? 'pointer-events-none' : ''
+      }`}
+    >
+      {/* Darkened backdrop with smooth fade in and fade out */}
       <div
-        onClick={onClose}
-        className={`fixed inset-0 bg-black/75 backdrop-blur-xs transition-opacity duration-300 ease-out ${
-          isAnimating ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+        onClick={handleDismiss}
+        className={`fixed inset-0 bg-black/75 backdrop-blur-xs ${
+          isExiting ? 'spf-backdrop-exit' : 'spf-backdrop-enter'
         }`}
+        style={
+          dragOffset !== null
+            ? { opacity: Math.max(0, 1 + dragOffset / 320), transition: 'none' }
+            : undefined
+        }
         aria-hidden="true"
       />
 
-      {/* Drawer Container (Sliding smoothly in and out from the left) */}
+      {/* Drawer Container (Smoothly sliding in on open, sliding out on exit) */}
       <aside
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
         style={{
           paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
           paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+          ...(dragOffset !== null
+            ? { transform: `translate3d(${dragOffset}px, 0, 0)`, transition: 'none' }
+            : {}),
         }}
-        className={`relative z-10 w-[84%] max-w-[340px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-          isAnimating ? 'translate-x-0' : '-translate-x-full'
+        className={`relative z-10 w-[84%] max-w-[340px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto ${
+          dragOffset !== null
+            ? ''
+            : isExiting
+            ? 'spf-drawer-exit'
+            : 'spf-drawer-enter'
         }`}
       >
         <div className="space-y-4">
@@ -117,10 +238,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Profile Row: always navigates to profile view so the user can edit profile and see their music */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('profile');
-              }}
+              onClick={() => handleAction(() => onNavigate('profile'))}
               className="w-full flex items-center gap-3.5 p-3 text-left group active:bg-white/5 transition-colors cursor-pointer"
             >
               {/* Avatar Circle */}
@@ -154,10 +272,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Añadir cuenta Row */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onOpenLogin();
-              }}
+              onClick={() => handleAction(() => onOpenLogin())}
               className="w-full flex items-center gap-3.5 p-3 active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
               <div className="w-8 h-8 rounded-full bg-[#363636] flex items-center justify-center text-[#b3b3b3] group-hover:text-white shrink-0">
@@ -182,10 +297,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Estadísticas de escucha with 'Novedad' blue label */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('stats');
-              }}
+              onClick={() => handleAction(() => onNavigate('stats'))}
               className="w-full flex items-center justify-between py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
               <div className="flex items-center gap-3.5">
@@ -209,10 +321,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Recientes */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('recents');
-              }}
+              onClick={() => handleAction(() => onNavigate('recents'))}
               className="w-full flex items-center gap-3.5 py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
               <div className="w-6 h-6 flex items-center justify-center text-white shrink-0">
@@ -229,10 +338,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Tus avisos */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onOpenNotifications();
-              }}
+              onClick={() => handleAction(() => onOpenNotifications())}
               className="w-full flex items-center gap-3.5 py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
               <div className="w-6 h-6 flex items-center justify-center text-white shrink-0">
@@ -250,10 +356,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Configuración y privacidad */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onNavigate('settings');
-              }}
+              onClick={() => handleAction(() => onNavigate('settings'))}
               className="w-full flex items-center gap-3.5 py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
               <div className="w-6 h-6 flex items-center justify-center text-white shrink-0">
@@ -302,10 +405,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             {/* Escuchar con amigos circle (three human silhouettes group session icon) */}
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                onOpenSharedSession();
-              }}
+              onClick={() => handleAction(() => onOpenSharedSession())}
               className="flex flex-col items-center gap-1 cursor-pointer active:scale-95 transition-transform group"
             >
               <div className="w-12 h-12 rounded-full bg-[#282828] group-hover:bg-[#333333] active:bg-[#383838] flex items-center justify-center text-white shadow shrink-0 transition-colors">
@@ -333,10 +433,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
           <div className="pt-4 pb-1">
             <button
               type="button"
-              onClick={() => {
-                onClose();
-                logout();
-              }}
+              onClick={() => handleAction(() => logout())}
               className="w-full py-2.5 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs uppercase tracking-wider active:scale-95 transition-all text-center cursor-pointer hover:bg-white/5"
             >
               Cerrar sesión

@@ -309,12 +309,71 @@
   animation: spfShimmer 1.4s ease-in-out infinite;
 }
 
+/* Spotify Mobile Side Drawer: Smooth slide-in and slide-out transitions */
+@keyframes spfDrawerSlideIn {
+  from {
+    transform: translate3d(-100%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes spfDrawerSlideOut {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-100%, 0, 0);
+  }
+}
+
+@keyframes spfBackdropFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spfBackdropFadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.spf-drawer-enter {
+  animation: spfDrawerSlideIn 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform;
+}
+
+.spf-drawer-exit {
+  animation: spfDrawerSlideOut 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+  will-change: transform;
+}
+
+.spf-backdrop-enter {
+  animation: spfBackdropFadeIn 0.3s ease-out both;
+}
+
+.spf-backdrop-exit {
+  animation: spfBackdropFadeOut 0.26s ease-in both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spf-page-enter,
   .spf-page-push,
   .spf-tab-pop,
   .spf-stagger > *,
-  .spf-skeleton {
+  .spf-skeleton,
+  .spf-drawer-enter,
+  .spf-drawer-exit,
+  .spf-backdrop-enter,
+  .spf-backdrop-exit {
     animation: none !important;
   }
 }
