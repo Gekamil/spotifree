@@ -4,6 +4,7 @@ import { SpotifyEqualizer } from '../common/SpotifyEqualizer';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
+import { AboutAppSection } from '../common/AboutAppSection';
 import {
   getBackgroundPlaybackAllowed,
   getCarLyricsEnabled,
@@ -681,6 +682,9 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Acerca de la aplicación (Versión y Últimos cambios) */}
+        <AboutAppSection variant="mobile" />
 
         {/* Cerrar Sesión */}
         {isAuthenticated && (

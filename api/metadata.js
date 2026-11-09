@@ -371,23 +371,29 @@ function pickMotion(html, key) {
   };
 }
 
-async function findAppleAlbumId(title, artist, country) {
-  const term = encodeURIComponent(`${artist} ${title}`.trim());
-  const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=5&country=${country}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-  });
-  if (!r.ok) return null;
-  const data = await r.json();
+async function findAppleAlbumId(title, artist, country = 'es') {
   const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s*[([].*?[)\]]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  // Same artist (whole name) and same song title, nothing looser
-  const a = norm(artist);
-  const t = norm(title);
-  const hit =
-    (data.results || []).find((x) => {
-      const xa = norm(x.artistName);
-      return a && xa && (xa.includes(a) || a.includes(xa)) && norm(x.trackName) === t;
-    }) || null;
-  return hit?.collectionId ? String(hit.collectionId) : null;
+  const cleanTitle = String(title || '').replace(/\s*[\(\[][^)]*(feat\.|remix|ft\.|with|version|remaster)[^)]*[\)\]]/gi, '').trim();
+  const countries = country === 'us' ? ['us'] : [country, 'us'];
+
+  for (const c of countries) {
+    const term = encodeURIComponent(`${artist} ${cleanTitle || title}`.trim());
+    try {
+      const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=6&country=${c}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      });
+      if (!r.ok) continue;
+      const data = await r.json();
+      const a = norm(artist);
+      const t = norm(cleanTitle || title);
+      const hit = (data.results || []).find((x) => {
+        const xa = norm(x.artistName);
+        return a && xa && (xa.includes(a) || a.includes(xa)) && (norm(x.trackName) === t || norm(x.trackName).includes(t));
+      });
+      if (hit?.collectionId) return String(hit.collectionId);
+    } catch {}
+  }
+  return null;
 }
 
 async function handleMotionCover(req, res) {
@@ -404,14 +410,34 @@ async function handleMotionCover(req, res) {
       res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
       return res.status(200).json(MOTION_CACHE.get(key));
     }
-    const page = await fetch(`https://music.apple.com/${country}/album/${id}`, {
+    let page = await fetch(`https://music.apple.com/${country}/album/${id}`, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
         'Accept-Language': 'es-ES,es;q=0.9',
       },
     });
-    const html = page.ok ? await page.text() : '';
-    const out = { id, square: pickMotion(html, 'motionDetailSquare'), tall: pickMotion(html, 'motionDetailTall') };
+    let html = page.ok ? await page.text() : '';
+    let square = pickMotion(html, 'motionDetailSquare');
+    let tall = pickMotion(html, 'motionDetailTall');
+
+    // If not found in the regional store (e.g. 'es'), fallback to US global storefront!
+    if (!square && !tall && country !== 'us') {
+      try {
+        const usPage = await fetch(`https://music.apple.com/us/album/${id}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+        });
+        if (usPage.ok) {
+          const usHtml = await usPage.text();
+          square = pickMotion(usHtml, 'motionDetailSquare');
+          tall = pickMotion(usHtml, 'motionDetailTall');
+        }
+      } catch {}
+    }
+
+    const out = { id, square, tall };
     if (page.ok) MOTION_CACHE.set(key, out);
     res.setHeader('Cache-Control', page.ok ? 'public, max-age=86400, s-maxage=604800' : 'no-store');
     return res.status(200).json(out);

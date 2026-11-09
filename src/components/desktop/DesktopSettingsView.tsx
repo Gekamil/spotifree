@@ -5,6 +5,7 @@ import { NativeSpotifyLoginButton } from '../common/NativeSpotifyLoginButton';
 import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
+import { AboutAppSection } from '../common/AboutAppSection';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -859,6 +860,11 @@ export const DesktopSettingsView: React.FC = () => {
             </div>
           </section>
         )}
+
+        {/* Acerca de la aplicación (Versión y Cambios) */}
+        <div className="pt-6 border-t border-white/5">
+          <AboutAppSection variant="desktop" />
+        </div>
       </div>
     </div>
   );
