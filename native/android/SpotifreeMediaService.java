@@ -14,6 +14,8 @@ import android.net.wifi.WifiManager;
 import android.os.PowerManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -30,6 +32,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.ServiceCompat;
+import androidx.core.content.ContextCompat;
 import androidx.media.MediaBrowserServiceCompat;
 import androidx.media.session.MediaButtonReceiver;
 
@@ -453,9 +456,12 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         if (artUri != null) {
             mb.putString(MediaMetadataCompat.METADATA_KEY_ALBUM_ART_URI, artUri.toString());
             mb.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, artUri.toString());
+            mb.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artUri.toString());
         }
         if (art != null && artworkUrl != null && artworkUrl.equals(loadedArtUrl)) {
             mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art);
+            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, art);
+            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art);
         }
         session.setMetadata(mb.build());
 
@@ -668,15 +674,50 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         return new MediaBrowserCompat.MediaItem(d.build(), browsable ? MediaBrowserCompat.MediaItem.FLAG_BROWSABLE : MediaBrowserCompat.MediaItem.FLAG_PLAYABLE);
     }
 
+    private final Map<Integer, Bitmap> tabBitmapCache = new ConcurrentHashMap<>();
+
+    @Nullable
+    private Bitmap getTabBitmap(int iconRes) {
+        Bitmap cached = tabBitmapCache.get(iconRes);
+        if (cached != null && !cached.isRecycled()) return cached;
+        try {
+            Drawable d = ContextCompat.getDrawable(this, iconRes);
+            if (d == null) d = getDrawable(iconRes);
+            if (d == null) return null;
+
+            int size = 96;
+            int pad = 12;
+            Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+            Canvas c = new Canvas(b);
+            d.setBounds(pad, pad, size - pad, size - pad);
+            d.draw(c);
+
+            tabBitmapCache.put(iconRes, b);
+            return b;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private MediaBrowserCompat.MediaItem tabItem(String id, String t, int iconRes, int browsableStyle) {
         Bundle ex = new Bundle();
         ex.putInt(BROWSABLE_HINT, browsableStyle);
         ex.putInt(PLAYABLE_HINT, STYLE_LIST);
-        MediaDescriptionCompat d = new MediaDescriptionCompat.Builder()
-            .setMediaId(id).setTitle(t)
-            .setIconUri(SpotifreeArtProvider.resUri(this, iconRes))
-            .setExtras(ex).build();
-        return new MediaBrowserCompat.MediaItem(d, MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
+        MediaDescriptionCompat.Builder d = new MediaDescriptionCompat.Builder()
+            .setMediaId(id)
+            .setTitle(t)
+            .setExtras(ex);
+
+        // 1. Direct Bitmap: zero latency, car never falls back to title initial
+        Bitmap bmp = getTabBitmap(iconRes);
+        if (bmp != null) {
+            d.setIconBitmap(bmp);
+        }
+
+        // 2. Standard android.resource URI for automotive systems
+        d.setIconUri(Uri.parse("android.resource://" + getPackageName() + "/" + iconRes));
+
+        return new MediaBrowserCompat.MediaItem(d.build(), MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
     }
 
     /** A playlist folder: its songs are shown as a list */
@@ -787,9 +828,14 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private List<MediaBrowserCompat.MediaItem> playlistChildren(String plId, JSONArray tracks) {
         List<MediaBrowserCompat.MediaItem> out = new ArrayList<>();
         if (tracks.length() > 1) {
-            out.add(item("shuf:" + plId, tr("Reproducir en aleatorio", "Shuffle play"),
-                tracks.length() + tr(" canciones", " songs"),
-                null, false, null));
+            MediaDescriptionCompat.Builder sb = new MediaDescriptionCompat.Builder()
+                .setMediaId("shuf:" + plId)
+                .setTitle(tr("Reproducir en aleatorio", "Shuffle play"))
+                .setSubtitle(tracks.length() + tr(" canciones", " songs"))
+                .setIconUri(Uri.parse("android.resource://" + getPackageName() + "/" + R.drawable.ic_car_shuffle));
+            Bitmap shufBmp = getTabBitmap(R.drawable.ic_car_shuffle);
+            if (shufBmp != null) sb.setIconBitmap(shufBmp);
+            out.add(new MediaBrowserCompat.MediaItem(sb.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
         }
         for (int j = 0; j < tracks.length() && j < 300; j++) {
             JSONObject t = tracks.optJSONObject(j);

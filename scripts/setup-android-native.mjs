@@ -271,7 +271,8 @@ ${services}
         <provider
             android:name=".SpotifreeArtProvider"
             android:authorities="\${applicationId}.art"
-            android:exported="true" />
+            android:exported="true"
+            android:grantUriPermissions="true" />
         <provider
             android:name=".SpotifreeShareProvider"
             android:authorities="\${applicationId}.share"

@@ -35,7 +35,7 @@ public class SpotifreeArtProvider extends ContentProvider {
 
     private static final String[] ALLOWED_HOST_SUFFIXES = {
         "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com",
-        "mzstatic.com" // photos of the Explorar categories
+        "mzstatic.com", "wikimedia.org", "githubusercontent.com", "imgur.com", "twimg.com"
     };
 
     /** A drawable of the app (tab icons) served as a PNG: content://<pkg>.art/res/<id> */
@@ -59,6 +59,7 @@ public class SpotifreeArtProvider extends ContentProvider {
         if (!dir.exists() && !dir.mkdirs()) return null;
         File f = new File(dir, name);
         if (f.exists() && f.length() > 0) return f;
+        if (f.exists()) f.delete();
         try {
             Bitmap b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
             Canvas cv = new Canvas(b);
@@ -168,8 +169,18 @@ public class SpotifreeArtProvider extends ContentProvider {
         File f = null;
         if ("res".equals(first) && uri.getPathSegments().size() > 1) {
             try {
-                int id = Integer.parseInt(uri.getPathSegments().get(1));
-                f = renderDrawable(ctx, ctx.getDrawable(id), "res_" + id + ".png", 192);
+                String seg = uri.getPathSegments().get(1);
+                int id = 0;
+                try {
+                    id = Integer.parseInt(seg);
+                } catch (NumberFormatException ignored) {
+                    id = ctx.getResources().getIdentifier(seg, "drawable", ctx.getPackageName());
+                }
+                if (id != 0) {
+                    Drawable d = androidx.core.content.ContextCompat.getDrawable(ctx, id);
+                    if (d == null) d = ctx.getDrawable(id);
+                    f = renderDrawable(ctx, d, "res_" + id + ".png", 192);
+                }
             } catch (Exception ignored) {}
         } else if ("logo".equals(first)) {
             f = logoFile(ctx);
@@ -186,6 +197,10 @@ public class SpotifreeArtProvider extends ContentProvider {
     @Nullable
     @Override
     public String getType(@NonNull Uri uri) {
+        String first = uri.getPathSegments().isEmpty() ? "" : uri.getPathSegments().get(0);
+        if ("res".equals(first) || "logo".equals(first)) {
+            return "image/png";
+        }
         return "image/jpeg";
     }
 
