@@ -549,7 +549,7 @@ async function getDeezerPreview(title, artist) {
   return null;
 }
 
-async function getInvidiousAudioUrl(videoId) {
+async function getInvidiousAudioInfo(videoId) {
   const instances = await getHealthyInvidiousInstances();
   for (const base of instances) {
     try {
@@ -557,24 +557,32 @@ async function getInvidiousAudioUrl(videoId) {
       if (!res.ok) continue;
       const data = await res.json();
       const formats = [...(data.adaptiveFormats || []), ...(data.formatStreams || [])];
-      const audio = formats
-        .filter((f) => (f.type?.startsWith('audio/') || f.container === 'm4a' || f.container === 'webm') && f.url)
+      // STRICT audio filtering: MUST be audio/* and have valid url
+      const audios = formats
+        .filter((f) => f.type?.startsWith('audio/') && f.url)
         .sort((a, b) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0));
 
-      for (const f of audio) {
-        if (!f.url) continue;
-        try {
-          const probe = await fetchWithTimeout(f.url, { headers: { Range: 'bytes=0-1024' } }, 3000);
-          if (probe.ok || probe.status === 206) {
-            return f.url;
-          }
-        } catch {}
+      if (audios.length === 0) continue;
+
+      // Prefer m4a / itag 140 / 139 (fastest to stream and universally compatible)
+      const chosen = audios.find((f) => f.container === 'm4a' || f.itag === '140') || audios[0];
+      if (chosen?.url) {
+        return {
+          url: chosen.url,
+          mime: chosen.type?.split(';')[0]?.trim() || 'audio/mp4',
+          clen: parseInt(chosen.clen || '0', 10),
+          bitrate: chosen.bitrate,
+          container: chosen.container,
+        };
       }
-      // If probe was throttled, still return highest bitrate url as strong candidate
-      if (audio[0]?.url) return audio[0].url;
     } catch {}
   }
   return null;
+}
+
+async function getInvidiousAudioUrl(videoId) {
+  const info = await getInvidiousAudioInfo(videoId);
+  return info?.url || null;
 }
 
 export default async function handler(req, res) {
@@ -610,39 +618,63 @@ export default async function handler(req, res) {
         }
       }
 
-      if (!videoId) return res.status(404).json({ error: 'Video not found' });
-      const audioUrl = await getInvidiousAudioUrl(videoId);
-      if (!audioUrl) return res.status(404).json({ error: 'Audio stream not found' });
+      let audioInfo = videoId ? await getInvidiousAudioInfo(videoId) : null;
 
-      // Support direct audio piping if requested or for downloads requiring inline bytes
-      const shouldPipe = req.query?.pipe === 'true';
-      if (shouldPipe) {
+      // If Invidious audio format was found, proxy the audio stream directly!
+      // This eliminates client CORS issues and avoids Google Video 403 Forbidden.
+      if (audioInfo?.url) {
+        const clientRange = req.headers.range;
+        const upstreamRange = clientRange || (audioInfo.clen > 0 ? `bytes=0-${audioInfo.clen - 1}` : 'bytes=0-15000000');
+
         try {
-          const upstream = await fetch(audioUrl, {
-            headers: { Range: req.headers.range || 'bytes=0-' },
+          const upstream = await fetch(audioInfo.url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Range': upstreamRange,
+            },
           });
+
           if (upstream.ok || upstream.status === 206) {
-            res.status(upstream.status);
-            res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/mpeg');
-            if (action === 'download') {
-              res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+            const buf = Buffer.from(await upstream.arrayBuffer());
+            if (buf.length > 50000) {
+              res.status(clientRange ? 206 : 200);
+              res.setHeader('Content-Type', audioInfo.mime || 'audio/mp4');
+              res.setHeader('Content-Length', String(buf.length));
+              res.setHeader('Accept-Ranges', 'bytes');
+              res.setHeader('Access-Control-Allow-Origin', '*');
+              if (clientRange && upstream.headers.get('content-range')) {
+                res.setHeader('Content-Range', upstream.headers.get('content-range'));
+              }
+              if (action === 'download') {
+                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+              }
+              return res.send(buf);
             }
-            const cl = upstream.headers.get('content-length');
-            if (cl) res.setHeader('Content-Length', cl);
-            const cr = upstream.headers.get('content-range');
-            if (cr) res.setHeader('Content-Range', cr);
-            res.setHeader('Accept-Ranges', 'bytes');
-            const body = Buffer.from(await upstream.arrayBuffer());
-            return res.send(body);
           }
-        } catch {}
+        } catch (streamErr) {
+          console.warn('[api/audio] Upstream audio proxy failed, checking fallback:', streamErr);
+        }
       }
 
-      // Default high-performance path: 302 redirect directly to the audio stream CDN
-      if (action === 'download') {
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-      }
-      return res.redirect(302, audioUrl);
+      // Fallback: Deezer preview audio if YouTube audio could not be proxied
+      try {
+        const queryParts = q.split(/\s*[-–—]\s*/);
+        const title = queryParts.length > 1 ? queryParts[1] : q;
+        const artist = queryParts.length > 1 ? queryParts[0] : '';
+        const deezerBuf = await getDeezerPreview(title, artist);
+        if (deezerBuf && deezerBuf.length > 50000) {
+          res.status(200);
+          res.setHeader('Content-Type', 'audio/mpeg');
+          res.setHeader('Content-Length', String(deezerBuf.length));
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          if (action === 'download') {
+            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+          }
+          return res.send(deezerBuf);
+        }
+      } catch {}
+
+      return res.status(404).json({ error: 'Audio stream not found' });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }

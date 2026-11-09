@@ -43,6 +43,8 @@ export function onDownloadsChanged(callback: () => void): () => void {
  */
 export async function isTrackDownloaded(trackId: string): Promise<boolean> {
   if (typeof window === 'undefined') return false;
+  if (!trackId) return false;
+  if (trackId.startsWith('local-dev-')) return true;
   const clean = cleanTrackId(trackId);
   if (!clean) return false;
 
@@ -87,8 +89,8 @@ export async function getDownloadedTrackBlobUrl(trackId: string): Promise<string
       }
       if (res && res.ok) {
         const blob = await res.blob();
-        // Discard corrupted or tiny 0-byte clips (< 400 KB)
-        if (blob && blob.size < 400_000) {
+        // Discard corrupted or tiny 0-byte clips (< 50 KB)
+        if (blob && blob.size < 50_000) {
           try { await cache.delete(cacheKeyClean); } catch {}
           return null;
         }
@@ -106,7 +108,7 @@ export async function getDownloadedTrackBlobUrl(trackId: string): Promise<string
       const spotifreeDir = await root.getDirectoryHandle('musica-spotifree');
       const fileHandle = await spotifreeDir.getFileHandle(`${clean}.mp3`);
       const file = await fileHandle.getFile();
-      if (file && file.size >= 400_000) {
+      if (file && file.size >= 50_000) {
         return URL.createObjectURL(file);
       }
     }
@@ -181,6 +183,18 @@ export async function purgeCorruptedPreviewAudio(): Promise<number> {
  */
 export async function downloadTrackAudio(track: Track): Promise<boolean> {
   if (typeof window === 'undefined' || !track) return false;
+
+  // 0. If it is already a device track, it is inherently offline on this phone!
+  if (track.id.startsWith('local-dev-')) {
+    try {
+      window.localStorage.setItem(`${TRACK_META_PREFIX}${track.id}`, JSON.stringify(track));
+      notifyDownloadsChanged(track.id);
+      return true;
+    } catch {
+      return true;
+    }
+  }
+
   const clean = cleanTrackId(track.id);
   if (!clean) return false;
 
@@ -213,24 +227,11 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
       }
     }
 
-    // Strategy 3: Piped direct bytes fallback
-    if (!res || !res.ok) {
-      try {
-        const pipeUrl = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query)}&pipe=true`;
-        const timeoutSignal = typeof AbortSignal !== 'undefined' && AbortSignal.timeout
-          ? AbortSignal.timeout(60000)
-          : undefined;
-        res = await fetch(pipeUrl, { signal: timeoutSignal });
-      } catch (e) {
-        console.warn(`[offlineStorage] Strategy 3 failed for ${track.name}:`, e);
-      }
-    }
-
     if (!res || !res.ok) return false;
 
     const blob = await res.blob();
-    // Strictly require >= 250 KB to guarantee full audio rather than tiny errors/previews
-    if (!blob || blob.size < 250_000) return false;
+    // Guarantee real audio rather than empty/error payload
+    if (!blob || blob.size < 50_000) return false;
 
     // 1. Store in CacheStorage
     if ('caches' in window) {
@@ -238,7 +239,7 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
       const cacheKey = `/musica-spotifree/tracks/${clean}.mp3`;
       const responseToCache = new Response(blob, {
         headers: {
-          'Content-Type': 'audio/mpeg',
+          'Content-Type': blob.type || 'audio/mp4',
           'Content-Length': String(blob.size),
           'X-Track-Id': clean,
           'X-Track-Title': encodeURIComponent(track.name),
@@ -475,6 +476,35 @@ export function getDownloadedPlaylists(): Playlist[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * Get all individual tracks saved for offline listening
+ */
+export function getDownloadedTracks(): Track[] {
+  if (typeof window === 'undefined') return [];
+  const tracks: Track[] = [];
+  const seenIds = new Set<string>();
+
+  try {
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const key = window.localStorage.key(i);
+      if (key && key.startsWith(TRACK_META_PREFIX)) {
+        try {
+          const raw = window.localStorage.getItem(key);
+          if (raw) {
+            const trk = JSON.parse(raw) as Track;
+            if (trk && trk.id && !seenIds.has(trk.id)) {
+              seenIds.add(trk.id);
+              tracks.push(trk);
+            }
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+
+  return tracks;
 }
 
 /**

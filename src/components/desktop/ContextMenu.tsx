@@ -575,6 +575,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             </button>
           )}
 
+          {/* Mover a carpeta (si está descargada o es archivo local) */}
+          {targetTrack && isTrackOffline && (
+            <button
+              onClick={() => {
+                window.dispatchEvent(new CustomEvent('spotifree:open-move-folder', { detail: { track: targetTrack } }));
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+              </svg>
+              <span>Mover a subcarpeta</span>
+            </button>
+          )}
+
           <div className="h-px bg-white/10 my-1 mx-1" />
 
           {/* Fuente de audio (elegir otra subida de la canción) */}
