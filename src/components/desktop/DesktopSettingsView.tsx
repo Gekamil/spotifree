@@ -548,6 +548,34 @@ export const DesktopSettingsView: React.FC = () => {
 
 
 
+        {/* Gustos Musicales & Recomendaciones */}
+        {matchesSearch('gustos recomendaciones artistas favoritos personalizar taste onboarding') && (
+          <section className="space-y-3">
+            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+              {language === 'en' ? 'Music Taste & Recommendations' : 'Gustos Musicales & Recomendaciones'}
+            </h2>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">
+              <div className="space-y-1 max-w-md">
+                <span className="text-sm font-semibold text-white">
+                  {language === 'en' ? 'Personalize favorite artists' : 'Personalizar mis artistas favoritos'}
+                </span>
+                <p className="text-xs text-[#a7a7a7] leading-relaxed">
+                  {language === 'en'
+                    ? 'Choose or update artists you like to improve your Daily Mixes, Discover Weekly, and recommendations.'
+                    : 'Elige o actualiza los artistas que te gustan para afinar tus Mixes diarios, Descubrimiento semanal y recomendaciones estilo Spotify.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => useUIStore.getState().openTasteOnboarding()}
+                className="px-5 py-2 rounded-full bg-[#1ed760] text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer shadow shrink-0"
+              >
+                {language === 'en' ? 'Adjust taste' : 'Ajustar gustos'}
+              </button>
+            </div>
+          </section>
+        )}
+
         {/* 2. IDIOMA (Custom Spotify Dropdown) */}
         {matchesSearch('idioma language english español') && (
           <section className="space-y-3">

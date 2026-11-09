@@ -247,6 +247,30 @@ export const SettingsModal: React.FC = () => {
               </div>
             )}
           </section>
+
+          {/* Section 3: Gustos Musicales */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold text-[#1ed760] uppercase tracking-wider">
+              Gustos Musicales & Recomendaciones
+            </h3>
+            <div className="bg-[#282828] p-3.5 rounded-lg border border-white/5 flex items-center justify-between gap-4">
+              <div>
+                <p className="font-bold text-xs text-white">Personalizar mis artistas favoritos</p>
+                <p className="text-[11px] text-[#b3b3b3] mt-0.5">
+                  Elige o actualiza los artistas que te gustan para afinar tus Mixes diarios y recomendaciones estilo Spotify.
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  closeSettingsModal();
+                  useUIStore.getState().openTasteOnboarding();
+                }}
+                className="px-4 py-2 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer"
+              >
+                Ajustar gustos
+              </button>
+            </div>
+          </section>
         </div>
 
         {/* Modal Footer */}

@@ -18,6 +18,7 @@ interface UIState {
   isSettingsModalOpen: boolean;
   isLoginModalOpen: boolean;
   isImportModalOpen: boolean;
+  isTasteOnboardingOpen: boolean;
   isAddToPlaylistModalOpen: boolean;
   trackForAddToPlaylist: Track | null;
   contextMenu: ContextMenuState;
@@ -48,6 +49,8 @@ interface UIState {
   closeLoginModal: () => void;
   openImportModal: () => void;
   closeImportModal: () => void;
+  openTasteOnboarding: () => void;
+  closeTasteOnboarding: () => void;
   openAddToPlaylistModal: (track: Track) => void;
   closeAddToPlaylistModal: () => void;
   toggleRightSidebar: (sidebar: 'queue' | 'lyrics' | 'now-playing' | 'friends') => void;
@@ -68,6 +71,7 @@ const store = create<UIState>((set) => ({
   isSettingsModalOpen: false,
   isLoginModalOpen: false,
   isImportModalOpen: false,
+  isTasteOnboardingOpen: false,
   isAddToPlaylistModalOpen: false,
   trackForAddToPlaylist: null,
   contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
@@ -162,6 +166,14 @@ const store = create<UIState>((set) => ({
 
   openImportModal: () => set({ isImportModalOpen: true, isProfileOpen: false }),
   closeImportModal: () => set({ isImportModalOpen: false }),
+  openTasteOnboarding: () =>
+    set({
+      isTasteOnboardingOpen: true,
+      isProfileOpen: false,
+      isSettingsModalOpen: false,
+      contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },
+    }),
+  closeTasteOnboarding: () => set({ isTasteOnboardingOpen: false }),
   openAddToPlaylistModal: (track: Track) => set({ isAddToPlaylistModalOpen: true, trackForAddToPlaylist: track }),
   closeAddToPlaylistModal: () => set({ isAddToPlaylistModalOpen: false, trackForAddToPlaylist: null }),
 
@@ -185,6 +197,7 @@ const store = create<UIState>((set) => ({
       isSettingsModalOpen: false,
       isLoginModalOpen: false,
       isImportModalOpen: false,
+      isTasteOnboardingOpen: false,
       isAddToPlaylistModalOpen: false,
       trackForAddToPlaylist: null,
       contextMenu: { isOpen: false, x: 0, y: 0, trackId: null, playlistId: null },

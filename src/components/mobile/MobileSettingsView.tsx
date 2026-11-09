@@ -311,6 +311,34 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
+        {/* Gustos y recomendaciones */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between px-1 mb-1">
+            <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
+              {language === 'en' ? 'Music Taste & Recommendations' : 'Gustos Musicales'}
+            </span>
+          </div>
+          <div className="p-4 rounded-2xl bg-[#181818] border border-white/[0.06] flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-bold text-white">
+                {language === 'en' ? 'Personalize music taste' : 'Personalizar mis gustos musicales'}
+              </p>
+              <p className="text-xs text-[#b3b3b3] mt-0.5 leading-relaxed">
+                {language === 'en'
+                  ? 'Choose favorite artists to power your Daily Mixes and personalized suggestions'
+                  : 'Elige tus artistas favoritos para afinar tus Mixes diarios y recomendaciones estilo Spotify'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => useUIStore.getState().openTasteOnboarding()}
+              className="px-4 py-2 rounded-full bg-[#1ed760] text-black font-bold text-xs shrink-0 hover:scale-105 active:scale-95 transition-all cursor-pointer shadow"
+            >
+              {language === 'en' ? 'Adjust' : 'Ajustar'}
+            </button>
+          </div>
+        </div>
+
         {/* Idioma / Language */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider px-1">

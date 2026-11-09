@@ -7,6 +7,7 @@ import { MobileLayout } from './components/mobile/MobileLayout';
 import { AudioController } from './components/common/AudioController';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AddToPlaylistModal } from './components/modals/AddToPlaylistModal';
+import { TasteOnboardingModal } from './components/modals/TasteOnboardingModal';
 import { SharedSessionModal } from './components/common/SharedSessionModal';
 import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
@@ -98,6 +99,10 @@ function App() {
       if (Capacitor.isPluginAvailable('App')) {
         CapApp.addListener('backButton', ({ canGoBack }) => {
           const ui = useUIStore.getState();
+          if (ui.isTasteOnboardingOpen) {
+            ui.closeTasteOnboarding();
+            return;
+          }
           if (ui.isLoginModalOpen) {
             ui.closeLoginModal();
             return;
@@ -163,6 +168,29 @@ function App() {
       } catch {}
     }
 
+    // Taste onboarding for new/guest accounts without a Spotify session/cookie
+    let tasteTimer: ReturnType<typeof setTimeout> | null = null;
+    if (typeof window !== 'undefined') {
+      const hasCookie = Boolean(
+        window.localStorage.getItem('user_spotify_cookie') ||
+        window.localStorage.getItem('spotify_sp_dc') ||
+        window.localStorage.getItem('spotify_access_token')
+      );
+      const isCompleted = window.localStorage.getItem('spotifree_taste_onboarding_completed') === 'true';
+
+      if (!hasCookie && !isCompleted) {
+        tasteTimer = setTimeout(() => {
+          const recheck = Boolean(
+            window.localStorage.getItem('user_spotify_cookie') ||
+            window.localStorage.getItem('spotify_sp_dc')
+          );
+          if (!recheck) {
+            useUIStore.getState().openTasteOnboarding();
+          }
+        }, 900);
+      }
+    }
+
     const handleFocus = () => {
       if (typeof window !== 'undefined' && window.location.search.includes('code=')) return;
       const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') : null;
@@ -178,6 +206,7 @@ function App() {
       removeUrlListener?.();
       unsubscribeAuth();
       unsubscribePlayer();
+      if (tasteTimer) clearTimeout(tasteTimer);
       window.removeEventListener('focus', handleFocus);
       window.removeEventListener('spotifree_open_login_modal', handleOpenModal);
     };
@@ -188,6 +217,7 @@ function App() {
       <AudioController />
       {isMobile ? <MobileLayout /> : <DesktopLayout />}
       <AddToPlaylistModal />
+      <TasteOnboardingModal />
       {isMobile && <SharedSessionModal />}
       <SharedSessionCursors />
       <AudioSourceSheet />

@@ -134,6 +134,36 @@ const MAX_SIGNALS = 4000;
 const uid = () => useSpotifyDataStore.getState().user?.id || 'local';
 const signalsKey = () => `spotifree_taste_${uid()}`;
 const firstSeenKey = () => `spotifree_taste_since_${uid()}`;
+const onboardingKey = () => `spotifree_onboarding_artists_${uid()}`;
+
+export interface OnboardingArtistSeed {
+  name: string;
+  image?: string;
+  id?: string;
+}
+
+export function getOnboardingArtistSeeds(): OnboardingArtistSeed[] {
+  try {
+    const raw = localStorage.getItem(onboardingKey());
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function saveOnboardingArtistSeeds(artists: OnboardingArtistSeed[]): void {
+  try {
+    localStorage.setItem(onboardingKey(), JSON.stringify(artists));
+    localStorage.setItem('spotifree_taste_onboarding_completed', 'true');
+    // Log as high-affinity like signals
+    for (const art of artists) {
+      logSignal({ k: 'like', t: '', a: art.name, img: art.image });
+    }
+  } catch (e) {
+    console.warn('[SpotifreeMixes] Failed to save onboarding seeds', e);
+  }
+  // Immediately build recommendations & mixes
+  void refreshSpotifreeMixes(true);
+}
 
 function readSignals(): Signal[] {
   try {
@@ -365,6 +395,11 @@ export function buildTasteProfile(): TasteProfile {
   const stats = useStatsStore.getState();
   if ((stats.currentUserId || 'local') === uid()) {
     for (const a of Object.values(stats.artists || {})) addArtist(a.name, Math.min(6, Math.log2(1 + a.plays)) * 0.6, 0, a.image);
+  }
+
+  // Onboarding taste seeds chosen by the user: strong starting baseline
+  for (const s of getOnboardingArtistSeeds()) {
+    addArtist(s.name, 4.5, 4.5, s.image);
   }
 
   // Everything that happened in Spotifree (and Spotify's recent plays), fading with age
@@ -754,6 +789,7 @@ function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtist
     playlists: s.playlists.some((p) => p.id.startsWith('sf-') && !saved.includes(p.id))
       ? s.playlists.filter((p) => !p.id.startsWith('sf-') || saved.includes(p.id))
       : s.playlists,
+    dynamicShelves: withSpotifreeShelves(s.dynamicShelves || [], mixes, s.user?.display_name, suggestedArtists),
   }));
 }
 
