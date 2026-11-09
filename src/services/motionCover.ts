@@ -144,7 +144,8 @@ async function appleAlbumId(t: Track): Promise<string | null> {
           const album = norm(t.album?.name);
           const results: any[] = (data.results || []).filter((x: any) => {
             const xa = norm(x.artistName);
-            return artistN && xa && (xa.includes(artistN) || artistN.includes(xa));
+            const notComp = x.collectionArtistName !== 'Various Artists' || artistN.includes('various');
+            return notComp && artistN && xa && (xa === artistN || xa.startsWith(artistN) || artistN.startsWith(xa));
           });
           const hit =
             (album && results.find((x) => norm(x.collectionName) === album)) ||

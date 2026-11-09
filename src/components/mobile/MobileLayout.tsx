@@ -12,6 +12,8 @@ import { dedupeHomeShelves, useSpotifreeMixes, withSpotifreeShelves } from '../.
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
+import { MobileProfileDrawer } from './MobileProfileDrawer';
+import { useSharedSessionStore } from '../../services/sharedSessionService';
 import { MobilePlaylistView } from './MobilePlaylistView';
 import { MobileSearchView } from './MobileSearchView';
 import { MobileCreateSheet } from './MobileCreateSheet';
@@ -51,7 +53,7 @@ export const MobileLayout: React.FC = () => {
     window.addEventListener(LOCAL_FILES_EVENT, load);
     return () => window.removeEventListener(LOCAL_FILES_EVENT, load);
   }, []);
-  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
+  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica' | string>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
@@ -328,6 +330,7 @@ export const MobileLayout: React.FC = () => {
   const { openLoginModal, sortOrder, setSortOrder, viewMode, setViewMode } = useUIStore();
   const [isMobileSortSheetOpen, setIsMobileSortSheetOpen] = useState(false);
   const [isMobileViewSheetOpen, setIsMobileViewSheetOpen] = useState(false);
+  const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
 
   const getSortLabel = () => {
     switch (sortOrder) {
@@ -435,7 +438,15 @@ export const MobileLayout: React.FC = () => {
       });
 
     if (homeFilter === 'musica') {
-      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias')) as any) as typeof list);
+      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias') && !s.title.toLowerCase().includes('podcast')) as any) as typeof list);
+    }
+    if (homeFilter === 'podcasts') {
+      const p = list.filter((s) => s.title.toLowerCase().includes('podcast') || s.title.toLowerCase().includes('noticias') || s.title.toLowerCase().includes('episodio'));
+      return p.length > 0 ? withoutShortcuts(dedupeHomeShelves(p as any) as typeof list) : [];
+    }
+    if (homeFilter === 'audiolibros') {
+      const a = list.filter((s) => s.title.toLowerCase().includes('libro') || s.title.toLowerCase().includes('audio'));
+      return a.length > 0 ? withoutShortcuts(dedupeHomeShelves(a as any) as typeof list) : [];
     }
 
     // No playlist twice on Home ("Tus playlists" + every section + the shortcuts at the top)
@@ -583,7 +594,8 @@ export const MobileLayout: React.FC = () => {
             <MobileHeader
               activeTab={homeFilter}
               onTabChange={setHomeFilter}
-              onOpenProfile={() => setMobileTab('profile')}
+              onOpenDrawer={() => setIsProfileDrawerOpen(true)}
+              onOpenProfile={() => setIsProfileDrawerOpen(true)}
               onOpenSettings={() => setMobileTab('settings')}
               onOpenNotifications={() => setIsNotificationsOpen(true)}
             />
@@ -882,7 +894,7 @@ export const MobileLayout: React.FC = () => {
             <div className="flex items-center justify-between pt-1 gap-2 flex-nowrap">
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                 <button
-                  onClick={isAuthenticated ? () => setMobileTab('profile') : openLoginModal}
+                  onClick={() => setIsProfileDrawerOpen(true)}
                   className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[#242424] overflow-hidden flex items-center justify-center text-[#b3b3b3] hover:text-white cursor-pointer active:scale-95 transition-transform shrink-0"
                 >
                   {user?.images?.[0]?.url ? (
@@ -1751,6 +1763,32 @@ export const MobileLayout: React.FC = () => {
           {toastMessage}
         </div>
       )}
+
+      {/* Spotify Profile Side Drawer (Slides in from the left) */}
+      <MobileProfileDrawer
+        isOpen={isProfileDrawerOpen}
+        onClose={() => setIsProfileDrawerOpen(false)}
+        onNavigate={(tab) => {
+          setIsProfileDrawerOpen(false);
+          setMobileTab(tab);
+        }}
+        onOpenSharedSession={() => {
+          setIsProfileDrawerOpen(false);
+          useSharedSessionStore.getState().setModalOpen(true);
+        }}
+        onOpenTaste={() => {
+          setIsProfileDrawerOpen(false);
+          useUIStore.getState().openTasteOnboarding();
+        }}
+        onOpenNotifications={() => {
+          setIsProfileDrawerOpen(false);
+          setIsNotificationsOpen(true);
+        }}
+        onOpenLogin={() => {
+          setIsProfileDrawerOpen(false);
+          openLoginModal();
+        }}
+      />
 
       {/* Global Login / Cookie modal */}
       <LoginModal />

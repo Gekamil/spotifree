@@ -388,7 +388,11 @@ async function findAppleAlbumId(title, artist, country = 'es') {
       const t = norm(cleanTitle || title);
       const hit = (data.results || []).find((x) => {
         const xa = norm(x.artistName);
-        return a && xa && (xa.includes(a) || a.includes(xa)) && (norm(x.trackName) === t || norm(x.trackName).includes(t));
+        const xt = norm(x.trackName);
+        const artistMatch = xa === a || xa.startsWith(a) || a.startsWith(xa);
+        const trackMatch = xt === t || xt.replace(/\s*[([].*?[)\]]/g, '').trim() === t;
+        const notComp = x.collectionArtistName !== 'Various Artists' || a.includes('various');
+        return artistMatch && trackMatch && notComp;
       });
       if (hit?.collectionId) return String(hit.collectionId);
     } catch {}

@@ -1,8 +1,9 @@
 /**
  * Album cover that comes alive when the album has an Apple Music animated cover:
- * - Shows the static artwork by default ("el logo solo como antes").
- * - Displays a subtle indicator text/badge when an animated motion cover is available.
- * - Smoothly crossfades between static artwork and animated video upon click/tap.
+ * - Shows the static artwork by default.
+ * - Long-pressing (mantener pulsado) or tapping on the cover smoothly toggles between
+ *   the static artwork and the high-res animated video.
+ * - No intrusive button or toggle switch: pure, natural touch on the cover image.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import type { Track } from '../../types/spotify';
@@ -29,7 +30,6 @@ export const MotionCover: React.FC<Props> = ({
   imgClassName = '',
   onImgError,
   interactive = true,
-  showIndicator = true,
 }) => {
   const boxRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -38,6 +38,9 @@ export const MotionCover: React.FC<Props> = ({
   const [visible, setVisible] = useState(true);
   const [allowed, setAllowed] = useState(() => motionCoversAllowed());
   const [isMotionActive, setIsMotionActive] = useState(false);
+
+  const holdTimerRef = useRef<number | null>(null);
+  const isHoldActionRef = useRef(false);
 
   useEffect(() => {
     const on = () => setAllowed(motionCoversAllowed());
@@ -130,21 +133,53 @@ export const MotionCover: React.FC<Props> = ({
     };
   }, [motion, visible, allowed]);
 
-  const handleToggle = (e: React.MouseEvent) => {
+  const toggleMotion = () => {
     if (!motion || !allowed || !interactive) return;
-    // Don't toggle if user clicked on other interactive elements
-    e.stopPropagation();
     setIsMotionActive((prev) => {
       const next = !prev;
-      // Remembered: once turned on, the next songs with an animated cover start animated
       try {
         localStorage.setItem(MOTION_ON_KEY, next ? '1' : '0');
       } catch {}
       return next;
     });
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate(35);
+      } catch {}
+    }
   };
 
-  // The user's last choice applies to every new song
+  const handleTouchStart = () => {
+    if (!hasMotion || !interactive) return;
+    isHoldActionRef.current = false;
+    holdTimerRef.current = window.setTimeout(() => {
+      isHoldActionRef.current = true;
+      toggleMotion();
+    }, 380);
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (holdTimerRef.current) {
+      window.clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    if (isHoldActionRef.current) {
+      e.preventDefault();
+      isHoldActionRef.current = false;
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    if (!hasMotion || !interactive) return;
+    e.stopPropagation();
+    if (isHoldActionRef.current) {
+      isHoldActionRef.current = false;
+      return;
+    }
+    toggleMotion();
+  };
+
+  // The user's last choice applies to new songs if they left it enabled
   useEffect(() => {
     if (!motion) return;
     try {
@@ -157,8 +192,13 @@ export const MotionCover: React.FC<Props> = ({
   return (
     <div
       ref={boxRef}
-      onClick={hasMotion && interactive ? handleToggle : undefined}
-      className={`relative overflow-hidden group select-none ${hasMotion && interactive ? 'cursor-pointer' : ''} ${className}`}
+      onTouchStart={hasMotion && interactive ? handleTouchStart : undefined}
+      onTouchEnd={hasMotion && interactive ? handleTouchEnd : undefined}
+      onClick={hasMotion && interactive ? handleClick : undefined}
+      title={hasMotion ? (isMotionActive ? 'Toca o mantén pulsado para ver la portada estática' : 'Toca o mantén pulsado para activar la portada animada') : undefined}
+      className={`relative overflow-hidden group select-none ${
+        hasMotion && interactive ? 'cursor-pointer active:scale-[0.99] transition-transform' : ''
+      } ${className}`}
     >
       {/* 1. Static Artwork Layer (always present underneath for instant fallback & smooth crossfade) */}
       {src ? (
@@ -188,27 +228,16 @@ export const MotionCover: React.FC<Props> = ({
         />
       )}
 
-      {/* 3. Subtle Indicator Badge (shows when animated motion cover is available) */}
-      {/* 3. Small Spotify-style pill in the corner when the album has an animated cover */}
-      {hasMotion && showIndicator && (
-        <button
-          type="button"
-          onClick={handleToggle}
-          className={`absolute top-2.5 right-2.5 z-30 h-7 pl-2 pr-2.5 rounded-full flex items-center gap-1 text-[11px] font-bold backdrop-blur-md shadow-[0_2px_10px_rgba(0,0,0,0.45)] transition-all duration-300 active:scale-90 cursor-pointer ${
-            isMotionActive ? 'bg-white text-black' : 'bg-black/55 text-white hover:bg-black/75'
+      {/* 3. Discreet subtle indicator (tiny 5px green dot in corner only when animated cover is available) */}
+      {hasMotion && (
+        <div
+          className={`absolute bottom-2 right-2 pointer-events-none transition-opacity duration-500 flex items-center justify-center ${
+            isMotionActive ? 'opacity-90' : 'opacity-40 group-hover:opacity-80'
           }`}
-          title={isMotionActive ? 'Ver la portada fija' : 'Ver la portada animada'}
-          aria-pressed={isMotionActive}
+          title={isMotionActive ? 'Portada animada activa' : 'Animación disponible'}
         >
-          <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-            {isMotionActive ? (
-              <path d="M2.7 1A.7.7 0 0 0 2 1.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7zm8 0a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7z" />
-            ) : (
-              <path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z" />
-            )}
-          </svg>
-          Animada
-        </button>
+          <span className={`w-2 h-2 rounded-full shadow-lg ${isMotionActive ? 'bg-[#1ed760] animate-pulse ring-2 ring-black/40' : 'bg-white/60'}`} />
+        </div>
       )}
     </div>
   );
