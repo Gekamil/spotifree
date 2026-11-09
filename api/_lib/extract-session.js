@@ -353,6 +353,59 @@ export function cleanSpDcString(raw) {
 /** Cards per home section (Spotify's web player asks for 10; "Mostrar todos" shows them all) */
 export const HOME_SECTION_LIMIT = 40;
 
+/** Small track object (what the app needs to recommend and play it) */
+function slimTrack(t) {
+  if (!t?.id || !t.name) return null;
+  return {
+    id: t.id,
+    name: t.name,
+    duration_ms: t.duration_ms || 0,
+    artists: (t.artists || []).map((a) => ({ id: a.id, name: a.name })),
+    album: {
+      id: t.album?.id || '',
+      name: t.album?.name || '',
+      images: t.album?.images?.length ? [{ url: toHDImage(t.album.images[0].url) }] : [],
+    },
+  };
+}
+
+/** Top artists, top songs and recent plays of the signed-in account (Spotify Web API) */
+async function fetchAccountTaste(accessToken) {
+  const get = async (path) => {
+    try {
+      const r = await fetch(`https://api.spotify.com/v1${path}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: AbortSignal.timeout(4000),
+      });
+      return r.ok ? await r.json() : null;
+    } catch {
+      return null;
+    }
+  };
+  const [artists, tracks, recent] = await Promise.all([
+    get('/me/top/artists?limit=30&time_range=medium_term'),
+    get('/me/top/tracks?limit=50&time_range=medium_term'),
+    get('/me/player/recently-played?limit=50'),
+  ]);
+  return {
+    topArtists: (artists?.items || [])
+      .filter((a) => a?.name)
+      .map((a) => ({
+        id: a.id,
+        name: a.name,
+        genres: a.genres || [],
+        images: a.images?.length ? [{ url: toHDImage(a.images[0].url) }] : [],
+      })),
+    topTracks: (tracks?.items || []).map(slimTrack).filter(Boolean),
+    recentlyPlayed: (recent?.items || [])
+      .map((x) => {
+        const track = slimTrack(x?.track);
+        return track && x.played_at ? { track, played_at: x.played_at } : null;
+      })
+      .filter(Boolean),
+  };
+}
+
 export async function extractSpotifySession(spDcCookie) {
   const cookie = cleanSpDcString(spDcCookie);
   if (!cookie || !cookie.startsWith('AQ') || cookie.length < 30) {
@@ -602,8 +655,12 @@ export async function extractSpotifySession(spDcCookie) {
     console.warn('[Extractor] Could not fetch liked songs count:', e.message);
   }
 
+  // The account's taste for the Spotifree playlists: top artists and songs (last ~6 months) and
+  // recent plays with their real dates. Each one is optional: empty if Spotify doesn't answer.
+  const taste = await fetchAccountTaste(accessToken);
+
   // Parse Library Playlists
-  const rawLibraryItems = libraryResult.status === 'fulfilled' ? libraryResult.value?.data?.me?.libraryV3?.items || [] : [];
+  const rawLibraryItems =libraryResult.status === 'fulfilled' ? libraryResult.value?.data?.me?.libraryV3?.items || [] : [];
   const playlists = [];
 
   for (const item of rawLibraryItems) {
@@ -817,6 +874,9 @@ export async function extractSpotifySession(spDcCookie) {
     playlists,
     shelves,
     quickAccess,
+    topArtists: taste.topArtists,
+    topTracks: taste.topTracks,
+    recentlyPlayed: taste.recentlyPlayed,
     accessToken,
     // The app re-reads older sessions once, to get the longer "Mostrar todos" lists
     homeSectionLimit: HOME_SECTION_LIMIT,

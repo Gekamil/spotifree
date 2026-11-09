@@ -8,6 +8,10 @@ export interface ExtractedSession {
   shelves: DynamicShelf[];
   quickAccess: Array<{ id: string; name: string; image: string; color: string }>;
   accessToken?: string;
+  /** The account's taste (for its Spotifree playlists): may be empty if Spotify didn't answer */
+  topArtists?: Array<{ id: string; name: string; genres?: string[]; images?: Array<{ url: string }> }>;
+  topTracks?: any[];
+  recentlyPlayed?: Array<{ track: any; played_at: string }>;
   /** Cards per home section the server asked Spotify for (older sessions: none = 10) */
   homeSectionLimit?: number;
 }

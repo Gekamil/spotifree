@@ -336,14 +336,16 @@ export function buildTasteProfile(): TasteProfile {
     tracks.set(k, x);
   };
 
-  // Spotify's starting data fades over ~6 months since this account started using Spotifree
+  // Spotify's starting data (library) fades over ~6 months since this account started using
+  // Spotifree; its top artists / songs are re-read every day, so they never weigh less than half
   const baseline = Math.pow(0.5, (now - firstSeen()) / (180 * DAY));
+  const topWeight = Math.max(0.5, baseline);
   const st = useSpotifyDataStore.getState();
-  (st.topArtists || []).forEach((a: any, i: number) => addArtist(a?.name, (3 - Math.min(2, i / 10)) * baseline, 0, a?.images?.[0]?.url));
+  (st.topArtists || []).forEach((a: any, i: number) => addArtist(a?.name, (3 - Math.min(2, i / 10)) * topWeight, 0, a?.images?.[0]?.url));
   (st.topTracks || []).forEach((t: any, i: number) => {
     const tr = asTrack(t);
     if (!tr) return;
-    const w = (2 - Math.min(1.5, i / 20)) * baseline;
+    const w = (2 - Math.min(1.5, i / 20)) * topWeight;
     addTrack(tr, w, 0, 0);
     addArtist(firstArtist(tr), w * 0.6, 0);
   });
@@ -392,11 +394,12 @@ interface Discover {
   recent: Array<{ title: string; date: string; cover: string | null; tracks: Track[] }>;
 }
 async function discover(artist: string): Promise<Discover | null> {
-  const key = `discover:${norm(artist)}`;
+  // v2: the server now finds the artist's new releases (older cached answers had none)
+  const key = `discover2:${norm(artist)}`;
   const cached = await kvGet<{ t: number; v: Discover }>(key);
-  if (cached && Date.now() - cached.t < 3 * DAY) return cached.v;
+  if (cached && Date.now() - cached.t < 2 * DAY) return cached.v;
   try {
-    const r = await fetch(`/api/discover?artist=${encodeURIComponent(artist)}`);
+    const r = await fetch(`/api/discover?artist=${encodeURIComponent(artist)}&v=2`);
     if (!r.ok) return cached?.v || null;
     const v = (await r.json()) as Discover & { error?: string };
     if (!v.error && v.artist) await kvSet(key, { t: Date.now(), v });

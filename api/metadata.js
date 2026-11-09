@@ -473,13 +473,19 @@ async function handleDiscover(req, res) {
     const [top, related, albums] = await Promise.all([
       dz(`/artist/${artist.id}/top?limit=15`).catch(() => ({ data: [] })),
       dz(`/artist/${artist.id}/related?limit=8`).catch(() => ({ data: [] })),
-      dz(`/artist/${artist.id}/albums?limit=12`).catch(() => ({ data: [] })),
+      // Deezer doesn't list albums by date: ask for many and sort them below
+      dz(`/artist/${artist.id}/albums?limit=100`).catch(() => ({ data: [] })),
     ]);
     const rel = (related.data || []).slice(0, 6);
     const relTops = await Promise.all(rel.map((r) => dz(`/artist/${r.id}/top?limit=6`).catch(() => ({ data: [] }))));
     // Releases of the last 8 weeks
     const since = Date.now() - 56 * 24 * 3600 * 1000;
-    const fresh = (albums.data || []).filter((a) => a.release_date && Date.parse(a.release_date) >= since).slice(0, 3);
+    const fresh = (albums.data || [])
+      .filter((a) => a.release_date && Date.parse(a.release_date) >= since && Date.parse(a.release_date) <= Date.now())
+      .sort((a, b) => Date.parse(b.release_date) - Date.parse(a.release_date))
+      // The same single often comes twice (clean / explicit, remix pack…): one per title
+      .filter((a, i, list) => list.findIndex((b) => dzNorm(b.title) === dzNorm(a.title)) === i)
+      .slice(0, 4);
     const freshTracks = await Promise.all(fresh.map((a) => dz(`/album/${a.id}/tracks?limit=6`).catch(() => ({ data: [] }))));
     const out = {
       artist: { id: artist.id, name: artist.name, picture: artist.picture_xl || artist.picture_big || null, fans: artist.nb_fan || 0 },

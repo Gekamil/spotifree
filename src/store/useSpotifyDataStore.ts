@@ -587,6 +587,25 @@ function getInitialSession(): { user: UserProfile | null; isAuthenticated: boole
 
 const initialSession = getInitialSession();
 
+/** The signed-in Spotify account's taste saved with its session (top artists / songs, recent plays) */
+function getSavedTaste(): { topArtists: any[]; topTracks: Track[]; recentlyPlayed: any[] } {
+  const empty = { topArtists: [], topTracks: [], recentlyPlayed: [] };
+  if (typeof window === 'undefined' || !initialSession.isAuthenticated) return empty;
+  try {
+    const s = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
+    // Only the account that is signed in now
+    if (!s?.user?.id || s.user.id !== initialSession.user?.id) return empty;
+    return {
+      topArtists: Array.isArray(s.topArtists) ? s.topArtists : [],
+      topTracks: Array.isArray(s.topTracks) ? s.topTracks : [],
+      recentlyPlayed: Array.isArray(s.recentlyPlayed) ? s.recentlyPlayed : [],
+    };
+  } catch {
+    return empty;
+  }
+}
+const savedTaste = getSavedTaste();
+
 const store = create<SpotifyDataState>((set, get) => ({
   isAuthenticated: initialSession.isAuthenticated,
   isLoading: false,
@@ -599,9 +618,9 @@ const store = create<SpotifyDataState>((set, get) => ({
   featuredPlaylists: [],
   featuredMessage: 'Novedades populares',
   newReleases: [],
-  topTracks: [],
-  topArtists: [],
-  recentlyPlayed: [],
+  topTracks: savedTaste.topTracks,
+  topArtists: savedTaste.topArtists,
+  recentlyPlayed: savedTaste.recentlyPlayed,
   dynamicShelves: initialSession.isAuthenticated
     ? buildDynamicShelves(initialSession.user, getInitialPlaylists(initialSession.user?.id), 'Novedades para ti')
     : DEFAULT_PUBLIC_SHELVES,
@@ -1014,6 +1033,10 @@ const store = create<SpotifyDataState>((set, get) => ({
       playlists: mergeFreshSpotifyPlaylists(current.length ? current : savedPlaylists, freshPlaylists, imported),
       dynamicShelves: session.shelves?.length ? session.shelves : get().dynamicShelves,
       quickAccessCards: session.quickAccess?.length ? session.quickAccess : get().quickAccessCards,
+      // The account's taste (Spotify's top artists / songs and recent plays) for its recommendations
+      ...(Array.isArray(session.topArtists) && session.topArtists.length ? { topArtists: session.topArtists } : {}),
+      ...(Array.isArray(session.topTracks) && session.topTracks.length ? { topTracks: session.topTracks } : {}),
+      ...(Array.isArray(session.recentlyPlayed) && session.recentlyPlayed.length ? { recentlyPlayed: session.recentlyPlayed } : {}),
       isLoading: false,
     });
     startDailySpotifyRefreshTimer();
@@ -1030,7 +1053,9 @@ const store = create<SpotifyDataState>((set, get) => ({
     const today = localDayStamp();
     // Also once for sessions read before the home rows had their full "Mostrar todos" lists
     const hasFullHome = (saved?.homeSectionLimit || 0) >= EXPECTED_HOME_SECTION_LIMIT;
-    if (!force && saved?._extractedDate === today && hasFullHome) return false;
+    // …and once for sessions read before the account's taste (top artists / recent plays) came with it
+    const hasTaste = Array.isArray(saved?.topArtists);
+    if (!force && saved?._extractedDate === today && hasFullHome && hasTaste) return false;
     if (refreshInFlight) return refreshInFlight;
     refreshInFlight = (async () => {
       try {
@@ -1076,6 +1101,10 @@ const store = create<SpotifyDataState>((set, get) => ({
           // Recommendations are Spotify's, not the user's: they are replaced every day
           dynamicShelves: fresh.shelves && fresh.shelves.length > 0 ? fresh.shelves : get().dynamicShelves,
           quickAccessCards: fresh.quickAccess && fresh.quickAccess.length ? fresh.quickAccess : get().quickAccessCards,
+          // The account's taste for its Spotifree playlists
+          ...(Array.isArray(fresh.topArtists) && fresh.topArtists.length ? { topArtists: fresh.topArtists } : {}),
+          ...(Array.isArray(fresh.topTracks) && fresh.topTracks.length ? { topTracks: fresh.topTracks } : {}),
+          ...(Array.isArray(fresh.recentlyPlayed) && fresh.recentlyPlayed.length ? { recentlyPlayed: fresh.recentlyPlayed } : {}),
         });
         console.info(`[Spotify] Cuenta actualizada (${today}): ${freshPlaylists.length} listas, ${merged.length} en tu biblioteca`);
         return true;
