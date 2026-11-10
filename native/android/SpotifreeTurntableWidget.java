@@ -157,6 +157,7 @@ public class SpotifreeTurntableWidget extends AppWidgetProvider {
                 v.setInt(R.id.widget_play, "setColorFilter", Color.BLACK);
                 v.setContentDescription(R.id.widget_play, playing ? "Pausar" : "Reproducir");
 
+                v.setContentDescription(R.id.tt_deck, hasSong ? "Tocadiscos: " + title + (artist == null || artist.isEmpty() ? "" : ", " + artist) : "Tocadiscos de Spotifree");
                 if (open != null) {
                     v.setOnClickPendingIntent(R.id.tt_deck, open);
                     v.setOnClickPendingIntent(R.id.widget_text, open);
