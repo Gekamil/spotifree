@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { confirmDialog } from '../common/ConfirmDialog';
 import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
+import { showGlobalToast } from '../../utils/globalToast';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -343,6 +344,35 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                   <path d="M11.838.146a.5.5 0 0 1 .708 0l3.308 3.308a.5.5 0 0 1 0 .708L5.27 14.746l-4.5 1a.5.5 0 0 1-.601-.6l1-4.5L11.838.146zm.354 1.768L2.946 11.16l-.68 3.061 3.061-.68 9.246-9.246-2.381-2.381z" />
                 </svg>
                 <span className="truncate">Editar datos</span>
+              </button>
+
+              {/* Invitar a colaborar (playlist colaborativa) */}
+              <button
+                onClick={async () => {
+                  const plId = targetPlaylist?.id || contextMenu.playlistId;
+                  closeContextMenu();
+                  if (!plId) return;
+                  const { shareAsCollaborative } = await import('../../services/sharedPlaylists');
+                  const link = await shareAsCollaborative(plId).catch(() => null);
+                  if (!link) {
+                    showGlobalToast('No se ha podido crear la invitación');
+                    return;
+                  }
+                  try {
+                    await navigator.clipboard.writeText(link);
+                    showGlobalToast('Enlace de invitación copiado');
+                  } catch {
+                    showGlobalToast(link);
+                  }
+                }}
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                  <circle cx="9" cy="8" r="3.5" />
+                  <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
+                  <path d="M19 8v6M16 11h6" />
+                </svg>
+                <span className="truncate">{(targetPlaylist as any)?.shared_id ? 'Invitar a más personas' : 'Invitar a colaborar'}</span>
               </button>
 
               {/* 4. Historial de versiones */}

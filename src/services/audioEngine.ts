@@ -133,6 +133,33 @@ export function setSourceOverride(trackId: string, videoId: string | null) {
   } catch {}
 }
 
+// Source the app switched to by itself for a song (the first one didn't match it): used again
+// next time, but not shown as "chosen by hand" (the "Fuente de audio" sheet stays on Automática)
+const AUTO_SOURCE_KEY = 'spotifree_source_auto';
+function readAutoSources(): Record<string, string> {
+  try {
+    return JSON.parse(window.localStorage.getItem(AUTO_SOURCE_KEY) || '{}') || {};
+  } catch {
+    return {};
+  }
+}
+export function getAutoSource(trackId?: string | null): string | null {
+  if (!trackId || typeof window === 'undefined') return null;
+  return readAutoSources()[trackId.replace(/^spotify:track:/i, '')] || null;
+}
+export function setAutoSource(trackId: string, videoId: string | null) {
+  if (typeof window === 'undefined') return;
+  const id = trackId.replace(/^spotify:track:/i, '');
+  const all = readAutoSources();
+  if (videoId) all[id] = videoId;
+  else delete all[id];
+  const keys = Object.keys(all);
+  if (keys.length > 1500) for (const k of keys.slice(0, keys.length - 1500)) delete all[k];
+  try {
+    window.localStorage.setItem(AUTO_SOURCE_KEY, JSON.stringify(all));
+  } catch {}
+}
+
 function normWords(s: string): string[] {
   return (s || '')
     .toLowerCase()
@@ -2349,7 +2376,11 @@ class AudioEngine {
       if (!target) return false;
       if (usePlayerStore.getState().currentTrack?.id !== trackId) return false; // song changed meanwhile
 
+      // Remembered for this song: by hand as the user's choice, automatically as the app's own choice
+      // (the automatic one used to be only in the search cache, which other lookups could replace,
+      // so the wrong audio came back the next time the song played)
       if (opts.manual) setSourceOverride(trackId, target);
+      else setAutoSource(trackId, target);
       persistVideoId(query, target);
       this.verifiedSources.add(`${trackId}|${target}`);
       console.info(`[AudioEngine] Audio source -> ${target}${opts.reason ? ` (${opts.reason})` : ''}`);
@@ -2404,6 +2435,10 @@ class AudioEngine {
       this.verifiedSources.add(key); // chosen by the user
       return;
     }
+    if (getAutoSource(track.id) === this.currentVideoId) {
+      this.verifiedSources.add(key); // the app already checked and switched to this one
+      return;
+    }
     let data: any = null;
     try { data = this.ytPlayer?.getVideoData?.(); } catch {}
     if (!data || !data.title) return; // not known yet, try on the next tick
@@ -2437,8 +2472,9 @@ class AudioEngine {
     if (!query) return null;
     const cleanQuery = query.trim();
 
-    // A source the user chose by hand for this song always wins
-    const override = getSourceOverride(trackId);
+    // A source the user chose by hand for this song always wins; then the one the app switched to
+    // by itself (after finding the first one didn't match the song)
+    const override = getSourceOverride(trackId) || getAutoSource(trackId);
     if (override) return override;
 
     const verified = getVerifiedVideoId(cleanQuery, trackTitle, trackArtist);

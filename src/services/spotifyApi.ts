@@ -1,6 +1,8 @@
 import type { Playlist, Track, UserProfile } from '../types/spotify';
 import { getValidAccessToken } from './spotifyAuth';
 import { filterMusicTracksOnly } from '../utils/trackFilter';
+import { withoutNotInterested } from '../utils/notInterested';
+import { rankSearchTracks } from '../utils/searchRanking';
 
 export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
   try {
@@ -453,6 +455,10 @@ export async function searchSpotify(query: string): Promise<any | null> {
     console.error('Parallel search enrichment failed:', err);
   }
 
+  // Results come from several places (server, your library, Deezer) one after another: order them
+  // by how well they match what was typed
+  tracks = rankSearchTracks(cleanQ, tracks);
+
   return {
     tracks: { items: tracks },
     artists: { items: artists },
@@ -526,7 +532,8 @@ export async function fetchRecommendations(options: {
     if (res.ok) {
       const data = await res.json();
       if (data.tracks && Array.isArray(data.tracks)) {
-        return data.tracks;
+        // (autoplay and smart shuffle use these: "No me interesa" songs stay out)
+        return withoutNotInterested(data.tracks);
       }
     }
   } catch (err) {
@@ -578,7 +585,8 @@ export async function fetchPlaylistRecommendations(
     if (res.ok) {
       const data = await res.json();
       if (data.tracks && Array.isArray(data.tracks) && data.tracks.length > 0) {
-        return filterMusicTracksOnly(data.tracks);
+        // "No me interesa" songs are never recommended
+        return withoutNotInterested(filterMusicTracksOnly(data.tracks));
       }
     }
   } catch (err) {

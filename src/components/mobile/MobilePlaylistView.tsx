@@ -48,6 +48,9 @@ import { PlaylistAddSongsScreen } from './PlaylistAddSongsScreen';
 import { PlaylistEditScreen } from './PlaylistEditScreen';
 import { confirmDialog } from '../common/ConfirmDialog';
 import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
+import { AddedByAvatar, SharedMembersRow, useSharedCode, useSharedMembers } from '../common/SharedPlaylistBits';
+import { shareAsCollaborative } from '../../services/sharedPlaylists';
+import { isNotInterested, markNotInterested, undoNotInterested } from '../../utils/notInterested';
 import { showGlobalToast } from '../../utils/globalToast';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
@@ -76,6 +79,9 @@ import {
   getSharedPlaylistById,
 } from '../../utils/userStorage';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
+
+/** Long playlists: rows off screen aren't laid out or painted until you scroll near them */
+const LONG_LIST_ROW: React.CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' } as React.CSSProperties;
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -749,6 +755,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [cleanId, activePlaylist.id, onBack]);
 
+  // Collaborative playlist: members in the header and who added each song
+  const sharedCode = useSharedCode(activePlaylist.id, playlist.id, cleanId);
+  const sharedMembers = useSharedMembers(sharedCode);
+
   // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
   const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
   // Like Spotify, only your own playlists can be edited (not the ones you just follow)
@@ -1365,6 +1375,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <SpotifyBadgeIcon size={18} />
                   <span className="text-white font-black">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
                 </div>
+                {sharedCode && <SharedMembersRow code={sharedCode} />}
                 <div className="text-xs text-[#b3b3b3] font-medium">
                   {tracks.length} {tracks.length === 1 ? 'canción' : 'canciones'}
                 </div>
@@ -1403,6 +1414,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 <span>•</span>
                 <span>{tracks.length} canciones</span>
               </div>
+              {sharedCode && (
+                <div className="mt-2">
+                  <SharedMembersRow code={sharedCode} />
+                </div>
+              )}
             </div>
           )}
         </>
@@ -1764,6 +1780,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <div
                     onClick={() => handleTrackClick(track)}
                     className="flex items-center justify-between p-2.5 rounded-lg active:bg-white/10 cursor-pointer transition-colors group"
+                    style={LONG_LIST_ROW}
                   >
                     {/* Left: Cover or Number + Info */}
                     <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
@@ -1791,6 +1808,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                           {track.name}
                         </span>
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
+                          {sharedCode && <AddedByAvatar members={sharedMembers} track={track} />}
                           {(findDeviceMatch(track) || downloadedTrackIds.has(cleanTrackId)) && (
                             <span title="Suena sin conexión (Modo avión)" className="shrink-0 -mr-0.5">
                               <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
@@ -2110,6 +2128,42 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 }}
               />
 
+              {isOwnPlaylist && canAddTracksToThisList && !isLikedPlaylist && (
+                <SheetItem
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="9" cy="8" r="3.5" />
+                      <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
+                      <path d="M19 8v6M16 11h6" />
+                    </svg>
+                  }
+                  label={sharedCode ? 'Invitar a más personas' : 'Invitar a colaborar'}
+                  sublabel={sharedCode ? 'Comparte el enlace de esta playlist colaborativa' : 'Tus amigos podrán añadir y quitar canciones'}
+                  onClick={async () => {
+                    setIsOptionsOpen(false);
+                    const link = await shareAsCollaborative(activePlaylist.id).catch(() => null);
+                    if (!link) {
+                      showGlobalToast('No se ha podido crear la invitación');
+                      return;
+                    }
+                    try {
+                      if (navigator.share) {
+                        await navigator.share({ title: activePlaylist.name || playlist.name, text: `Añade canciones a «${activePlaylist.name || playlist.name}» conmigo`, url: link });
+                        return;
+                      }
+                    } catch {
+                      return; // share sheet closed
+                    }
+                    try {
+                      await navigator.clipboard.writeText(link);
+                      showGlobalToast('Enlace de invitación copiado');
+                    } catch {
+                      showGlobalToast(link);
+                    }
+                  }}
+                />
+              )}
+
               {canAddTracksToThisList && !isLikedPlaylist && (
                 <SheetItem
                   icon={
@@ -2160,6 +2214,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             />
 
             <SheetList>
+              {/* One option, like Spotify: the window has "Canciones que te gustan", your playlists and "Nueva playlist" */}
               <SheetItem
                 icon={
                   isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? (
@@ -2168,10 +2223,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     <AddTrackNativeIcon size={24} className="text-white" />
                   )
                 }
-                label={isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? 'Eliminar de Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
+                label="Añadir a playlist"
+                sublabel={isTrackLiked(activeTrackMenu.id, activeTrackMenu) ? 'Guardada en Canciones que te gustan' : undefined}
                 onClick={() => {
-                  handleToggleTrackLike(activeTrackMenu);
+                  const t = activeTrackMenu;
                   setActiveTrackMenu(null);
+                  setTimeout(() => useUIStore.getState().openAddToPlaylistModal(t), 150);
                 }}
               />
 
@@ -2186,10 +2243,27 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 }}
               />
 
+              {/* No me interesa: out of recommendations, mixes and smart shuffle */}
               <SheetItem
-                icon={<PlusCircleNativeIcon size={22} className="text-white" />}
-                label="Añadir a otra playlist"
-                onClick={() => setIsAddToPlaylistModalOpen(true)}
+                icon={
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                    <path d="M12.03 3.97a.75.75 0 0 1 0 1.06l-7 7a.75.75 0 0 1-1.06-1.06l7-7a.75.75 0 0 1 1.06 0" />
+                  </svg>
+                }
+                label={isNotInterested(activeTrackMenu) ? 'Te interesa de nuevo' : 'No me interesa'}
+                sublabel={isNotInterested(activeTrackMenu) ? undefined : 'No te la recomendaremos'}
+                onClick={() => {
+                  const t = activeTrackMenu;
+                  setActiveTrackMenu(null);
+                  if (isNotInterested(t)) {
+                    undoNotInterested(t);
+                    showGlobalToast('Podremos volver a recomendártela');
+                  } else {
+                    markNotInterested(t);
+                    showGlobalToast('No volveremos a recomendarte esta canción');
+                  }
+                }}
               />
 
               {/* Descargar para escuchar sin conexión (Modo avión) */}

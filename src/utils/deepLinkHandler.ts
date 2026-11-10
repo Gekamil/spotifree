@@ -96,6 +96,12 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
       return true;
     }
 
+    // Invitation to a shared playlist: ?collab=PL…
+    const collabParam = parsedUrl.searchParams.get('collab');
+    if (collabParam) {
+      return await openSharedInvite(collabParam.trim());
+    }
+
     // Query parameters: ?play=..., ?q=..., ?search=..., ?track=..., ?playlist=...
     const playParam = parsedUrl.searchParams.get('play') ?? parsedUrl.searchParams.get('q') ?? parsedUrl.searchParams.get('search');
     if (playParam !== null) {
@@ -264,6 +270,34 @@ async function playPlaylistById(playlistId: string): Promise<boolean> {
   return false;
 }
 
+async function openSharedInvite(code: string): Promise<boolean> {
+  const { joinSharedPlaylist } = await import('../services/sharedPlaylists');
+  let localId: string | null = null;
+  try {
+    localId = await joinSharedPlaylist(code);
+  } catch (err) {
+    console.warn('[DeepLink] Could not join shared playlist', err);
+  }
+  try {
+    if (window.location.search.includes('collab=')) {
+      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    }
+  } catch {}
+  if (!localId) {
+    showGlobalToast('No se ha podido abrir la playlist compartida');
+    return false;
+  }
+  const playlist = useSpotifyDataStore.getState().playlists.find((p) => p.id === localId);
+  if (playlist) {
+    window.dispatchEvent(new CustomEvent('spotifree_open_playlist', { detail: playlist }));
+    (window as any).__mobileSelectPlaylist?.(playlist);
+    (window as any).__desktopSelectPlaylist?.(playlist);
+    useUIStore.getState().setActiveMainTab('playlist');
+  }
+  showGlobalToast('Te has unido a la playlist colaborativa');
+  return true;
+}
+
 async function openArtistById(artistId: string): Promise<boolean> {
   const targetId = artistId.startsWith('art-') ? artistId : `art-${artistId}`;
 
@@ -299,7 +333,7 @@ export function initDeepLinks() {
     try {
       const fullUrl = window.location.href;
       const params = new URLSearchParams(window.location.search);
-      if (params.has('play') || params.has('q') || params.has('track') || params.has('playlist') || params.has('album')) {
+      if (params.has('play') || params.has('q') || params.has('track') || params.has('playlist') || params.has('album') || params.has('collab')) {
         void handleDeepLink(fullUrl);
       }
     } catch {}

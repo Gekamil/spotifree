@@ -64,6 +64,10 @@ import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtw
 import { toHDImage } from '../../utils/formatters';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
+import { AddedByAvatar, SharedMembersRow, useSharedCode, useSharedMembers } from '../common/SharedPlaylistBits';
+
+/** Long playlists: rows off screen aren't laid out or painted until you scroll near them */
+const LONG_LIST_ROW: React.CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' } as React.CSSProperties;
 import { fetchPlaylistRecommendations } from '../../services/spotifyApi';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
@@ -319,6 +323,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       window.removeEventListener('spotifree_playlist_updated', handlePlaylistUpdated);
     };
   }, [dynamicPlaylist.id]);
+
+  // Collaborative playlist: members in the header and who added each song
+  const sharedCode = useSharedCode(dynamicPlaylist.id, playlist.id);
+  const sharedMembers = useSharedMembers(sharedCode);
 
   // DJ Mode and Transitions State (Desktop)
   const [isAutomixActive, setIsAutomixActive] = useState<boolean>(() => {
@@ -1389,6 +1397,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       <SpotifyBadgeIcon size={18} />
                       <span>{dynamicPlaylist.owner?.display_name === 'Spotify' ? 'Spotifree' : (dynamicPlaylist.owner?.display_name || 'Spotifree')}</span>
                     </span>
+                    {sharedCode && (
+                      <>
+                        <span>•</span>
+                        <SharedMembersRow code={sharedCode} />
+                      </>
+                    )}
                     <span>•</span>
                     <span className="text-white/90">
                       {loading
@@ -1728,6 +1742,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       e.preventDefault();
                       openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
                     }}
+                    style={LONG_LIST_ROW}
                     className={`grid ${
                       isAutomixActive
                         ? 'grid-cols-[20px_4fr_2.5fr_100px_90px_2fr_minmax(80px,1fr)]'
@@ -1782,6 +1797,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                           {track.name}
                         </p>
                         <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
+                          {sharedCode && (
+                            <span className="inline-flex align-[-2px] mr-1.5">
+                              <AddedByAvatar members={sharedMembers} track={track} />
+                            </span>
+                          )}
                           {(() => {
                             const parsed = parseTrackArtists(track.artists);
                             return parsed.map((a, aIdx) => (

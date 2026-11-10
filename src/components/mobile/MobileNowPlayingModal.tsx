@@ -36,6 +36,9 @@ import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
+import { isNotInterested, markNotInterested, undoNotInterested } from '../../utils/notInterested';
+import { LyricsFullscreen } from './LyricsFullscreen';
+import { showGlobalToast } from '../../utils/globalToast';
 import { isTrackDownloaded } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { parseTrackArtists } from '../../utils/trackArtists';
@@ -79,6 +82,71 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const queueStartYRef = useRef(0);
   const queueCurrentYRef = useRef(0);
   const queueScrollRef = useRef<HTMLDivElement>(null);
+
+  // Queue: press and hold a song, then drag it to move it (the row takes the grey it already
+  // shows when pressed). Moving the finger before the hold is a normal scroll.
+  const [reorder, setReorder] = useState<{ idx: number; offset: number } | null>(null);
+  const reorderRef = useRef<{ idx: number; offset: number } | null>(null);
+  reorderRef.current = reorder;
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdStartY = useRef(0);
+  const holdStartIdx = useRef(0);
+  const rowH = useRef(68);
+  const suppressClick = useRef(false);
+
+  // While dragging the page must not scroll (React's touch listeners can't stop it: passive)
+  useEffect(() => {
+    const el = queueScrollRef.current;
+    if (!el) return;
+    const block = (e: TouchEvent) => {
+      if (reorderRef.current) e.preventDefault();
+    };
+    el.addEventListener('touchmove', block, { passive: false });
+    return () => el.removeEventListener('touchmove', block);
+  }, [isQueueOpen]);
+
+  const onRowTouchStart = (e: React.TouchEvent, idx: number) => {
+    holdStartY.current = e.touches[0].clientY;
+    const row = e.currentTarget as HTMLElement;
+    if (holdTimer.current) clearTimeout(holdTimer.current);
+    holdTimer.current = setTimeout(() => {
+      rowH.current = row.offsetHeight + 4;
+      holdStartIdx.current = idx;
+      setReorder({ idx, offset: 0 });
+      // the swipe-down-to-close of the queue doesn't apply while moving a song
+      setIsQueueDragging(false);
+      setQueueDragY(0);
+      try {
+        navigator.vibrate?.(12);
+      } catch {}
+    }, 350);
+  };
+  const onRowTouchMove = (e: React.TouchEvent, baseOffset: number, count: number) => {
+    const dy = e.touches[0].clientY - holdStartY.current;
+    const r = reorderRef.current;
+    if (!r) {
+      if (Math.abs(dy) > 8 && holdTimer.current) {
+        clearTimeout(holdTimer.current);
+        holdTimer.current = null;
+      }
+      return;
+    }
+    e.stopPropagation();
+    const target = Math.max(0, Math.min(count - 1, holdStartIdx.current + Math.round(dy / rowH.current)));
+    if (target !== r.idx) usePlayerStore.getState().reorderQueue(baseOffset + r.idx, baseOffset + target);
+    setReorder({ idx: target, offset: dy - (target - holdStartIdx.current) * rowH.current });
+  };
+  const onRowTouchEnd = () => {
+    if (holdTimer.current) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    if (reorderRef.current) {
+      suppressClick.current = true; // the lift after a drag is not a tap
+      setTimeout(() => (suppressClick.current = false), 350);
+      setReorder(null);
+    }
+  };
 
   const handleQueueTouchStart = (e: React.TouchEvent) => {
     queueStartYRef.current = e.touches[0].clientY;
@@ -376,18 +444,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     if (lyricsScrollRef.current && activeLineIndex >= 0) {
       const activeEl = lyricsScrollRef.current.querySelector(`[data-line-index="${activeLineIndex}"]`) as HTMLElement;
       if (activeEl) {
-        if (isLyricsExpanded) {
-          // Full-screen mode: center the active lyric line in the screen
-          activeEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        } else {
-          // Compact mode: ONLY scroll the internal card container without moving the parent modal / screen
-          const container = lyricsScrollRef.current;
-          const targetTop = activeEl.offsetTop - container.offsetTop - 40;
-          container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
-        }
+        // Only scroll the card's own box (the full-screen lyrics follow the song on their own)
+        const container = lyricsScrollRef.current;
+        const targetTop = activeEl.offsetTop - container.offsetTop - 40;
+        container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
       }
     }
-  }, [activeLineIndex, isLyricsExpanded]);
+  }, [activeLineIndex]);
 
   if (!isOpen || !currentTrack) return null;
 
@@ -773,7 +836,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         >
           {/* Lyrics Card Header */}
           <div
-            onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
+            onClick={() => setIsLyricsExpanded(true)}
             className="flex items-center justify-between mb-4 text-white cursor-pointer select-none"
           >
             <span className="font-bold text-base tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
@@ -783,7 +846,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               )}
             </span>
             <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 hover:bg-black/50 text-white/90 active:scale-95 transition-all text-xs font-bold">
-              <span>{isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}</span>
+              <span>Pantalla completa</span>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
               </svg>
@@ -795,7 +858,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <div
               ref={lyricsScrollRef}
               className={`space-y-4 font-bold select-none transition-all duration-300 ${
-                isLyricsExpanded ? 'max-h-[500px] overflow-y-auto scroll-smooth pr-2' : 'max-h-[220px] overflow-y-auto scroll-smooth pr-1 scrollbar-none'
+                'max-h-[220px] overflow-y-auto scroll-smooth pr-1 scrollbar-none'
               }`}
             >
               {syncedLines.map((line, idx) => {
@@ -848,7 +911,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               })}
             </div>
           ) : lyrics ? (
-            <div className={`text-white font-bold leading-relaxed whitespace-pre-line text-base ${isLyricsExpanded ? 'max-h-[500px] overflow-y-auto' : 'h-[220px] overflow-hidden'}`}>
+            <div className={`text-white font-bold leading-relaxed whitespace-pre-line text-base h-[220px] overflow-hidden`}>
               {lyrics}
             </div>
           ) : (
@@ -879,11 +942,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </button>
 
             <button
-              onClick={() => setIsLyricsExpanded(!isLyricsExpanded)}
+              onClick={() => setIsLyricsExpanded(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white text-xs font-bold active:scale-95 transition-all"
-              title={isLyricsExpanded ? 'Minimizar' : 'Pantalla completa'}
+              title="Pantalla completa"
             >
-              <span>{isLyricsExpanded ? 'Cerrar' : 'Ampliar'}</span>
+              <span>Ampliar</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 3 21 3 21 9"></polyline>
                 <polyline points="9 21 3 21 3 15"></polyline>
@@ -893,6 +956,26 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </button>
           </div>
         </div>
+
+        <LyricsFullscreen
+          open={isLyricsExpanded}
+          onClose={() => setIsLyricsExpanded(false)}
+          title={currentTrack.name}
+          artist={(currentTrack.artists || []).map((a) => a.name).join(', ')}
+          cover={coverUrl}
+          color={extractedModalColor}
+          lines={syncedLines as any}
+          plain={lyrics as any}
+          activeIndex={activeLineIndex}
+          progressMs={progressMs}
+          durationMs={durationMs}
+          isPlaying={isPlaying}
+          onTogglePlay={togglePlay}
+          onSeek={(ms) => {
+            setProgress(ms);
+            audioEngine.seek(ms / 1000);
+          }}
+        />
 
         {/* SECTION: Official Music Video / Videoclip */}
         <div className="rounded-2xl bg-[#181818] p-4 space-y-3 shadow-xl border border-white/5 overflow-hidden">
@@ -1050,11 +1133,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             {/* Actions list */}
             <div className="space-y-1">
-              {/* Option 1: Añadir / Quitar Canciones que te gustan */}
+              {/* Option 1: Añadir a playlist (Canciones que te gustan, your playlists or a new one) */}
               <button
                 onClick={() => {
-                  toggleLike(currentTrack.id, currentTrack);
+                  const t = currentTrack;
                   setIsMenuOpen(false);
+                  setTimeout(() => useUIStore.getState().openAddToPlaylistModal(t), 150);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
               >
@@ -1066,9 +1150,35 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   )}
                 </div>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">
-                    {isLiked ? 'Eliminar de Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
-                  </p>
+                  <p className="font-bold text-sm text-white">Añadir a playlist</p>
+                  {isLiked && <p className="text-xs text-[#b3b3b3] truncate">Guardada en Canciones que te gustan</p>}
+                </div>
+              </button>
+
+              {/* No me interesa */}
+              <button
+                onClick={() => {
+                  const t = currentTrack;
+                  setIsMenuOpen(false);
+                  if (isNotInterested(t)) {
+                    undoNotInterested(t);
+                    showGlobalToast('Podremos volver a recomendártela');
+                  } else {
+                    markNotInterested(t);
+                    showGlobalToast('No volveremos a recomendarte esta canción');
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                    <path d="M12.03 3.97a.75.75 0 0 1 0 1.06l-7 7a.75.75 0 0 1-1.06-1.06l7-7a.75.75 0 0 1 1.06 0" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-bold text-sm text-white">{isNotInterested(currentTrack) ? 'Te interesa de nuevo' : 'No me interesa'}</p>
+                  {!isNotInterested(currentTrack) && <p className="text-xs text-[#b3b3b3] truncate">No te la recomendaremos</p>}
                 </div>
               </button>
 
@@ -1333,18 +1443,34 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   );
                 }
 
+                const baseOffset = curIdx >= 0 ? curIdx + 1 : 0;
                 return (
                   <div className="space-y-1">
                     {upcoming.map((t, idx) => {
                       const cover = getTrackCoverUrl(t) || t.album?.images?.[0]?.url || (t as any).image;
+                      const dragging = reorder?.idx === idx;
                       return (
                         <div
-                          key={`${t.id}-${idx}`}
+                          // stable key: the row moves instead of being rebuilt, so the finger keeps it
+                          key={t.id}
+                          onTouchStart={(e) => onRowTouchStart(e, idx)}
+                          onTouchMove={(e) => onRowTouchMove(e, baseOffset, upcoming.length)}
+                          onTouchEnd={onRowTouchEnd}
+                          onTouchCancel={onRowTouchEnd}
+                          onContextMenu={(e) => e.preventDefault()}
                           onClick={() => {
+                            if (suppressClick.current) return;
                             playTrack(t, queue);
                             setIsQueueOpen(false);
                           }}
-                          className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors cursor-pointer"
+                          style={
+                            dragging
+                              ? { transform: `translateY(${reorder!.offset}px)`, transition: 'none', position: 'relative', zIndex: 10 }
+                              : undefined
+                          }
+                          className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${
+                            dragging ? 'bg-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.5)]' : 'hover:bg-white/10 active:bg-white/15'
+                          }`}
                         >
                           <div className="w-11 h-11 rounded-md overflow-hidden bg-[#282828] shrink-0 shadow">
                             <img

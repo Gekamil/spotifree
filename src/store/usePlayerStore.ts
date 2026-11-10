@@ -293,7 +293,8 @@ const store = create<PlayerState>((set, get) => ({
       return;
     const [moved] = current.splice(fromIndex, 1);
     current.splice(toIndex, 0, moved);
-    set({ queue: current, originalQueue: current });
+    // In shuffle the original order is kept (turning shuffle off brings it back)
+    set(get().isShuffle ? { queue: current } : { queue: current, originalQueue: current });
   },
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {

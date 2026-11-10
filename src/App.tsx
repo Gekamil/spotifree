@@ -45,6 +45,9 @@ function App() {
     // Remembers the friends who listen together with this device (Settings › Escuchar juntos)
     initListenFriends();
 
+    // Collaborative playlists stay in sync between everyone who joined them
+    void import('./services/sharedPlaylists').then((m) => m.initSharedPlaylists()).catch(() => {});
+
     // Initialize real-time cloud session listener
     const unsubscribeAuth = initAuthListener();
 

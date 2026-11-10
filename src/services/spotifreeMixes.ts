@@ -13,6 +13,7 @@
  *    with a gradient), drawn on the device.
  */
 import { create } from 'zustand';
+import { isNotInterested } from '../utils/notInterested';
 import type { Playlist, Track } from '../types/spotify';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../store/useSpotifyDataStore';
@@ -117,7 +118,7 @@ async function kvSet(key: string, value: unknown): Promise<void> {
 // ---------------------------------------------------------------------------
 // 1. Signals (per account)
 // ---------------------------------------------------------------------------
-type SignalKind = 'play' | 'skip' | 'like' | 'unlike' | 'search' | 'spotify';
+type SignalKind = 'play' | 'skip' | 'like' | 'unlike' | 'search' | 'spotify' | 'hide';
 interface Signal {
   k: SignalKind;
   t: string; // title ('' for artist-only signals)
@@ -127,8 +128,8 @@ interface Signal {
   ts: number;
 }
 
-const WEIGHT: Record<SignalKind, number> = { play: 1, skip: -0.6, like: 4, unlike: -4, search: 1.5, spotify: 0.8 };
-const HALF_LIFE_DAYS: Record<SignalKind, number> = { play: 60, skip: 30, like: 240, unlike: 120, search: 30, spotify: 90 };
+const WEIGHT: Record<SignalKind, number> = { play: 1, skip: -0.6, like: 4, unlike: -4, search: 1.5, spotify: 0.8, hide: -5 };
+const HALF_LIFE_DAYS: Record<SignalKind, number> = { play: 60, skip: 30, like: 240, unlike: 120, search: 30, spotify: 90, hide: 365 };
 const MAX_SIGNALS = 4000;
 
 const uid = () => useSpotifyDataStore.getState().user?.id || 'local';
@@ -264,6 +265,12 @@ function installSignalHooks() {
         logSignal({ k: 'unlike', t: tr.name, a: firstArtist(tr), id: tr.id });
       }
     }
+  });
+
+  // "No me interesa": a strong no for the song (and a smaller one for its artist)
+  window.addEventListener('spotifree:not-interested', (e: any) => {
+    const t: Track | undefined = e?.detail?.track;
+    if (t?.name) logSignal({ k: 'hide', t: t.name, a: firstArtist(t), id: t.id });
   });
 
   // Searches (artists and songs the user looked for)
@@ -561,7 +568,8 @@ function dedupe(list: Track[], known?: Set<string>, perArtist = 99): Track[] {
   const out: Track[] = [];
   for (const t of list) {
     const k = trackKey(t.name, firstArtist(t));
-    if (seen.has(k) || (known && known.has(k))) continue;
+    // "No me interesa": never in a Spotifree playlist
+    if (seen.has(k) || (known && known.has(k)) || isNotInterested(t)) continue;
     const a = norm(firstArtist(t));
     const n = perA.get(a) || 0;
     if (n >= perArtist) continue;
