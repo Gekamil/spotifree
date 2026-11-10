@@ -47,6 +47,7 @@ import { PlaylistToolbar, PlaylistSortSheet, loadPlaylistSort, savePlaylistSort,
 import { PlaylistAddSongsScreen } from './PlaylistAddSongsScreen';
 import { PlaylistEditScreen } from './PlaylistEditScreen';
 import { confirmDialog } from '../common/ConfirmDialog';
+import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
 import { showGlobalToast } from '../../utils/globalToast';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
@@ -2100,6 +2101,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   setTimeout(() => setToastMessage(null), 2500);
                 }}
               />
+
+              {canAddTracksToThisList && !isLikedPlaylist && (
+                <SheetItem
+                  icon={
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" />
+                      <path d="M12 7v5l3 2" />
+                    </svg>
+                  }
+                  label="Historial de versiones"
+                  sublabel="Vuelve a como estaba antes"
+                  onClick={() => {
+                    setIsOptionsOpen(false);
+                    openPlaylistVersions(activePlaylist.id, activePlaylist.name || playlist.name);
+                  }}
+                />
+              )}
 
               {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
                 <SheetItem

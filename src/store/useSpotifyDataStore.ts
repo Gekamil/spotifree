@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { addToTrash, trashForCloud } from '../services/playlistTrash';
+import { recordPlaylistVersion } from '../services/playlistVersions';
 import type { Playlist, UserProfile, Track } from '../types/spotify';
 import {
   initiateSpotifyLogin,
@@ -812,6 +813,13 @@ const store = create<SpotifyDataState>((set, get) => ({
       const existingInCache = s.playlistDetailsCache[id];
       const existingInList = s.playlists.find((p) => p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name)));
       const baseEntry = existingInCache || existingInList || { id, name: isTargetLiked ? 'Canciones que te gustan' : 'Playlist', tracks: { total: 0, items: [] } };
+      // Version history: the songs it had before this change (only playlists in the library)
+      if (existingInList && updates.tracks?.items) {
+        try {
+          const before = existingInCache?.tracks?.items?.length ? existingInCache : existingInList;
+          recordPlaylistVersion({ id: existingInList.id, tracks: before.tracks }, updates.tracks.items);
+        } catch {}
+      }
       const updatedCacheEntry = { ...baseEntry, ...updates } as Playlist;
 
       let found = false;
@@ -1211,6 +1219,11 @@ const store = create<SpotifyDataState>((set, get) => ({
       const updatedPlaylists = s.playlists.map((p) => {
         if (matchPl(p)) {
           const newItems = filterItems(p.tracks?.items || []);
+          // Version history (the full list as it was before removing the song)
+          try {
+            const full = s.playlistDetailsCache[p.id]?.tracks?.items?.length ? s.playlistDetailsCache[p.id] : p;
+            if (!isLikedPl) recordPlaylistVersion({ id: p.id, tracks: full.tracks }, filterItems(full.tracks?.items || []));
+          } catch {}
           return {
             ...p,
             tracks: { total: newItems.length, items: newItems },

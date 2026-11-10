@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { confirmDialog } from '../common/ConfirmDialog';
+import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -344,16 +345,32 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 <span className="truncate">Editar datos</span>
               </button>
 
-              {/* 4. Eliminar (Trash Can) */}
+              {/* 4. Historial de versiones */}
+              <button
+                onClick={() => {
+                  const plId = targetPlaylist?.id || contextMenu.playlistId;
+                  closeContextMenu();
+                  if (plId) openPlaylistVersions(plId, targetPlaylist?.name || 'Playlist');
+                }}
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                  <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" />
+                  <path d="M12 7v5l3 2" />
+                </svg>
+                <span className="truncate">Historial de versiones</span>
+              </button>
+
+              {/* 5. Eliminar (Spotify: a normal option; the confirmation is the safeguard) */}
               <button
                 onClick={handleDeletePlaylist}
-                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-[#ff5c5c]"
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
                   <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
                   <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
                 </svg>
-                <span className="truncate font-bold">Eliminar</span>
+                <span className="truncate">Eliminar</span>
               </button>
 
               <div className="h-px bg-white/10 my-1 mx-1" />

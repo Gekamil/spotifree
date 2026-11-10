@@ -13,6 +13,7 @@ import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
 import { ApkUpdateBanner } from './components/common/ApkUpdateBanner';
 import { ConfirmDialogHost } from './components/common/ConfirmDialog';
+import { PlaylistVersionsHost } from './components/common/PlaylistVersionsDialog';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
 import SleepTimerSheet from './components/common/SleepTimerSheet';
 import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
@@ -208,6 +209,7 @@ function App() {
       <StoryCardSheet />
       <GlobalToast />
       <ApkUpdateBanner />
+      <PlaylistVersionsHost />
       <ConfirmDialogHost />
     </ErrorBoundary>
   );
