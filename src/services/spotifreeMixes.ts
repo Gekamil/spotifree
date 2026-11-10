@@ -14,6 +14,7 @@
  */
 import { create } from 'zustand';
 import { isNotInterested } from '../utils/notInterested';
+import { isExcludedFromTaste } from '../utils/tasteExclusions';
 import type { Playlist, Track } from '../types/spotify';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../store/useSpotifyDataStore';
@@ -215,7 +216,7 @@ function installSignalHooks() {
   usePlayerStore.subscribe((s) => {
     const t = s.currentTrack;
     if (t?.id !== curId) {
-      if (curTrack && !curLogged && lastProgress > 0 && lastProgress < 15000) {
+      if (curTrack && !curLogged && lastProgress > 0 && lastProgress < 15000 && !isExcludedFromTaste((s as any).currentContextId)) {
         logSignal({ k: 'skip', t: curTrack.name, a: firstArtist(curTrack), id: curTrack.id });
       }
       curId = t?.id || null;
@@ -227,7 +228,8 @@ function installSignalHooks() {
     lastProgress = s.progressMs || 0;
     if (t && !curLogged && lastProgress >= 30000) {
       curLogged = true;
-      logSignal({ k: 'play', t: t.name, a: firstArtist(t), id: t.id, img: coverOf(t) });
+      // "Excluir de tu perfil de gustos": plays from that playlist don't count
+      if (!isExcludedFromTaste((s as any).currentContextId)) logSignal({ k: 'play', t: t.name, a: firstArtist(t), id: t.id, img: coverOf(t) });
     }
   });
 

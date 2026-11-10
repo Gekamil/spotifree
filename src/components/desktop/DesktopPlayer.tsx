@@ -10,10 +10,8 @@ import {
   NextNativeIcon,
   RepeatNativeIcon,
   RepeatOneNativeIcon,
-  MiniplayerNativeIcon,
   LyricsNativeIcon,
   QueueNativeIcon,
-  DeviceNativeIcon,
   VolumeLevelNativeIcon,
   FullscreenNativeIcon,
 } from '../icons/SpotifyNativeIcons';
@@ -26,6 +24,7 @@ import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } f
 import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
+import { DevicePickerButton, MiniPlayerButton, restoreAudioOutput } from './PlayerExtras';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -80,6 +79,11 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     'https://i.scdn.co/image/ab67616d0000b273809e5975e533b8fb328325dd';
 
   const { toggleRightSidebar, activeRightSidebar } = useUIStore();
+
+  // The audio output chosen in "Conectar a un dispositivo" is kept between visits
+  useEffect(() => {
+    restoreAudioOutput();
+  }, []);
 
   const [isHoveringProgress, setIsHoveringProgress] = useState(false);
   const [isHoveringVolume, setIsHoveringVolume] = useState(false);
@@ -471,13 +475,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           {sleepActive && <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1ed760]" />}
         </button>
 
-        <button
-          onClick={() => {}}
-          className="text-[#b3b3b3] hover:text-[#1ed760] transition-colors p-1"
-          title="Conectado a: Este ordenador (Altavoces estéreo)"
-        >
-          <DeviceNativeIcon size={16} className="currentColor" />
-        </button>
+        <DevicePickerButton />
 
         {/* Volume */}
         <div className="flex items-center gap-1.5">
@@ -515,13 +513,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
         </div>
 
         {/* Miniplayer button */}
-        <button
-          onClick={() => {}}
-          className="text-[#b3b3b3] hover:text-white transition-colors p-1"
-          title="Abrir el Minirreproductor"
-        >
-          <MiniplayerNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
-        </button>
+        <MiniPlayerButton />
 
         <button
           onClick={() => {

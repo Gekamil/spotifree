@@ -291,7 +291,7 @@ public class SpotifreeLocalMusicPlugin extends Plugin {
                 }
 
                 File dir = offlineTracksDir();
-                for (String candidateExt : new String[]{"m4a", "mp3", "webm", "ogg"}) {
+                for (String candidateExt : new String[]{"m4a", "mp3", "webm", "ogg", "flac", "wav"}) {
                     File oldFile = new File(dir, safeId + "." + candidateExt);
                     if (oldFile.exists()) oldFile.delete();
                 }
@@ -366,7 +366,7 @@ public class SpotifreeLocalMusicPlugin extends Plugin {
             return;
         }
         File dir = offlineTracksDir();
-        for (String candidateExt : new String[]{"m4a", "mp3", "webm", "ogg"}) {
+        for (String candidateExt : new String[]{"m4a", "mp3", "webm", "ogg", "flac", "wav"}) {
             File f = new File(dir, safeId + "." + candidateExt);
             if (f.exists() && f.length() >= 16384) {
                 JSObject r = new JSObject();
@@ -388,7 +388,7 @@ public class SpotifreeLocalMusicPlugin extends Plugin {
         final String safeId = safeFileKey(call.getString("id", ""));
         if (!safeId.isEmpty()) {
             File dir = offlineTracksDir();
-            for (String ext : new String[]{"m4a", "mp3", "webm", "ogg", "json"}) {
+            for (String ext : new String[]{"m4a", "mp3", "webm", "ogg", "flac", "wav", "json"}) {
                 File f = new File(dir, safeId + "." + ext);
                 if (f.exists()) f.delete();
             }
@@ -448,7 +448,7 @@ public class SpotifreeLocalMusicPlugin extends Plugin {
                     if (f.getName().endsWith(".json")) {
                         String safeId = f.getName().substring(0, f.getName().length() - 5);
                         File audioFile = null;
-                        for (String ext : new String[]{"m4a", "mp3", "webm", "ogg"}) {
+                        for (String ext : new String[]{"m4a", "mp3", "webm", "ogg", "flac", "wav"}) {
                             File cand = new File(tDir, safeId + "." + ext);
                             if (cand.exists() && cand.length() >= 16384) {
                                 audioFile = cand;

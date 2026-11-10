@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import https from 'node:https';
 import path from 'node:path';
+import { extractViaMonochrome, extractViaSoundCloud } from '../api/_lib/musicFallback.js';
 
 const CACHE = new Map(); // target -> { id, url, duration, title, timestamp }
 const pendingRequests = new Map();
@@ -278,18 +279,32 @@ async function extractDirectYouTubeAudio(videoId) {
 }
 
 export async function streamAudioDirect(target, req, res, startSeconds = 0, options = {}) {
+  const rawQuery = (options.q || target || '').trim();
   let cleanTarget = (target || '').trim();
+  const isMonoId = /^mono:\d{10,25}$/.test(cleanTarget);
+  const isScId = /^sc:\d+$/.test(cleanTarget);
   let videoId = /^[a-zA-Z0-9_-]{11}$/.test(cleanTarget) ? cleanTarget : null;
-  if (!videoId && !cleanTarget.startsWith('http')) {
+  if (!videoId && !isMonoId && !isScId && !cleanTarget.startsWith('http')) {
     try {
-      videoId = await resolveYouTubeVideoId(cleanTarget);
+      videoId = await resolveYouTubeVideoId(rawQuery || cleanTarget);
     } catch {}
   }
 
-  // Fast direct Innertube VISIONOS/IOS extraction (no yt-dlp subprocess bot-check overhead)
-  if (videoId && startSeconds <= 0) {
-    const direct = await extractDirectYouTubeAudio(videoId);
+  // Fast direct extraction: Innertube VISIONOS/IOS -> Monochrome lossless -> SoundCloud MP3
+  if (startSeconds <= 0) {
+    let direct = videoId ? await extractDirectYouTubeAudio(videoId) : null;
+    if (!direct?.url) {
+      const fbOpts = {
+        q: rawQuery || cleanTarget,
+        title: options.title || '',
+        artist: options.artist || '',
+        expectedDurationSec: options.expectedDurationSec || 0,
+        explicitId: isMonoId || isScId ? cleanTarget : '',
+      };
+      direct = (await extractViaMonochrome(fbOpts)) || (await extractViaSoundCloud(fbOpts));
+    }
     if (direct?.url) {
+      const resolvedId = direct.id || videoId || '';
       try {
         if (options.transcodeMp3) {
           // Real FFmpeg transcode to genuine ID3/MPEG-1 Layer 3 MP3 stream
@@ -300,8 +315,8 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
               'Content-Type': 'audio/mpeg',
               'Transfer-Encoding': 'chunked',
               'Access-Control-Allow-Origin': '*',
-              'X-Audio-Source': 'full',
-              'X-Video-Id': videoId,
+              'X-Audio-Source': direct.source || 'full',
+              'X-Video-Id': resolvedId,
               ...(options.headers || {}),
             });
             const ff = spawn('ffmpeg', ['-loglevel', 'error', '-i', 'pipe:0', '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', 'pipe:1']);
@@ -319,15 +334,19 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
           const up = await fetch(direct.url, { headers: reqHeaders });
           if (up.ok || up.status === 206) {
             const buf = Buffer.from(await up.arrayBuffer());
-            if (buf.length > 10000) {
+            if (buf.length > 0) {
               const outHeaders = {
                 'Content-Type': direct.mime || 'audio/mp4',
                 'Content-Length': String(buf.length),
                 'Accept-Ranges': 'bytes',
                 'Access-Control-Allow-Origin': '*',
-                'X-Audio-Source': 'full',
-                'X-Video-Id': videoId,
+                'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, Content-Disposition, X-Video-Id, X-Total-Length, X-Audio-Source, X-Audio-Mime, X-Audio-Ext, X-Direct-Audio-Url',
+                'X-Audio-Source': direct.source || 'full',
+                'X-Audio-Mime': direct.mime || 'audio/mp4',
+                'X-Audio-Ext': direct.ext || 'm4a',
+                'X-Video-Id': resolvedId,
                 'X-Total-Length': String(direct.clen || buf.length),
+                ...(direct.directCors ? { 'X-Direct-Audio-Url': direct.url } : {}),
                 ...(options.headers || {}),
               };
               if (up.headers.get('content-range')) outHeaders['Content-Range'] = up.headers.get('content-range');

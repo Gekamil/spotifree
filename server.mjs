@@ -181,7 +181,13 @@ const server = http.createServer(async (req, res) => {
       const wantMp3 = reqUrl.searchParams.get('format') === 'mp3' || isDownload;
       const rawFilename = reqUrl.searchParams.get('filename') || 'cancion.mp3';
       const safeFile = wantMp3 ? rawFilename.replace(/\.[^.]+$/, '') + '.mp3' : rawFilename;
+      const rawDur = Number(reqUrl.searchParams.get('duration') || reqUrl.searchParams.get('durationSec') || 0);
+      const expectedDurationSec = rawDur > 1000 ? Math.round(rawDur / 1000) : Math.round(rawDur);
       return await streamAudioDirect(target, req, res, startSec, {
+        q: reqUrl.searchParams.get('q') || '',
+        title: reqUrl.searchParams.get('title') || '',
+        artist: reqUrl.searchParams.get('artist') || '',
+        expectedDurationSec: expectedDurationSec > 35 ? expectedDurationSec : 0,
         transcodeMp3: wantMp3,
         headers: isDownload ? { 'Content-Disposition': `attachment; filename="${safeFile}"` } : {},
       });

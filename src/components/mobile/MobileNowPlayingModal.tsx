@@ -839,18 +839,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             onClick={() => setIsLyricsExpanded(true)}
             className="flex items-center justify-between mb-4 text-white cursor-pointer select-none"
           >
-            <span className="font-bold text-base tracking-tight font-['SpotifyMixUITitle'] flex items-center gap-2">
+            <span className="font-bold text-base tracking-tight font-['SpotifyMixUITitle']">
               Letras
-              {syncedLines.length > 0 && (
-                <span className="w-2 h-2 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760]" />
-              )}
             </span>
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/30 hover:bg-black/50 text-white/90 active:scale-95 transition-all text-xs font-bold">
-              <span>Pantalla completa</span>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
-              </svg>
-            </div>
           </div>
 
           {/* Lyrics Content */}
@@ -944,7 +935,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             <button
               onClick={() => setIsLyricsExpanded(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/30 hover:bg-black/50 text-white text-xs font-bold active:scale-95 transition-all"
-              title="Pantalla completa"
+              title="Ampliar letra"
             >
               <span>Ampliar</span>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

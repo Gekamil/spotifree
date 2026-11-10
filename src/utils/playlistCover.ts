@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { SyntheticEvent } from 'react';
 import type { Playlist } from '../types/spotify';
+import { ARTIST_IMAGE_CACHE } from './artistImage';
+import { TRACK_COVER_CACHE, getTrackCoverUrl } from './trackCovers';
+import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 
 /**
  * Spotify's look for a playlist without artwork: dark grey square with an outlined music note.
@@ -26,7 +29,7 @@ export function getAutoPlaylistCover(items: any[] | undefined | null): string {
   const covers: string[] = [];
   for (const x of items || []) {
     const t = x?.track && x.track.name ? x.track : x;
-    const art = t?.album?.images?.[0]?.url;
+    const art = getTrackCoverUrl(t) || t?.album?.images?.[0]?.url || (t?.id && TRACK_COVER_CACHE.get(t.id)) || (t as any)?.image;
     if (art && !covers.includes(art)) covers.push(art);
     if (covers.length === 4) break;
   }
@@ -59,7 +62,7 @@ function loadImage(url: string): Promise<HTMLImageElement | null> {
     img.onload = () => resolve(img);
     img.onerror = () => resolve(null);
     img.src = url.replace(/\/\d+x\d+-000000-80-0-0\.jpg$/, '/300x300-000000-80-0-0.jpg');
-    setTimeout(() => resolve(null), 8000);
+    setTimeout(() => resolve(null), 3000);
   });
 }
 
@@ -91,11 +94,47 @@ async function drawCollage(key: string, covers: string[]) {
 /** Best cover for a playlist: its own image, else the automatic one from its songs. */
 export function getPlaylistCover(p: Partial<Playlist> | null | undefined): string {
   if (!p) return EMPTY_PLAYLIST_COVER;
-  if (p.id === 'liked-songs') return LIKED_COVER;
+  const pid = p.id || '';
+  if (pid === 'liked-songs' || pid === 'collection:tracks' || pid === 'user-liked-songs') return LIKED_COVER;
+
+  // 1. Own photo directly on playlist
   const own = p.images?.find((i) => i?.url)?.url;
   // Older builds saved the Liked Songs heart as the cover of brand-new playlists: ignore it there
-  if (own && !(own === LIKED_COVER && p.id !== 'liked-songs')) return own;
-  return getAutoPlaylistCover(p.tracks?.items);
+  if (own && !(own === LIKED_COVER && pid !== 'liked-songs')) return own;
+
+  // 2. Check cached details from store
+  let cached: Partial<Playlist> | undefined;
+  try {
+    cached = useSpotifyDataStore.getState?.()?.playlistDetailsCache?.[pid];
+  } catch {}
+
+  const cachedOwn = cached?.images?.find((i) => i?.url)?.url;
+  if (cachedOwn && !(cachedOwn === LIKED_COVER && pid !== 'liked-songs')) return cachedOwn;
+
+  // 3. Check artist photo cache if it's an artist
+  const isArt = p.type === 'artist' || p.description === 'Artista' || pid.startsWith('art-') || pid.startsWith('artist-');
+  if (isArt) {
+    const artistName = (p.name || pid).replace(/^(art-|artist-|sf-artist-)/i, '').trim().toLowerCase();
+    const artPic = ARTIST_IMAGE_CACHE.get(artistName);
+    if (artPic) return artPic;
+  }
+
+  // 4. Check tracks on playlist or cached details or localStorage
+  let items = p.tracks?.items;
+  if (!items || items.length === 0) {
+    items = cached?.tracks?.items;
+  }
+  if ((!items || items.length === 0) && typeof window !== 'undefined' && pid) {
+    try {
+      const cleanPid = pid.replace(/^spotify:playlist:/i, '').split('?')[0];
+      const raw =
+        window.localStorage.getItem(`spotifree_playlist_tracks_${cleanPid}`) ||
+        window.localStorage.getItem(`spotifree_playlist_tracks_${pid}`);
+      if (raw) items = JSON.parse(raw);
+    } catch {}
+  }
+
+  return getAutoPlaylistCover(items);
 }
 
 /**
@@ -108,8 +147,17 @@ export function onPlaylistCoverError(p: Partial<Playlist> | null | undefined) {
     const step = Number(img.dataset.coverStep || '0');
     img.dataset.coverStep = String(step + 1);
     if (step === 0) {
-      const first = (p?.tracks?.items || [])
-        .map((x: any) => (x?.track && x.track.name ? x.track : x)?.album?.images?.[0]?.url)
+      let items = p?.tracks?.items;
+      if (!items || items.length === 0) {
+        try {
+          items = useSpotifyDataStore.getState?.()?.playlistDetailsCache?.[p?.id || '']?.tracks?.items;
+        } catch {}
+      }
+      const first = (items || [])
+        .map((x: any) => {
+          const t = x?.track && x.track.name ? x.track : x;
+          return getTrackCoverUrl(t) || t?.album?.images?.[0]?.url;
+        })
         .find((u: string | undefined) => u && u !== img.src);
       if (first) {
         img.referrerPolicy = 'no-referrer';

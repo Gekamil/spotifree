@@ -7,7 +7,7 @@ export const TRACK_COVER_CACHE = new Map<string, string>();
  * Detects whether a URL is a playlist cover, mosaic, or generic placeholder
  * instead of an actual song album artwork.
  */
-export function isPlaylistOrGenericCover(url?: string | null, playlistCover?: string | null): boolean {
+export function isPlaylistOrGenericCover(url?: string | null, _playlistCover?: string | null): boolean {
   if (!url) return true;
   if (url.includes('liked-songs')) return true;
   if (url.includes('mosaic.scdn.co')) return true;
@@ -15,7 +15,7 @@ export function isPlaylistOrGenericCover(url?: string | null, playlistCover?: st
   // Spotify User & Editorial playlist cover hashes: ab67706c, ab67706f, ab67706d
   if (url.includes('ab67706c') || url.includes('ab67706f') || url.includes('ab67706d')) return true;
   if (url.includes('/img/daily/') || url.includes('/img/radio/')) return true;
-  if (playlistCover && (url === playlistCover || url.endsWith(playlistCover.slice(-25)))) return true;
+  if (url.startsWith('data:image/svg+xml')) return true;
   return false;
 }
 
@@ -144,24 +144,19 @@ export async function findExactCover(t: Track): Promise<string | null> {
  * prioritizing the dedicated track cache, then album images.
  * NEVER returns the parent playlist cover or generic playlist thumbnail!
  */
-export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): string | undefined {
+export function getTrackCoverUrl(track: Track, _fallbackPlaylistCover?: string): string | undefined {
   if (!track) return undefined;
   // 1. The cover the song itself comes with (its real album) always wins
   const albumCover = track.album?.images?.[0]?.url;
-  if (albumCover && !isPlaylistOrGenericCover(albumCover, fallbackPlaylistCover)) {
-    // If the cover is identical to the playlist cover, do not use it
-    if (!fallbackPlaylistCover || (albumCover !== fallbackPlaylistCover && !albumCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
-      return albumCover;
-    }
+  if (albumCover && !isPlaylistOrGenericCover(albumCover)) {
+    return albumCover;
   }
 
-  // 2. A cover found for this exact song
+  // 2. A cover found for this exact song in cache
   if (TRACK_COVER_CACHE.has(track.id)) {
     const cached = TRACK_COVER_CACHE.get(track.id);
-    if (cached && !isPlaylistOrGenericCover(cached, fallbackPlaylistCover)) {
-      if (!fallbackPlaylistCover || (cached !== fallbackPlaylistCover && !cached.endsWith(fallbackPlaylistCover.slice(-25)))) {
-        return cached;
-      }
+    if (cached && !isPlaylistOrGenericCover(cached)) {
+      return cached;
     }
   }
 
@@ -180,10 +175,8 @@ export function getTrackCoverUrl(track: Track, fallbackPlaylistCover?: string): 
     anyT.album_cover_url ||
     anyT.thumbnail;
 
-  if (directCover && !isPlaylistOrGenericCover(directCover, fallbackPlaylistCover)) {
-    if (!fallbackPlaylistCover || (directCover !== fallbackPlaylistCover && !directCover.endsWith(fallbackPlaylistCover.slice(-25)))) {
-      return directCover;
-    }
+  if (directCover && !isPlaylistOrGenericCover(directCover)) {
+    return directCover;
   }
 
   return undefined;
@@ -215,8 +208,7 @@ export async function resolveTrackCoversBatch(
       }
     }
     const currentCover = t.album?.images?.[0]?.url;
-    const isSameAsPlaylist = currentCover && playlistCover && (currentCover === playlistCover || currentCover.endsWith(playlistCover.slice(-25)));
-    return !currentCover || isPlaylistOrGenericCover(currentCover) || isSameAsPlaylist;
+    return !currentCover || isPlaylistOrGenericCover(currentCover);
   });
 
   if (allUpdates.size > 0 && onBatchResolved) {
@@ -245,8 +237,8 @@ export async function resolveTrackCoversBatch(
         // Exactly this song's cover (Spotify oEmbed, or iTunes with the same title AND artist).
         // No "first result" fallbacks: those showed other songs' covers.
         const exact = await findExactCover(t);
-        if (exact && !isPlaylistOrGenericCover(exact, playlistCover)) {
-          persistTrackCover(t.id, exact, playlistCover);
+        if (exact && !isPlaylistOrGenericCover(exact)) {
+          persistTrackCover(t.id, exact);
           return { id: t.id, url: exact };
         }
         return null;
@@ -300,7 +292,7 @@ export const TrackArtwork: React.FC<{
       alt={alt}
       onError={() => setError(true)}
       referrerPolicy="no-referrer"
-      loading="lazy"
+      decoding="async"
       className={`${className} object-cover shrink-0 shadow bg-[#242424]`}
       style={{ width: size, height: size }}
     />

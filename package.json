@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node tests/dj_transitions.test.js && node tests/dj_planner.test.js && node tests/offline_downloads.test.js && node tests/app_logic.test.js",
+    "test": "node tests/dj_transitions.test.js && node tests/dj_planner.test.js && node tests/offline_downloads.test.js && node tests/app_logic.test.js && node tests/cover_art_performance.test.mjs && node tests/lyrics_controls.test.mjs && node tests/adversarial_lyrics_controls.test.mjs && node tests/challenger_m2_lyrics_adversarial.test.mjs && node tests/desktop_settings_playlist.test.mjs && node tests/challenger_m3_edge_cases.test.mjs && node tests/dj_interface_orb.test.mjs",
     "preview": "vite preview",
     "cap:sync": "cap sync",
     "cap:android": "cap open android",

@@ -80,8 +80,6 @@ import {
 } from '../../utils/userStorage';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
 
-/** Long playlists: rows off screen aren't laid out or painted until you scroll near them */
-const LONG_LIST_ROW: React.CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: 'auto 64px' } as React.CSSProperties;
 
 function getArtistMonthlyListeners(name: string): string {
   const n = name.toLowerCase();
@@ -1780,7 +1778,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   <div
                     onClick={() => handleTrackClick(track)}
                     className="flex items-center justify-between p-2.5 rounded-lg active:bg-white/10 cursor-pointer transition-colors group"
-                    style={LONG_LIST_ROW}
                   >
                     {/* Left: Cover or Number + Info */}
                     <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">

@@ -131,6 +131,10 @@ describe('Offline Downloads & Airplane Mode Persistence', () => {
     webm[0] = 0x1a; webm[1] = 0x45; webm[2] = 0xdf; webm[3] = 0xa3;
     assert.deepEqual(O.sniffAudioFormat(webm), { valid: true, mime: 'audio/webm', ext: 'webm' });
 
+    const flac = new Uint8Array(64);
+    flac[0] = 0x66; flac[1] = 0x4c; flac[2] = 0x61; flac[3] = 0x43; // 'fLaC'
+    assert.deepEqual(O.sniffAudioFormat(flac), { valid: true, mime: 'audio/flac', ext: 'flac' });
+
     const html = new TextEncoder().encode('<!doctype html><html>error</html>');
     assert.equal(O.sniffAudioFormat(html).valid, false);
 
@@ -249,5 +253,67 @@ describe('Offline Downloads & Airplane Mode Persistence', () => {
     assert.equal(purged, 1);
     assert.ok(await cache.match('/musica-spotifree/tracks/shortreal.mp3'));
     assert.equal(await cache.match('/musica-spotifree/tracks/badpreview.mp3'), null);
+  });
+
+  it('uses X-Direct-Audio-Url CDN fast-path for FLAC chunks and scores candidates strictly', async () => {
+    const flacBytes = new Uint8Array(3_200_000);
+    flacBytes[0] = 0x66; flacBytes[1] = 0x4c; flacBytes[2] = 0x61; flacBytes[3] = 0x43; // 'fLaC'
+    for (let i = 16; i < flacBytes.length; i += 311) flacBytes[i] = 0x55;
+
+    const urlsCalled = [];
+    globalThis.fetch = async (url, init) => {
+      urlsCalled.push(String(url));
+      const range = init?.headers?.Range || '';
+      const m = range.match(/bytes=(\d+)-(\d+)/);
+      const start = m ? parseInt(m[1], 10) : 0;
+      const end = m ? Math.min(flacBytes.length - 1, parseInt(m[2], 10)) : flacBytes.length - 1;
+      const slice = flacBytes.slice(start, end + 1);
+      return new Response(slice, {
+        status: 206,
+        headers: {
+          'Content-Type': 'audio/flac',
+          'Content-Range': `bytes ${start}-${end}/${flacBytes.length}`,
+          'X-Total-Length': String(flacBytes.length),
+          'X-Video-Id': 'mono:152962978843463680',
+          'X-Audio-Source': 'monochrome-flac',
+          'X-Audio-Ext': 'flac',
+          'X-Audio-Mime': 'audio/flac',
+          'X-Direct-Audio-Url': 'https://tracks.monochrome.st/track/152962978843463680',
+        },
+      });
+    };
+
+    const ok = await O.downloadTrackAudio({
+      id: 'trk-mono-fast',
+      name: 'MONACO',
+      duration_ms: 267000,
+      artists: [{ name: 'Bad Bunny' }],
+    });
+    assert.equal(ok, true);
+    assert.equal(urlsCalled.length, 2);
+    assert.ok(urlsCalled[1].startsWith('https://tracks.monochrome.st/track/'));
+
+    const { scoreMusicCandidate } = await import('../api/_lib/musicFallback.js');
+    assert.equal(
+      scoreMusicCandidate(
+        { candTitle: 'Vas A Quedarte', candArtist: 'Aitana', candDurationSec: 226 },
+        { title: 'Vas a quedarte', artist: 'Aitana', expectedDurationSec: 226 }
+      ).matched,
+      true
+    );
+    assert.equal(
+      scoreMusicCandidate(
+        { candTitle: 'Vas A Quedarte (Reggaeton Remix)', candArtist: 'Alex Villa', candDurationSec: 183 },
+        { title: 'Vas a quedarte', artist: 'Aitana', expectedDurationSec: 226 }
+      ).matched,
+      false
+    );
+    assert.equal(
+      scoreMusicCandidate(
+        { candTitle: 'Counting Stars (Karaoke Version)', candArtist: 'ZZang', candDurationSec: 257 },
+        { title: 'Counting Stars', artist: 'OneRepublic', expectedDurationSec: 257 }
+      ).matched,
+      false
+    );
   });
 });

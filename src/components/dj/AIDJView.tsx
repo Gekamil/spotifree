@@ -348,6 +348,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     if (!q) return;
     handleUserPrompt(q);
     setPromptInput('');
+    setShowChatDrawer(true);
   };
 
   const tracksToDisplay: Track[] = djTracks && djTracks.length > 0 ? djTracks : queue;
@@ -463,7 +464,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {/* Chat / Historial Drawer Button */}
         <button
           type="button"
-          onClick={() => setShowChatDrawer(true)}
+          onClick={() => setShowChatDrawer((prev) => !prev)}
           className={`relative w-10 h-10 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
             showChatDrawer ? 'bg-[#1ed760] text-black shadow-lg' : 'bg-black/25 hover:bg-black/45 text-white backdrop-blur-md'
           }`}
@@ -621,71 +622,73 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </div>
         )}
 
-        {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") */}
-        <div className="w-full max-w-md sm:max-w-xl space-y-2 mt-auto">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSendPrompt();
-            }}
-            className="flex items-center gap-2 bg-white/[0.08] hover:bg-white/[0.12] border border-white/20 focus-within:border-white/45 rounded-full px-3 py-1.5 backdrop-blur-xl shadow-[0_8px_28px_rgba(0,0,0,0.35)] transition-all"
-          >
-            <button
-              type="button"
-              onClick={toggleMic}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-                isMicListening
-                  ? 'bg-[#00f2fe] text-black shadow-[0_0_14px_rgba(0,242,254,0.9)] animate-pulse'
-                  : 'text-white/70 hover:text-white bg-white/10 hover:bg-white/20'
-              }`}
-              title={isMicListening ? 'Detener micrófono' : 'Hablar por micrófono'}
+        {/* Text Chat / Prompt Input Bar in Frosted Glass ("Cristal") - Single Input Invariant: only rendered when drawer is closed */}
+        {!showChatDrawer && (
+          <div className="w-full max-w-md sm:max-w-xl space-y-2 mt-auto">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleSendPrompt();
+              }}
+              className="flex items-center gap-2 bg-white/[0.08] hover:bg-white/[0.12] border border-white/20 focus-within:border-white/45 rounded-full px-3 py-1.5 backdrop-blur-xl shadow-[0_8px_28px_rgba(0,0,0,0.35)] transition-all"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                <line x1="12" y1="19" x2="12" y2="23" />
-              </svg>
-            </button>
-
-            <input
-              type="text"
-              value={promptInput}
-              onChange={(e) => setPromptInput(e.target.value)}
-              placeholder={isMicListening ? "Te escucho... habla conmigo" : "Escribe al DJ (ej. más reggaeton, algo chill)..."}
-              className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/50 outline-none font-['SpotifyMixUI'] px-1"
-            />
-
-            <button
-              type="submit"
-              disabled={!promptInput.trim()}
-              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
-                promptInput.trim()
-                  ? 'bg-white text-black hover:scale-105 active:scale-95'
-                  : 'text-white/30 bg-white/5 cursor-not-allowed'
-              }`}
-              title="Enviar petición"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="5" y1="12" x2="19" y2="12" />
-                <polyline points="12 5 19 12 12 19" />
-              </svg>
-            </button>
-          </form>
-
-          {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Dynamically curated from user library */}
-          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap justify-center py-1 px-1 max-w-full">
-            {vibeChips.map((chip) => (
               <button
-                key={chip}
                 type="button"
-                onClick={() => handleSendPrompt(chip)}
-                className="px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[10.5px] sm:text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+                onClick={toggleMic}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  isMicListening
+                    ? 'bg-[#00f2fe] text-black shadow-[0_0_14px_rgba(0,242,254,0.9)] animate-pulse'
+                    : 'text-white/70 hover:text-white bg-white/10 hover:bg-white/20'
+                }`}
+                title={isMicListening ? 'Detener micrófono' : 'Hablar por micrófono'}
               >
-                {chip}
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                </svg>
               </button>
-            ))}
+
+              <input
+                type="text"
+                value={promptInput}
+                onChange={(e) => setPromptInput(e.target.value)}
+                placeholder={isMicListening ? "Te escucho... habla conmigo" : "Escribe al DJ (ej. más reggaeton, algo chill)..."}
+                className="flex-1 bg-transparent text-xs sm:text-sm text-white placeholder-white/50 outline-none font-['SpotifyMixUI'] px-1"
+              />
+
+              <button
+                type="submit"
+                disabled={!promptInput.trim()}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  promptInput.trim()
+                    ? 'bg-white text-black hover:scale-105 active:scale-95'
+                    : 'text-white/30 bg-white/5 cursor-not-allowed'
+                }`}
+                title="Enviar petición"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                  <polyline points="12 5 19 12 12 19" />
+                </svg>
+              </button>
+            </form>
+
+            {/* Quick Vibe Chips in Frosted Glass ("Cristal") - Dynamically curated from user library */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap sm:flex-nowrap justify-center py-1 px-1 max-w-full">
+              {vibeChips.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleSendPrompt(chip)}
+                  className="px-2.5 sm:px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[10.5px] sm:text-[11px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* =========================================================================
             CLASSIC SPOTIFY MINI-PLAYER ("El minireproductor de toda la vida estilo cristal")
@@ -899,7 +902,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       {isChatRendered && (
         <div
           className={`fixed inset-0 z-50 flex flex-col justify-end transition-colors duration-300 ${
-            isChatAnimated ? 'bg-black/60 backdrop-blur-sm' : 'bg-transparent pointer-events-none'
+            isChatAnimated ? 'bg-black/60 backdrop-blur-sm sm:bg-black/30 sm:backdrop-blur-none' : 'bg-transparent pointer-events-none'
           }`}
           onClick={() => setShowChatDrawer(false)}
         >
@@ -909,10 +912,10 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               transform: chatDragY > 0 ? `translateY(${chatDragY}px)` : undefined,
               transition: isChatDragging ? 'none' : undefined,
             }}
-            className={`bg-[#121212] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[82vh] sm:max-h-[580px] sm:w-[460px] sm:absolute sm:bottom-20 sm:right-6 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-6 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+            className={`bg-[#121212] sm:fixed sm:top-0 sm:right-0 sm:bottom-0 sm:w-[420px] sm:max-h-full sm:rounded-none sm:border-l sm:border-white/10 sm:bg-[#121212]/95 sm:backdrop-blur-2xl sm:shadow-2xl rounded-t-3xl max-h-[82vh] flex flex-col p-4 sm:p-5 pb-6 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
               isChatAnimated
-                ? 'translate-y-0 opacity-100 scale-100'
-                : 'translate-y-full opacity-50 scale-[0.98] sm:translate-y-4 sm:opacity-0 sm:scale-95'
+                ? 'translate-y-0 opacity-100 scale-100 sm:translate-x-0 sm:translate-y-0'
+                : 'translate-y-full opacity-50 scale-[0.98] sm:translate-x-full sm:translate-y-0 sm:opacity-0 sm:scale-100'
             }`}
           >
             {/* Top Drag Indicator Pill (Mobile only) */}
@@ -1077,19 +1080,50 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               )}
             </div>
 
-            {/* In-drawer Prompt Input Form */}
+            {/* Quick Vibe Chips inside drawer */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1.5 px-0.5 scrollbar-none shrink-0 mb-1">
+              {vibeChips.map((chip) => (
+                <button
+                  key={chip}
+                  type="button"
+                  onClick={() => handleSendPrompt(chip)}
+                  className="px-2.5 py-1 rounded-full bg-white/[0.07] hover:bg-white/[0.15] active:scale-95 text-[11px] font-bold text-white/85 border border-white/10 transition-all cursor-pointer whitespace-nowrap shrink-0"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* In-drawer Prompt Input Form with Voice Control */}
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 handleSendPrompt();
               }}
-              className="flex items-center gap-2 bg-[#282828] border border-white/10 focus-within:border-white/30 rounded-full px-3 py-1.5 transition-all mt-1"
+              className="flex items-center gap-2 bg-[#242424] border border-white/10 focus-within:border-white/30 rounded-full px-3 py-1.5 transition-all mt-1 shrink-0"
             >
+              <button
+                type="button"
+                onClick={toggleMic}
+                className={`w-7 h-7 rounded-full flex items-center justify-center transition-all shrink-0 cursor-pointer ${
+                  isMicListening
+                    ? 'bg-[#00f2fe] text-black shadow-[0_0_14px_rgba(0,242,254,0.9)] animate-pulse'
+                    : 'text-white/70 hover:text-white bg-white/10 hover:bg-white/20'
+                }`}
+                title={isMicListening ? 'Detener micrófono' : 'Hablar por micrófono'}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                </svg>
+              </button>
+
               <input
                 type="text"
                 value={promptInput}
                 onChange={(e) => setPromptInput(e.target.value)}
-                placeholder="Escribe una canción o petición al DJ..."
+                placeholder={isMicListening ? "Te escucho... habla conmigo" : "Escribe una canción o petición al DJ..."}
                 className="flex-1 bg-transparent text-xs text-white placeholder-white/40 outline-none font-['SpotifyMixUI'] px-1"
               />
               <button

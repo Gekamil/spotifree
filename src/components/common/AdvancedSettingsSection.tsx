@@ -20,6 +20,88 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
   const [recent, setRecent] = useState(() => getRecentAtEnd());
   const desktop = variant === 'desktop';
 
+  if (desktop) {
+    return (
+      <div className="font-['SpotifyMixUI']">
+        {/* Shuffle Mode */}
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 py-3 border-b border-white/5">
+          <div className="space-y-1 max-w-md">
+            <span className="text-sm font-semibold text-white">Modo aleatorio</span>
+            <p className="text-xs text-[#a7a7a7] leading-relaxed">
+              Elige cómo se ordenan las canciones al activar la reproducción aleatoria.
+            </p>
+          </div>
+          <div role="radiogroup" aria-label="Modo aleatorio" className="flex flex-col gap-2 shrink-0 sm:min-w-[280px]">
+            {OPTIONS.map((o) => {
+              const on = algo === o.id;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={on}
+                  onClick={() => {
+                    setAlgo(o.id);
+                    setShuffleAlgorithm(o.id);
+                  }}
+                  className={`flex items-start gap-2.5 p-2 rounded-lg transition-colors cursor-pointer text-left ${
+                    on ? 'bg-white/10' : 'hover:bg-white/5'
+                  }`}
+                >
+                  <span className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                    on ? 'border-[#1ed760]' : 'border-[#727272]'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full bg-[#1ed760] transition-transform duration-200 ${on ? 'scale-100' : 'scale-0'}`} />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white truncate">{o.title}</span>
+                      {o.id === 'balanced' && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-[#1ed760]/15 text-[#1ed760]">
+                          Recomendado
+                        </span>
+                      )}
+                    </div>
+                    <span className="text-[11px] text-[#a7a7a7] leading-tight block mt-0.5">{o.desc}</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Lo escuchado hace poco, al final */}
+        <div className="flex items-center justify-between py-3 border-b border-white/5">
+          <div className="space-y-0.5 max-w-md">
+            <span className="text-sm font-semibold text-white">Lo escuchado hace poco, al final</span>
+            <p className="text-xs text-[#a7a7a7] leading-relaxed">
+              Las canciones que has escuchado en los últimos días van más tarde en el aleatorio, para empezar por lo que hace tiempo que no oyes.
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={recent}
+            aria-label="Lo escuchado hace poco, al final"
+            onClick={() => {
+              setRecent(!recent);
+              setRecentAtEnd(!recent);
+            }}
+            className={`relative inline-flex h-[24px] w-[42px] shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out focus:outline-none ${
+              recent ? 'bg-[#1ed760]' : 'bg-[#535353] hover:bg-[#727272]'
+            }`}
+          >
+            <span
+              className={`pointer-events-none inline-block h-[20px] w-[20px] rounded-full bg-white shadow transform transition duration-200 ease-in-out mt-[2px] ${
+                recent ? 'translate-x-[20px]' : 'translate-x-[2px]'
+              }`}
+            />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="space-y-3 font-['SpotifyMixUI']">
       {desktop && <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">Ajustes avanzados</h3>}

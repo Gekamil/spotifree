@@ -19,6 +19,7 @@ import { audioEngine } from '../../services/audioEngine';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { parseTrackArtists } from '../../utils/trackArtists';
+import { artistLibraryId, toggleFollowArtist } from '../../utils/artistFollow';
 import { parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 
 interface DesktopRightSidebarProps {
@@ -116,7 +117,13 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     useShallow((s) => ({ currentTrack: s.currentTrack, queue: s.queue, playTrack: s.playTrack, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds, progressMs: s.progressMs }))
   );
   const playlists = useSpotifyDataStore((s) => s.playlists);
-  const [isFollowing, setIsFollowing] = useState(true);
+  // "Seguir" puts the artist in Tu biblioteca (same as the artist page's button)
+  const followArtistId = currentTrack?.artists?.[0]?.id;
+  const followArtistName = currentTrack?.artists?.[0]?.name;
+  const isFollowing = useSpotifyDataStore((s) => {
+    const id = artistLibraryId(followArtistId, followArtistName);
+    return !!id && s.playlists.some((p) => p.id === id);
+  });
   const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
@@ -446,6 +453,11 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
             <div className="flex items-center gap-1 shrink-0">
               <button
+                onClick={(e) => {
+                  if (!currentTrack) return;
+                  const r = e.currentTarget.getBoundingClientRect();
+                  useUIStore.getState().openContextMenu(Math.max(8, r.right - 260), r.bottom + 6, currentTrack.id, (currentTrack as any).playlistId);
+                }}
                 className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 title="Más opciones"
               >
@@ -568,11 +580,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
               className="rounded-xl p-4 text-white space-y-2 relative shadow-lg overflow-hidden transition-all duration-300 border border-white/10"
             >
               <div className="flex items-center justify-between">
-                <span className="font-bold text-sm tracking-tight text-white flex items-center gap-2">
+                <span className="font-bold text-sm tracking-tight text-white">
                   Vista previa de la letra
-                  {syncedLyrics.length > 0 && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" title="Sincronizada" />
-                  )}
                 </span>
               </div>
 
@@ -684,7 +693,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      setIsFollowing(!isFollowing);
+                      if (followArtistName) toggleFollowArtist({ id: followArtistId, name: followArtistName, image: artistInfo.image || undefined });
                     }}
                     className="border border-white/30 hover:border-white rounded-full px-4 py-1 text-xs font-bold text-white transition-all hover:scale-104 active:scale-95 cursor-pointer"
                   >

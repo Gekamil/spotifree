@@ -3,13 +3,14 @@ import { useUIStore } from '../../store/useUIStore';
 import { confirmDialog } from '../common/ConfirmDialog';
 import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
 import { showGlobalToast } from '../../utils/globalToast';
+import { isExcludedFromTaste, toggleExcludedFromTaste } from '../../utils/tasteExclusions';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { saveCustomTrackToStorage } from '../../utils/userStorage';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openStoryCard } from '../../utils/storyCard';
-import { isTrackDownloaded } from '../../utils/offlineStorage';
+import { isTrackDownloaded, isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 
 interface ContextMenuProps {
@@ -237,6 +238,22 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
     targetPlaylist.id !== 'collection:tracks'
   );
 
+  const isSavedInLibrary = (() => {
+    const plId = targetPlaylist?.id || contextMenu.playlistId;
+    if (!plId) return false;
+    const clean = plId.replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+    if (plId === 'liked-songs' || plId === 'collection:tracks' || clean === 'liked-songs') return true;
+    if (playlists.some((p) => p.id === plId || p.id === clean)) return true;
+    try {
+      const raw = localStorage.getItem('spotifree_saved_library_playlists');
+      if (raw) {
+        const list = JSON.parse(raw);
+        if (Array.isArray(list) && (list.includes(plId) || list.includes(clean))) return true;
+      }
+    } catch {}
+    return false;
+  })();
+
   const handleDeletePlaylist = () => {
     const plId = targetPlaylist?.id || contextMenu.playlistId;
     if (plId && isUserCreatedPlaylist && !isLikedPlaylist) {
@@ -320,18 +337,89 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             <span className="truncate">Añadir a la cola</span>
           </button>
 
-          {/* 2. Añadir al perfil */}
-          <button
-            onClick={() => {
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-              <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0M1.5 8a6.5 6.5 0 1 1 11.395 4.277 3.5 3.5 0 0 0-1.163-1.088l-1.523-.88a.285.285 0 0 1-.076-.428l.086-.104v-.001c.549-.654.962-1.449 1.02-2.422.03-.526-.055-1.074-.165-1.395a3.2 3.2 0 0 0-.671-1.154 3.26 3.26 0 0 0-4.806 0 3.2 3.2 0 0 0-.672 1.154c-.109.32-.195.87-.163 1.395.057.973.47 1.768 1.018 2.422l.087.105a.285.285 0 0 1-.076.428l-1.523.88a3.5 3.5 0 0 0-1.163 1.088A6.48 6.48 0 0 1 1.5 8" />
-            </svg>
-            <span className="truncate">Añadir al perfil</span>
-          </button>
+          {/* 2. Añadir / Eliminar de Tu biblioteca (para listas no creadas por el usuario) */}
+          {!isLikedPlaylist && !isFolder && !isUserCreatedPlaylist && (
+            <button
+              onClick={() => {
+                const plId = targetPlaylist?.id || contextMenu.playlistId;
+                if (!plId) return;
+                const cleanId = plId.replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+                let list: string[] = [];
+                try {
+                  list = JSON.parse(localStorage.getItem('spotifree_saved_library_playlists') || '[]');
+                } catch {}
+
+                if (isSavedInLibrary) {
+                  useSpotifyDataStore.getState().deletePlaylist(plId);
+                  list = list.filter((id) => id !== plId && id !== cleanId);
+                  try {
+                    localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+                  } catch {}
+                  showGlobalToast('Eliminada de Tu biblioteca');
+                } else {
+                  if (targetPlaylist) {
+                    useSpotifyDataStore.getState().addCustomPlaylist(targetPlaylist);
+                  }
+                  if (!list.includes(plId)) list.push(plId);
+                  try {
+                    localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+                  } catch {}
+                  showGlobalToast('Añadida a Tu biblioteca');
+                }
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                {isSavedInLibrary ? (
+                  <path d="M12.5 0a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm.354 2.146a.5.5 0 0 0-.708 0L10.5 3.793l-.646-.647a.5.5 0 0 0-.708.708l1 1a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0 0-.708zM8 2a5.5 5.5 0 1 0 5.498 5.002 4.49 4.49 0 0 0-1.002-.002A4.5 4.5 0 1 1 8 3c.334 0 .66.036.974.105.156-.34.354-.653.586-.93A5.474 5.474 0 0 0 8 2z" />
+                ) : (
+                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8.75-4.5a.75.75 0 0 0-1.5 0v3.25H4a.75.75 0 0 0 0 1.5h3.25V11.5a.75.75 0 0 0 1.5 0V8.25H12a.75.75 0 0 0 0-1.5H8.75z" />
+                )}
+              </svg>
+              <span className="truncate">{isSavedInLibrary ? 'Eliminar de Tu biblioteca' : 'Añadir a Tu biblioteca'}</span>
+            </button>
+          )}
+
+          {/* Descargar lista */}
+          {!isFolder && (
+            <button
+              onClick={async () => {
+                const plId = targetPlaylist?.id || contextMenu.playlistId;
+                closeContextMenu();
+                if (!plId) return;
+                const tracksToDownload = targetPlaylist?.tracks?.items || [];
+                if (tracksToDownload.length === 0) {
+                  showGlobalToast('La lista no tiene canciones para descargar');
+                  return;
+                }
+                const downloaded = isPlaylistDownloaded(plId);
+                if (downloaded) {
+                  await deleteDownloadedPlaylist(plId, tracksToDownload.map((t: any) => t.id));
+                  showGlobalToast('Descarga eliminada');
+                } else {
+                  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+                    showGlobalToast('Modo avión: conéctate para descargar');
+                    return;
+                  }
+                  showGlobalToast(`Descargando ${tracksToDownload.length} canciones...`);
+                  const res = await downloadPlaylist(targetPlaylist, tracksToDownload);
+                  if (res.downloaded > 0) {
+                    showGlobalToast(`${res.downloaded} canciones descargadas`);
+                  } else {
+                    showGlobalToast('No se pudo descargar la lista');
+                  }
+                }
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18M1 12C1 5.925 5.925 1 12 1s11 4.925 11 11-4.925 11-11 11S1 18.075 1 12" />
+                <path d="M12 6.05a1 1 0 0 1 1 1v7.486l1.793-1.793a1 1 0 1 1 1.414 1.414L12 18.364l-4.207-4.207a1 1 0 1 1 1.414-1.414L11 14.536V7.05a1 1 0 0 1 1-1" />
+              </svg>
+              <span className="truncate">{targetPlaylist && isPlaylistDownloaded(targetPlaylist.id) ? 'Eliminar descarga' : 'Descargar lista'}</span>
+            </button>
+          )}
 
           {isUserCreatedPlaylist && (
             <>
@@ -391,7 +479,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 <span className="truncate">Historial de versiones</span>
               </button>
 
-              {/* 5. Eliminar (Spotify: a normal option; the confirmation is the safeguard) */}
+              {/* 5. Eliminar de Tu biblioteca (Spotify: a normal option; the confirmation is the safeguard) */}
               <button
                 onClick={handleDeletePlaylist}
                 className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
@@ -400,91 +488,58 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                   <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
                   <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
                 </svg>
-                <span className="truncate">Eliminar</span>
+                <span className="truncate">Eliminar de Tu biblioteca</span>
               </button>
 
-              <div className="h-px bg-white/10 my-1 mx-1" />
-
-              {/* 5. Hacer privada */}
-              <button
-                onClick={() => {
-                  closeContextMenu();
-                }}
-                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
-              >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                  <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H3a1 1 0 0 0-1 1v7a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1h-1.5V4.5A3.5 3.5 0 0 0 8 1m2 5H6V4.5a2 2 0 1 1 4 0z" />
-                </svg>
-                <span className="truncate">Hacer privada</span>
-              </button>
             </>
           )}
 
-          {/* 6. Invitar a colaboradores */}
+          <div className="h-px bg-white/10 my-1 mx-1" />
+
+          {/* Excluir de tu perfil de gustos (what you play from it doesn't teach your mixes) */}
+          {(() => {
+            const plId = targetPlaylist?.id || contextMenu.playlistId;
+            if (!plId || plId === 'liked-songs') return null;
+            const excluded = isExcludedFromTaste(plId);
+            return (
+              <button
+                onClick={() => {
+                  const now = toggleExcludedFromTaste(plId);
+                  closeContextMenu();
+                  showGlobalToast(now ? 'Excluida de tu perfil de gustos' : 'Incluida de nuevo en tu perfil de gustos');
+                }}
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className={`${excluded ? 'text-[#1ed760]' : 'text-[#a7a7a7]'} shrink-0`}>
+                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
+                  <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
+                </svg>
+                <span className="truncate">{excluded ? 'Incluir en tu perfil de gustos' : 'Excluir de tu perfil de gustos'}</span>
+              </button>
+            );
+          })()}
+
+          {/* Compartir: copies this playlist's link */}
           <button
-            onClick={() => {
-              navigator.clipboard?.writeText(window.location.href).catch(() => {});
+            onClick={async () => {
+              const plId = targetPlaylist?.id || contextMenu.playlistId;
               closeContextMenu();
+              if (!plId) return;
+              const link = `${window.location.origin}/?playlist=${encodeURIComponent(plId.replace(/^spotify:playlist:/i, ''))}`;
+              try {
+                await navigator.clipboard.writeText(link);
+                showGlobalToast('Enlace copiado al portapapeles');
+              } catch {
+                showGlobalToast(link);
+              }
             }}
             className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
           >
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-              <path d="M12.5 8a.75.75 0 0 1 .75.75v1.75H15a.75.75 0 0 1 0 1.5h-1.75V13.75a.75.75 0 0 1-1.5 0V12H10a.75.75 0 0 1 0-1.5h1.75V8.75a.75.75 0 0 1 .75-.75" />
-              <path d="M6 0a4 4 0 1 0 0 8 4 4 0 0 0 0-8M3.5 4a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0M0 13c0-2.21 2.686-4 6-4 1.157 0 2.228.217 3.125.597a4 4 0 0 0-.125 1.003v1.306A8.5 8.5 0 0 0 6 10.5c-3.13 0-4.5 1.637-4.5 2.5V14h5.602c.11.536.31 1.042.585 1.5H0z" />
+              <path d="M1 5.75A.75.75 0 0 1 1.75 5H4v1.5H2.5v8h11v-8H12V5h2.25a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-.75.75H1.75a.75.75 0 0 1-.75-.75z" />
+              <path d="M8 9.576a.75.75 0 0 0 .75-.75V2.903l1.454 1.454a.75.75 0 0 0 1.06-1.06L8 .03 4.735 3.296a.75.75 0 0 0 1.06 1.061L7.25 2.903v5.923c0 .414.336.75.75.75" />
             </svg>
-            <span className="truncate">Invitar a colaboradores</span>
-          </button>
-
-          {/* 7. Excluir de tu perfil de gustos */}
-          <button
-            onClick={() => {
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
-          >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-              <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-              <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
-            </svg>
-            <span className="truncate">Excluir de tu perfil de gustos</span>
-          </button>
-
-          {/* 8. Mover a carpeta */}
-          <button
-            onClick={() => {
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"
-          >
-            <div className="flex items-center gap-3 truncate">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                <path d="M1.75 1A1.75 1.75 0 0 0 0 2.75v11.5C0 15.216.784 16 1.75 16h12.5A1.75 1.75 0 0 0 16 14.25v-9.5A1.75 1.75 0 0 0 14.25 3H7.82l-.65-1.125A1.75 1.75 0 0 0 5.655 1zM1.5 2.75a.25.25 0 0 1 .25-.25h3.905a.25.25 0 0 1 .216.125L6.954 4.5h7.296a.25.25 0 0 1 .25.25v9.5a.25.25 0 0 1-.25.25H1.75a.25.25 0 0 1-.25-.25z" />
-              </svg>
-              <span className="truncate">Mover a carpeta</span>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7]">
-              <path d="M6 3.5 10.5 8 6 12.5" />
-            </svg>
-          </button>
-
-          {/* 9. Compartir */}
-          <button
-            onClick={() => {
-              navigator.clipboard?.writeText(window.location.href).catch(() => {});
-              closeContextMenu();
-            }}
-            className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"
-          >
-            <div className="flex items-center gap-3 truncate">
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                <path d="M1 5.75A.75.75 0 0 1 1.75 5H4v1.5H2.5v8h11v-8H12V5h2.25a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-.75.75H1.75a.75.75 0 0 1-.75-.75z" />
-                <path d="M8 9.576a.75.75 0 0 0 .75-.75V2.903l1.454 1.454a.75.75 0 0 0 1.06-1.06L8 .03 4.735 3.296a.75.75 0 0 0 1.06 1.061L7.25 2.903v5.923c0 .414.336.75.75.75" />
-              </svg>
-              <span className="truncate">Compartir</span>
-            </div>
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7]">
-              <path d="M6 3.5 10.5 8 6 12.5" />
-            </svg>
+            <span className="truncate">Copiar enlace de la playlist</span>
           </button>
         </div>
       ) : (

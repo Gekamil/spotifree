@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import type { Playlist, Track } from '../../types/spotify';
 import {
   PlayNativeIcon,
@@ -17,6 +17,8 @@ import { ClockIcon } from '../icons/SpotifyIcons';
 import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
+import { showGlobalToast } from '../../utils/globalToast';
+import { isFollowingArtist, toggleFollowArtist } from '../../utils/artistFollow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { formatDuration, stripHtml } from '../../utils/formatters';
@@ -61,13 +63,50 @@ function getArtistMonthlyListeners(name: string): string {
 import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
+import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
+import { getArtistPicture, ARTIST_IMAGE_CACHE } from '../../utils/artistImage';
 import { toHDImage } from '../../utils/formatters';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
+import { PLAYLIST_SORTS, loadPlaylistSort, savePlaylistSort, sortPlaylistTracks, type PlaylistSortKey } from '../mobile/PlaylistTools';
 import { AddedByAvatar, SharedMembersRow, useSharedCode, useSharedMembers } from '../common/SharedPlaylistBits';
 
-/** Long playlists: rows off screen aren't laid out or painted until you scroll near them */
-const LONG_LIST_ROW: React.CSSProperties = { contentVisibility: 'auto', containIntrinsicSize: 'auto 56px' } as React.CSSProperties;
+/** "Fecha en la que se añadió" like Spotify: "hace 3 días" when recent, "12 mar 2024" otherwise */
+function formatAddedAt(v?: string | null): string {
+  const t = Date.parse(String(v || ''));
+  if (!Number.isFinite(t)) return '';
+  const diff = Date.now() - t;
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'ahora';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} ${h === 1 ? 'hora' : 'horas'}`;
+  const d = Math.floor(h / 24);
+  if (d < 7) return `hace ${d} ${d === 1 ? 'día' : 'días'}`;
+  if (d < 28) {
+    const w = Math.floor(d / 7);
+    return `hace ${w} ${w === 1 ? 'semana' : 'semanas'}`;
+  }
+  return new Date(t).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).replace('.', '');
+}
+
+/** A column title of the song table: click to sort by it (again to reverse) */
+const SortHeader: React.FC<{ label: React.ReactNode; title?: string; active: boolean; desc: boolean; onClick: () => void }> = ({ label, title, active, desc, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    title={title || (typeof label === 'string' ? `Ordenar por ${label.toLowerCase()}` : undefined)}
+    className={`flex items-center gap-1.5 min-w-0 text-left uppercase tracking-wider cursor-pointer hover:text-white transition-colors ${active ? 'text-white' : ''}`}
+  >
+    <span className="truncate">{label}</span>
+    {active && (
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="#1ed760" className="shrink-0" style={{ transform: desc ? 'rotate(180deg)' : undefined }}>
+        <path d="M.47 11.03a.75.75 0 0 0 1.06 0L8 4.56l6.47 6.47a.75.75 0 1 0 1.06-1.06L8 2.44.47 9.97a.75.75 0 0 0 0 1.06" />
+      </svg>
+    )}
+  </button>
+);
+
 import { fetchPlaylistRecommendations } from '../../services/spotifyApi';
 
 import { resolvePlaylistBanner } from '../../utils/playlistBanner';
@@ -91,7 +130,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, likedTrackIds: s.likedTrackIds, playTrack: s.playTrack, togglePlay: s.togglePlay, toggleLike: s.toggleLike, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle }))
   );
 
-  const { openContextMenu, openEditPlaylistModal, openAddToPlaylistModal } = useUIStore();
+  const { openContextMenu, openEditPlaylistModal, openAddToPlaylistModal, setActiveMainTab } = useUIStore();
   const { user, playlists: allUserPlaylists } = useSpotifyDataStore();
   useAutoCovers((s) => s.version); // repaint when the songs' collage is ready
   const [isDownloaded, setIsDownloaded] = useState<boolean>(() => isPlaylistDownloaded(playlist.id));
@@ -171,7 +210,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [dynamicTracks, setDynamicTracks] = useState<Track[]>(deduplicateTracks(initialTracks));
   const [dynamicPlaylist, setDynamicPlaylist] = useState<Playlist>(playlist);
-  const [trackCovers, setTrackCovers] = useState<Record<string, string>>({});
+  const [trackCovers, setTrackCovers] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    for (const t of initialTracks) {
+      if (t.id && TRACK_COVER_CACHE.has(t.id)) {
+        initial[t.id] = TRACK_COVER_CACHE.get(t.id)!;
+      }
+    }
+    return initial;
+  });
 
   // Reactive listener for real-time liked songs synchronization
   useEffect(() => {
@@ -507,6 +554,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const checkIsInLibrary = (id: string): boolean => {
     if (!id) return false;
     const clean = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
+    const isTargetArtist = (
+      dynamicPlaylist?.description?.toLowerCase() === 'artista' ||
+      (dynamicPlaylist as any)?.type === 'artist' ||
+      (dynamicPlaylist as any)?.is_artist === true ||
+      id.startsWith('art-') ||
+      id.startsWith('artist-')
+    );
+    if (isTargetArtist) {
+      return isFollowingArtist(id, dynamicPlaylist?.name || playlist.name);
+    }
     if (id === 'liked-songs' || id === 'collection:tracks' || clean === 'liked-songs') return true;
     if (allUserPlaylists && allUserPlaylists.some((p) => p.id === id || p.id === clean)) return true;
     if (typeof window !== 'undefined') {
@@ -530,7 +587,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   useEffect(() => {
     setIsSavedInLibrary(checkIsInLibrary(playlist.id));
-  }, [playlist.id, allUserPlaylists]);
+  }, [playlist.id, allUserPlaylists, dynamicPlaylist?.name]);
 
   const handleToggleLibrary = () => {
     const next = !isSavedInLibrary;
@@ -560,6 +617,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
       } catch {}
     }
+    showGlobalToast(next ? 'Añadida a Tu biblioteca' : 'Eliminada de Tu biblioteca');
+  };
+
+  const handleToggleFollowArtist = () => {
+    const next = toggleFollowArtist({
+      id: dynamicPlaylist.id,
+      name: dynamicPlaylist.name,
+      image: dynamicPlaylist.images?.[0]?.url,
+    });
+    setIsSavedInLibrary(next);
+    showGlobalToast(next ? 'Añadido a Tu biblioteca' : 'Eliminado de Tu biblioteca');
   };
 
   // States for Spotify "Busquemos algo para tu lista" inline track searcher
@@ -725,49 +793,38 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       if (isArtist) {
         setLoading(true);
         try {
-          const cleanArtistName = playlist.name.replace(/^(art-|artist-)/i, '').trim();
-          const searchRes = await fetch(
-            `https://itunes.apple.com/search?term=${encodeURIComponent(cleanArtistName)}&media=music&entity=song&limit=25`
-          );
-          if (searchRes.ok) {
-            const data = await searchRes.json();
-            const artistTracks: Track[] = (data.results || []).map((t: any, idx: number) => ({
-              id: `artist-song-${t.trackId || idx}`,
-              name: t.trackName || 'Canción',
-              duration_ms: (t.trackTimeMillis && t.trackTimeMillis > 35000) ? t.trackTimeMillis : 210000,
-              artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || cleanArtistName }],
-              album: {
-                id: `alb-${t.collectionId || idx}`,
-                name: t.collectionName || t.trackName,
-                images: [{ url: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb') }],
+          const cleanArtistName = resolveArtistName(playlist.id, playlist.name);
+          const cachedPic = ARTIST_IMAGE_CACHE.get(cleanArtistName.toLowerCase());
+          const resolvedPic = cachedPic || (await getArtistPicture(cleanArtistName));
+          const artistTracks = await fetchArtistTopTracks(playlist.id, cleanArtistName);
+
+          if (!cancelled && artistTracks.length > 0) {
+            const cachedDetails = useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
+            const artistImg =
+              resolvedPic ||
+              cachedDetails?.images?.[0]?.url ||
+              playlist.images?.[0]?.url ||
+              artistTracks[0]?.album?.images?.[0]?.url ||
+              '';
+
+            const updatedArtistPlaylist: Playlist = {
+              ...playlist,
+              name: cleanArtistName,
+              description: 'Artista oficial • Verificado en Spotify',
+              images: [{ url: artistImg }],
+              tracks: {
+                total: artistTracks.length,
+                items: artistTracks,
               },
-            }));
-
-            if (!cancelled && artistTracks.length > 0) {
-              const artistImg =
-                playlist.images?.[0]?.url ||
-                artistTracks[0]?.album?.images?.[0]?.url ||
-                '';
-
-              const updatedArtistPlaylist: Playlist = {
-                ...playlist,
-                name: cleanArtistName,
-                description: 'Artista oficial • Verificado en Spotify',
-                images: [{ url: artistImg }],
-                tracks: {
-                  total: artistTracks.length,
-                  items: artistTracks,
-                },
-              };
-              setDynamicTracks(artistTracks);
-              setDynamicPlaylist(updatedArtistPlaylist);
-              setLoading(false);
-              artistTracks.slice(0, 3).forEach((t) => {
-                const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
-                audioEngine.prefetchTrack(q, t.id);
-              });
-              return;
-            }
+            };
+            setDynamicTracks(artistTracks);
+            setDynamicPlaylist(updatedArtistPlaylist);
+            setLoading(false);
+            artistTracks.slice(0, 3).forEach((t) => {
+              const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
+              audioEngine.prefetchTrack(q, t.id);
+            });
+            return;
           }
         } catch (err) {
           console.error('Error loading artist tracks:', err);
@@ -928,22 +985,72 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setHeroCoverError(false);
   }, [dynamicPlaylist.id]);
 
-  // Playlist tracks maintain their original sequence (Spotify parity: shuffle does not rearrange the visible list)
-  const tracks = dynamicTracks;
+  // Spotify's "Lista" menu: order (also by clicking a column title, again to reverse it), compact
+  // view and the search inside the playlist. Only the view changes, never the playlist itself;
+  // playing follows what you see.
+  const [sortKey, setSortKey] = useState<PlaylistSortKey>(() => loadPlaylistSort(playlist.id));
+  const [sortDesc, setSortDesc] = useState(false);
+  const [filterQuery, setFilterQuery] = useState('');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isViewMenuOpen, setIsViewMenuOpen] = useState(false);
+  const [isCompact, setIsCompact] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('spotifree_desktop_compact_tracks') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const viewMenuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setSortKey(loadPlaylistSort(playlist.id));
+    setSortDesc(false);
+    setFilterQuery('');
+    setIsFilterOpen(false);
+  }, [playlist.id]);
+  useEffect(() => {
+    if (!isViewMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (viewMenuRef.current && !viewMenuRef.current.contains(e.target as Node)) setIsViewMenuOpen(false);
+    };
+    window.addEventListener('mousedown', close);
+    return () => window.removeEventListener('mousedown', close);
+  }, [isViewMenuOpen]);
+  const chooseSort = (key: PlaylistSortKey, desc = false) => {
+    setSortKey(key);
+    setSortDesc(desc);
+    savePlaylistSort(playlist.id, key);
+  };
+  /** Column title clicked: sort by it, a second click reverses, a third goes back to the custom order */
+  const onColumnSort = (key: PlaylistSortKey) => {
+    if (sortKey !== key) chooseSort(key);
+    else if (!sortDesc) setSortDesc(true);
+    else chooseSort('custom');
+  };
+  const setCompact = (v: boolean) => {
+    setIsCompact(v);
+    try {
+      localStorage.setItem('spotifree_desktop_compact_tracks', v ? '1' : '0');
+    } catch {}
+  };
 
-  if (
+  const tracks = useMemo(() => {
+    let list = sortPlaylistTracks(dynamicTracks, sortKey);
+    if (sortDesc && sortKey !== 'custom') list = [...list].reverse();
+    const q = filterQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((t) =>
+        `${t.name} ${(t.artists || []).map((a) => a.name).join(' ')} ${t.album?.name || ''}`.toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [dynamicTracks, sortKey, sortDesc, filterQuery]);
+
+  const isDJ = Boolean(
     dynamicPlaylist.id === 'spotify-dj' ||
     dynamicPlaylist.id === 'dj' ||
     dynamicPlaylist.name?.toLowerCase().trim() === 'dj' ||
     (dynamicPlaylist as any).is_dj
-  ) {
-    return (
-      <AIDJView
-        onBack={() => useUIStore.getState().setActiveMainTab('home')}
-        onOpenPlayer={() => useUIStore.getState().toggleRightSidebar('now-playing')}
-      />
-    );
-  }
+  );
 
   const isLikedPlaylist =
     dynamicPlaylist.id === 'liked-songs' ||
@@ -996,7 +1103,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const tracksWithPlaylistId = tracks.map((t) => ({ ...t, playlistId: playlist.id }));
 
   const isCurrentPlaylistPlaying =
-    isPlaying && tracks.some((t) => t.id === currentTrack?.id);
+    isPlaying && tracks.some((t) => t.id === currentTrack?.id || matchTrackId(t.id, currentTrack?.id));
 
   const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
@@ -1084,7 +1191,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   }, [tracks, isClipsModalOpen]);
 
   const handlePlayAll = () => {
-    if (tracks.length === 0) return;
+    if (loading) {
+      showGlobalToast('Cargando canciones de la lista...');
+      return;
+    }
+    if (tracks.length === 0) {
+      showGlobalToast('La lista no tiene canciones disponibles');
+      return;
+    }
     if (isCurrentPlaylistPlaying) {
       togglePlay();
     } else {
@@ -1112,7 +1226,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
   };
 
-  const totalDurationMs = tracks.reduce((acc, t) => acc + (t.duration_ms || 0), 0);
+  const totalDurationMs = dynamicTracks.reduce((acc, t) => acc + (t.duration_ms || 0), 0);
   const totalMinutes = Math.floor(totalDurationMs / 60000);
   const totalHours = Math.floor(totalMinutes / 60);
   const remainingMinutes = totalMinutes % 60;
@@ -1166,6 +1280,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   }, [dynamicPlaylist.id, dynamicPlaylist.images, tracks, hasBanner, bannerImgUrl]);
 
   const themeColor = extractedThemeColor;
+
+  if (isDJ) {
+    return (
+      <AIDJView
+        onBack={() => setActiveMainTab('home')}
+        onOpenPlayer={() => useUIStore.getState().toggleRightSidebar('now-playing')}
+      />
+    );
+  }
 
   return (
     <div ref={containerRef} className="select-none min-h-full pb-20 relative bg-[#121212] animate-cascade-down">
@@ -1244,19 +1367,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 />
               </svg>
               <span>
-                Hecha para <span className="font-bold">{user?.display_name || 'ti'}</span>
+                Hecha para <span onClick={() => setActiveMainTab('profile')} className="font-bold hover:underline cursor-pointer">{user?.display_name || 'ti'}</span>
               </span>
               <span>•</span>
               <span>
                 {tracks.length} {tracks.length === 1 ? 'canción' : 'canciones'}, {formattedDuration}
               </span>
             </div>
-            <button
-              type="button"
-              className="text-xs text-white/75 hover:text-white underline text-left mt-0.5 cursor-pointer w-fit drop-shadow-sm"
-            >
-              Recomendaciones e impacto de la promoción
-            </button>
           </div>
         </div>
       ) : (
@@ -1373,7 +1490,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
                 {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
                   <>
-                    <span className="font-bold text-white hover:underline cursor-pointer">Spotifree</span>
+                    <span onClick={() => setActiveMainTab('profile')} className="font-bold text-white hover:underline cursor-pointer">Spotifree</span>
                     <span>•</span>
                     <span className="text-white/90">
                       {loading
@@ -1383,7 +1500,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </>
                 ) : dynamicPlaylist.name.toLowerCase().includes('mix diario') || dynamicPlaylist.id.includes('37i9dQZF1E35QYVMBRlDph') ? (
                   <>
-                    <span className="font-bold text-white hover:underline cursor-pointer">Hecha para {user?.display_name || 'ti'}</span>
+                    <span onClick={() => setActiveMainTab('profile')} className="font-bold text-white hover:underline cursor-pointer">Hecha para {user?.display_name || 'ti'}</span>
                     <span>•</span>
                     <span className="text-white/90">
                       {loading
@@ -1393,7 +1510,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   </>
                 ) : (
                   <>
-                    <span className="flex items-center gap-1.5 font-bold text-white hover:underline cursor-pointer">
+                    <span onClick={() => setActiveMainTab('profile')} className="flex items-center gap-1.5 font-bold text-white hover:underline cursor-pointer">
                       <SpotifyBadgeIcon size={18} />
                       <span>{dynamicPlaylist.owner?.display_name === 'Spotify' ? 'Spotifree' : (dynamicPlaylist.owner?.display_name || 'Spotifree')}</span>
                     </span>
@@ -1550,7 +1667,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             </button>
 
             {/* Add to Library / Checkmark toggle button (+ / ✓) */}
-            {!isLikedPlaylist && !isFolder && (
+            {!isLikedPlaylist && !isFolder && !isArtist && (
               <button
                 onClick={handleToggleLibrary}
                 className={`w-8 h-8 rounded-full flex items-center justify-center hover:scale-106 active:scale-95 transition-all cursor-pointer ${
@@ -1606,21 +1723,148 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             </button>
 
             {isArtist && (
-              <button className="px-6 py-2 rounded-full border border-white/30 text-white font-bold text-xs uppercase hover:border-white hover:scale-105 active:scale-95 transition-all cursor-pointer">
-                Seguir
+              <button
+                type="button"
+                onClick={handleToggleFollowArtist}
+                className={`px-4 py-1.5 rounded-full border text-white font-bold text-sm hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+                  isSavedInLibrary ? 'border-white/30 hover:border-white' : 'border-white/50 hover:border-white'
+                }`}
+              >
+                {isSavedInLibrary ? 'Siguiendo' : 'Seguir'}
               </button>
             )}
           </div>
 
-          {/* Right view switcher */}
-          <div className="flex items-center gap-4 text-xs text-[#b3b3b3]">
-            <div className="flex items-center gap-1.5 font-semibold hover:text-white cursor-pointer transition-colors">
-              <span>Lista</span>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
-                <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
-              </svg>
+          {/* Right: search in the playlist + "Lista" menu (order and view), like Spotify */}
+          {!isArtist && dynamicTracks.length > 0 && (
+            <div className="flex items-center gap-2 text-sm text-[#b3b3b3]">
+              <div
+                className={`flex items-center h-8 rounded-[4px] transition-all duration-300 overflow-hidden ${
+                  isFilterOpen || filterQuery ? 'w-56 bg-[#2a2a2a]' : 'w-8'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setIsFilterOpen((v) => !v)}
+                  className="w-8 h-8 shrink-0 flex items-center justify-center rounded-full hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                  title="Buscar en la playlist"
+                  aria-label="Buscar en la playlist"
+                >
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M7 1.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5M.25 7a6.75 6.75 0 1 1 12.096 4.12l3.184 3.185a.75.75 0 1 1-1.06 1.06L11.304 12.2A6.75 6.75 0 0 1 .25 7" />
+                  </svg>
+                </button>
+                {(isFilterOpen || filterQuery) && (
+                  <>
+                    <input
+                      autoFocus
+                      value={filterQuery}
+                      onChange={(e) => setFilterQuery(e.target.value)}
+                      onBlur={() => !filterQuery && setIsFilterOpen(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          setFilterQuery('');
+                          setIsFilterOpen(false);
+                        }
+                      }}
+                      placeholder="Buscar en la playlist"
+                      className="flex-1 min-w-0 bg-transparent text-[13px] text-white placeholder-[#a7a7a7] outline-none pr-1"
+                    />
+                    {filterQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setFilterQuery('')}
+                        className="p-1 text-[#b3b3b3] hover:text-white transition-colors cursor-pointer mr-1 shrink-0"
+                        title="Borrar búsqueda"
+                        aria-label="Borrar búsqueda"
+                      >
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M2.47 2.47a.75.75 0 0 1 1.06 0L8 6.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L9.06 8l4.47 4.47a.75.75 0 0 1-1.06 1.06L8 9.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L6.94 8 2.47 3.53a.75.75 0 0 1 0-1.06z" />
+                        </svg>
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              <div className="relative" ref={viewMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsViewMenuOpen((v) => !v)}
+                  className="flex items-center gap-2 h-8 px-2 font-semibold hover:text-white transition-colors cursor-pointer"
+                  aria-haspopup="menu"
+                  aria-expanded={isViewMenuOpen}
+                >
+                  <span>{sortKey === 'custom' ? (isCompact ? 'Compacta' : 'Lista') : PLAYLIST_SORTS.find((s) => s.id === sortKey)?.label}</span>
+                  {isCompact ? (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M15.5 13.5H.5V12h15zm0-4.75H.5v-1.5h15zm0-4.75H.5V2.5h15z" />
+                    </svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z" />
+                    </svg>
+                  )}
+                </button>
+                {isViewMenuOpen && (
+                  <div role="menu" className="absolute right-0 top-9 z-50 w-56 p-1 rounded-[4px] bg-[#282828] shadow-[0_16px_24px_rgba(0,0,0,0.3),0_6px_8px_rgba(0,0,0,0.2)] text-[13px]">
+                    <p className="px-3 pt-2.5 pb-1 text-[11px] font-bold text-[#b3b3b3]">Ordenar por</p>
+                    {PLAYLIST_SORTS.map((s) => (
+                      <button
+                        key={s.id}
+                        role="menuitemradio"
+                        aria-checked={sortKey === s.id}
+                        onClick={() => {
+                          if (sortKey === s.id && s.id !== 'custom') setSortDesc((d) => !d);
+                          else chooseSort(s.id);
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] text-left cursor-pointer ${
+                          sortKey === s.id ? 'text-[#1ed760]' : 'text-white/90'
+                        }`}
+                      >
+                        <span>{s.label}</span>
+                        {sortKey === s.id && (
+                          <span className="flex items-center gap-1.5">
+                            {s.id !== 'custom' && (
+                              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ transform: sortDesc ? 'rotate(180deg)' : undefined }}>
+                                <path d="M.47 11.03a.75.75 0 0 0 1.06 0L8 4.56l6.47 6.47a.75.75 0 1 0 1.06-1.06L8 2.44.47 9.97a.75.75 0 0 0 0 1.06" />
+                              </svg>
+                            )}
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                              <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+                            </svg>
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                    <div className="h-px bg-white/10 mx-2 my-1" />
+                    <p className="px-3 pt-2 pb-1 text-[11px] font-bold text-[#b3b3b3]">Ver como</p>
+                    {[
+                      { v: true, label: 'Compacta' },
+                      { v: false, label: 'Lista' },
+                    ].map((o) => (
+                      <button
+                        key={o.label}
+                        role="menuitemradio"
+                        aria-checked={isCompact === o.v}
+                        onClick={() => setCompact(o.v)}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] text-left cursor-pointer ${
+                          isCompact === o.v ? 'text-[#1ed760]' : 'text-white/90'
+                        }`}
+                      >
+                        <span>{o.label}</span>
+                        {isCompact === o.v && (
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+                            <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+                          </svg>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -1641,13 +1885,19 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             } gap-4 px-4 py-2 border-b border-white/10 text-xs font-semibold text-[#b3b3b3] uppercase tracking-wider mb-2`}
           >
             <span>#</span>
-            <span>Título</span>
-            <span>Álbum</span>
+            <SortHeader label="Título" active={sortKey === 'title'} desc={sortDesc} onClick={() => onColumnSort('title')} />
+            <SortHeader label="Álbum" active={sortKey === 'album'} desc={sortDesc} onClick={() => onColumnSort('album')} />
             {isAutomixActive && <span>BPM</span>}
             {isAutomixActive && <span>Tono</span>}
-            <span>Fecha en la que se añadió</span>
+            <SortHeader label="Fecha en la que se añadió" active={sortKey === 'added'} desc={!sortDesc} onClick={() => onColumnSort('added')} />
             <div className="flex justify-end pr-8">
-              <ClockIcon size={16} />
+              <SortHeader
+                label={<ClockIcon size={16} />}
+                title="Duración"
+                active={sortKey === 'duration'}
+                desc={sortDesc}
+                onClick={() => onColumnSort('duration')}
+              />
             </div>
           </div>
         )}
@@ -1672,8 +1922,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
         {/* Empty State when tracks.length === 0 and not loading */}
         {!loading && tracks.length === 0 && (
-          <div className="py-8 flex flex-col items-center justify-center text-center max-w-xl mx-auto">
-            {isLikedPlaylist ? (
+          <div className="py-12 flex flex-col items-center justify-center text-center max-w-xl mx-auto">
+            {filterQuery.trim() ? (
+              <div className="space-y-3">
+                <h3 className="text-xl font-bold text-white font-['SpotifyMixUITitle']">
+                  No se han encontrado resultados para «{filterQuery.trim()}»
+                </h3>
+                <p className="text-sm text-[#b3b3b3] max-w-md mx-auto">
+                  Comprueba que las palabras estén bien escritas o utiliza otras palabras clave.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setFilterQuery('')}
+                  className="mt-2 px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer"
+                >
+                  Borrar búsqueda
+                </button>
+              </div>
+            ) : isLikedPlaylist ? (
               <div className="space-y-4">
                 <div className="w-16 h-16 rounded-full bg-[#282828] flex items-center justify-center text-white/50 mx-auto shadow-inner">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1742,12 +2008,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                       e.preventDefault();
                       openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
                     }}
-                    style={LONG_LIST_ROW}
                     className={`grid ${
                       isAutomixActive
                         ? 'grid-cols-[20px_4fr_2.5fr_100px_90px_2fr_minmax(80px,1fr)]'
                         : 'grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)]'
-                    } gap-4 px-4 py-2 rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
+                    } gap-4 px-4 ${isCompact ? 'py-1' : 'py-2'} rounded-md hover:bg-white/10 cursor-pointer items-center transition-colors group ${
                       isThisTrackSelected ? 'bg-white/10' : ''
                     }`}
                   >
@@ -1782,12 +2047,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
                     {/* Track Title + Artists */}
                     <div className="flex items-center gap-3 min-w-0 pr-2">
-                      <TrackArtwork
-                        src={trackCovers[track.id] || getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
-                        alt={track.name}
-                        size={40}
-                        className="w-10 h-10 rounded shrink-0 object-cover shadow"
-                      />
+                      {!isCompact && (
+                        <TrackArtwork
+                          src={trackCovers[track.id] || getTrackCoverUrl(track, dynamicPlaylist.images?.[0]?.url)}
+                          alt={track.name}
+                          size={40}
+                          className="w-10 h-10 rounded shrink-0 object-cover shadow"
+                        />
+                      )}
                       <div className="min-w-0 flex-1">
                         <p
                           className={`text-sm font-semibold truncate ${
@@ -1852,8 +2119,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     )}
 
                     {/* Date Added */}
-                    <div className="text-xs text-[#b3b3b3]">
-                      {track.added_at || 'Reciente'}
+                    <div className="text-sm text-[#b3b3b3] truncate">
+                      {formatAddedAt(track.added_at)}
                     </div>
 
                     {/* Duration, Spotify Checkmark/Plus, and 3-Dots Menu */}

@@ -1,5 +1,6 @@
 import type { Track, Playlist } from '../types/spotify';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { getArtistPicture, ARTIST_IMAGE_CACHE } from '../utils/artistImage';
 
 /**
  * Resolves clean artist name from an artist ID or playlist name
@@ -119,7 +120,9 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
 
   // Cache in store if we found songs
   if (songs.length > 0) {
-    const artistCover = songs[0]?.album?.images?.[0]?.url || '';
+    const cachedPic = ARTIST_IMAGE_CACHE.get(cleanName.toLowerCase());
+    const artistPic = cachedPic || (await getArtistPicture(cleanName));
+    const artistCover = artistPic || songs[0]?.album?.images?.[0]?.url || '';
     const syntheticPlaylist: Playlist = {
       id: artistId,
       name: cleanName,

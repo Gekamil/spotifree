@@ -186,6 +186,8 @@ async function idbClearAll(): Promise<void> {
 // ---------------------------------------------------------------------------
 function mimeToExt(mime = ''): string {
   const m = mime.toLowerCase();
+  if (m.includes('flac')) return 'flac';
+  if (m.includes('wav')) return 'wav';
   if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
   if (m.includes('webm')) return 'webm';
   if (m.includes('ogg') || m.includes('opus')) return 'ogg';
@@ -216,12 +218,13 @@ export function sniffAudioFormat(bytes: Uint8Array): { valid: boolean; mime: str
   if (bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53) {
     return { valid: true, mime: 'audio/ogg', ext: 'ogg' };
   }
-  // RIFF / WAV or FLAC
-  if (
-    (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) ||
-    (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43)
-  ) {
-    return { valid: true, mime: 'audio/mp4', ext: 'm4a' };
+  // FLAC ('fLaC')
+  if (bytes[0] === 0x66 && bytes[1] === 0x4c && bytes[2] === 0x61 && bytes[3] === 0x43) {
+    return { valid: true, mime: 'audio/flac', ext: 'flac' };
+  }
+  // RIFF / WAV
+  if (bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46) {
+    return { valid: true, mime: 'audio/wav', ext: 'wav' };
   }
   return { valid: false, mime: '', ext: 'm4a' };
 }
@@ -347,7 +350,7 @@ async function getStoredAudioEntry(trackId: string): Promise<StoredTrackEntry | 
     if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
       const root = await (navigator.storage as any).getDirectory();
       const dir = await root.getDirectoryHandle('musica-spotifree');
-      for (const name of [`${clean}.m4a`, `${clean}.mp3`]) {
+      for (const name of [`${clean}.m4a`, `${clean}.mp3`, `${clean}.flac`, `${clean}.webm`, `${clean}.ogg`, `${clean}.wav`]) {
         try {
           const fh = await dir.getFileHandle(name);
           const file = await fh.getFile();
@@ -419,7 +422,7 @@ export async function getAllDownloadedTrackIds(): Promise<Set<string>> {
       const root = await (navigator.storage as any).getDirectory();
       const dir = await root.getDirectoryHandle('musica-spotifree');
       for await (const entry of (dir as any).values()) {
-        const m = String(entry?.name || '').match(/^([^/]+)\.(mp3|m4a|webm|ogg)$/i);
+        const m = String(entry?.name || '').match(/^([^/]+)\.(mp3|m4a|webm|ogg|flac|wav)$/i);
         if (m?.[1]) result.add(cleanTrackId(m[1]));
       }
     }
@@ -514,6 +517,26 @@ async function fetchChunkedAudioFromBackend(baseOrigin: string, track: Track, kn
 
   const chunks: ArrayBuffer[] = [firstBuf];
   let downloadedBytes = firstBuf.byteLength;
+  const directAudioUrl = firstRes.headers.get('x-direct-audio-url') || '';
+
+  // Fast CDN direct-CORS path when backend resolves a CORS-open audio URL (avoids repeated serverless round-trips)
+  if (downloadedBytes < totalLen && directAudioUrl) {
+    try {
+      const DIRECT_CHUNK = 8_388_608;
+      while (downloadedBytes < totalLen) {
+        const end = Math.min(totalLen - 1, downloadedBytes + DIRECT_CHUNK - 1);
+        const directRes = await fetch(directAudioUrl, {
+          headers: { Range: `bytes=${downloadedBytes}-${end}` },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(45000) : undefined,
+        });
+        if (!directRes.ok && directRes.status !== 206) break;
+        const buf = await directRes.arrayBuffer();
+        if (!buf || buf.byteLength === 0) break;
+        chunks.push(buf);
+        downloadedBytes += buf.byteLength;
+      }
+    } catch {}
+  }
 
   if (downloadedBytes < totalLen) {
     const nextParams = new URLSearchParams();
@@ -548,6 +571,96 @@ async function fetchChunkedAudioFromBackend(baseOrigin: string, track: Track, kn
   if (totalLen > 0 && finalBlob.size < Math.floor(totalLen * 0.98)) return null;
 
   return { blob: finalBlob, mimeType, ext, size: finalBlob.size, track };
+}
+
+/**
+ * Direct CORS fallback via tracks.monochrome.st when backend servers cannot extract the track.
+ */
+async function fetchDirectAudioViaMonochrome(track: Track): Promise<StoredTrackEntry | null> {
+  try {
+    const rawTitle = track.name || '';
+    const rawArtist = track.artists?.[0]?.name || '';
+    const cleanQ = `${rawTitle} ${rawArtist}`
+      .replace(/\s*[\[(](official.*?|remastered.*?|explicit|bonus track)[\])]/gi, '')
+      .trim();
+    if (!cleanQ) return null;
+
+    const searchRes = await fetch(
+      `https://tracks.monochrome.st/search/tracks?q=${encodeURIComponent(cleanQ)}&limit=8`,
+      { signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined }
+    );
+    if (!searchRes.ok) return null;
+    const data = await searchRes.json();
+    const items: any[] = Array.isArray(data?.tracks) ? data.tracks : [];
+    if (items.length === 0) return null;
+
+    const norm = (s = '') =>
+      s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    const targetTitle = norm(rawTitle);
+    const targetArtist = norm(rawArtist);
+    const titleTokens = targetTitle.split(' ').filter((w) => w.length >= 2);
+    const targetDurSec = track.duration_ms ? Math.round(track.duration_ms / 1000) : 0;
+
+    let best: any = null;
+    let bestScore = -999;
+
+    for (const item of items) {
+      if (!item?.id || item.playable === false) continue;
+      const candTitle = norm(item.title || '');
+      const candArtists = norm(Array.isArray(item.artistNames) ? item.artistNames.join(' ') : '');
+      const candFull = `${candTitle} ${candArtists}`.trim();
+      const candDurSec = Math.round((Number(item.duration) || 0) / 1000);
+      if (candDurSec > 0 && candDurSec < 45 && !(targetDurSec > 0 && targetDurSec < 45)) continue;
+      if (targetDurSec > 35 && candDurSec > 0 && Math.abs(candDurSec - targetDurSec) > 22) continue;
+      if (!targetFullAllows(candFull, targetTitle)) continue;
+
+      let score = 0;
+      if (candTitle === targetTitle) score += 80;
+      if (titleTokens.length > 0) {
+        const hits = titleTokens.filter((w) => candFull.includes(w)).length;
+        if (hits / titleTokens.length < 0.5) continue;
+        score += Math.round((hits / titleTokens.length) * 50);
+      }
+      if (targetArtist) {
+        const aTokens = targetArtist.split(' ').filter((w) => w.length >= 2);
+        const aHits = aTokens.filter((w) => candFull.includes(w)).length;
+        score += aHits > 0 ? 45 : -60;
+      }
+      if (targetDurSec > 35 && candDurSec > 0) {
+        score += Math.abs(candDurSec - targetDurSec) <= 5 ? 35 : 10;
+      }
+      if (score >= 35 && score > bestScore) {
+        bestScore = score;
+        best = item;
+      }
+    }
+
+    if (!best?.id) return null;
+    const binRes = await fetch(`https://tracks.monochrome.st/track/${best.id}`, {
+      signal: AbortSignal.timeout ? AbortSignal.timeout(45000) : undefined,
+    });
+    if (!binRes.ok) return null;
+    const blob = await binRes.blob();
+    const check = await validateAudioBlob(blob);
+    if (!check.valid) return null;
+    const mimeType = check.mime || 'audio/flac';
+    return {
+      blob: blob.type ? blob : new Blob([blob], { type: mimeType }),
+      mimeType,
+      ext: check.ext || 'flac',
+      size: blob.size,
+      track,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function targetFullAllows(candNorm: string, targetTitleNorm: string): boolean {
+  for (const tag of ['karaoke', 'instrumental', 'tribute', 'backing track', '8d audio', 'slowed', 'sped up']) {
+    if (candNorm.includes(tag) && !targetTitleNorm.includes(tag)) return false;
+  }
+  return true;
 }
 
 function base64ToUint8Array(b64: string): Uint8Array {
@@ -782,24 +895,31 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
   const knownVideoId = getCachedVideoIdForTrack(track);
   let extracted: StoredTrackEntry | null = null;
 
-  // Strategy 1: Primary chunked streaming endpoint (Vercel / configured API_BASE)
-  try {
-    extracted = await fetchChunkedAudioFromBackend(API_BASE, track, knownVideoId);
-  } catch (e) {
-    console.warn(`[offlineStorage] Strategy 1 failed for ${track.name}:`, e);
-  }
-
-  // Strategy 2: Capacitor Android APK direct phone-IP YouTube extraction (bypass server/datacenter limits)
-  if (!extracted && Capacitor.isNativePlatform()) {
+  // On Capacitor APK, try phone residential IP YouTube M4A (~3.5 MB) first before server FLAC/stream
+  if (Capacitor.isNativePlatform()) {
     extracted = await fetchDirectAudioViaCapacitor(track, knownVideoId);
   }
 
-  // Strategy 3: Render cloud backend fallback
+  // Primary backend streaming endpoint (Vercel / configured API_BASE with YouTube + Monochrome + SoundCloud)
+  if (!extracted) {
+    try {
+      extracted = await fetchChunkedAudioFromBackend(API_BASE, track, knownVideoId);
+    } catch (e) {
+      console.warn(`[offlineStorage] Primary backend strategy failed for ${track.name}:`, e);
+    }
+  }
+
+  // Direct CORS Monochrome lossless CDN fallback (works even if backend API is temporarily unavailable)
+  if (!extracted) {
+    extracted = await fetchDirectAudioViaMonochrome(track);
+  }
+
+  // Render cloud backend fallback
   if (!extracted && API_BASE !== RENDER_BACKEND_BASE) {
     try {
       extracted = await fetchChunkedAudioFromBackend(RENDER_BACKEND_BASE, track, knownVideoId);
     } catch (e) {
-      console.warn(`[offlineStorage] Strategy 3 failed for ${track.name}:`, e);
+      console.warn(`[offlineStorage] Render backend strategy failed for ${track.name}:`, e);
     }
   }
 
@@ -831,7 +951,7 @@ export async function deleteDownloadedTrack(trackId: string): Promise<void> {
     if (typeof navigator !== 'undefined' && navigator.storage && (navigator.storage as any).getDirectory) {
       const root = await (navigator.storage as any).getDirectory();
       const dir = await root.getDirectoryHandle('musica-spotifree');
-      for (const ext of ['mp3', 'm4a', 'webm', 'ogg']) {
+      for (const ext of ['mp3', 'm4a', 'webm', 'ogg', 'flac', 'wav']) {
         await dir.removeEntry(`${clean}.${ext}`).catch(() => {});
       }
     }

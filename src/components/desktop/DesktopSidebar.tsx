@@ -34,6 +34,20 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   const [filter, setFilter] = useState<'all' | 'playlists' | 'artists'>('all');
   const [showSearchInput, setShowSearchInput] = useState(false);
   const [librarySearch, setLibrarySearch] = useState('');
+  const [libSize, setLibSize] = useState<'collapsed' | 'normal' | 'wide'>(() => {
+    try {
+      const v = localStorage.getItem('spotifree_library_size');
+      return v === 'collapsed' || v === 'wide' ? v : 'normal';
+    } catch {
+      return 'normal';
+    }
+  });
+  const setSize = (v: 'collapsed' | 'normal' | 'wide') => {
+    setLibSize(v);
+    try {
+      localStorage.setItem('spotifree_library_size', v);
+    } catch {}
+  };
 
   // 1:1 Spotify "Importa tu música" prompt card state (dismissible for 2 days)
   const [showImportCard, setShowImportCard] = useState(() => {
@@ -150,11 +164,78 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     }
   };
 
+  // Spotify: "Contraer Tu biblioteca" leaves only the covers; "Ampliar" makes it wide with a grid
+  if (libSize === 'collapsed') {
+    return (
+      <aside className="w-[72px] h-full flex flex-col items-center bg-[#121212] rounded-lg select-none shrink-0 text-white py-3 gap-2">
+        <button
+          onClick={() => setSize('normal')}
+          title="Abrir Tu biblioteca"
+          aria-label="Abrir Tu biblioteca"
+          className="w-10 h-10 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white transition-colors cursor-pointer"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M14.5 2.134a1 1 0 0 1 1 0l6 3.464a1 1 0 0 1 .5.866V21a1 1 0 0 1-1 1h-6a1 1 0 0 1-1-1V3a1 1 0 0 1 .5-.866M16 4.732V20h4V7.041zM3 22a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1m6 0a1 1 0 0 1-1-1V3a1 1 0 0 1 2 0v18a1 1 0 0 1-1 1" />
+          </svg>
+        </button>
+        <div className="relative">
+          <button
+            data-create-button
+            onClick={toggleCreateMenu}
+            title="Crear"
+            aria-label="Crear"
+            className="w-8 h-8 rounded-full bg-[#1f1f1f] hover:bg-[#2a2a2a] flex items-center justify-center text-white cursor-pointer transition-colors"
+          >
+            <CreateNativeIcon size={16} />
+          </button>
+          <CreateMenuDropdown />
+        </div>
+        <div className="flex-1 w-full overflow-y-auto scrollbar-none flex flex-col items-center gap-1 pt-1">
+          {processedPlaylists.map((playlist) => {
+            const isLiked = playlist.id === 'liked-songs';
+            const autoCover = getPlaylistCover(playlist);
+            const cover = isLiked ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' : autoCover === EMPTY_PLAYLIST_COVER ? '' : toHDImage(autoCover);
+            const isArtist = checkIsArtist(playlist);
+            return (
+              <button
+                key={playlist.id}
+                onClick={() => onSelectPlaylist(playlist)}
+                onContextMenu={(e) => {
+                  e.preventDefault();
+                  openContextMenu(e.clientX, e.clientY, undefined, playlist.id);
+                }}
+                title={playlist.name}
+                className={`p-2 rounded-md cursor-pointer transition-colors ${selectedPlaylistId === playlist.id ? 'bg-[#282828]' : 'hover:bg-[#1a1a1a]'}`}
+              >
+                {cover ? (
+                  <img
+                    src={cover}
+                    alt={playlist.name}
+                    onError={onPlaylistCoverError(playlist)}
+                    referrerPolicy="no-referrer"
+                    className={`w-12 h-12 object-cover bg-[#282828] ${isArtist ? 'rounded-full' : 'rounded'}`}
+                  />
+                ) : (
+                  <span className="w-12 h-12 rounded bg-[#282828] flex items-center justify-center text-[#b3b3b3]">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                    </svg>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-[330px] h-full flex flex-col bg-[#121212] rounded-lg select-none shrink-0 text-white relative">
+    <aside className={`${libSize === 'wide' ? 'w-[min(640px,48vw)]' : 'w-[330px]'} h-full flex flex-col bg-[#121212] rounded-lg select-none shrink-0 text-white relative transition-[width] duration-300`}>
       {/* Header: Tu biblioteca + Crear + Expand */}
       <div className="p-4 pb-2 flex items-center justify-between relative group/sidebar-header">
         <button
+          onClick={() => setSize('collapsed')}
           className="flex items-center text-[#b3b3b3] hover:text-white transition-colors duration-200 group/collapse-btn overflow-hidden cursor-pointer"
           title="Contraer Tu biblioteca"
         >
@@ -179,10 +260,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           <CreateMenuDropdown />
 
           <button
-            title="Ampliar Tu biblioteca"
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-[#1f1f1f] hover:scale-104 transition-all"
+            onClick={() => setSize(libSize === 'wide' ? 'normal' : 'wide')}
+            title={libSize === 'wide' ? 'Reducir Tu biblioteca' : 'Ampliar Tu biblioteca'}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-[#1f1f1f] hover:scale-104 transition-all cursor-pointer"
           >
-            <ExpandLibraryNativeIcon size={16} />
+            <span style={{ transform: libSize === 'wide' ? 'scaleX(-1)' : undefined }} className="flex">
+              <ExpandLibraryNativeIcon size={16} />
+            </span>
           </button>
         </div>
       </div>
@@ -305,7 +389,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         ) : viewMode === 'cuadricula' || viewMode === 'cuadricula-compacta' ? (
           <div
             className={`grid gap-2 ${
-              viewMode === 'cuadricula-compacta' ? 'grid-cols-3' : 'grid-cols-2'
+              libSize === 'wide'
+                ? viewMode === 'cuadricula-compacta' ? 'grid-cols-5' : 'grid-cols-4'
+                : viewMode === 'cuadricula-compacta' ? 'grid-cols-3' : 'grid-cols-2'
             }`}
           >
             {processedPlaylists.map((playlist) => {
