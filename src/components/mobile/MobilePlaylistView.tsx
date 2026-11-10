@@ -751,6 +751,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
   const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
+  // Like Spotify, only your own playlists can be edited (not the ones you just follow)
+  const ownerOf = (activePlaylist as any).owner || (playlist as any).owner || {};
+  const isOwnPlaylist =
+    isLikedPlaylist ||
+    Boolean((playlist as any).is_custom || (activePlaylist as any).is_custom) ||
+    /^(custom-|pl-custom-|imported-|local-)/.test(String(playlist.id || '')) ||
+    (!!user?.id && ownerOf.id === user.id) ||
+    (!!user?.display_name && ownerOf.display_name === user.display_name);
 
   if (
     playlist.id === 'spotify-dj' ||
@@ -1575,7 +1583,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
       {!isArtist && tracks.length > 0 && (
         <PlaylistToolbar
-          canEdit={canAddTracksToThisList}
+          canEdit={canAddTracksToThisList && isOwnPlaylist}
           sortKey={sortKey}
           onAdd={() => setIsAddScreenOpen(true)}
           onEdit={() => setIsEditScreenOpen(true)}

@@ -72,12 +72,18 @@ function setRestoredIds(ids: string[]) {
 
 /** What travels in the account (stats map): the trash with light songs, and the restored ids */
 export function trashForCloud() {
-  return {
-    playlistTrash: read()
-      .slice(0, 20)
-      .map((e) => ({ ...e, playlist: { ...e.playlist, tracks: { total: e.total, items: (e.playlist.tracks?.items || []).slice(0, 300).map(slimTrack) } } })),
-    restoredPlaylistIds: getRestoredIds(),
-  };
+  // The account document holds 1 MB in all: the trash gets ~600 songs (~200 KB). The newest
+  // deleted playlists go first; older ones stay recoverable on the device that deleted them.
+  const SONG_BUDGET = 600;
+  let left = SONG_BUDGET;
+  const playlistTrash: TrashEntry[] = [];
+  for (const e of read().slice(0, 10)) {
+    const items = (e.playlist.tracks?.items || []).slice(0, 300);
+    if (items.length > left) break;
+    left -= items.length;
+    playlistTrash.push({ ...e, playlist: { ...e.playlist, images: e.image ? [{ url: e.image }] : [], tracks: { total: e.total, items: items.map(slimTrack) } } });
+  }
+  return { playlistTrash, restoredPlaylistIds: getRestoredIds() };
 }
 
 /** A playlist is being deleted: keep a copy (empty brand-new lists are not worth keeping) */

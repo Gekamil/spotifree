@@ -27,9 +27,10 @@ export const ConfirmDialogHost: React.FC = () => {
   useEffect(() => {
     if (!req) return;
     setClosing(false);
+    // (Enter is left to the focused button: the confirm button has the focus when it opens, and
+    // Enter on "Cancelar" must cancel, not delete)
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') finish(false);
-      if (e.key === 'Enter') finish(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

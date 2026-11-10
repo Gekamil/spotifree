@@ -308,6 +308,8 @@ export async function saveUserDataToFirestore(uid: string, data: Partial<CloudUs
     const cleaned = prepareUserDocForFirestore(uid, data);
     if (!cleaned) return false;
     lastWrittenUpdatedAt = cleaned.updatedAt;
+    writtenUpdatedAts.add(cleaned.updatedAt);
+    if (writtenUpdatedAts.size > 30) writtenUpdatedAts.delete(writtenUpdatedAts.values().next().value as number);
     await setDoc(userRef, cleaned, { merge: true });
     lastCloudSaveError = '';
     return true;
@@ -385,7 +387,11 @@ export function prepareUserDocForFirestore(uid: string, data: Partial<CloudUserD
       payload.playlists = fitPlaylists(payload.playlists, Math.max(150000, BUDGET - rest));
     }
     if (byteSize(payload) > BUDGET && payload.stats) {
-      delete payload.stats.bannerImage;
+      // The trash of deleted playlists gives way first (it stays on the device that deleted them)
+      while (byteSize(payload) > BUDGET && Array.isArray(payload.stats.playlistTrash) && payload.stats.playlistTrash.length) {
+        payload.stats.playlistTrash = payload.stats.playlistTrash.slice(0, -1);
+      }
+      if (byteSize(payload) > BUDGET) delete payload.stats.bannerImage;
       if (byteSize(payload) > BUDGET) delete payload.stats.avatarImage;
       if (byteSize(payload) > BUDGET && payload.stats.taste?.signals) payload.stats.taste = { ...payload.stats.taste, signals: payload.stats.taste.signals.slice(-400) };
     }
@@ -409,7 +415,8 @@ export async function getUserDataFromFirestore(uid: string): Promise<CloudUserDa
   }
 }
 
-/** updatedAt of the last document this device wrote (its echo from the server is not a remote change) */
+/** updatedAt of the documents this device wrote lately (their echo from the server is not a remote change) */
+const writtenUpdatedAts = new Set<number>();
 export let lastWrittenUpdatedAt = 0;
 
 export function subscribeToUserDataFirestore(
@@ -426,7 +433,7 @@ export function subscribeToUserDataFirestore(
       // applying an older echo could undo a change made a moment later
       if (snap.metadata.hasPendingWrites) return;
       const data = snap.data() as CloudUserData;
-      if (data?.updatedAt && data.updatedAt === lastWrittenUpdatedAt) return;
+      if (data?.updatedAt && writtenUpdatedAts.has(data.updatedAt)) return;
       onUpdate(data);
     },
     (err) => {

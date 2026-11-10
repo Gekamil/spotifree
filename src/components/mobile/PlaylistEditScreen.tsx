@@ -26,6 +26,18 @@ export const PlaylistEditScreen: React.FC<{
   const [smartLabel, setSmartLabel] = useState<string | null>(null);
   const startY = useRef(0);
   const startIndex = useRef(0);
+  // A stable key per song (not its position): while dragging, the row moves in the DOM instead of
+  // being rebuilt, so the finger keeps hold of it
+  const keys = useRef(new WeakMap<Track, number>());
+  const nextKey = useRef(0);
+  const keyOf = (t: Track) => {
+    let k = keys.current.get(t);
+    if (k === undefined) {
+      k = ++nextKey.current;
+      keys.current.set(t, k);
+    }
+    return k;
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -47,7 +59,9 @@ export const PlaylistEditScreen: React.FC<{
 
   const onPointerDown = (e: React.PointerEvent, index: number) => {
     e.preventDefault();
-    (e.target as HTMLElement).setPointerCapture?.(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+    } catch {}
     startY.current = e.clientY;
     startIndex.current = index;
     setDrag({ index, offset: 0 });
@@ -134,7 +148,7 @@ export const PlaylistEditScreen: React.FC<{
           const dragging = drag?.index === i;
           return (
             <div
-              key={`${t.id}-${i}`}
+              key={keyOf(t)}
               className={`flex items-center gap-3 px-3 ${dragging ? 'bg-[#2a2a2a] shadow-[0_8px_24px_rgba(0,0,0,0.6)] relative z-10 rounded-md' : ''}`}
               style={{ height: ROW, transform: dragging ? `translateY(${drag!.offset}px) scale(1.02)` : undefined, transition: dragging ? 'none' : 'transform 150ms' }}
             >

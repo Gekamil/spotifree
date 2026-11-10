@@ -12,6 +12,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { execSync } from 'node:child_process';
 
 const root = process.cwd();
 const appDir = path.join(root, 'android', 'app');
@@ -425,9 +426,20 @@ if (!gradle.includes('androidx.media:media')) {
 if (!gradle.includes('checkReleaseBuilds')) {
   gradle = gradle.replace(/android\s*\{/, (m) => `${m}\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }`);
 }
-// Which build this APK is: versionName = the commit it was built from (the app compares it with
-// the latest published APK to offer the update; web changes arrive by themselves, native ones don't)
-const buildSha = (process.env.GITHUB_SHA || '').slice(0, 7);
+// Which build this APK is: versionName = the last commit that changed the app's native parts, the
+// same one the release notes publish as "native:" (.github/workflows/android-apk.yml). The app
+// compares both to offer the update; web changes arrive by themselves, native ones don't.
+// (GITHUB_SHA alone is the newest pushed commit, which may not be a native change.)
+let buildSha = '';
+if (process.env.GITHUB_SHA) {
+  try {
+    buildSha = execSync(
+      "git log -1 --format=%H -- native 'scripts/setup-android-*.mjs' capacitor.config.ts package.json package-lock.json public/offline.html public/icon-mobile-512.png public/app-icons .github/workflows/android-apk.yml",
+      { cwd: root, encoding: 'utf8' }
+    ).trim().slice(0, 7);
+  } catch {}
+  if (!buildSha) buildSha = process.env.GITHUB_SHA.slice(0, 7);
+}
 if (buildSha) {
   gradle = gradle.replace(/versionName\s+"[^"]*"/, `versionName "${buildSha}"`);
   const runNumber = Number(process.env.GITHUB_RUN_NUMBER || 0);
