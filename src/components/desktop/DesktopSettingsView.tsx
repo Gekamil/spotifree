@@ -8,6 +8,8 @@ import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
 import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
 import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
+import { CloudSyncBadge } from '../common/CloudSyncBadge';
+import { RecoverPlaylistsSection } from '../common/RecoverPlaylistsSection';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -382,7 +384,10 @@ export const DesktopSettingsView: React.FC = () => {
         {/* 1. CUENTA Y SESIÓN (Spotify 1:1 Clean Design) */}
         {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar') && (
           <section className="space-y-4">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta Spotifree (Sincronización en la Nube)</h2>
+            <div className="flex items-center justify-between gap-3 max-w-xl">
+              <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta Spotifree</h2>
+              <CloudSyncBadge />
+            </div>
             <div className="max-w-xl">
               <SpotifreeAuthCard showCookieInput={false} />
             </div>
@@ -862,6 +867,11 @@ export const DesktopSettingsView: React.FC = () => {
             </div>
           </section>
         )}
+
+        {/* Recuperar playlists borradas (90 días) */}
+        <div className="pt-6 border-t border-white/5 max-w-2xl">
+          <RecoverPlaylistsSection variant="desktop" />
+        </div>
 
         {/* Ajustes avanzados: how shuffle orders the songs */}
         <div className="pt-6 border-t border-white/5 max-w-2xl">

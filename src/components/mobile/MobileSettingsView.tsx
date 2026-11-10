@@ -7,6 +7,8 @@ import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
 import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
 import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
+import { CloudSyncBadge } from '../common/CloudSyncBadge';
+import { RecoverPlaylistsSection } from '../common/RecoverPlaylistsSection';
 import { SettingsMenu, SETTINGS_PAGE_TITLES, type SettingsPage } from './SettingsMenu';
 import {
   getBackgroundPlaybackAllowed,
@@ -313,7 +315,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1 mb-1">
             <span className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">Cuenta Spotifree</span>
-            <span className="text-[10px] text-[#1ed760] font-bold uppercase tracking-wider">SINCRONIZACIÓN ACTIVADA</span>
+            <CloudSyncBadge />
           </div>
           <div className="rounded-2xl overflow-hidden border border-white/[0.06] bg-[#181818]">
             <div className="px-4 pt-4 pb-2">
@@ -688,6 +690,8 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         </>)}
 
         {page === 'advanced' && <AdvancedSettingsSection variant="mobile" />}
+
+        {page === 'recover' && <RecoverPlaylistsSection variant="mobile" />}
 
         {page === 'storage' && (<>
         {/* Almacenamiento & Caché Real */}

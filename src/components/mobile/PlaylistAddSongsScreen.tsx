@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Track } from '../../types/spotify';
 import { searchSpotify } from '../../services/spotifyApi';
 import { filterMusicTracksOnly } from '../../utils/trackFilter';
@@ -70,7 +71,7 @@ export const PlaylistAddSongsScreen: React.FC<{
   };
   const list = query.trim() ? results : suggestions;
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-[120] bg-[#121212] text-white flex flex-col font-['SpotifyMixUI'] transition-transform duration-200 ease-out ${
         closing ? 'translate-y-full' : 'translate-y-0 animate-in slide-in-from-bottom duration-300'
@@ -164,6 +165,7 @@ export const PlaylistAddSongsScreen: React.FC<{
           );
         })}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

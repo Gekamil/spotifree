@@ -14,6 +14,7 @@ import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
 import { MobileHeader } from './MobileHeader';
 import { MobileProfileDrawer } from './MobileProfileDrawer';
+import { confirmDialog } from '../common/ConfirmDialog';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
 import { MobilePlaylistView } from './MobilePlaylistView';
 import { MobileSearchView } from './MobileSearchView';
@@ -213,10 +214,17 @@ export const MobileLayout: React.FC = () => {
     setEditTargetDesc(pl.description || '');
   };
 
-  const handleDeletePlaylist = (id: string) => {
-    useSpotifyDataStore.getState().deletePlaylist(id);
+  const handleDeletePlaylist = async (id: string) => {
+    const name = playlistMenuTarget?.name || 'esta playlist';
     setPlaylistMenuTarget(null);
     setLongPressedPlaylistId(null);
+    const ok = await confirmDialog({
+      title: '¿Eliminar de Tu biblioteca?',
+      body: `Se eliminará «${name}» de Tu biblioteca. Podrás recuperarla durante 90 días en Ajustes › Recuperar playlists.`,
+      confirmLabel: 'Eliminar',
+    });
+    if (!ok) return;
+    useSpotifyDataStore.getState().deletePlaylist(id);
     setToastMessage('Se ha eliminado de tu biblioteca');
     setTimeout(() => setToastMessage(null), 2500);
   };

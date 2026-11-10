@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { addToTrash, trashForCloud } from '../services/playlistTrash';
 import type { Playlist, UserProfile, Track } from '../types/spotify';
 import {
   initiateSpotifyLogin,
@@ -939,6 +940,14 @@ const store = create<SpotifyDataState>((set, get) => ({
       return pClean === cleanId;
     };
 
+    // Recoverable for 90 days (Ajustes › Recuperar playlists): a copy with its songs goes to the trash
+    try {
+      const s0 = get();
+      const victim = s0.playlistDetailsCache[id] || s0.playlistDetailsCache[cleanId] || s0.playlists.find((p) => matchId(p.id));
+      const listed = s0.playlists.find((p) => matchId(p.id));
+      if (victim) addToTrash({ ...(listed || {}), ...victim, is_new: (listed as any)?.is_new ?? (victim as any).is_new } as Playlist);
+    } catch {}
+
     set((s) => {
       const remainingPlaylists = s.playlists.filter((p) => !matchId(p.id));
       const newCache = { ...s.playlistDetailsCache };
@@ -1001,7 +1010,12 @@ const store = create<SpotifyDataState>((set, get) => ({
 
           // 5. Cloud sync to Spotifree account if logged in
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
-            syncSpotifreeAccount({ playlists: remainingPlaylists, deletedPlaylistIds: deletedList }).catch(() => {});
+            syncSpotifreeAccount({
+              playlists: remainingPlaylists,
+              deletedPlaylistIds: deletedList,
+              // the trash travels with the account, so it can be recovered from another device
+              stats: trashForCloud(),
+            } as any).catch(() => {});
           });
 
           // 6. Global event for live UI navigation and cross-tab synchronization

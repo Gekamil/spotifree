@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { Track } from '../../types/spotify';
 import { getTrackCoverUrl, TrackArtwork } from '../../utils/trackCovers';
 import { parseTrackArtists } from '../../utils/trackArtists';
@@ -82,7 +83,7 @@ export const PlaylistEditScreen: React.FC<{
     setSmartLabel(`Ordenadas para mezclar ${labels[strategy] || ''}`.trim());
   };
 
-  return (
+  return createPortal(
     <div
       className={`fixed inset-0 z-[120] bg-[#121212] text-white flex flex-col font-['SpotifyMixUI'] select-none transition-transform duration-200 ease-out ${
         closing ? 'translate-y-full' : 'translate-y-0 animate-in slide-in-from-bottom duration-300'
@@ -172,6 +173,7 @@ export const PlaylistEditScreen: React.FC<{
         })}
         {list.length === 0 && <p className="px-4 py-10 text-center text-[14px] text-[#a7a7a7]">La playlist se quedará vacía.</p>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

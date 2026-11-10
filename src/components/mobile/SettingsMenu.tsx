@@ -1,9 +1,10 @@
 import React from 'react';
 
-export type SettingsPage = 'account' | 'display' | 'playback' | 'eq' | 'advanced' | 'storage' | 'social' | 'about';
+export type SettingsPage = 'account' | 'recover' | 'display' | 'playback' | 'eq' | 'advanced' | 'storage' | 'social' | 'about';
 
 export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
   account: 'Cuenta y gustos',
+  recover: 'Recuperar playlists',
   display: 'Idioma y pantalla',
   playback: 'Reproducción',
   eq: 'Ecualizador',
@@ -15,6 +16,7 @@ export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
 
 const ICONS: Record<SettingsPage, React.ReactNode> = {
   account: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z" />,
+  recover: <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4m5-1v5l3 2" />,
   display: <path d="M3 5h18v11H3zm6 14h6v2H9z" />,
   playback: <path d="M8 5v14l11-7z" />,
   eq: <path d="M5 21v-7m0-4V3m7 18v-9m0-4V3m7 18v-5m0-4V3M2 14h6m1-6h6m1 8h6" />,
@@ -29,6 +31,7 @@ const GROUPS: Array<{ title: string; items: Array<{ id: SettingsPage; subtitle: 
     title: 'General',
     items: [
       { id: 'account', subtitle: 'Cuenta de Spotifree, sincronización y tus gustos' },
+      { id: 'recover', subtitle: 'Las que has borrado en los últimos 90 días' },
       { id: 'display', subtitle: 'Idioma, banners e icono de la app' },
     ],
   },

@@ -46,6 +46,8 @@ import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
 import { PlaylistToolbar, PlaylistSortSheet, loadPlaylistSort, savePlaylistSort, sortPlaylistTracks, type PlaylistSortKey } from './PlaylistTools';
 import { PlaylistAddSongsScreen } from './PlaylistAddSongsScreen';
 import { PlaylistEditScreen } from './PlaylistEditScreen';
+import { confirmDialog } from '../common/ConfirmDialog';
+import { showGlobalToast } from '../../utils/globalToast';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
@@ -121,7 +123,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [editName, setEditName] = useState(playlist.name || '');
   const [editDesc, setEditDesc] = useState(playlist.description || '');
   const [editCover, setEditCover] = useState(playlist.images?.[0]?.url || '');
-  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
   const [activeTrackMenu, setActiveTrackMenu] = useState<Track | null>(null);
   const [isAddToPlaylistModalOpen, setIsAddToPlaylistModalOpen] = useState(false);
   const [transitionModalPair, setTransitionModalPair] = useState<{ trackA: Track; trackB: Track } | null>(null);
@@ -2101,37 +2102,23 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               />
 
               {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
-                <div>
-                  {!isConfirmDeleteOpen ? (
-                    <SheetItem danger icon={<TrashNativeIcon size={20} />} label="Eliminar playlist" onClick={() => setIsConfirmDeleteOpen(true)} />
-                  ) : (
-                    <div className="p-3 bg-red-950/40 border border-red-500/30 rounded-xl space-y-2 mt-1">
-                      <p className="text-xs text-white/90 font-medium">
-                        ¿Seguro que deseas eliminar «{activePlaylist.name}» de tu biblioteca?
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => {
-                            setIsConfirmDeleteOpen(false);
-                            setIsOptionsOpen(false);
-                            deletePlaylist(activePlaylist.id);
-                            deletePlaylist(cleanId);
-                            onBack();
-                          }}
-                          className="flex-1 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
-                        >
-                          Eliminar
-                        </button>
-                        <button
-                          onClick={() => setIsConfirmDeleteOpen(false)}
-                          className="flex-1 py-2 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs uppercase tracking-wider cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <SheetItem
+                  icon={<TrashNativeIcon size={20} />}
+                  label="Eliminar playlist"
+                  onClick={async () => {
+                    setIsOptionsOpen(false);
+                    const ok = await confirmDialog({
+                      title: '¿Eliminar de Tu biblioteca?',
+                      body: `Se eliminará «${activePlaylist.name}» de Tu biblioteca. Podrás recuperarla durante 90 días en Ajustes › Recuperar playlists.`,
+                      confirmLabel: 'Eliminar',
+                    });
+                    if (!ok) return;
+                    deletePlaylist(activePlaylist.id);
+                    deletePlaylist(cleanId);
+                    showGlobalToast(`Se ha eliminado «${activePlaylist.name}» de Tu biblioteca`);
+                    onBack();
+                  }}
+                />
               )}
             </SheetList>
       </MobileSheet>

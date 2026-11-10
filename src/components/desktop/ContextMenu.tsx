@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useUIStore } from '../../store/useUIStore';
+import { confirmDialog } from '../common/ConfirmDialog';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -238,10 +239,17 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
     const plId = targetPlaylist?.id || contextMenu.playlistId;
     if (plId && isUserCreatedPlaylist && !isLikedPlaylist) {
       const plName = targetPlaylist?.name || 'esta lista';
-      if (window.confirm(`¿Seguro que deseas eliminar «${plName}»?`)) {
+      closeContextMenu();
+      void confirmDialog({
+        title: '¿Eliminar de Tu biblioteca?',
+        body: `Se eliminará «${plName}» de Tu biblioteca. Podrás recuperarla durante 90 días en Ajustes › Recuperar playlists.`,
+        confirmLabel: 'Eliminar',
+      }).then((ok) => {
+        if (!ok) return;
         deletePlaylist(plId);
         setActiveMainTab('home');
-      }
+      });
+      return;
     }
     closeContextMenu();
   };

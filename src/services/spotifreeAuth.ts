@@ -18,10 +18,22 @@ import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { applyRemoteSettings } from './settingsSync';
 import { showGlobalToast } from '../utils/globalToast';
+import { create } from 'zustand';
+import { mergeCloudTrash } from './playlistTrash';
 
 /** Notices about saving to the account: once per session / at most once a minute */
 let warnedNoAccount = false;
 let lastSaveWarning = 0;
+let lastRemoteNotice = 0;
+
+/** State of the account's sync, shown in Settings (and used for the "updated from another device" notice) */
+export type CloudSyncState = 'idle' | 'saving' | 'saved' | 'error' | 'offline' | 'local';
+export const useCloudSync = create<{ state: CloudSyncState; savedAt: number; receivedAt: number; error: string }>(() => ({
+  state: 'idle',
+  savedAt: 0,
+  receivedAt: 0,
+  error: '',
+}));
 
 export interface SpotifreeAccount {
   uid?: string;
@@ -336,6 +348,7 @@ export async function syncSpotifreeAccount(
   const uid = payload.uid || current?.uid;
 
   if (!email) {
+    useCloudSync.setState({ state: 'local' });
     // Changes without a Spotifree account stay on this device: say so once
     if ((payload.playlists || payload.likedTracks) && !warnedNoAccount) {
       warnedNoAccount = true;
@@ -399,6 +412,8 @@ export async function syncSpotifreeAccount(
   const merged: SpotifreeAccount = {
     ...(current || {}),
     ...payload,
+    // stats is a map of independent parts (settings, taste, trash…): a payload adds to it
+    ...(payload.stats ? { stats: { ...((current as any)?.stats || {}), ...payload.stats } } : {}),
     playlists: cleanPlaylists,
     deletedPlaylistIds: Array.from(deletedSet),
     likedTracks: cleanLikedTracks,
@@ -409,7 +424,12 @@ export async function syncSpotifreeAccount(
 
   // 1. Sync to Cloud Firestore if user is authenticated with Firebase
   if (uid && isFirebaseConfigured()) {
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    // Offline the save waits in Firestore's queue and goes out when the connection is back
+    useCloudSync.setState({ state: offline ? 'offline' : 'saving' });
     const ok = await saveUserDataToFirestore(uid, merged);
+    if (ok) useCloudSync.setState({ state: 'saved', savedAt: Date.now(), error: '' });
+    else useCloudSync.setState({ state: 'error', error: lastCloudSaveError || 'sin conexión' });
     // A failed save used to be silent: the change then never reached the other devices
     if (!ok && Date.now() - lastSaveWarning > 60000) {
       lastSaveWarning = Date.now();
@@ -450,6 +470,21 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   const candidates = [acc.settings, (acc as any).stats?.appSettings].filter((x) => x && x.values);
   const syncedSettings = candidates.sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
   if (syncedSettings) applyRemoteSettings(syncedSettings);
+
+  // 1a-bis. Trash of deleted playlists and the ones restored on another device: a restored playlist
+  // must stop being "deleted" here too, or this device would keep hiding it
+  if (st.playlistTrash || st.restoredPlaylistIds) {
+    const restored: string[] = Array.isArray(st.restoredPlaylistIds) ? st.restoredPlaylistIds : [];
+    mergeCloudTrash(Array.isArray(st.playlistTrash) ? st.playlistTrash : [], restored);
+    if (restored.length) {
+      const r = new Set(restored);
+      acc = { ...acc, deletedPlaylistIds: (acc.deletedPlaylistIds || []).filter((x) => !r.has(x)) };
+      try {
+        const localD: string[] = JSON.parse(window.localStorage.getItem('spotifree_deleted_playlist_ids') || '[]');
+        window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(localD.filter((x) => !r.has(x))));
+      } catch {}
+    }
+  }
 
   // 1b. Sync deleted playlist IDs if present in cloud account
   if (Array.isArray(acc.deletedPlaylistIds) && typeof window !== 'undefined') {
@@ -658,6 +693,7 @@ export function initAuthListener(): () => void {
       applyAccountToAppStores(acc);
 
       // Realtime listener for cross-device updates (PC <-> Mobile)
+      let firstSnapshot = true;
       unsubscribeFirestore = subscribeToUserDataFirestore(user.uid, (fresh) => {
         if (!fresh) return;
         const freshAcc: SpotifreeAccount = {
@@ -675,6 +711,16 @@ export function initAuthListener(): () => void {
         };
         saveCurrentSpotifreeAccount(freshAcc);
         applyAccountToAppStores(freshAcc);
+        // Real time: a change made on another device just arrived (the first value is just the load)
+        if (firstSnapshot) {
+          firstSnapshot = false;
+          return;
+        }
+        useCloudSync.setState({ receivedAt: Date.now() });
+        if (Date.now() - lastRemoteNotice > 30000) {
+          lastRemoteNotice = Date.now();
+          showGlobalToast('Tu biblioteca se ha actualizado con los cambios de otro dispositivo');
+        }
       });
     } else {
       // Never wipe out a locally stored account/cookie just because Firebase user is null
