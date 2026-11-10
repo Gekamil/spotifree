@@ -2211,24 +2211,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                     onClick={() => {
                       saveCustomTrackToStorage(targetPl.id, false, activeTrackMenu, user?.id);
 
-                      // Update in-memory playlist tracks and cache immediately
+                      // Store, cache, this device AND the account in the cloud (updatePlaylist syncs it,
+                      // so the change also shows up on the web and other devices)
                       const store = useSpotifyDataStore.getState();
-                      const currentPl = store.playlists.find((p) => p.id === targetPl.id);
+                      const currentPl = store.playlistDetailsCache[targetPl.id] || store.playlists.find((p) => p.id === targetPl.id);
                       if (currentPl) {
                         const existingItems = currentPl.tracks?.items || [];
                         if (!existingItems.some((t) => t.id === activeTrackMenu.id)) {
-                          const newItems = [activeTrackMenu, ...existingItems];
-                          const updatedPl = {
-                            ...currentPl,
-                            tracks: { total: newItems.length, items: newItems },
-                          };
-                          useSpotifyDataStore.setState((s) => ({
-                            playlists: s.playlists.map((p) => (p.id === targetPl.id ? updatedPl : p)),
-                            playlistDetailsCache: {
-                              ...s.playlistDetailsCache,
-                              [targetPl.id]: updatedPl,
-                            },
-                          }));
+                          // Like Spotify: a new song goes to the end
+                          const newItems = [...existingItems, { ...activeTrackMenu, added_at: new Date().toISOString() }];
+                          store.updatePlaylist(targetPl.id, { tracks: { total: newItems.length, items: newItems } });
                         }
                       }
 

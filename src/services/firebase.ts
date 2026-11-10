@@ -249,33 +249,147 @@ function cleanDataForFirestore(obj: any): any {
   return cleaned;
 }
 
+/** The last reason a save to the cloud failed ('' when the last one worked) */
+export let lastCloudSaveError = '';
+
+const byteSize = (x: unknown) => {
+  try {
+    return new Blob([JSON.stringify(x)]).size;
+  } catch {
+    return JSON.stringify(x || '').length;
+  }
+};
+
+/** A song with just what the app needs (Firestore documents are limited to 1 MB) */
+function slimTrack(t: any): any {
+  if (!t || typeof t !== 'object') return t;
+  const out: any = {
+    id: t.id,
+    name: t.name,
+    duration_ms: t.duration_ms || 0,
+    artists: (t.artists || []).slice(0, 4).map((a: any) => ({ id: a?.id || '', name: a?.name || '' })),
+    album: {
+      id: t.album?.id || '',
+      name: t.album?.name || '',
+      images: t.album?.images?.[0]?.url && !String(t.album.images[0].url).startsWith('data:') ? [{ url: t.album.images[0].url }] : [],
+    },
+  };
+  if (t.added_at) out.added_at = t.added_at;
+  if (t.added_by && typeof t.added_by === 'string') out.added_by = t.added_by;
+  return out;
+}
+
+const isOwnList = (p: any) =>
+  Boolean(p?.is_custom) || /^(custom-|pl-custom-|imported-|local-)/.test(String(p?.id || '')) || p?.id === 'liked-songs';
+
+/** Playlists that fit in the document: slim songs first; if still too big, the songs of lists that
+ *  Spotify itself gives back on the other device go, and as a last resort long lists are cut. */
+function fitPlaylists(playlists: any[], budget: number): any[] {
+  const slim = (p: any, items?: any[]) => {
+    const own = typeof p.images?.[0]?.url === 'string' && p.images[0].url.startsWith('data:') && p.images[0].url.length > 200000;
+    return {
+      ...p,
+      // A very big photo of its own can't travel (the songs' collage is used instead)
+      images: own ? [] : p.images,
+      tracks: { total: p.tracks?.total ?? (items || p.tracks?.items || []).length, items: (items ?? p.tracks?.items ?? []).map(slimTrack) },
+    };
+  };
+  let list = playlists.slice(0, 500).map((p) => slim(p));
+  if (byteSize(list) <= budget) return list;
+  list = list.map((p) => (isOwnList(p) ? p : { ...p, tracks: { total: p.tracks?.total || 0, items: [] } }));
+  if (byteSize(list) <= budget) return list;
+  return list.map((p) => ({ ...p, tracks: { total: p.tracks?.total || 0, items: (p.tracks?.items || []).slice(0, 150) } }));
+}
+
 export async function saveUserDataToFirestore(uid: string, data: Partial<CloudUserData>): Promise<boolean> {
   if (!isFirebaseConfigured() || !db) return false;
   try {
     const userRef = doc(db, 'users', uid);
-    // firestore.rules only accept these fields (hasOnly): any other key makes the whole save
-    // fail. App settings travel inside the free-form "stats" map.
+    const cleaned = prepareUserDocForFirestore(uid, data);
+    if (!cleaned) return false;
+    await setDoc(userRef, cleaned, { merge: true });
+    lastCloudSaveError = '';
+    return true;
+  } catch (err: any) {
+    lastCloudSaveError = String(err?.code || err?.message || err || 'error');
+    console.error('[Firestore] Error saving user data:', err);
+    return false;
+  }
+}
+
+/** The account as the database rules accept it (null when it can't be saved: no valid email) */
+export function prepareUserDocForFirestore(uid: string, data: Partial<CloudUserData>): Record<string, any> | null {
+  {
+    // firestore.rules only accept these fields (hasOnly) and reject the WHOLE save when one of
+    // them breaks a limit, so every field is made to fit the rules here. App settings, the
+    // listening taste and photos too big for avatarUrl travel inside the free-form "stats" map.
     const ALLOWED = [
-      'uid', 'id', 'email', 'displayName', 'avatarUrl', 'photoURL', 'bannerUrl', 'spotifyCookie',
+      'uid', 'email', 'displayName', 'avatarUrl', 'photoURL', 'bannerUrl', 'spotifyCookie',
       'playlists', 'likedTracks', 'history', 'deletedPlaylistIds', 'stats', 'customTransitions',
-      'theme', 'createdAt', 'updatedAt',
+      'theme', 'updatedAt',
     ];
     const src: Record<string, any> = { ...(data as any) };
-    if (src.settings) {
-      src.stats = { ...(src.stats && typeof src.stats === 'object' ? src.stats : {}), appSettings: src.settings };
-    }
+    const stats: Record<string, any> = src.stats && typeof src.stats === 'object' ? { ...src.stats } : {};
+    if (src.settings) stats.appSettings = src.settings;
+    if ((src as any).taste) stats.taste = (src as any).taste;
+
     const payload: Record<string, any> = {};
     for (const k of ALLOWED) if (src[k] !== undefined) payload[k] = src[k];
-    if (Array.isArray(payload.history) && payload.history.length > 500) payload.history = payload.history.slice(0, 500);
+    payload.uid = uid; // must equal the document id ("id" and "createdAt" are never sent: they can't change)
+
+    // Rules: email required and valid
+    const email = String(payload.email || '').trim().toLowerCase();
+    if (!/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email)) {
+      lastCloudSaveError = 'correo no válido';
+      return null;
+    }
+    payload.email = email;
+    // displayName 1-100
+    if (typeof payload.displayName === 'string') {
+      payload.displayName = payload.displayName.trim().slice(0, 100);
+      if (!payload.displayName) delete payload.displayName;
+    } else delete payload.displayName;
+    // Photos: web addresses up to 2000 characters; a picture uploaded from the device goes in stats
+    for (const [k, statKey] of [['avatarUrl', 'avatarImage'], ['photoURL', ''], ['bannerUrl', 'bannerImage']] as const) {
+      const v = payload[k];
+      if (v === null || v === undefined) continue;
+      if (typeof v !== 'string') {
+        delete payload[k];
+        continue;
+      }
+      if (v.length > 2000) {
+        delete payload[k];
+        if (statKey && v.startsWith('data:image') && v.length <= 350000) stats[statKey] = v;
+      } else if (statKey) {
+        stats[statKey] = null; // a web photo replaces an uploaded one
+      }
+    }
+    if (typeof payload.spotifyCookie === 'string' && payload.spotifyCookie.length > 10000) delete payload.spotifyCookie;
+    if (payload.theme !== undefined && !['standard', 'oled', 'platinum'].includes(payload.theme)) delete payload.theme;
+    if (payload.playlists !== undefined && !Array.isArray(payload.playlists)) delete payload.playlists;
+    if (payload.likedTracks !== undefined) {
+      payload.likedTracks = Array.isArray(payload.likedTracks) ? payload.likedTracks.filter((x: any) => typeof x === 'string').slice(-20000) : [];
+    }
+    if (Array.isArray(payload.history)) payload.history = payload.history.slice(0, 500).map(slimTrack);
+    else delete payload.history;
     if (Array.isArray(payload.deletedPlaylistIds) && payload.deletedPlaylistIds.length > 1000) {
       payload.deletedPlaylistIds = payload.deletedPlaylistIds.slice(-1000);
     }
-    const cleaned = cleanDataForFirestore({ ...payload, updatedAt: Date.now() });
-    await setDoc(userRef, cleaned, { merge: true });
-    return true;
-  } catch (err) {
-    console.error('[Firestore] Error saving user data:', err);
-    return false;
+    if (Object.keys(stats).length) payload.stats = stats;
+
+    // Size: a Firestore document holds at most 1 MB
+    const BUDGET = 900000;
+    if (Array.isArray(payload.playlists)) {
+      const rest = byteSize({ ...payload, playlists: [] });
+      payload.playlists = fitPlaylists(payload.playlists, Math.max(150000, BUDGET - rest));
+    }
+    if (byteSize(payload) > BUDGET && payload.stats) {
+      delete payload.stats.bannerImage;
+      if (byteSize(payload) > BUDGET) delete payload.stats.avatarImage;
+      if (byteSize(payload) > BUDGET && payload.stats.taste?.signals) payload.stats.taste = { ...payload.stats.taste, signals: payload.stats.taste.signals.slice(-400) };
+    }
+
+    return cleanDataForFirestore({ ...payload, updatedAt: Date.now() });
   }
 }
 

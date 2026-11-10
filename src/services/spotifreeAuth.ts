@@ -7,6 +7,7 @@ import {
   loginWithGoogleFirebase,
   logoutFirebase,
   saveUserDataToFirestore,
+  lastCloudSaveError,
   getUserDataFromFirestore,
   subscribeToUserDataFirestore,
   onFirebaseAuthStateChanged,
@@ -16,6 +17,11 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { applyRemoteSettings } from './settingsSync';
+import { showGlobalToast } from '../utils/globalToast';
+
+/** Notices about saving to the account: once per session / at most once a minute */
+let warnedNoAccount = false;
+let lastSaveWarning = 0;
 
 export interface SpotifreeAccount {
   uid?: string;
@@ -329,7 +335,14 @@ export async function syncSpotifreeAccount(
   const email = (payload.email || current?.email || '').trim().toLowerCase();
   const uid = payload.uid || current?.uid;
 
-  if (!email) return null;
+  if (!email) {
+    // Changes without a Spotifree account stay on this device: say so once
+    if ((payload.playlists || payload.likedTracks) && !warnedNoAccount) {
+      warnedNoAccount = true;
+      showGlobalToast('Guardado en este dispositivo. Entra con tu cuenta de Spotifree para verlo también en tus otros dispositivos.');
+    }
+    return null;
+  }
 
   // Gather all deleted playlist IDs
   const deletedSet = new Set<string>(
@@ -396,7 +409,12 @@ export async function syncSpotifreeAccount(
 
   // 1. Sync to Cloud Firestore if user is authenticated with Firebase
   if (uid && isFirebaseConfigured()) {
-    await saveUserDataToFirestore(uid, merged);
+    const ok = await saveUserDataToFirestore(uid, merged);
+    // A failed save used to be silent: the change then never reached the other devices
+    if (!ok && Date.now() - lastSaveWarning > 60000) {
+      lastSaveWarning = Date.now();
+      showGlobalToast(`No se pudo guardar en tu cuenta (${lastCloudSaveError || 'sin conexión'}). Se reintentará con el próximo cambio.`);
+    }
   }
 
   saveCurrentSpotifreeAccount(merged);
@@ -409,6 +427,10 @@ export async function syncSpotifreeAccount(
  * and ensures any cloud-synced Spotify cookie and custom profile are applied.
  */
 export function applyAccountToAppStores(acc: SpotifreeAccount): void {
+  // Photos uploaded from a device travel in stats (avatarUrl only takes web addresses)
+  const st: any = (acc as any).stats || {};
+  if (!acc.avatarUrl && typeof st.avatarImage === 'string') acc = { ...acc, avatarUrl: st.avatarImage };
+  if (!acc.bannerUrl && typeof st.bannerImage === 'string') acc = { ...acc, bannerUrl: st.bannerImage };
   const userId = acc.uid || acc.email || 'spotifree-user';
   const displayName = acc.displayName || acc.email.split('@')[0] || 'Usuario';
   const images = acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [];
@@ -556,14 +578,21 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       const systemPlaylists = s.playlists.filter((p) => p.id === 'liked-songs' || p.id === 'user-liked-songs');
       const cleanIds = new Set(cleanPlaylists.map((p) => p.id));
       const remainingSystem = systemPlaylists.filter((p) => !cleanIds.has(p.id));
+      // A list that came from the cloud without its songs (they didn't fit in the account; Spotify
+      // gives them back) keeps the songs this device already has
+      const withSongs = cleanPlaylists.map((p) => {
+        if ((p.tracks?.items?.length || 0) > 0 || !(p.tracks?.total > 0)) return p;
+        const local = s.playlistDetailsCache[p.id] || s.playlists.find((x) => x.id === p.id);
+        return local?.tracks?.items?.length ? { ...p, tracks: local.tracks } : p;
+      });
       const updatedCache = { ...s.playlistDetailsCache };
-      cleanPlaylists.forEach((p) => {
+      withSongs.forEach((p) => {
         if (p && p.id) {
           updatedCache[p.id] = p;
         }
       });
       return {
-        playlists: [...cleanPlaylists, ...remainingSystem],
+        playlists: [...withSongs, ...remainingSystem],
         playlistDetailsCache: updatedCache,
       };
     });
@@ -622,6 +651,7 @@ export function initAuthListener(): () => void {
         playlists: cloudData?.playlists || [],
         deletedPlaylistIds: cloudData?.deletedPlaylistIds || [],
         likedTracks: cloudData?.likedTracks || [],
+        stats: (cloudData as any)?.stats,
         updatedAt: cloudData?.updatedAt || Date.now(),
       };
       saveCurrentSpotifreeAccount(acc);
@@ -640,6 +670,7 @@ export function initAuthListener(): () => void {
           playlists: fresh.playlists || [],
           deletedPlaylistIds: fresh.deletedPlaylistIds || [],
           likedTracks: fresh.likedTracks || [],
+          stats: (fresh as any).stats,
           updatedAt: fresh.updatedAt || Date.now(),
         };
         saveCurrentSpotifreeAccount(freshAcc);

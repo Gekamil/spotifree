@@ -859,7 +859,9 @@ const sigKey = (s: Signal) => `${s.k}|${s.t}|${s.a}|${s.ts}`;
 function mergeCloudTaste() {
   try {
     const acc: any = getSavedSpotifreeAccount();
-    const cloud: Signal[] = acc?.taste?.signals || [];
+    // In the cloud it lives in stats.taste (the database only accepts known fields)
+    const taste = acc?.stats?.taste || acc?.taste;
+    const cloud: Signal[] = taste?.signals || [];
     if (!cloud.length) return;
     const local = readSignals();
     const have = new Set(local.map(sigKey));
@@ -868,7 +870,7 @@ function mergeCloudTaste() {
       writeSignals([...local, ...add].sort((a, b) => a.ts - b.ts));
       newSignals += add.length;
     }
-    const since = Number(acc.taste.since) || 0;
+    const since = Number(taste.since) || 0;
     if (since && since < firstSeen()) localStorage.setItem(firstSeenKey(), String(since));
   } catch {}
 }
