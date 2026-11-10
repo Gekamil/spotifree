@@ -9,6 +9,7 @@ import {
   getActiveUserId,
 } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
+import { shuffleTracks } from '../utils/shuffleOrder';
 import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } from '../utils/trackCovers';
 
 export function matchTrackId(a?: string | null, b?: string | null): boolean {
@@ -232,6 +233,16 @@ const getInitialLikedTrackIds = (): string[] => {
   return [];
 };
 
+/** When a song was last heard (this account's stats), for 'recent songs at the end' */
+function lastPlayedAt(t: Track): number {
+  try {
+    const st = useStatsStore.getState().tracks || {};
+    return st[t.id]?.lastPlayedAt || 0;
+  } catch {
+    return 0;
+  }
+}
+
 /** Listening time not yet counted (less than a second), see setProgress */
 let statCarryMs = 0;
 let statLastMs = -1;
@@ -294,11 +305,7 @@ const store = create<PlayerState>((set, get) => ({
     let activeQueue: Track[];
     if (newQueue) {
       if (state.isShuffle) {
-        const others = rawOriginal.filter((t) => t.id !== track.id);
-        for (let i = others.length - 1; i > 0; i--) {
-          const j = Math.floor(Math.random() * (i + 1));
-          [others[i], others[j]] = [others[j], others[i]];
-        }
+        const others = shuffleTracks(rawOriginal.filter((t) => t.id !== track.id), lastPlayedAt);
         activeQueue = [track, ...others];
       } else {
         activeQueue = rawOriginal;
@@ -921,12 +928,8 @@ const store = create<PlayerState>((set, get) => ({
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
       const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
       const curr = state.currentTrack;
-      const others = baseTracks.filter((t) => t.id !== curr?.id);
-      // Fisher-Yates random shuffle
-      for (let i = others.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [others[i], others[j]] = [others[j], others[i]];
-      }
+      // Order from Settings › Ajustes avanzados (balanced by artist, recent songs at the end)
+      const others = shuffleTracks(baseTracks.filter((t) => t.id !== curr?.id), lastPlayedAt);
       const shuffledQueue = curr ? [curr, ...others] : others;
       set({
         shuffleMode: nextShuffle,
@@ -943,11 +946,7 @@ const store = create<PlayerState>((set, get) => ({
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
       const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
       const curr = state.currentTrack;
-      const others = baseTracks.filter((t) => t.id !== curr?.id);
-      for (let i = others.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [others[i], others[j]] = [others[j], others[i]];
-      }
+      const others = shuffleTracks(baseTracks.filter((t) => t.id !== curr?.id), lastPlayedAt);
       const shuffledQueue = curr ? [curr, ...others] : others;
       set({
         shuffleMode: nextShuffle,

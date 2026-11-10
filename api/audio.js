@@ -81,12 +81,12 @@ async function getHealthyInvidiousInstances() {
     return INVIDIOUS_INSTANCES;
   }
   try {
-    const res = await fetchWithTimeout('https://api.invidious.io/instances.json?sort_by=health', {}, 3500);
+    const res = await fetchWithTimeout('https://api.invidious.io/instances.json', {}, 3500);
     if (res.ok) {
       const data = await res.json();
       const healthy = (data || [])
-        .filter(([domain, meta]) => meta?.type === 'https' && meta?.health > 80 && meta?.uri)
-        .map(([domain, meta]) => meta.uri);
+        .filter(([, meta]) => meta?.type === 'https' && meta?.api === true && !meta?.monitor?.down && (meta?.monitor?.uptime ?? 100) > 80 && meta?.uri)
+        .map(([, meta]) => meta.uri);
       if (healthy.length > 0) {
         INVIDIOUS_INSTANCES = [...new Set(['https://yt.chocolatemoo53.com', ...healthy])];
         LAST_INSTANCES_FETCH = Date.now();
@@ -549,47 +549,302 @@ async function getDeezerPreview(title, artist) {
   return null;
 }
 
-async function getInvidiousAudioInfo(videoId) {
-  const instances = await getHealthyInvidiousInstances();
-  for (const base of instances) {
+const AUDIO_INFO_CACHE = new Map();
+const YT_PLAYER_KEY = 'AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8';
+let INNERTUBE_VISIONOS_PROMISE = null;
+let INNERTUBE_IOS_PROMISE = null;
+let INNERTUBE_VR_PROMISE = null;
+let CACHED_VISITOR_DATA = { value: '', fetchedAt: 0 };
+
+function mimeToExt(mime = '') {
+  const m = mime.toLowerCase();
+  if (m.includes('mpeg') || m.includes('mp3')) return 'mp3';
+  if (m.includes('webm')) return 'webm';
+  if (m.includes('ogg') || m.includes('opus')) return 'ogg';
+  return 'm4a';
+}
+
+function pickBestAudioFormat(formats = [], preferCompact = false) {
+  const audios = formats.filter((f) => {
+    const mime = f.mime_type || f.mimeType || f.type || '';
+    return mime.startsWith('audio/') && f.url;
+  });
+  if (audios.length === 0) return null;
+
+  const parseNum = (v) => parseInt(String(v || '0'), 10) || 0;
+  const enriched = audios.map((f) => {
+    const mime = (f.mime_type || f.mimeType || f.type || 'audio/mp4').split(';')[0].trim();
+    const clen = parseNum(f.content_length ?? f.contentLength ?? f.clen);
+    const bitrate = parseNum(f.bitrate);
+    const itag = String(f.itag || '');
+    return { url: f.url, mime, clen, bitrate, itag, ext: mimeToExt(mime) };
+  });
+
+  if (preferCompact) {
+    // Under ~3.9 MB fits inside a single Vercel serverless response even without Range chunking
+    const underCap = enriched.filter((f) => f.clen > 0 && f.clen <= 3_900_000).sort((a, b) => b.bitrate - a.bitrate);
+    if (underCap.length > 0) return underCap[0];
+  }
+
+  // Standard priority: M4A 128kbps AAC (itag 140) -> higher/other M4A -> WebM Opus -> compact fallback
+  const itag140 = enriched.find((f) => f.itag === '140');
+  if (itag140) return itag140;
+  const m4aBest = enriched.filter((f) => f.mime.includes('mp4')).sort((a, b) => b.bitrate - a.bitrate)[0];
+  if (m4aBest) return m4aBest;
+  return enriched.sort((a, b) => b.bitrate - a.bitrate)[0];
+}
+
+async function getInnertubeClient(clientType) {
+  const { Innertube } = await import('youtubei.js');
+  return Innertube.create({ client_type: clientType, retrieve_player: false });
+}
+
+async function getVisitorDataCached() {
+  if (CACHED_VISITOR_DATA.value && Date.now() - CACHED_VISITOR_DATA.fetchedAt < 1800_000) {
+    return CACHED_VISITOR_DATA.value;
+  }
+  try {
+    const res = await fetchWithTimeout(
+      'https://www.youtube.com/sw.js_data',
+      {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        },
+      },
+      3000
+    );
+    if (res.ok) {
+      const text = await res.text();
+      const match = text.match(/"(Cg[a-zA-Z0-9_%-]{20,})"/);
+      if (match?.[1]) {
+        CACHED_VISITOR_DATA = { value: match[1], fetchedAt: Date.now() };
+        return match[1];
+      }
+    }
+  } catch {}
+  return '';
+}
+
+async function extractViaRawInnertube(videoId, preferCompact = false) {
+  const visitorData = await getVisitorDataCached();
+  const profiles = [
+    {
+      name: 'raw-visionos',
+      userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15',
+      clientNameHeader: '101',
+      clientVersion: '1.02',
+      client: {
+        clientName: 'VISIONOS',
+        clientVersion: '1.02',
+        deviceMake: 'Apple',
+        deviceModel: 'RealityDevice17,1',
+        osName: 'visionOS',
+        osVersion: '26.5.23O471',
+        visitorData,
+        hl: 'es',
+        gl: 'ES',
+      },
+    },
+    {
+      name: 'raw-ios',
+      userAgent: 'com.google.ios.youtube/20.11.6 (iPhone10,4; U; CPU iOS 16_7_7 like Mac OS X)',
+      clientNameHeader: '5',
+      clientVersion: '20.11.6',
+      client: {
+        clientName: 'iOS',
+        clientVersion: '20.11.6',
+        deviceMake: 'Apple',
+        deviceModel: 'iPhone10,4',
+        osName: 'iOS',
+        osVersion: '16.7.7.20H330',
+        visitorData,
+        hl: 'es',
+        gl: 'ES',
+      },
+    },
+    {
+      name: 'raw-android-vr',
+      userAgent: 'com.google.android.apps.youtube.vr.oculus/1.65.10 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      clientNameHeader: '28',
+      clientVersion: '1.65.10',
+      client: {
+        clientName: 'ANDROID_VR',
+        clientVersion: '1.65.10',
+        deviceMake: 'Oculus',
+        deviceModel: 'Quest 3',
+        osName: 'Android',
+        osVersion: '12L',
+        androidSdkVersion: 32,
+        visitorData,
+        hl: 'es',
+        gl: 'ES',
+      },
+    },
+  ];
+
+  for (const prof of profiles) {
     try {
-      const res = await fetchWithTimeout(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {}, 4000);
+      const res = await fetchWithTimeout(
+        `https://www.youtube.com/youtubei/v1/player?key=${YT_PLAYER_KEY}&prettyPrint=false`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': prof.userAgent,
+            'X-YouTube-Client-Name': prof.clientNameHeader,
+            'X-YouTube-Client-Version': prof.clientVersion,
+            ...(visitorData ? { 'X-Goog-Visitor-Id': visitorData } : {}),
+          },
+          body: JSON.stringify({
+            videoId,
+            context: { client: prof.client },
+            contentCheckOk: true,
+            racyCheckOk: true,
+          }),
+        },
+        4500
+      );
       if (!res.ok) continue;
       const data = await res.json();
-      const formats = [...(data.adaptiveFormats || []), ...(data.formatStreams || [])];
-      // STRICT audio filtering: MUST be audio/* and have valid url
-      const audios = formats
-        .filter((f) => f.type?.startsWith('audio/') && f.url)
-        .sort((a, b) => (parseInt(b.bitrate) || 0) - (parseInt(a.bitrate) || 0));
-
-      if (audios.length === 0) continue;
-
-      // Prefer m4a / itag 140 / 139 (fastest to stream and universally compatible)
-      const chosen = audios.find((f) => f.container === 'm4a' || f.itag === '140') || audios[0];
-      if (chosen?.url) {
-        return {
-          url: chosen.url,
-          mime: chosen.type?.split(';')[0]?.trim() || 'audio/mp4',
-          clen: parseInt(chosen.clen || '0', 10),
-          bitrate: chosen.bitrate,
-          container: chosen.container,
-        };
-      }
+      if (data?.playabilityStatus?.status !== 'OK') continue;
+      const formats = [...(data.streamingData?.adaptiveFormats || []), ...(data.streamingData?.formats || [])];
+      const chosen = pickBestAudioFormat(formats, preferCompact);
+      if (chosen) return { ...chosen, source: prof.name };
     } catch {}
   }
   return null;
 }
 
-async function getInvidiousAudioUrl(videoId) {
-  const info = await getInvidiousAudioInfo(videoId);
-  return info?.url || null;
+async function getInvidiousAudioInfo(videoId, preferCompact = false) {
+  const instances = await getHealthyInvidiousInstances();
+  for (const base of instances.slice(0, 3)) {
+    try {
+      const res = await fetchWithTimeout(`${base}/api/v1/videos/${videoId}?fields=adaptiveFormats,formatStreams`, {}, 3500);
+      if (!res.ok) continue;
+      const data = await res.json();
+      const formats = [...(data.adaptiveFormats || []), ...(data.formatStreams || [])];
+      const chosen = pickBestAudioFormat(formats, preferCompact);
+      if (chosen?.url) return { ...chosen, source: 'invidious' };
+    } catch {}
+  }
+  return null;
+}
+
+async function extractBestAudioInfo(videoId, preferCompact = false, forceFresh = false) {
+  if (!videoId) return null;
+  const cacheKey = `${videoId}_${preferCompact ? 'compact' : 'best'}`;
+  const cached = !forceFresh ? AUDIO_INFO_CACHE.get(cacheKey) : null;
+  if (cached && Date.now() - cached.fetchedAt < 600_000) {
+    return cached;
+  }
+
+  // 1. youtubei.js VISIONOS client (streams full multi-MB tracks cleanly without 1MB PO-Token cutoff!)
+  try {
+    if (!INNERTUBE_VISIONOS_PROMISE) INNERTUBE_VISIONOS_PROMISE = getInnertubeClient('VISIONOS').catch(() => null);
+    const ytVis = await INNERTUBE_VISIONOS_PROMISE;
+    if (ytVis) {
+      const info = await ytVis.getBasicInfo(videoId, { client: 'VISIONOS' });
+      const formats = [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])];
+      const chosen = pickBestAudioFormat(formats, preferCompact);
+      if (chosen) {
+        const entry = { ...chosen, source: 'innertube-visionos', fetchedAt: Date.now() };
+        AUDIO_INFO_CACHE.set(cacheKey, entry);
+        return entry;
+      }
+    }
+  } catch (e) {
+    INNERTUBE_VISIONOS_PROMISE = null;
+    console.warn('[api/audio] youtubei VISIONOS failed:', e?.message || e);
+  }
+
+  // 2. Raw Innertube JSON (VISIONOS -> iOS -> ANDROID_VR)
+  const rawResult = await extractViaRawInnertube(videoId, preferCompact);
+  if (rawResult) {
+    const entry = { ...rawResult, fetchedAt: Date.now() };
+    AUDIO_INFO_CACHE.set(cacheKey, entry);
+    return entry;
+  }
+
+  // 3. youtubei.js IOS client
+  try {
+    if (!INNERTUBE_IOS_PROMISE) INNERTUBE_IOS_PROMISE = getInnertubeClient('IOS').catch(() => null);
+    const ytIos = await INNERTUBE_IOS_PROMISE;
+    if (ytIos) {
+      const info = await ytIos.getBasicInfo(videoId, { client: 'IOS' });
+      const formats = [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])];
+      const chosen = pickBestAudioFormat(formats, preferCompact);
+      if (chosen) {
+        const entry = { ...chosen, source: 'innertube-ios', fetchedAt: Date.now() };
+        AUDIO_INFO_CACHE.set(cacheKey, entry);
+        return entry;
+      }
+    }
+  } catch (e) {
+    INNERTUBE_IOS_PROMISE = null;
+    console.warn('[api/audio] youtubei IOS failed:', e?.message || e);
+  }
+
+  // 4. youtubei.js ANDROID_VR client
+  try {
+    if (!INNERTUBE_VR_PROMISE) INNERTUBE_VR_PROMISE = getInnertubeClient('ANDROID_VR').catch(() => null);
+    const ytVr = await INNERTUBE_VR_PROMISE;
+    if (ytVr) {
+      const info = await ytVr.getBasicInfo(videoId, { client: 'ANDROID_VR' });
+      const formats = [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])];
+      const chosen = pickBestAudioFormat(formats, preferCompact);
+      if (chosen) {
+        const entry = { ...chosen, source: 'innertube-vr', fetchedAt: Date.now() };
+        AUDIO_INFO_CACHE.set(cacheKey, entry);
+        return entry;
+      }
+    }
+  } catch (e) {
+    INNERTUBE_VR_PROMISE = null;
+    console.warn('[api/audio] youtubei ANDROID_VR failed:', e?.message || e);
+  }
+
+  // 5. Healthy Invidious fallback
+  const inv = await getInvidiousAudioInfo(videoId, preferCompact);
+  if (inv) {
+    const entry = { ...inv, fetchedAt: Date.now() };
+    AUDIO_INFO_CACHE.set(cacheKey, entry);
+    return entry;
+  }
+
+  return null;
+}
+
+function parseByteRangeHeader(rangeHeader, totalLength) {
+  if (!rangeHeader || typeof rangeHeader !== 'string') return null;
+  const m = rangeHeader.match(/bytes=(\d+)-(\d*)/i);
+  if (!m) return null;
+  const start = parseInt(m[1], 10);
+  if (isNaN(start) || start < 0) return null;
+  const MAX_VERCEL_CHUNK = 3_145_728; // 3 MB safe under Vercel 4.5 MB payload cap
+  let end = m[2] ? parseInt(m[2], 10) : start + MAX_VERCEL_CHUNK - 1;
+  if (end - start + 1 > MAX_VERCEL_CHUNK) {
+    end = start + MAX_VERCEL_CHUNK - 1;
+  }
+  if (totalLength > 0 && end >= totalLength) {
+    end = totalLength - 1;
+  }
+  if (end < start) return null;
+  return { start, end };
+}
+
+function normalizeDownloadFilename(rawName, ext) {
+  const base = (rawName || 'cancion').replace(/\.(mp3|m4a|webm|ogg|mp4|wav)$/i, '').trim() || 'cancion';
+  return `${base}.${ext}`;
 }
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges, Content-Disposition');
+  res.setHeader(
+    'Access-Control-Expose-Headers',
+    'Content-Length, Content-Range, Accept-Ranges, Content-Disposition, X-Video-Id, X-Total-Length, X-Audio-Source, X-Audio-Mime, X-Audio-Ext'
+  );
 
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
@@ -600,92 +855,144 @@ export default async function handler(req, res) {
 
   // 1. STREAM OR DOWNLOAD ACTION
   if (action === 'stream' || action === 'download') {
-    const q = (req.query?.q || req.query?.query || '').trim();
+    const rawQ = (req.query?.q || req.query?.query || '').trim();
+    const rawTitle = (req.query?.title || '').trim();
+    const rawArtist = (req.query?.artist || '').trim();
+    const rawDuration = req.query?.duration || req.query?.duration_ms || req.query?.durationSec;
+    let expectedDurationSec = rawDuration
+      ? Number(rawDuration) > 1000
+        ? Math.round(Number(rawDuration) / 1000)
+        : Math.round(Number(rawDuration))
+      : 0;
+    if (expectedDurationSec <= 35) expectedDurationSec = 0;
+
+    const q = cleanQuery(rawQ || `${rawTitle} ${rawArtist}`.trim());
     const explicitId = (req.query?.videoId || req.query?.id || '').trim();
-    const filename = req.query?.filename ? decodeURIComponent(req.query.filename) : 'cancion.mp3';
+    const rawFilename = req.query?.filename ? decodeURIComponent(req.query.filename) : (rawTitle || q || 'cancion');
+    const allowPreview = req.query?.allowPreview === '1';
 
     if (!q && !explicitId) return res.status(400).json({ error: 'Missing query q or videoId' });
 
     try {
       let videoId = /^[\w-]{11}$/.test(explicitId) ? explicitId : null;
       if (!videoId) {
-        try {
-          const result = await resolveViaYouTubeMusic(q);
-          videoId = result?.videoId;
-        } catch {
-          const result = await resolveViaYouTubeSearch(q);
-          videoId = result?.videoId;
+        const verified = getVerifiedVideoId(q, rawTitle, rawArtist);
+        if (verified) {
+          videoId = verified;
+        } else {
+          try {
+            const result = await resolveViaYouTubeMusic(q, rawTitle, rawArtist, new Set(), expectedDurationSec);
+            videoId = result?.videoId;
+          } catch {
+            try {
+              const result = await resolveViaYouTubeSearch(q, rawTitle, rawArtist, new Set(), expectedDurationSec);
+              videoId = result?.videoId;
+            } catch {}
+          }
         }
       }
 
-      let audioInfo = videoId ? await getInvidiousAudioInfo(videoId) : null;
+      const clientRangeHeader = req.headers.range;
+      const preferCompact = !clientRangeHeader;
 
-      // If Invidious audio format was found, proxy the audio stream directly!
-      // This eliminates client CORS issues and avoids Google Video 403 Forbidden.
-      if (audioInfo?.url) {
-        const clientRange = req.headers.range;
-        const upstreamRange = clientRange || (audioInfo.clen > 0 ? `bytes=0-${audioInfo.clen - 1}` : 'bytes=0-15000000');
+      let audioInfo = videoId ? await extractBestAudioInfo(videoId, preferCompact, false) : null;
+
+      // Retry once forcing fresh stream extraction if cached URL fails upstream
+      for (let attempt = 0; attempt < 2 && audioInfo?.url; attempt++) {
+        const parsedRange = parseByteRangeHeader(clientRangeHeader, audioInfo.clen);
+        const defaultCap = 3_800_000;
+        const upstreamRange = parsedRange
+          ? `bytes=${parsedRange.start}-${parsedRange.end}`
+          : audioInfo.clen > 0
+          ? `bytes=0-${Math.min(audioInfo.clen - 1, defaultCap - 1)}`
+          : `bytes=0-${defaultCap - 1}`;
 
         try {
-          const upstream = await fetch(audioInfo.url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-              'Range': upstreamRange,
+          const upstream = await fetchWithTimeout(
+            audioInfo.url,
+            {
+              headers: {
+                Range: upstreamRange,
+              },
             },
-          });
+            15000
+          );
 
           if (upstream.ok || upstream.status === 206) {
             const buf = Buffer.from(await upstream.arrayBuffer());
-            if (buf.length > 50000) {
-              res.status(clientRange ? 206 : 200);
+            if (buf.length > 10000) {
+              const upRange = upstream.headers.get('content-range') || '';
+              const totalMatch = upRange.match(/\/(\d+)$/);
+              const totalLen = totalMatch ? parseInt(totalMatch[1], 10) : audioInfo.clen || buf.length;
+              const isPartial = Boolean(clientRangeHeader) || (totalLen > 0 && buf.length < totalLen);
+              const outExt = audioInfo.ext || mimeToExt(audioInfo.mime);
+              const finalName = normalizeDownloadFilename(rawFilename, outExt);
+
+              res.status(isPartial ? 206 : 200);
               res.setHeader('Content-Type', audioInfo.mime || 'audio/mp4');
               res.setHeader('Content-Length', String(buf.length));
               res.setHeader('Accept-Ranges', 'bytes');
-              res.setHeader('Access-Control-Allow-Origin', '*');
-              if (clientRange && upstream.headers.get('content-range')) {
-                res.setHeader('Content-Range', upstream.headers.get('content-range'));
+              res.setHeader('X-Video-Id', videoId || '');
+              res.setHeader('X-Total-Length', String(totalLen));
+              res.setHeader('X-Audio-Source', 'full');
+              res.setHeader('X-Audio-Mime', audioInfo.mime || 'audio/mp4');
+              res.setHeader('X-Audio-Ext', outExt);
+              res.setHeader('Cache-Control', 'no-store');
+              if (upRange) {
+                res.setHeader('Content-Range', upRange);
+              } else if (isPartial && parsedRange) {
+                res.setHeader('Content-Range', `bytes ${parsedRange.start}-${parsedRange.start + buf.length - 1}/${totalLen}`);
+              } else if (isPartial) {
+                res.setHeader('Content-Range', `bytes 0-${buf.length - 1}/${totalLen}`);
               }
               if (action === 'download') {
-                res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+                res.setHeader('Content-Disposition', `attachment; filename="${finalName}"`);
               }
               return res.send(buf);
             }
           }
+          // Upstream 403/410 -> force refresh cached Innertube stream URL once
+          if (attempt === 0) {
+            audioInfo = await extractBestAudioInfo(videoId, preferCompact, true);
+            continue;
+          }
         } catch (streamErr) {
-          console.warn('[api/audio] Upstream audio proxy failed, checking fallback:', streamErr);
+          console.warn('[api/audio] Upstream audio proxy failed:', streamErr?.message || streamErr);
+          if (attempt === 0) {
+            audioInfo = await extractBestAudioInfo(videoId, preferCompact, true);
+            continue;
+          }
         }
+        break;
       }
 
-      // Fallback: Deezer preview audio if YouTube audio could not be proxied
-      try {
-        const queryParts = q.split(/\s*[-–—]\s*/);
-        const title = queryParts.length > 1 ? queryParts[1] : q;
-        const artist = queryParts.length > 1 ? queryParts[0] : '';
-        const deezerBuf = await getDeezerPreview(title, artist);
-        if (deezerBuf && deezerBuf.length > 50000) {
-          res.status(200);
-          res.setHeader('Content-Type', 'audio/mpeg');
-          res.setHeader('Content-Length', String(deezerBuf.length));
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          if (action === 'download') {
-            res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      // Only return 30s preview if caller explicitly allowed preview mode; NEVER disguise 30s preview as full download!
+      if (allowPreview) {
+        try {
+          const queryParts = q.split(/\s*[-–—]\s*/);
+          const title = rawTitle || (queryParts.length > 1 ? queryParts[1] : q);
+          const artist = rawArtist || (queryParts.length > 1 ? queryParts[0] : '');
+          const deezerBuf = await getDeezerPreview(title, artist);
+          if (deezerBuf && deezerBuf.length > 50000) {
+            res.status(200);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', String(deezerBuf.length));
+            res.setHeader('X-Audio-Source', 'preview');
+            return res.send(deezerBuf);
           }
-          return res.send(deezerBuf);
-        }
-      } catch {}
+        } catch {}
+      }
 
-      return res.status(404).json({ error: 'Audio stream not found' });
+      return res.status(404).json({
+        error: 'No se pudo extraer el audio completo de la canción',
+        videoId: videoId || null,
+      });
     } catch (err) {
       return res.status(500).json({ error: err.message });
     }
   }
 
   // 1b. CHUNK ACTION: first ~3 MB of the audio, same-origin + CORS, for in-browser analysis
-  // of BPM / key / structure (the decoded chunk usually covers the whole song at 128 kbps).
-  // YouTube blocks most server IPs ("confirm you're not a bot"), so when the full audio is
-  // not reachable we fall back to Deezer's official 30 s preview of the same song: enough
-  // for a real BPM / key / energy measurement (but not for positions inside the song, so it
-  // is flagged with X-Audio-Source: preview).
   if (action === 'chunk') {
     const id = (req.query?.id || '').trim();
     const q = (req.query?.q || '').trim();
@@ -703,17 +1010,16 @@ export default async function handler(req, res) {
         }
       }
       if (videoId) {
-        // Bounded: public instances are usually down, don't make the preview fallback wait
-        const audioUrl = await Promise.race([
-          getInvidiousAudioUrl(videoId).catch(() => null),
+        const audioInfo = await Promise.race([
+          extractBestAudioInfo(videoId, false, false).catch(() => null),
           new Promise((r) => setTimeout(() => r(null), 6000)),
         ]);
-        if (audioUrl) {
-          const upstream = await fetchWithTimeout(audioUrl, { headers: { Range: 'bytes=0-3145727' } }, 15000).catch(() => null);
+        if (audioInfo?.url) {
+          const upstream = await fetchWithTimeout(audioInfo.url, { headers: { Range: 'bytes=0-3145727' } }, 15000).catch(() => null);
           if (upstream && upstream.ok) {
             const buf = Buffer.from(await upstream.arrayBuffer());
             if (buf.length > 60000) {
-              res.setHeader('Content-Type', upstream.headers.get('content-type') || 'audio/webm');
+              res.setHeader('Content-Type', audioInfo.mime || upstream.headers.get('content-type') || 'audio/mp4');
               res.setHeader('X-Audio-Source', 'full');
               res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
               return res.status(200).send(buf);

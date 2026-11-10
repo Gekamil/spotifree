@@ -40,7 +40,22 @@ public class MainActivity extends BridgeActivity {
     private void configureWebView() {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
-                getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+                android.webkit.WebView webView = getBridge().getWebView();
+                webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+                webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                    try {
+                        if (url == null || url.startsWith("blob:") || url.startsWith("data:")) return;
+                        android.app.DownloadManager.Request req = new android.app.DownloadManager.Request(Uri.parse(url));
+                        if (mimetype != null && !mimetype.isEmpty()) req.setMimeType(mimetype);
+                        String fileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype);
+                        req.setTitle(fileName);
+                        req.setDescription("Descargando desde Spotifree");
+                        req.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                        req.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName);
+                        android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                        if (dm != null) dm.enqueue(req);
+                    } catch (Exception ignored) {}
+                });
             }
         } catch (Exception ignored) {}
     }

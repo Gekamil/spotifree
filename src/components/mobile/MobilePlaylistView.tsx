@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
@@ -43,6 +43,9 @@ import {
 } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from './MobileSheet';
+import { PlaylistToolbar, PlaylistSortSheet, loadPlaylistSort, savePlaylistSort, sortPlaylistTracks, type PlaylistSortKey } from './PlaylistTools';
+import { PlaylistAddSongsScreen } from './PlaylistAddSongsScreen';
+import { PlaylistEditScreen } from './PlaylistEditScreen';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
@@ -181,6 +184,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         if (storedTracks) {
           const parsed = JSON.parse(storedTracks);
           if (Array.isArray(parsed) && parsed.length > 0) return parsed.filter(isNotRemoved);
+        }
+        const offlineRaw =
+          window.localStorage.getItem(`spotifree_offline_meta_${cleanId}`) ||
+          window.localStorage.getItem(`spotifree_offline_meta_${playlist.id}`);
+        if (offlineRaw) {
+          const offlinePl = JSON.parse(offlineRaw);
+          if (Array.isArray(offlinePl?.tracks?.items) && offlinePl.tracks.items.length > 0) {
+            return offlinePl.tracks.items.filter(isNotRemoved);
+          }
         }
       } catch {}
     }
@@ -356,6 +368,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     setIsSavedInLibrary(checkIsInLibrary(playlist.id, cleanId));
   }, [playlist.id, cleanId, allUserPlaylists]);
 
+  // Añadir / Editar / Ordenar (Spotify's row under the play button)
+  const [sortKey, setSortKey] = useState<PlaylistSortKey>(() => loadPlaylistSort(playlist.id));
+  const [isAddScreenOpen, setIsAddScreenOpen] = useState(false);
+  const [isEditScreenOpen, setIsEditScreenOpen] = useState(false);
+  const [isSortSheetOpen, setIsSortSheetOpen] = useState(false);
+  useEffect(() => setSortKey(loadPlaylistSort(playlist.id)), [playlist.id]);
+
   // Track search state for empty lists
   const [addSearchQuery, setAddSearchQuery] = useState('');
   const [addSearchResults, setAddSearchResults] = useState<Track[]>([]);
@@ -525,7 +544,31 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       return;
     }
 
-    // 5b. Check shared collaborative playlist storage
+    // 5b. Check offline downloaded metadata / localStorage playlist tracks
+    if (typeof window !== 'undefined') {
+      try {
+        const offlineRaw =
+          window.localStorage.getItem(`spotifree_offline_meta_${cleanId}`) ||
+          window.localStorage.getItem(`spotifree_offline_meta_${playlist.id}`);
+        if (offlineRaw) {
+          const offlinePl = JSON.parse(offlineRaw);
+          if (Array.isArray(offlinePl?.tracks?.items) && offlinePl.tracks.items.length > 0) {
+            setTracks(mergeWithCustom(offlinePl.tracks.items));
+            return;
+          }
+        }
+        const storedRaw = window.localStorage.getItem(`spotifree_playlist_tracks_${cleanId}`);
+        if (storedRaw) {
+          const storedItems = JSON.parse(storedRaw);
+          if (Array.isArray(storedItems) && storedItems.length > 0) {
+            setTracks(mergeWithCustom(storedItems));
+            return;
+          }
+        }
+      } catch {}
+    }
+
+    // 5c. Check shared collaborative playlist storage
     const sharedPl = getSharedPlaylistById(cleanId);
     if (sharedPl && sharedPl.tracks && sharedPl.tracks.length > 0) {
       setTracks(mergeWithCustom(sharedPl.tracks));
@@ -671,7 +714,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   };
 
   // Playlist tracks maintain their original sequence (Spotify parity: shuffle does not rearrange the visible list)
-  const displayTracks = tracks;
+  // Ordenar (Spotify): only how the list is shown; the playlist keeps its own order
+  const displayTracks = useMemo(() => sortPlaylistTracks(tracks, sortKey), [tracks, sortKey]);
 
   // Real-time synchronization for deleted tracks & deleted playlists
   useEffect(() => {
@@ -834,13 +878,14 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }, [displayTracks, isClipsModalOpen]);
 
   const handleAddTrack = (track: Track) => {
+    // (who added it only matters in shared playlists)
     const trackWithMeta: Track = {
       ...track,
-      added_at: 'Hoy',
-      added_by: user?.display_name || 'Tú',
+      added_at: new Date().toISOString(),
     };
 
-    const updatedTracks = [trackWithMeta, ...tracks.filter((t) => t.id !== track.id)];
+    // Like Spotify: a new song goes to the end
+    const updatedTracks = [...tracks.filter((t) => t.id !== track.id), trackWithMeta];
     setTracks(updatedTracks);
     setActivePlaylist((prev) => ({
       ...prev,
@@ -983,18 +1028,28 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       setToastMessage('Descargas eliminadas de este dispositivo');
       setTimeout(() => setToastMessage(null), 2500);
     } else {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setToastMessage('Estás en modo avión: conéctate a internet para descargar');
+        setTimeout(() => setToastMessage(null), 3000);
+        return;
+      }
+      if (!tracks || tracks.length === 0) {
+        setToastMessage('No hay canciones para descargar en esta lista');
+        setTimeout(() => setToastMessage(null), 2500);
+        return;
+      }
       setIsDownloading(true);
-      setToastMessage(`Descargando ${tracks.length} canciones para escuchar sin conexión...`);
+      setToastMessage(`Descargando ${tracks.length} canciones para modo avión...`);
       try {
         const res = await downloadPlaylist(activePlaylist, tracks, (completed, total) => {
           setToastMessage(`Descargando canciones (${completed}/${total})...`);
         });
         if (res && res.downloaded > 0) {
           setIsDownloaded(true);
-          setToastMessage(`¡${res.downloaded} canciones guardadas en «musica-spotifree» para escuchar sin conexión!`);
+          setToastMessage(`¡${res.downloaded} de ${res.total} canciones listas para modo avión!`);
         } else {
           setIsDownloaded(false);
-          setToastMessage('No se ha podido descargar. Para escuchar sin conexión, añade tus canciones en Archivos locales');
+          setToastMessage(res?.offline ? 'Sin conexión a internet para descargar' : 'No se ha podido extraer el audio de estas canciones');
         }
       } catch {
         setToastMessage('Error al descargar canciones');
@@ -1020,6 +1075,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     setActivePlaylist((prev) => ({ ...prev, ...updated }));
     setIsEditModalOpen(false);
     setToastMessage('Playlist actualizada con éxito');
+    setTimeout(() => setToastMessage(null), 2500);
+  };
+
+  /** Editar › Guardar: removed songs go through the usual removal (kept removed, synced) and the
+   *  new order is saved to the playlist (store, this device and the account) */
+  const handleEditSave = (order: Track[], removed: Track[]) => {
+    const targetKey = isLikedPlaylist ? 'liked-songs' : cleanId;
+    for (const t of removed) handleRemoveTrackFromPlaylist(t.id, t);
+    setTracks(order);
+    setActivePlaylist((prev) => ({ ...prev, tracks: { total: order.length, items: order } }));
+    // A hand-made order is shown as it is
+    setSortKey('custom');
+    savePlaylistSort(playlist.id, 'custom');
+    useSpotifyDataStore.getState().updatePlaylist(targetKey, { tracks: { total: order.length, items: order } });
+    useSpotifyDataStore.getState().cachePlaylistDetails({ ...activePlaylist, id: targetKey, tracks: { total: order.length, items: order } });
+    setToastMessage(removed.length ? `Playlist actualizada · ${removed.length} quitada${removed.length === 1 ? '' : 's'}` : 'Orden guardado');
     setTimeout(() => setToastMessage(null), 2500);
   };
 
@@ -1500,6 +1571,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         </div>
       </div>
 
+      {!isArtist && tracks.length > 0 && (
+        <PlaylistToolbar
+          canEdit={canAddTracksToThisList}
+          sortKey={sortKey}
+          onAdd={() => setIsAddScreenOpen(true)}
+          onEdit={() => setIsEditScreenOpen(true)}
+          onSort={() => setIsSortSheetOpen(true)}
+        />
+      )}
+
       {isArtist && (
         <div className="px-5 pt-3 pb-1">
           <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
@@ -1708,11 +1789,6 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                           <span className="truncate">
                             {parseTrackArtists(track.artists).map((a) => a.name).join(', ') || 'Artista'}
                           </span>
-                          {track.added_by && (
-                            <span className="text-[10px] text-[#1ed760] font-medium shrink-0">
-                              • {typeof track.added_by === 'string' ? track.added_by : track.added_by.name}
-                            </span>
-                          )}
                         </span>
                       </div>
                     </div>
@@ -2196,6 +2272,32 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </>
         )}
       </MobileSheet>
+
+      {/* Añadir / Editar / Ordenar */}
+      <PlaylistAddSongsScreen
+        open={isAddScreenOpen}
+        playlistName={activePlaylist.name || playlist.name}
+        existing={tracks}
+        suggestions={popularSuggestions}
+        onAdd={handleAddTrack}
+        onClose={() => setIsAddScreenOpen(false)}
+      />
+      <PlaylistEditScreen
+        open={isEditScreenOpen}
+        playlistName={activePlaylist.name || playlist.name}
+        tracks={tracks}
+        onSave={handleEditSave}
+        onClose={() => setIsEditScreenOpen(false)}
+      />
+      <PlaylistSortSheet
+        open={isSortSheetOpen}
+        value={sortKey}
+        onChange={(k) => {
+          setSortKey(k);
+          savePlaylistSort(playlist.id, k);
+        }}
+        onClose={() => setIsSortSheetOpen(false)}
+      />
 
       {/* Add To Playlist Picker */}
       <MobileSheet open={isAddToPlaylistModalOpen && !!activeTrackMenu} onClose={() => setIsAddToPlaylistModalOpen(false)} closeLabel="Cancelar" zIndex={130}>

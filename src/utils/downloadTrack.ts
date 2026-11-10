@@ -13,15 +13,23 @@ function toast(message: string) {
 }
 
 export async function downloadTrackEverywhere(track: Track): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    toast('Modo avión: conéctate a internet para descargar canciones.');
+    return false;
+  }
   toast(`Descargando «${track.name}»…`);
   const ok = await downloadTrackAudio(track);
   if (!ok) {
-    toast(`No se pudo descargar «${track.name}». Inténtalo de nuevo.`);
+    toast(`No se pudo extraer el audio de «${track.name}». Inténtalo de nuevo.`);
     return false;
   }
   // Same audio (already in the app) also saved as a file on the device
-  await saveTrackAsMp3File(track).catch(() => false);
-  toast(`«${track.name}» descargada: suena sin conexión y está guardada en tu dispositivo`);
+  const savedFile = await saveTrackAsMp3File(track).catch(() => false);
+  toast(
+    savedFile
+      ? `«${track.name}» descargada: suena en modo avión y guardada en tu dispositivo`
+      : `«${track.name}» descargada para escuchar sin conexión`
+  );
   return true;
 }
 

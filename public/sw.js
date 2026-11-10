@@ -12,15 +12,37 @@
 // App shell cache: lets the app open with no connection (airplane mode), so the songs in
 // "Archivos locales" can be played. Only this cache's own older versions are ever deleted:
 // "musica-spotifree" (downloads) and other caches are left alone.
-const CACHE_NAME = 'spotifree-shell-v3';
-const SHELL = ['/', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png'];
-const MAX_ASSETS = 160;
+const CACHE_NAME = 'spotifree-shell-v4';
+const SHELL = ['/', '/index.html', '/offline.html', '/silence.wav', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png'];
+const MAX_ASSETS = 180;
+
+function fetchWithTimeout(request, ms = 2800) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
+  return fetch(request, { signal: ctrl.signal }).finally(() => clearTimeout(t));
+}
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
       .open(CACHE_NAME)
-      .then((cache) => Promise.all(SHELL.map((u) => cache.add(u).catch(() => {}))))
+      .then(async (cache) => {
+        await Promise.all(SHELL.map((u) => cache.add(u).catch(() => {})));
+        // Also pre-cache the current entry JS/CSS assets referenced by index.html on first install
+        try {
+          const indexRes = await cache.match('/');
+          if (indexRes) {
+            const html = await indexRes.clone().text();
+            const urls = [];
+            const re = /(?:src|href)=["'](\/assets\/[^"']+)["']/g;
+            let m;
+            while ((m = re.exec(html)) !== null) {
+              if (m[1]) urls.push(m[1]);
+            }
+            await Promise.all(urls.map((u) => cache.add(u).catch(() => {})));
+          }
+        } catch {}
+      })
       .then(() => self.skipWaiting())
   );
 });
@@ -41,15 +63,15 @@ async function trimAssets(cache) {
   for (let i = 0; i < keys.length - MAX_ASSETS; i++) await cache.delete(keys[i]);
 }
 
-/** Pages: network first (always the latest app), the saved copy when offline */
+/** Pages: fast network-first (always latest when online), instant cached shell in airplane mode */
 async function handleNavigation(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const res = await fetch(request);
+    const res = await fetchWithTimeout(request, 2800);
     if (res && res.ok) cache.put('/', res.clone()).catch(() => {});
     return res;
   } catch {
-    return (await cache.match('/')) || (await cache.match(request)) || new Response('Sin conexión', { status: 503 });
+    return (await cache.match('/')) || (await cache.match('/index.html')) || (await cache.match(request)) || (await cache.match('/offline.html')) || new Response('Sin conexión', { status: 503 });
   }
 }
 
@@ -69,11 +91,11 @@ async function handleAsset(request) {
   }
 }
 
-/** Fonts, icons, manifest: network first, saved copy when offline */
+/** Fonts, icons, manifest: fast network first, saved copy when offline */
 async function handleStatic(request) {
   const cache = await caches.open(CACHE_NAME);
   try {
-    const res = await fetch(request);
+    const res = await fetchWithTimeout(request, 2800);
     if (res && res.ok) cache.put(request, res.clone()).catch(() => {});
     return res;
   } catch {
@@ -153,6 +175,20 @@ self.addEventListener('message', (event) => {
 
     case 'SKIP_WAITING':
       self.skipWaiting();
+      break;
+
+    case 'CACHE_URLS':
+      if (Array.isArray(event.data.urls)) {
+        event.waitUntil(
+          caches.open(CACHE_NAME).then((cache) =>
+            Promise.all(
+              event.data.urls
+                .filter((u) => typeof u === 'string' && u.startsWith('/'))
+                .map((u) => cache.match(u).then((hit) => (hit ? null : cache.add(u).catch(() => {}))))
+            )
+          )
+        );
+      }
       break;
   }
 });

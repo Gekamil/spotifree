@@ -62,6 +62,24 @@ if ('serviceWorker' in navigator) {
       .then((reg) => {
         console.log('[SW] Registered, scope:', reg.scope);
 
+        const cacheActiveShellAssets = () => {
+          try {
+            const ctrl = navigator.serviceWorker.controller || reg.active;
+            if (!ctrl) return;
+            const urls = new Set<string>(['/', '/offline.html', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png']);
+            document.querySelectorAll('script[src], link[rel="stylesheet"][href], link[rel="modulepreload"][href]').forEach((el) => {
+              const raw = el.getAttribute('src') || el.getAttribute('href') || '';
+              try {
+                const u = new URL(raw, window.location.origin);
+                if (u.origin === window.location.origin) urls.add(u.pathname + u.search);
+              } catch {}
+            });
+            ctrl.postMessage({ type: 'CACHE_URLS', urls: Array.from(urls) });
+          } catch {}
+        };
+        cacheActiveShellAssets();
+        setTimeout(cacheActiveShellAssets, 3000);
+
         // Periodically ping SW to keep it alive while audio is playing
         setInterval(() => {
           if (navigator.serviceWorker.controller) {
@@ -86,7 +104,17 @@ if ('serviceWorker' in navigator) {
           // Import player store state to check if we should be playing
           import('./store/usePlayerStore').then(({ usePlayerStore }) => {
             const { isPlaying } = usePlayerStore.getState();
-            if (isPlaying && engine.ytPlayer) {
+            if (!isPlaying) return;
+
+            if (engine.activeEngine === 'html5' && engine.audio && engine.audio.paused && !engine.isExplicitlyPaused) {
+              engine.audio.play().catch(() => {});
+              if ('mediaSession' in navigator) {
+                navigator.mediaSession.playbackState = 'playing';
+              }
+              return;
+            }
+
+            if (engine.ytPlayer) {
               try {
                 const ytState = typeof engine.ytPlayer.getPlayerState === 'function'
                   ? engine.ytPlayer.getPlayerState() : -1;

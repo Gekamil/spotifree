@@ -27,11 +27,10 @@ import {
   isPlaylistDownloaded,
   downloadPlaylist,
   deleteDownloadedPlaylist,
-  downloadTrackAudio,
-  deleteDownloadedTrack,
   getAllDownloadedTrackIds,
   onDownloadsChanged,
 } from '../../utils/offlineStorage';
+import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { djTransitionService } from '../../services/djTransitionService';
 import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRATEGY_LABELS, startNewDJSession } from '../../services/djMixPlanner';
@@ -113,14 +112,36 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const customSaved = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
   const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === playlist.id);
   const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
+  const cleanInitId = playlist.id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
+  let offlineFallbackTracks: Track[] = [];
+  if (typeof window !== 'undefined') {
+    try {
+      const offlineRaw =
+        window.localStorage.getItem(`spotifree_offline_meta_${cleanInitId}`) ||
+        window.localStorage.getItem(`spotifree_offline_meta_${playlist.id}`);
+      if (offlineRaw) {
+        const parsed = JSON.parse(offlineRaw);
+        if (Array.isArray(parsed?.tracks?.items)) offlineFallbackTracks = parsed.tracks.items;
+      }
+      if (offlineFallbackTracks.length === 0) {
+        const storedRaw = window.localStorage.getItem(`spotifree_playlist_tracks_${cleanInitId}`);
+        if (storedRaw) {
+          const parsed = JSON.parse(storedRaw);
+          if (Array.isArray(parsed)) offlineFallbackTracks = parsed;
+        }
+      }
+    } catch {}
+  }
   const rawBaseTracks = isLikedInitially
-    ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || []), ...(sfMix?.tracks?.items || [])])
+    ? deduplicateTracks([...customSaved, ...(playlist.tracks?.items || []), ...(storePl?.tracks?.items || []), ...(sfMix?.tracks?.items || []), ...offlineFallbackTracks])
     : ((playlist.tracks?.items && playlist.tracks.items.length > 0)
     ? playlist.tracks.items
     : (sfMix?.tracks?.items && sfMix.tracks.items.length > 0)
     ? sfMix.tracks.items
     : (storePl?.tracks?.items && storePl.tracks.items.length > 0)
     ? storePl.tracks.items
+    : offlineFallbackTracks.length > 0
+    ? offlineFallbackTracks
     : customSaved);
 
   const removedTrackIds = getRemovedTrackIdsForPlaylist(playlist.id);
@@ -420,60 +441,57 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const handleToggleTrackDownload = async (track: Track) => {
     const clean = cleanTrackId(track.id);
     if (downloadedTrackIds.has(clean)) {
-      await deleteDownloadedTrack(track.id);
-      try {
-        window.dispatchEvent(
-          new CustomEvent('spotifree:toast', {
-            detail: { message: `Descarga eliminada: ${track.name}` },
-          })
-        );
-      } catch {}
+      await removeTrackDownload(track);
     } else {
       setDownloadingTrackIds((prev) => new Set(prev).add(clean));
-      try {
-        window.dispatchEvent(
-          new CustomEvent('spotifree:toast', {
-            detail: { message: `Descargando «${track.name}» para escuchar sin conexión...` },
-          })
-        );
-      } catch {}
-      const ok = await downloadTrackAudio(track);
+      await downloadTrackEverywhere(track);
       setDownloadingTrackIds((prev) => {
         const next = new Set(prev);
         next.delete(clean);
         return next;
       });
-      if (ok) {
-        try {
-          window.dispatchEvent(
-            new CustomEvent('spotifree:toast', {
-              detail: { message: `¡«${track.name}» descargada para modo avión!` },
-            })
-          );
-        } catch {}
-      } else {
-        try {
-          window.dispatchEvent(
-            new CustomEvent('spotifree:toast', {
-              detail: { message: `No se pudo descargar «${track.name}».` },
-            })
-          );
-        } catch {}
-      }
     }
   };
 
   const handleToggleDownload = async () => {
+    if (isDownloading) return;
     if (isDownloaded) {
-      await deleteDownloadedPlaylist(dynamicPlaylist.id);
+      await deleteDownloadedPlaylist(dynamicPlaylist.id, dynamicTracks.map((t) => t.id));
       setIsDownloaded(false);
     } else {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        try {
+          window.dispatchEvent(new CustomEvent('spotifree:toast', { detail: { message: 'Modo avión: conéctate para descargar' } }));
+        } catch {}
+        return;
+      }
       setIsDownloading(true);
-      await downloadPlaylist(dynamicPlaylist, dynamicTracks, (cur, tot) => {
-        setDownloadProgress({ current: cur, total: tot });
-      });
-      setIsDownloading(false);
-      setIsDownloaded(true);
+      try {
+        const res = await downloadPlaylist(dynamicPlaylist, dynamicTracks, (cur, tot) => {
+          setDownloadProgress({ current: cur, total: tot });
+        });
+        if (res.downloaded > 0) {
+          setIsDownloaded(true);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('spotifree:toast', {
+                detail: { message: `${res.downloaded} de ${res.total} canciones descargadas para modo avión` },
+              })
+            );
+          } catch {}
+        } else {
+          setIsDownloaded(false);
+          try {
+            window.dispatchEvent(
+              new CustomEvent('spotifree:toast', {
+                detail: { message: 'No se pudo descargar ninguna canción. Inténtalo de nuevo.' },
+              })
+            );
+          } catch {}
+        }
+      } finally {
+        setIsDownloading(false);
+      }
     }
   };
 

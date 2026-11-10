@@ -76,7 +76,22 @@ ${plugins.map((p) => `        registerPlugin(${p}.class);`).join('\n')}
     private void configureWebView() {
         try {
             if (getBridge() != null && getBridge().getWebView() != null) {
-                getBridge().getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
+                android.webkit.WebView webView = getBridge().getWebView();
+                webView.getSettings().setMediaPlaybackRequiresUserGesture(false);
+                webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
+                    try {
+                        if (url == null || url.startsWith("blob:") || url.startsWith("data:")) return;
+                        android.app.DownloadManager.Request req = new android.app.DownloadManager.Request(Uri.parse(url));
+                        if (mimetype != null && !mimetype.isEmpty()) req.setMimeType(mimetype);
+                        String fileName = android.webkit.URLUtil.guessFileName(url, contentDisposition, mimetype);
+                        req.setTitle(fileName);
+                        req.setDescription("Descargando desde Spotifree");
+                        req.setNotificationVisibility(android.app.DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                        req.setDestinationInExternalPublicDir(android.os.Environment.DIRECTORY_DOWNLOADS, fileName);
+                        android.app.DownloadManager dm = (android.app.DownloadManager) getSystemService(DOWNLOAD_SERVICE);
+                        if (dm != null) dm.enqueue(req);
+                    } catch (Exception ignored) {}
+                });
             }
         } catch (Exception ignored) {}
     }
@@ -409,6 +424,14 @@ if (!gradle.includes('androidx.media:media')) {
 // Release lint is advisory here (a lint warning must not block the APK)
 if (!gradle.includes('checkReleaseBuilds')) {
   gradle = gradle.replace(/android\s*\{/, (m) => `${m}\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }`);
+}
+// Which build this APK is: versionName = the commit it was built from (the app compares it with
+// the latest published APK to offer the update; web changes arrive by themselves, native ones don't)
+const buildSha = (process.env.GITHUB_SHA || '').slice(0, 7);
+if (buildSha) {
+  gradle = gradle.replace(/versionName\s+"[^"]*"/, `versionName "${buildSha}"`);
+  const runNumber = Number(process.env.GITHUB_RUN_NUMBER || 0);
+  if (runNumber > 0) gradle = gradle.replace(/versionCode\s+\d+/, `versionCode ${runNumber + 100}`);
 }
 fs.writeFileSync(gradlePath, gradle, 'utf8');
 

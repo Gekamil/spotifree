@@ -239,10 +239,109 @@ export async function resolveAudio(target) {
   return promise;
 }
 
-export function streamAudioDirect(target, req, res, startSeconds = 0, options = {}) {
+let YT_VIS_PROMISE = null;
+const DIRECT_STREAM_CACHE = new Map();
+
+async function extractDirectYouTubeAudio(videoId) {
+  if (!videoId || !/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return null;
+  const cached = DIRECT_STREAM_CACHE.get(videoId);
+  if (cached && Date.now() - cached.ts < 600_000) return cached;
+
+  try {
+    const { Innertube } = await import('youtubei.js');
+    for (const ct of ['VISIONOS', 'IOS', 'ANDROID_VR']) {
+      try {
+        const yt =
+          ct === 'VISIONOS'
+            ? await (YT_VIS_PROMISE || (YT_VIS_PROMISE = Innertube.create({ client_type: 'VISIONOS', retrieve_player: false })))
+            : await Innertube.create({ client_type: ct, retrieve_player: false });
+        const info = await yt.getBasicInfo(videoId, { client: ct });
+        const formats = [...(info.streaming_data?.adaptive_formats || []), ...(info.streaming_data?.formats || [])]
+          .filter((f) => f.mime_type?.startsWith('audio/') && f.url);
+        const chosen = formats.find((f) => String(f.itag) === '140') || formats.sort((a, b) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+        if (chosen?.url) {
+          const entry = {
+            url: chosen.url,
+            mime: (chosen.mime_type || 'audio/mp4').split(';')[0].trim(),
+            clen: parseInt(String(chosen.content_length || '0'), 10) || 0,
+            ts: Date.now(),
+          };
+          DIRECT_STREAM_CACHE.set(videoId, entry);
+          return entry;
+        }
+      } catch {
+        if (ct === 'VISIONOS') YT_VIS_PROMISE = null;
+      }
+    }
+  } catch {}
+  return null;
+}
+
+export async function streamAudioDirect(target, req, res, startSeconds = 0, options = {}) {
   let cleanTarget = (target || '').trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(cleanTarget)) {
-    cleanTarget = `https://www.youtube.com/watch?v=${cleanTarget}`;
+  let videoId = /^[a-zA-Z0-9_-]{11}$/.test(cleanTarget) ? cleanTarget : null;
+  if (!videoId && !cleanTarget.startsWith('http')) {
+    try {
+      videoId = await resolveYouTubeVideoId(cleanTarget);
+    } catch {}
+  }
+
+  // Fast direct Innertube VISIONOS/IOS extraction (no yt-dlp subprocess bot-check overhead)
+  if (videoId && startSeconds <= 0) {
+    const direct = await extractDirectYouTubeAudio(videoId);
+    if (direct?.url) {
+      try {
+        if (options.transcodeMp3) {
+          // Real FFmpeg transcode to genuine ID3/MPEG-1 Layer 3 MP3 stream
+          const upstreamRes = await fetch(direct.url);
+          if (upstreamRes.ok && upstreamRes.body) {
+            const { Readable } = await import('node:stream');
+            res.writeHead(200, {
+              'Content-Type': 'audio/mpeg',
+              'Transfer-Encoding': 'chunked',
+              'Access-Control-Allow-Origin': '*',
+              'X-Audio-Source': 'full',
+              'X-Video-Id': videoId,
+              ...(options.headers || {}),
+            });
+            const ff = spawn('ffmpeg', ['-loglevel', 'error', '-i', 'pipe:0', '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', 'pipe:1']);
+            Readable.fromWeb(upstreamRes.body).pipe(ff.stdin);
+            ff.stdout.pipe(res);
+            req.on('close', () => {
+              try { ff.kill(); } catch {}
+            });
+            return;
+          }
+        } else {
+          // Proxy exact Range or full stream straight through
+          const reqHeaders = {};
+          if (req.headers.range) reqHeaders.Range = req.headers.range;
+          const up = await fetch(direct.url, { headers: reqHeaders });
+          if (up.ok || up.status === 206) {
+            const buf = Buffer.from(await up.arrayBuffer());
+            if (buf.length > 10000) {
+              const outHeaders = {
+                'Content-Type': direct.mime || 'audio/mp4',
+                'Content-Length': String(buf.length),
+                'Accept-Ranges': 'bytes',
+                'Access-Control-Allow-Origin': '*',
+                'X-Audio-Source': 'full',
+                'X-Video-Id': videoId,
+                'X-Total-Length': String(direct.clen || buf.length),
+                ...(options.headers || {}),
+              };
+              if (up.headers.get('content-range')) outHeaders['Content-Range'] = up.headers.get('content-range');
+              res.writeHead(up.status === 206 ? 206 : 200, outHeaders);
+              return res.end(buf);
+            }
+          }
+        }
+      } catch {}
+    }
+  }
+
+  if (videoId) {
+    cleanTarget = `https://www.youtube.com/watch?v=${videoId}`;
   } else if (!cleanTarget.startsWith('http')) {
     cleanTarget = `ytsearch1:${cleanTarget}`;
   }
@@ -261,7 +360,8 @@ export function streamAudioDirect(target, req, res, startSeconds = 0, options = 
   const pythonCmd = process.env.PYTHON_BIN || (process.platform === 'win32' ? 'python' : 'python3');
   const args = [
     '-m', 'yt_dlp',
-    '-f', options.format || 'ba[ext=webm]/ba/b',
+    '--extractor-args', 'youtube:player_client=visionos,ios,android_vr',
+    '-f', options.format || 'ba[ext=m4a]/ba[ext=webm]/ba/b',
     '-o', '-',
     '--no-warnings',
     '-q',

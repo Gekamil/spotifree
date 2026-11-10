@@ -24,6 +24,25 @@ interface LocalMusicPlugin {
   status(): Promise<{ available: boolean; granted: boolean }>;
   scan(o: { request: boolean }): Promise<{ granted: boolean; tracks: DeviceSong[]; error?: string }>;
   artwork(o: { albumId: number; id: number }): Promise<{ dataUrl: string | null }>;
+  saveOfflineTrack?(o: {
+    id: string;
+    base64: string;
+    ext: string;
+    mimeType: string;
+    metadataJson: string;
+    fileName: string;
+    savePublic?: boolean;
+  }): Promise<{ ok: boolean; path?: string; size?: number; savedPublic?: boolean }>;
+  savePublicMusicFile?(o: {
+    base64: string;
+    fileName: string;
+    mimeType: string;
+  }): Promise<{ ok: boolean }>;
+  getOfflineTrackPath?(o: { id: string }): Promise<{ exists: boolean; path?: string; ext?: string; size?: number }>;
+  deleteOfflineTrack?(o: { id: string }): Promise<{ ok: boolean }>;
+  saveOfflinePlaylist?(o: { id: string; metadataJson: string }): Promise<{ ok: boolean }>;
+  deleteOfflinePlaylist?(o: { id: string }): Promise<{ ok: boolean }>;
+  listOfflineData?(): Promise<{ tracks: any[]; playlists: any[] }>;
 }
 
 const LocalMusic = registerPlugin<LocalMusicPlugin>('SpotifreeLocalMusic');
@@ -188,4 +207,104 @@ export function findDeviceMatch(track: Pick<Track, 'name' | 'artists'> | null | 
   // Same artist (or the file has no artist tag but the title is long enough to be specific)
   const ok = devArtist ? artists.some((a) => a && (devArtist.includes(a) || a.includes(devArtist))) : key.length >= 8;
   return ok ? id : null;
+}
+
+// ---------------------------------------------------------------------------
+// Native Android App-Private Offline Storage + Public Music/Spotifree Export
+// ---------------------------------------------------------------------------
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const res = typeof reader.result === 'string' ? reader.result : '';
+      const idx = res.indexOf(',');
+      resolve(idx >= 0 ? res.slice(idx + 1) : res);
+    };
+    reader.onerror = () => reject(reader.error || new Error('FileReader failed'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+export async function saveNativeOfflineTrack(
+  cleanId: string,
+  blob: Blob,
+  ext: string,
+  mimeType: string,
+  track: Track,
+  fileName: string,
+  savePublic = false
+): Promise<boolean> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.saveOfflineTrack) return false;
+  try {
+    const base64 = await blobToBase64(blob);
+    const res = await LocalMusic.saveOfflineTrack({
+      id: cleanId,
+      base64,
+      ext,
+      mimeType,
+      metadataJson: JSON.stringify(track),
+      fileName,
+      savePublic,
+    });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function saveNativePublicMusicFile(
+  blob: Blob,
+  fileName: string,
+  mimeType: string
+): Promise<boolean> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.savePublicMusicFile) return false;
+  try {
+    const base64 = await blobToBase64(blob);
+    const res = await LocalMusic.savePublicMusicFile({ base64, fileName, mimeType });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function getNativeOfflineTrackUrl(cleanId: string): Promise<string | null> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.getOfflineTrackPath) return null;
+  try {
+    const res = await LocalMusic.getOfflineTrackPath({ id: cleanId });
+    if (res?.exists && res.path) {
+      return Capacitor.convertFileSrc(`file://${res.path}`);
+    }
+  } catch {}
+  return null;
+}
+
+export async function deleteNativeOfflineTrack(cleanId: string): Promise<void> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.deleteOfflineTrack) return;
+  try {
+    await LocalMusic.deleteOfflineTrack({ id: cleanId });
+  } catch {}
+}
+
+export async function saveNativeOfflinePlaylist(id: string, playlist: any): Promise<void> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.saveOfflinePlaylist) return;
+  try {
+    await LocalMusic.saveOfflinePlaylist({ id, metadataJson: JSON.stringify(playlist) });
+  } catch {}
+}
+
+export async function deleteNativeOfflinePlaylist(id: string): Promise<void> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.deleteOfflinePlaylist) return;
+  try {
+    await LocalMusic.deleteOfflinePlaylist({ id });
+  } catch {}
+}
+
+export async function listNativeOfflineData(): Promise<{ tracks: any[]; playlists: any[] } | null> {
+  if (!isDeviceMusicAvailable() || !LocalMusic.listOfflineData) return null;
+  try {
+    const res = await LocalMusic.listOfflineData();
+    return res || { tracks: [], playlists: [] };
+  } catch {
+    return null;
+  }
 }

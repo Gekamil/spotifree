@@ -13,7 +13,7 @@ function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Authorization');
-  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, Content-Disposition, X-Video-Id, X-Total-Length, X-Audio-Source');
 }
 
 function toHDImage(url) {
@@ -165,9 +165,9 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.3', cookiesLoaded: !!process.env.YOUTUBE_COOKIES }));
   }
 
-  // 2. Direct Audio Streaming (/api/audio/stream)
-  if (pathname === '/api/audio/stream') {
-    const target = reqUrl.searchParams.get('id') || reqUrl.searchParams.get('q') || reqUrl.searchParams.get('v') || reqUrl.searchParams.get('trackId') || '';
+  // 2. Direct Audio Streaming & Download (/api/audio/stream, /api/audio/download)
+  if (pathname === '/api/audio/stream' || pathname === '/api/audio/download') {
+    const target = reqUrl.searchParams.get('id') || reqUrl.searchParams.get('videoId') || reqUrl.searchParams.get('q') || reqUrl.searchParams.get('v') || reqUrl.searchParams.get('trackId') || '';
     if (!target.trim()) {
       res.statusCode = 400;
       res.setHeader('Content-Type', 'application/json');
@@ -177,7 +177,14 @@ const server = http.createServer(async (req, res) => {
     try {
       currentPlayingTrackId = target;
       const startSec = Math.max(0, parseInt(reqUrl.searchParams.get('start') || '0', 10)) || 0;
-      return streamAudioDirect(target, req, res, startSec);
+      const isDownload = pathname === '/api/audio/download';
+      const wantMp3 = reqUrl.searchParams.get('format') === 'mp3' || isDownload;
+      const rawFilename = reqUrl.searchParams.get('filename') || 'cancion.mp3';
+      const safeFile = wantMp3 ? rawFilename.replace(/\.[^.]+$/, '') + '.mp3' : rawFilename;
+      return await streamAudioDirect(target, req, res, startSec, {
+        transcodeMp3: wantMp3,
+        headers: isDownload ? { 'Content-Disposition': `attachment; filename="${safeFile}"` } : {},
+      });
     } catch (err) {
       console.error('[AudioStream error]:', err.message);
       if (!res.headersSent) {

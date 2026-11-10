@@ -307,6 +307,7 @@ export async function saveUserDataToFirestore(uid: string, data: Partial<CloudUs
     const userRef = doc(db, 'users', uid);
     const cleaned = prepareUserDocForFirestore(uid, data);
     if (!cleaned) return false;
+    lastWrittenUpdatedAt = cleaned.updatedAt;
     await setDoc(userRef, cleaned, { merge: true });
     lastCloudSaveError = '';
     return true;
@@ -408,6 +409,9 @@ export async function getUserDataFromFirestore(uid: string): Promise<CloudUserDa
   }
 }
 
+/** updatedAt of the last document this device wrote (its echo from the server is not a remote change) */
+export let lastWrittenUpdatedAt = 0;
+
 export function subscribeToUserDataFirestore(
   uid: string,
   onUpdate: (data: CloudUserData) => void
@@ -417,9 +421,13 @@ export function subscribeToUserDataFirestore(
   return onSnapshot(
     userRef,
     (snap) => {
-      if (snap.exists()) {
-        onUpdate(snap.data() as CloudUserData);
-      }
+      if (!snap.exists()) return;
+      // This device's own writes come back twice (local, then confirmed): they are not news, and
+      // applying an older echo could undo a change made a moment later
+      if (snap.metadata.hasPendingWrites) return;
+      const data = snap.data() as CloudUserData;
+      if (data?.updatedAt && data.updatedAt === lastWrittenUpdatedAt) return;
+      onUpdate(data);
     },
     (err) => {
       console.warn('[Firestore] Realtime subscription error:', err);

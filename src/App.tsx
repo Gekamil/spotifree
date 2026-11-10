@@ -11,6 +11,7 @@ import { TasteOnboardingModal } from './components/modals/TasteOnboardingModal';
 import { SharedSessionModal } from './components/common/SharedSessionModal';
 import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
+import { ApkUpdateBanner } from './components/common/ApkUpdateBanner';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
 import SleepTimerSheet from './components/common/SleepTimerSheet';
 import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
@@ -205,6 +206,7 @@ function App() {
       <ImportPlaylistDialog />
       <StoryCardSheet />
       <GlobalToast />
+      <ApkUpdateBanner />
     </ErrorBoundary>
   );
 }

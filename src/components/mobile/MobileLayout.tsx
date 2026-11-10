@@ -31,7 +31,14 @@ import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { isPlaylistDownloaded, getDownloadedPlaylists, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
+import {
+  isPlaylistDownloaded,
+  getDownloadedPlaylists,
+  getAllDownloadedTrackIds,
+  onDownloadsChanged,
+  downloadPlaylist,
+  deleteDownloadedPlaylist,
+} from '../../utils/offlineStorage';
 import { getCustomLikedSongs } from '../../utils/userStorage';
 import {
   ShareNativeIcon,
@@ -49,12 +56,24 @@ export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local' | 'recents' | 'stats'>('home');
   const [localCount, setLocalCount] = useState(0);
   useEffect(() => {
-    const load = () => listLocalTracks().then((t) => setLocalCount(t.length + deviceTracks().length));
+    const load = () =>
+      Promise.all([listLocalTracks(), getAllDownloadedTrackIds()]).then(([t, dlIds]) => {
+        const dev = deviceTracks();
+        const combined = new Set<string>();
+        dev.forEach((x) => combined.add(x.id));
+        t.forEach((x) => combined.add(x.id));
+        dlIds.forEach((id) => combined.add(id));
+        setLocalCount(combined.size);
+      });
     load();
     // APK: the phone's music (only if the permission was already given; it is asked in Archivos locales)
     void scanDeviceMusic(false);
     window.addEventListener(LOCAL_FILES_EVENT, load);
-    return () => window.removeEventListener(LOCAL_FILES_EVENT, load);
+    const unsubDownloads = onDownloadsChanged(load);
+    return () => {
+      window.removeEventListener(LOCAL_FILES_EVENT, load);
+      unsubDownloads();
+    };
   }, []);
   const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
@@ -267,16 +286,43 @@ export const MobileLayout: React.FC = () => {
       setToastMessage('Descarga eliminada');
     } else {
       const target = playlistMenuTarget;
-      const cached = (useSpotifyDataStore.getState().playlistDetailsCache as any)[target.id];
-      const tracks = cached?.tracks?.items || target.tracks?.items || [];
-      // Close the menu right away and show what is happening
       setPlaylistMenuTarget(null);
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setToastMessage('Modo avión: conéctate a internet para descargar playlists');
+        setTimeout(() => setToastMessage(null), 3000);
+        return;
+      }
+      const cleanPid = target.id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
+      const cached =
+        (useSpotifyDataStore.getState().playlistDetailsCache as any)[target.id] ||
+        (useSpotifyDataStore.getState().playlistDetailsCache as any)[cleanPid];
+      let tracks = cached?.tracks?.items || target.tracks?.items || [];
+      if (tracks.length === 0 && typeof window !== 'undefined') {
+        try {
+          const savedRaw = window.localStorage.getItem(`spotifree_playlist_tracks_${cleanPid}`);
+          if (savedRaw) tracks = JSON.parse(savedRaw);
+        } catch {}
+      }
+      if (tracks.length === 0 && cleanPid) {
+        setToastMessage('Cargando canciones de la playlist…');
+        try {
+          const resPl = await fetch(`/api/spotify/playlist/${encodeURIComponent(cleanPid)}`);
+          if (resPl.ok) {
+            const dataPl = await resPl.json();
+            if (Array.isArray(dataPl?.tracks?.items) && dataPl.tracks.items.length > 0) {
+              tracks = dataPl.tracks.items;
+            }
+          }
+        } catch {}
+      }
       setToastMessage(`Descargando ${tracks.length} canciones…`);
       const res = await downloadPlaylist(target, tracks, (done, total) => setToastMessage(`Descargando canciones (${done}/${total})…`));
       setToastMessage(
-        res.downloaded > 0
-          ? `${res.downloaded} de ${res.total} canciones disponibles sin conexión`
-          : 'No se ha podido descargar. Para escuchar sin conexión, añade tus canciones en Archivos locales'
+        res.offline
+          ? 'Modo avión: conéctate para descargar'
+          : res.downloaded > 0
+          ? `${res.downloaded} de ${res.total} canciones guardadas para modo avión`
+          : 'No se pudo descargar ninguna canción. Inténtalo de nuevo.'
       );
       setTimeout(() => setToastMessage(null), 3500);
       return;

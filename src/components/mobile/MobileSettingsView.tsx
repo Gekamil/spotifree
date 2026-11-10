@@ -6,6 +6,8 @@ import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
 import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
+import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
+import { SettingsMenu, SETTINGS_PAGE_TITLES, type SettingsPage } from './SettingsMenu';
 import {
   getBackgroundPlaybackAllowed,
   getCarLyricsEnabled,
@@ -35,6 +37,13 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   const { user, isAuthenticated, logout } = useSpotifyDataStore();
   const { openLoginModal, convertPhotosToBanners, setConvertPhotosToBanners } = useUIStore();
   const { language, setLanguage } = useLanguageStore();
+  // Spotify-style settings: a home list of categories, each one its own page
+  const [page, setPage] = useState<SettingsPage | null>(null);
+  useEffect(() => {
+    try {
+      document.querySelector('[data-mobile-scroll]')?.scrollTo({ top: 0 });
+    } catch {}
+  }, [page]);
 
   // Playback Settings
   const [normalizeAudio, setNormalizeAudio] = useState(() => {
@@ -202,7 +211,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
       {/* Top Header */}
       <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/90 backdrop-blur-md flex items-center justify-between border-b border-white/[0.06]">
         <button
-          onClick={onBack}
+          onClick={() => (page ? setPage(null) : onBack())}
           className="p-1.5 text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer"
           title="Atrás"
         >
@@ -211,12 +220,13 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </svg>
         </button>
         <h2 className="text-base font-black text-white font-['SpotifyMixUITitle']">
-          Configuración
+          {page ? SETTINGS_PAGE_TITLES[page] : 'Configuración'}
         </h2>
         <div className="w-8" />
       </div>
 
-      <div className="p-4 space-y-6">
+      <div key={page || 'home'} className="p-4 space-y-6 animate-in fade-in slide-in-from-right-3 duration-200">
+        {page === null && (<>
         {/* User Card */}
         {isAuthenticated ? (
           <div
@@ -295,6 +305,10 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </a>
         )}
 
+        <SettingsMenu onOpen={setPage} />
+        </>)}
+
+        {page === 'account' && (<>
         {/* Tu Cuenta Spotifree */}
         <div className="space-y-2">
           <div className="flex items-center justify-between px-1 mb-1">
@@ -341,6 +355,9 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
+        </>)}
+
+        {page === 'display' && (<>
         {/* Idioma / Language */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider px-1">
@@ -417,6 +434,9 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
+        </>)}
+
+        {page === 'playback' && (<>
         {/* Reproducción */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
@@ -657,11 +677,19 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
+        </>)}
+
+        {page === 'eq' && (<>
         {/* Ecualizador (estilo Spotify) */}
         <div className="p-4 rounded-2xl bg-[#121212] border border-white/[0.06]">
           <SpotifyEqualizer variant="mobile" />
         </div>
 
+        </>)}
+
+        {page === 'advanced' && <AdvancedSettingsSection variant="mobile" />}
+
+        {page === 'storage' && (<>
         {/* Almacenamiento & Caché Real */}
         <div className="space-y-3">
           <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
@@ -684,14 +712,22 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
           </div>
         </div>
 
+        </>)}
+
+        {page === 'social' && (<>
         {/* Escuchar juntos: friends listening now / before */}
         <ListeningFriendsSection variant="mobile" />
 
+        </>)}
+
+        {page === 'about' && (<>
         {/* Acerca de la aplicación (Versión y Últimos cambios) */}
         <AboutAppSection variant="mobile" />
 
+        </>)}
+
         {/* Cerrar Sesión */}
-        {isAuthenticated && (
+        {page === null && isAuthenticated && (
           <div className="pt-4 pb-8 flex flex-col items-center">
             <button
               onClick={logout}

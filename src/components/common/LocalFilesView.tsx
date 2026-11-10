@@ -23,7 +23,7 @@ import {
   isDeviceMusicAvailable,
   scanDeviceMusic,
 } from '../../utils/nativeLocalMusic';
-import { getDownloadedTracks, onDownloadsChanged } from '../../utils/offlineStorage';
+import { getAllDownloadedTrackIds, getDownloadedTracks, onDownloadsChanged } from '../../utils/offlineStorage';
 import {
   type DownloadFolder,
   createDownloadFolder,
@@ -153,7 +153,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
   }, [allTracks, folders, folderVersion]);
 
   const refresh = async () => {
-    const [list, size] = await Promise.all([listLocalTracks(), getLocalFilesSize()]);
+    const [list, size] = await Promise.all([listLocalTracks(), getLocalFilesSize(), getAllDownloadedTrackIds()]);
     setImported(list);
     setSizeBytes(size);
     if (onDevice) setPhoneTracks(deviceTracks());
@@ -178,7 +178,8 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
     if (onDevice) void scanPhone(false);
 
     const onLocal = () => void refresh();
-    const onDown = () => {
+    const onDown = async () => {
+      await getAllDownloadedTrackIds();
       setDownloaded(getDownloadedTracks());
       setFolderVersion((v) => v + 1);
     };

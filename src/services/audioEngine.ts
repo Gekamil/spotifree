@@ -198,7 +198,8 @@ class AudioEngine {
 
   private eqFrequencies = [60, 150, 400, 1000, 2400, 15000];
   private isCrossfading = false;
-  private preloadedNext: { track: Track; videoId?: string; query: string } | null = null;
+  private activeBlobUrls: [string | null, string | null] = [null, null];
+  private preloadedNext: { track: Track; videoId?: string; query: string; offlineUrl?: string } | null = null;
   private isPreloadingNext = false;
   private crossfadeInterval: number | null = null;
   private auditionInterval: number | null = null;
@@ -286,6 +287,46 @@ class AudioEngine {
   private static isSameTrack(a?: Track | null, b?: Track | null): boolean {
     if (!a || !b) return false;
     return AudioEngine.cleanId(a.id) === AudioEngine.cleanId(b.id);
+  }
+
+  private async resolveOfflinePlaybackUrl(track?: Track | null): Promise<string | null> {
+    if (!track?.id) return null;
+    try {
+      const deviceCopy = !isLocalTrackId(track.id) ? findDeviceMatch(track) : null;
+      if (track.id.startsWith(DEVICE_PREFIX)) return getDeviceTrackUrl(track.id);
+      if (deviceCopy) return getDeviceTrackUrl(deviceCopy);
+      if (isLocalTrackId(track.id)) return await getLocalTrackUrl(track.id);
+      return await getDownloadedTrackBlobUrl(track.id);
+    } catch {
+      return null;
+    }
+  }
+
+  private setHtml5DeckSource(deckIndex: 0 | 1, srcUrl: string, startSeconds = 0): void {
+    const el = this.audios[deckIndex];
+    if (!el) return;
+    const oldBlob = this.activeBlobUrls[deckIndex];
+    if (oldBlob && oldBlob !== srcUrl && oldBlob.startsWith('blob:')) {
+      try { URL.revokeObjectURL(oldBlob); } catch {}
+    }
+    this.activeBlobUrls[deckIndex] = srcUrl.startsWith('blob:') ? srcUrl : null;
+    el.src = srcUrl;
+    if (startSeconds > 0) {
+      const applySeek = () => {
+        try {
+          if (isFinite(el.duration) && startSeconds < el.duration) {
+            el.currentTime = startSeconds;
+          }
+        } catch {}
+      };
+      if (el.readyState >= 1) {
+        applySeek();
+      } else {
+        el.addEventListener('loadedmetadata', applySeek, { once: true });
+      }
+    } else {
+      try { el.currentTime = 0; } catch {}
+    }
   }
 
   private checkCrossfade(curSec: number, durSec: number) {
@@ -447,19 +488,19 @@ class AudioEngine {
       upcoming = upcoming.filter((t) => !isLocalTrackId(t.id) && !findDeviceMatch(t));
       if (upcoming.length === 0) return;
 
-      // 1. Process track N+1 (pre-cue into inactive player without stealing audio focus)
+      // 1. Process track N+1 (check offline storage first, else resolve & pre-cue)
       const next1 = upcoming[0];
       if (next1 && next1.id !== this.currentTrackId) {
         const artist1 = next1.artists?.[0]?.name || '';
         const query1 = `${next1.name} ${artist1}`.trim();
+        const offlineUrl1 = await this.resolveOfflinePlaybackUrl(next1);
+
         let videoId1: string | null | undefined = VIDEO_ID_CACHE.get(query1);
-        if (!videoId1) {
+        if (!offlineUrl1 && !videoId1 && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
           const dur1 = next1.duration_ms ? next1.duration_ms / 1000 : undefined;
           videoId1 = (await this.resolveVideoId(query1, next1.id, next1.name, artist1, dur1)) || undefined;
         }
 
-        // Discard stale preload: the song changed, a crossfade started, or the queue/shuffle order
-        // changed while resolving. Otherwise the next crossfade would play a different song than the UI.
         const expectedNext = tracksToPreload && tracksToPreload.length > 0 ? next1 : usePlayerStore.getState().getNextTrack?.();
         if (
           this.isAuditioning ||
@@ -475,10 +516,11 @@ class AudioEngine {
           track: next1,
           videoId: videoId1 || undefined,
           query: query1,
+          offlineUrl: offlineUrl1 || undefined,
         };
 
-        // DJ mode: measure the real BPM / key / structure of the playing and the next song
-        if (this.isDJModeEnabled()) {
+        // DJ mode: measure the real BPM / key / structure of the playing and the next song (online only)
+        if (this.isDJModeEnabled() && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
           const cur = usePlayerStore.getState().currentTrack;
           if (cur) void analyzeTrackAudio(cur, { videoId: this.currentVideoId });
           void analyzeTrackAudio(next1, { videoId: videoId1 || null });
@@ -486,15 +528,15 @@ class AudioEngine {
 
         // Cue video on inactive secondary player ready for instant playback
         const secPlayer = this.secondaryYtPlayer;
-        if (videoId1 && secPlayer && typeof secPlayer.cueVideoById === 'function') {
+        if (!offlineUrl1 && videoId1 && secPlayer && typeof secPlayer.cueVideoById === 'function') {
           try {
             secPlayer.cueVideoById({ videoId: videoId1, startSeconds: 0 });
           } catch {}
         }
       }
 
-      // 2. Process track N+2 in background (resolve videoId and prime cache for instant subsequent skip)
-      if (upcoming.length > 1) {
+      // 2. Process track N+2 in background (only when online)
+      if (upcoming.length > 1 && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
         const next2 = upcoming[1];
         if (next2 && next2.id !== this.currentTrackId) {
           const artist2 = next2.artists?.[0]?.name || '';
@@ -558,23 +600,41 @@ class AudioEngine {
       }
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
+      const offlineUrl = await this.resolveOfflinePlaybackUrl(nextTrack);
       let videoId: string | null | undefined = VIDEO_ID_CACHE.get(query);
 
-      if (!videoId) {
+      if (!offlineUrl && !videoId && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
         const nextDur = nextTrack.duration_ms ? nextTrack.duration_ms / 1000 : undefined;
         videoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName, nextDur)) || undefined;
       }
-      this.preloadedNext = { track: nextTrack, videoId: videoId || undefined, query };
+      this.preloadedNext = {
+        track: nextTrack,
+        videoId: videoId || undefined,
+        query,
+        offlineUrl: offlineUrl || undefined,
+      };
     }
 
     let nextTrack = this.preloadedNext?.track;
     let nextVideoId = this.preloadedNext?.videoId;
+    let nextOfflineUrl = this.preloadedNext?.offlineUrl;
     if (!nextTrack) {
       this.isCrossfading = false;
       return;
     }
 
-    if (this.activeEngine === 'youtube' && !nextVideoId) {
+    if (!nextOfflineUrl) {
+      nextOfflineUrl = (await this.resolveOfflinePlaybackUrl(nextTrack)) || undefined;
+      if (nextOfflineUrl && this.preloadedNext) this.preloadedNext.offlineUrl = nextOfflineUrl;
+    }
+
+    // If offline and next song isn't downloaded, don't crossfade into silence
+    if (!nextOfflineUrl && typeof navigator !== 'undefined' && navigator.onLine === false) {
+      this.isCrossfading = false;
+      return;
+    }
+
+    if (this.activeEngine === 'youtube' && !nextOfflineUrl && !nextVideoId) {
       const artistName = nextTrack.artists?.[0]?.name || '';
       const query = `${nextTrack.name} ${artistName}`.trim();
       nextVideoId = (await this.resolveVideoId(query, nextTrack.id, nextTrack.name, artistName)) || undefined;
@@ -588,7 +648,7 @@ class AudioEngine {
       return;
     }
 
-    if (this.activeEngine === 'youtube' && !nextVideoId) {
+    if (this.activeEngine === 'youtube' && !nextOfflineUrl && !nextVideoId) {
       this.isCrossfading = false;
       return;
     }
@@ -604,7 +664,7 @@ class AudioEngine {
     }
 
     // Start secondary player at volume 0 (Universal dual-deck simultaneous crossfade)
-    if (this.activeEngine === 'youtube' && secYt && nextVideoId) {
+    if (this.activeEngine === 'youtube' && secYt && nextVideoId && !nextOfflineUrl) {
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
         if (typeof secYt.unMute === 'function') secYt.unMute();
@@ -617,11 +677,13 @@ class AudioEngine {
         }
         secYt.playVideo();
       } catch {}
-    } else if (this.activeEngine === 'html5') {
+    } else if (this.activeEngine === 'html5' || nextOfflineUrl) {
       try {
+        const secIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
         const secAudio = this.secondaryAudio;
         secAudio.volume = 0;
-        secAudio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(this.preloadedNext.query)}`;
+        const nextUrl = nextOfflineUrl || `${API_BASE}/api/audio/stream?q=${encodeURIComponent(this.preloadedNext.query)}&trackId=${encodeURIComponent(nextTrack.id)}`;
+        this.setHtml5DeckSource(secIdx, nextUrl, mixInSec);
         secAudio.play().catch(() => {});
       } catch {}
     }
@@ -892,6 +954,7 @@ class AudioEngine {
     const nextTrack = this.preloadedNext?.track || state.getNextTrack?.();
     const nextVideoId = this.preloadedNext?.videoId;
     const nextQuery = this.preloadedNext?.query;
+    const nextOfflineUrl = this.preloadedNext?.offlineUrl;
     this.preloadedNext = null;
 
     if (!nextTrack) {
@@ -903,11 +966,12 @@ class AudioEngine {
     const oldYtIndex = this.activeYtIndex;
     const oldAudioIndex = this.activeAudioIndex;
     const isMobile = this.isMobileOrPWA();
+    const nextIsHtml5 = Boolean(nextOfflineUrl) || this.activeEngine === 'html5';
 
     // Is the secondary deck really outputting the incoming song? On mobile it may have been blocked.
     let secondaryIsPlayingIncoming = false;
     try {
-      if (this.activeEngine === 'youtube') {
+      if (!nextIsHtml5) {
         const sec = this.secondaryYtPlayer;
         const st = sec && typeof sec.getPlayerState === 'function' ? sec.getPlayerState() : -1;
         const ct = sec && typeof sec.getCurrentTime === 'function' ? sec.getCurrentTime() : 0;
@@ -938,11 +1002,10 @@ class AudioEngine {
       this.isTransitioning = false;
     }, 3500);
 
-    const swappedDecks = this.activeEngine === 'youtube' ? oldYtIndex !== this.activeYtIndex : oldAudioIndex !== this.activeAudioIndex;
+    const swappedDecks = !nextIsHtml5 ? oldYtIndex !== this.activeYtIndex : oldAudioIndex !== this.activeAudioIndex;
 
     // 2. NOW silence and cleanly stop outgoing old player if we swapped decks
     if (!swappedDecks) {
-      // Same deck reused: the secondary (incoming) deck must be silenced, the primary will load song B
       try {
         const sec = this.secondaryYtPlayer;
         if (sec) {
@@ -952,24 +1015,27 @@ class AudioEngine {
         const secA = this.secondaryAudio;
         if (secA) { secA.volume = 0; secA.pause(); }
       } catch {}
-    } else if (oldYtIndex !== this.activeYtIndex && this.activeEngine === 'youtube') {
-      const oldPlayer = this.ytPlayers[oldYtIndex];
-      if (oldPlayer) {
-        try {
-          if (typeof oldPlayer.setVolume === 'function') oldPlayer.setVolume(0);
-          if (typeof oldPlayer.stopVideo === 'function') oldPlayer.stopVideo();
-          else if (typeof oldPlayer.pauseVideo === 'function') oldPlayer.pauseVideo();
-          if (typeof oldPlayer.setPlaybackRate === 'function') oldPlayer.setPlaybackRate(1);
-        } catch {}
+    } else {
+      if (this.activeEngine === 'youtube') {
+        const oldPlayer = this.ytPlayers[oldYtIndex];
+        if (oldPlayer) {
+          try {
+            if (typeof oldPlayer.setVolume === 'function') oldPlayer.setVolume(0);
+            if (typeof oldPlayer.stopVideo === 'function') oldPlayer.stopVideo();
+            else if (typeof oldPlayer.pauseVideo === 'function') oldPlayer.pauseVideo();
+            if (typeof oldPlayer.setPlaybackRate === 'function') oldPlayer.setPlaybackRate(1);
+          } catch {}
+        }
       }
-    } else if (oldAudioIndex !== this.activeAudioIndex) {
-      const oldAudio = this.audios[oldAudioIndex];
-      if (oldAudio) {
-        try {
-          oldAudio.volume = 0;
-          oldAudio.pause();
-          oldAudio.currentTime = 0;
-        } catch {}
+      if (oldAudioIndex !== this.activeAudioIndex) {
+        const oldAudio = this.audios[oldAudioIndex];
+        if (oldAudio) {
+          try {
+            oldAudio.volume = 0;
+            oldAudio.pause();
+            oldAudio.currentTime = 0;
+          } catch {}
+        }
       }
     }
 
@@ -977,7 +1043,8 @@ class AudioEngine {
     let detectedVideoId = nextVideoId || null;
     let elapsedSeconds = crossfadeSec > 0 ? crossfadeSec : 0;
 
-    if (this.activeEngine === 'youtube') {
+    if (!nextIsHtml5) {
+      this.activeEngine = 'youtube';
       const newPlayer = this.ytPlayers[this.activeYtIndex];
       if (newPlayer) {
         try {
@@ -1002,11 +1069,9 @@ class AudioEngine {
             detectedVideoId = data.video_id;
           }
           if (!swappedDecks) {
-            // Treat the reload like a fresh start so stale progress/ENDED events from song A are ignored
             this.lastTrackStartTime = Date.now();
           }
 
-          // When the deck was just reloaded, getCurrentTime() may still report the OLD song position
           if (swappedDecks && typeof newPlayer.getCurrentTime === 'function') {
             const ct = newPlayer.getCurrentTime();
             if (isFinite(ct) && ct > 0) {
@@ -1016,12 +1081,13 @@ class AudioEngine {
         } catch {}
       }
     } else {
+      this.activeEngine = 'html5';
       const newAudio = this.audios[this.activeAudioIndex];
       if (newAudio) {
         try {
-          if (!swappedDecks && nextQuery) {
-            newAudio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(nextQuery)}&trackId=${encodeURIComponent(nextTrack.id)}`;
-            newAudio.currentTime = 0;
+          const targetUrl = nextOfflineUrl || (nextQuery ? `${API_BASE}/api/audio/stream?q=${encodeURIComponent(nextQuery)}&trackId=${encodeURIComponent(nextTrack.id)}` : '');
+          if (targetUrl && (!swappedDecks || !secondaryIsPlayingIncoming)) {
+            this.setHtml5DeckSource(this.activeAudioIndex, targetUrl, 0);
             elapsedSeconds = 0;
           }
           newAudio.volume = Math.max(0, Math.min(1, masterVolume));
@@ -2585,38 +2651,29 @@ class AudioEngine {
           this.isTransitioning = false;
           return;
         }
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          if (offlineBlobUrl) {
-            this.activeEngine = 'html5';
-            this.audio.src = offlineBlobUrl;
-            this.audio.currentTime = startSeconds;
-            await this.audio.play();
-            this.startCarrier();
-            usePlayerStore.setState({ isPlaying: true });
-            this.isTransitioning = false;
-            return;
-          } else {
-            console.warn('[AudioEngine] Offline / Modo avión: pista no descargada:', trackId);
-            usePlayerStore.setState({ isPlaying: false });
-            this.isTransitioning = false;
-            try {
-              window.dispatchEvent(
-                new CustomEvent('spotifree:toast', {
-                  detail: { message: 'Modo avión: esta canción no está descargada para escuchar sin conexión' }
-                })
-              );
-            } catch {}
-            return;
-          }
-        }
         if (offlineBlobUrl) {
           this.activeEngine = 'html5';
-          this.audio.src = offlineBlobUrl;
-          this.audio.currentTime = startSeconds;
+          const { isMuted } = usePlayerStore.getState();
+          this.audio.volume = isMuted ? 0 : this.getEffectiveVolume();
+          this.setHtml5DeckSource(this.activeAudioIndex, offlineBlobUrl, startSeconds);
           await this.audio.play();
           this.startCarrier();
+          this.startProgressTicker();
           usePlayerStore.setState({ isPlaying: true });
           this.isTransitioning = false;
+          return;
+        }
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          console.warn('[AudioEngine] Offline / Modo avión: pista no descargada:', trackId);
+          usePlayerStore.setState({ isPlaying: false });
+          this.isTransitioning = false;
+          try {
+            window.dispatchEvent(
+              new CustomEvent('spotifree:toast', {
+                detail: { message: 'Modo avión: esta canción no está descargada para escuchar sin conexión' }
+              })
+            );
+          } catch {}
           return;
         }
       } catch {}
@@ -3213,6 +3270,7 @@ class AudioEngine {
 
   public async preloadTrack(trackId: string, query: string) {
     if (!query || VIDEO_ID_CACHE.has(query)) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     try {
       const resolveUrl = `${API_BASE}/api/audio/resolve?q=${encodeURIComponent(query)}&trackId=${encodeURIComponent(trackId)}`;
       const res = await fetch(resolveUrl, { signal: AbortSignal.timeout?.(4000) });
