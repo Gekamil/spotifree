@@ -5,6 +5,7 @@ import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
+import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
 import {
   getBackgroundPlaybackAllowed,
   getCarLyricsEnabled,
@@ -682,6 +683,9 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
             </div>
           </div>
         </div>
+
+        {/* Escuchar juntos: friends listening now / before */}
+        <ListeningFriendsSection variant="mobile" />
 
         {/* Acerca de la aplicación (Versión y Últimos cambios) */}
         <AboutAppSection variant="mobile" />

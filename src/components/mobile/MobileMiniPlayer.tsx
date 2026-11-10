@@ -131,7 +131,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
       {/* 2px Bottom Progress Bar */}
       <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[8px] overflow-hidden pointer-events-none">
         <div
-          className="h-full bg-white transition-all duration-200 ease-linear"
+          className="h-full bg-white transition-[width] duration-[250ms] ease-linear"
           style={{ width: `${percent}%` }}
         />
       </div>

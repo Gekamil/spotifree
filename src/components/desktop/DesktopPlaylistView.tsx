@@ -721,7 +721,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               const artistImg =
                 playlist.images?.[0]?.url ||
                 artistTracks[0]?.album?.images?.[0]?.url ||
-                'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
+                '';
 
               const updatedArtistPlaylist: Playlist = {
                 ...playlist,

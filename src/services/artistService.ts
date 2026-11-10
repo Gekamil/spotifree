@@ -119,7 +119,7 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
 
   // Cache in store if we found songs
   if (songs.length > 0) {
-    const artistCover = songs[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
+    const artistCover = songs[0]?.album?.images?.[0]?.url || '';
     const syntheticPlaylist: Playlist = {
       id: artistId,
       name: cleanName,

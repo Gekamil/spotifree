@@ -721,9 +721,9 @@ export const MobileLayout: React.FC = () => {
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
-                    <div className="flex items-end justify-between relative z-20 pt-4 w-full">
+                    <div className="flex items-end justify-between relative z-20 mt-auto pt-4 w-full">
                       <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
-                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[50px] break-words whitespace-normal tracking-tight" />
+                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[50px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                       </div>
 
                       <button
@@ -1692,11 +1692,10 @@ export const MobileLayout: React.FC = () => {
 
       {/* Mobile Sort Bottom Sheet (Spotify Official "Ordenar por") */}
       <MobileSheet open={isMobileSortSheetOpen} onClose={() => setIsMobileSortSheetOpen(false)}>
-        <div className="pb-4">
-          <div className="px-5 pt-3 pb-2 border-b border-white/10">
-            <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Ordenar por</h3>
-          </div>
-          <SheetList>
+        {/* Spotify's sheet: plain rows, the chosen one green with a check; then "Ver como" */}
+        <div className="font-['SpotifyMixUI']">
+          <h3 className="px-1 pb-2 text-[17px] font-bold text-white font-['SpotifyMixUITitle']">Ordenar por</h3>
+          <div role="radiogroup" aria-label="Ordenar por">
             {[
               { id: 'recientes', label: 'Recientes' },
               { id: 'anadidos', label: 'Añadidos recientemente' },
@@ -1705,27 +1704,61 @@ export const MobileLayout: React.FC = () => {
             ].map((item) => {
               const isSelected = sortOrder === item.id;
               return (
-                <SheetItem
+                <button
                   key={item.id}
-                  label={item.label}
-                  active={isSelected}
-                  icon={
-                    isSelected ? (
-                      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
-                        <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
-                      </svg>
-                    ) : (
-                      <div className="w-5 h-5" />
-                    )
-                  }
+                  type="button"
+                  role="radio"
+                  aria-checked={isSelected}
                   onClick={() => {
                     setSortOrder(item.id as any);
-                    setIsMobileSortSheetOpen(false);
+                    setTimeout(() => setIsMobileSortSheetOpen(false), 120);
                   }}
-                />
+                  className="w-full flex items-center justify-between -mx-2 px-3 py-3.5 rounded-lg text-left active:bg-white/[0.06] transition-colors cursor-pointer" style={{ width: 'calc(100% + 16px)' }}
+                >
+                  <span className={`text-[16px] transition-colors ${isSelected ? 'text-[#1ed760] font-bold' : 'text-white'}`}>{item.label}</span>
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 16 16"
+                    fill="currentColor"
+                    className={`text-[#1ed760] shrink-0 transition-all duration-200 ${isSelected ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}
+                  >
+                    <path d="M15.53 2.47a.75.75 0 0 1 0 1.06L4.907 14.153.47 9.716a.75.75 0 0 1 1.06-1.06l3.377 3.376L14.47 2.47a.75.75 0 0 1 1.06 0" />
+                  </svg>
+                </button>
               );
             })}
-          </SheetList>
+          </div>
+          <div className="my-2 h-px bg-white/10" />
+          <div className="px-1 pt-1 flex items-center justify-between">
+            <span className="text-[16px] text-white">Ver como</span>
+            <div className="flex items-center gap-1 bg-[#2a2a2a] rounded-full p-1">
+              {(
+                [
+                  { id: 'lista', label: 'Lista', d: 'M15 14.5H5V13h10zm0-5.75H5v-1.5h10zM15 3H5V1.5h10zM3 3H1V1.5h2zm0 11.5H1V13h2zm0-5.75H1v-1.5h2z' },
+                  { id: 'cuadricula', label: 'Cuadrícula', d: 'M1 1h6v6H1zm1.5 1.5v3h3v-3zM1 9h6v6H1zm1.5 1.5v3h3v-3zM9 1h6v6H9zm1.5 1.5v3h3v-3zM9 9h6v6H9zm1.5 1.5v3h3v-3z' },
+                ] as const
+              ).map((v) => {
+                const on = viewMode === v.id || (v.id === 'lista' && viewMode !== 'cuadricula' && viewMode !== 'cuadricula-compacta');
+                return (
+                  <button
+                    key={v.id}
+                    type="button"
+                    aria-label={v.label}
+                    aria-pressed={on}
+                    onClick={() => setViewMode(v.id as any)}
+                    className={`w-9 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                      on ? 'bg-white text-black' : 'text-[#b3b3b3] active:text-white'
+                    }`}
+                  >
+                    <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor">
+                      <path d={v.d} />
+                    </svg>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </MobileSheet>
 

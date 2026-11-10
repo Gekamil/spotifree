@@ -20,17 +20,8 @@ export const AboutAppSection: React.FC<AboutAppSectionProps> = ({ variant = 'mob
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             {/* Spotify Green App Icon */}
-            <div className="w-10 h-10 rounded-xl bg-black border border-white/10 flex items-center justify-center shrink-0 shadow-md">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" fill="#1ED760" />
-                <path
-                  d="M7 9.5C10.2 8.6 14.3 8.8 17 10.4M7.8 12.5C10.5 11.7 13.9 12 16.2 13.3M8.5 15.3C10.7 14.7 13.4 15 15.2 16.1"
-                  stroke="black"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
+            <img src="/icon-192.png" alt="" className="w-10 h-10 rounded-xl shrink-0 shadow-md" />
+
 
             <div className="min-w-0">
               <div className="flex items-center gap-2">

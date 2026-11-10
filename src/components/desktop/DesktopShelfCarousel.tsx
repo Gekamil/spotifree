@@ -52,7 +52,20 @@ const CarouselCard: React.FC<{
   const isArtist =
     card.subtitle?.toLowerCase() === 'artista' || card.id.startsWith('artist-') || card.id.startsWith('art-') || (card as any).isArtist;
   const isRadioCard = card.image?.includes('/img/radio/') || card.id.startsWith('rad-') || (card as any).isRadio;
-  const hasValidImage = !!card.image && card.image.trim().length > 0 && !imageError;
+  // An artist that comes without a photo: their real one, looked up by name
+  const [artistPhoto, setArtistPhoto] = useState('');
+  useEffect(() => {
+    if (!isArtist || (card.image && card.image.trim()) || !card.title) return;
+    let alive = true;
+    getArtistPicture(card.title)
+      .then((u) => alive && u && setArtistPhoto(u))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [isArtist, card.image, card.title]);
+  const imageUrl = (card.image && card.image.trim()) || artistPhoto;
+  const hasValidImage = !!imageUrl && !imageError;
 
   const handleImageLoad = () => {
     setImageLoaded(true);
@@ -117,7 +130,7 @@ const CarouselCard: React.FC<{
           <>
             <img
               ref={imgRef}
-              src={toHDImage(card.image)}
+              src={toHDImage(imageUrl)}
               alt={card.title}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"

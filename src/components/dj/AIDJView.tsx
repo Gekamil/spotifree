@@ -50,6 +50,19 @@ const getBestTrackArtwork = (track: Track | null | undefined): string => {
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 };
 
+/** The mini player's 2 px progress line: the only part of the DJ screen that follows the song's progress */
+const DJMiniProgress: React.FC<{ fallbackDurationMs?: number }> = ({ fallbackDurationMs }) => {
+  const progressMs = usePlayerStore((s) => s.progressMs);
+  const durationMs = usePlayerStore((s) => s.durationMs);
+  const duration = durationMs || fallbackDurationMs || 180000;
+  const pct = duration > 0 ? (Math.min(progressMs, duration) / duration) * 100 : 0;
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[10px] overflow-hidden pointer-events-none">
+      <div className="h-full bg-white origin-left will-change-transform" style={{ transform: `scaleX(${pct / 100})` }} />
+    </div>
+  );
+};
+
 const DEFAULT_QUICK_CHIPS = [
   'Más movido',
   'Algo chill',
@@ -94,18 +107,18 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const activeSegIdx = activeSegment ? segments.indexOf(activeSegment) : -1;
   const upcomingSegment = activeSegIdx >= 0 ? segments[activeSegIdx + 1] || null : null;
 
+  // (No progressMs here: it changes 10 times a second and would redraw the whole DJ screen;
+  // the mini player's bar reads it on its own, see DJMiniProgress)
   const {
     currentTrack,
     isPlaying,
-    progressMs,
-    durationMs,
     playTrack,
     togglePlay,
     likedTrackIds,
     toggleLike,
     queue,
   } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, progressMs: s.progressMs, durationMs: s.durationMs, playTrack: s.playTrack, togglePlay: s.togglePlay, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, queue: s.queue }))
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, queue: s.queue }))
   );
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
@@ -348,9 +361,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   };
 
   const isCurrentLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
-  const currentDuration = durationMs || currentTrack?.duration_ms || 180000;
-  const currentProgress = Math.min(progressMs, currentDuration);
-  const progressPercent = currentDuration > 0 ? (currentProgress / currentDuration) * 100 : 0;
   const activeArtwork = getBestTrackArtwork(currentTrack);
 
   const isSpeaking = visualizerState === 'speaking' || visualizerState === 'listening';
@@ -690,12 +700,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             title="Toca para abrir reproductor completo con letra y detalles"
           >
             {/* 2px Bottom Progress Bar */}
-            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[10px] overflow-hidden pointer-events-none">
-              <div
-                className="h-full bg-white transition-all duration-200 ease-linear"
-                style={{ width: `${progressPercent}%` }}
-              />
-            </div>
+            <DJMiniProgress fallbackDurationMs={currentTrack?.duration_ms} />
 
             {/* Left: Artwork + Track details */}
             <div className="flex items-center min-w-0 flex-1 mr-2">

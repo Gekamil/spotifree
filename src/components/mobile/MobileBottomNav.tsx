@@ -21,8 +21,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
         height: 'calc(64px + env(safe-area-inset-bottom, 0px))',
       }}
-      className="fixed bottom-0 left-0 right-0 flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-gradient-to-t from-black via-black/85 to-transparent pointer-events-auto"
+      className="fixed bottom-0 left-0 right-0 flex items-center justify-around z-50 px-2 select-none font-['SpotifyMixUI'] bg-[linear-gradient(to_top,#000_0%,rgba(0,0,0,0.94)_65%,rgba(0,0,0,0.82)_100%)] pointer-events-auto"
     >
+      {/* Spotify's fade: the content dissolves above the bar instead of showing behind its labels */}
+      <div aria-hidden="true" className="absolute left-0 right-0 bottom-full h-10 pointer-events-none bg-gradient-to-t from-black/80 to-transparent" />
       {/* 1. Inicio */}
       <button
         onClick={() => onTabChange('home')}

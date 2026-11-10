@@ -182,24 +182,46 @@ public class SpotifreeWidget extends AppWidgetProvider {
         return R.layout.spotifree_widget;
     }
 
+    /** Current cover (restored from disk after a restart); shared with the turntable widget */
+    static Bitmap art(Context ctx) {
+        try {
+            SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            persistArt(ctx, prefs);
+            restoreArt(ctx, prefs);
+        } catch (Throwable ignored) {}
+        return source;
+    }
+
+    /** Card colour taken from the current cover */
+    static int currentCardColor() {
+        return color != 0 ? color : DEFAULT_COLOR;
+    }
+
+    /** {title, artist} of the song playing, or the last one (remembered after the app closes) */
+    static String[] song(Context ctx) {
+        SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        String title = SpotifreeMediaService.title;
+        String artist = SpotifreeMediaService.artist;
+        if (title != null && !title.isEmpty()) {
+            prefs.edit().putString("title", title).putString("artist", artist == null ? "" : artist).apply();
+            return new String[] { title, artist == null ? "" : artist };
+        }
+        return new String[] { prefs.getString("title", ""), prefs.getString("artist", "") };
+    }
+
     /** Redraws every Spotifree widget (cheap when nothing changed) */
     static void update(Context ctx) {
+        // The turntable widget follows the same song, cover and play state
+        SpotifreeTurntableWidget.update(ctx);
         try {
             AppWidgetManager mgr = AppWidgetManager.getInstance(ctx);
             int[] ids = mgr.getAppWidgetIds(new ComponentName(ctx, SpotifreeWidget.class));
             if (ids == null || ids.length == 0) return;
 
-            SharedPreferences prefs = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-            persistArt(ctx, prefs);
-            restoreArt(ctx, prefs);
-            String title = SpotifreeMediaService.title;
-            String artist = SpotifreeMediaService.artist;
-            if (title != null && !title.isEmpty()) {
-                prefs.edit().putString("title", title).putString("artist", artist == null ? "" : artist).apply();
-            } else {
-                title = prefs.getString("title", "");
-                artist = prefs.getString("artist", "");
-            }
+            art(ctx);
+            String[] song = song(ctx);
+            String title = song[0];
+            String artist = song[1];
             boolean playing = SpotifreeMediaService.playing;
             // The app is running (its media session can take the buttons)
             boolean live = SpotifreeMediaService.current != null && SpotifreeMediaPlugin.isAppRunning();

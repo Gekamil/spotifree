@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Record label when there is no cover yet: green, with the spindle hole -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+    <path
+        android:fillColor="#FF111111"
+        android:pathData="M0,0 L64,0 L64,64 L0,64 Z" />
+    <path
+        android:fillColor="#FF1ED760"
+        android:pathData="M32,1 A31,31 0 1,1 32,63 A31,31 0 1,1 32,1 Z" />
+    <path
+        android:fillColor="#FF0B0B0B"
+        android:pathData="M32,28.8 A3.2,3.2 0 1,1 32,35.2 A3.2,3.2 0 1,1 32,28.8 Z" />
+</vector>

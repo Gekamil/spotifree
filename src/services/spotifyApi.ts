@@ -389,7 +389,7 @@ export async function searchSpotify(query: string): Promise<any | null> {
           const img = matchSong?.artworkUrl100?.replace('100x100bb', '600x600bb') ||
                       songData.results?.[idx]?.artworkUrl100?.replace('100x100bb', '600x600bb') ||
                       tracks[0]?.album?.images?.[0]?.url ||
-                      'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658';
+                      '';
 
           artistMap.set(a.artistName.toLowerCase(), {
             id: `art-${a.artistId || idx}`,

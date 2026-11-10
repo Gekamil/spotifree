@@ -156,7 +156,7 @@ export const DesktopLayout: React.FC = () => {
       desc = desc || 'Los éxitos más escuchados en España.';
     } else if (cleanId === '37i9dQZF1DX10zKzsJ2jva') {
       title = title || 'Viva Latino';
-      image = image || 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541';
+      image = image || 'https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5';
       desc = desc || 'Los éxitos de la música latina.';
     } else if (cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection-tracks') {
       title = 'Canciones que te gustan';

@@ -25,6 +25,10 @@ interface StatsState {
   artists: Record<string, ArtistStat>;
   tracks: Record<string, TrackStat>;
   audioPersonality: string;
+  /** Seconds listened per local day (YYYY-MM-DD), last 60 days */
+  daily: Record<string, number>;
+  /** Seconds listened per hour of the day (0-23) */
+  hourly: number[];
   isWrappedOpen: boolean;
   currentUserId: string | null;
   openWrapped: () => void;
@@ -52,6 +56,8 @@ const EMPTY_STATS = {
   artists: {} as Record<string, ArtistStat>,
   tracks: {} as Record<string, TrackStat>,
   audioPersonality: 'Oyente Musical',
+  daily: {} as Record<string, number>,
+  hourly: new Array(24).fill(0) as number[],
 };
 
 function loadSavedStats(userId: string | null = null) {
@@ -68,11 +74,13 @@ function loadSavedStats(userId: string | null = null) {
         artists: parsed.artists || {},
         tracks: parsed.tracks || {},
         audioPersonality: parsed.audioPersonality || 'Oyente Musical',
+        daily: parsed.daily && typeof parsed.daily === 'object' ? parsed.daily : {},
+        hourly: Array.isArray(parsed.hourly) && parsed.hourly.length === 24 ? parsed.hourly : new Array(24).fill(0),
       };
     }
   } catch {}
 
-  return { ...EMPTY_STATS };
+  return { ...EMPTY_STATS, daily: {}, hourly: new Array(24).fill(0) };
 }
 
 function persistStats(data: any, userId: string | null = null) {
@@ -87,6 +95,8 @@ function persistStats(data: any, userId: string | null = null) {
         artists: data.artists,
         tracks: data.tracks,
         audioPersonality: data.audioPersonality,
+        daily: data.daily,
+        hourly: data.hourly,
       })
     );
   } catch {}
@@ -105,6 +115,8 @@ export const useStatsStore = create<StatsState>((set, get) => ({
   artists: initial.artists,
   tracks: initial.tracks,
   audioPersonality: initial.audioPersonality,
+  daily: initial.daily,
+  hourly: initial.hourly,
   isWrappedOpen: false,
   currentUserId: initialUserId,
 
@@ -120,6 +132,8 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       artists: loaded.artists,
       tracks: loaded.tracks,
       audioPersonality: loaded.audioPersonality,
+      daily: loaded.daily,
+      hourly: loaded.hourly,
     });
   },
 
@@ -131,6 +145,8 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       artists: {},
       tracks: {},
       audioPersonality: 'Oyente Musical',
+      daily: {},
+      hourly: new Array(24).fill(0),
     });
   },
 
@@ -143,7 +159,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       const existingArtist = state.artists[artistKey] || {
         id: artistKey,
         name: primaryArtist,
-        image: track.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
+        image: track.album?.images?.[0]?.url || '',
         plays: 0,
         minutes: 0,
       };
@@ -153,8 +169,21 @@ export const useStatsStore = create<StatsState>((set, get) => ({
         minutes: existingArtist.minutes + 1 / 60,
       };
 
+      // When: per local day (kept 60 days) and per hour of the day, for the listening charts
+      const now = new Date();
+      const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      let daily = state.daily;
+      if (daily[day] === undefined && Object.keys(daily).length >= 60) {
+        daily = Object.fromEntries(Object.entries(daily).sort(([a], [b]) => a.localeCompare(b)).slice(-59));
+      }
+      daily = { ...daily, [day]: (daily[day] || 0) + 1 };
+      const hourly = state.hourly.slice();
+      hourly[now.getHours()] = (hourly[now.getHours()] || 0) + 1;
+
       const updated = {
         totalSeconds: newSec,
+        daily,
+        hourly,
         artists: {
           ...state.artists,
           [artistKey]: updatedArtist,
@@ -179,7 +208,7 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       const existingArtist = state.artists[artistKey] || {
         id: artistKey,
         name: primaryArtist,
-        image: track.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
+        image: track.album?.images?.[0]?.url || '',
         plays: 0,
         minutes: 0,
       };

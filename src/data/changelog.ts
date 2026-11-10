@@ -11,14 +11,29 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.1.3';
+export const APP_VERSION = '0.2.0';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.0',
+    date: '10 de noviembre, 2026',
+    title: 'Tocadiscos, estadísticas y escuchar con amigos',
+    isLatest: true,
+    highlights: [
+      'Nuevo widget «Tocadiscos» para la pantalla de inicio: el vinilo gira con la canción que suena, con su portada en la etiqueta, y el brazo baja al darle a reproducir.',
+      'Estadísticas de escucha rediseñadas: minutos de la semana comparados con la anterior, gráfico de los últimos 7 días, a qué horas escuchas y tus artistas y canciones más escuchados. El tiempo escuchado ya se cuenta bien.',
+      'Ajustes › Escuchar juntos: los amigos que están escuchando contigo, con su foto, y con los que has escuchado antes.',
+      'El panel lateral del perfil ya se cierra bien y todos sus botones funcionan.',
+      '«Novedades de la app» sustituye a «Tus avisos» y muestra qué cambia en cada versión.',
+      'Ordenar y ver la biblioteca con el mismo diseño que Spotify, en móvil y ordenador.',
+      'La tarjeta de «Tu DJ personal» vuelve a tener el texto y el botón abajo, y la pantalla del DJ va más fluida.',
+      'Portadas que no cargaban arregladas y artistas de ejemplo sustituidos por los tuyos de verdad.',
+    ],
+  },
   {
     version: '0.1.3',
     date: '9 de Noviembre, 2026',
     title: 'Coche y Android Auto perfeccionados',
-    isLatest: true,
     highlights: [
       'Iconos superiores oficiales de Spotify (Inicio, Tu biblioteca, Explorar y Cola) cargados de forma instantánea mediante bitmaps directos en memoria.',
       'Soporte completo para reproducción aleatoria en listas de reproducción con el icono oficial de shuffle en la cabecera.',

@@ -1,0 +1,197 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Turntable widget (4x2): the record turns while the song plays (the cover is its label), the
+     tonearm drops onto it; song, artist and controls on the right. Card tinted with the cover's colour. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ImageView
+        android:id="@+id/widget_bg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/spotifree_widget_shape" />
+
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY"
+        android:src="@drawable/spotifree_widget_shade" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:padding="10dp">
+
+        <!-- Deck: base, record (turning / still), label (turning frames / still), tonearm -->
+        <FrameLayout
+            android:id="@+id/tt_deck"
+            android:layout_width="96dp"
+            android:layout_height="96dp">
+
+            <ImageView
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/spotifree_tt_plinth" />
+
+            <FrameLayout
+                android:layout_width="84dp"
+                android:layout_height="84dp"
+                android:layout_gravity="center">
+
+                <ProgressBar
+                    android:id="@+id/tt_spin"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:indeterminate="true"
+                    android:indeterminateBehavior="repeat"
+                    android:indeterminateDrawable="@drawable/spotifree_vinyl_spin"
+                    android:indeterminateDuration="1800"
+                    android:indeterminateTint="#FFFFFFFF"
+                    android:indeterminateTintMode="multiply"
+                    android:interpolator="@android:anim/linear_interpolator"
+                    android:visibility="gone" />
+
+                <ImageView
+                    android:id="@+id/tt_disc"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:contentDescription="@null"
+                    android:src="@drawable/spotifree_vinyl_disc" />
+
+                <ViewFlipper
+                    android:id="@+id/tt_flipper"
+                    android:layout_width="31dp"
+                    android:layout_height="31dp"
+                    android:layout_gravity="center"
+                    android:autoStart="true"
+                    android:flipInterval="112"
+                    android:visibility="gone">
+                    <ImageView android:id="@+id/tt_f0" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f1" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f2" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f3" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f4" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f5" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f6" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f7" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f8" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f9" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f10" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f11" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f12" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f13" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f14" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                    <ImageView android:id="@+id/tt_f15" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
+                </ViewFlipper>
+
+                <ImageView
+                    android:id="@+id/tt_label"
+                    android:layout_width="31dp"
+                    android:layout_height="31dp"
+                    android:layout_gravity="center"
+                    android:contentDescription="@null"
+                    android:scaleType="fitXY"
+                    android:src="@drawable/spotifree_vinyl_label" />
+            </FrameLayout>
+
+            <ImageView
+                android:id="@+id/tt_arm"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@null"
+                android:scaleType="fitXY"
+                android:src="@drawable/spotifree_tonearm_off" />
+        </FrameLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="14dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_state"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text="Spotifree"
+                android:textColor="#CCFFFFFF"
+                android:textSize="11sp" />
+
+            <LinearLayout
+                android:id="@+id/widget_text"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1"
+                android:gravity="center_vertical"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-black"
+                    android:maxLines="1"
+                    android:text="Spotifree"
+                    android:textColor="#FFFFFF"
+                    android:textSize="17sp" />
+
+                <TextView
+                    android:id="@+id/widget_artist"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="#D9FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ImageView
+                    android:id="@+id/widget_prev"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="Anterior"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_stat_prev" />
+
+                <ImageView
+                    android:id="@+id/widget_play"
+                    android:layout_width="46dp"
+                    android:layout_height="46dp"
+                    android:layout_marginStart="4dp"
+                    android:layout_marginEnd="4dp"
+                    android:background="@drawable/spotifree_widget_play_bg"
+                    android:contentDescription="Reproducir"
+                    android:padding="12dp"
+                    android:src="@drawable/ic_stat_play" />
+
+                <ImageView
+                    android:id="@+id/widget_next"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:contentDescription="Siguiente"
+                    android:padding="9dp"
+                    android:src="@drawable/ic_stat_next" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

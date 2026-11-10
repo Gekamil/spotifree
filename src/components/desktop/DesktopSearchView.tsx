@@ -563,11 +563,17 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           >
                             <div>
                               <div className="w-28 h-28 rounded-full overflow-hidden mb-4 shadow-xl bg-[#242424]">
-                                <img
-                                  src={topArtist.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658'}
-                                  alt={topArtist.name}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                />
+                                {topArtist.images?.[0]?.url ? (
+                                  <img
+                                    src={topArtist.images[0].url}
+                                    alt={topArtist.name}
+                                    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-white/70">
+                                    {(topArtist.name || '?').charAt(0).toUpperCase()}
+                                  </div>
+                                )}
                               </div>
                               <h3 className="text-3xl font-black text-white font-['SpotifyMixUITitle'] leading-tight">
                                 {topArtist.name}

@@ -79,76 +79,9 @@ function getFallbackLyrics(title: string = '', artist: string = ''): string[] {
   ];
 }
 
-// Artist info helper with high-resolution 640x640 Spotify photography
+// Artist card of "Sonando ahora": the same for every artist. No invented listener numbers and
+// no fixed photos: the song's cover until the artist's real photo arrives (getArtistPicture).
 function getArtistInfo(artistName: string = '', fallbackImage?: string) {
-  const a = artistName.toLowerCase();
-  if (a.includes('romeo santos')) {
-    return {
-      name: 'Romeo Santos',
-      listeners: '24.819.340 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
-      bio: "Anthony Santos, conocido artísticamente como Romeo Santos, es el legendario 'Rey de la Bachata', vocalista líder de Aventura y uno de los artistas latinos más influyentes del mundo.",
-    };
-  }
-  if (a.includes('prince royce')) {
-    return {
-      name: 'Prince Royce',
-      listeners: '18.940.110 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb9875412976be04620573e86c',
-      bio: "Geoffrey Royce Rojas, apodado 'El Príncipe de la Bachata', es un aclamado cantante y compositor multiplatino estadounidense de origen dominicano.",
-    };
-  }
-  if (a.includes('trueno')) {
-    return {
-      name: 'Trueno',
-      listeners: '16.540.890 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb919ca0a8e0f6b4c3e3871131',
-      bio: "Mateo Palacios Corazzina, conocido como Trueno, es un referente indiscutible del hip hop y freestyle argentino originario del barrio de La Boca en Buenos Aires.",
-    };
-  }
-  if (a.includes('boza')) {
-    return {
-      name: 'Boza',
-      listeners: '11.230.400 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb4d7bfa51c8a32bbd778fb8c3',
-      bio: "Humberto Ceballos Boza, conocido como Boza, es un destacado cantante y compositor panameño que fusiona dancehall, reguetón y ritmos urbanos caribeños.",
-    };
-  }
-  if (a.includes('bad bunny')) {
-    return {
-      name: 'Bad Bunny',
-      listeners: '68.210.450 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb9ad3eb759082ef7ef688b56d',
-      bio: "Benito Antonio Martínez Ocasio es un icono global de la música urbana, multipremiado por los Grammy y uno de los artistas más escuchados en la historia del streaming.",
-    };
-  }
-  if (a.includes('ozuna')) {
-    return {
-      name: 'Ozuna',
-      listeners: '39.450.800 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb21b0b57117faed68367a78e8',
-      bio: "Juan Carlos Ozuna Rosado es una de las mayores superestrellas mundiales de la música latina, apodado internacionalmente como 'El Negrito de Ojos Claros'.",
-    };
-  }
-  if (a.includes('quevedo')) {
-    return {
-      name: 'Quevedo',
-      listeners: '22.180.900 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5ebf8998ad6d2c49c7ab028eb67',
-      bio: "Pedro Luis Domínguez Quevedo es un rapero y cantante canario consagrado como una de las figuras más influyentes del pop y reguetón en español.",
-    };
-  }
-  if (a.includes('feid')) {
-    return {
-      name: 'Feid',
-      listeners: '42.600.100 oyentes mensuales',
-      image: 'https://i.scdn.co/image/ab6761610000e5eb604da57c9a62256c702ae07d',
-      bio: "Salomón Villada Hoyos, conocido como Feid o Ferxxo, es un exitoso cantautor y productor colombiano líder del reguetón contemporáneo.",
-    };
-  }
-
-  // Unknown artist: no invented numbers, and never another artist's photo (the song's cover
-  // until the real artist photo arrives)
   return {
     name: artistName || 'Artista',
     listeners: '',

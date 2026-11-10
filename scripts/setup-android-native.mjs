@@ -294,6 +294,17 @@ ${services}
                 android:resource="@xml/spotifree_widget_info" />
         </receiver>
         <receiver
+            android:name=".SpotifreeTurntableWidget"
+            android:exported="false"
+            android:label="Tocadiscos">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/spotifree_turntable_info" />
+        </receiver>
+        <receiver
             android:name="androidx.media.session.MediaButtonReceiver"
             android:exported="true">
             <intent-filter>

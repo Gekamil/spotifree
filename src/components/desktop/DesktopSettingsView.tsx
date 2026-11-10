@@ -6,6 +6,7 @@ import { DJEffectsSelector } from '../common/DJEffectsSelector';
 import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
+import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -860,6 +861,11 @@ export const DesktopSettingsView: React.FC = () => {
             </div>
           </section>
         )}
+
+        {/* Escuchar juntos: friends listening now / before */}
+        <div className="pt-6 border-t border-white/5">
+          <ListeningFriendsSection variant="desktop" />
+        </div>
 
         {/* Acerca de la aplicación (Versión y Cambios) */}
         <div className="pt-6 border-t border-white/5">

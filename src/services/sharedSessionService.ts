@@ -22,6 +22,7 @@ import {
 import type { Track } from '../types/spotify';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useUIStore } from '../store/useUIStore';
+import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 
 export interface SessionParticipant {
   id: string;
@@ -29,6 +30,8 @@ export interface SessionParticipant {
   color: string;
   isHost: boolean;
   lastSeen: number;
+  /** Profile photo (a URL, or a small image) so friends see who is listening */
+  avatar?: string;
   cursor?: {
     pctX: number;
     pctY: number;
@@ -76,6 +79,21 @@ export interface SharedSessionStore {
   broadcastPlayback: (track: Track | null, isPlaying: boolean, progressMs: number) => Promise<void>;
   broadcastCursor: (pctX: number, pctY: number) => void;
   _subscribeToSessionDoc: (sessionId: string) => void;
+}
+
+/** This account's profile photo for the session: its custom one or Spotify's (small enough to share) */
+function myAvatar(): string | undefined {
+  if (typeof window === 'undefined') return undefined;
+  try {
+    const u: any = useSpotifyDataStore.getState().user;
+    const id = u?.id || window.localStorage.getItem('spotifree_active_user_id') || 'default';
+    const raw = window.localStorage.getItem(`spotifree_custom_profile_${id}`) || window.localStorage.getItem('spotifree_custom_profile');
+    const custom = raw ? JSON.parse(raw)?.avatarUrl : '';
+    const url = custom || u?.images?.[0]?.url || '';
+    // Web addresses always; an uploaded picture only if small (it travels inside the session)
+    if (/^https?:\/\//.test(url) || (url.startsWith('data:image') && url.length < 60000)) return url;
+  } catch {}
+  return undefined;
 }
 
 const PARTICIPANT_COLORS = [
@@ -587,6 +605,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       color,
       isHost: true,
       lastSeen: Date.now(),
+      ...(myAvatar() ? { avatar: myAvatar() } : {}),
     };
 
     const initialPlayback: SessionPlaybackState = {
@@ -663,6 +682,7 @@ export const useSharedSessionStore = create<SharedSessionStore>((set, get) => ({
       color,
       isHost: false,
       lastSeen: Date.now(),
+      ...(myAvatar() ? { avatar: myAvatar() } : {}),
     };
 
     // 1. Fetch from Firestore first to verify the session is active before joining

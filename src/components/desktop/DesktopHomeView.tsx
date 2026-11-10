@@ -3,6 +3,7 @@ import { PlayNativeIcon, PauseNativeIcon } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore, buildDynamicShelves, getDeletedPlaylistIds } from '../../store/useSpotifyDataStore';
+import { useStatsStore } from '../../store/useStatsStore';
 import { useSpotifreeMixes, withSpotifreeShelves } from '../../services/spotifreeMixes';
 import { useUIStore } from '../../store/useUIStore';
 import { DesktopShelfCarousel } from './DesktopShelfCarousel';
@@ -19,9 +20,9 @@ const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
   { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Éxitos España', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b', color: '#1a4b4c' },
   { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
-  { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541', color: '#bd2427' },
+  { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5', color: '#bd2427' },
   { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
-  { id: '37i9dQZF1DX4JAvHpjipBk', name: 'Novedades Viernes', image: 'https://i.scdn.co/image/ab67706f000000029b48c4df2e2d93e18a994770', color: '#2d4b68' },
+  { id: '37i9dQZF1DX6PYajiT4pAf', name: 'Novedades Viernes', image: 'https://i.scdn.co/image/ab67706f00000002eaecef062c2877a5c0f5f10e', color: '#2d4b68' },
 ];
 
 interface DesktopHomeViewProps {
@@ -203,21 +204,20 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               id: `art-${name.toLowerCase().replace(/\s+/g, '-')}`,
               title: name,
               subtitle: 'Artista',
-              image: p.images?.[0]?.url || 'https://i.scdn.co/image/ab6761610000e5eb4e015d3113dd88ee0cb71658',
+              // No photo: the carousel looks up the artist's real one
+              image: '',
             });
           }
         }
       });
 
-      const defaultArtists = [
-        { name: 'Romeo Santos', img: 'https://i.scdn.co/image/ab6761610000e5eb56e6d183815f9bca1b4a9296' },
-        { name: 'Prince Royce', img: 'https://i.scdn.co/image/ab6761610000e5eb7dcab764f69fc39bb2f97a5b' },
-        { name: 'Bad Bunny', img: 'https://i.scdn.co/image/ab6761610000e5eb9ad3eb759082ef7ef688b56d' },
-        { name: 'Álvaro Díaz', img: 'https://i.scdn.co/image/ab6761610000e5ebfa055a1532ba706d8a3952ba' },
-        { name: 'Feid', img: 'https://i.scdn.co/image/ab6761610000e5eb604da57c9a62256c702ae07d' },
-      ];
+      // This account's real artists: Spotify's top artists, then the ones most played here
+      const realArtists = [
+        ...(useSpotifyDataStore.getState().topArtists || []).map((a: any) => ({ name: String(a?.name || ''), img: a?.images?.[0]?.url || '' })),
+        ...useStatsStore.getState().getTopArtists(12).map((a) => ({ name: a.name, img: '' })),
+      ].filter((a) => a.name);
 
-      defaultArtists.forEach((a) => {
+      realArtists.forEach((a) => {
         if (!seen.has(a.name.toLowerCase())) {
           seen.add(a.name.toLowerCase());
           userArtists.push({
@@ -233,28 +233,24 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         {
           id: 'shelf-siguiendo-artists',
           prefix: 'Tus favoritos',
-          title: 'Artistas que sigues',
-          subtitle: 'Acceso directo a la discografía de tus artistas',
-          cards: userArtists.slice(0, 8),
+          title: 'Tus artistas',
+          subtitle: 'Los que más escuchas',
+          cards: userArtists.slice(0, 10),
           hasSeeAll: false,
         },
         {
+          // Real new music of the account's artists: Radar de novedades + their mixes (Spotifree)
           id: 'shelf-siguiendo-releases',
-          prefix: 'Novedades de',
-          title: 'Tus artistas seguidos',
-          subtitle: 'Nuevos álbumes y sencillos recomendados para ti',
-          cards: playlists
-            .filter((p) => !p.id.includes('collection') && !p.name.includes('Canciones que'))
-            .slice(0, 8)
-            .map((p) => ({
-              id: p.id,
-              title: p.name,
-              subtitle: stripHtml(p.description) || 'Lanzamiento recomendado',
-              image: p.images?.[0]?.url || '',
-            })),
+          prefix: 'Para ti',
+          title: 'Novedades y mixes de tus artistas',
+          subtitle: 'Lo último que han sacado y mezclas con su música',
+          cards: (sfMixes || [])
+            .filter((m) => m.sfKind === 'radar' || m.sfKind === 'artist')
+            .sort((a, b) => (a.sfKind === 'radar' ? -1 : 0) - (b.sfKind === 'radar' ? -1 : 0))
+            .map((m) => ({ id: m.id, title: m.name, subtitle: stripHtml(m.description), image: m.images?.[0]?.url || '' })),
           hasSeeAll: true,
         },
-      ];
+      ].filter((s) => s.cards.length > 0);
     }
     const deletedIds = getDeletedPlaylistIds();
     const base = withSpotifreeShelves(
@@ -658,9 +654,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               </div>
 
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
-              <div className="flex items-end justify-between relative z-20 w-full">
+              <div className="flex items-end justify-between relative z-20 mt-auto w-full">
                 <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-190px)]">
-                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[48px] break-words whitespace-normal tracking-tight" />
+                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[48px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                 </div>
 
                 <button

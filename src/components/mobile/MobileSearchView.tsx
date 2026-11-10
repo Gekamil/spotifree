@@ -441,7 +441,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                   style={{ backgroundColor: cat.bgColor }}
                   className="relative h-24 rounded-lg p-3 overflow-hidden cursor-pointer active:scale-98 transition-transform shadow-md"
                 >
-                  <h3 className="text-base font-black text-white leading-tight break-words max-w-[65%] z-10 relative font-['SpotifyMixUITitle']">
+                  <h3
+                    lang="es"
+                    className="text-base font-black text-white leading-tight break-normal hyphens-auto max-w-[78%] z-10 relative font-['SpotifyMixUITitle']"
+                  >
                     {cat.title}
                   </h3>
                   <img

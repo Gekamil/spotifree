@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
+import { hasUnseenChanges } from '../modals/MessagesNotificationsModal';
 
 interface MobileProfileDrawerProps {
   isOpen: boolean;
@@ -25,35 +26,63 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
     return window.localStorage.getItem('spotifree_sharing_activity') !== 'false';
   });
 
+  const [unseenChanges, setUnseenChanges] = useState(() => hasUnseenChanges());
+  useEffect(() => {
+    const seen = () => setUnseenChanges(false);
+    window.addEventListener('spotifree:changes-seen', seen);
+    return () => window.removeEventListener('spotifree:changes-seen', seen);
+  }, []);
   const [shouldRender, setShouldRender] = useState(isOpen);
   const [isExiting, setIsExiting] = useState(false);
   const [dragOffset, setDragOffset] = useState<number | null>(null);
 
   const exitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const actionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Synchronous mirrors of the state (timers and the parent effect read these, never stale)
+  const renderedRef = useRef(isOpen);
+  const exitingRef = useRef(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const touchStartX = useRef(0);
   const touchStartY = useRef(0);
   const touchStartTime = useRef(0);
   const isDragging = useRef(false);
 
-  // Synchronize rendering state when parent changes isOpen
+  /**
+   * Slides the drawer out, then unmounts it and tells the parent. `action` (a navigation…)
+   * runs while it slides. Nothing re-opens it until the parent opens it again.
+   */
+  const startExit = useCallback((action?: () => void) => {
+    if (exitingRef.current || !renderedRef.current) return;
+    exitingRef.current = true;
+    setIsExiting(true);
+    setDragOffset(null);
+    if (action) actionTimerRef.current = setTimeout(action, 180);
+    exitTimerRef.current = setTimeout(() => {
+      renderedRef.current = false;
+      exitingRef.current = false;
+      setShouldRender(false);
+      setIsExiting(false);
+      onCloseRef.current();
+    }, 280);
+  }, []);
+
+  // Only the parent's isOpen drives this (the drawer's own exit state must never re-open it)
   useEffect(() => {
     if (isOpen) {
       if (exitTimerRef.current) clearTimeout(exitTimerRef.current);
       if (actionTimerRef.current) clearTimeout(actionTimerRef.current);
+      renderedRef.current = true;
+      exitingRef.current = false;
       setShouldRender(true);
       setIsExiting(false);
       setDragOffset(null);
-    } else if (shouldRender && !isExiting) {
-      // Trigger smooth exit animation before unmounting
-      setIsExiting(true);
-      exitTimerRef.current = setTimeout(() => {
-        setShouldRender(false);
-        setIsExiting(false);
-      }, 280);
+    } else {
+      // Closed from outside (back button, another screen): slide out if still showing
+      startExit();
     }
-  }, [isOpen, shouldRender, isExiting]);
+  }, [isOpen, startExit]);
 
   // Cleanup timers on unmount
   useEffect(() => {
@@ -64,16 +93,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   }, []);
 
   // Smooth dismiss handler (plays exit animation then notifies parent)
-  const handleDismiss = useCallback(() => {
-    if (isExiting) return;
-    setIsExiting(true);
-    setDragOffset(null);
-    exitTimerRef.current = setTimeout(() => {
-      onClose();
-      setShouldRender(false);
-      setIsExiting(false);
-    }, 280);
-  }, [isExiting, onClose]);
+  const handleDismiss = useCallback(() => startExit(), [startExit]);
 
   // Close on Escape key
   useEffect(() => {
@@ -86,26 +106,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
   }, [isOpen, handleDismiss]);
 
   // Action handler with visible exit slide-out before navigation
-  const handleAction = useCallback(
-    (action: () => void) => {
-      if (isExiting) return;
-      setIsExiting(true);
-      setDragOffset(null);
-
-      // Trigger the action / navigation while the drawer slides smoothly off-screen
-      actionTimerRef.current = setTimeout(() => {
-        action();
-      }, 180);
-
-      // Finalize unmount and notify parent
-      exitTimerRef.current = setTimeout(() => {
-        onClose();
-        setShouldRender(false);
-        setIsExiting(false);
-      }, 290);
-    },
-    [isExiting, onClose]
-  );
+  const handleAction = useCallback((action: () => void) => startExit(action), [startExit]);
 
   // Swipe to dismiss gestures
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -171,8 +172,8 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
     } catch {}
   }
   const avatarUrl = customAvatar || user?.images?.[0]?.url;
-  const displayName = user?.display_name || 'Jorgete';
-  const initial = displayName.charAt(0).toUpperCase() || 'J';
+  const displayName = user?.display_name || (isAuthenticated ? 'Tu perfil' : 'Invitado');
+  const initial = displayName.charAt(0).toUpperCase() || 'U';
 
   const toggleActivity = () => {
     const next = !isActivitySharing;
@@ -224,7 +225,7 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
             ? { transform: `translate3d(${dragOffset}px, 0, 0)`, transition: 'none' }
             : {}),
         }}
-        className={`relative z-10 w-[84%] max-w-[340px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto ${
+        className={`relative z-10 w-[80%] max-w-[300px] h-full bg-[#1f1f1f] flex flex-col justify-between px-4 text-white shadow-2xl overflow-y-auto ${
           dragOffset !== null
             ? ''
             : isExiting
@@ -335,22 +336,23 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
               </span>
             </button>
 
-            {/* Tus avisos */}
+            {/* Novedades de la app (what changed in each version) */}
             <button
               type="button"
               onClick={() => handleAction(() => onOpenNotifications())}
               className="w-full flex items-center gap-3.5 py-2.5 px-2 rounded-lg active:bg-white/5 transition-colors text-left cursor-pointer group"
             >
-              <div className="w-6 h-6 flex items-center justify-center text-white shrink-0">
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 5L6 9H2v6h4l5 4V5z" />
-                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
-                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              <div className="relative w-6 h-6 flex items-center justify-center text-white shrink-0">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9z" />
+                  <path d="M19 15l.8 1.9 1.9.8-1.9.8L19 20.4l-.8-1.9-1.9-.8 1.9-.8z" />
                 </svg>
+                {unseenChanges && <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-[#1ed760]" />}
               </div>
-              <span className="text-[15px] font-bold text-white tracking-tight">
-                Tus avisos
-              </span>
+              <div className="flex flex-col">
+                <span className="text-[15px] font-bold text-white tracking-tight">Novedades de la app</span>
+                <span className="text-[11px] font-medium text-[#a7a7a7]">Qué ha cambiado en Spotifree</span>
+              </div>
             </button>
 
             {/* Configuración y privacidad */}

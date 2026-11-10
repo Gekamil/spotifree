@@ -232,6 +232,10 @@ const getInitialLikedTrackIds = (): string[] => {
   return [];
 };
 
+/** Listening time not yet counted (less than a second), see setProgress */
+let statCarryMs = 0;
+let statLastMs = -1;
+
 const store = create<PlayerState>((set, get) => ({
   currentTrack: null,
   isPlaying: false,
@@ -815,11 +819,22 @@ const store = create<PlayerState>((set, get) => ({
   setProgress: (ms: number) => {
     const prev = get().progressMs;
     const current = get().currentTrack;
-    if (current && Math.abs(ms - prev) >= 800 && Math.abs(ms - prev) <= 1500 && get().isPlaying) {
-      try {
-        useStatsStore.getState().recordPlaybackSecond(current);
-      } catch {}
+    // Listening time: the player reports progress every 0.1-0.25 s, so the real elapsed time is
+    // added up and counted second by second (jumps from seeking are not listening time)
+    const delta = statLastMs >= 0 ? ms - statLastMs : 0;
+    statLastMs = ms;
+    if (current && get().isPlaying && delta > 0 && delta <= 2000) {
+      statCarryMs += delta;
+      while (statCarryMs >= 1000) {
+        statCarryMs -= 1000;
+        try {
+          useStatsStore.getState().recordPlaybackSecond(current);
+        } catch {}
+      }
     }
+    // Smoothness: while a song simply plays on, screens get its position ~4 times a second (enough
+    // for the bar and the lyrics) instead of 10; seeks, pauses and new songs go through at once
+    if (get().isPlaying && ms > prev && ms - prev < 240) return;
     set({ progressMs: ms });
 
     // Update native lockscreen / notification position state (throttled to every 1.5s or on manual seek)

@@ -123,7 +123,7 @@ export async function syncChromeSession(): Promise<boolean> {
     : [
         { id: '37i9dQZF1DWZdsS73T1ogG', name: 'el nuevo urbano', image: 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426', color: '#704838' },
         { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Éxitos España', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b', color: '#1a4b4c' },
-        { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002b661661614f16bcaeb152541', color: '#bd2427' },
+        { id: '37i9dQZF1DX10zKzsJ2jva', name: 'Viva Latino', image: 'https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5', color: '#bd2427' },
         { id: '37i9dQZF1DX2EiUAL7Wdfc', name: 'míticas', image: 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6', color: '#8b3a1a' },
       ];
 

@@ -4,4 +4,5 @@
     <string name="shortcut_play_music_long">Pon música en Spotifree</string>
     <string name="shortcut_reproducir_musica">Reproducir música</string>
     <string name="shortcut_reproducir_musica_long">Reproducir música en Spotifree</string>
+    <string name="spotifree_turntable_desc">Tocadiscos: el vinilo gira con la canción que suena</string>
 </resources>

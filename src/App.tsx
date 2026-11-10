@@ -22,6 +22,7 @@ import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
 import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
 import { initSpotifreeMixes } from './services/spotifreeMixes';
+import { initListenFriends } from './services/listenFriends';
 import { initDeepLinks, handleDeepLink } from './utils/deepLinkHandler';
 
 if (typeof window !== 'undefined') {
@@ -37,6 +38,9 @@ function App() {
 
     // Spotifree's own playlists: learns from what each account plays and refreshes daily
     initSpotifreeMixes();
+
+    // Remembers the friends who listen together with this device (Settings › Escuchar juntos)
+    initListenFriends();
 
     // Initialize real-time cloud session listener
     const unsubscribeAuth = initAuthListener();
