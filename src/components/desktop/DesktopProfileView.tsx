@@ -10,6 +10,7 @@ import { resolveVibrantColor } from '../../utils/spotifyColor';
 import { EditProfileModal } from '../common/EditProfileModal';
 import { syncUserProfileToServer } from '../../utils/userAccounts';
 import { syncSpotifreeAccount } from '../../services/spotifreeAuth';
+import { getPlaylistCover, onPlaylistCoverError, EMPTY_PLAYLIST_COVER } from '../../utils/playlistCover';
 
 interface DesktopProfileViewProps {
   onSelectPlaylist?: (playlist: Playlist) => void;
@@ -287,9 +288,13 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
                       {idx + 1}
                     </span>
                     <img
-                      src={track.image}
+                      src={track.image || EMPTY_PLAYLIST_COVER}
                       alt={track.name}
-                      className="w-11 h-11 rounded object-cover shadow"
+                      onError={(e) => {
+                        e.currentTarget.onerror = null;
+                        e.currentTarget.src = EMPTY_PLAYLIST_COVER;
+                      }}
+                      className="w-11 h-11 rounded object-cover shadow bg-[#242424]"
                     />
                     <div className="flex flex-col min-w-0">
                       <span className="font-bold text-white text-sm truncate group-hover:text-[#1ed760] transition-colors">
@@ -330,7 +335,7 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
           {userPlaylists.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
               {userPlaylists.map((pl) => {
-                const cover = pl.images?.[0]?.url;
+                const cover = getPlaylistCover(pl);
                 return (
                   <div
                     key={pl.id}
@@ -342,6 +347,7 @@ export const DesktopProfileView: React.FC<DesktopProfileViewProps> = ({
                         <img
                           src={cover}
                           alt={pl.name}
+                          onError={onPlaylistCoverError(pl)}
                           className="w-full h-full object-cover"
                         />
                       ) : (

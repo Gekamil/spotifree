@@ -143,6 +143,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
   const [loading, setLoading] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [reloadCounter, setReloadCounter] = useState(0);
   const isLikedInitially =
     playlist.id === 'liked-songs' ||
     playlist.id === 'tracks' ||
@@ -771,8 +773,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       return t;
     });
 
-    // Do NOT wipe out existing dynamicTracks if we already have them for this playlist
+    // Do NOT wipe out existing dynamicTracks if we already have them for THIS playlist;
+    // DO reset when switching to a genuinely different playlist/artist/vault ID.
+    const switchingPlaylist = playlist.id !== dynamicPlaylist.id;
     setDynamicTracks((prev) => {
+      if (switchingPlaylist) return mapped;
       if (mapped.length === 0 && prev.length > 0) {
         return prev.filter(isNotRemoved);
       }
@@ -860,6 +865,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       }
 
       if (isLikedInitially || (playlist.tracks?.items && playlist.tracks.items.length > 0)) return;
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setNetworkError(true);
+        setLoading(false);
+        return;
+      }
+      setNetworkError(false);
       setLoading(true);
       try {
         const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
@@ -873,6 +884,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           headers,
         });
         if (res.ok) {
+          setNetworkError(false);
           const data = await res.json();
           if (!cancelled && data.tracks?.items) {
             const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
@@ -921,9 +933,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               });
             } catch {}
           }
+        } else {
+          setNetworkError(true);
         }
       } catch (err) {
         console.error('Error loading dynamic tracks:', err);
+        setNetworkError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -933,7 +948,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return () => {
       cancelled = true;
     };
-  }, [playlist.id, playlist.tracks]);
+  }, [playlist.id, playlist.tracks, reloadCounter]);
 
   // Synchronize dynamicPlaylist when props or cover image change from EditPlaylistModal
   useEffect(() => {
@@ -1098,7 +1113,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       (user?.display_name && dynamicPlaylist.owner?.display_name?.toLowerCase() === user.display_name.toLowerCase())
     );
 
-  const canAddTracksToThisList = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || isUserCreatedPlaylist);
+  const canManagePlaylist = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || isUserCreatedPlaylist);
+  const canAddTracksToThisList = canManagePlaylist;
 
   const tracksWithPlaylistId = tracks.map((t) => ({ ...t, playlistId: playlist.id }));
 
@@ -1397,11 +1413,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           />
           {/* Cover Art 232x232 */}
           <div
-            onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
+            onClick={() => canManagePlaylist && openEditPlaylistModal(dynamicPlaylist)}
             className={`w-56 h-56 shrink-0 shadow-2xl ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden bg-[#282828] relative ${
-              isUserCreatedPlaylist ? 'group cursor-pointer' : ''
+              canManagePlaylist ? 'group cursor-pointer' : ''
             }`}
-            title={isUserCreatedPlaylist ? "Elegir foto" : undefined}
+            title={canManagePlaylist ? "Elegir foto" : undefined}
           >
             {isLikedPlaylist ? (
               <img
@@ -1472,9 +1488,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   : 'Lista'}
               </span>
               <h1
-                onClick={() => isUserCreatedPlaylist && openEditPlaylistModal(dynamicPlaylist)}
+                onClick={() => canManagePlaylist && openEditPlaylistModal(dynamicPlaylist)}
                 className={`text-5xl lg:text-7xl font-black text-white tracking-tight leading-none py-1 font-['SpotifyMixUITitle'] truncate ${
-                  isUserCreatedPlaylist ? 'cursor-pointer hover:underline' : ''
+                  canManagePlaylist ? 'cursor-pointer hover:underline' : ''
                 }`}
               >
                 {dynamicPlaylist.name}
@@ -1488,7 +1504,32 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
               {/* Single unified metadata line matching Real Spotify */}
               <div className="flex items-center gap-1.5 text-sm text-white font-normal mt-2 flex-wrap">
-                {dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
+                {isAlbum ? (
+                  <>
+                    {tracks[0]?.artists?.[0]?.name && (
+                      <>
+                        <span
+                          onClick={() => {
+                            const a = tracks[0].artists?.[0];
+                            if (a && onSelectPlaylistById) {
+                              const artId = a.id?.startsWith('art-') ? a.id : `art-${a.name.toLowerCase().replace(/\s+/g, '-')}`;
+                              onSelectPlaylistById(artId, a.name);
+                            }
+                          }}
+                          className="font-bold text-white hover:underline cursor-pointer"
+                        >
+                          {tracks[0].artists[0].name}
+                        </span>
+                        <span>•</span>
+                      </>
+                    )}
+                    <span className="text-white/90">
+                      {loading
+                        ? 'Cargando canciones...'
+                        : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}, ${formattedDuration}`}
+                    </span>
+                  </>
+                ) : dynamicPlaylist.id.includes('37i9dQZF1DX2EiUAL7Wdfc') || dynamicPlaylist.name.toLowerCase() === 'míticas' ? (
                   <>
                     <span onClick={() => setActiveMainTab('profile')} className="font-bold text-white hover:underline cursor-pointer">Spotifree</span>
                     <span>•</span>
@@ -1722,6 +1763,39 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </svg>
             </button>
 
+            {/* Quick Action Buttons for all saved library playlists: Añadir & Editar */}
+            {canManagePlaylist && (
+              <div className="flex items-center gap-2 pl-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const searchSection = document.getElementById('desktop-playlist-search-section');
+                    if (searchSection) {
+                      searchSection.scrollIntoView({ behavior: 'smooth' });
+                    }
+                  }}
+                  className="px-3.5 py-1.5 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white transition-all flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Añadir canciones a esta playlist"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75z" />
+                  </svg>
+                  <span>Añadir</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openEditPlaylistModal(dynamicPlaylist)}
+                  className="px-3.5 py-1.5 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white transition-all flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
+                  title="Editar información de la playlist"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M11.838.146a.5.5 0 0 0-.707 0L1.146 10.131a.5.5 0 0 0-.131.232l-1 4a.5.5 0 0 0 .606.606l4-1a.5.5 0 0 0 .232-.131L14.838 3.854a.5.5 0 0 0 0-.708l-3-3zM11.2 1.414l1.386 1.386-8.993 8.993-1.386-1.386L11.2 1.414zM1.866 12.134l1.386 1.386-2.585.646.646-2.585z" />
+                  </svg>
+                  <span>Editar</span>
+                </button>
+              </div>
+            )}
+
             {isArtist && (
               <button
                 type="button"
@@ -1871,9 +1945,27 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       {/* Track List Table */}
       <div className="px-8">
         {isArtist && (
-          <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] mb-4">
-            Populares
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+              Populares
+            </h2>
+            {onSelectPlaylistById && (
+              <button
+                type="button"
+                onClick={() =>
+                  onSelectPlaylistById(
+                    `sc-vault-${encodeURIComponent(dynamicPlaylist.name)}`,
+                    `${dynamicPlaylist.name}: Remixes, Leaks y Slowed`,
+                    dynamicPlaylist.images?.[0]?.url
+                  )
+                }
+                className="inline-flex items-center gap-2 px-4 min-h-[38px] rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/10 transition-all cursor-pointer"
+              >
+                <span className="w-2 h-2 rounded-full bg-[#ff5500]" aria-hidden="true" />
+                <span>Remixes, Slowed e Inéditas (SoundCloud)</span>
+              </button>
+            )}
+          </div>
         )}
         {/* Table Header - Only rendered when tracks exist */}
         {tracks.length > 0 && (
@@ -1920,8 +2012,44 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           </div>
         )}
 
-        {/* Empty State when tracks.length === 0 and not loading */}
-        {!loading && tracks.length === 0 && (
+        {/* Offline State when tracks.length === 0 and not loading due to no connection */}
+        {!loading && tracks.length === 0 && ((typeof navigator !== 'undefined' && navigator.onLine === false) || networkError) ? (
+          <div className="py-16 flex flex-col items-center justify-center text-center max-w-lg mx-auto px-4">
+            <div className="w-20 h-20 rounded-full bg-[#282828] flex items-center justify-center text-[#b3b3b3] mb-5 shadow-inner">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="1" y1="1" x2="23" y2="23" />
+                <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                <line x1="12" y1="20" x2="12.01" y2="20" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] mb-2">
+              Sin conexión a Internet
+            </h2>
+            <p className="text-sm text-[#b3b3b3] leading-relaxed mb-6 max-w-md">
+              No se han podido cargar las canciones de esta playlist porque no tienes conexión de red o Wi-Fi. Comprueba tu conexión a Internet o escucha tu música descargada.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setReloadCounter((c) => c + 1)}
+                className="px-6 py-2.5 rounded-full bg-white hover:bg-white/90 text-black text-xs font-black uppercase tracking-wider transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-lg"
+              >
+                Reintentar
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveMainTab('home')}
+                className="px-5 py-2.5 rounded-full border border-white/20 hover:border-white text-white text-xs font-bold transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              >
+                Ir a inicio
+              </button>
+            </div>
+          </div>
+        ) : !loading && tracks.length === 0 && (
           <div className="py-12 flex flex-col items-center justify-center text-center max-w-xl mx-auto">
             {filterQuery.trim() ? (
               <div className="space-y-3">
@@ -2056,13 +2184,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                         />
                       )}
                       <div className="min-w-0 flex-1">
-                        <p
-                          className={`text-sm font-semibold truncate ${
-                            isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
-                          }`}
-                        >
-                          {track.name}
-                        </p>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p
+                            className={`text-sm font-semibold truncate ${
+                              isThisTrackPlaying ? 'text-[#1ed760]' : 'text-white'
+                            }`}
+                          >
+                            {track.name}
+                          </p>
+                          {track.scVariant && track.scVariant !== 'official_like' && track.scVariantLabel && (
+                            <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                              {track.scVariantLabel}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-[#b3b3b3] truncate mt-0.5 group-hover:text-white transition-colors">
                           {sharedCode && (
                             <span className="inline-flex align-[-2px] mr-1.5">
@@ -2092,7 +2227,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     </div>
 
                     {/* Album Name */}
-                    <div className="text-xs text-[#b3b3b3] truncate group-hover:text-white transition-colors">
+                    <div
+                      onClick={(e) => {
+                        if (track.album?.id && onSelectPlaylistById) {
+                          e.stopPropagation();
+                          const albId = track.album.id.startsWith('alb-') ? track.album.id : `alb-${track.album.id}`;
+                          onSelectPlaylistById(albId, track.album.name, track.album.images?.[0]?.url);
+                        }
+                      }}
+                      className="text-xs text-[#b3b3b3] truncate group-hover:text-white hover:underline cursor-pointer transition-colors"
+                      title={track.album?.name || dynamicPlaylist.name}
+                    >
                       {track.album?.name || dynamicPlaylist.name}
                     </div>
 

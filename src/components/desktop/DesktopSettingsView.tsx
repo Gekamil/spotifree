@@ -221,6 +221,91 @@ export const DesktopSettingsView: React.FC = () => {
   const [musicVideos, setMusicVideos] = useState(true);
   const [canvasEnabled, setCanvasEnabled] = useState(true);
 
+  // Streaming & Download quality matching official Spotify Desktop
+  const [streamingQuality, setStreamingQuality] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_streaming_quality') || 'very_high';
+    }
+    return 'very_high';
+  });
+
+  const [downloadQuality, setDownloadQuality] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_download_quality') || 'very_high';
+    }
+    return 'very_high';
+  });
+
+  const [normalizeLevel, setNormalizeLevel] = useState<'quiet' | 'normal' | 'loud'>(() => {
+    if (typeof window !== 'undefined') {
+      return (window.localStorage.getItem('spotifree_normalize_level') as any) || 'normal';
+    }
+    return 'normal';
+  });
+
+  const [automixEnabled, setAutomixEnabled] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_automix_enabled') !== 'false';
+    }
+    return true;
+  });
+
+  const [hardwareAccel, setHardwareAccel] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_hardware_accel') !== 'false';
+    }
+    return true;
+  });
+
+  const [privateSession, setPrivateSession] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('spotifree_private_session') === 'true';
+    }
+    return false;
+  });
+
+  const handleSelectStreamingQuality = (val: string) => {
+    setStreamingQuality(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_streaming_quality', val);
+    }
+  };
+
+  const handleSelectDownloadQuality = (val: string) => {
+    setDownloadQuality(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_download_quality', val);
+    }
+  };
+
+  const handleSelectNormalizeLevel = (lvl: 'quiet' | 'normal' | 'loud') => {
+    setNormalizeLevel(lvl);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_normalize_level', lvl);
+    }
+  };
+
+  const handleToggleAutomix = (val: boolean) => {
+    setAutomixEnabled(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_automix_enabled', String(val));
+    }
+  };
+
+  const handleToggleHardwareAccel = (val: boolean) => {
+    setHardwareAccel(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_hardware_accel', String(val));
+    }
+  };
+
+  const handleTogglePrivateSession = (val: boolean) => {
+    setPrivateSession(val);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('spotifree_private_session', String(val));
+    }
+  };
+
   // Playback & Audio settings
   const [normalizeAudio, setNormalizeAudio] = useState(() => {
     if (typeof window !== 'undefined') {
@@ -582,12 +667,63 @@ export const DesktopSettingsView: React.FC = () => {
         )}
 
         {/* 3. CALIDAD DE AUDIO Y ECUALIZADOR (Official Spotify Desktop Category 3) */}
-        {matchesSearch('calidad audio ecualizador decibelios hz frecuencia sonido normalizar volumen equalizer') && (
+        {matchesSearch('calidad audio streaming descarga ecualizador decibelios hz frecuencia sonido normalizar volumen equalizer') && (
           <section className="space-y-4">
             <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
               {language === 'en' ? 'Audio Quality & Equalizer' : 'Calidad de audio y Ecualizador'}
             </h2>
 
+            {/* Calidad del streaming */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+              <div>
+                <p className="text-sm font-medium text-white">
+                  {language === 'en' ? 'Streaming quality' : 'Calidad del streaming'}
+                </p>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {language === 'en'
+                    ? 'Higher quality uses more data and requires a faster internet connection.'
+                    : 'Una mayor calidad consume más datos y requiere una conexión a Internet más rápida.'}
+                </p>
+              </div>
+              <SpotifyCustomSelect
+                value={streamingQuality}
+                options={[
+                  { value: 'auto', label: language === 'en' ? 'Automatic (recommended)' : 'Automática (recomendada)' },
+                  { value: 'low', label: language === 'en' ? 'Low (96 kbit/s)' : 'Baja (96 kbit/s)' },
+                  { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
+                  { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
+                  { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
+                ]}
+                onChange={handleSelectStreamingQuality}
+                minWidth="240px"
+              />
+            </div>
+
+            {/* Calidad de la descarga */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+              <div>
+                <p className="text-sm font-medium text-white">
+                  {language === 'en' ? 'Download quality' : 'Calidad de la descarga'}
+                </p>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {language === 'en'
+                    ? 'Determines audio quality for offline tracks saved in «musica-spotifree».'
+                    : 'Determina la tasa de bits para las canciones descargadas en «musica-spotifree».'}
+                </p>
+              </div>
+              <SpotifyCustomSelect
+                value={downloadQuality}
+                options={[
+                  { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
+                  { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
+                  { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
+                ]}
+                onChange={handleSelectDownloadQuality}
+                minWidth="240px"
+              />
+            </div>
+
+            {/* Normalizar volumen */}
             <div className="flex items-center justify-between py-3 border-b border-white/5">
               <div>
                 <div className="text-sm font-medium text-white">
@@ -605,6 +741,38 @@ export const DesktopSettingsView: React.FC = () => {
                 ariaLabel="Normalizar el volumen"
               />
             </div>
+
+            {/* Nivel de volumen (solo si normalización está activa) */}
+            {normalizeAudio && (
+              <div className="flex items-center justify-between py-3 border-b border-white/5 animate-in fade-in">
+                <div>
+                  <span className="text-sm font-medium text-white">
+                    {language === 'en' ? 'Volume level' : 'Nivel de volumen'}
+                  </span>
+                  <p className="text-xs text-[#a7a7a7] mt-0.5">
+                    {language === 'en'
+                      ? 'Adjust normalization target according to your listening environment.'
+                      : 'Ajusta el objetivo según si escuchas en silencio o en un entorno ruidoso.'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 bg-[#181818] p-1 rounded-full border border-white/10">
+                  {(['quiet', 'normal', 'loud'] as const).map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      onClick={() => handleSelectNormalizeLevel(lvl)}
+                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                        normalizeLevel === lvl
+                          ? 'bg-[#1ed760] text-black shadow'
+                          : 'text-[#b3b3b3] hover:text-white'
+                      }`}
+                    >
+                      {lvl === 'quiet' ? (language === 'en' ? 'Quiet' : 'Silencioso') : lvl === 'normal' ? (language === 'en' ? 'Normal' : 'Normal') : (language === 'en' ? 'Loud' : 'Alto')}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="pt-2">
               <SpotifyEqualizer variant="desktop" />
@@ -636,6 +804,23 @@ export const DesktopSettingsView: React.FC = () => {
                   checked={gaplessAudio}
                   onChange={handleToggleGapless}
                   ariaLabel="Reproducción sin pausas"
+                />
+              </div>
+
+              {/* Automix (Transiciones automáticas estilo Spotify) */}
+              <div className="flex items-center justify-between py-3 border-b border-white/5">
+                <div>
+                  <div className="text-sm font-medium text-white">Automix</div>
+                  <div className="text-xs text-[#a7a7a7] mt-0.5">
+                    {language === 'en'
+                      ? 'Allows smooth transitions between songs on supported playlists.'
+                      : 'Permite transiciones continuas y fluidas entre canciones en las playlists compatibles.'}
+                  </div>
+                </div>
+                <SpotifyToggle
+                  checked={automixEnabled}
+                  onChange={handleToggleAutomix}
+                  ariaLabel="Automix"
                 />
               </div>
 
@@ -832,6 +1017,25 @@ export const DesktopSettingsView: React.FC = () => {
 
             {/* Icono de la app: solo en navegador (antes de instalar) y en la APK */}
             <AppIconSelector variant="desktop" />
+
+            {/* Aceleración por hardware */}
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <span className="text-sm font-medium text-white">
+                  {language === 'en' ? 'Hardware acceleration' : 'Aceleración por hardware'}
+                </span>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {language === 'en'
+                    ? 'Uses the graphics processor to optimize app smoothness and rendering.'
+                    : 'Usa la tarjeta gráfica para optimizar la fluidez visual y el rendimiento de la aplicación.'}
+                </p>
+              </div>
+              <SpotifyToggle
+                checked={hardwareAccel}
+                onChange={handleToggleHardwareAccel}
+                ariaLabel="Aceleración por hardware"
+              />
+            </div>
           </section>
         )}
 
@@ -927,6 +1131,25 @@ export const DesktopSettingsView: React.FC = () => {
             {/* Shared session listening */}
             <div className="py-1">
               <ListeningFriendsSection variant="desktop" />
+            </div>
+
+            {/* Sesión privada */}
+            <div className="flex items-center justify-between py-3 border-b border-white/5">
+              <div>
+                <span className="text-sm font-medium text-white">
+                  {language === 'en' ? 'Private session' : 'Sesión privada'}
+                </span>
+                <p className="text-xs text-[#a7a7a7] mt-0.5">
+                  {language === 'en'
+                    ? 'Start a private session to listen anonymously without updating activity with friends.'
+                    : 'Inicia una sesión privada para escuchar de forma anónima sin compartir tu actividad con amigos.'}
+                </p>
+              </div>
+              <SpotifyToggle
+                checked={privateSession}
+                onChange={handleTogglePrivateSession}
+                ariaLabel="Sesión privada"
+              />
             </div>
 
             {/* Gustos Musicales & Recomendaciones */}

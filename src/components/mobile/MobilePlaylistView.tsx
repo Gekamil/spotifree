@@ -107,6 +107,7 @@ interface MobilePlaylistViewProps {
 export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   playlist,
   onBack,
+  onSelectPlaylistById,
 }) => {
   const {
     currentTrack,
@@ -347,6 +348,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   }, [activePlaylist.id, cleanId]);
 
   const [loading, setLoading] = useState(false);
+  const [networkError, setNetworkError] = useState(false);
+  const [reloadCounter, setReloadCounter] = useState(0);
   const checkIsInLibrary = (id: string, clean: string): boolean => {
     if (!id) return false;
     if (id === 'liked-songs' || id === 'collection:tracks' || clean === 'liked-songs') return true;
@@ -448,9 +451,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
   }, [addSearchQuery]);
 
+  const prevPlaylistIdRef = useRef<string>(cleanId);
+
   // Load tracks accurately if playlist only had stub or is an artist
   useEffect(() => {
     let cancelled = false;
+    const switchedPlaylist = prevPlaylistIdRef.current !== cleanId;
+    prevPlaylistIdRef.current = cleanId;
+    if (switchedPlaylist) {
+      setTracks([]);
+    }
 
     // A. ARTIST PROFILE: Fetch real popular top songs for this artist immediately
     const isArtist =
@@ -607,7 +617,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
     // 6. Fetch from backend endpoint with Spotify session / cookies
     async function fetchTracks() {
-      if (tracks.length === 0) {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        setNetworkError(true);
+        setLoading(false);
+        return;
+      }
+      setNetworkError(false);
+      if (switchedPlaylist || tracks.length === 0) {
         setLoading(true);
       }
       try {
@@ -619,6 +635,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
         const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(cleanId)}`, { headers });
         if (res.ok) {
+          setNetworkError(false);
           const data = await res.json();
           if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
             const merged = mergeWithCustom(data.tracks.items);
@@ -636,9 +653,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             setLoading(false);
             return;
           }
+        } else {
+          setNetworkError(true);
         }
       } catch (err) {
         console.warn('Backend playlist fetch notice:', err);
+        setNetworkError(true);
       }
 
       if (!cancelled) setLoading(false);
@@ -648,7 +668,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [playlist.id, playlist.name, isLikedPlaylist, user?.id]);
+  }, [playlist.id, playlist.name, isLikedPlaylist, user?.id, reloadCounter]);
 
   // Batch resolve individual track covers asynchronously on mobile
   useEffect(() => {
@@ -757,8 +777,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const sharedCode = useSharedCode(activePlaylist.id, playlist.id, cleanId);
   const sharedMembers = useSharedMembers(sharedCode);
 
-  // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or unsaved playlists
-  const canAddTracksToThisList = !isArtist && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
+  const isAlbum = playlist.type === 'album' || cleanId.startsWith('alb-') || cleanId.startsWith('album-');
+  const isFolder = playlist.type === 'folder';
+
+  // Only allow adding tracks and viewing recommendations on user-owned/saved playlists, never on artists or albums
+  const canAddTracksToThisList = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || (playlist as any).is_custom);
   // Like Spotify, only your own playlists can be edited (not the ones you just follow)
   const ownerOf = (activePlaylist as any).owner || (playlist as any).owner || {};
   const isOwnPlaylist =
@@ -767,6 +790,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     /^(custom-|pl-custom-|imported-|local-)/.test(String(playlist.id || '')) ||
     (!!user?.id && ownerOf.id === user.id) ||
     (!!user?.display_name && ownerOf.display_name === user.display_name);
+
+  // Allow adding, editing and sorting on all playlists saved in library
+  const canManageThisPlaylist = !isArtist && !isAlbum && !isFolder && (isLikedPlaylist || isSavedInLibrary || isOwnPlaylist || Boolean((playlist as any).is_custom));
 
   if (
     playlist.id === 'spotify-dj' ||
@@ -1382,7 +1408,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           ) : (
             /* Classic Regular Playlist Hero (Centered Square Cover Box) */
             <div className="px-6 pt-4 pb-4 flex flex-col items-center text-center">
-              <div className="w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0">
+              <div
+                onClick={() => {
+                  if (canManageThisPlaylist) setIsEditScreenOpen(true);
+                }}
+                className={`w-52 h-52 rounded-lg overflow-hidden shadow-[0_16px_36px_rgba(0,0,0,0.85)] bg-black mb-4 border border-white/10 relative z-10 shrink-0 ${canManageThisPlaylist ? 'cursor-pointer active:scale-98 transition-transform' : ''}`}
+                title={canManageThisPlaylist ? 'Toca para editar imagen y nombre' : undefined}
+              >
                 {coverUrl ? (
                   <img
                     src={toHDImage(coverUrl)}
@@ -1398,7 +1430,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   </div>
                 )}
               </div>
-              <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-2">
+              <h1
+                onClick={() => {
+                  if (canManageThisPlaylist) setIsEditScreenOpen(true);
+                }}
+                className={`text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-2 ${canManageThisPlaylist ? 'cursor-pointer hover:underline' : ''}`}
+                title={canManageThisPlaylist ? 'Toca para editar el nombre' : undefined}
+              >
                 {playlist.name}
               </h1>
               {playlist.description && (
@@ -1595,9 +1633,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         </div>
       </div>
 
-      {!isArtist && tracks.length > 0 && (
+      {!isArtist && !isAlbum && !isFolder && (tracks.length > 0 || canManageThisPlaylist) && (
         <PlaylistToolbar
-          canEdit={canAddTracksToThisList && isOwnPlaylist}
+          canEdit={canManageThisPlaylist}
           sortKey={sortKey}
           onAdd={() => setIsAddScreenOpen(true)}
           onEdit={() => setIsEditScreenOpen(true)}
@@ -1606,10 +1644,26 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       )}
 
       {isArtist && (
-        <div className="px-5 pt-3 pb-1">
+        <div className="px-5 pt-3 pb-1 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
             Populares
           </h2>
+          {onSelectPlaylistById && (
+            <button
+              type="button"
+              onClick={() =>
+                onSelectPlaylistById(
+                  `sc-vault-${encodeURIComponent(playlist.name)}`,
+                  `${playlist.name}: Remixes, Leaks y Slowed`,
+                  coverUrl
+                )
+              }
+              className="inline-flex items-center gap-1.5 px-3.5 min-h-[36px] rounded-full bg-white/10 active:bg-white/20 text-white text-[11px] font-bold border border-white/10"
+            >
+              <span className="w-2 h-2 rounded-full bg-[#ff5500]" aria-hidden="true" />
+              <span>Remixes y Leaks</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -1630,7 +1684,44 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </div>
         ) : tracks.length === 0 ? (
           <div className="p-4 text-center space-y-4">
-            {isLikedPlaylist ? (
+            {((typeof navigator !== 'undefined' && navigator.onLine === false) || networkError) ? (
+              <div className="py-12 px-4 flex flex-col items-center justify-center text-center">
+                <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-4 text-[#b3b3b3]">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+                    <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+                    <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                  </svg>
+                </div>
+                <h3 className="text-base font-bold text-white mb-1.5 font-['SpotifyMixUITitle']">Sin conexión a Internet</h3>
+                <p className="text-xs text-[#b3b3b3] max-w-xs mb-5">
+                  Comprueba tu conexión de red o el modo avión. El contenido de esta playlist no está disponible sin conexión porque aún no se ha descargado.
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNetworkError(false);
+                      setReloadCounter((c) => c + 1);
+                    }}
+                    className="px-5 py-2.5 rounded-full bg-white text-black text-xs font-bold hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+                  >
+                    Reintentar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onBack}
+                    className="px-5 py-2.5 rounded-full bg-white/10 text-white text-xs font-bold hover:bg-white/20 active:scale-95 transition-colors border border-white/10 cursor-pointer"
+                  >
+                    Volver
+                  </button>
+                </div>
+              </div>
+            ) : isLikedPlaylist ? (
               <div className="p-4 bg-[#181818] border border-white/10 rounded-2xl text-left space-y-2 shadow-lg">
                 <div className="flex items-center gap-2 font-bold text-white text-sm">
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="#1ed760" className="shrink-0">
@@ -1649,8 +1740,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               </div>
             )}
 
-            {/* In-place Track Searcher matching Spotify Mobile (Only shown if user can add tracks) */}
-            {canAddTracksToThisList && (
+            {/* In-place Track Searcher matching Spotify Mobile (Only shown if user can add tracks and is online) */}
+            {canAddTracksToThisList && !networkError && (typeof navigator === 'undefined' || navigator.onLine !== false) && (
               <div className="space-y-3 pt-2">
               <div className="relative w-full">
                 <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#b3b3b3] pointer-events-none">
@@ -1797,13 +1888,20 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                       </div>
 
                       <div className="flex flex-col min-w-0">
-                        <span
-                          className={`font-bold text-sm truncate ${
-                            isThisPlaying ? 'text-[#1ed760]' : 'text-white'
-                          }`}
-                        >
-                          {track.name}
-                        </span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span
+                            className={`font-bold text-sm truncate ${
+                              isThisPlaying ? 'text-[#1ed760]' : 'text-white'
+                            }`}
+                          >
+                            {track.name}
+                          </span>
+                          {track.scVariant && track.scVariant !== 'official_like' && track.scVariantLabel && (
+                            <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                              {track.scVariantLabel}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-xs text-[#b3b3b3] truncate mt-0.5 flex items-center gap-1.5">
                           {sharedCode && <AddedByAvatar members={sharedMembers} track={track} />}
                           {(findDeviceMatch(track) || downloadedTrackIds.has(cleanTrackId)) && (

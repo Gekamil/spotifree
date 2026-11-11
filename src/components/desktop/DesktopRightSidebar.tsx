@@ -21,6 +21,8 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { artistLibraryId, toggleFollowArtist } from '../../utils/artistFollow';
 import { parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
+import { useKaraokeMode } from '../../utils/useKaraokeMode';
+import { KaraokeMicButton } from '../common/KaraokeMicButton';
 
 interface DesktopRightSidebarProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -136,6 +138,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const [plainLyrics, setPlainLyrics] = useState<string[]>([]);
   const [dominantColor, setDominantColor] = useState<string>('#5d1f00');
   const lyricsScrollRef = useRef<HTMLDivElement>(null);
+  const karaoke = useKaraokeMode(currentTrack, activeRightSidebar === 'lyrics');
 
   // Resizable Right Sidebar State (Spotify Desktop Fidelity)
   const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
@@ -963,17 +966,28 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
       {/* 3. FULL LYRICS MODE (Real-time synchronized with auto-scroll) */}
       {activeRightSidebar === 'lyrics' && (
         <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-300">
-          <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#121212] shrink-0">
+          <div className="p-4 flex flex-wrap items-center justify-between gap-2 border-b border-white/5 bg-[#121212] shrink-0">
             <h3 className="font-bold text-base text-white">Letras</h3>
-            <button
-              onClick={closeRightSidebar}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-            >
-              <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
-                <path d="M5.03 10.53a.75.75 0 1 1-1.06-1.06L5.44 8 3.97 6.53a.75.75 0 0 1 1.06-1.06l2 2a.75.75 0 0 1 0 1.06z" />
-                <path d="M1 0a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm.5 1.5h8v13h-8zm13 13H11v-13h3.5z" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              {karaoke.available && (
+                <KaraokeMicButton
+                  compact
+                  active={karaoke.active}
+                  switching={karaoke.switching}
+                  onToggle={karaoke.toggle}
+                />
+              )}
+              <button
+                onClick={closeRightSidebar}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Cerrar letras"
+              >
+                <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true">
+                  <path d="M5.03 10.53a.75.75 0 1 1-1.06-1.06L5.44 8 3.97 6.53a.75.75 0 0 1 1.06-1.06l2 2a.75.75 0 0 1 0 1.06z" />
+                  <path d="M1 0a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm.5 1.5h8v13h-8zm13 13H11v-13h3.5z" />
+                </svg>
+              </button>
+            </div>
           </div>
           {currentTrack ? (
             <div
@@ -1030,9 +1044,13 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                                   key={`w-${idx}-${wIdx}`}
                                   className={`transition-all duration-150 inline-block ${
                                     isCurrentWord
-                                      ? 'text-white font-black drop-shadow-[0_2px_14px_rgba(255,255,255,1)] scale-105'
+                                      ? karaoke.active
+                                        ? 'text-[#1ed760] font-black drop-shadow-[0_2px_14px_rgba(30,215,96,0.85)] scale-105'
+                                        : 'text-white font-black drop-shadow-[0_2px_14px_rgba(255,255,255,1)] scale-105'
                                       : isWordSung
-                                      ? 'text-white/95 font-bold'
+                                      ? karaoke.active
+                                        ? 'text-[#1ed760]/90 font-bold'
+                                        : 'text-white/95 font-bold'
                                       : 'text-white/40 font-bold'
                                   }`}
                                 >

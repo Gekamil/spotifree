@@ -1,12 +1,24 @@
 /**
- * Shared datacenter-safe studio audio extraction helpers (Monochrome lossless + SoundCloud progressive)
- * used by Vercel /api/audio, Render scripts/audioService.mjs, and strict match scoring.
+ * Shared datacenter-safe studio audio extraction, SoundCloud catalog search / HLS assembly,
+ * official-vs-variant classification, and verified instrumental ("sin voces") discovery.
  */
 
 const MONO_CACHE = new Map();
 const SC_TRACK_CACHE = new Map();
+const SC_HLS_BUFFER_CACHE = new Map();
+const SC_HLS_MAX_ENTRIES = 4;
+
 const UNWANTED_TAGS = ['karaoke', 'instrumental', 'tribute', 'backing track', '8d audio', 'slowed', 'sped up', 'nightcore', 'acapella', 'piano cover', 'guitar cover'];
 const VARIANT_TAGS = ['remix', 'live', 'en vivo', 'acoustic', 'acustico'];
+
+export const INSTRUMENTAL_MARKER_REGEX = /\b(instrumental|karaoke|sin\s+voces|sin\s+voz|no\s+vocals?|vocals?\s+removed|off\s+vocal|backing\s+track|accompaniment|tv\s+track|only\s+beat|beat\s+only|pista\s+original)\b/i;
+const INSTRUMENTAL_DISQUALIFY_REGEX = /\b(acapella|a\s*capella|slowed|sped\s*up|speed\s*up|nightcore|8d\s*audio|piano\s+cover|guitar\s+cover|violin\s+cover|sax\s+cover|drum\s+cover|bass\s+cover|fingerstyle|ukulele|tutorial|reaction|reaccion|parodia|parody|medley|mashup)\b/i;
+
+const SC_SLOWED_REGEX = /\b(slowed|reverb|sped\s*up|speed\s*up|nightcore|chopped|screwed|8d)\b/i;
+const SC_LEAK_REGEX = /\b(unreleased|leak|leaked|inedita|inédita|demo|snippet|outtake|vault|unheard|filtrada|filtracion|filtración)\b/i;
+const SC_REMIX_REGEX = /\b(remix|rmx|bootleg|flip|mashup|edit|vip|rework|club\s*mix|extended\s*mix|hardstyle|techno\s*mix)\b/i;
+const SC_LIVE_REGEX = /\b(live|en\s*vivo|en\s*directo|session|sesión|concierto|festival|boiler\s*room|acoustic|acustico|acústico)\b/i;
+const SC_NOISE_REGEX = /\b(white\s*noise|rain\s*sounds|podcast|audiobook|asmr|interview|entrevista|sleep\s*sounds|guided\s*meditation)\b/i;
 
 export async function fetchWithTimeout(url, options = {}, ms = 6000) {
   const controller = new AbortController();
@@ -159,6 +171,61 @@ export function scoreMusicCandidate(
   return { matched: score >= 35, score };
 }
 
+/**
+ * Validate whether an external candidate is genuinely an instrumental / "sin voces" track for a song.
+ */
+export function scoreInstrumentalCandidate(
+  { candTitle = '', candArtist = '', candDurationSec = 0 },
+  { title = '', artist = '', expectedDurationSec = 0 }
+) {
+  const fullRaw = `${candTitle} ${candArtist}`.trim();
+  if (!INSTRUMENTAL_MARKER_REGEX.test(fullRaw)) {
+    return { matched: false, score: -999 };
+  }
+  const origNorm = normalizeMusicText(`${title} ${artist}`);
+  if (INSTRUMENTAL_DISQUALIFY_REGEX.test(fullRaw)) {
+    const allowedByOrig = /\b(remix|acoustic|acustico)\b/i.test(origNorm);
+    if (!allowedByOrig) return { matched: false, score: -999 };
+  }
+  if (/\b(remix|rmx|mashup|edit|live|en\s*vivo)\b/i.test(fullRaw) && !/\b(remix|rmx|live|en\s*vivo)\b/i.test(origNorm)) {
+    return { matched: false, score: -999 };
+  }
+  if (candDurationSec > 0 && candDurationSec < 45 && !(expectedDurationSec > 0 && expectedDurationSec < 45)) {
+    return { matched: false, score: -999 };
+  }
+  if (expectedDurationSec > 35 && candDurationSec > 0 && Math.abs(candDurationSec - expectedDurationSec) > 18) {
+    return { matched: false, score: -999 };
+  }
+
+  const normCand = normalizeMusicText(fullRaw);
+  const titleTokens = tokenizeNormalized(stripMusicNoise(title));
+  if (titleTokens.length > 0) {
+    const hits = titleTokens.filter((tok) => normCand.includes(tok)).length;
+    if (hits / titleTokens.length < 0.6) return { matched: false, score: -999 };
+  }
+
+  let score = 50;
+  if (/\b(official\s*instrumental|instrumental\s*oficial|sin\s+voces|backing\s+track|off\s+vocal)\b/i.test(fullRaw)) score += 30;
+  else if (/\bkaraoke\b/i.test(fullRaw)) score += 10;
+
+  const artistTokens = tokenizeNormalized(artist);
+  if (artistTokens.length > 0) {
+    const artistHits = artistTokens.filter((tok) => normCand.includes(tok)).length;
+    if (artistHits > 0) score += Math.round((artistHits / artistTokens.length) * 35);
+    else score -= 20;
+  }
+
+  if (expectedDurationSec > 35 && candDurationSec > 0) {
+    const diff = Math.abs(candDurationSec - expectedDurationSec);
+    if (diff <= 3) score += 35;
+    else if (diff <= 8) score += 20;
+    else if (diff <= 14) score += 5;
+    else score -= 15;
+  }
+
+  return { matched: score >= 55, score };
+}
+
 export async function verifyDirectAudioStream(url, headers = {}) {
   const res = await fetchWithTimeout(
     url,
@@ -284,67 +351,263 @@ export async function extractViaMonochrome({ q = '', title = '', artist = '', ex
   return null;
 }
 
-let SC_CLIENT_CACHE = { value: '', fetchedAt: 0 };
+/**
+ * Search Monochrome specifically for an instrumental / "sin voces" track.
+ */
+export async function findInstrumentalOnMonochrome({ title = '', artist = '', expectedDurationSec = 0 } = {}) {
+  const cleanT = stripMusicNoise(title);
+  if (!cleanT) return null;
+  const searchQ = `${cleanT} instrumental`.trim();
+  try {
+    const res = await fetchWithTimeout(
+      `https://tracks.monochrome.st/search/tracks?q=${encodeURIComponent(searchQ)}&limit=8`,
+      { headers: { Accept: 'application/json', 'User-Agent': 'Mozilla/5.0' } },
+      4000
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const items = Array.isArray(data?.tracks) ? data.tracks : [];
+    let best = null;
+    let bestScore = -999;
+    for (const item of items) {
+      if (!item?.id || item.playable === false) continue;
+      const candDurationSec = Math.round((Number(item.duration) || 0) / 1000);
+      const candArtist = Array.isArray(item.artistNames) ? item.artistNames.join(' ') : '';
+      const ev = scoreInstrumentalCandidate(
+        { candTitle: item.title || '', candArtist, candDurationSec },
+        { title, artist, expectedDurationSec }
+      );
+      if (ev.matched && ev.score > bestScore) {
+        bestScore = ev.score;
+        best = {
+          sourceId: `mono:${item.id}`,
+          title: item.title || '',
+          artist: candArtist || artist,
+          durationSec: candDurationSec,
+          score: ev.score,
+          provider: 'monochrome',
+        };
+      }
+    }
+    return best;
+  } catch {
+    return null;
+  }
+}
 
-async function getSoundCloudClientId(force = false) {
+// ---------------------------------------------------------------------------
+// SoundCloud Dynamic Client, Progressive + HLS fMP4 Extractor, Classifier & Catalog
+// ---------------------------------------------------------------------------
+let SC_CLIENT_CACHE = { value: '', fetchedAt: 0 };
+let SC_CLIENT_INFLIGHT = null;
+
+export async function getSoundCloudClientId(force = false) {
   if (!force && SC_CLIENT_CACHE.value && Date.now() - SC_CLIENT_CACHE.fetchedAt < 6 * 3600_000) {
     return SC_CLIENT_CACHE.value;
   }
-  try {
-    const html = await fetchWithTimeout(
-      'https://soundcloud.com/discover',
-      { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } },
-      4500
-    ).then((r) => (r.ok ? r.text() : ''));
-    const scripts = [...html.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map((m) => m[1]);
-    for (const sUrl of scripts.slice(-5).reverse()) {
-      const js = await fetchWithTimeout(sUrl, {}, 4000).then((r) => (r.ok ? r.text() : '')).catch(() => '');
-      const m = js.match(/client_id\s*:\s*"([a-zA-Z0-9]{20,40})"/);
-      if (m?.[1]) {
-        SC_CLIENT_CACHE = { value: m[1], fetchedAt: Date.now() };
-        return m[1];
+  if (!force && SC_CLIENT_INFLIGHT) {
+    return SC_CLIENT_INFLIGHT;
+  }
+  const job = (async () => {
+    try {
+      const html = await fetchWithTimeout(
+        'https://soundcloud.com/discover',
+        { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' } },
+        4500
+      ).then((r) => (r.ok ? r.text() : ''));
+      const scripts = [...html.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map((m) => m[1]);
+      for (const sUrl of scripts.slice(-6).reverse()) {
+        const js = await fetchWithTimeout(sUrl, {}, 4000).then((r) => (r.ok ? r.text() : '')).catch(() => '');
+        const m = js.match(/client_id\s*:\s*"([a-zA-Z0-9]{20,40})"/);
+        if (m?.[1]) {
+          SC_CLIENT_CACHE = { value: m[1], fetchedAt: Date.now() };
+          return m[1];
+        }
       }
+    } catch {}
+    return '';
+  })();
+  SC_CLIENT_INFLIGHT = job;
+  try {
+    return await job;
+  } finally {
+    if (SC_CLIENT_INFLIGHT === job) SC_CLIENT_INFLIGHT = null;
+  }
+}
+
+async function fetchSoundCloudJson(urlBuilder) {
+  let cid = await getSoundCloudClientId();
+  if (!cid) return null;
+  let res = await fetchWithTimeout(urlBuilder(cid), { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
+  if (res.status === 401 || res.status === 403) {
+    cid = await getSoundCloudClientId(true);
+    if (!cid) return null;
+    res = await fetchWithTimeout(urlBuilder(cid), { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
+  }
+  if (!res.ok) return null;
+  return res.json();
+}
+
+function selectSoundCloudTranscoding(item) {
+  const transcodings = item?.media?.transcodings || [];
+  const prog = transcodings.find((x) => x?.format?.protocol === 'progressive' && x?.url);
+  if (prog) return { transcoding: prog, mode: 'progressive' };
+
+  const hlsMp4 =
+    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.preset || '').includes('160k') && String(x?.format?.mime_type || '').includes('mp4') && x?.url) ||
+    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mp4') && x?.url);
+  if (hlsMp4) return { transcoding: hlsMp4, mode: 'hls-fmp4' };
+
+  return null;
+}
+
+function storeHlsBuffer(cacheKey, buf) {
+  SC_HLS_BUFFER_CACHE.delete(cacheKey);
+  while (SC_HLS_BUFFER_CACHE.size >= SC_HLS_MAX_ENTRIES) {
+    const oldestKey = SC_HLS_BUFFER_CACHE.keys().next().value;
+    if (oldestKey) SC_HLS_BUFFER_CACHE.delete(oldestKey);
+    else break;
+  }
+  SC_HLS_BUFFER_CACHE.set(cacheKey, { buf, fetchedAt: Date.now() });
+}
+
+export function getCachedSoundCloudHlsBuffer(cacheKey) {
+  const entry = SC_HLS_BUFFER_CACHE.get(cacheKey);
+  if (entry && Date.now() - entry.fetchedAt < 600_000) {
+    return entry.buf;
+  }
+  return null;
+}
+
+async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
+  const existing = getCachedSoundCloudHlsBuffer(cacheKey);
+  if (existing) return existing;
+
+  const m3u8Text = await fetchWithTimeout(m3u8Url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 5000).then((r) => (r.ok ? r.text() : ''));
+  if (!m3u8Text || /#EXT-X-KEY/i.test(m3u8Text)) return null;
+
+  const mapMatch = m3u8Text.match(/#EXT-X-MAP:URI="([^"]+)"/i);
+  const segUrls = m3u8Text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+
+  if (!mapMatch?.[1] || segUrls.length === 0 || segUrls.length > 160) return null;
+
+  const allUrls = [mapMatch[1], ...segUrls];
+  const parts = new Array(allUrls.length);
+  const fetchSegOnce = async (u) => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const buf = await fetchWithTimeout(u, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 8000)
+        .then((r) => (r.ok ? r.arrayBuffer().then((ab) => Buffer.from(ab)) : null))
+        .catch(() => null);
+      if (buf && buf.length > 0) return buf;
     }
-  } catch {}
-  return '';
+    return null;
+  };
+  const BATCH = 8;
+  for (let i = 0; i < allUrls.length; i += BATCH) {
+    const slice = allUrls.slice(i, i + BATCH);
+    const bufs = await Promise.all(slice.map(fetchSegOnce));
+    if (bufs.some((b) => !b || b.length === 0)) return null;
+    for (let j = 0; j < bufs.length; j++) {
+      parts[i + j] = bufs[j];
+    }
+  }
+
+  const fullBuf = Buffer.concat(parts);
+  const sniff = sniffAudioSignature(fullBuf.subarray(0, 32));
+  if (!sniff.valid || fullBuf.length < 100_000) return null;
+
+  storeHlsBuffer(cacheKey, fullBuf);
+  return fullBuf;
+}
+
+async function resolveSoundCloudItemToStream(item) {
+  if (!item?.id || item.policy === 'SNIP') return null;
+  const durSec = Math.round((Number(item.duration) || 0) / 1000);
+  if (durSec > 0 && durSec < 45) return null;
+
+  const picked = selectSoundCloudTranscoding(item);
+  if (!picked) return null;
+
+  const streamMeta = await fetchSoundCloudJson(
+    (cid) => `${picked.transcoding.url}?client_id=${cid}${item.track_authorization ? `&track_authorization=${encodeURIComponent(item.track_authorization)}` : ''}`
+  ).catch(() => null);
+  if (!streamMeta?.url) return null;
+
+  const idKey = `sc:${item.id}`;
+
+  if (picked.mode === 'progressive') {
+    const verified = await verifyDirectAudioStream(streamMeta.url).catch(() => null);
+    if (!verified) return null;
+    const entry = {
+      id: idKey,
+      url: streamMeta.url,
+      mime: verified.mime || 'audio/mpeg',
+      ext: verified.ext || 'mp3',
+      clen: verified.clen,
+      source: 'soundcloud-mp3',
+      directCors: false,
+      fetchedAt: Date.now(),
+    };
+    SC_TRACK_CACHE.set(idKey, entry);
+    return entry;
+  }
+
+  // HLS fMP4: assemble init segment + media segments cleanly into contiguous audio/mp4
+  const fullBuf = await fetchSoundCloudHlsBuffer(streamMeta.url, idKey);
+  if (!fullBuf) return null;
+
+  const entry = {
+    id: idKey,
+    url: `sc-hls:${item.id}`,
+    streamBuffer: fullBuf,
+    mime: 'audio/mp4',
+    ext: 'm4a',
+    clen: fullBuf.length,
+    source: 'soundcloud-hls',
+    directCors: false,
+    fetchedAt: Date.now(),
+  };
+  SC_TRACK_CACHE.set(idKey, entry);
+  return entry;
 }
 
 export async function extractViaSoundCloud({ q = '', title = '', artist = '', expectedDurationSec = 0, explicitId = '' } = {}) {
-  const scMatch = String(explicitId || '').match(/^sc:(\d+)$/);
+  const scMatch = String(explicitId || '').match(/^sc[:\-](\d+)$/);
   if (scMatch) {
-    const cached = SC_TRACK_CACHE.get(`sc:${scMatch[1]}`);
-    if (cached && Date.now() - cached.fetchedAt < 300_000) return cached;
-  }
+    const trackNum = scMatch[1];
+    const idKey = `sc:${trackNum}`;
+    const cached = SC_TRACK_CACHE.get(idKey);
+    if (cached && Date.now() - cached.fetchedAt < 300_000) {
+      if (cached.streamBuffer || !String(cached.url).startsWith('sc-hls:')) return cached;
+      const buf = getCachedSoundCloudHlsBuffer(idKey);
+      if (buf) return { ...cached, streamBuffer: buf };
+    }
 
-  const clientId = await getSoundCloudClientId();
-  if (!clientId) return null;
+    try {
+      const item = await fetchSoundCloudJson((cid) => `https://api-v2.soundcloud.com/tracks/${trackNum}?client_id=${cid}`);
+      if (item?.id) {
+        const directEntry = await resolveSoundCloudItemToStream(item);
+        if (directEntry) return directEntry;
+      }
+    } catch {}
+    return null;
+  }
 
   const searchQ = stripMusicNoise(`${title} ${artist}`.trim() || q);
   if (!searchQ) return null;
 
   try {
-    const searchUrl = `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${clientId}&limit=10`;
-    let res = await fetchWithTimeout(searchUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4500);
-    if (res.status === 401 || res.status === 403) {
-      const freshId = await getSoundCloudClientId(true);
-      if (!freshId) return null;
-      res = await fetchWithTimeout(
-        `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${freshId}&limit=10`,
-        { headers: { 'User-Agent': 'Mozilla/5.0' } },
-        4500
-      );
-    }
-    if (!res.ok) return null;
-
-    const data = await res.json();
+    const data = await fetchSoundCloudJson(
+      (cid) => `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${cid}&limit=10`
+    );
     const items = Array.isArray(data?.collection) ? data.collection : [];
 
     const scored = [];
     for (const item of items) {
-      if (!item?.id || item.policy === 'SNIP') continue;
-      const transcodings = item.media?.transcodings || [];
-      const prog = transcodings.find((x) => x.format?.protocol === 'progressive' && x.url);
-      if (!prog) continue;
+      if (!item?.id || item.policy === 'SNIP' || !selectSoundCloudTranscoding(item)) continue;
       const candDurationSec = Math.round((Number(item.duration) || 0) / 1000);
       const candArtist = item.user?.username || '';
       const evalRes = scoreMusicCandidate(
@@ -352,36 +615,338 @@ export async function extractViaSoundCloud({ q = '', title = '', artist = '', ex
         { title, artist, query: searchQ, expectedDurationSec }
       );
       if (evalRes.matched) {
-        scored.push({ item, prog, score: evalRes.score });
+        scored.push({ item, score: evalRes.score });
       }
     }
 
     scored.sort((a, b) => b.score - a.score);
-    for (const { item, prog } of scored.slice(0, 2)) {
-      const activeCid = SC_CLIENT_CACHE.value || clientId;
-      const trUrl = `${prog.url}?client_id=${activeCid}${item.track_authorization ? `&track_authorization=${encodeURIComponent(item.track_authorization)}` : ''}`;
-      const streamMeta = await fetchWithTimeout(trUrl, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 4000)
-        .then((r) => (r.ok ? r.json() : null))
-        .catch(() => null);
-      if (!streamMeta?.url) continue;
-
-      const verified = await verifyDirectAudioStream(streamMeta.url).catch(() => null);
-      if (!verified) continue;
-
-      const idKey = `sc:${item.id}`;
-      const entry = {
-        id: idKey,
-        url: streamMeta.url,
-        mime: verified.mime || 'audio/mpeg',
-        ext: verified.ext || 'mp3',
-        clen: verified.clen,
-        source: 'soundcloud-mp3',
-        directCors: false,
-        fetchedAt: Date.now(),
-      };
-      SC_TRACK_CACHE.set(idKey, entry);
-      return entry;
+    for (const { item } of scored.slice(0, 2)) {
+      const entry = await resolveSoundCloudItemToStream(item);
+      if (entry) return entry;
     }
   } catch {}
   return null;
+}
+
+export async function findInstrumentalOnSoundCloud({ title = '', artist = '', expectedDurationSec = 0 } = {}) {
+  const cleanT = stripMusicNoise(title);
+  if (!cleanT) return null;
+  const queries = [`${cleanT} ${artist} instrumental`.trim(), `${cleanT} karaoke`.trim()];
+
+  let best = null;
+  let bestScore = -999;
+
+  for (const searchQ of queries) {
+    try {
+      const data = await fetchSoundCloudJson(
+        (cid) => `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(searchQ)}&client_id=${cid}&limit=8`
+      );
+      const items = Array.isArray(data?.collection) ? data.collection : [];
+      for (const item of items) {
+        if (!item?.id || item.policy === 'SNIP' || !selectSoundCloudTranscoding(item)) continue;
+        const candDurationSec = Math.round((Number(item.duration) || 0) / 1000);
+        const candArtist = item.user?.username || '';
+        const ev = scoreInstrumentalCandidate(
+          { candTitle: item.title || '', candArtist, candDurationSec },
+          { title, artist, expectedDurationSec }
+        );
+        if (ev.matched && ev.score > bestScore) {
+          bestScore = ev.score;
+          best = {
+            sourceId: `sc:${item.id}`,
+            title: item.title || '',
+            artist: candArtist || artist,
+            durationSec: candDurationSec,
+            score: ev.score,
+            provider: 'soundcloud',
+          };
+        }
+      }
+      if (best && bestScore >= 95) break;
+    } catch {}
+  }
+
+  return best;
+}
+
+// ---------------------------------------------------------------------------
+// SoundCloud Variant Classifier, Catalog Search & Artist Vault Builder
+// ---------------------------------------------------------------------------
+export function normalizeSoundCloudArtwork(url = '') {
+  if (!url || typeof url !== 'string') return '';
+  return url
+    .replace('-large.', '-t500x500.')
+    .replace('-t200x200.', '-t500x500.')
+    .replace('-crop.', '-t500x500.');
+}
+
+export function classifySoundCloudVariant(trackTitle = '', tagList = '', genre = '') {
+  const raw = `${trackTitle} ${tagList} ${genre}`.trim();
+  if (INSTRUMENTAL_MARKER_REGEX.test(trackTitle)) return { variant: 'instrumental', label: 'Sin voces' };
+  if (SC_SLOWED_REGEX.test(raw)) return { variant: 'slowed', label: 'Slowed / Sped Up' };
+  if (SC_LEAK_REGEX.test(raw)) return { variant: 'leak', label: 'Inédita / Leak' };
+  if (SC_REMIX_REGEX.test(raw)) return { variant: 'remix', label: 'Remix' };
+  if (SC_LIVE_REGEX.test(raw)) return { variant: 'live', label: 'En vivo' };
+  return { variant: 'official_like', label: 'SoundCloud' };
+}
+
+function cleanOfficialCompareTitle(str = '') {
+  return normalizeMusicText(
+    String(str)
+      .replace(/\s*[\[(][^)\]]*(feat\.?|ft\.?|official|audio|video|remaster|explicit|bonus|version|remix)[^)\]]*[\])]/gi, '')
+      .replace(/\s*[-–—]\s*(remaster|radio edit|single version|bonus track).*$/gi, '')
+  );
+}
+
+/**
+ * Checks whether a SoundCloud track literally duplicates one of the official catalog tracks.
+ * Returns matching official track index or -1.
+ */
+export function findMatchingOfficialTrackIndex(scItem, officialTracks = []) {
+  if (!scItem || !Array.isArray(officialTracks) || officialTracks.length === 0) return -1;
+  const cls = classifySoundCloudVariant(scItem.title || '', scItem.tag_list || '', scItem.genre || '');
+  if (cls.variant !== 'official_like') return -1;
+
+  const scNormTitle = cleanOfficialCompareTitle(scItem.title || '');
+  if (!scNormTitle) return -1;
+  const scUploader = normalizeMusicText(scItem.user?.username || '');
+  const scDurSec = Math.round((Number(scItem.duration) || 0) / 1000);
+
+  for (let i = 0; i < officialTracks.length; i++) {
+    const off = officialTracks[i];
+    if (!off?.name) continue;
+    const offTitle = cleanOfficialCompareTitle(off.name || '');
+    const offArtist = normalizeMusicText(off.artists?.[0]?.name || '');
+    const offDurSec = Math.round((Number(off.duration_ms) || 0) / 1000);
+
+    if (!offTitle) continue;
+    const titleAligned =
+      scNormTitle === offTitle ||
+      scNormTitle === `${offArtist} ${offTitle}`.trim() ||
+      scNormTitle === `${offTitle} ${offArtist}`.trim() ||
+      (scNormTitle.includes(offTitle) && (!offArtist || scNormTitle.includes(offArtist) || scUploader.includes(offArtist)));
+    if (!titleAligned) continue;
+
+    if (offDurSec > 35 && scDurSec > 35 && Math.abs(scDurSec - offDurSec) > 14) continue;
+
+    const artistMatch =
+      !offArtist ||
+      scUploader.includes(offArtist) ||
+      offArtist.includes(scUploader) ||
+      scNormTitle.includes(offArtist);
+
+    if (artistMatch) return i;
+  }
+  return -1;
+}
+
+export function scItemToSpotifreeTrack(item, variantInfo = null) {
+  const cls = variantInfo || classifySoundCloudVariant(item.title || '', item.tag_list || '', item.genre || '');
+  const cover = normalizeSoundCloudArtwork(item.artwork_url || item.user?.avatar_url || '');
+  const artistName = String(item.user?.username || 'SoundCloud').trim() || 'SoundCloud';
+  const durationMs = Math.max(45000, Number(item.duration) || 180000);
+
+  return {
+    id: `sc-${item.id}`,
+    name: String(item.title || 'SoundCloud Track').trim(),
+    duration_ms: durationMs,
+    preview_url: null,
+    artists: [{ id: `sc-art-${item.user?.id || 'sc'}`, name: artistName }],
+    album: {
+      id: `sc-alb-${item.id}`,
+      name: `SoundCloud • ${cls.label}`,
+      images: cover ? [{ url: cover }] : [],
+    },
+    scVariant: cls.variant,
+    scVariantLabel: cls.label,
+    scUrl: item.permalink_url || undefined,
+    source: 'soundcloud',
+  };
+}
+
+export async function searchSoundCloudCatalog(
+  query,
+  { limit = 16, officialTracks = [], includeOfficialDuplicates = false, artistFilter = '' } = {}
+) {
+  const cleanQ = String(query || '').trim();
+  if (!cleanQ) return { tracks: [], officialAltIds: {} };
+
+  try {
+    const data = await fetchSoundCloudJson(
+      (cid) => `https://api-v2.soundcloud.com/search/tracks?q=${encodeURIComponent(cleanQ)}&client_id=${cid}&limit=${Math.min(30, limit + 10)}`
+    );
+    const items = Array.isArray(data?.collection) ? data.collection : [];
+
+    const officialAltIds = {};
+    const out = [];
+    const seenNorm = new Set();
+    const artistTokens = tokenizeNormalized(artistFilter);
+
+    for (const item of items) {
+      if (!item?.id || item.policy === 'SNIP' || !selectSoundCloudTranscoding(item)) continue;
+      const durSec = Math.round((Number(item.duration) || 0) / 1000);
+      if (durSec < 45 || durSec > 900) continue; // Keep genuine songs/remixes (exclude 2h podcasts/long sets)
+
+      const rawCombined = `${item.title || ''} ${item.user?.username || ''} ${item.genre || ''}`;
+      if (SC_NOISE_REGEX.test(rawCombined)) continue;
+
+      if (artistTokens.length > 0) {
+        const hay = normalizeMusicText(`${item.title || ''} ${item.user?.username || ''} ${item.tag_list || ''} ${item.description || ''}`);
+        const matchesArtist = artistTokens.every((t) => hay.includes(t)) || (artistTokens.length >= 2 && artistTokens.filter((t) => hay.includes(t)).length >= Math.ceil(artistTokens.length * 0.75));
+        if (!matchesArtist) continue;
+      }
+
+      const dupIdx = findMatchingOfficialTrackIndex(item, officialTracks);
+      if (dupIdx >= 0) {
+        const offId = officialTracks[dupIdx]?.id;
+        if (offId && !officialAltIds[offId]) {
+          officialAltIds[offId] = `sc:${item.id}`;
+        }
+        if (!includeOfficialDuplicates) continue;
+      }
+
+      const normKey = normalizeMusicText(`${item.title || ''} ${item.user?.username || ''}`);
+      if (!normKey || seenNorm.has(normKey)) continue;
+      seenNorm.add(normKey);
+
+      out.push(scItemToSpotifreeTrack(item));
+      if (out.length >= limit) break;
+    }
+
+    return { tracks: out, officialAltIds };
+  } catch {
+    return { tracks: [], officialAltIds: {} };
+  }
+}
+
+export async function resolveSoundCloudUrl(rawUrl = '') {
+  const cleanUrl = String(rawUrl || '').trim();
+  if (!/^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(cleanUrl)) return null;
+
+  try {
+    const resolved = await fetchSoundCloudJson(
+      (cid) => `https://api-v2.soundcloud.com/resolve?url=${encodeURIComponent(cleanUrl)}&client_id=${cid}`
+    );
+    if (!resolved) return null;
+
+    if (resolved.kind === 'track' && resolved.id) {
+      if (resolved.policy === 'SNIP' || !selectSoundCloudTranscoding(resolved)) return null;
+      return { kind: 'track', track: scItemToSpotifreeTrack(resolved) };
+    }
+
+    if (resolved.kind === 'playlist' && Array.isArray(resolved.tracks)) {
+      const tracks = resolved.tracks
+        .filter((t) => t?.id && t.policy !== 'SNIP' && selectSoundCloudTranscoding(t))
+        .map((t) => scItemToSpotifreeTrack(t));
+      const cover = normalizeSoundCloudArtwork(resolved.artwork_url || resolved.user?.avatar_url || tracks[0]?.album?.images?.[0]?.url || '');
+      return {
+        kind: 'playlist',
+        playlist: {
+          id: `sc-pl-${resolved.id}`,
+          name: resolved.title || 'Playlist de SoundCloud',
+          description: `SoundCloud • ${tracks.length} canciones`,
+          type: 'playlist',
+          images: cover ? [{ url: cover }] : [],
+          owner: {
+            display_name: resolved.user?.username || 'SoundCloud',
+            id: `sc-art-${resolved.user?.id || 'sc'}`,
+          },
+          tracks: { total: tracks.length, items: tracks },
+        },
+      };
+    }
+  } catch {}
+  return null;
+}
+
+/**
+ * Builds an artist "Remixes, Slowed, Oficiales & Leaks" SoundCloud Vault playlist,
+ * automatically deduplicating official originals while preserving scAltIds as extra sources.
+ */
+export async function buildArtistSoundCloudVault(artistName = '') {
+  const cleanName = String(artistName || '').trim();
+  if (!cleanName) return null;
+
+  const [dzOfficialRes, leakRes, remixRes, generalRes] = await Promise.all([
+    fetchWithTimeout(
+      `https://api.deezer.com/search?q=artist:"${encodeURIComponent(cleanName)}"&limit=10`,
+      { headers: { 'User-Agent': 'Mozilla/5.0' } },
+      3500
+    )
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .catch(() => ({ data: [] })),
+    searchSoundCloudCatalog(`${cleanName} unreleased leak`, { limit: 12, artistFilter: cleanName }),
+    searchSoundCloudCatalog(`${cleanName} remix slowed`, { limit: 14, artistFilter: cleanName }),
+    searchSoundCloudCatalog(`${cleanName}`, { limit: 14, artistFilter: cleanName }),
+  ]);
+
+  const officialTracks = (dzOfficialRes?.data || []).slice(0, 6).map((t) => {
+    const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+    return {
+      id: `dz-${t.id}`,
+      name: t.title || t.title_short,
+      duration_ms: (t.duration || 210) * 1000,
+      preview_url: null,
+      artists: [{ id: `art-${t.artist?.id || 'dz'}`, name: t.artist?.name || cleanName }],
+      album: {
+        id: `alb-${t.album?.id || 'dz'}`,
+        name: t.album?.title || t.title,
+        images: cover ? [{ url: cover }] : [],
+      },
+      scVariantLabel: 'Oficial',
+    };
+  });
+
+  // Deduplicate SoundCloud pool against official tracks (exact official dupes only attach as alt source)
+  const rawPool = [...leakRes.tracks, ...remixRes.tracks, ...generalRes.tracks];
+  const scTracks = [];
+  const seenScIds = new Set();
+  const seenScTitles = new Set();
+
+  for (const scT of rawPool) {
+    if (!scT?.id || seenScIds.has(scT.id)) continue;
+    const fakeScObj = {
+      id: scT.id.replace(/^sc-/, ''),
+      title: scT.name,
+      user: { username: scT.artists?.[0]?.name || '' },
+      duration: scT.duration_ms,
+      tag_list: scT.album?.name || '',
+    };
+    const dupIdx = findMatchingOfficialTrackIndex(fakeScObj, officialTracks);
+    if (dupIdx >= 0) {
+      if (!(officialTracks[dupIdx]).scAltId) {
+        (officialTracks[dupIdx]).scAltId = `sc:${fakeScObj.id}`;
+      }
+      continue;
+    }
+    const normT = normalizeMusicText(scT.name);
+    if (!normT || seenScTitles.has(normT)) continue;
+    seenScIds.add(scT.id);
+    seenScTitles.add(normT);
+    scTracks.push(scT);
+  }
+
+  // Prioritize Leaks & Remixes/Slowed up front, interspersed cleanly with a handful of top official tracks
+  const leaks = scTracks.filter((t) => t.scVariant === 'leak');
+  const remixesSlowed = scTracks.filter((t) => t.scVariant === 'remix' || t.scVariant === 'slowed');
+  const others = scTracks.filter((t) => t.scVariant !== 'leak' && t.scVariant !== 'remix' && t.scVariant !== 'slowed');
+
+  const combined = [...remixesSlowed.slice(0, 10), ...leaks.slice(0, 8), ...others.slice(0, 5), ...officialTracks.slice(0, 5)].slice(0, 28);
+  if (combined.length === 0) return null;
+
+  const coverImg =
+    remixesSlowed.find((t) => t.album?.images?.[0]?.url)?.album?.images?.[0]?.url ||
+    officialTracks.find((t) => t.album?.images?.[0]?.url)?.album?.images?.[0]?.url ||
+    combined[0]?.album?.images?.[0]?.url ||
+    '';
+
+  return {
+    id: `sc-vault-${encodeURIComponent(cleanName)}`,
+    name: `${cleanName}: Remixes, Leaks y Slowed`,
+    description: `SoundCloud & oficiales • ${remixesSlowed.length} remixes/slowed, ${leaks.length} inéditas y temas oficiales`,
+    type: 'playlist',
+    images: coverImg ? [{ url: coverImg }] : [],
+    owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+    tracks: { total: combined.length, items: combined },
+  };
 }

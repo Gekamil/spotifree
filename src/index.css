@@ -378,4 +378,60 @@
   }
 }
 
+/* Karaoke Microphone Button Animations (compositor-only, opted-in under no-preference) */
+@keyframes spfKaraokeFloat {
+  0%, 100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-1.5px) scale(1.06);
+  }
+}
+
+@keyframes spfKaraokeWave {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@keyframes spfKaraokeHalo {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(1.32);
+  }
+}
+
+.spf-karaoke-mic-btn {
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .spf-karaoke-mic-available .spf-karaoke-mic-icon {
+    animation: spfKaraokeFloat 2.4s ease-in-out infinite;
+  }
+  .spf-karaoke-mic-active .spf-karaoke-mic-icon {
+    animation: spfKaraokeFloat 1.15s ease-in-out infinite;
+  }
+  .spf-karaoke-mic-active .spf-karaoke-wave {
+    transform-origin: center;
+    animation: spfKaraokeWave 1.15s ease-in-out infinite;
+  }
+  .spf-karaoke-mic-active .spf-karaoke-halo {
+    animation: spfKaraokeHalo 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  }
+}
+
 

@@ -134,6 +134,7 @@ const officialCategories = [
 
 interface FullSearchResults {
   tracks: any[];
+  soundcloudTracks: any[];
   artists: any[];
   albums: any[];
   playlists: any[];
@@ -243,9 +244,10 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   const [selectedCategory, setSelectedCategory] = useState<typeof officialCategories[0] | null>(null);
   // Changes every day: curated playlists reshuffled + today's live picks
   const categoryShelves = useDailyCategoryHub(selectedCategory?.id);
-  const [searchFilter, setSearchFilter] = useState<'todo' | 'canciones' | 'artistas' | 'albumes' | 'playlists'>('todo');
+  const [searchFilter, setSearchFilter] = useState<'todo' | 'canciones' | 'soundcloud' | 'artistas' | 'albumes' | 'playlists'>('todo');
   const [searchResults, setSearchResults] = useState<FullSearchResults>({
     tracks: [],
+    soundcloudTracks: [],
     artists: [],
     albums: [],
     playlists: [],
@@ -272,7 +274,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
 
   useEffect(() => {
     if (!searchQuery.trim()) {
-      setSearchResults({ tracks: [], artists: [], albums: [], playlists: [] });
+      setSearchResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
       setIsSearching(false);
       setHasSearched(false);
       return;
@@ -286,6 +288,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
         if (active) {
           setSearchResults({
             tracks: data?.tracks?.items || [],
+            soundcloudTracks: data?.soundcloudTracks?.items || [],
             artists: data?.artists?.items || [],
             albums: data?.albums?.items || [],
             playlists: data?.playlists?.items || [],
@@ -294,7 +297,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
         }
       } catch {
         if (active) {
-          setSearchResults({ tracks: [], artists: [], albums: [], playlists: [] });
+          setSearchResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
           setHasSearched(true);
         }
       } finally {
@@ -514,22 +517,32 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
 
           {/* Filter Pills matching Spotify Desktop Search */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {(['todo', 'canciones', 'artistas', 'albumes', 'playlists'] as const).map((filter) => (
+            {(['todo', 'canciones', 'soundcloud', 'artistas', 'albumes', 'playlists'] as const).map((filter) => (
               <button
                 key={filter}
                 onClick={() => setSearchFilter(filter)}
-                className={`h-8 px-4 rounded-full text-xs font-bold capitalize transition-all cursor-pointer ${
+                className={`h-8 px-4 rounded-full text-xs font-bold shrink-0 transition-all cursor-pointer ${
                   searchFilter === filter
                     ? 'bg-white text-black shadow'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                {filter === 'todo' ? 'Todo' : filter === 'canciones' ? 'Canciones' : filter === 'artistas' ? 'Artistas' : filter === 'albumes' ? 'Álbumes' : 'Playlists'}
+                {filter === 'todo'
+                  ? 'Todo'
+                  : filter === 'canciones'
+                  ? 'Canciones'
+                  : filter === 'soundcloud'
+                  ? `Remixes y Leaks${searchResults.soundcloudTracks.length > 0 ? ` (${searchResults.soundcloudTracks.length})` : ''}`
+                  : filter === 'artistas'
+                  ? 'Artistas'
+                  : filter === 'albumes'
+                  ? 'Álbumes'
+                  : 'Playlists'}
               </button>
             ))}
           </div>
 
-          {searchResults.tracks.length > 0 || searchResults.artists.length > 0 ? (
+          {searchResults.tracks.length > 0 || searchResults.soundcloudTracks.length > 0 || searchResults.artists.length > 0 || searchResults.playlists.length > 0 ? (
             <div className="space-y-10">
               {/* TAB: TODO */}
               {searchFilter === 'todo' && (
@@ -669,9 +682,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 }`}>
                                   {track.name}
                                 </span>
-                                <span className="text-xs text-[#b3b3b3] truncate">
-                                  {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
-                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                                  {track.scVariantLabel && (
+                                    <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                                      {track.scVariantLabel}
+                                    </span>
+                                  )}
+                                  <span className="text-xs text-[#b3b3b3] truncate">
+                                    {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
+                                  </span>
+                                </div>
                               </div>
                             </div>
                             <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
@@ -715,6 +735,73 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             onClick={() => handleAlbumClick(album)}
                           />
                         ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* SoundCloud Remixes, Slowed & Leaks Shelf */}
+                  {searchResults.soundcloudTracks.length > 0 && (
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="text-xl font-bold text-white font-['SpotifyMixUITitle']">
+                          Remixes, Slowed e Inéditas (SoundCloud)
+                        </h3>
+                        <button
+                          type="button"
+                          onClick={() => setSearchFilter('soundcloud')}
+                          className="text-xs font-bold text-[#b3b3b3] hover:text-white hover:underline cursor-pointer"
+                        >
+                          Mostrar todo
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        {searchResults.soundcloudTracks.slice(0, 4).map((track: any) => {
+                          const isThisPlaying = isPlaying && currentTrack?.id === track.id;
+                          return (
+                            <div
+                              key={track.id}
+                              onClick={() => {
+                                addRecentSearch({
+                                  id: track.id,
+                                  type: 'track',
+                                  title: track.name,
+                                  subtitle: `SoundCloud • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
+                                  image: track.album?.images?.[0]?.url,
+                                  data: track,
+                                });
+                                if (currentTrack?.id === track.id) togglePlay();
+                                else playTrack(track, searchResults.soundcloudTracks);
+                              }}
+                              className={`group flex items-center justify-between p-2.5 rounded-lg bg-[#181818] hover:bg-[#282828] cursor-pointer transition-colors ${
+                                currentTrack?.id === track.id ? 'bg-[#282828]' : ''
+                              }`}
+                            >
+                              <div className="flex items-center gap-3 min-w-0 pr-3">
+                                <img
+                                  src={track.album?.images?.[0]?.url}
+                                  alt={track.name}
+                                  className="w-11 h-11 rounded object-cover shadow bg-[#242424] shrink-0"
+                                />
+                                <div className="min-w-0">
+                                  <p className={`text-sm font-semibold truncate ${isThisPlaying ? 'text-[#1ed760]' : 'text-white'}`}>
+                                    {track.name}
+                                  </p>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                                      {track.scVariantLabel || 'SoundCloud'}
+                                    </span>
+                                    <span className="text-xs text-[#b3b3b3] truncate">
+                                      {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-xs text-[#b3b3b3] tabular-nums shrink-0">
+                                {formatDuration(track.duration_ms)}
+                              </span>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
@@ -797,9 +884,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             }`}>
                               {track.name}
                             </span>
-                            <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                              {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')} • {track.album?.name}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                              {track.scVariantLabel && (
+                                <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                                  {track.scVariantLabel}
+                                </span>
+                              )}
+                              <span className="text-xs text-[#b3b3b3] truncate">
+                                {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')} • {track.album?.name}
+                              </span>
+                            </div>
                           </div>
                         </div>
                         <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
@@ -808,6 +902,66 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* TAB: SOUNDCLOUD REMIXES, SLOWED & LEAKS */}
+              {searchFilter === 'soundcloud' && (
+                <div className="space-y-1">
+                  {searchResults.soundcloudTracks.length > 0 ? (
+                    searchResults.soundcloudTracks.map((track: any) => {
+                      const isThisPlaying = isPlaying && currentTrack?.id === track.id;
+                      const isThisSelected = currentTrack?.id === track.id;
+                      return (
+                        <div
+                          key={track.id}
+                          onClick={() => {
+                            addRecentSearch({
+                              id: track.id,
+                              type: 'track',
+                              title: track.name,
+                              subtitle: `SoundCloud • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
+                              image: track.album?.images?.[0]?.url,
+                              data: track,
+                            });
+                            if (currentTrack?.id === track.id) togglePlay();
+                            else playTrack(track, searchResults.soundcloudTracks);
+                          }}
+                          className={`group flex items-center justify-between p-2.5 rounded-lg hover:bg-white/10 cursor-pointer transition-colors ${
+                            isThisSelected ? 'bg-white/10' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0 pr-3">
+                            <img
+                              src={track.album?.images?.[0]?.url}
+                              alt={track.name}
+                              className="w-11 h-11 rounded object-cover shadow bg-[#242424] shrink-0"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className={`font-semibold text-sm truncate ${isThisPlaying ? 'text-[#1ed760]' : 'text-white'}`}>
+                                {track.name}
+                              </span>
+                              <div className="flex items-center gap-2 mt-0.5 min-w-0">
+                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                                  {track.scVariantLabel || 'SoundCloud'}
+                                </span>
+                                <span className="text-xs text-[#b3b3b3] truncate">
+                                  {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                          <span className="text-xs text-[#b3b3b3] font-['SpotifyMixUI'] tabular-nums pr-4">
+                            {formatDuration(track.duration_ms)}
+                          </span>
+                        </div>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-[#b3b3b3] py-6">
+                      No se encontraron remixes, versiones slowed ni inéditas en SoundCloud para «{searchQuery}».
+                    </p>
+                  )}
                 </div>
               )}
 

@@ -11,7 +11,7 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
     const validToken = await getValidAccessToken().catch(() => null);
     const activeToken = validToken || storedToken;
 
-    if (activeToken && activeToken !== 'session-bridge-active' && !id.startsWith('dz-')) {
+    if (activeToken && activeToken !== 'session-bridge-active' && !id.startsWith('dz-') && !id.startsWith('sc-')) {
       try {
         const res = await fetch(`https://api.spotify.com/v1/playlists/${encodeURIComponent(id)}`, {
           headers: { Authorization: `Bearer ${activeToken}` },
@@ -178,6 +178,7 @@ export async function searchSpotify(query: string): Promise<any | null> {
   const normalizedQ = cleanQ.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
 
   let tracks: Track[] = [];
+  let soundcloudTracks: Track[] = [];
   let artists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
   let albums: Array<{ id: string; name: string; images: Array<{ url: string }>; release_date?: string; artists: Array<{ name: string }> }> = [];
   let playlists: Array<{
@@ -226,13 +227,18 @@ export async function searchSpotify(query: string): Promise<any | null> {
     }
   } catch {}
 
-  // 2. Query Backend Search API (/api/spotify/search) which accesses Deezer, YouTube Music & Spotify
+  let gotBackendResults = false;
+  // 2. Query Backend Search API (/api/spotify/search) which accesses Deezer, SoundCloud, iTunes & Spotify
   try {
     const searchUrl = `/api/spotify/search?q=${encodeURIComponent(cleanQ)}`;
-    const res = await fetch(searchUrl, { signal: AbortSignal.timeout?.(4500) });
+    const res = await fetch(searchUrl, { signal: AbortSignal.timeout?.(7500) });
     if (res.ok) {
       const data = await res.json();
+      if (Array.isArray(data.soundcloudTracks?.items) && data.soundcloudTracks.items.length > 0) {
+        soundcloudTracks = data.soundcloudTracks.items;
+      }
       if (data.tracks?.items?.length) {
+        gotBackendResults = true;
         // Put official search results at the forefront
         const newSpotifyTracks: Track[] = [];
         for (const item of data.tracks.items) {
@@ -241,6 +247,16 @@ export async function searchSpotify(query: string): Promise<any | null> {
           }
         }
         tracks = [...newSpotifyTracks, ...tracks];
+      }
+      const wantsVariantInMain =
+        /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|soundcloud)\b/i.test(cleanQ) ||
+        tracks.length < 5;
+      if (wantsVariantInMain && soundcloudTracks.length > 0) {
+        for (const scT of soundcloudTracks.slice(0, 8)) {
+          if (!tracks.some((t) => t.id === scT.id || t.name.toLowerCase() === scT.name.toLowerCase())) {
+            tracks.push(scT);
+          }
+        }
       }
       if (data.artists?.items?.length && artists.length === 0) artists = data.artists.items;
       if (data.albums?.items?.length && albums.length === 0) albums = data.albums.items;
@@ -252,7 +268,8 @@ export async function searchSpotify(query: string): Promise<any | null> {
     }
   } catch {}
 
-  // 2b. Direct Deezer Global Music Catalog Query (Finds brand-new releases with 1000x1000 studio covers)
+  // 2b. Direct Deezer Global Music Catalog Query (only needed if backend search was partial/unavailable)
+  if (!gotBackendResults || artists.length === 0) {
   try {
     const withoutPlaylist = (normalizedQ || cleanQ).replace(/\bplaylist(s)?\b/gi, '').trim() || (normalizedQ || cleanQ);
     const queryForDeezer = withoutPlaylist;
@@ -325,6 +342,7 @@ export async function searchSpotify(query: string): Promise<any | null> {
       });
     }
   } catch {}
+  }
 
   // 3. Try Spotify Official Web API if valid token exists
   try {
@@ -461,6 +479,7 @@ export async function searchSpotify(query: string): Promise<any | null> {
 
   return {
     tracks: { items: tracks },
+    soundcloudTracks: { items: soundcloudTracks },
     artists: { items: artists },
     albums: { items: albums },
     playlists: { items: playlists },

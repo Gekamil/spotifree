@@ -46,41 +46,35 @@ describe('DJ Interface Unification & Dynamic 3-Layer Talking Orb (Requirement R4
   } = visualizerModule;
 
   // =========================================================================
-  // 1. DJ CHAT INTERFACE UNIFICATION IN AIDJView.tsx
+  // 1. DJ CHAT INTERFACE UNIFICATION IN AIDJView.tsx (Spotify Official Screenshot media_1794324985536_6d3e7cf8.jpg)
   // =========================================================================
   describe('1. DJ Chat Interface Unification & Single Input Invariant', () => {
-    it('enforces single input invariant: main view prompt bar is conditionally hidden when drawer is open (!showChatDrawer)', () => {
-      // Find the conditional expression wrapping the main prompt bar
+    it('enforces clean header without top-right circle button for authentic Spotify DJ interface', () => {
+      // Must not render circular chat drawer button in header
       assert.ok(
-        aidjSource.includes('!showChatDrawer &&'),
-        'Main view prompt bar must be conditionally hidden when showChatDrawer is true'
+        !aidjSource.includes('title="Chat con la IA DJ e historial"'),
+        'Must remove top-right circle button from header as requested'
       );
-
-      // Verify that the main prompt bar is within the !showChatDrawer condition
-      const mainBarIndex = aidjSource.indexOf('!showChatDrawer &&');
-      const mainFormIndex = aidjSource.indexOf('onSubmit={(e) => {\n                e.preventDefault();\n                handleSendPrompt();\n              }}', mainBarIndex);
-      assert.ok(mainFormIndex > mainBarIndex, 'Main input form must be nested inside !showChatDrawer block');
+      assert.ok(
+        aidjSource.includes('className="w-10 h-10"'),
+        'Must keep symmetric spacer div in header'
+      );
     });
 
-    it('displays main bottom prompt bar and vibe chips when chat drawer is closed', () => {
-      // Main prompt bar includes vibe chips container
+    it('displays vibe chips for quick DJ interactions directly without intrusive bottom input bar', () => {
+      // Renders dynamic vibe chips
       assert.ok(
         aidjSource.includes('{vibeChips.map((chip) => ('),
         'Must render dynamic vibe chips'
       );
+      // Clean interface without bottom prompt input bar
       assert.ok(
-        aidjSource.includes('Escribe al DJ (ej. más reggaeton, algo chill)...'),
-        'Must have main prompt placeholder'
+        !aidjSource.includes('placeholder="Escribe una canción o petición al DJ..."'),
+        'Must not contain bottom text input bar'
       );
     });
 
-    it('submitting prompt or clicking vibe chips opens chat drawer via handleSendPrompt', () => {
-      // Check handleSendPrompt implementation
-      assert.ok(
-        aidjSource.includes('setShowChatDrawer(true);'),
-        'handleSendPrompt must set showChatDrawer to true'
-      );
-
+    it('clicking vibe chips directly dispatches handleUserPrompt', () => {
       // Check handleSendPrompt resets promptInput and triggers handleUserPrompt
       assert.ok(
         aidjSource.includes('handleUserPrompt(q);') && aidjSource.includes("setPromptInput('');"),
@@ -88,51 +82,37 @@ describe('DJ Interface Unification & Dynamic 3-Layer Talking Orb (Requirement R4
       );
     });
 
-    it('drawer contains microphone toggle button for full voice input parity', () => {
-      // Locate the in-drawer form
-      const drawerMarker = aidjSource.indexOf('{isChatRendered &&');
-      assert.ok(drawerMarker > -1, 'Chat drawer must exist');
-      const inDrawerSection = aidjSource.slice(drawerMarker);
-
-      // Check microphone button in drawer form
+    it('voice toggle button available for full voice input parity', () => {
       assert.ok(
-        inDrawerSection.includes('onClick={toggleMic}'),
-        'Chat drawer input form must include toggleMic button'
+        aidjSource.includes('onClick={toggleMic}'),
+        'Must include toggleMic button'
       );
       assert.ok(
-        inDrawerSection.includes('isMicListening'),
-        'Chat drawer input form must reflect isMicListening state'
-      );
-      assert.ok(
-        inDrawerSection.includes('Te escucho... habla conmigo'),
-        'Chat drawer input placeholder must respond when mic is active'
+        aidjSource.includes('isMicListening'),
+        'Must reflect isMicListening state'
       );
     });
 
-    it('chat drawer in desktop mode is docked to right side panel without floating overlap', () => {
-      // Check desktop docked sidebar classes
+    it('chat drawer matches Spotify floating card layout in bottom-right (media_1794324985536_6d3e7cf8.jpg)', () => {
+      // Check desktop floating card classes from user screenshot
       assert.ok(
-        aidjSource.includes('sm:fixed sm:top-0 sm:right-0 sm:bottom-0 sm:w-[420px] sm:max-h-full sm:rounded-none sm:border-l sm:border-white/10 sm:bg-[#121212]/95 sm:backdrop-blur-2xl sm:shadow-2xl'),
-        'Chat drawer must be docked to the right edge with Spotify desktop panel styling'
+        aidjSource.includes('sm:fixed sm:bottom-20 sm:right-6 sm:w-[420px]') ||
+        aidjSource.includes('sm:bottom-20 sm:right-6 sm:w-[420px]'),
+        'Chat drawer must be positioned as a floating card in bottom-right matching Spotify official screenshot'
       );
 
-      // Verify that the old floating card styling is eliminated
+      // Verify rounded card and backdrop blur
       assert.ok(
-        !aidjSource.includes('sm:bottom-20 sm:right-6 sm:w-[460px]'),
-        'Old floating box positioning (sm:bottom-20 sm:right-6 sm:w-[460px]) must be eliminated'
-      );
-
-      // Mobile top drag indicator must be hidden on desktop
-      assert.ok(
-        aidjSource.includes('title="Cerrar chat"') && aidjSource.includes('sm:hidden'),
-        'Mobile drag bar must have sm:hidden on desktop'
+        aidjSource.includes('sm:rounded-[24px]') && aidjSource.includes('sm:backdrop-blur-2xl'),
+        'Chat card must have rounded corners (sm:rounded-[24px]) and backdrop blur'
       );
     });
 
-    it('desktop chat drawer animates smoothly with right-slide transition', () => {
+    it('chat drawer includes green circular DJ badge matching official Spotify', () => {
       assert.ok(
-        aidjSource.includes('sm:translate-x-0') && aidjSource.includes('sm:translate-x-full'),
-        'Chat drawer must slide horizontally on desktop (sm:translate-x-full to sm:translate-x-0)'
+        aidjSource.includes('w-8 h-8 rounded-full bg-[#1ed760]') ||
+        aidjSource.includes('bg-[#1ed760] text-black font-black text-xs rounded-full'),
+        'Must display circular green DJ badge next to "Chat con tu DJ"'
       );
     });
   });

@@ -269,7 +269,12 @@ export const DesktopLayout: React.FC = () => {
 
             {activeMainTab === 'profile' && (
               <div key="profile" className="spf-page-enter min-h-full">
-                <DesktopProfileView onSelectPlaylist={handleSelectPlaylist} />
+                <DesktopProfileView
+                  onSelectPlaylist={handleSelectPlaylist}
+                  onSelectArtist={(artistName) => {
+                    handleSelectPlaylistById(`art-${artistName.toLowerCase().replace(/\s+/g, '-')}`, artistName);
+                  }}
+                />
               </div>
             )}
 

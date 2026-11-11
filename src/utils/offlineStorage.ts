@@ -577,6 +577,7 @@ async function fetchChunkedAudioFromBackend(baseOrigin: string, track: Track, kn
  * Direct CORS fallback via tracks.monochrome.st when backend servers cannot extract the track.
  */
 async function fetchDirectAudioViaMonochrome(track: Track): Promise<StoredTrackEntry | null> {
+  if (track?.id?.startsWith('sc-')) return null;
   try {
     const rawTitle = track.name || '';
     const rawArtist = track.artists?.[0]?.name || '';
@@ -673,6 +674,7 @@ function base64ToUint8Array(b64: string): Uint8Array {
 
 async function fetchDirectAudioViaCapacitor(track: Track, knownVideoId?: string | null): Promise<StoredTrackEntry | null> {
   if (!Capacitor.isNativePlatform()) return null;
+  if (track?.id?.startsWith('sc-') || knownVideoId?.startsWith('sc:') || knownVideoId?.startsWith('mono:')) return null;
 
   try {
     let videoId = knownVideoId || getCachedVideoIdForTrack(track);
@@ -892,7 +894,8 @@ export async function downloadTrackAudio(track: Track): Promise<boolean> {
     return false;
   }
 
-  const knownVideoId = getCachedVideoIdForTrack(track);
+  const scMatch = String(clean || '').match(/^sc-(\d+)$/);
+  const knownVideoId = scMatch ? `sc:${scMatch[1]}` : getCachedVideoIdForTrack(track) || (track.scAltId || null);
   let extracted: StoredTrackEntry | null = null;
 
   // On Capacitor APK, try phone residential IP YouTube M4A (~3.5 MB) first before server FLAC/stream

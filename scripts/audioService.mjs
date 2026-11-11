@@ -2,7 +2,13 @@ import { spawn } from 'node:child_process';
 import readline from 'node:readline';
 import https from 'node:https';
 import path from 'node:path';
-import { extractViaMonochrome, extractViaSoundCloud } from '../api/_lib/musicFallback.js';
+import {
+  extractViaMonochrome,
+  extractViaSoundCloud,
+  scoreInstrumentalCandidate,
+  findInstrumentalOnMonochrome,
+  findInstrumentalOnSoundCloud,
+} from '../api/_lib/musicFallback.js';
 
 const CACHE = new Map(); // target -> { id, url, duration, title, timestamp }
 const pendingRequests = new Map();
@@ -282,7 +288,7 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
   const rawQuery = (options.q || target || '').trim();
   let cleanTarget = (target || '').trim();
   const isMonoId = /^mono:\d{10,25}$/.test(cleanTarget);
-  const isScId = /^sc:\d+$/.test(cleanTarget);
+  const isScId = /^sc[:\-]\d+$/.test(cleanTarget);
   let videoId = /^[a-zA-Z0-9_-]{11}$/.test(cleanTarget) ? cleanTarget : null;
   if (!videoId && !isMonoId && !isScId && !cleanTarget.startsWith('http')) {
     try {
@@ -290,10 +296,10 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
     } catch {}
   }
 
-  // Fast direct extraction: Innertube VISIONOS/IOS -> Monochrome lossless -> SoundCloud MP3
+  // Fast direct extraction: Innertube VISIONOS/IOS -> Monochrome lossless -> SoundCloud MP3 / HLS fMP4
   if (startSeconds <= 0) {
     let direct = videoId ? await extractDirectYouTubeAudio(videoId) : null;
-    if (!direct?.url) {
+    if (!direct?.url && !direct?.streamBuffer) {
       const fbOpts = {
         q: rawQuery || cleanTarget,
         title: options.title || '',
@@ -302,6 +308,50 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
         explicitId: isMonoId || isScId ? cleanTarget : '',
       };
       direct = (await extractViaMonochrome(fbOpts)) || (await extractViaSoundCloud(fbOpts));
+    }
+    if (direct?.streamBuffer && Buffer.isBuffer(direct.streamBuffer)) {
+      const resolvedId = direct.id || videoId || '';
+      const fullBuf = direct.streamBuffer;
+      try {
+        if (options.transcodeMp3) {
+          const { Readable } = await import('node:stream');
+          res.writeHead(200, {
+            'Content-Type': 'audio/mpeg',
+            'Transfer-Encoding': 'chunked',
+            'Access-Control-Allow-Origin': '*',
+            'X-Audio-Source': direct.source || 'soundcloud-hls',
+            'X-Video-Id': resolvedId,
+            ...(options.headers || {}),
+          });
+          const ff = spawn('ffmpeg', ['-loglevel', 'error', '-i', 'pipe:0', '-vn', '-c:a', 'libmp3lame', '-b:a', '192k', '-f', 'mp3', 'pipe:1']);
+          Readable.from([fullBuf]).pipe(ff.stdin);
+          ff.stdout.pipe(res);
+          req.on('close', () => {
+            try { ff.kill(); } catch {}
+          });
+          return;
+        }
+        const rangeMatch = String(req.headers.range || '').match(/bytes=(\d+)-(\d*)/i);
+        const start = rangeMatch ? Math.max(0, parseInt(rangeMatch[1], 10)) : 0;
+        const end = rangeMatch && rangeMatch[2] ? Math.min(fullBuf.length - 1, parseInt(rangeMatch[2], 10)) : fullBuf.length - 1;
+        const slice = fullBuf.subarray(start, end + 1);
+        const isPartial = Boolean(rangeMatch);
+        res.writeHead(isPartial ? 206 : 200, {
+          'Content-Type': direct.mime || 'audio/mp4',
+          'Content-Length': String(slice.length),
+          'Accept-Ranges': 'bytes',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges, Content-Disposition, X-Video-Id, X-Total-Length, X-Audio-Source, X-Audio-Mime, X-Audio-Ext, X-Direct-Audio-Url',
+          'X-Audio-Source': direct.source || 'soundcloud-hls',
+          'X-Audio-Mime': direct.mime || 'audio/mp4',
+          'X-Audio-Ext': direct.ext || 'm4a',
+          'X-Video-Id': resolvedId,
+          'X-Total-Length': String(fullBuf.length),
+          ...(isPartial ? { 'Content-Range': `bytes ${start}-${end}/${fullBuf.length}` } : {}),
+          ...(options.headers || {}),
+        });
+        return res.end(slice);
+      } catch {}
     }
     if (direct?.url) {
       const resolvedId = direct.id || videoId || '';
@@ -448,6 +498,47 @@ export function streamAudioFromUrl(streamUrl, req, res) {
   req.on('close', () => {
     upstreamReq.destroy();
   });
+}
+
+export async function findBestInstrumentalNode({ title = '', artist = '', expectedDurationSec = 0 } = {}) {
+  const cleanTitle = String(title || '').trim();
+  if (!cleanTitle) return null;
+  const baseQ = `${cleanTitle} ${artist}`.trim();
+  const [ytInst, ytKaraoke, monoBest, scBest] = await Promise.all([
+    searchYouTubeTracks(`${baseQ} instrumental`, 8).catch(() => []),
+    searchYouTubeTracks(`${baseQ} karaoke sin voces`, 8).catch(() => []),
+    findInstrumentalOnMonochrome({ title: cleanTitle, artist, expectedDurationSec }).catch(() => null),
+    findInstrumentalOnSoundCloud({ title: cleanTitle, artist, expectedDurationSec }).catch(() => null),
+  ]);
+
+  const pool = [];
+  if (monoBest) pool.push(monoBest);
+  if (scBest) pool.push(scBest);
+
+  const seenYt = new Set();
+  for (const item of [...ytInst, ...ytKaraoke]) {
+    const vid = String(item?.id || '').replace(/^yt-/, '');
+    if (!/^[a-zA-Z0-9_-]{11}$/.test(vid) || seenYt.has(vid)) continue;
+    seenYt.add(vid);
+    const durSec = Math.round((Number(item.duration_ms) || 0) / 1000);
+    const ev = scoreInstrumentalCandidate(
+      { candTitle: item.name || '', candArtist: item.artists?.[0]?.name || '', candDurationSec: durSec },
+      { title: cleanTitle, artist, expectedDurationSec }
+    );
+    if (ev.matched) {
+      pool.push({
+        sourceId: vid,
+        title: item.name || '',
+        artist: item.artists?.[0]?.name || artist,
+        durationSec: durSec,
+        score: ev.score,
+        provider: 'youtube',
+      });
+    }
+  }
+
+  pool.sort((a, b) => b.score - a.score);
+  return pool[0] ? { ...pool[0], label: 'Sin voces' } : null;
 }
 
 export async function searchYouTubeTracks(query, limit = 15) {

@@ -60,21 +60,21 @@ export function calculateOrbLayerDisplacement(
   const W = getUpperRightWeight(theta, 0.85);
 
   if (layerIndex === 1) {
-    // Layer 1 (Mid ring): displaced toward upper-right with speech harmonics
+    // Layer 1 (Mid ring): displaced ~18-22px toward upper-right with speech harmonics
     const scaleFactor = mini ? size / 38 : size / 260;
-    const midBaseDisplacement = (mini ? 1.6 : 13.5) * scaleFactor;
-    const midSpeechHarmonic = voiceLevel * (mini ? 1.0 : 5.0) * scaleFactor * Math.sin(theta * 3 - time * 3.2);
+    const midBaseDisplacement = (mini ? 2.2 : 18.0) * scaleFactor;
+    const midSpeechHarmonic = (0.3 + voiceLevel * 0.7) * (mini ? 1.2 : 7.0) * scaleFactor * Math.sin(theta * 3 - time * 3.5);
     const midLayerOffset = splitAmount * W * (midBaseDisplacement + midSpeechHarmonic);
     return baseOffset + midLayerOffset;
   }
 
   if (layerIndex === 2) {
-    // Layer 2 (Outer ring): displaced further toward upper-right with high-frequency speech flutter
+    // Layer 2 (Outer ring): displaced ~36-44px toward upper-right with high-frequency speech wave flutter
     const scaleFactor = mini ? size / 38 : size / 260;
-    const outerBaseDisplacement = (mini ? 3.4 : 28.0) * scaleFactor;
+    const outerBaseDisplacement = (mini ? 4.2 : 36.0) * scaleFactor;
     const outerSpeechFlutter =
-      voiceLevel * (mini ? 1.4 : 7.0) * scaleFactor * Math.cos(theta * 4 + time * 4.2) +
-      (mini ? 0.5 : 2.5) * scaleFactor * Math.sin(theta * 2 + time * 2.5);
+      (0.35 + voiceLevel * 0.65) * (mini ? 1.8 : 9.5) * scaleFactor * Math.cos(theta * 4 + time * 4.5) +
+      (mini ? 0.8 : 4.0) * scaleFactor * Math.sin(theta * 2 + time * 2.8);
     const outerLayerOffset = splitAmount * W * (outerBaseDisplacement + outerSpeechFlutter);
     return baseOffset + outerLayerOffset;
   }
@@ -256,28 +256,28 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       }
 
       // =========================================================================
-      // LAYER 0: CORE RING (Stable circular foundation)
+      // LAYER 0: CORE RING (Stable circular foundation with Spotify DJ gradient)
       // =========================================================================
       const grad0 = ctx.createLinearGradient(
-        centerX - baseRadius,
-        centerY - baseRadius,
-        centerX + baseRadius,
-        centerY + baseRadius
+        centerX - baseRadius * 0.8,
+        centerY + baseRadius * 0.8,
+        centerX + baseRadius * 0.8,
+        centerY - baseRadius * 0.8
       );
       if (currentState === 'listening') {
         grad0.addColorStop(0, '#00f2fe');
         grad0.addColorStop(0.5, smoothColor);
         grad0.addColorStop(1, '#00f2fe');
       } else {
-        grad0.addColorStop(0, '#1ed760');
-        grad0.addColorStop(0.35, smoothColor);
-        grad0.addColorStop(0.7, '#00f2fe');
-        grad0.addColorStop(1, '#1ed760');
+        grad0.addColorStop(0, '#0c52cc');
+        grad0.addColorStop(0.3, '#00f2fe');
+        grad0.addColorStop(0.65, '#1ed760');
+        grad0.addColorStop(1, '#5ffcd4');
       }
 
-      const glowOpacity = isSpeaking ? 0.75 : isPlaying ? 0.6 : 0.45;
+      const glowOpacity = isSpeaking ? 0.85 : isPlaying ? 0.65 : 0.45;
       const shadowColor0 = `rgba(${Math.round(currentRgb[0])}, ${Math.round(currentRgb[1])}, ${Math.round(currentRgb[2])}, ${glowOpacity})`;
-      const shadowBlur0 = mini ? 6 : isSpeaking ? 22 : 18;
+      const shadowBlur0 = mini ? 6 : isSpeaking ? 24 : 18;
 
       drawRing(
         0,
@@ -294,23 +294,24 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       // =========================================================================
       // LAYER 1 & 2: DYNAMIC TALKING ORB DELAMINATION (Upper-right quadrant)
+      // Dividing into 3 resonant lobes/arcs when the DJ speaks
       // =========================================================================
       if (split > 0.005) {
-        // LAYER 1: MID RING (cyan-teal gradient, medium opacity, harmonic resonance)
+        // LAYER 1: MID RING (cyan-teal gradient, high opacity, harmonic resonance)
         const grad1 = ctx.createLinearGradient(
           centerX,
-          centerY - baseRadius * 1.2,
-          centerX + baseRadius * 1.2,
+          centerY - baseRadius * 1.25,
+          centerX + baseRadius * 1.25,
           centerY
         );
         grad1.addColorStop(0, '#00f2fe');
         grad1.addColorStop(0.5, '#1ed760');
-        grad1.addColorStop(1, '#00f2fe');
+        grad1.addColorStop(1, '#5ffcd4');
 
-        const alpha1 = split * (0.65 + currentVoice * 0.35);
-        const lineWidth1 = strokeWidth * (mini ? 0.78 : 0.70);
-        const shadowColor1 = `rgba(0, 242, 254, ${alpha1 * 0.85})`;
-        const shadowBlur1 = mini ? 4 : 16;
+        const alpha1 = split * (0.85 + currentVoice * 0.15);
+        const lineWidth1 = strokeWidth * (mini ? 0.85 : 0.80);
+        const shadowColor1 = `rgba(0, 242, 254, ${alpha1 * 0.9})`;
+        const shadowBlur1 = mini ? 5 : 20;
 
         drawRing(
           1,
@@ -325,21 +326,21 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
           shadowBlur1
         );
 
-        // LAYER 2: OUTER RING (neon bloom, high-frequency speech flutter)
+        // LAYER 2: OUTER RING (electric mint-neon bloom, high-frequency speech wave flutter)
         const grad2 = ctx.createLinearGradient(
           centerX,
-          centerY - baseRadius * 1.35,
-          centerX + baseRadius * 1.35,
+          centerY - baseRadius * 1.45,
+          centerX + baseRadius * 1.45,
           centerY
         );
-        grad2.addColorStop(0, '#38ef7d');
+        grad2.addColorStop(0, '#5ffcd4');
         grad2.addColorStop(0.5, '#00f2fe');
         grad2.addColorStop(1, '#1ed760');
 
-        const alpha2 = split * (0.45 + currentVoice * 0.45);
-        const lineWidth2 = strokeWidth * (mini ? 0.60 : 0.50);
-        const shadowColor2 = `rgba(30, 215, 96, ${alpha2 * 0.9})`;
-        const shadowBlur2 = mini ? 5 : 24;
+        const alpha2 = split * (0.75 + currentVoice * 0.25);
+        const lineWidth2 = strokeWidth * (mini ? 0.75 : 0.70);
+        const shadowColor2 = `rgba(95, 252, 212, ${alpha2 * 0.95})`;
+        const shadowBlur2 = mini ? 6 : 26;
 
         drawRing(
           2,

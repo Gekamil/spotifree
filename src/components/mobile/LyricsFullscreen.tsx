@@ -5,6 +5,9 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import type { Track } from '../../types/spotify';
+import { useKaraokeMode } from '../../utils/useKaraokeMode';
+import { KaraokeMicButton } from '../common/KaraokeMicButton';
 
 export interface LyricLine {
   timeMs: number;
@@ -15,6 +18,7 @@ export interface LyricLine {
 interface Props {
   open: boolean;
   onClose: () => void;
+  track?: Track | null;
   title: string;
   artist: string;
   cover?: string;
@@ -39,6 +43,7 @@ export function LyricsFullscreen(p: Props) {
   const [following, setFollowing] = useState(true);
   const resumeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autoScrolling = useRef(false);
+  const karaoke = useKaraokeMode(p.track, p.open);
 
   // Keep the current line in the middle (unless the user is reading on their own)
   useEffect(() => {
@@ -87,18 +92,29 @@ export function LyricsFullscreen(p: Props) {
       role="dialog"
       aria-label="Letra"
     >
-      {/* Header: close + song */}
-      <div className="flex items-center gap-3 px-4 pt-3 pb-2 shrink-0">
-        <button onClick={p.onClose} className="p-2 -ml-2 rounded-full active:scale-90 transition-transform" aria-label="Cerrar letra">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+      {/* Header: close + song + verified Karaoke ("sin voces") toggle */}
+      <div className="flex flex-wrap items-center gap-3 px-4 pt-3 pb-2 shrink-0">
+        <button onClick={p.onClose} className="min-w-[44px] min-h-[44px] flex items-center justify-center -ml-2 rounded-full active:scale-90 transition-transform" aria-label="Cerrar letra">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
             <path d="M2.793 8.043a1 1 0 0 1 1.414 0L12 15.836l7.793-7.793a1 1 0 1 1 1.414 1.414L12 18.664 2.793 9.457a1 1 0 0 1 0-1.414z" />
           </svg>
         </button>
-        {p.cover && <img src={p.cover} alt="" className="w-10 h-10 rounded object-cover shadow" />}
+        {p.cover && <img src={p.cover} alt="" className="w-10 h-10 rounded object-cover shadow shrink-0" />}
         <div className="min-w-0 flex-1">
           <p className="font-bold text-[15px] truncate">{p.title}</p>
-          <p className="text-[13px] text-white/70 truncate">{p.artist}</p>
+          <p className="text-[13px] text-white/70 truncate">
+            {p.artist}
+            {karaoke.active && ' · Modo karaoke'}
+          </p>
         </div>
+        {karaoke.available && (
+          <KaraokeMicButton
+            compact
+            active={karaoke.active}
+            switching={karaoke.switching}
+            onToggle={karaoke.toggle}
+          />
+        )}
       </div>
 
       {/* Lyrics */}
@@ -121,12 +137,29 @@ export function LyricsFullscreen(p: Props) {
                   setFollowing(true);
                 }}
                 className={`text-[26px] leading-[1.25] font-bold mb-5 cursor-pointer transition-colors duration-200 ${
-                  isCurrent ? 'text-white' : isPast ? 'text-white/55' : 'text-black/55'
+                  isCurrent
+                    ? karaoke.active
+                      ? 'text-white drop-shadow-[0_2px_18px_rgba(255,255,255,0.75)]'
+                      : 'text-white'
+                    : isPast
+                    ? 'text-white/55'
+                    : 'text-black/55'
                 }`}
               >
                 {isCurrent && line.words.length > 0
                   ? line.words.map((w, wi) => (
-                      <span key={wi} className={`transition-colors duration-150 ${vocalMs >= w.timeMs ? 'text-white' : 'text-black/55'}`}>
+                      <span
+                        key={wi}
+                        className={`transition-colors duration-150 ${
+                          vocalMs >= w.timeMs
+                            ? karaoke.active
+                              ? 'text-[#1ed760] drop-shadow-[0_0_12px_rgba(30,215,96,0.65)]'
+                              : 'text-white'
+                            : karaoke.active
+                            ? 'text-white/45'
+                            : 'text-black/55'
+                        }`}
+                      >
                         {w.text}
                         {wi < line.words.length - 1 ? ' ' : ''}
                       </span>

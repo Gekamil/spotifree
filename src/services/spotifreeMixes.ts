@@ -561,7 +561,7 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
 // 5. Building the playlists
 // ---------------------------------------------------------------------------
 export interface SpotifreeMix extends Playlist {
-  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist';
+  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud';
 }
 
 function dedupe(list: Track[], known?: Set<string>, perArtist = 99): Track[] {
@@ -765,6 +765,40 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const imgs = style === 'artist' ? [pictureOf(a.name)] : shuffle(items.map(coverOf).filter(Boolean), r);
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${d.artist?.name || a.name} y artistas parecidos`, items, cover, userName));
+  }
+
+  // SoundCloud Vault playlists (remixes, slowed, leaks & deduplicated officials) for top listened artists
+  const vaultResults = await Promise.all(
+    ranked.slice(0, 2).map(async (a) => {
+      const displayName = disc.get(norm(a.name))?.artist?.name || a.name;
+      try {
+        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(`sc-vault-${displayName}`)}`, {
+          signal: AbortSignal.timeout ? AbortSignal.timeout(4500) : undefined,
+        });
+        if (!res.ok) return null;
+        const vault = await res.json();
+        const items: Track[] = Array.isArray(vault?.tracks?.items) ? vault.tracks.items : [];
+        if (items.length < 4) return null;
+        const title = `${displayName}: Remixes, Leaks y Slowed`;
+        if (taken.has(norm(title))) return null;
+        const imgs = items.map(coverOf).filter(Boolean);
+        const cover = (await makeCover(title, 'collage', imgs.length >= 4 ? imgs : [pictureOf(a.name), ...imgs], '#ff5500')) || imgs[0] || pictureOf(a.name) || '';
+        return mix(
+          `sf-sc-${norm(a.name).replace(/\s+/g, '-')}`,
+          'soundcloud',
+          title,
+          vault.description || `Remixes, slowed e inéditas de ${displayName}`,
+          items,
+          cover,
+          userName
+        );
+      } catch {
+        return null;
+      }
+    })
+  );
+  for (const vm of vaultResults) {
+    if (vm) out.push(vm);
   }
 
   // "Artistas que te pueden gustar": similar to several of the user's artists, not heard yet
@@ -990,8 +1024,9 @@ export function withSpotifreeShelves(
   suggestedArtists: SuggestedArtist[] = []
 ): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
-  const made = mixes.filter((m) => m.sfKind !== 'artist').map(cardOf);
+  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
+  const soundcloudMixes = mixes.filter((m) => m.sfKind === 'soundcloud').map(cardOf);
   const name = (userName || '').split(' ')[0];
 
   // Extend Spotify's first "Hecho para / Made for" section, only that one
@@ -1008,6 +1043,9 @@ export function withSpotifreeShelves(
   }
   if (artists.length) {
     ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
+  }
+  if (soundcloudMixes.length) {
+    ours.push({ id: 'sf-sc-vaults', title: 'Remixes, Slowed e Inéditas · SoundCloud', subtitle: 'Basado en los artistas que más escuchas', type: 'mixes', cards: soundcloudMixes, hasSeeAll: true });
   }
   shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];
   // Like Spotify, a bit further down: artists similar to yours that you don't listen to yet

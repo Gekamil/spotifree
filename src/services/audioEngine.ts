@@ -106,6 +106,23 @@ export interface SourceCandidate {
   match: boolean;
 }
 
+export interface InstrumentalSourceInfo {
+  sourceId: string;
+  title: string;
+  artist: string;
+  durationSec: number;
+  provider: string;
+  label: string;
+}
+
+export interface KaraokeState {
+  trackId: string | null;
+  active: boolean;
+  switching: boolean;
+  originalSourceId: string | null;
+  instrumental: InstrumentalSourceInfo | null;
+}
+
 // Source the user picked by hand for a song (trackId -> videoId), always used for that song
 const SOURCE_OVERRIDE_KEY = 'spotifree_source_overrides';
 function readOverrides(): Record<string, string> {
@@ -240,6 +257,16 @@ class AudioEngine {
   private lastPreloadAttempt = 0;
   private lastObservedAdvanceTime = 0;
   private stuckRecoveryAttempts = 0;
+  private instrumentalCache = new Map<string, InstrumentalSourceInfo | null>();
+  private instrumentalPending = new Map<string, Promise<InstrumentalSourceInfo | null>>();
+  private karaokeState: KaraokeState = {
+    trackId: null,
+    active: false,
+    switching: false,
+    originalSourceId: null,
+    instrumental: null,
+  };
+  private karaokeListeners = new Set<() => void>();
 
   public get isTransitionActive(): boolean {
     return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
@@ -341,7 +368,14 @@ class AudioEngine {
     if (startSeconds > 0) {
       const applySeek = () => {
         try {
-          if (isFinite(el.duration) && startSeconds < el.duration) {
+          if (el.duration === Infinity) {
+            el.currentTime = 1e101;
+            const onTimeUpdate = () => {
+              el.removeEventListener('timeupdate', onTimeUpdate);
+              try { el.currentTime = startSeconds; } catch {}
+            };
+            el.addEventListener('timeupdate', onTimeUpdate, { once: true });
+          } else {
             el.currentTime = startSeconds;
           }
         } catch {}
@@ -2133,6 +2167,11 @@ class AudioEngine {
             }
           }
         } catch {}
+      } else if (this.activeEngine === 'html5' && this.audio && !this.audio.paused) {
+        const curSec = this.audio.currentTime;
+        if (isFinite(curSec) && curSec >= 0) {
+          usePlayerStore.getState().setProgress(curSec * 1000);
+        }
       }
     }, 100);
   }
@@ -2146,6 +2185,22 @@ class AudioEngine {
 
   private setupHtml5Listeners() {
     this.audios.forEach((audioEl, idx) => {
+      audioEl.addEventListener('loadedmetadata', () => {
+        if (audioEl.duration === Infinity) {
+          // Chromium WebM Blob duration fix:
+          // Setting currentTime = 1e101 forces Chromium to parse the duration from the stream EOF.
+          const prevTime = audioEl.currentTime;
+          audioEl.currentTime = 1e101;
+          const onTimeUpdate = () => {
+            audioEl.removeEventListener('timeupdate', onTimeUpdate);
+            try {
+              audioEl.currentTime = prevTime || 0;
+            } catch {}
+          };
+          audioEl.addEventListener('timeupdate', onTimeUpdate, { once: true });
+        }
+      });
+
       audioEl.addEventListener('timeupdate', () => {
         if (this.activeEngine === 'html5' && this.activeAudioIndex === idx && !this.isSeeking) {
           const cur = audioEl.currentTime;
@@ -2419,6 +2474,256 @@ class AudioEngine {
     }
   }
 
+  private emitKaraokeChange() {
+    for (const fn of this.karaokeListeners) {
+      try { fn(); } catch {}
+    }
+  }
+
+  public subscribeKaraoke(listener: () => void): () => void {
+    this.karaokeListeners.add(listener);
+    return () => {
+      this.karaokeListeners.delete(listener);
+    };
+  }
+
+  public getKaraokeState(trackId?: string | null): KaraokeState {
+    if (trackId && AudioEngine.cleanId(trackId) !== this.karaokeState.trackId) {
+      const clean = AudioEngine.cleanId(trackId);
+      const cached = clean ? this.instrumentalCache.get(clean) ?? null : null;
+      return {
+        trackId: clean || null,
+        active: false,
+        switching: false,
+        originalSourceId: null,
+        instrumental: cached,
+      };
+    }
+    return this.karaokeState;
+  }
+
+  private resetKaraokeForTrack(trackId?: string | null) {
+    const clean = AudioEngine.cleanId(trackId);
+    const cached = clean ? this.instrumentalCache.get(clean) ?? null : null;
+    this.karaokeState = {
+      trackId: clean || null,
+      active: false,
+      switching: false,
+      originalSourceId: null,
+      instrumental: cached,
+    };
+    this.emitKaraokeChange();
+  }
+
+  /**
+   * Checks whether a verified instrumental / "sin voces" version exists for this song.
+   * Returns null unless a real instrumental source was confirmed.
+   */
+  public async checkInstrumentalSource(track?: Track | null): Promise<InstrumentalSourceInfo | null> {
+    if (!track?.id || !track?.name) return null;
+    const clean = AudioEngine.cleanId(track.id);
+    if (!clean) return null;
+    if (this.instrumentalCache.has(clean)) {
+      const cached = this.instrumentalCache.get(clean) || null;
+      if (this.karaokeState.trackId === clean && this.karaokeState.instrumental !== cached) {
+        this.karaokeState = { ...this.karaokeState, instrumental: cached };
+        this.emitKaraokeChange();
+      }
+      return cached;
+    }
+    if (this.instrumentalPending.has(clean)) {
+      return this.instrumentalPending.get(clean)!;
+    }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+
+    const p = (async () => {
+      try {
+        const artist = track.artists?.[0]?.name || '';
+        const params = new URLSearchParams({ title: track.name });
+        if (artist) params.set('artist', artist);
+        if (track.duration_ms && track.duration_ms > 35000) {
+          params.set('duration', String(Math.round(track.duration_ms / 1000)));
+        }
+        const res = await fetch(`${API_BASE}/api/audio/instrumental?${params.toString()}`, {
+          signal: AbortSignal.timeout ? AbortSignal.timeout(7000) : undefined,
+        });
+        if (!res.ok) return null;
+        const data = await res.json();
+        const cand: InstrumentalSourceInfo | null = data?.found && data?.candidate?.sourceId ? data.candidate : null;
+        this.instrumentalCache.set(clean, cand);
+        if (this.karaokeState.trackId === clean) {
+          this.karaokeState = { ...this.karaokeState, instrumental: cand };
+          this.emitKaraokeChange();
+        }
+        return cand;
+      } catch {
+        return null;
+      } finally {
+        this.instrumentalPending.delete(clean);
+      }
+    })();
+
+    this.instrumentalPending.set(clean, p);
+    return p;
+  }
+
+  private async loadAudioSourceAtPosition(sourceId: string, startSeconds: number, wasPlaying: boolean, track: Track): Promise<boolean> {
+    const cleanTargetTrack = AudioEngine.cleanId(track.id);
+    const isHtml5Target =
+      sourceId === 'offline' ||
+      sourceId.startsWith('sc:') ||
+      sourceId.startsWith('sc-') ||
+      sourceId.startsWith('mono:');
+
+    this.isTransitioning = true;
+    setTimeout(() => { this.isTransitioning = false; }, 3500);
+
+    try {
+      if (this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
+        try { this.ytPlayer.pauseVideo(); } catch {}
+      }
+    } catch {}
+    try { this.audio?.pause(); } catch {}
+
+    const { isMuted } = usePlayerStore.getState();
+
+    if (isHtml5Target) {
+      let srcUrl: string | null = null;
+      if (sourceId === 'offline') {
+        srcUrl = await this.resolveOfflinePlaybackUrl(track);
+      } else {
+        const normId = sourceId.startsWith('sc-') ? `sc:${sourceId.slice(3)}` : sourceId;
+        srcUrl = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(track.id)}`;
+      }
+      if (!srcUrl) return false;
+      if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) !== cleanTargetTrack) return false;
+
+      this.activeEngine = 'html5';
+      this.currentVideoId = sourceId === 'offline' ? null : sourceId;
+      this.lastTrackStartTime = Date.now();
+      this.audio.volume = isMuted ? 0 : this.getEffectiveVolume();
+      this.setHtml5DeckSource(this.activeAudioIndex, srcUrl, Math.max(0, startSeconds));
+      if (wasPlaying) {
+        await this.audio.play();
+        this.startCarrier();
+      }
+      this.startProgressTicker();
+      return true;
+    }
+
+    await this.ensureYouTubeReady();
+    const p = this.ytPlayer;
+    if (!p || typeof p.loadVideoById !== 'function') return false;
+    if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) !== cleanTargetTrack) return false;
+
+    this.activeEngine = 'youtube';
+    this.currentVideoId = sourceId;
+    this.lastTrackStartTime = Date.now();
+    if (typeof p.unMute === 'function') p.unMute();
+    if (typeof p.setVolume === 'function') p.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
+    const safeSec = startSeconds > 1 ? startSeconds : 0;
+    if (wasPlaying) {
+      p.loadVideoById({ videoId: sourceId, startSeconds: safeSec });
+      p.playVideo();
+      this.startCarrier();
+      this.startProgressTicker();
+    } else {
+      p.cueVideoById({ videoId: sourceId, startSeconds: safeSec });
+    }
+    return true;
+  }
+
+  /**
+   * Toggles Karaoke mode ("Sin voces") for the active track at the exact playback second.
+   */
+  public async toggleKaraokeMode(trackArg?: Track | null): Promise<boolean> {
+    const track = trackArg || usePlayerStore.getState().currentTrack;
+    if (!track?.id) return false;
+    const clean = AudioEngine.cleanId(track.id);
+    if (!clean) return false;
+
+    if (this.karaokeState.switching) return this.karaokeState.active;
+
+    const inst = await this.checkInstrumentalSource(track);
+    if (!inst?.sourceId) return false;
+
+    const currentlyActive = this.karaokeState.trackId === clean && this.karaokeState.active;
+    const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
+    const wasPlaying = usePlayerStore.getState().isPlaying;
+
+    this.karaokeState = {
+      ...this.karaokeState,
+      trackId: clean,
+      switching: true,
+      instrumental: inst,
+    };
+    this.emitKaraokeChange();
+
+    try {
+      if (!currentlyActive) {
+        let origId = this.currentVideoId;
+        if (!origId && this.activeEngine === 'html5') {
+          const off = await this.resolveOfflinePlaybackUrl(track);
+          if (off) origId = 'offline';
+        }
+        if (!origId) {
+          const scMatch = String(clean).match(/^sc-(\d+)$/);
+          if (scMatch) origId = `sc:${scMatch[1]}`;
+          else {
+            const q = `${track.name} ${track.artists?.[0]?.name || ''}`.trim();
+            origId = await this.resolveVideoId(q, track.id, track.name, track.artists?.[0]?.name || '', track.duration_ms ? track.duration_ms / 1000 : undefined);
+          }
+        }
+
+        const ok = await this.loadAudioSourceAtPosition(inst.sourceId, posSec, wasPlaying, track);
+        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
+          this.karaokeState = {
+            trackId: clean,
+            active: true,
+            switching: false,
+            originalSourceId: origId,
+            instrumental: inst,
+          };
+          this.emitKaraokeChange();
+          return true;
+        }
+      } else {
+        let restoreId = this.karaokeState.originalSourceId;
+        if (!restoreId) {
+          const scMatch = String(clean).match(/^sc-(\d+)$/);
+          if (scMatch) restoreId = `sc:${scMatch[1]}`;
+          else {
+            const q = `${track.name} ${track.artists?.[0]?.name || ''}`.trim();
+            restoreId = await this.resolveVideoId(q, track.id, track.name, track.artists?.[0]?.name || '', track.duration_ms ? track.duration_ms / 1000 : undefined);
+          }
+        }
+        if (restoreId) {
+          await this.loadAudioSourceAtPosition(restoreId, posSec, wasPlaying, track);
+        }
+        if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
+          this.karaokeState = {
+            trackId: clean,
+            active: false,
+            switching: false,
+            originalSourceId: null,
+            instrumental: inst,
+          };
+          this.emitKaraokeChange();
+        }
+        return false;
+      }
+    } catch (e) {
+      console.warn('[AudioEngine] toggleKaraokeMode failed:', e);
+    }
+
+    this.karaokeState = {
+      ...this.karaokeState,
+      switching: false,
+    };
+    this.emitKaraokeChange();
+    return this.karaokeState.active;
+  }
+
   /**
    * Once per song: does the video really play this song? Compares the YouTube title/channel
    * with the song and artist, and its length with Spotify's. A different song, or a version far
@@ -2429,6 +2734,7 @@ class AudioEngine {
     if (curSec < 1.5 || !durSec || !this.currentVideoId) return;
     const track = usePlayerStore.getState().currentTrack;
     if (!track || !this.currentTrackId || AudioEngine.cleanId(track.id) !== AudioEngine.cleanId(this.currentTrackId)) return;
+    if (this.karaokeState.active && this.karaokeState.trackId === AudioEngine.cleanId(track.id)) return;
     const key = `${track.id}|${this.currentVideoId}`;
     if (this.verifiedSources.has(key)) return;
     if (getSourceOverride(track.id) === this.currentVideoId) {
@@ -2470,6 +2776,7 @@ class AudioEngine {
     trackDurationSec?: number
   ): Promise<string | null> {
     if (!query) return null;
+    if (trackId && /^sc-\d+$/.test(AudioEngine.cleanId(trackId))) return null;
     const cleanQuery = query.trim();
 
     // A source the user chose by hand for this song always wins; then the one the app switched to
@@ -2656,6 +2963,9 @@ class AudioEngine {
     this.isSeeking = false;
     this.isTransitioning = true;
     this.isExplicitlyPaused = false;
+    if (cleanNew !== cleanCur) {
+      this.resetKaraokeForTrack(cleanNew);
+    }
 
     usePlayerStore.getState().setProgress(startSeconds * 1000);
     // Start silent carrier audio synchronously during the user gesture.
@@ -2713,6 +3023,29 @@ class AudioEngine {
           return;
         }
       } catch {}
+
+      // 0b. SoundCloud tracks (`sc-<id>`): stream MP3 progressive / HLS fMP4 directly via backend
+      const scDirectMatch = cleanNew.match(/^sc-(\d+)$/);
+      if (scDirectMatch) {
+        const scExplicit = `sc:${scDirectMatch[1]}`;
+        this.activeEngine = 'html5';
+        this.currentVideoId = scExplicit;
+        const { isMuted } = usePlayerStore.getState();
+        this.audio.volume = isMuted ? 0 : this.getEffectiveVolume();
+        this.setHtml5DeckSource(
+          this.activeAudioIndex,
+          `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(scExplicit)}&trackId=${encodeURIComponent(trackId)}`,
+          startSeconds
+        );
+        await this.audio.play();
+        this.startCarrier();
+        this.startProgressTicker();
+        usePlayerStore.setState({ isPlaying: true });
+        setTimeout(() => {
+          this.isTransitioning = false;
+        }, 2500);
+        return;
+      }
 
       // 1. Resolve videoId instantly via unified cache & resolver with accurate track metadata
       const curTrk = usePlayerStore.getState().currentTrack;
@@ -2820,9 +3153,11 @@ class AudioEngine {
           try { navigator.mediaSession.playbackState = 'playing'; } catch (_) {}
         }
       } else {
+        const scAlt = track?.scAltId;
+        const altQuery = scAlt ? `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(scAlt)}&trackId=${encodeURIComponent(track?.id || '')}` : `${API_BASE}/api/audio/stream?q=${encodeURIComponent(originalQuery)}`;
         console.warn('[AudioEngine] Alternate YouTube resolve failed, streaming via HTML5 fallback');
         this.activeEngine = 'html5';
-        this.audio.src = `${API_BASE}/api/audio/stream?q=${encodeURIComponent(originalQuery)}`;
+        this.audio.src = altQuery;
         this.audio.currentTime = 0;
         this.audio.volume = this.getEffectiveVolume();
         await this.audio.play();
@@ -3015,12 +3350,46 @@ class AudioEngine {
       this.setVolume(isMuted ? 0 : volume);
     }
 
-    if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+    if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
       try {
         this.ytPlayer.seekTo(seconds, true);
       } catch {}
-    } else {
-      this.audio.currentTime = seconds;
+    } else if (this.audio) {
+      try {
+        const el = this.audio;
+        const dur = el.duration;
+        const storeDurSec = (usePlayerStore.getState().durationMs || 0) / 1000;
+        const knownDur = isFinite(dur) && dur > 0 ? dur : storeDurSec;
+        const maxSec = knownDur > 0 ? Math.max(0, knownDur - 0.25) : 999999;
+        const target = Math.min(Math.max(0, seconds), maxSec);
+
+        if (dur === Infinity) {
+          el.currentTime = 1e101;
+          const onTimeUpdate = () => {
+            el.removeEventListener('timeupdate', onTimeUpdate);
+            try {
+              if (typeof (el as any).fastSeek === 'function') {
+                (el as any).fastSeek(target);
+              }
+              el.currentTime = target;
+            } catch {}
+          };
+          el.addEventListener('timeupdate', onTimeUpdate, { once: true });
+        } else {
+          if (typeof (el as any).fastSeek === 'function') {
+            try { (el as any).fastSeek(target); } catch {}
+          }
+          el.currentTime = target;
+        }
+
+        if (this.isCrossfading && this.secondaryAudio) {
+          try {
+            this.secondaryAudio.currentTime = target;
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('[AudioEngine] HTML5 seek error:', err);
+      }
     }
 
     usePlayerStore.getState().setProgress(seconds * 1000);
@@ -3041,7 +3410,7 @@ class AudioEngine {
 
     setTimeout(() => {
       this.isSeeking = false;
-    }, 300);
+    }, 400);
   }
 
   public isAudioDucked: boolean = false;

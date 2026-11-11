@@ -2,9 +2,15 @@ import http from 'node:http';
 import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
-import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks } from './scripts/audioService.mjs';
+import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks, findBestInstrumentalNode } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
 import { searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
+import {
+  searchSoundCloudCatalog,
+  resolveSoundCloudUrl,
+  findMatchingOfficialTrackIndex,
+  buildArtistSoundCloudVault,
+} from './api/_lib/musicFallback.js';
 
 const PORT = process.env.PORT || 10000;
 let currentPlayingTrackId = null;
@@ -20,9 +26,7 @@ function toHDImage(url) {
   if (!url) return '';
   return url
     .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
-    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
     .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
-    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
     .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
     .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/');
 }
@@ -244,6 +248,27 @@ const server = http.createServer(async (req, res) => {
       res.statusCode = 500;
       res.setHeader('Content-Type', 'application/json');
       return res.end(JSON.stringify({ error: err.message }));
+    }
+  }
+
+  // 3b. Audio Instrumental Finder (/api/audio/instrumental)
+  if (pathname === '/api/audio/instrumental') {
+    const title = (reqUrl.searchParams.get('title') || '').trim();
+    const artist = (reqUrl.searchParams.get('artist') || '').trim();
+    const rawDur = Number(reqUrl.searchParams.get('duration') || 0);
+    const dur = rawDur > 1000 ? Math.round(rawDur / 1000) : Math.round(rawDur);
+    res.setHeader('Content-Type', 'application/json');
+    if (!title) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ found: false, candidate: null, error: 'Missing title' }));
+    }
+    try {
+      const candidate = await findBestInstrumentalNode({ title, artist, expectedDurationSec: dur > 35 ? dur : 0 });
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ found: Boolean(candidate), candidate: candidate || null }));
+    } catch (e) {
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ found: false, candidate: null, error: e?.message }));
     }
   }
 
@@ -630,15 +655,29 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 7. Search API (/api/spotify/search) - Official Spotify API + iTunes + YouTube Music
-  // YouTube Music Innertube search engine: 'https://music.youtube.com/youtubei/v1/search' (clientName: 'WEB_REMIX')
-  if (pathname === '/api/spotify/search') {
+  // 7. Search API (/api/spotify/search) - Official Spotify API + SoundCloud + iTunes + YouTube Music
+  if (pathname === '/api/spotify/search' || pathname === '/api/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
     res.setHeader('Content-Type', 'application/json');
 
     if (!q) {
       res.statusCode = 200;
-      return res.end(JSON.stringify({ tracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+      return res.end(JSON.stringify({ tracks: { items: [] }, soundcloudTracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+    }
+
+    if (/^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(q)) {
+      try {
+        const scResolved = await resolveSoundCloudUrl(q);
+        if (scResolved?.kind === 'track' && scResolved.track) {
+          res.statusCode = 200;
+          return res.end(JSON.stringify({ tracks: { items: [scResolved.track] }, soundcloudTracks: { items: [scResolved.track] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+        }
+        if (scResolved?.kind === 'playlist' && scResolved.playlist) {
+          const items = scResolved.playlist.tracks?.items || [];
+          res.statusCode = 200;
+          return res.end(JSON.stringify({ tracks: { items: items.slice(0, 20) }, soundcloudTracks: { items }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [scResolved.playlist] } }));
+        }
+      } catch {}
     }
 
     try {
@@ -663,7 +702,7 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // If Spotify Web API returned tracks, enrich HD images and return primary!
+      // If Spotify Web API returned tracks, enrich HD images, SoundCloud variants and return primary!
       if (spotifyData && spotifyData.tracks?.items?.length > 0) {
         // Enrich public playlists if not present in Web API response
         if (!spotifyData.playlists?.items?.length) {
@@ -682,6 +721,57 @@ const server = http.createServer(async (req, res) => {
             },
           }));
         }
+
+        // Search SoundCloud variants and artist vault for Spotify Web API results
+        const scRes = await Promise.race([
+          Promise.all([
+            searchSoundCloudCatalog(cleanQ, { limit: 12 }),
+            searchSoundCloudCatalog(`${cleanQ} remix slowed leak`, { limit: 14 }),
+          ]).then(([baseSc, varSc]) => {
+            const seen = new Set();
+            const merged = [];
+            for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
+              if (!t?.id || seen.has(t.id)) continue;
+              seen.add(t.id);
+              merged.push(t);
+            }
+            return { tracks: merged };
+          }),
+          new Promise((r) => setTimeout(() => r({ tracks: [] }), 4000)),
+        ]).catch(() => ({ tracks: [] }));
+
+        const soundcloudVariants = [];
+        for (const scT of scRes?.tracks || []) {
+          const scNumId = String(scT.id || '').replace(/^sc-/, '');
+          const dupIdx = findMatchingOfficialTrackIndex(
+            { id: scNumId, title: scT.name, user: { username: scT.artists?.[0]?.name || '' }, duration: scT.duration_ms, tag_list: scT.album?.name || '' },
+            spotifyData.tracks.items
+          );
+          if (dupIdx >= 0) {
+            if (!spotifyData.tracks.items[dupIdx].scAltId) spotifyData.tracks.items[dupIdx].scAltId = `sc:${scNumId}`;
+            continue;
+          }
+          soundcloudVariants.push(scT);
+        }
+        spotifyData.soundcloudTracks = { items: soundcloudVariants };
+
+        const matchedArtist = spotifyData.artists?.items?.[0];
+        if (matchedArtist?.name && soundcloudVariants.length > 0) {
+          const vId = `sc-vault-${encodeURIComponent(matchedArtist.name)}`;
+          const plItems = spotifyData.playlists?.items || [];
+          if (!plItems.some(p => p.id === vId)) {
+            plItems.unshift({
+              id: vId,
+              name: `${matchedArtist.name}: Remixes, Leaks y Slowed`,
+              description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+              images: matchedArtist.images?.length ? matchedArtist.images : soundcloudVariants[0]?.album?.images || [],
+              owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+              tracks: { total: soundcloudVariants.length + 6, items: [] },
+            });
+            spotifyData.playlists.items = plItems;
+          }
+        }
+
         res.statusCode = 200;
         return res.end(JSON.stringify(spotifyData));
       }
@@ -905,9 +995,42 @@ const server = http.createServer(async (req, res) => {
         );
       }
 
+      // Attach SoundCloud variants & artist vault without duplicating literal official tracks
+      const scRes = await Promise.race([
+        searchSoundCloudCatalog(withoutPlaylist, { limit: 16 }),
+        new Promise((r) => setTimeout(() => r({ tracks: [] }), 3000)),
+      ]);
+      const soundcloudVariants = [];
+      for (const scT of scRes?.tracks || []) {
+        const scNumId = String(scT.id || '').replace(/^sc-/, '');
+        const dupIdx = findMatchingOfficialTrackIndex(
+          { id: scNumId, title: scT.name, user: { username: scT.artists?.[0]?.name || '' }, duration: scT.duration_ms, tag_list: scT.album?.name || '' },
+          combined
+        );
+        if (dupIdx >= 0) {
+          if (!combined[dupIdx].scAltId) combined[dupIdx].scAltId = `sc:${scNumId}`;
+          continue;
+        }
+        soundcloudVariants.push(scT);
+      }
+      if (artists[0]?.name && soundcloudVariants.length > 0) {
+        const vId = `sc-vault-${encodeURIComponent(artists[0].name)}`;
+        if (!playlists.some((p) => p.id === vId)) {
+          playlists.unshift({
+            id: vId,
+            name: `${artists[0].name}: Remixes, Leaks y Slowed`,
+            description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+            images: artists[0].images?.length ? artists[0].images : soundcloudVariants[0]?.album?.images || [],
+            owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+            tracks: { total: soundcloudVariants.length + 6, items: [] },
+          });
+        }
+      }
+
       res.statusCode = 200;
       return res.end(JSON.stringify({
         tracks: { items: combined },
+        soundcloudTracks: { items: soundcloudVariants },
         artists: { items: artists },
         albums: { items: albums },
         playlists: { items: playlists },
@@ -923,6 +1046,24 @@ const server = http.createServer(async (req, res) => {
   if (pathname.startsWith('/api/spotify/playlist/')) {
     const rawId = pathname.replace('/api/spotify/playlist/', '').split('/')[0];
     res.setHeader('Content-Type', 'application/json');
+
+    if (rawId.startsWith('sc-vault-')) {
+      let artistName = rawId.slice('sc-vault-'.length);
+      try { artistName = decodeURIComponent(artistName); } catch {}
+      const vault = await buildArtistSoundCloudVault(artistName).catch(() => null);
+      if (vault) {
+        res.statusCode = 200;
+        return res.end(JSON.stringify(vault));
+      }
+    }
+    if (rawId.startsWith('sc-pl-url:')) {
+      const rawUrl = decodeURIComponent(rawId.slice('sc-pl-url:'.length));
+      const scResolved = await resolveSoundCloudUrl(rawUrl).catch(() => null);
+      if (scResolved?.kind === 'playlist' && scResolved.playlist) {
+        res.statusCode = 200;
+        return res.end(JSON.stringify(scResolved.playlist));
+      }
+    }
 
     // Deezer Playlist fast-path
     if (rawId.startsWith('dz-') || /^\d+$/.test(rawId)) {
@@ -970,6 +1111,73 @@ const server = http.createServer(async (req, res) => {
         }
       } catch (err) {
         console.warn(`Deezer playlist fetch notice ${rawId}:`, err.message);
+      }
+    }
+
+    // Artist profile fast-path (art-* / artist-*)
+    if (rawId.startsWith('art-') || rawId.startsWith('artist-')) {
+      const artRaw = rawId.replace(/^(art-|artist-)/, '');
+      let artistName = artRaw;
+      try { artistName = decodeURIComponent(artRaw); } catch {}
+      try {
+        let dzArtist = null;
+        if (/^\d+$/.test(artRaw)) {
+          const aRes = await fetch(`https://api.deezer.com/artist/${artRaw}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout?.(4000),
+          });
+          if (aRes.ok) dzArtist = await aRes.json();
+        }
+        if (!dzArtist || !dzArtist.name) {
+          const sRes = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout?.(4000),
+          });
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData.data?.length) dzArtist = sData.data[0];
+          }
+        }
+        if (dzArtist && dzArtist.id) {
+          const topRes = await fetch(`https://api.deezer.com/artist/${dzArtist.id}/top?limit=40`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout?.(4000),
+          });
+          const topData = topRes.ok ? await topRes.json() : { data: [] };
+          const cover = toHDImage(dzArtist.picture_xl || dzArtist.picture_big || dzArtist.picture_medium || dzArtist.picture);
+          const tracks = (topData.data || []).map((t, idx) => ({
+            id: `dz-${t.id}`,
+            name: t.title || t.title_short,
+            artists: [{ id: `art-${dzArtist.id}`, name: dzArtist.name }],
+            album: {
+              id: `alb-${t.album?.id || rawId}`,
+              name: t.album?.title || t.title,
+              images: (t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium)
+                ? [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium) }]
+                : cover ? [{ url: cover }] : [],
+            },
+            duration_ms: (t.duration || 210) * 1000,
+            preview_url: null,
+            added_at: 'Popular',
+          }));
+
+          res.statusCode = 200;
+          return res.end(JSON.stringify({
+            id: rawId,
+            name: dzArtist.name,
+            description: 'Artista',
+            type: 'artist',
+            images: cover ? [{ url: cover }] : [],
+            owner: { display_name: 'Spotify', id: 'spotify' },
+            color: '#181818',
+            tracks: {
+              total: tracks.length,
+              items: tracks,
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn(`Artist fetch notice ${rawId}:`, err.message);
       }
     }
 

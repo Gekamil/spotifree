@@ -25,12 +25,13 @@ const MOBILE_CATEGORIES = BROWSE_CATEGORIES;
 
 export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlaylistById }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ tracks: any[]; artists: any[]; playlists: any[] }>({
+  const [results, setResults] = useState<{ tracks: any[]; soundcloudTracks: any[]; artists: any[]; playlists: any[] }>({
     tracks: [],
+    soundcloudTracks: [],
     artists: [],
     playlists: [],
   });
-  const [filter, setFilter] = useState<'todo' | 'canciones' | 'artistas' | 'playlists'>('todo');
+  const [filter, setFilter] = useState<'todo' | 'canciones' | 'soundcloud' | 'artistas' | 'playlists'>('todo');
   const [isSearching, setIsSearching] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
   const [selectedCat, setSelectedCat] = useState<(typeof MOBILE_CATEGORIES)[number] | null>(null);
@@ -73,7 +74,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults({ tracks: [], artists: [], playlists: [] });
+      setResults({ tracks: [], soundcloudTracks: [], artists: [], playlists: [] });
       setIsSearching(false);
       return;
     }
@@ -84,11 +85,12 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
         const data = await searchSpotify(query);
         setResults({
           tracks: data?.tracks?.items || [],
+          soundcloudTracks: data?.soundcloudTracks?.items || [],
           artists: data?.artists?.items || [],
           playlists: data?.playlists?.items || [],
         });
       } catch {
-        setResults({ tracks: [], artists: [], playlists: [] });
+        setResults({ tracks: [], soundcloudTracks: [], artists: [], playlists: [] });
       } finally {
         setIsSearching(false);
       }
@@ -200,17 +202,19 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
         <div className="space-y-4">
           {/* Filter Pills */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {(['todo', 'canciones', 'artistas', 'playlists'] as const).map((f) => (
+            {(['todo', 'canciones', 'soundcloud', 'artistas', 'playlists'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
-                className={`h-8 px-4 rounded-full text-xs font-bold capitalize shrink-0 transition-all ${
+                className={`h-9 px-4 rounded-full text-xs font-bold shrink-0 transition-all ${
                   filter === f
                     ? 'bg-[#1ed760] text-black shadow'
                     : 'bg-white/10 text-white hover:bg-white/20'
                 }`}
               >
-                {f}
+                {f === 'soundcloud'
+                  ? `Remixes y Leaks${results.soundcloudTracks.length > 0 ? ` (${results.soundcloudTracks.length})` : ''}`
+                  : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
           </div>
@@ -269,12 +273,92 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         >
                           {trk.name}
                         </span>
-                        <span className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                          {parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ')}
-                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                          {trk.scVariantLabel && (
+                            <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                              {trk.scVariantLabel}
+                            </span>
+                          )}
+                          <span className="text-xs text-[#b3b3b3] truncate">
+                            {parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ')}
+                          </span>
+                        </div>
                       </div>
                     </div>
                     <span className="text-xs text-[#b3b3b3]">
+                      {formatDuration(trk.duration_ms)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Results: SoundCloud Remixes, Slowed & Leaks */}
+          {(filter === 'todo' || filter === 'soundcloud') && results.soundcloudTracks.length > 0 && (
+            <div className="space-y-1 pt-2">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-sm font-bold text-white">Remixes, Slowed e Inéditas</h3>
+                {filter === 'todo' && (
+                  <button
+                    type="button"
+                    onClick={() => setFilter('soundcloud')}
+                    className="text-xs font-bold text-[#b3b3b3] active:text-white"
+                  >
+                    Ver todo
+                  </button>
+                )}
+              </div>
+              {results.soundcloudTracks.slice(0, filter === 'todo' ? 4 : 20).map((trk) => {
+                const isThisPlaying = isPlaying && currentTrack?.id === trk.id;
+                const cover = trk.album?.images?.[0]?.url;
+
+                return (
+                  <div
+                    key={trk.id}
+                    onClick={() => {
+                      addRecentSearch({
+                        id: trk.id,
+                        type: 'track',
+                        title: trk.name,
+                        subtitle: `SoundCloud • ${parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ') || ''}`,
+                        image: cover,
+                        data: trk,
+                      });
+                      if (currentTrack?.id === trk.id) {
+                        togglePlay();
+                      } else {
+                        playTrack(trk, results.soundcloudTracks);
+                      }
+                    }}
+                    className="flex items-center justify-between p-2 rounded-lg active:bg-white/10 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+                      <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow">
+                        {cover && (
+                          <img
+                            src={cover}
+                            alt={trk.name}
+                            onError={handleImageError}
+                            className="w-full h-full object-cover"
+                          />
+                        )}
+                      </div>
+                      <div className="flex flex-col min-w-0">
+                        <span className={`font-bold text-sm truncate ${isThisPlaying ? 'text-[#1ed760]' : 'text-white'}`}>
+                          {trk.name}
+                        </span>
+                        <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
+                          <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                            {trk.scVariantLabel || 'SoundCloud'}
+                          </span>
+                          <span className="text-xs text-[#b3b3b3] truncate">
+                            {parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-[#b3b3b3] tabular-nums shrink-0">
                       {formatDuration(trk.duration_ms)}
                     </span>
                   </div>

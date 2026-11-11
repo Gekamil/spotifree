@@ -951,6 +951,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
         <LyricsFullscreen
           open={isLyricsExpanded}
           onClose={() => setIsLyricsExpanded(false)}
+          track={currentTrack}
           title={currentTrack.name}
           artist={(currentTrack.artists || []).map((a) => a.name).join(', ')}
           cover={coverUrl}

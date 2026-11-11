@@ -1,4 +1,9 @@
 import { toHDImage, searchSpotifyPublicPlaylists } from './_lib/extract-session.js';
+import {
+  searchSoundCloudCatalog,
+  resolveSoundCloudUrl,
+  findMatchingOfficialTrackIndex,
+} from './_lib/musicFallback.js';
 
 const searchCache = new Map();
 
@@ -27,6 +32,36 @@ export default async function handler(req, res) {
   const cached = searchCache.get(cacheKey);
   if (cached && Date.now() - cached.timestamp < 120000) {
     return res.status(200).json(cached.data);
+  }
+
+  // Direct SoundCloud URL paste support (tracks & sets/playlists)
+  if (/^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(q)) {
+    try {
+      const scResolved = await resolveSoundCloudUrl(q);
+      if (scResolved?.kind === 'track' && scResolved.track) {
+        const payload = {
+          tracks: { items: [scResolved.track] },
+          soundcloudTracks: { items: [scResolved.track] },
+          artists: { items: [] },
+          albums: { items: [] },
+          playlists: { items: [] },
+        };
+        searchCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+        return res.status(200).json(payload);
+      }
+      if (scResolved?.kind === 'playlist' && scResolved.playlist) {
+        const items = scResolved.playlist.tracks?.items || [];
+        const payload = {
+          tracks: { items: items.slice(0, 20) },
+          soundcloudTracks: { items },
+          artists: { items: [] },
+          albums: { items: [] },
+          playlists: { items: [scResolved.playlist] },
+        };
+        searchCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+        return res.status(200).json(payload);
+      }
+    } catch {}
   }
 
   try {
@@ -74,6 +109,29 @@ export default async function handler(req, res) {
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
       }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
+
+      // 7. SoundCloud tracks (direct + variant remixes/slowed/unreleased, race-capped so search stays fast)
+      Promise.race([
+        (async () => {
+          const hasVarWord = /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|sin\s+voces)\b/i.test(trackSearchQuery);
+          if (hasVarWord) {
+            return searchSoundCloudCatalog(trackSearchQuery, { limit: 18 });
+          }
+          const [baseSc, varSc] = await Promise.all([
+            searchSoundCloudCatalog(trackSearchQuery, { limit: 12 }),
+            searchSoundCloudCatalog(`${trackSearchQuery} remix slowed leak`, { limit: 14 }),
+          ]);
+          const seen = new Set();
+          const merged = [];
+          for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
+            if (!t?.id || seen.has(t.id)) continue;
+            seen.add(t.id);
+            merged.push(t);
+          }
+          return { tracks: merged, officialAltIds: {} };
+        })(),
+        new Promise((r) => setTimeout(() => r({ tracks: [], officialAltIds: {}, timedOut: true }), 4500)),
+      ]),
     ];
 
     if (significantWords.length > 1) {
@@ -94,7 +152,8 @@ export default async function handler(req, res) {
     const deezerPlaylistsRes1 = results[4];
     const deezerPlaylistsRes2 = results[5];
     const itunesRes = results[6];
-    const deezerExtraRes = results[7] || { data: [] };
+    const scCatalogRes = results[7] || { tracks: [] };
+    const deezerExtraRes = results[8] || { data: [] };
 
     const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
     const deezerTracks = allDeezerRaw.map(t => {
@@ -228,14 +287,80 @@ export default async function handler(req, res) {
       });
     }
 
+    // Classify SoundCloud hits against official catalog:
+    // literal official duplicates enrich the existing official track with `scAltId`,
+    // while genuine variants (remixes, slowed, leaks/unreleased, live) populate `soundcloudTracks`.
+    const soundcloudVariants = [];
+    for (const scT of scCatalogRes?.tracks || []) {
+      const scNumId = String(scT.id || '').replace(/^sc-/, '');
+      const dupIdx = findMatchingOfficialTrackIndex(
+        {
+          id: scNumId,
+          title: scT.name,
+          user: { username: scT.artists?.[0]?.name || '' },
+          duration: scT.duration_ms,
+          tag_list: scT.album?.name || '',
+        },
+        combinedTracks
+      );
+      if (dupIdx >= 0) {
+        if (!combinedTracks[dupIdx].scAltId) {
+          combinedTracks[dupIdx].scAltId = `sc:${scNumId}`;
+        }
+        continue;
+      }
+      soundcloudVariants.push(scT);
+    }
+
+    const wantsVariantUpfront =
+      /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|soundcloud|sin\s+voces)\b/i.test(cleanQ) ||
+      combinedTracks.length < 3;
+    if (wantsVariantUpfront && soundcloudVariants.length > 0) {
+      const existingIds = new Set(combinedTracks.map((t) => t.id));
+      for (const scT of soundcloudVariants.slice(0, 6)) {
+        if (!existingIds.has(scT.id)) {
+          combinedTracks.push(scT);
+          existingIds.add(scT.id);
+        }
+      }
+    }
+
+    // Add artist SoundCloud Vault playlist card when searching an artist or variant query
+    const primaryMatchedArtist = artists[0];
+    if (primaryMatchedArtist?.name && soundcloudVariants.length > 0) {
+      const vaultId = `sc-vault-${encodeURIComponent(primaryMatchedArtist.name)}`;
+      if (!seenPlaylistIds.has(vaultId)) {
+        seenPlaylistIds.add(vaultId);
+        playlists.unshift({
+          id: vaultId,
+          name: `${primaryMatchedArtist.name}: Remixes, Leaks y Slowed`,
+          description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+          images: primaryMatchedArtist.images?.length
+            ? primaryMatchedArtist.images
+            : soundcloudVariants[0]?.album?.images || [],
+          owner: {
+            display_name: 'SoundCloud • Spotifree',
+            id: 'soundcloud',
+          },
+          tracks: {
+            total: soundcloudVariants.length + 6,
+            items: [],
+          },
+        });
+      }
+    }
+
     const payload = {
       tracks: { items: combinedTracks },
+      soundcloudTracks: { items: soundcloudVariants },
       artists: { items: artists },
       albums: { items: albums },
       playlists: { items: playlists },
     };
 
-    searchCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+    if (!scCatalogRes?.timedOut || soundcloudVariants.length > 0) {
+      searchCache.set(cacheKey, { data: payload, timestamp: Date.now() });
+    }
     return res.status(200).json(payload);
   } catch (err) {
     console.error('[api/search] Error:', err);

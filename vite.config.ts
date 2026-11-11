@@ -13,6 +13,8 @@ import { readExternalPlaylist } from './api/_lib/import-playlist.js';
 // @ts-ignore
 import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
+import { searchSoundCloudCatalog, resolveSoundCloudUrl, findMatchingOfficialTrackIndex } from './api/_lib/musicFallback.js';
+// @ts-ignore
 import metadataHandler from './api/metadata.js';
 // @ts-ignore
 import ttsHandler from './api/tts.js';
@@ -27,9 +29,7 @@ function toHDImage(url: string | null | undefined): string {
   if (!url) return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
   return url
     .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/, '/ab67616d0000b273$1')
-    .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706f00000002$1')
     .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/, '/ab6761610000e5eb$1')
-    .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/, '/ab67706c0000d72c$1')
     .replace('mosaic.scdn.co/60/', 'mosaic.scdn.co/640/')
     .replace('mosaic.scdn.co/300/', 'mosaic.scdn.co/640/')
     .replace('liked-songs-64.png', 'liked-songs-640.jpg')
@@ -1112,7 +1112,22 @@ function dynamicSpotifyPlugin(): Plugin {
 
         if (!q) {
           res.statusCode = 200;
-          return res.end(JSON.stringify({ tracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+          return res.end(JSON.stringify({ tracks: { items: [] }, soundcloudTracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+        }
+
+        if (/^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(q)) {
+          try {
+            const scResolved = await resolveSoundCloudUrl(q);
+            if (scResolved?.kind === 'track' && scResolved.track) {
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ tracks: { items: [scResolved.track] }, soundcloudTracks: { items: [scResolved.track] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+            }
+            if (scResolved?.kind === 'playlist' && scResolved.playlist) {
+              const items = scResolved.playlist.tracks?.items || [];
+              res.statusCode = 200;
+              return res.end(JSON.stringify({ tracks: { items: items.slice(0, 20) }, soundcloudTracks: { items }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [scResolved.playlist] } }));
+            }
+          } catch {}
         }
 
         try {
@@ -1338,8 +1353,81 @@ function dynamicSpotifyPlugin(): Plugin {
             );
           }
 
+          let soundcloudVariants: any[] = [];
+          try {
+            const scRes = await Promise.race([
+              Promise.all([
+                searchSoundCloudCatalog(cleanQ, { limit: 14 }),
+                searchSoundCloudCatalog(`${cleanQ} remix slowed leak`, { limit: 14 }),
+              ]).then(([baseSc, varSc]: [any, any]) => {
+                const seen = new Set();
+                const merged: any[] = [];
+                for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
+                  if (!t?.id || seen.has(t.id)) continue;
+                  seen.add(t.id);
+                  merged.push(t);
+                }
+                return { tracks: merged };
+              }),
+              new Promise<{ tracks: any[] }>((resolve) => setTimeout(() => resolve({ tracks: [] }), 4000)),
+            ]);
+
+            for (const scT of scRes?.tracks || []) {
+              const scNumId = String(scT.id || '').replace(/^sc-/, '');
+              const dupIdx = findMatchingOfficialTrackIndex(
+                { id: scNumId, title: scT.name, user: { username: scT.artists?.[0]?.name || '' }, duration: scT.duration_ms, tag_list: scT.album?.name || '' },
+                combined
+              );
+              if (dupIdx >= 0) {
+                if (!(combined[dupIdx] as any).scAltId) {
+                  (combined[dupIdx] as any).scAltId = `sc:${scNumId}`;
+                }
+                continue;
+              }
+              soundcloudVariants.push(scT);
+            }
+          } catch {}
+
+          const wantsVariantUpfront =
+            /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|soundcloud|sin\s+voces)\b/i.test(cleanQ) ||
+            combined.length < 3;
+          if (wantsVariantUpfront && soundcloudVariants.length > 0) {
+            const existingIds = new Set(combined.map((t: any) => t.id));
+            for (const scT of soundcloudVariants.slice(0, 8)) {
+              if (!existingIds.has(scT.id)) {
+                combined.push(scT);
+                existingIds.add(scT.id);
+              }
+            }
+          }
+
+          // Add artist SoundCloud Vault playlist card when searching an artist or variant query
+          const primaryMatchedArtist = artists[0];
+          if (primaryMatchedArtist?.name && soundcloudVariants.length > 0) {
+            const vaultId = `sc-vault-${encodeURIComponent(primaryMatchedArtist.name)}`;
+            if (!playlists.some((p: any) => p.id === vaultId)) {
+              playlists.unshift({
+                id: vaultId,
+                name: `${primaryMatchedArtist.name}: Remixes, Leaks y Slowed`,
+                description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+                images: primaryMatchedArtist.images?.length
+                  ? primaryMatchedArtist.images
+                  : soundcloudVariants[0]?.album?.images || [],
+                owner: {
+                  display_name: 'SoundCloud • Spotifree',
+                  id: 'soundcloud',
+                },
+                tracks: {
+                  total: soundcloudVariants.length + 6,
+                  items: [],
+                },
+              });
+            }
+          }
+
           const payload = {
             tracks: { items: combined },
+            soundcloudTracks: { items: soundcloudVariants },
             artists: { items: artists },
             albums: { items: albums },
             playlists: { items: playlists },

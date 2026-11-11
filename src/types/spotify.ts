@@ -29,6 +29,11 @@ export interface Track {
   preview_url?: string | null;
   isSmartRecommendation?: boolean;
   canvasUrl?: string | null;
+  scAltId?: string;
+  scVariant?: 'remix' | 'slowed' | 'leak' | 'live' | 'instrumental' | 'official_like';
+  scVariantLabel?: string;
+  scUrl?: string;
+  source?: string;
 }
 
 export interface Playlist {

@@ -13,7 +13,6 @@ import {
   LyricsNativeIcon,
   QueueNativeIcon,
   VolumeLevelNativeIcon,
-  FullscreenNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -514,20 +513,6 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
 
         {/* Miniplayer button */}
         <MiniPlayerButton />
-
-        <button
-          onClick={() => {
-            if (!document.fullscreenElement) {
-              document.documentElement.requestFullscreen?.().catch(() => {});
-            } else {
-              document.exitFullscreen?.().catch(() => {});
-            }
-          }}
-          className="text-[#b3b3b3] hover:text-white transition-colors p-1"
-          title="Pantalla completa"
-        >
-          <FullscreenNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
-        </button>
       </div>
     </footer>
   );

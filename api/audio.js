@@ -6,9 +6,13 @@ import {
   extractViaMonochrome,
   extractViaSoundCloud,
   mimeToAudioExt,
+  scoreInstrumentalCandidate,
+  findInstrumentalOnMonochrome,
+  findInstrumentalOnSoundCloud,
 } from './_lib/musicFallback.js';
 
 const RESOLVE_CACHE = new Map();
+const INSTRUMENTAL_CACHE = new Map();
 let YT_BOT_BLOCKED_UNTIL = 0;
 
 function getVerifiedVideoId(q, title = '', artist = '') {
@@ -449,9 +453,8 @@ async function resolveViaYouTubeMusicLegacy(q, expectedTitle = '', expectedArtis
   throw new Error('YTM: no confident videoId found');
 }
 
-async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
-  const searchSuffix = q.toLowerCase().includes('topic') ? '' : ' Topic';
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q + searchSuffix)}`;
+async function ytWebSearch(searchQuery) {
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(searchQuery)}`;
   const res = await fetchWithTimeout(
     url,
     {
@@ -463,13 +466,10 @@ async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '
     },
     3500
   );
-
-  if (!res.ok) throw new Error('YT search non-ok');
+  if (!res.ok) return [];
   const html = await res.text();
+  const out = [];
 
-  const candidates = [];
-
-  // 1. Try parsing ytInitialData for structured videoRenderer items
   const jsonMatch = html.match(/ytInitialData\s*=\s*({.+?});<\/script>/);
   if (jsonMatch) {
     try {
@@ -480,31 +480,40 @@ async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '
 
       for (const item of contents) {
         const r = item.videoRenderer;
-        if (r && r.videoId && /^[a-zA-Z0-9_-]{11}$/.test(r.videoId) && !excludeSet.has(r.videoId)) {
-          const title = r.title?.runs?.[0]?.text || '';
-          const artist = r.ownerText?.runs?.[0]?.text || '';
-          const lengthStr = r.lengthText?.simpleText || '';
-          const candDurSec = parseDurationSec(lengthStr);
-          const score = scoreCandidate(q, expectedTitle, expectedArtist, title, artist, candDurSec, expectedDurationSec);
-          candidates.push({ videoId: r.videoId, score, title, artist });
+        if (r && r.videoId && /^[a-zA-Z0-9_-]{11}$/.test(r.videoId)) {
+          out.push({
+            videoId: r.videoId,
+            title: r.title?.runs?.[0]?.text || '',
+            artist: r.ownerText?.runs?.[0]?.text || '',
+            durationSec: parseDurationSec(r.lengthText?.simpleText || ''),
+          });
         }
       }
     } catch {}
   }
 
-  // 2. Fallback: Parse <a> tags with titles
-  if (candidates.length === 0) {
+  if (out.length === 0) {
     const linkRegex = /href="\/watch\?v=([a-zA-Z0-9_-]{11})"[^>]*title="([^"]+)"/g;
     let match;
     while ((match = linkRegex.exec(html)) !== null) {
-      const vid = match[1];
-      const title = match[2];
-      if (!excludeSet.has(vid)) {
-        const score = scoreCandidate(q, expectedTitle, expectedArtist, title, '', 0, expectedDurationSec);
-        candidates.push({ videoId: vid, score, title, artist: '' });
-      }
+      out.push({ videoId: match[1], title: match[2], artist: '', durationSec: 0 });
     }
   }
+
+  return out;
+}
+
+async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
+  const searchSuffix = q.toLowerCase().includes('topic') ? '' : ' Topic';
+  const items = await ytWebSearch(q + searchSuffix);
+  if (items.length === 0) throw new Error('YT search non-ok');
+
+  const candidates = items
+    .filter((item) => !excludeSet.has(item.videoId))
+    .map((item) => ({
+      ...item,
+      score: scoreCandidate(q, expectedTitle, expectedArtist, item.title, item.artist, item.durationSec, expectedDurationSec),
+    }));
 
   candidates.sort((a, b) => b.score - a.score);
 
@@ -513,6 +522,56 @@ async function resolveViaYouTubeSearch(q, expectedTitle = '', expectedArtist = '
   }
 
   throw new Error('YT search: no confident videoId found');
+}
+
+async function findBestInstrumentalSource({ title = '', artist = '', expectedDurationSec = 0 }) {
+  const cleanTitle = cleanQuery(title);
+  if (!cleanTitle) return null;
+  const cacheKey = `${normForMatch(cleanTitle)}|${normForMatch(artist)}|${expectedDurationSec}`;
+  const cached = INSTRUMENTAL_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.fetchedAt < 3600_000) {
+    return cached.value;
+  }
+
+  const baseQ = `${cleanTitle} ${artist}`.trim();
+  const [ytmItems, ytInstItems, ytSinVocesItems, monoBest, scBest] = await Promise.all([
+    ytmSearch(`${baseQ} instrumental`).catch(() => []),
+    ytWebSearch(`${baseQ} instrumental`).catch(() => []),
+    ytWebSearch(`${baseQ} karaoke sin voces`).catch(() => []),
+    findInstrumentalOnMonochrome({ title: cleanTitle, artist, expectedDurationSec }).catch(() => null),
+    findInstrumentalOnSoundCloud({ title: cleanTitle, artist, expectedDurationSec }).catch(() => null),
+  ]);
+
+  const pool = [];
+  if (monoBest) pool.push(monoBest);
+  if (scBest) pool.push(scBest);
+
+  const seenYt = new Set();
+  for (const item of [...ytmItems, ...ytInstItems, ...ytSinVocesItems]) {
+    if (!item?.videoId || seenYt.has(item.videoId)) continue;
+    seenYt.add(item.videoId);
+    const ev = scoreInstrumentalCandidate(
+      { candTitle: item.title || '', candArtist: item.artist || '', candDurationSec: item.durationSec || 0 },
+      { title: cleanTitle, artist, expectedDurationSec }
+    );
+    if (ev.matched) {
+      pool.push({
+        sourceId: item.videoId,
+        title: item.title || '',
+        artist: item.artist || artist,
+        durationSec: item.durationSec || 0,
+        score: ev.score,
+        provider: 'youtube',
+      });
+    }
+  }
+
+  pool.sort((a, b) => b.score - a.score);
+  const winner = pool[0] ? { ...pool[0], label: 'Sin voces' } : null;
+
+  if (INSTRUMENTAL_CACHE.size > 150) INSTRUMENTAL_CACHE.clear();
+  INSTRUMENTAL_CACHE.set(cacheKey, { value: winner, fetchedAt: Date.now() });
+  return winner;
 }
 
 function normForMatch(s = '') {
@@ -891,7 +950,7 @@ async function resolveBestAudioStreamSource({
     const mono = await extractViaMonochrome({ explicitId });
     return mono ? { audioInfo: mono, videoId: mono.id } : { audioInfo: null, videoId: explicitId };
   }
-  if (/^sc:\d+$/.test(explicitId)) {
+  if (/^sc[:\-]\d+$/.test(explicitId)) {
     const sc = await extractViaSoundCloud({ q, title: rawTitle, artist: rawArtist, expectedDurationSec, explicitId });
     return sc ? { audioInfo: sc, videoId: sc.id } : { audioInfo: null, videoId: explicitId };
   }
@@ -963,6 +1022,34 @@ async function resolveBestAudioStreamSource({
   return { audioInfo: null, videoId };
 }
 
+function sendBufferedAudioResponse({ req, res, buf, totalLen, startOffset, audioInfo, videoId, action, rawFilename, isRange }) {
+  const outExt = audioInfo.ext || mimeToExt(audioInfo.mime);
+  const finalName = normalizeDownloadFilename(rawFilename, outExt);
+  const isPartial = Boolean(isRange) || (totalLen > 0 && buf.length < totalLen);
+
+  res.status(isPartial ? 206 : 200);
+  res.setHeader('Content-Type', audioInfo.mime || 'audio/mp4');
+  res.setHeader('Content-Length', String(buf.length));
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('X-Video-Id', videoId || '');
+  res.setHeader('X-Stream-Id', audioInfo.id || videoId || '');
+  res.setHeader('X-Total-Length', String(totalLen));
+  res.setHeader('X-Audio-Source', audioInfo.source || 'full');
+  res.setHeader('X-Audio-Mime', audioInfo.mime || 'audio/mp4');
+  res.setHeader('X-Audio-Ext', outExt);
+  if (audioInfo.directCors && audioInfo.url && !String(audioInfo.url).startsWith('sc-hls:')) {
+    res.setHeader('X-Direct-Audio-Url', audioInfo.url);
+  }
+  res.setHeader('Cache-Control', 'no-store');
+  if (isPartial) {
+    res.setHeader('Content-Range', `bytes ${startOffset}-${startOffset + buf.length - 1}/${totalLen}`);
+  }
+  if (action === 'download') {
+    res.setHeader('Content-Disposition', `attachment; filename="${finalName}"`);
+  }
+  return res.send(buf);
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -1013,7 +1100,29 @@ export default async function handler(req, res) {
       });
 
       // Retry once forcing fresh stream extraction if cached URL fails upstream
-      for (let attempt = 0; attempt < 2 && audioInfo?.url; attempt++) {
+      for (let attempt = 0; attempt < 2 && audioInfo; attempt++) {
+        if (audioInfo.streamBuffer && Buffer.isBuffer(audioInfo.streamBuffer)) {
+          const fullLen = audioInfo.streamBuffer.length;
+          const parsedRange = parseByteRangeHeader(clientRangeHeader, fullLen);
+          const sliceStart = parsedRange ? parsedRange.start : 0;
+          const defaultSliceEnd = Math.min(fullLen - 1, 3_145_727);
+          const sliceEnd = parsedRange ? parsedRange.end : (fullLen > 3_800_000 ? defaultSliceEnd : fullLen - 1);
+          const sliceBuf = audioInfo.streamBuffer.subarray(sliceStart, sliceEnd + 1);
+          return sendBufferedAudioResponse({
+            req,
+            res,
+            buf: sliceBuf,
+            totalLen: fullLen,
+            startOffset: sliceStart,
+            audioInfo,
+            videoId,
+            action,
+            rawFilename,
+            isRange: Boolean(clientRangeHeader) || sliceBuf.length < fullLen,
+          });
+        }
+        if (!audioInfo.url) break;
+
         const parsedRange = parseByteRangeHeader(clientRangeHeader, audioInfo.clen);
         const defaultCap = 3_800_000;
         const upstreamRange = parsedRange
@@ -1039,35 +1148,18 @@ export default async function handler(req, res) {
               const upRange = upstream.headers.get('content-range') || '';
               const totalMatch = upRange.match(/\/(\d+)$/);
               const totalLen = totalMatch ? parseInt(totalMatch[1], 10) : audioInfo.clen || buf.length;
-              const isPartial = Boolean(clientRangeHeader) || (totalLen > 0 && buf.length < totalLen);
-              const outExt = audioInfo.ext || mimeToExt(audioInfo.mime);
-              const finalName = normalizeDownloadFilename(rawFilename, outExt);
-
-              res.status(isPartial ? 206 : 200);
-              res.setHeader('Content-Type', audioInfo.mime || 'audio/mp4');
-              res.setHeader('Content-Length', String(buf.length));
-              res.setHeader('Accept-Ranges', 'bytes');
-              res.setHeader('X-Video-Id', videoId || '');
-              res.setHeader('X-Stream-Id', audioInfo.id || videoId || '');
-              res.setHeader('X-Total-Length', String(totalLen));
-              res.setHeader('X-Audio-Source', audioInfo.source || 'full');
-              res.setHeader('X-Audio-Mime', audioInfo.mime || 'audio/mp4');
-              res.setHeader('X-Audio-Ext', outExt);
-              if (audioInfo.directCors && audioInfo.url) {
-                res.setHeader('X-Direct-Audio-Url', audioInfo.url);
-              }
-              res.setHeader('Cache-Control', 'no-store');
-              if (upRange) {
-                res.setHeader('Content-Range', upRange);
-              } else if (isPartial && parsedRange) {
-                res.setHeader('Content-Range', `bytes ${parsedRange.start}-${parsedRange.start + buf.length - 1}/${totalLen}`);
-              } else if (isPartial) {
-                res.setHeader('Content-Range', `bytes 0-${buf.length - 1}/${totalLen}`);
-              }
-              if (action === 'download') {
-                res.setHeader('Content-Disposition', `attachment; filename="${finalName}"`);
-              }
-              return res.send(buf);
+              return sendBufferedAudioResponse({
+                req,
+                res,
+                buf,
+                totalLen,
+                startOffset: parsedRange ? parsedRange.start : 0,
+                audioInfo,
+                videoId,
+                action,
+                rawFilename,
+                isRange: Boolean(clientRangeHeader),
+              });
             }
           }
           // Upstream 403/410 -> force refresh cached YouTube URL or fall back to Monochrome/SoundCloud
@@ -1154,6 +1246,13 @@ export default async function handler(req, res) {
           new Promise((r) => setTimeout(() => r(null), 6500)),
         ]);
         const audioInfo = resolved?.audioInfo;
+        if (audioInfo?.streamBuffer && Buffer.isBuffer(audioInfo.streamBuffer)) {
+          const sliceBuf = audioInfo.streamBuffer.subarray(0, 3_145_728);
+          res.setHeader('Content-Type', audioInfo.mime || 'audio/mp4');
+          res.setHeader('X-Audio-Source', audioInfo.source || 'full');
+          res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800');
+          return res.status(200).send(sliceBuf);
+        }
         if (audioInfo?.url) {
           const upstream = await fetchWithTimeout(audioInfo.url, { headers: { Range: 'bytes=0-3145727' } }, 15000).catch(() => null);
           if (upstream && (upstream.ok || upstream.status === 206)) {
@@ -1177,6 +1276,23 @@ export default async function handler(req, res) {
       return res.status(404).json({ error: 'Audio stream not found' });
     } catch (err) {
       return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // 1c-bis. INSTRUMENTAL ACTION: verifies whether an authentic no-vocals / instrumental backing track exists
+  if (action === 'instrumental') {
+    const title = (req.query?.title || '').trim();
+    const artist = (req.query?.artist || '').trim();
+    const rawDur = req.query?.duration;
+    let dur = rawDur ? (Number(rawDur) > 1000 ? Math.round(Number(rawDur) / 1000) : Math.round(Number(rawDur))) : 0;
+    if (dur <= 35) dur = 0;
+    if (!title) return res.status(400).json({ found: false, candidate: null, error: 'Missing title' });
+    try {
+      const candidate = await findBestInstrumentalSource({ title, artist, expectedDurationSec: dur });
+      res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
+      return res.status(200).json({ found: Boolean(candidate), candidate: candidate || null });
+    } catch (err) {
+      return res.status(200).json({ found: false, candidate: null, error: err?.message });
     }
   }
 

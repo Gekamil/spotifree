@@ -34,6 +34,21 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
 
   let songs: Track[] = [];
 
+  // 1.5. Direct Backend Fast-Path (/api/playlist handles Deezer & iTunes server-side with zero CORS issues)
+  try {
+    const pRes = await fetch(`/api/playlist?id=${encodeURIComponent(artistId)}`);
+    if (pRes.ok) {
+      const pData = await pRes.json();
+      if (Array.isArray(pData.tracks?.items) && pData.tracks.items.length > 0) {
+        songs = pData.tracks.items.map((x: any) => (x.track ? x.track : x)).filter(Boolean);
+        if (pData.images?.[0]?.url) {
+          ARTIST_IMAGE_CACHE.set(cleanName.toLowerCase(), pData.images[0].url);
+        }
+        if (songs.length > 0) return songs;
+      }
+    }
+  } catch {}
+
   // 2. Try Spotify search endpoint
   try {
     const sRes = await fetch(`/api/spotify/search?q=${encodeURIComponent(cleanName)}`);

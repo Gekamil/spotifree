@@ -1,6 +1,7 @@
 const MEMORY_PLAYLIST_CACHE = new Map();
 import { toHDImage, cleanSpDcString, getWebPlayerAuth, extractEntityImage } from './_lib/extract-session.js';
 import { readExternalPlaylist } from './_lib/import-playlist.js';
+import { buildArtistSoundCloudVault, resolveSoundCloudUrl } from './_lib/musicFallback.js';
 
 function stripHtml(text) {
   if (!text) return '';
@@ -161,6 +162,77 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       }
     } catch (e) {
       console.warn('[Playlist API] Deezer fetch error:', e.message);
+    }
+  }
+
+  // Artist profile direct fast-path (art-* / artist-*)
+  if (cleanId.startsWith('art-') || cleanId.startsWith('artist-')) {
+    const artRaw = cleanId.replace(/^(art-|artist-)/, '');
+    let artistName = artRaw;
+    try { artistName = decodeURIComponent(artRaw); } catch {}
+    try {
+      let dzArtist = null;
+      if (/^\d+$/.test(artRaw)) {
+        const aRes = await fetch(`https://api.deezer.com/artist/${artRaw}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+        });
+        if (aRes.ok) dzArtist = await aRes.json();
+      }
+      if (!dzArtist || !dzArtist.name) {
+        const sRes = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(artistName)}&limit=1`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+        });
+        if (sRes.ok) {
+          const sData = await sRes.json();
+          if (sData.data?.length) dzArtist = sData.data[0];
+        }
+      }
+      if (dzArtist && dzArtist.id) {
+        const topRes = await fetch(`https://api.deezer.com/artist/${dzArtist.id}/top?limit=40`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+        });
+        const topData = topRes.ok ? await topRes.json() : { data: [] };
+        const cover = toHDImage(dzArtist.picture_xl || dzArtist.picture_big || dzArtist.picture_medium || dzArtist.picture);
+        const tracks = (topData.data || []).map((t, idx) => ({
+          id: `dz-${t.id}`,
+          name: t.title || t.title_short,
+          artists: [{ id: `art-${dzArtist.id}`, name: dzArtist.name }],
+          album: {
+            id: `alb-${t.album?.id || cleanId}`,
+            name: t.album?.title || t.title,
+            images: (t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium)
+              ? [{ url: toHDImage(t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium) }]
+              : cover ? [{ url: cover }] : [],
+          },
+          duration_ms: (t.duration || 210) * 1000,
+          preview_url: null,
+          added_at: 'Popular',
+        }));
+
+        const mapped = {
+          id: cleanId,
+          name: dzArtist.name,
+          description: 'Artista',
+          type: 'artist',
+          images: cover ? [{ url: cover }] : [],
+          owner: {
+            display_name: 'Spotify',
+            id: 'spotify',
+          },
+          color: '#181818',
+          tracks: {
+            total: tracks.length,
+            items: tracks,
+          },
+        };
+        MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
+        return mapped;
+      }
+    } catch (e) {
+      console.warn('[Playlist API] Artist fetch error:', e.message);
     }
   }
 
@@ -1133,6 +1205,29 @@ export default async function handler(req, res) {
     }
 
     const reqType = url.searchParams.get('type') || '';
+    if (id.startsWith('sc-vault-')) {
+      const artistEncoded = id.slice('sc-vault-'.length);
+      let artistName = artistEncoded;
+      try { artistName = decodeURIComponent(artistEncoded); } catch {}
+      const cached = MEMORY_PLAYLIST_CACHE.get(id);
+      if (cached?.tracks?.items?.length > 0) {
+        return res.status(200).json(cached);
+      }
+      const vault = await buildArtistSoundCloudVault(artistName);
+      if (vault) {
+        MEMORY_PLAYLIST_CACHE.set(id, vault);
+        return res.status(200).json(vault);
+      }
+      return res.status(404).json({ error: `No se encontraron remixes o inéditas de ${artistName}` });
+    }
+    if (id.startsWith('sc-pl-url:')) {
+      const rawUrl = decodeURIComponent(id.slice('sc-pl-url:'.length));
+      const scResolved = await resolveSoundCloudUrl(rawUrl);
+      if (scResolved?.kind === 'playlist' && scResolved.playlist) {
+        return res.status(200).json(scResolved.playlist);
+      }
+      return res.status(404).json({ error: 'No se pudo resolver la playlist de SoundCloud.' });
+    }
     if (reqType === 'youtube' || id.startsWith('PL') || id.startsWith('RD') || id.startsWith('OLAK5uy_') || id.startsWith('yt-')) {
       const cleanListId = id.replace(/^yt-/, '');
       try {
