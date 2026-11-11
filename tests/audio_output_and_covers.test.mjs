@@ -27,6 +27,9 @@ describe('Spotifree v0.2.3 — Audio Output Device Selector (Mobile & APK)', () 
     assert.ok(java.includes('public void openSystemMediaOutput('));
     assert.ok(java.includes('AudioDeviceCallback'));
     assert.ok(java.includes('AudioManager.GET_DEVICES_OUTPUTS'));
+    assert.ok(java.includes('getAudioDevicesForAttributes('));
+    assert.ok(!java.includes('getDevicesForAttributes('));
+    assert.ok(!java.includes('removeFlags('));
     assert.ok(java.includes('com.android.settings.panel.action.MEDIA_OUTPUT'));
   });
 

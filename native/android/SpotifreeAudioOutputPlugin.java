@@ -2,7 +2,6 @@ package com.spotifree.music;
 
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioDeviceCallback;
 import android.media.AudioDeviceInfo;
@@ -82,6 +81,7 @@ public class SpotifreeAudioOutputPlugin extends Plugin {
 
     private void emitSnapshot() {
         try {
+            if (getBridge() == null) return;
             notifyListeners("devicesChanged", buildSnapshot(), false);
         } catch (Throwable ignored) {}
     }
@@ -146,6 +146,7 @@ public class SpotifreeAudioOutputPlugin extends Plugin {
         return name;
     }
 
+    @SuppressWarnings("deprecation")
     private Set<Integer> resolveActiveMediaDeviceIds(AudioManager am) {
         Set<Integer> ids = new HashSet<>();
         if (am == null) return ids;
@@ -157,7 +158,7 @@ public class SpotifreeAudioOutputPlugin extends Plugin {
                         .setUsage(AudioAttributes.USAGE_MEDIA)
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
                         .build();
-                List<AudioDeviceInfo> active = am.getDevicesForAttributes(attrs);
+                List<AudioDeviceInfo> active = am.getAudioDevicesForAttributes(attrs);
                 if (active != null) {
                     for (AudioDeviceInfo d : active) {
                         ids.add(d.getId());
@@ -285,6 +286,7 @@ public class SpotifreeAudioOutputPlugin extends Plugin {
     }
 
     @PluginMethod
+    @SuppressWarnings("deprecation")
     public void setOutputDevice(PluginCall call) {
         String deviceId = call.getString("deviceId", "default");
         if (deviceId == null || deviceId.isEmpty()) deviceId = "default";
@@ -388,34 +390,28 @@ public class SpotifreeAudioOutputPlugin extends Plugin {
         boolean opened = false;
         Context ctx = getContext();
         if (ctx != null) {
-            PackageManager pm = ctx.getPackageManager();
             String pkg = ctx.getPackageName();
 
             Intent[] candidates = new Intent[] {
                 // 1. Android 11-15 Media Output Switcher Panel (Pixel, AOSP, OneUI, MIUI, etc.)
                 new Intent("com.android.settings.panel.action.MEDIA_OUTPUT")
-                        .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", pkg)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        .putExtra("com.android.settings.panel.extra.PACKAGE_NAME", pkg),
                 // 2. Android System Volume & Output Panel (API 29+ public SDK)
-                new Intent("android.settings.panel.action.VOLUME")
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                new Intent("android.settings.panel.action.VOLUME"),
                 // 3. Bluetooth Settings fallback (all Android versions)
-                new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                new Intent(Settings.ACTION_BLUETOOTH_SETTINGS),
             };
 
             for (Intent candidate : candidates) {
                 try {
-                    if (pm != null && candidate.resolveActivity(pm) != null) {
-                        if (getActivity() != null) {
-                            candidate.removeFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            getActivity().startActivity(candidate);
-                        } else {
-                            ctx.startActivity(candidate);
-                        }
-                        opened = true;
-                        break;
+                    if (getActivity() != null) {
+                        getActivity().startActivity(candidate);
+                    } else {
+                        candidate.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        ctx.startActivity(candidate);
                     }
+                    opened = true;
+                    break;
                 } catch (Throwable ignored) {}
             }
         }
