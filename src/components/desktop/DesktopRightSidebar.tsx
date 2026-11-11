@@ -23,6 +23,8 @@ import { artistLibraryId, toggleFollowArtist } from '../../utils/artistFollow';
 import { parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { useKaraokeMode } from '../../utils/useKaraokeMode';
 import { KaraokeMicButton } from '../common/KaraokeMicButton';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
+import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 
 interface DesktopRightSidebarProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -188,9 +190,42 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     };
   }, [isResizing, sidebarWidth]);
 
+  const currentTrackIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
+  const upcomingQueue = currentTrackIndex >= 0 ? queue.slice(currentTrackIndex + 1) : queue;
+
+  const [resolvedCoverMap, setResolvedCoverMap] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    const targets = [currentTrack, ...upcomingQueue.slice(0, 6)].filter((t): t is NonNullable<typeof t> => Boolean(t && t.id));
+    if (targets.length === 0) return;
+    let alive = true;
+    resolveTrackCoversBatch(targets, undefined, (updates) => {
+      if (!alive || updates.size === 0) return;
+      setResolvedCoverMap((prev) => {
+        const next = { ...prev };
+        updates.forEach((url, id) => {
+          if (url && !isPlaylistOrGenericCover(url)) next[id] = url;
+        });
+        return next;
+      });
+    }).catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [currentTrack?.id, currentTrack?.album?.images?.[0]?.url, upcomingQueue.length, upcomingQueue[0]?.id]);
+
+  const coverOfTrack = (t: any): string => {
+    if (!t) return DEFAULT_FALLBACK_COVER;
+    const raw =
+      (t.id && resolvedCoverMap[t.id]) ||
+      getTrackCoverUrl(t) ||
+      (!isPlaylistOrGenericCover(t.album?.images?.[0]?.url) ? t.album?.images?.[0]?.url : undefined);
+    return toHDImage(raw) || DEFAULT_FALLBACK_COVER;
+  };
+
   const primaryArtist = currentTrack?.artists?.[0]?.name || '';
-  const hdCover = toHDImage(currentTrack?.album?.images?.[0]?.url);
-  const artistInfoBase = getArtistInfo(primaryArtist, hdCover);
+  const hdCover = currentTrack ? coverOfTrack(currentTrack) : DEFAULT_FALLBACK_COVER;
+  const artistInfoBase = getArtistInfo(primaryArtist, hdCover !== DEFAULT_FALLBACK_COVER ? hdCover : '');
   // The artist's real photo (looked up, cached); some hard-coded links had stopped working
   const [artistPhoto, setArtistPhoto] = useState<string | null>(null);
   const [artistPhotoFailed, setArtistPhotoFailed] = useState(false);
@@ -210,7 +245,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   }, [primaryArtist]);
   const artistInfo = {
     ...artistInfoBase,
-    image: (!artistPhotoFailed && artistPhoto) || artistInfoBase.image || hdCover || '',
+    image: (!artistPhotoFailed && artistPhoto) || artistInfoBase.image || hdCover || DEFAULT_FALLBACK_COVER,
   };
 
   // Extract real dynamic dominant artwork color with seamless gradient
@@ -220,8 +255,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
       setDominantColor('#5d1f00');
       return;
     }
-    const coverUrl = hdCover || currentTrack.album?.images?.[0]?.url;
-    if (coverUrl && !coverUrl.includes('liked-songs')) {
+    const coverUrl = (hdCover !== DEFAULT_FALLBACK_COVER ? hdCover : '') || currentTrack.album?.images?.[0]?.url;
+    if (coverUrl && !coverUrl.includes('liked-songs') && !coverUrl.startsWith('data:image/svg+xml')) {
       extractDominantColorFromImage(coverUrl).then((hex) => {
         if (!cancelled && hex) {
           setDominantColor(hex);
@@ -384,8 +419,6 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   }, [activeLineIndex, activeRightSidebar]);
 
   const isLiked = currentTrack ? likedTrackIds.includes(currentTrack.id) : false;
-  const currentTrackIndex = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
-  const upcomingQueue = currentTrackIndex >= 0 ? queue.slice(currentTrackIndex + 1) : queue;
 
   // Find current context playlist name
   const currentPlaylist = playlists.find(
@@ -497,6 +530,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                 track={currentTrack}
                 src={hdCover}
                 alt={currentTrack?.name || 'Portada'}
+                onImgError={handleImageError}
                 className={`w-full h-full transition-all duration-700 ease-in-out group-hover:scale-103 ${
                   isCanvasMode && canvasUrl ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
                 }`}
@@ -671,6 +705,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       // Broken photo: fall back to the song's cover (never a broken-image icon)
                       if (artistPhoto && !artistPhotoFailed) setArtistPhotoFailed(true);
                       else if (hdCover && (e.currentTarget as HTMLImageElement).src !== hdCover) (e.currentTarget as HTMLImageElement).src = hdCover;
+                      else handleImageError(e);
                     }}
                     className="w-full h-full object-cover object-top group-hover:scale-104 transition-transform duration-500"
                   />
@@ -800,8 +835,10 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                 >
                   <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
                     <img
-                      src={toHDImage(upcomingQueue[0].album?.images?.[0]?.url)}
+                      src={coverOfTrack(upcomingQueue[0])}
                       alt={upcomingQueue[0].name}
+                      referrerPolicy="no-referrer"
+                      onError={handleImageError}
                       className="w-full h-full object-cover"
                     />
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
@@ -852,6 +889,8 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                   <img
                     src={hdCover}
                     alt={currentTrack.name}
+                    referrerPolicy="no-referrer"
+                    onError={handleImageError}
                     className="w-12 h-12 rounded object-cover shadow shrink-0 bg-[#282828]"
                   />
                   <div className="min-w-0 flex-1">
@@ -928,8 +967,10 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                       >
                         <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
                           <img
-                            src={toHDImage(item.album?.images?.[0]?.url)}
+                            src={coverOfTrack(item)}
                             alt={item.name}
+                            referrerPolicy="no-referrer"
+                            onError={handleImageError}
                             className="w-full h-full object-cover pointer-events-none"
                           />
                           <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">

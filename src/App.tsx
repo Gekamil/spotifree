@@ -9,6 +9,8 @@ import { ErrorBoundary } from './components/common/ErrorBoundary';
 import { AddToPlaylistModal } from './components/modals/AddToPlaylistModal';
 import { TasteOnboardingModal } from './components/modals/TasteOnboardingModal';
 import { SharedSessionModal } from './components/common/SharedSessionModal';
+import { MobileDevicePickerSheet } from './components/mobile/MobileDevicePickerSheet';
+import { initAudioOutputListeners } from './services/audioOutputService';
 import { SharedSessionCursors } from './components/common/SharedSessionCursors';
 import GlobalToast from './components/common/GlobalToast';
 import { ApkUpdateBanner } from './components/common/ApkUpdateBanner';
@@ -44,6 +46,9 @@ function App() {
 
     // Remembers the friends who listen together with this device (Settings › Escuchar juntos)
     initListenFriends();
+
+    // Audio output selection & Bluetooth / APK device listener
+    initAudioOutputListeners();
 
     // Collaborative playlists stay in sync between everyone who joined them
     void import('./services/sharedPlaylists').then((m) => m.initSharedPlaylists()).catch(() => {});
@@ -205,6 +210,7 @@ function App() {
       <AddToPlaylistModal />
       <TasteOnboardingModal />
       {isMobile && <SharedSessionModal />}
+      {isMobile && <MobileDevicePickerSheet />}
       <SharedSessionCursors />
       <AudioSourceSheet />
       <SleepTimerSheet />

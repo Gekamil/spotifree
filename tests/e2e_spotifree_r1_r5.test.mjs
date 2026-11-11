@@ -568,22 +568,22 @@ describe('Tier 1: Feature Coverage (Category-Partition & Primary Contracts)', ()
   });
 
   // --------------------------------------------------------------------------
-  // Requirement R5: Version 0.2.2 & Baseline Preservation
+  // Requirement R5: Version 0.2.3 & Baseline Preservation
   // --------------------------------------------------------------------------
-  describe('R5: Version 0.2.2 & Baseline Preservation', () => {
-    it('T1-R5-01: package.json version is 0.2.2', () => {
+  describe('R5: Version 0.2.3 & Baseline Preservation', () => {
+    it('T1-R5-01: package.json version is 0.2.3', () => {
       const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-      assert.equal(pkg.version, '0.2.2', 'package.json version must be 0.2.2');
+      assert.equal(pkg.version, '0.2.3', 'package.json version must be 0.2.3');
     });
 
-    it('T1-R5-02: changelog.ts APP_VERSION is 0.2.2', () => {
-      assert.equal(changelogModule.APP_VERSION, '0.2.2', 'changelog.ts APP_VERSION must be 0.2.2');
+    it('T1-R5-02: changelog.ts APP_VERSION is 0.2.3', () => {
+      assert.equal(changelogModule.APP_VERSION, '0.2.3', 'changelog.ts APP_VERSION must be 0.2.3');
     });
 
-    it('T1-R5-03: changelog.ts includes release notes for 0.2.2', () => {
+    it('T1-R5-03: changelog.ts includes release notes for 0.2.3', () => {
       const latest = changelogModule.CHANGELOG_RELEASES?.[0];
       assert.ok(latest, 'Must contain at least one release');
-      assert.equal(latest.version, '0.2.2', 'Latest release version must be 0.2.2');
+      assert.equal(latest.version, '0.2.3', 'Latest release version must be 0.2.3');
       assert.equal(latest.isLatest, true, 'isLatest flag must be true');
       assert.ok(latest.highlights?.length >= 3, 'Must have at least 3 highlights');
     });
@@ -1111,11 +1111,11 @@ describe('Tier 3: Cross-Feature Pairwise Combinations', () => {
     assert.deepEqual(savedIds, [explicitPl.id], 'Only explicit ID in saved library');
   });
 
-  it('T3-06: R5 + All: Version 0.2.2 changelog aligns with R1, R2, R3, R4 feature contracts', () => {
-    const latestRelease = changelogModule.CHANGELOG_RELEASES[0];
-    assert.equal(latestRelease.version, '0.2.2', 'Version matches 0.2.2');
+  it('T3-06: R5 + All: Version 0.2.2 changelog entry aligns with R1, R2, R3, R4 feature contracts', () => {
+    const r022 = changelogModule.CHANGELOG_RELEASES.find((r) => r.version === '0.2.2');
+    assert.ok(r022, 'Version 0.2.2 release entry must exist');
 
-    const allHighlights = latestRelease.highlights.join(' ').toLowerCase();
+    const allHighlights = r022.highlights.join(' ').toLowerCase();
     // Verify R1, R2, R3, R4 are described
     assert.ok(
       allHighlights.includes('remix') || allHighlights.includes('remixes'),
@@ -1251,11 +1251,11 @@ describe('Tier 4: Real-World Application Workloads & User Scenarios', () => {
     assert.ok(mobile.code.includes('soundcloudTracks'), 'Mobile has soundcloudTracks');
   });
 
-  it('T4-S05: Scenario 5 (Full Offline & Cold Boot Release Audit): Cold boot v0.2.2 with intact offline storage', () => {
+  it('T4-S05: Scenario 5 (Full Offline & Cold Boot Release Audit): Cold boot v0.2.3 with intact offline storage', () => {
     // 1. Version checks
     const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-    assert.equal(pkg.version, '0.2.2');
-    assert.equal(changelogModule.APP_VERSION, '0.2.2');
+    assert.equal(pkg.version, '0.2.3');
+    assert.equal(changelogModule.APP_VERSION, '0.2.3');
 
     // 2. Offline storage utility functionality
     const offlinePath = path.join(rootDir, 'src', 'utils', 'offlineStorage.ts');

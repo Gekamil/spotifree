@@ -42,6 +42,7 @@ import { showGlobalToast } from '../../utils/globalToast';
 import { isTrackDownloaded } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
 import { parseTrackArtists } from '../../utils/trackArtists';
+import { openDevicePickerSheet, useAudioOutputStore } from '../../services/audioOutputService';
 
 interface MobileNowPlayingModalProps {
   isOpen: boolean;
@@ -74,6 +75,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     currentContextId,
   } = usePlayerStore(
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId }))
+  );
+
+  const { activeOutputLabel, activeOutputKind } = useAudioOutputStore(
+    useShallow((s) => ({ activeOutputLabel: s.activeLabel, activeOutputKind: s.activeKind }))
   );
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
@@ -768,9 +773,17 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
           {/* Authentic Spotify Device Bar & Bottom Controls */}
           <div className="flex items-center justify-between pt-3 pb-1 border-t border-white/5">
-            <button className="flex items-center gap-2 text-xs font-bold text-[#1ed760] tracking-wide cursor-pointer hover:underline">
-              <SpotifyConnectNativeIcon size={16} />
-              <span className="uppercase tracking-wider text-[11px] font-black">Este teléfono</span>
+            <button
+              onClick={() => openDevicePickerSheet()}
+              className="flex items-center gap-2 text-xs font-bold text-[#1ed760] tracking-wide cursor-pointer hover:underline active:scale-95 transition-transform min-w-0 max-w-[60%]"
+              title="Seleccionar salida de audio"
+            >
+              <SpotifyConnectNativeIcon size={16} className="shrink-0" />
+              <span className="uppercase tracking-wider text-[11px] font-black truncate">
+                {activeOutputKind !== 'default' && activeOutputKind !== 'speaker' && activeOutputLabel
+                  ? activeOutputLabel
+                  : 'Este teléfono'}
+              </span>
             </button>
 
             <div className="flex items-center gap-2.5 sm:gap-4 text-[#b3b3b3] shrink-0">

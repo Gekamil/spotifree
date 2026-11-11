@@ -4,10 +4,11 @@ import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useLanguageStore, useTranslation } from '../../utils/i18n';
-import { saveCustomTrackToStorage } from '../../utils/userStorage';
+import { saveCustomTrackToStorage, getSavedCustomTracks } from '../../utils/userStorage';
+import { showGlobalToast } from '../../utils/globalToast';
 import { handleImageError } from '../../utils/imageFallback';
 import { getPlaylistCover } from '../../utils/playlistCover';
-import type { Track, Playlist } from '../../types/spotify';
+import type { Playlist } from '../../types/spotify';
 
 export const AddToPlaylistModal: React.FC = () => {
   const { isAddToPlaylistModalOpen, trackForAddToPlaylist, closeAddToPlaylistModal } = useUIStore();
@@ -70,21 +71,8 @@ export const AddToPlaylistModal: React.FC = () => {
     userPlaylists.forEach((pl) => {
       // Check in-memory items
       const hasTrackInMemory = pl.tracks?.items?.some((t) => t.id === track.id);
-      // Check localStorage custom tracks
-      let hasInLocal = false;
-      if (typeof window !== 'undefined') {
-        try {
-          const targetId = user?.id || 'spotify-user';
-          const key = targetId !== 'spotify-user'
-            ? `spotifree_playlist_tracks_${targetId}_${pl.id}`
-            : `spotifree_playlist_tracks_${pl.id}`;
-          const raw = window.localStorage.getItem(key);
-          if (raw) {
-            const list: Track[] = JSON.parse(raw);
-            hasInLocal = list.some((t) => t.id === track.id);
-          }
-        } catch {}
-      }
+      // Check localStorage custom tracks across all user key variants
+      const hasInLocal = getSavedCustomTracks(pl.id, false, user?.id).some((t) => t.id === track.id);
       if (hasTrackInMemory || hasInLocal) {
         initialMatches.add(pl.id);
       }
@@ -116,25 +104,8 @@ export const AddToPlaylistModal: React.FC = () => {
     setIsLikedState((prev) => !prev);
   };
 
-  const handleCreateNewPlaylist = () => {
+  const commitPendingSelections = () => {
     if (!track) return;
-    const finalName = newPlaylistTitle.trim() || `Mi playlist nº ${userPlaylists.length + 1}`;
-    const trackWithDate = { ...track, added_at: track.added_at || 'Hoy' };
-    const newPl = useSpotifyDataStore.getState().createPlaylist(finalName, [trackWithDate]);
-
-    // Save to user storage
-    saveCustomTrackToStorage(newPl.id, false, trackWithDate, user?.id);
-
-    setIsCreatingNew(false);
-    setNewPlaylistTitle('');
-    closeAddToPlaylistModal();
-  };
-
-  const handleSaveAndClose = () => {
-    if (!track) {
-      closeAddToPlaylistModal();
-      return;
-    }
 
     // 1. Commit Liked Songs change if toggled
     const cleanId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -149,7 +120,6 @@ export const AddToPlaylistModal: React.FC = () => {
     // 2. Commit Playlists changes
     selectedPlaylistIds.forEach((plId) => {
       if (!initialPlaylistIds.has(plId)) {
-        // Newly added to plId
         saveCustomTrackToStorage(plId, false, track, user?.id);
 
         const store = useSpotifyDataStore.getState();
@@ -157,7 +127,6 @@ export const AddToPlaylistModal: React.FC = () => {
         if (currentPl) {
           const existing = currentPl.tracks?.items || [];
           if (!existing.some((t) => t.id === track.id)) {
-            // Like Spotify: a new song goes to the end of the playlist
             const updated = [...existing, { ...track, added_at: new Date().toISOString() }];
             useSpotifyDataStore.getState().updatePlaylist(plId, {
               tracks: { total: updated.length, items: updated },
@@ -169,18 +138,35 @@ export const AddToPlaylistModal: React.FC = () => {
 
     initialPlaylistIds.forEach((plId) => {
       if (!selectedPlaylistIds.has(plId)) {
-        // Removed from plId: same path as "Quitar de esta lista" (blacklist + all layers + open views)
         useSpotifyDataStore.getState().removeTrackFromPlaylist(plId, track.id, track);
       }
     });
+  };
 
-    // Close
+  const handleCreateNewPlaylist = () => {
+    if (!track) return;
+    const finalName = newPlaylistTitle.trim() || `Mi playlist nº ${userPlaylists.length + 1}`;
+    const trackWithDate = { ...track, added_at: track.added_at || 'Hoy' };
+    commitPendingSelections();
+    const newPl = useSpotifyDataStore.getState().createPlaylist(finalName, [trackWithDate]);
+
+    // Save to user storage as well so custom playlist tracks survive any cold reload
+    saveCustomTrackToStorage(newPl.id, false, trackWithDate, user?.id, [trackWithDate]);
+
+    setIsCreatingNew(false);
+    setNewPlaylistTitle('');
+    showGlobalToast(`Añadida a «${finalName}»`);
+    closeAddToPlaylistModal();
+  };
+
+  const handleSaveAndClose = () => {
+    commitPendingSelections();
     closeAddToPlaylistModal();
   };
 
   return (
     <div
-      className={`fixed inset-0 z-[120] bg-black/75 backdrop-blur-sm flex flex-col justify-end sm:justify-center sm:items-center select-none transition-opacity duration-300 ${
+      className={`fixed inset-0 z-[150] bg-black/75 backdrop-blur-sm flex flex-col justify-end sm:justify-center sm:items-center select-none transition-opacity duration-300 ${
         isAnimatingIn ? 'opacity-100' : 'opacity-0'
       }`}
       onClick={handleSaveAndClose}

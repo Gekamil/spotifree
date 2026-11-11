@@ -510,6 +510,21 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
               ))}
             </div>
           )}
+
+          {/* Empty state when active tab has 0 matches */}
+          {!isSearching && (
+            (filter === 'canciones' && results.tracks.length === 0) ||
+            (filter === 'soundcloud' && results.soundcloudTracks.length === 0) ||
+            (filter === 'artistas' && results.artists.length === 0) ||
+            (filter === 'albumes' && results.albums.length === 0) ||
+            (filter === 'playlists' && results.playlists.length === 0) ||
+            (filter === 'todo' && results.tracks.length === 0 && results.soundcloudTracks.length === 0 && results.artists.length === 0 && results.albums.length === 0 && results.playlists.length === 0)
+          ) && (
+            <div className="py-10 text-center text-[#b3b3b3] space-y-1.5 px-4">
+              <p className="text-sm font-bold text-white">No hay resultados en esta sección</p>
+              <p className="text-xs text-[#a7a7a7]">Prueba con otras palabras para «{query}».</p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-6">

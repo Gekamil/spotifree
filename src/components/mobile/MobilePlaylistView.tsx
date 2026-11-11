@@ -649,17 +649,27 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           const data = await res.json();
           if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
             const merged = mergeWithCustom(data.tracks.items);
+            const hasInitialHd = playlist.images && playlist.images.length > 0 && playlist.images[0].url && !playlist.images[0].url.includes('liked-songs');
+            const hasScrapedImg = data.images?.length > 0 && data.images[0].url && !data.images[0].url.includes('liked-songs');
+            const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
+            const updatedActive: Playlist = {
+              ...playlist,
+              ...data,
+              name: (data.name && data.name !== 'Tu biblioteca' && data.name !== 'Playlist' && !isSlugName) ? data.name : playlist.name,
+              description: data.description || playlist.description,
+              images: hasInitialHd ? playlist.images : (hasScrapedImg ? data.images : playlist.images),
+              color: data.color || playlist.color,
+              owner: data.owner || playlist.owner,
+              tracks: { total: merged.length, items: merged },
+            };
             setTracks(merged);
+            setActivePlaylist(updatedActive);
             if (typeof window !== 'undefined') {
               try {
                 window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(merged));
               } catch {}
             }
-            useSpotifyDataStore.getState().cachePlaylistDetails({
-              ...playlist,
-              ...data,
-              tracks: { total: merged.length, items: merged },
-            });
+            useSpotifyDataStore.getState().cachePlaylistDetails(updatedActive);
             setLoading(false);
             return;
           }
@@ -1365,7 +1375,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 scrollY > 160 ? 'opacity-100' : 'opacity-0 pointer-events-none'
               }`}
             >
-              {playlist.name}
+              {activePlaylist.name}
             </span>
 
             <button
@@ -1452,18 +1462,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 className={`text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight mb-2 ${canManageThisPlaylist ? 'cursor-pointer hover:underline' : ''}`}
                 title={canManageThisPlaylist ? 'Toca para editar el nombre' : undefined}
               >
-                {playlist.name}
+                {activePlaylist.name}
               </h1>
-              {playlist.description && (
+              {activePlaylist.description && (
                 <p className="text-[13px] font-medium text-white/70 leading-relaxed max-w-sm mb-2">
-                  {stripHtml(playlist.description)}
+                  {stripHtml(activePlaylist.description)}
                 </p>
               )}
-              <div className="flex items-center gap-1.5 text-xs text-[#b3b3b3] font-medium">
+              <div className="flex items-center gap-1.5 text-xs text-[#b3b3b3] font-medium flex-wrap justify-center">
                 <SpotifyBadgeIcon size={16} />
-                <span className="text-white font-bold">{playlist.owner?.display_name || user?.display_name || 'Spotify'}</span>
+                <span className="text-white font-bold">{activePlaylist.owner?.display_name || user?.display_name || 'Spotify'}</span>
                 <span>•</span>
-                <span>{tracks.length} canciones</span>
+                <span>
+                  {activePlaylist.type === 'album' || cleanId.startsWith('alb-')
+                    ? `Álbum${(activePlaylist as any).release_date ? ` • ${String((activePlaylist as any).release_date).split('-')[0]}` : ''}`
+                    : `${tracks.length} ${tracks.length === 1 ? 'canción' : 'canciones'}`}
+                </span>
               </div>
               {sharedCode && (
                 <div className="mt-2">

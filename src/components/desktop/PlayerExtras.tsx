@@ -15,29 +15,13 @@ import { getTrackCoverUrl } from '../../utils/trackCovers';
 import { showGlobalToast } from '../../utils/globalToast';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { DeviceNativeIcon, MiniplayerNativeIcon } from '../icons/SpotifyNativeIcons';
+import { AUDIO_SINK_KEY, applyOutput, canChooseWebOutput, restoreAudioOutput } from '../../services/audioOutputService';
 
 // ---------------------------------------------------------------------------
 // Devices
 // ---------------------------------------------------------------------------
-const SINK_KEY = 'spotifree_audio_output';
-
-function canChooseOutput(): boolean {
-  return typeof window !== 'undefined' && typeof (window as any).AudioContext !== 'undefined' && 'setSinkId' in (window as any).AudioContext.prototype;
-}
-
-async function applyOutput(deviceId: string): Promise<boolean> {
-  try {
-    const ctx: any = (audioEngine as any).audioContext;
-    if (ctx?.setSinkId) await ctx.setSinkId(deviceId === 'default' ? '' : deviceId);
-    for (const a of ((audioEngine as any).audios || []) as any[]) {
-      if (a?.setSinkId) await a.setSinkId(deviceId === 'default' ? '' : deviceId).catch(() => {});
-    }
-    localStorage.setItem(SINK_KEY, deviceId);
-    return true;
-  } catch {
-    return false;
-  }
-}
+const SINK_KEY = AUDIO_SINK_KEY;
+export { restoreAudioOutput };
 
 export const DevicePickerButton: React.FC = () => {
   const [open, setOpen] = useState(false);
@@ -101,7 +85,7 @@ export const DevicePickerButton: React.FC = () => {
             </div>
           </div>
 
-          {canChooseOutput() && (
+          {canChooseWebOutput() && (
             <>
               <p className="text-sm font-bold mb-1.5">Salida de audio</p>
               <div className="space-y-0.5 mb-4 max-h-48 overflow-y-auto">
@@ -150,14 +134,6 @@ export const DevicePickerButton: React.FC = () => {
     </div>
   );
 };
-
-/** Restores the chosen audio output when the app starts */
-export function restoreAudioOutput() {
-  try {
-    const id = localStorage.getItem(SINK_KEY);
-    if (id && id !== 'default' && canChooseOutput()) void applyOutput(id);
-  } catch {}
-}
 
 // ---------------------------------------------------------------------------
 // Mini player (Document Picture-in-Picture)

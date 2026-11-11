@@ -11,14 +11,25 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.2';
+export const APP_VERSION = '0.2.3';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.3',
+    date: '11 de noviembre, 2026',
+    title: 'Selector de salida de audio en móvil y APK, carátulas en play directo y mejoras en búsquedas',
+    isLatest: true,
+    highlights: [
+      'Selector de dispositivo y salida de audio en móvil y Android APK: pulsa el icono de dispositivos en el minirreproductor o «Este teléfono» en el reproductor para elegir altavoz, auriculares, Bluetooth o abrir «Escuchar juntos» con el mismo diseño que ordenador.',
+      'Plugin nativo Android (SpotifreeAudioOutput): detección en tiempo real de altavoces, cable y Bluetooth en la app Android con acceso directo al panel de salida de medios del sistema.',
+      'Carátulas siempre visibles en el reproductor lateral de ordenador: al reproducir directamente desde Inicio o búsquedas, las portadas de «Sonando ahora» y la cola se resuelven automáticamente sin quedarse vacías.',
+      'Pulido de álbumes, remixes y añadir a playlist: años reales en resultados de álbumes, actualización completa de cabecera de álbumes en móvil y guardado persistente al crear playlists desde el modal.',
+    ],
+  },
   {
     version: '0.2.2',
     date: '11 de noviembre, 2026',
     title: 'Remixes oficiales en búsquedas, pestaña de álbumes, creación de playlist al añadir y prevención de autoguardado',
-    isLatest: true,
     highlights: [
       'Remixes oficiales primero: en la pestaña de remixes de búsqueda ahora aparecen primero los remixes oficiales de catálogo antes que temas de SoundCloud o filtraciones.',
       'Nuevo apartado de Álbumes en búsquedas: pestaña dedicada a álbumes en ordenador y móvil igual que en Spotify, con navegación a lista completa de canciones.',

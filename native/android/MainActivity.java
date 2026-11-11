@@ -24,6 +24,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SpotifreeLoginPlugin.class);
         registerPlugin(SpotifreeMediaPlugin.class);
         registerPlugin(SpotifreeAudioFxPlugin.class);
+        registerPlugin(SpotifreeAudioOutputPlugin.class);
         registerPlugin(SpotifreeSpeechPlugin.class);
         registerPlugin(SpotifreeLocalMusicPlugin.class);
         super.onCreate(savedInstanceState);

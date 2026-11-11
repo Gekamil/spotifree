@@ -304,7 +304,15 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       const items = cached.tracks.items.map((t: any) => ({ ...t, playlistId: card.id }));
       const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
-      playTrack(start, items);
+      playTrack(start, items, card.id);
+      return;
+    }
+
+    const sfMixMatch = useSpotifreeMixes.getState().mixes.find((m) => m.id === card.id);
+    if (sfMixMatch?.tracks?.items && sfMixMatch.tracks.items.length > 0) {
+      const items = sfMixMatch.tracks.items.map((t: any) => ({ ...t, playlistId: card.id }));
+      const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
+      playTrack(start, items, card.id);
       return;
     }
 
@@ -312,7 +320,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     if (cardPlaylist?.tracks?.items && cardPlaylist.tracks.items.length > 0) {
       const items = cardPlaylist.tracks.items.map((t: any) => ({ ...t, playlistId: card.id }));
       const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
-      playTrack(start, items);
+      playTrack(start, items, card.id);
       return;
     }
 
@@ -337,7 +345,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             tracks: data.tracks,
           } as any);
           const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
-          playTrack(start, items);
+          playTrack(start, items, card.id);
           return;
         }
       }

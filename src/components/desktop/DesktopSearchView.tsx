@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useShallow } from 'zustand/react/shallow';
 import { PlayNativeIcon, PauseNativeIcon, CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
@@ -187,9 +188,12 @@ const ArtistSearchCard: React.FC<{
 const AlbumSearchCard: React.FC<{
   album: any;
   onClick: () => void;
-}> = ({ album, onClick }) => {
+  onPlay?: () => void;
+}> = ({ album, onClick, onPlay }) => {
   const [imgFailed, setImgFailed] = useState(false);
   const cover = album.images?.[0]?.url;
+  const releaseYear = album.release_date ? String(album.release_date).split('-')[0] : '';
+  const typeLabel = album.record_type === 'single' ? 'Sencillo' : album.record_type === 'ep' ? 'EP' : 'Álbum';
 
   return (
     <div
@@ -201,6 +205,7 @@ const AlbumSearchCard: React.FC<{
           <img
             src={cover}
             alt={album.name}
+            referrerPolicy="no-referrer"
             onError={() => setImgFailed(true)}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
           />
@@ -214,9 +219,10 @@ const AlbumSearchCard: React.FC<{
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onClick();
+            if (onPlay) onPlay();
+            else onClick();
           }}
-          className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+          className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer"
           title={`Reproducir ${album.name}`}
         >
           <PlayNativeIcon size={16} className="text-black ml-0.5" />
@@ -226,7 +232,7 @@ const AlbumSearchCard: React.FC<{
         {album.name}
       </span>
       <span className="text-xs text-[#b3b3b3] truncate mt-1">
-        {album.release_date || 'Álbum'} • {album.artists?.[0]?.name || 'Artista'}
+        {releaseYear || typeLabel} • {album.artists?.[0]?.name || 'Artista'}
       </span>
     </div>
   );
@@ -353,6 +359,41 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
     if (onSelectPlaylistById) {
       onSelectPlaylistById(album.id, album.name, album.images?.[0]?.url);
     }
+  };
+
+  const handleQuickPlayCollection = async (id: string, name?: string, cover?: string, ownerName?: string) => {
+    const store = useSpotifyDataStore.getState();
+    const cached = store.playlistDetailsCache[id] || store.playlists.find((p) => p.id === id);
+    if (cached?.tracks?.items && cached.tracks.items.length > 0) {
+      const items = cached.tracks.items.map((t: any) => ({ ...t, playlistId: id }));
+      playTrack(items[0], items, id);
+      return;
+    }
+    try {
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+      const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (userCookie) headers['x-spotify-cookie'] = userCookie;
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.tracks?.items && data.tracks.items.length > 0) {
+          const items = data.tracks.items.map((t: any) => ({ ...t, playlistId: id }));
+          store.cachePlaylistDetails({
+            ...data,
+            id,
+            name: data.name || name || 'Playlist',
+            images: cover ? [{ url: cover }] : data.images || [],
+            owner: data.owner || { display_name: ownerName || 'Spotify', id: 'spotify' },
+            tracks: { total: items.length, items },
+          });
+          playTrack(items[0], items, id);
+          return;
+        }
+      }
+    } catch {}
+    onSelectPlaylistById?.(id, name, cover);
   };
 
   const handlePlaylistClick = (playlist: any) => {
@@ -542,7 +583,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
             ))}
           </div>
 
-          {searchResults.tracks.length > 0 || searchResults.soundcloudTracks.length > 0 || searchResults.artists.length > 0 || searchResults.playlists.length > 0 ? (
+          {searchResults.tracks.length > 0 || searchResults.soundcloudTracks.length > 0 || searchResults.artists.length > 0 || searchResults.albums.length > 0 || searchResults.playlists.length > 0 ? (
             <div className="space-y-10">
               {/* TAB: TODO */}
               {searchFilter === 'todo' && (
@@ -733,6 +774,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             key={album.id}
                             album={album}
                             onClick={() => handleAlbumClick(album)}
+                            onPlay={() => void handleQuickPlayCollection(album.id, album.name, album.images?.[0]?.url, album.artists?.[0]?.name)}
                           />
                         ))}
                       </div>
@@ -744,7 +786,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     <div>
                       <div className="flex items-center justify-between mb-3">
                         <h3 className="text-xl font-bold text-white font-['SpotifyMixUITitle']">
-                          Remixes, Slowed e Inéditas (SoundCloud)
+                          Remixes, Leaks y Slowed
                         </h3>
                         <button
                           type="button"
@@ -836,11 +878,9 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    if (onSelectPlaylistById) {
-                                      onSelectPlaylistById(pl.id, pl.name, cover);
-                                    }
+                                    void handleQuickPlayCollection(pl.id, pl.name, cover, pl.owner?.display_name);
                                   }}
-                                  className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                                  className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer"
                                   title={`Reproducir ${pl.name}`}
                                 >
                                   <PlayNativeIcon size={16} className="text-black ml-0.5" />
@@ -988,15 +1028,22 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
 
               {/* TAB: ÁLBUMES */}
               {searchFilter === 'albumes' && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-                  {searchResults.albums.map((album: any) => (
-                    <AlbumSearchCard
-                      key={album.id}
-                      album={album}
-                      onClick={() => handleAlbumClick(album)}
-                    />
-                  ))}
-                </div>
+                searchResults.albums.length > 0 ? (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                    {searchResults.albums.map((album: any) => (
+                      <AlbumSearchCard
+                        key={album.id}
+                        album={album}
+                        onClick={() => handleAlbumClick(album)}
+                        onPlay={() => void handleQuickPlayCollection(album.id, album.name, album.images?.[0]?.url, album.artists?.[0]?.name)}
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-[#b3b3b3] py-6">
+                    No se encontraron álbumes para «{searchQuery}».
+                  </p>
+                )
               )}
 
               {/* TAB: PLAYLISTS */}
@@ -1015,17 +1062,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             <img
                               src={cover}
                               alt={pl.name}
+                              referrerPolicy="no-referrer"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
                           )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (onSelectPlaylistById) {
-                                onSelectPlaylistById(pl.id, pl.name, cover);
-                              }
+                              void handleQuickPlayCollection(pl.id, pl.name, cover, pl.owner?.display_name);
                             }}
-                            className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200"
+                            className="absolute bottom-2 right-2 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer"
                             title={`Reproducir ${pl.name}`}
                           >
                             <PlayNativeIcon size={16} className="text-black ml-0.5" />

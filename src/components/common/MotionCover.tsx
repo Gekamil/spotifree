@@ -8,6 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { Track } from '../../types/spotify';
 import { MOTION_COVER_EVENT, getMotionCover, motionCoversAllowed, type MotionCover as Motion } from '../../services/motionCover';
+import { DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 
 const MOTION_ON_KEY = 'spotifree_motion_cover_on';
 
@@ -38,6 +39,11 @@ export const MotionCover: React.FC<Props> = ({
   const [visible, setVisible] = useState(true);
   const [allowed, setAllowed] = useState(() => motionCoversAllowed());
   const [isMotionActive, setIsMotionActive] = useState(false);
+  const [imgFailed, setImgFailed] = useState(false);
+
+  useEffect(() => {
+    setImgFailed(false);
+  }, [src, track?.id]);
 
   const holdTimerRef = useRef<number | null>(null);
   const isHoldActionRef = useRef(false);
@@ -201,14 +207,16 @@ export const MotionCover: React.FC<Props> = ({
       } ${className}`}
     >
       {/* 1. Static Artwork Layer (always present underneath for instant fallback & smooth crossfade) */}
-      {src ? (
-        <img
-          src={src}
-          alt={alt}
-          onError={onImgError}
-          className={`w-full h-full object-cover transition-opacity duration-700 ease-in-out ${imgClassName}`}
-        />
-      ) : null}
+      <img
+        src={!imgFailed && src ? src : DEFAULT_FALLBACK_COVER}
+        alt={alt}
+        referrerPolicy="no-referrer"
+        onError={(e) => {
+          setImgFailed(true);
+          onImgError?.(e);
+        }}
+        className={`w-full h-full object-cover transition-opacity duration-700 ease-in-out ${imgClassName}`}
+      />
 
       {/* 2. Apple Music Motion Cover Video Layer (smooth crossfade in/out over static artwork) */}
       {hasMotion && (

@@ -299,24 +299,42 @@ const store = create<PlayerState>((set, get) => ({
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
     const state = get();
-    const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
-    const cleanNew = (track?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const hydrateCoverSync = (t: Track): Track => {
+      if (!t) return t;
+      const curUrl = t.album?.images?.[0]?.url;
+      if (curUrl && !isPlaylistOrGenericCover(curUrl)) return t;
+      const resolved = resolveTrackCover(t);
+      if (!resolved) return t;
+      return {
+        ...t,
+        album: {
+          ...t.album,
+          id: t.album?.id || `alb-${t.id}`,
+          name: t.album?.name || t.name,
+          images: [{ url: resolved }],
+        },
+      };
+    };
 
-    const rawOriginal = newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue);
+    const hydratedTrack = hydrateCoverSync(track);
+    const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const cleanNew = (hydratedTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+
+    const rawOriginal = (newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue)).map(hydrateCoverSync);
     let activeQueue: Track[];
     if (newQueue) {
       if (state.isShuffle) {
-        const others = shuffleTracks(rawOriginal.filter((t) => t.id !== track.id), lastPlayedAt);
-        activeQueue = [track, ...others];
+        const others = shuffleTracks(rawOriginal.filter((t) => t.id !== hydratedTrack.id), lastPlayedAt);
+        activeQueue = [hydratedTrack, ...others];
       } else {
         activeQueue = rawOriginal;
       }
     } else {
-      const exists = state.queue.some((t) => t && (t.id === track.id || matchTrackId(t.id, track.id)));
-      if (!exists && track) {
-        activeQueue = [track, ...state.queue];
+      const exists = state.queue.some((t) => t && (t.id === hydratedTrack.id || matchTrackId(t.id, hydratedTrack.id)));
+      if (!exists && hydratedTrack) {
+        activeQueue = [hydratedTrack, ...state.queue.map(hydrateCoverSync)];
       } else {
-        activeQueue = state.queue;
+        activeQueue = state.queue.map(hydrateCoverSync);
       }
     }
 
@@ -334,19 +352,19 @@ const store = create<PlayerState>((set, get) => ({
 
     const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
     try {
-      useStatsStore.getState().recordTrackPlayed(track);
+      useStatsStore.getState().recordTrackPlayed(hydratedTrack);
       recordHistoryItem({
-        id: track.id,
-        name: track.name || 'Canción',
-        subtitle: track.artists?.[0]?.name ? `Canción • ${track.artists[0].name}` : 'Canción',
-        image: track.album?.images?.[0]?.url || '',
+        id: hydratedTrack.id,
+        name: hydratedTrack.name || 'Canción',
+        subtitle: hydratedTrack.artists?.[0]?.name ? `Canción • ${hydratedTrack.artists[0].name}` : 'Canción',
+        image: hydratedTrack.album?.images?.[0]?.url || '',
         type: 'track',
-        track,
+        track: hydratedTrack,
       });
     } catch {}
 
     const updatedShuffle = state.isShuffle
-      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
+      ? [...state.playedInShuffle.filter((id) => id !== hydratedTrack.id), hydratedTrack.id]
       : [];
 
     let nextPreselectedId: string | null = null;
@@ -356,7 +374,7 @@ const store = create<PlayerState>((set, get) => ({
         const rnd = Math.floor(Math.random() * unplayed.length);
         nextPreselectedId = unplayed[rnd].id;
       } else {
-        const candidates = activeQueue.filter((t) => t.id !== track.id);
+        const candidates = activeQueue.filter((t) => t.id !== hydratedTrack.id);
         if (candidates.length > 0) {
           const rnd = Math.floor(Math.random() * candidates.length);
           nextPreselectedId = candidates[rnd].id;
@@ -365,11 +383,11 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     set({
-      currentTrack: track,
-      currentContextId: contextId !== undefined ? contextId : (track.album?.id || state.currentContextId),
+      currentTrack: hydratedTrack,
+      currentContextId: contextId !== undefined ? contextId : (hydratedTrack.album?.id || state.currentContextId),
       isPlaying: true,
       progressMs: 0,
-      durationMs: track.duration_ms,
+      durationMs: hydratedTrack.duration_ms,
       queue: activeQueue,
       originalQueue: rawOriginal,
       history: updatedHistory,
@@ -377,12 +395,43 @@ const store = create<PlayerState>((set, get) => ({
       preselectedNextTrackId: nextPreselectedId,
     });
 
+    // Resolve exact album covers for current track + upcoming queue so sidebars & players always show crisp artwork
+    const coverTargets = [hydratedTrack, ...activeQueue.slice(0, 6)].filter(Boolean);
+    if (coverTargets.length > 0) {
+      resolveTrackCoversBatch(coverTargets, undefined, (updates) => {
+        if (!updates || updates.size === 0) return;
+        set((s) => {
+          const patchTrack = (t: Track): Track => {
+            const url = updates.get(t.id);
+            if (!url) return t;
+            return {
+              ...t,
+              album: {
+                ...t.album,
+                id: t.album?.id || `alb-${t.id}`,
+                name: t.album?.name || t.name,
+                images: [{ url }],
+              },
+            };
+          };
+          const nextCurrent = s.currentTrack && updates.has(s.currentTrack.id) ? patchTrack(s.currentTrack) : s.currentTrack;
+          const nextQueue = s.queue.some((t) => updates.has(t.id)) ? s.queue.map(patchTrack) : s.queue;
+          const nextOriginal = s.originalQueue.some((t) => updates.has(t.id)) ? s.originalQueue.map(patchTrack) : s.originalQueue;
+          return {
+            currentTrack: nextCurrent,
+            queue: nextQueue,
+            originalQueue: nextOriginal,
+          };
+        });
+      }).catch(() => {});
+    }
+
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
     if (engine) {
       engine.unlockAudio?.();
-      const artistName = track.artists?.[0]?.name || '';
-      const query = `${track.name} ${artistName}`.trim();
-      engine.playTrack(track.id, query, 0);
+      const artistName = hydratedTrack.artists?.[0]?.name || '';
+      const query = `${hydratedTrack.name} ${artistName}`.trim();
+      engine.playTrack(hydratedTrack.id, query, 0);
 
       // Immediately preload the next 2 tracks (N+1 and N+2) in the background for zero-lag instant transitions
       setTimeout(() => {
@@ -401,7 +450,7 @@ const store = create<PlayerState>((set, get) => ({
       }, 500);
     }
 
-    updateMediaSessionTrack(track, 0);
+    updateMediaSessionTrack(hydratedTrack, 0);
   },
 
   togglePlay: () => {

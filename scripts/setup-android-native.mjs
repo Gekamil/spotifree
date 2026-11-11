@@ -43,7 +43,7 @@ function copyDir(src, dst) {
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
 
 // 3. MainActivity: every plugin of the app + voice intent & deep links handling
-const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeSpeechPlugin', 'SpotifreeLocalMusicPlugin'].filter((p) =>
+const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeAudioOutputPlugin', 'SpotifreeSpeechPlugin', 'SpotifreeLocalMusicPlugin'].filter((p) =>
   fs.existsSync(path.join(javaDir, `${p}.java`))
 );
 fs.writeFileSync(

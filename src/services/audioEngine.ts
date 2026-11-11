@@ -1608,6 +1608,14 @@ class AudioEngine {
     this.audios = [new Audio(), new Audio()];
     this.audios[0].preload = 'auto';
     this.audios[1].preload = 'auto';
+    try {
+      const savedSink = typeof window !== 'undefined' ? window.localStorage.getItem('spotifree_audio_output') : null;
+      if (savedSink && savedSink !== 'default') {
+        for (const a of this.audios as any[]) {
+          if (typeof a?.setSinkId === 'function') void a.setSinkId(savedSink).catch(() => {});
+        }
+      }
+    } catch {}
 
     this.setupHtml5Listeners();
 
@@ -2266,6 +2274,12 @@ class AudioEngine {
         } catch {
           this.audioContext = new AudioCtx();
         }
+        try {
+          const savedSink = window.localStorage.getItem('spotifree_audio_output');
+          if (savedSink && savedSink !== 'default' && typeof (this.audioContext as any)?.setSinkId === 'function') {
+            void (this.audioContext as any).setSinkId(savedSink).catch(() => {});
+          }
+        } catch {}
       }
 
       if (this.audioContext.state === 'suspended') {

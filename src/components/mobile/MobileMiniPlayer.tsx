@@ -14,6 +14,7 @@ import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCove
 import { MotionCover } from '../common/MotionCover';
 import { useUIStore } from '../../store/useUIStore';
 import { parseTrackArtists } from '../../utils/trackArtists';
+import { openDevicePickerSheet, useAudioOutputStore } from '../../services/audioOutputService';
 
 interface MobileMiniPlayerProps {
   onOpenFullPlayer: () => void;
@@ -44,6 +45,10 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
     toggleLike,
   } = usePlayerStore(
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike }))
+  );
+
+  const { activeOutputLabel, isDeviceSheetOpen } = useAudioOutputStore(
+    useShallow((s) => ({ activeOutputLabel: s.activeLabel, isDeviceSheetOpen: s.isSheetOpen }))
   );
 
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
@@ -178,8 +183,15 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
       <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
         {/* Device indicator button with genuine Spotify Connect icon */}
         <button
-          className="w-8 h-8 flex items-center justify-center text-[#1ed760] hover:scale-105 active:scale-95 transition-transform"
-          title="Escuchando en este dispositivo"
+          onClick={(e) => {
+            e.stopPropagation();
+            openDevicePickerSheet();
+          }}
+          className={`w-8 h-8 flex items-center justify-center rounded-full text-[#1ed760] hover:scale-105 active:scale-95 transition-all cursor-pointer ${
+            isDeviceSheetOpen ? 'bg-white/15 scale-105' : ''
+          }`}
+          title={`Conectar a un dispositivo (${activeOutputLabel})`}
+          aria-label="Seleccionar dispositivo de audio"
         >
           <SpotifyConnectNativeIcon size={16} />
         </button>

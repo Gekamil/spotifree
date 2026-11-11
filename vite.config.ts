@@ -1305,13 +1305,29 @@ function dynamicSpotifyPlugin(): Plugin {
             images: [{ url: a.picture_xl || a.picture_big || a.picture_medium || '' }],
           }));
 
-          const albums = (deezerAlbumsRes.data || []).map((a: any) => ({
-            id: `alb-${a.id}`,
-            name: a.title,
-            artists: [{ name: a.artist?.name || 'Artista' }],
-            images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
-            release_date: '2026',
-          }));
+          const albums = await Promise.all(
+            (deezerAlbumsRes.data || []).map(async (a: any, idx: number) => {
+              let releaseDate = a.release_date || '';
+              if (!releaseDate && idx < 8 && a.id) {
+                try {
+                  const detail: any = await fetch(`https://api.deezer.com/album/${a.id}`, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    signal: AbortSignal.timeout ? AbortSignal.timeout(900) : undefined,
+                  }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+                  if (detail?.release_date) releaseDate = detail.release_date;
+                } catch {}
+              }
+              return {
+                id: `alb-${a.id}`,
+                name: a.title,
+                artists: [{ ...(a.artist?.id ? { id: `art-${a.artist.id}` } : {}), name: a.artist?.name || 'Artista' }],
+                images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
+                release_date: releaseDate,
+                record_type: a.record_type || 'album',
+                type: 'album',
+              };
+            })
+          );
 
           const topCover = combined[0]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f00000002acc0778b688c66b07afc5426';
           const secondCover = combined[1]?.album?.images?.[0]?.url || 'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6';
