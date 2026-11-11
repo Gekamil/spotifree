@@ -62,15 +62,49 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
 
   return (
     <header className="h-16 w-full bg-black px-4 flex items-center justify-between select-none shrink-0 z-50 relative">
-      {/* Left: Spotify Circle Logo */}
+      {/* Left: Spotify Circle Logo + Navigation arrows */}
       <div className="flex items-center gap-2 shrink-0 pl-1">
         <button
           onClick={handleHomeClick}
-          className="text-white hover:scale-104 active:scale-96 transition-transform p-1 mr-1"
+          className="text-white hover:scale-104 active:scale-96 transition-transform p-1 mr-1 cursor-pointer"
           title="Spotify"
         >
           <SpotifyLogoNativeIcon size={32} className="text-white" />
         </button>
+
+        {/* Back and Forward history navigation buttons matching Spotify Desktop */}
+        <div className="flex items-center gap-1.5 ml-1">
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.history.length > 1) {
+                window.history.back();
+              } else if (activeMainTab !== 'home') {
+                setActiveMainTab(activeMainTab === 'playlist' ? 'search' : 'home');
+              }
+            }}
+            className="w-8 h-8 rounded-full bg-[#181818] hover:bg-[#282828] text-[#b3b3b3] hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-90 shadow-sm"
+            title="Atrás"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.56 8l6.47 6.47a.75.75 0 1 1-1.06 1.06L2.44 8 9.97.47a.75.75 0 0 1 1.06 0" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                window.history.forward();
+              }
+            }}
+            className="w-8 h-8 rounded-full bg-[#181818] hover:bg-[#282828] text-[#b3b3b3] hover:text-white flex items-center justify-center transition-all cursor-pointer active:scale-90 shadow-sm"
+            title="Adelante"
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M4.97.47a.75.75 0 0 0 0 1.06L11.44 8 4.97 14.47a.75.75 0 1 0 1.06 1.06L13.56 8 6.03.47a.75.75 0 0 0-1.06 0" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       {/* Center: Home Button + Capsule Search Bar */}

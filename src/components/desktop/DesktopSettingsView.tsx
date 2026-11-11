@@ -10,6 +10,12 @@ import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
 import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
 import { CloudSyncBadge } from '../common/CloudSyncBadge';
 import { RecoverPlaylistsSection } from '../common/RecoverPlaylistsSection';
+import {
+  type SettingsPage,
+  SETTINGS_PAGE_TITLES,
+  ICONS,
+  GROUPS,
+} from '../mobile/SettingsMenu';
 import React, { useState, useRef, useEffect } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { getStorageUsage, clearOfflineCache } from '../../utils/offlineStorage';
@@ -131,7 +137,19 @@ const SpotifyCustomSelect: React.FC<{
   );
 };
 
+export const OFFICIAL_SPOTIFY_DESKTOP_CATEGORIES = [
+  'Cuenta', // 1. CUENTA
+  'Idioma', // 2. IDIOMA
+  'Calidad de audio y Ecualizador', // 3. CALIDAD DE AUDIO Y ECUALIZADOR
+  'Reproducción', // 4. REPRODUCCIÓN
+  'Visualización y Contenido', // 5. VISUALIZACIÓN Y CONTENIDO
+  'Tu biblioteca y Archivos locales', // 6. TU BIBLIOTECA Y ARCHIVOS LOCALES
+  'Almacenamiento', // 7. ALMACENAMIENTO
+  'Social y Acerca de', // 8. SOCIAL Y ACERCA DE
+] as const;
+
 export const DesktopSettingsView: React.FC = () => {
+  const [activeSection, setActiveSection] = useState<SettingsPage>('account');
   const [searchQuery, setSearchQuery] = useState('');
   const { setActiveMainTab, viewMode, setViewMode, convertPhotosToBanners, setConvertPhotosToBanners } = useUIStore();
   const { user } = useSpotifyDataStore();
@@ -206,7 +224,6 @@ export const DesktopSettingsView: React.FC = () => {
       setIsExtractingCookie(false);
     }
   };
-
 
   const { language, setLanguage } = useLanguageStore();
 
@@ -374,7 +391,6 @@ export const DesktopSettingsView: React.FC = () => {
   const handleToggleGapless = (val: boolean) => {
     setGaplessAudio(val);
     if (typeof window !== 'undefined') {
-      // Gapless and crossfade are independent: never wipe the crossfade duration here
       window.localStorage.setItem('spotifree_gapless', String(val));
     }
   };
@@ -394,12 +410,10 @@ export const DesktopSettingsView: React.FC = () => {
     }
   };
 
-
   const matchesSearch = (text: string) => {
     if (!searchQuery.trim()) return true;
     return text.toLowerCase().includes(searchQuery.toLowerCase());
   };
-
 
   const LANGUAGE_OPTIONS = [
     { value: 'es-ES', label: 'Español de España (European Spanish)' },
@@ -411,7 +425,6 @@ export const DesktopSettingsView: React.FC = () => {
     { value: 'pt-BR', label: 'Português do Brasil (Brazilian Portuguese)' },
     { value: 'ja-JP', label: '日本語 (Japanese)' },
   ];
-
 
   const isGuestInSession = useSharedSessionStore((s) => s.isInSession && !s.isHost);
   if (isGuestInSession) {
@@ -430,7 +443,6 @@ export const DesktopSettingsView: React.FC = () => {
         </p>
         <button
           onClick={() => {
-            // On the computer the session lives in the right panel
             const ui = useUIStore.getState();
             if (ui.activeRightSidebar !== 'friends') ui.toggleRightSidebar('friends');
           }}
@@ -442,15 +454,706 @@ export const DesktopSettingsView: React.FC = () => {
     );
   }
 
+  // Render individual apartado sections
+  const renderAccount = () => (
+    <div className="space-y-6">
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3 max-w-xl">
+          <span className="text-sm font-bold text-white uppercase tracking-wider text-[#b3b3b3]">
+            Sesión y cuenta Spotifree
+          </span>
+          <CloudSyncBadge />
+        </div>
+        <div className="max-w-xl">
+          <SpotifreeAuthCard showCookieInput={false} />
+        </div>
+      </div>
+
+      {/* Row 2: Sincronización mediante cookie sp_dc */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-4 border-t border-b border-white/5">
+        <div className="space-y-1 max-w-md">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-white">Cookie de sesión (sp_dc)</span>
+            {savedSpotifyCookieSuccess && (
+              <span className="text-xs font-bold text-[#1ed760] animate-in fade-in">
+                ✓ Guardada
+              </span>
+            )}
+          </div>
+          <p className="text-xs text-[#a7a7a7] leading-relaxed">
+            Permite sincronizar tu sesión de Spotify directamente. Se almacena localmente de forma privada en tu navegador.
+          </p>
+          <button
+            onClick={() => setActiveMainTab('guide')}
+            className="text-xs text-[#b3b3b3] hover:text-white underline cursor-pointer inline-block pt-0.5"
+          >
+            ¿Cómo obtener tu cookie sp_dc?
+          </button>
+          <div className="pt-2 max-w-[340px]">
+            <NativeSpotifyLoginButton
+              compact
+              onDone={() => {
+                setSpotifyCookie(window.localStorage.getItem('user_spotify_cookie') || '');
+                setActiveMainTab('home');
+              }}
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
+          <div className="relative flex items-center">
+            <input
+              type={showCookieText ? 'text' : 'password'}
+              value={spotifyCookie}
+              onChange={(e) => {
+                setSpotifyCookie(e.target.value);
+                if (cookieError) setCookieError(null);
+              }}
+              placeholder="Pega aquí tu cookie sp_dc"
+              className="w-full sm:w-64 bg-[#242424] border border-[#727272] focus:border-white rounded-full pl-4 pr-9 py-2 text-xs text-white outline-none transition-colors font-mono"
+            />
+            <button
+              type="button"
+              onClick={() => setShowCookieText(!showCookieText)}
+              className="absolute right-3 text-[#b3b3b3] hover:text-white cursor-pointer transition-colors"
+              title={showCookieText ? 'Ocultar cookie' : 'Mostrar cookie'}
+            >
+              {showCookieText ? (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+              ) : (
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              )}
+            </button>
+          </div>
+          {spotifyCookie && (
+            <button
+              type="button"
+              onClick={handleCopyCookie}
+              className="px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow active:scale-95 cursor-pointer shrink-0 flex items-center gap-1.5"
+              title="Copiar cookie sp_dc"
+            >
+              <span>{copiedCookie ? '✓ Copiada' : 'Copiar'}</span>
+            </button>
+          )}
+          <button
+            onClick={handleSaveSpotifyCookie}
+            disabled={isExtractingCookie}
+            className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
+          >
+            {isExtractingCookie ? 'Sincronizando...' : 'Guardar'}
+          </button>
+        </div>
+      </div>
+
+      {/* Verified cookie status notification */}
+      {spotifyCookie && !cookieError && (
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-white text-xs">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
+            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+          </svg>
+          <div className="min-w-0">
+            <p className="font-bold text-[#1ed760]">Clave sp_dc verificada y activa</p>
+            <p className="text-[#a7a7a7] text-[11px] truncate">
+              Conectada con la cuenta de <strong>{user?.display_name || 'Spotify'}</strong>. Tus canciones, playlists y biblioteca están sincronizadas.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {cookieError && (
+        <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
+          {cookieError}
+        </p>
+      )}
+
+      {/* Row 3: Vincular con el móvil mediante QR o enlace */}
+      {spotifyCookie && (
+        <div className="py-4 border-b border-white/5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <span className="text-sm font-semibold text-white flex items-center gap-2">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
+                  <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
+                </svg>
+                <span>Vincular con la app móvil</span>
+              </span>
+              <p className="text-xs text-[#a7a7a7] mt-0.5">
+                Escanea este código con la cámara de tu teléfono móvil para iniciar sesión al instante sin tener que buscar o pegar claves en el teléfono.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowMobileQr(!showMobileQr)}
+              className="self-start sm:self-auto px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer shadow active:scale-95"
+            >
+              {showMobileQr ? 'Ocultar código QR' : 'Mostrar código QR'}
+            </button>
+          </div>
+
+          {showMobileQr && (
+            <div className="p-4 rounded-xl bg-[#181818] border border-white/10 flex flex-col sm:flex-row items-center gap-5 animate-in fade-in">
+              <div className="bg-white p-2.5 rounded-lg shrink-0 shadow-lg">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                    `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`
+                  )}`}
+                  alt="Código QR para móvil"
+                  className="w-[150px] h-[150px]"
+                />
+              </div>
+              <div className="space-y-2 text-center sm:text-left">
+                <p className="text-xs font-bold text-white">Pasos para conectar tu móvil:</p>
+                <ol className="text-xs text-[#b3b3b3] list-decimal list-inside space-y-1">
+                  <li>Abre la cámara de tu teléfono móvil.</li>
+                  <li>Apunta a este código y pulsa en la notificación para abrir el enlace.</li>
+                  <li>Tu móvil iniciará sesión automáticamente con tus mismas playlists y biblioteca.</li>
+                </ol>
+                <div className="pt-1">
+                  <button
+                    onClick={() => {
+                      const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`;
+                      navigator.clipboard.writeText(link);
+                      setCopiedMobileLink(true);
+                      setTimeout(() => setCopiedMobileLink(false), 2500);
+                    }}
+                    className="text-xs bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold px-4 py-2 rounded-full cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-2 shadow"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v8A1.5 1.5 0 0 0 4 12.5h6A1.5 1.5 0 0 0 11.5 11V3A1.5 1.5 0 0 0 10 1.5H4zm0 1h6a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5zm8 3a.5.5 0 0 1 .5.5v7.5a1 1 0 0 1-1 1H5a.5.5 0 0 1 0-1h6.5a.5.5 0 0 0 .5-.5V6a.5.5 0 0 1 .5-.5z" />
+                    </svg>
+                    <span>{copiedMobileLink ? 'Enlace copiado al portapapeles' : 'Copiar enlace directo para móvil'}</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Row 4: Gustos y recomendaciones musicales */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3">
+        <div className="space-y-1 max-w-md">
+          <span className="text-sm font-semibold text-white">
+            {language === 'en' ? 'Personalize favorite artists' : 'Personalizar mis artistas favoritos'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] leading-relaxed">
+            {language === 'en'
+              ? 'Choose or update artists you like to improve your Daily Mixes, Discover Weekly, and recommendations.'
+              : 'Elige o actualiza los artistas que te gustan para afinar tus Mixes diarios, Descubrimiento semanal y recomendaciones estilo Spotify.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => useUIStore.getState().openTasteOnboarding()}
+          className="px-5 py-2 rounded-full bg-[#1ed760] text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer shadow shrink-0"
+        >
+          {language === 'en' ? 'Adjust taste' : 'Ajustar gustos'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderRecover = () => (
+    <div className="space-y-4">
+      <RecoverPlaylistsSection variant="desktop" />
+    </div>
+  );
+
+  const renderDisplay = () => (
+    <div className="space-y-4">
+      {/* Idioma */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+        <div>
+          <p className="text-sm font-medium text-white">
+            {language === 'en' ? 'App Language' : 'Idioma de la aplicación'}
+          </p>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Select your preferred language for the interface.'
+              : 'Selecciona tu idioma preferido para la interfaz.'}
+          </p>
+        </div>
+        <SpotifyCustomSelect
+          value={language === 'en' ? 'en-US' : 'es-ES'}
+          options={LANGUAGE_OPTIONS}
+          onChange={handleLanguageSelect}
+          minWidth="250px"
+        />
+      </div>
+
+      {/* Mostrar el panel Sonando al reproducir */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Show Now Playing panel on playback' : 'Mostrar el panel Sonando al reproducir'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Automatically displays track details in the right sidebar.'
+              : 'Despliega automáticamente los detalles de la pista en el panel lateral.'}
+          </p>
+        </div>
+        <SpotifyToggle
+          checked={showNowPlayingOnClick}
+          onChange={setShowNowPlayingOnClick}
+          ariaLabel="Mostrar el panel Sonando al hacer clic a reproducir"
+        />
+      </div>
+
+      {/* Convertir fotos a banners */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Convert photos to banners' : 'Convertir fotos a banners'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Displays playlist covers as full widescreen banners instead of the classic square box.'
+              : 'Muestra las carátulas de las playlists como banners panorámicos a pantalla completa en lugar del cuadro clásico.'}
+          </p>
+        </div>
+        <SpotifyToggle
+          checked={convertPhotosToBanners}
+          onChange={setConvertPhotosToBanners}
+          ariaLabel="Convertir fotos a banners"
+        />
+      </div>
+
+      {/* Canvas */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">Canvas</div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Short, looping visuals while a song is playing.'
+              : 'Imágenes breves y en bucle mientras suena una canción.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={canvasEnabled}
+          onChange={setCanvasEnabled}
+          ariaLabel="Canvas"
+        />
+      </div>
+
+      {/* Vídeos musicales */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">
+            {language === 'en' ? 'Music videos' : 'Vídeos musicales'}
+          </div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Play live performances and music videos when available.'
+              : 'Reproducir vídeos y actuaciones en directo cuando estén disponibles.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={musicVideos}
+          onChange={setMusicVideos}
+          ariaLabel="Vídeos musicales"
+        />
+      </div>
+
+      {/* Portadas animadas */}
+      <div className="py-3 border-b border-white/5">
+        <MotionCoverSetting />
+      </div>
+
+      {/* Icono de la app */}
+      <AppIconSelector variant="desktop" />
+
+      {/* Usar diseño de biblioteca compacta */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Use compact library layout' : 'Usar diseño de biblioteca compacta'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Hide artwork and compress the playlist list in the sidebar.'
+              : 'Oculta las carátulas y comprime la lista de playlists en la barra lateral.'}
+          </p>
+        </div>
+        <SpotifyToggle
+          checked={viewMode === 'compacta'}
+          onChange={(val) => setViewMode(val ? 'compacta' : 'lista')}
+          ariaLabel="Usar diseño de biblioteca compacta"
+        />
+      </div>
+
+      {/* Aceleración por hardware */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Hardware acceleration' : 'Aceleración por hardware'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Uses the graphics processor to optimize app smoothness and rendering.'
+              : 'Usa la tarjeta gráfica para optimizar la fluidez visual y el rendimiento de la aplicación.'}
+          </p>
+        </div>
+        <SpotifyToggle
+          checked={hardwareAccel}
+          onChange={handleToggleHardwareAccel}
+          ariaLabel="Aceleración por hardware"
+        />
+      </div>
+    </div>
+  );
+
+  const renderPlayback = () => (
+    <div className="space-y-4">
+      {/* Calidad del streaming */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+        <div>
+          <p className="text-sm font-medium text-white">
+            {language === 'en' ? 'Streaming quality' : 'Calidad del streaming'}
+          </p>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Higher quality uses more data and requires a faster internet connection.'
+              : 'Una mayor calidad consume más datos y requiere una conexión a Internet más rápida.'}
+          </p>
+        </div>
+        <SpotifyCustomSelect
+          value={streamingQuality}
+          options={[
+            { value: 'auto', label: language === 'en' ? 'Automatic (recommended)' : 'Automática (recomendada)' },
+            { value: 'low', label: language === 'en' ? 'Low (96 kbit/s)' : 'Baja (96 kbit/s)' },
+            { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
+            { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
+            { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
+          ]}
+          onChange={handleSelectStreamingQuality}
+          minWidth="240px"
+        />
+      </div>
+
+      {/* Calidad de la descarga */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
+        <div>
+          <p className="text-sm font-medium text-white">
+            {language === 'en' ? 'Download quality' : 'Calidad de la descarga'}
+          </p>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Determines audio quality for offline tracks saved in «musica-spotifree».'
+              : 'Determina la tasa de bits para las canciones descargadas en «musica-spotifree».'}
+          </p>
+        </div>
+        <SpotifyCustomSelect
+          value={downloadQuality}
+          options={[
+            { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
+            { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
+            { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
+          ]}
+          onChange={handleSelectDownloadQuality}
+          minWidth="240px"
+        />
+      </div>
+
+      {/* Normalizar volumen */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">
+            {language === 'en' ? 'Normalize volume' : 'Normalizar el volumen'}
+          </div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Set the same volume level for all tracks with dynamic compression.'
+              : 'Establece el mismo nivel de volumen para todas las canciones mediante compresión dinámica.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={normalizeAudio}
+          onChange={handleToggleNormalize}
+          ariaLabel="Normalizar el volumen"
+        />
+      </div>
+
+      {/* Nivel de volumen (solo si normalización está activa) */}
+      {normalizeAudio && (
+        <div className="flex items-center justify-between py-3 border-b border-white/5 animate-in fade-in">
+          <div>
+            <span className="text-sm font-medium text-white">
+              {language === 'en' ? 'Volume level' : 'Nivel de volumen'}
+            </span>
+            <p className="text-xs text-[#a7a7a7] mt-0.5">
+              {language === 'en'
+                ? 'Adjust normalization target according to your listening environment.'
+                : 'Ajusta el objetivo según si escuchas en silencio o en un entorno ruidoso.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1.5 bg-[#181818] p-1 rounded-full border border-white/10">
+            {(['quiet', 'normal', 'loud'] as const).map((lvl) => (
+              <button
+                key={lvl}
+                type="button"
+                onClick={() => handleSelectNormalizeLevel(lvl)}
+                className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                  normalizeLevel === lvl
+                    ? 'bg-[#1ed760] text-black shadow'
+                    : 'text-[#b3b3b3] hover:text-white'
+                }`}
+              >
+                {lvl === 'quiet' ? (language === 'en' ? 'Quiet' : 'Silencioso') : lvl === 'normal' ? (language === 'en' ? 'Normal' : 'Normal') : (language === 'en' ? 'Loud' : 'Alto')}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reproducción sin pausas */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">
+            {language === 'en' ? 'Gapless playback' : 'Reproducción sin pausas'}
+          </div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Allows continuous transitions without silence between tracks.'
+              : 'Permite transiciones continuas sin silencios entre pistas.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={gaplessAudio}
+          onChange={handleToggleGapless}
+          ariaLabel="Reproducción sin pausas"
+        />
+      </div>
+
+      {/* Automix */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">Automix</div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Allows smooth transitions between songs on supported playlists.'
+              : 'Permite transiciones continuas y fluidas entre canciones en las playlists compatibles.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={automixEnabled}
+          onChange={handleToggleAutomix}
+          ariaLabel="Automix"
+        />
+      </div>
+
+      {/* Fundido entre canciones */}
+      {gaplessAudio && (
+        <div className="py-3 border-b border-white/5 animate-in fade-in space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm font-medium text-white">
+                {language === 'en' ? 'Crossfade songs' : 'Fundido entre canciones'}
+              </div>
+              <div className="text-xs text-[#a7a7a7] mt-0.5">
+                {language === 'en'
+                  ? 'Allows tracks to crossfade smoothly without silence or sudden cuts.'
+                  : 'Permite que las canciones se fundan suavemente sin silencios ni cortes bruscos.'}
+              </div>
+            </div>
+            <SpotifyToggle
+              checked={crossfadeEnabled}
+              onChange={handleToggleCrossfade}
+              ariaLabel="Fundido entre canciones"
+            />
+          </div>
+
+          {crossfadeEnabled && (
+            <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="text-xs text-[#b3b3b3]">
+                  <span>
+                    {language === 'en'
+                      ? 'Continuous crossfade duration between tracks'
+                      : 'Duración del fundido continuo entre pistas'}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3 w-full sm:w-72">
+                  <input
+                    type="range"
+                    min="1"
+                    max="12"
+                    step="1"
+                    value={crossfadeSeconds}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setCrossfadeSeconds(val);
+                      if (typeof window !== 'undefined') {
+                        window.localStorage.setItem('spotifree_crossfade_sec', String(val));
+                      }
+                    }}
+                    style={{
+                      background: `linear-gradient(to right, #1ed760 ${((crossfadeSeconds - 1) / 11) * 100}%, rgba(255, 255, 255, 0.2) ${((crossfadeSeconds - 1) / 11) * 100}%)`,
+                    }}
+                    className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
+                  />
+                  <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 min-w-[70px] text-right">
+                    {`${crossfadeSeconds} s`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Quick chips */}
+              <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                {[2, 4, 6, 8, 10, 12].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => {
+                      setCrossfadeSeconds(s);
+                      if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', String(s));
+                    }}
+                    className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                      crossfadeSeconds === s ? 'bg-[#1ed760] text-black shadow' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    {s} s
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Reproducción automática */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <div className="text-sm font-medium text-white">
+            {language === 'en' ? 'Autoplay similar songs' : 'Reproducción automática similar'}
+          </div>
+          <div className="text-xs text-[#a7a7a7] mt-0.5 max-w-xl">
+            {language === 'en'
+              ? 'Recommends and plays similar music matching your style when your current playlist ends.'
+              : 'Recomienda y reproduce música similar del mismo estilo y género como el algoritmo de Spotify cuando finalice tu lista.'}
+          </div>
+        </div>
+        <SpotifyToggle
+          checked={autoplaySimilar}
+          onChange={handleToggleAutoplay}
+          ariaLabel="Reproducción automática similar"
+        />
+      </div>
+
+      {/* Efectos de DJ */}
+      <div className="py-3 border-b border-white/5">
+        <DJEffectsSelector />
+      </div>
+
+      {/* Voz del DJ con IA */}
+      <div className="py-3 border-b border-white/5">
+        <DJVoicePicker />
+      </div>
+    </div>
+  );
+
+  const renderEq = () => (
+    <div className="space-y-4">
+      <SpotifyEqualizer variant="desktop" />
+    </div>
+  );
+
+  const renderAdvanced = () => (
+    <div className="space-y-4">
+      {/* Archivos locales */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Local Files' : 'Archivos locales'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Show and play local audio files and downloaded tracks from your computer.'
+              : 'Muestra y reproduce tus archivos de audio descargados y pistas MP3 locales en tu ordenador.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('local')}
+          className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer shrink-0"
+        >
+          {language === 'en' ? 'Open Local Files' : 'Abrir Archivos locales'}
+        </button>
+      </div>
+
+      {/* Shuffle algorithm & options */}
+      <AdvancedSettingsSection variant="desktop" />
+    </div>
+  );
+
+  const renderStorage = () => (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <p className="text-sm font-medium text-white">
+            {language === 'en' ? 'Track and cover art cache' : 'Caché de canciones y portadas'}
+          </p>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {cacheSize} {language === 'en' ? 'used in secure storage «musica-spotifree».' : 'ocupados en almacenamiento seguro «musica-spotifree».'}
+          </p>
+        </div>
+        <button
+          onClick={handleClearCache}
+          className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer shrink-0"
+        >
+          {cacheCleared ? (language === 'en' ? '✓ Cache cleared!' : '¡Caché borrada!') : (language === 'en' ? 'Clear cache' : 'Borrar caché')}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderSocial = () => (
+    <div className="space-y-4">
+      {/* Listening with friends */}
+      <div className="py-1">
+        <ListeningFriendsSection variant="desktop" />
+      </div>
+
+      {/* Sesión privada */}
+      <div className="flex items-center justify-between py-3 border-b border-white/5">
+        <div>
+          <span className="text-sm font-medium text-white">
+            {language === 'en' ? 'Private session' : 'Sesión privada'}
+          </span>
+          <p className="text-xs text-[#a7a7a7] mt-0.5">
+            {language === 'en'
+              ? 'Start a private session to listen anonymously without updating activity with friends.'
+              : 'Inicia una sesión privada para escuchar de forma anónima sin compartir tu actividad con amigos.'}
+          </p>
+        </div>
+        <SpotifyToggle
+          checked={privateSession}
+          onChange={handleTogglePrivateSession}
+          ariaLabel="Sesión privada"
+        />
+      </div>
+    </div>
+  );
+
+  const renderAbout = () => (
+    <div className="space-y-4">
+      <AboutAppSection variant="desktop" />
+    </div>
+  );
+
   return (
-    <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-4xl mx-auto pb-24 font-['SpotifyMixUI',sans-serif]">
+    <div className="min-h-full bg-gradient-to-b from-[#1e1e1e] via-[#121212] to-[#121212] text-white p-6 md:p-8 select-none max-w-6xl mx-auto pb-24 font-['SpotifyMixUI',sans-serif]">
       {/* Title & Search Bar */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-4 font-['SpotifyMixUITitle']">
-          Configuración
-        </h1>
-        <div className="relative max-w-sm">
-          <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-[#b3b3b3]">
+      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white font-['SpotifyMixUITitle']">
+            Configuración
+          </h1>
+          <p className="text-xs text-[#a7a7a7] mt-1">
+            Personaliza tu experiencia de audio, biblioteca, cuenta y aspecto
+          </p>
+        </div>
+
+        <div className="relative w-full md:w-80">
+          <span className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none text-[#b3b3b3]">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
               <path d="M7 1.75a5.25 5.25 0 1 0 0 10.5 5.25 5.25 0 0 0 0-10.5M.25 7a6.75 6.75 0 1 1 12.096 4.12l3.184 3.185a.75.75 0 1 1-1.06 1.06L11.304 12.2A6.75 6.75 0 0 1 .25 7" />
             </svg>
@@ -460,726 +1163,213 @@ export const DesktopSettingsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Buscar opciones de configuración"
-            className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] text-sm text-white placeholder-[#727272] pl-10 pr-4 py-2 rounded-full border border-transparent focus:border-white focus:outline-none transition-colors"
+            className="w-full bg-[#242424] hover:bg-[#2a2a2a] focus:bg-[#242424] text-xs text-white placeholder-[#727272] pl-10 pr-9 py-2.5 rounded-full border border-transparent focus:border-white focus:outline-none transition-colors"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 flex items-center pr-3 text-[#b3b3b3] hover:text-white cursor-pointer"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M2.47 2.47a.75.75 0 0 1 1.06 0L8 6.94l4.47-4.47a.75.75 0 1 1 1.06 1.06L9.06 8l4.47 4.47a.75.75 0 0 1-1.06 1.06L8 9.06l-4.47 4.47a.75.75 0 0 1-1.06-1.06L6.94 8 2.47 3.53a.75.75 0 0 1 0-1.06z" />
+              </svg>
+            </button>
+          )}
         </div>
       </div>
 
-      <div className="space-y-8">
-        {/* 1. CUENTA (Official Spotify Desktop Category 1) */}
-        {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar account') && (
-          <section className="space-y-4">
-            <div className="flex items-center justify-between gap-3 max-w-xl">
-              <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">Cuenta</h2>
-              <CloudSyncBadge />
-            </div>
-            <div className="max-w-xl">
-              <SpotifreeAuthCard showCookieInput={false} />
-            </div>
+      {/* Main Layout: Search results OR Apartados Master-Detail */}
+      {searchQuery.trim() !== '' ? (
+        <div className="space-y-10 animate-in fade-in duration-200">
+          <div className="flex items-center justify-between pb-3 border-b border-white/10">
+            <span className="text-xs text-[#b3b3b3]">
+              Resultados para «<strong className="text-white">{searchQuery}</strong>»
+            </span>
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-xs text-[#1ed760] hover:underline font-bold cursor-pointer"
+            >
+              Ver todos los apartados
+            </button>
+          </div>
 
-            {/* Row 2: Sincronización mediante cookie sp_dc */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">
-              <div className="space-y-1 max-w-md">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-semibold text-white">Cookie de sesión (sp_dc)</span>
-                  {savedSpotifyCookieSuccess && (
-                    <span className="text-xs font-bold text-[#1ed760] animate-in fade-in">
-                      ✓ Guardada
-                    </span>
-                  )}
-                </div>
-                <p className="text-xs text-[#a7a7a7] leading-relaxed">
-                  Permite sincronizar tu sesión de Spotify directamente. Se almacena localmente de forma privada en tu navegador.
-                </p>
-                <button
-                  onClick={() => setActiveMainTab('guide')}
-                  className="text-xs text-[#b3b3b3] hover:text-white underline cursor-pointer inline-block pt-0.5"
-                >
-                  ¿Cómo obtener tu cookie sp_dc?
-                </button>
-                <div className="pt-2 max-w-[340px]">
-                  <NativeSpotifyLoginButton
-                    compact
-                    onDone={() => {
-                      setSpotifyCookie(window.localStorage.getItem('user_spotify_cookie') || '');
-                      setActiveMainTab('home');
-                    }}
-                  />
-                </div>
-              </div>
+          {matchesSearch('cuenta sesión spotify cookie sp_dc usuario desconectar account gustos recomendaciones') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Cuenta y gustos</h2>
+              {renderAccount()}
+            </section>
+          )}
 
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
-                <div className="relative flex items-center">
-                  <input
-                    type={showCookieText ? 'text' : 'password'}
-                    value={spotifyCookie}
-                    onChange={(e) => {
-                      setSpotifyCookie(e.target.value);
-                      if (cookieError) setCookieError(null);
-                    }}
-                    placeholder="Pega aquí tu cookie sp_dc"
-                    className="w-full sm:w-64 bg-[#242424] border border-[#727272] focus:border-white rounded-full pl-4 pr-9 py-2 text-xs text-white outline-none transition-colors font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowCookieText(!showCookieText)}
-                    className="absolute right-3 text-[#b3b3b3] hover:text-white cursor-pointer transition-colors"
-                    title={showCookieText ? 'Ocultar cookie' : 'Mostrar cookie'}
-                  >
-                    {showCookieText ? (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-                    ) : (
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    )}
-                  </button>
-                </div>
-                {spotifyCookie && (
-                  <button
-                    type="button"
-                    onClick={handleCopyCookie}
-                    className="px-3.5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all shadow active:scale-95 cursor-pointer shrink-0 flex items-center gap-1.5"
-                    title="Copiar cookie sp_dc"
-                  >
-                    <span>{copiedCookie ? '✓ Copiada' : 'Copiar'}</span>
-                  </button>
-                )}
-                <button
-                  onClick={handleSaveSpotifyCookie}
-                  disabled={isExtractingCookie}
-                  className="px-5 py-2 rounded-full bg-white hover:bg-[#f0f0f0] text-black text-xs font-bold transition-all shadow hover:scale-104 active:scale-95 disabled:opacity-50 cursor-pointer shrink-0"
-                >
-                  {isExtractingCookie ? 'Sincronizando...' : 'Guardar'}
-                </button>
-              </div>
-            </div>
+          {matchesSearch('idioma language english español visualización contenido sonando panel reproducir banners fotos carátulas icono app canvas vídeos musicales portadas animadas aceleración hardware') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Idioma y pantalla</h2>
+              {renderDisplay()}
+            </section>
+          )}
 
-            {/* Verified cookie status notification */}
-            {spotifyCookie && !cookieError && (
-              <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-white text-xs">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
-                  <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
-                </svg>
-                <div className="min-w-0">
-                  <p className="font-bold text-[#1ed760]">Clave sp_dc verificada y activa</p>
-                  <p className="text-[#a7a7a7] text-[11px] truncate">
-                    Conectada con la cuenta de <strong>{user?.display_name || 'Spotify'}</strong>. Tus canciones, playlists y biblioteca están sincronizadas.
-                  </p>
-                </div>
-              </div>
-            )}
+          {matchesSearch('calidad audio streaming descarga ecualizador decibelios hz frecuencia sonido normalizar volumen equalizer pausas fundido crossfade automática dj efectos voz playback') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Reproducción y sonido</h2>
+              {renderPlayback()}
+            </section>
+          )}
 
-            {cookieError && (
-              <p className="text-xs font-semibold text-[#f87171] animate-in fade-in">
-                {cookieError}
-              </p>
-            )}
+          {matchesSearch('ecualizador sonido frecuencias graves medios agudos graves equalizer') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Ecualizador</h2>
+              {renderEq()}
+            </section>
+          )}
 
-            {/* Row 3: Vincular con el móvil mediante QR o enlace */}
-            {spotifyCookie && (
-              <div className="py-3 border-b border-white/5 space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-sm font-semibold text-white flex items-center gap-2">
-                      <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
-                        <path d="M11 1.5H5a1.5 1.5 0 0 0-1.5 1.5v10A1.5 1.5 0 0 0 5 14.5h6a1.5 1.5 0 0 0 1.5-1.5V3A1.5 1.5 0 0 0 11 1.5zM5 2.5h6a.5.5 0 0 1 .5.5v9H4.5V3a.5.5 0 0 1 .5-.5zm3 11a.75.75 0 1 1 0-1.5.75.75 0 0 1 0 1.5z" />
-                      </svg>
-                      <span>Vincular con la app móvil</span>
-                    </span>
-                    <p className="text-xs text-[#a7a7a7] mt-0.5">
-                      Escanea este código con la cámara de tu teléfono móvil para iniciar sesión al instante sin tener que buscar o pegar claves en el teléfono.
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => setShowMobileQr(!showMobileQr)}
-                    className="self-start sm:self-auto px-4 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold transition-all cursor-pointer shadow active:scale-95"
-                  >
-                    {showMobileQr ? 'Ocultar código QR' : 'Mostrar código QR'}
-                  </button>
-                </div>
+          {matchesSearch('recuperar playlists trash papelera borradas restore') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Recuperar playlists</h2>
+              {renderRecover()}
+            </section>
+          )}
 
-                {showMobileQr && (
-                  <div className="p-4 rounded-xl bg-[#181818] border border-white/10 flex flex-col sm:flex-row items-center gap-5 animate-in fade-in">
-                    <div className="bg-white p-2.5 rounded-lg shrink-0 shadow-lg">
-                      <img
-                        src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
-                          `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`
-                        )}`}
-                        alt="Código QR para móvil"
-                        className="w-[150px] h-[150px]"
-                      />
-                    </div>
-                    <div className="space-y-2 text-center sm:text-left">
-                      <p className="text-xs font-bold text-white">Pasos para conectar tu móvil:</p>
-                      <ol className="text-xs text-[#b3b3b3] list-decimal list-inside space-y-1">
-                        <li>Abre la cámara de tu teléfono móvil.</li>
-                        <li>Apunta a este código y pulsa en la notificación para abrir el enlace.</li>
-                        <li>Tu móvil iniciará sesión automáticamente con tus mismas playlists y biblioteca.</li>
-                      </ol>
-                      <div className="pt-1">
-                        <button
-                          onClick={() => {
-                            const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/?sp_dc=${encodeURIComponent(cleanSpDc(spotifyCookie))}`;
-                            navigator.clipboard.writeText(link);
-                            setCopiedMobileLink(true);
-                            setTimeout(() => setCopiedMobileLink(false), 2500);
-                          }}
-                          className="text-xs bg-[#1ed760] hover:bg-[#1fdf64] text-black font-bold px-4 py-2 rounded-full cursor-pointer transition-transform active:scale-95 inline-flex items-center gap-2 shadow"
+          {matchesSearch('avanzados aleatorio shuffle archivos locales local files') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Ajustes avanzados</h2>
+              {renderAdvanced()}
+            </section>
+          )}
+
+          {matchesSearch('almacenamiento caché memoria espacio archivos offline musica-spotifree storage') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Almacenamiento</h2>
+              {renderStorage()}
+            </section>
+          )}
+
+          {matchesSearch('social amigos sesión compartida amigos escuchando privada anonymous') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Escuchar juntos y social</h2>
+              {renderSocial()}
+            </section>
+          )}
+
+          {matchesSearch('acerca de versión novedades changelog about spotifree') && (
+            <section className="space-y-4">
+              <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Acerca de</h2>
+              {renderAbout()}
+            </section>
+          )}
+        </div>
+      ) : (
+        <div className="flex flex-col md:flex-row items-start gap-8">
+          {/* Left Column: Apartados Sidebar organized by GROUPS (matching Mobile) */}
+          <aside className="w-full md:w-72 shrink-0 space-y-5 bg-[#181818]/60 p-3.5 rounded-2xl border border-white/[0.06] backdrop-blur-sm">
+            {GROUPS.map((group) => (
+              <div key={group.title} className="space-y-1">
+                <h3 className="px-3 py-1 text-[11px] font-black uppercase tracking-wider text-[#727272]">
+                  {group.title}
+                </h3>
+                <div className="space-y-0.5">
+                  {group.items.map((item) => {
+                    const isSelected = activeSection === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setActiveSection(item.id)}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-white/10 text-white font-bold shadow-sm'
+                            : 'text-[#a7a7a7] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <span
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? 'bg-[#1ed760] text-black shadow' : 'bg-[#242424] text-white'
+                          }`}
                         >
-                          <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                            <path d="M4 1.5A1.5 1.5 0 0 0 2.5 3v8A1.5 1.5 0 0 0 4 12.5h6A1.5 1.5 0 0 0 11.5 11V3A1.5 1.5 0 0 0 10 1.5H4zm0 1h6a.5.5 0 0 1 .5.5v8a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V3a.5.5 0 0 1 .5-.5zm8 3a.5.5 0 0 1 .5.5v7.5a1 1 0 0 1-1 1H5a.5.5 0 0 1 0-1h6.5a.5.5 0 0 0 .5-.5V6a.5.5 0 0 1 .5-.5z" />
+                          <svg
+                            width="14"
+                            height="14"
+                            viewBox="0 0 24 24"
+                            fill={item.id === 'playback' || item.id === 'account' ? 'currentColor' : 'none'}
+                            stroke={item.id === 'playback' || item.id === 'account' ? 'none' : 'currentColor'}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            {ICONS[item.id]}
                           </svg>
-                          <span>{copiedMobileLink ? 'Enlace copiado al portapapeles' : 'Copiar enlace directo para móvil'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* 2. IDIOMA (Official Spotify Desktop Category 2) */}
-        {matchesSearch('idioma language english español') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Language' : 'Idioma'}
-            </h2>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  {language === 'en' ? 'App Language' : 'Idioma de la aplicación'}
-                </p>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Select your preferred language for the interface.'
-                    : 'Selecciona tu idioma preferido para la interfaz.'}
-                </p>
-              </div>
-              <SpotifyCustomSelect
-                value={language === 'en' ? 'en-US' : 'es-ES'}
-                options={LANGUAGE_OPTIONS}
-                onChange={handleLanguageSelect}
-                minWidth="250px"
-              />
-            </div>
-          </section>
-        )}
-
-        {/* 3. CALIDAD DE AUDIO Y ECUALIZADOR (Official Spotify Desktop Category 3) */}
-        {matchesSearch('calidad audio streaming descarga ecualizador decibelios hz frecuencia sonido normalizar volumen equalizer') && (
-          <section className="space-y-4">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Audio Quality & Equalizer' : 'Calidad de audio y Ecualizador'}
-            </h2>
-
-            {/* Calidad del streaming */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Streaming quality' : 'Calidad del streaming'}
-                </p>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Higher quality uses more data and requires a faster internet connection.'
-                    : 'Una mayor calidad consume más datos y requiere una conexión a Internet más rápida.'}
-                </p>
-              </div>
-              <SpotifyCustomSelect
-                value={streamingQuality}
-                options={[
-                  { value: 'auto', label: language === 'en' ? 'Automatic (recommended)' : 'Automática (recomendada)' },
-                  { value: 'low', label: language === 'en' ? 'Low (96 kbit/s)' : 'Baja (96 kbit/s)' },
-                  { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
-                  { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
-                  { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
-                ]}
-                onChange={handleSelectStreamingQuality}
-                minWidth="240px"
-              />
-            </div>
-
-            {/* Calidad de la descarga */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 py-3 border-b border-white/5">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Download quality' : 'Calidad de la descarga'}
-                </p>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Determines audio quality for offline tracks saved in «musica-spotifree».'
-                    : 'Determina la tasa de bits para las canciones descargadas en «musica-spotifree».'}
-                </p>
-              </div>
-              <SpotifyCustomSelect
-                value={downloadQuality}
-                options={[
-                  { value: 'normal', label: language === 'en' ? 'Normal (160 kbit/s)' : 'Normal (160 kbit/s)' },
-                  { value: 'high', label: language === 'en' ? 'High (256 kbit/s)' : 'Alta (256 kbit/s)' },
-                  { value: 'very_high', label: language === 'en' ? 'Very high (320 kbit/s)' : 'Muy alta (320 kbit/s)' },
-                ]}
-                onChange={handleSelectDownloadQuality}
-                minWidth="240px"
-              />
-            </div>
-
-            {/* Normalizar volumen */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <div className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Normalize volume' : 'Normalizar el volumen'}
-                </div>
-                <div className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Set the same volume level for all tracks with dynamic compression.'
-                    : 'Establece el mismo nivel de volumen para todas las canciones mediante compresión dinámica.'}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <span className="block text-[13px] font-bold leading-tight truncate">
+                            {SETTINGS_PAGE_TITLES[item.id]}
+                          </span>
+                          <span className="block text-[11px] text-[#727272] truncate mt-0.5">
+                            {item.subtitle}
+                          </span>
+                        </div>
+                        <svg
+                          width="12"
+                          height="12"
+                          viewBox="0 0 16 16"
+                          fill="currentColor"
+                          className={`shrink-0 transition-transform ${
+                            isSelected ? 'text-[#1ed760] translate-x-0.5' : 'text-[#535353]'
+                          }`}
+                        >
+                          <path d="M5.47 2.47a.75.75 0 0 1 1.06 0l5 5a.75.75 0 0 1 0 1.06l-5 5a.75.75 0 1 1-1.06-1.06L9.94 8 5.47 3.53a.75.75 0 0 1 0-1.06z" />
+                        </svg>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
-              <SpotifyToggle
-                checked={normalizeAudio}
-                onChange={handleToggleNormalize}
-                ariaLabel="Normalizar el volumen"
-              />
-            </div>
+            ))}
+          </aside>
 
-            {/* Nivel de volumen (solo si normalización está activa) */}
-            {normalizeAudio && (
-              <div className="flex items-center justify-between py-3 border-b border-white/5 animate-in fade-in">
+          {/* Right Column: Selected Apartado Panel */}
+          <main className="flex-1 min-w-0 bg-[#181818]/60 border border-white/[0.06] rounded-2xl p-6 sm:p-8 backdrop-blur-sm shadow-xl min-h-[520px]">
+            <div className="flex items-center justify-between pb-5 mb-6 border-b border-white/5">
+              <div className="flex items-center gap-3.5">
+                <span className="w-10 h-10 rounded-xl bg-[#242424] flex items-center justify-center text-[#1ed760] shrink-0 border border-white/5 shadow-inner">
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill={activeSection === 'playback' || activeSection === 'account' ? 'currentColor' : 'none'}
+                    stroke={activeSection === 'playback' || activeSection === 'account' ? 'none' : 'currentColor'}
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    {ICONS[activeSection]}
+                  </svg>
+                </span>
                 <div>
-                  <span className="text-sm font-medium text-white">
-                    {language === 'en' ? 'Volume level' : 'Nivel de volumen'}
-                  </span>
+                  <h2 className="text-xl font-extrabold text-white font-['SpotifyMixUITitle']">
+                    {SETTINGS_PAGE_TITLES[activeSection]}
+                  </h2>
                   <p className="text-xs text-[#a7a7a7] mt-0.5">
-                    {language === 'en'
-                      ? 'Adjust normalization target according to your listening environment.'
-                      : 'Ajusta el objetivo según si escuchas en silencio o en un entorno ruidoso.'}
+                    {GROUPS.flatMap((g) => g.items).find((i) => i.id === activeSection)?.subtitle}
                   </p>
                 </div>
-                <div className="flex items-center gap-1.5 bg-[#181818] p-1 rounded-full border border-white/10">
-                  {(['quiet', 'normal', 'loud'] as const).map((lvl) => (
-                    <button
-                      key={lvl}
-                      type="button"
-                      onClick={() => handleSelectNormalizeLevel(lvl)}
-                      className={`px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                        normalizeLevel === lvl
-                          ? 'bg-[#1ed760] text-black shadow'
-                          : 'text-[#b3b3b3] hover:text-white'
-                      }`}
-                    >
-                      {lvl === 'quiet' ? (language === 'en' ? 'Quiet' : 'Silencioso') : lvl === 'normal' ? (language === 'en' ? 'Normal' : 'Normal') : (language === 'en' ? 'Loud' : 'Alto')}
-                    </button>
-                  ))}
-                </div>
               </div>
-            )}
-
-            <div className="pt-2">
-              <SpotifyEqualizer variant="desktop" />
-            </div>
-          </section>
-        )}
-
-        {/* 4. REPRODUCCIÓN (Official Spotify Desktop Category 4) */}
-        {matchesSearch('reproducción pausas fundido crossfade automática dj efectos voz playback') && (
-          <section className="space-y-4">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Playback' : 'Reproducción'}
-            </h2>
-
-            <div className="space-y-3">
-              {/* Reproducción sin pausas */}
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="text-sm font-medium text-white">
-                    {language === 'en' ? 'Gapless playback' : 'Reproducción sin pausas'}
-                  </div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    {language === 'en'
-                      ? 'Allows continuous transitions without silence between tracks.'
-                      : 'Permite transiciones continuas sin silencios entre pistas.'}
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={gaplessAudio}
-                  onChange={handleToggleGapless}
-                  ariaLabel="Reproducción sin pausas"
-                />
-              </div>
-
-              {/* Automix (Transiciones automáticas estilo Spotify) */}
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="text-sm font-medium text-white">Automix</div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5">
-                    {language === 'en'
-                      ? 'Allows smooth transitions between songs on supported playlists.'
-                      : 'Permite transiciones continuas y fluidas entre canciones en las playlists compatibles.'}
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={automixEnabled}
-                  onChange={handleToggleAutomix}
-                  ariaLabel="Automix"
-                />
-              </div>
-
-              {/* Fundido entre canciones (Solo visible si Reproducción sin pausas está activa) */}
-              {gaplessAudio && (
-                <div className="py-3 border-b border-white/5 animate-in fade-in space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-sm font-medium text-white">
-                        {language === 'en' ? 'Crossfade songs' : 'Fundido entre canciones'}
-                      </div>
-                      <div className="text-xs text-[#a7a7a7] mt-0.5">
-                        {language === 'en'
-                          ? 'Allows tracks to crossfade smoothly without silence or sudden cuts.'
-                          : 'Permite que las canciones se fundan suavemente sin silencios ni cortes bruscos.'}
-                      </div>
-                    </div>
-                    <SpotifyToggle
-                      checked={crossfadeEnabled}
-                      onChange={handleToggleCrossfade}
-                      ariaLabel="Fundido entre canciones"
-                    />
-                  </div>
-
-                  {crossfadeEnabled && (
-                    <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="text-xs text-[#b3b3b3]">
-                          <span>
-                            {language === 'en'
-                              ? 'Continuous crossfade duration between tracks'
-                              : 'Duración del fundido continuo entre pistas'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 w-full sm:w-72">
-                          <input
-                            type="range"
-                            min="1"
-                            max="12"
-                            step="1"
-                            value={crossfadeSeconds}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              setCrossfadeSeconds(val);
-                              if (typeof window !== 'undefined') {
-                                window.localStorage.setItem('spotifree_crossfade_sec', String(val));
-                              }
-                            }}
-                            style={{
-                              background: `linear-gradient(to right, #1ed760 ${((crossfadeSeconds - 1) / 11) * 100}%, rgba(255, 255, 255, 0.2) ${((crossfadeSeconds - 1) / 11) * 100}%)`,
-                            }}
-                            className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760]"
-                          />
-                          <span className="text-xs font-mono font-bold text-[#1ed760] tabular-nums shrink-0 min-w-[70px] text-right">
-                            {`${crossfadeSeconds} s`}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Quick chips */}
-                      <div className="flex items-center gap-1.5 flex-wrap pt-1">
-                        {[2, 4, 6, 8, 10, 12].map((s) => (
-                          <button
-                            key={s}
-                            onClick={() => {
-                              setCrossfadeSeconds(s);
-                              if (typeof window !== 'undefined') window.localStorage.setItem('spotifree_crossfade_sec', String(s));
-                            }}
-                            className={`px-2.5 py-1 rounded-full text-xs font-bold transition-all cursor-pointer ${
-                              crossfadeSeconds === s ? 'bg-[#1ed760] text-black shadow' : 'bg-white/5 text-white/70 hover:bg-white/10 hover:text-white'
-                            }`}
-                          >
-                            {s} s
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Reproducción automática */}
-              <div className="flex items-center justify-between py-3 border-b border-white/5">
-                <div>
-                  <div className="text-sm font-medium text-white">
-                    {language === 'en' ? 'Autoplay similar songs' : 'Reproducción automática similar'}
-                  </div>
-                  <div className="text-xs text-[#a7a7a7] mt-0.5 max-w-xl">
-                    {language === 'en'
-                      ? 'Recommends and plays similar music matching your style when your current playlist ends.'
-                      : 'Recomienda y reproduce música similar del mismo estilo y género como el algoritmo de Spotify cuando finalice tu lista. Si se desactiva, pasa a tu siguiente lista o vuelve al inicio sin añadir temas aleatorios.'}
-                  </div>
-                </div>
-                <SpotifyToggle
-                  checked={autoplaySimilar}
-                  onChange={handleToggleAutoplay}
-                  ariaLabel="Reproducción automática similar"
-                />
-              </div>
-
-              {/* Efectos de DJ */}
-              <div className="py-3 border-b border-white/5">
-                <DJEffectsSelector />
-              </div>
-
-              {/* Voz del DJ con IA */}
-              <div className="py-3 border-b border-white/5">
-                <DJVoicePicker />
-              </div>
-            </div>
-          </section>
-        )}
-
-        {/* 5. VISUALIZACIÓN Y CONTENIDO (Official Spotify Desktop Category 5) */}
-        {matchesSearch('visualización contenido sonando panel reproducir banners fotos carátulas icono app canvas vídeos musicales portadas animadas') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Display & Content' : 'Visualización y Contenido'}
-            </h2>
-
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Show Now Playing panel on playback' : 'Mostrar el panel Sonando al reproducir'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Automatically displays track details in the right sidebar.'
-                    : 'Despliega automáticamente los detalles de la pista en el panel lateral.'}
-                </p>
-              </div>
-              <SpotifyToggle
-                checked={showNowPlayingOnClick}
-                onChange={setShowNowPlayingOnClick}
-                ariaLabel="Mostrar el panel Sonando al hacer clic a reproducir"
-              />
+              {activeSection === 'account' && <CloudSyncBadge />}
             </div>
 
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Convert photos to banners' : 'Convertir fotos a banners'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Displays playlist covers as full widescreen banners instead of the classic square box.'
-                    : 'Muestra las carátulas de las playlists como banners panorámicos a pantalla completa en lugar del cuadro clásico.'}
-                </p>
-              </div>
-              <SpotifyToggle
-                checked={convertPhotosToBanners}
-                onChange={setConvertPhotosToBanners}
-                ariaLabel="Convertir fotos a banners"
-              />
+            {/* Active section content */}
+            <div className="animate-in fade-in duration-150">
+              {activeSection === 'account' && renderAccount()}
+              {activeSection === 'recover' && renderRecover()}
+              {activeSection === 'display' && renderDisplay()}
+              {activeSection === 'playback' && renderPlayback()}
+              {activeSection === 'eq' && renderEq()}
+              {activeSection === 'advanced' && renderAdvanced()}
+              {activeSection === 'storage' && renderStorage()}
+              {activeSection === 'social' && renderSocial()}
+              {activeSection === 'about' && renderAbout()}
             </div>
-
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <div className="text-sm font-medium text-white">Canvas</div>
-                <div className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Short, looping visuals while a song is playing.'
-                    : 'Imágenes breves y en bucle mientras suena una canción.'}
-                </div>
-              </div>
-              <SpotifyToggle
-                checked={canvasEnabled}
-                onChange={setCanvasEnabled}
-                ariaLabel="Canvas"
-              />
-            </div>
-
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <div className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Music videos' : 'Vídeos musicales'}
-                </div>
-                <div className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Play live performances and music videos when available.'
-                    : 'Reproducir vídeos y actuaciones en directo cuando estén disponibles.'}
-                </div>
-              </div>
-              <SpotifyToggle
-                checked={musicVideos}
-                onChange={setMusicVideos}
-                ariaLabel="Vídeos musicales"
-              />
-            </div>
-
-            <div className="py-3 border-b border-white/5">
-              <MotionCoverSetting />
-            </div>
-
-            {/* Icono de la app: solo en navegador (antes de instalar) y en la APK */}
-            <AppIconSelector variant="desktop" />
-
-            {/* Aceleración por hardware */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Hardware acceleration' : 'Aceleración por hardware'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Uses the graphics processor to optimize app smoothness and rendering.'
-                    : 'Usa la tarjeta gráfica para optimizar la fluidez visual y el rendimiento de la aplicación.'}
-                </p>
-              </div>
-              <SpotifyToggle
-                checked={hardwareAccel}
-                onChange={handleToggleHardwareAccel}
-                ariaLabel="Aceleración por hardware"
-              />
-            </div>
-          </section>
-        )}
-
-        {/* 6. TU BIBLIOTECA Y ARCHIVOS LOCALES (Official Spotify Desktop Category 6) */}
-        {matchesSearch('tu biblioteca archivos locales compacta diseño lista recuperar playlists trash borrar aleatorio shuffle reciente library') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Your Library & Local Files' : 'Tu biblioteca y Archivos locales'}
-            </h2>
-
-            {/* Usar diseño de biblioteca compacta */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Use compact library layout' : 'Usar diseño de biblioteca compacta'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Hide artwork and compress the playlist list in the sidebar.'
-                    : 'Oculta las carátulas y comprime la lista de playlists en la barra lateral.'}
-                </p>
-              </div>
-              <SpotifyToggle
-                checked={viewMode === 'compacta'}
-                onChange={(val) => setViewMode(val ? 'compacta' : 'lista')}
-                ariaLabel="Usar diseño de biblioteca compacta"
-              />
-            </div>
-
-            {/* Archivos locales */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Local Files' : 'Archivos locales'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Show and play local audio files and downloaded tracks from your computer.'
-                    : 'Muestra y reproduce tus archivos de audio descargados y pistas MP3 locales en tu ordenador.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveMainTab('local')}
-                className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer shrink-0"
-              >
-                {language === 'en' ? 'Open Local Files' : 'Abrir Archivos locales'}
-              </button>
-            </div>
-
-            {/* Shuffle algorithm & recent-at-end */}
-            <AdvancedSettingsSection variant="desktop" />
-
-            {/* Recuperar playlists borradas (90 días) */}
-            <div className="pt-2">
-              <RecoverPlaylistsSection variant="desktop" />
-            </div>
-          </section>
-        )}
-
-        {/* 7. ALMACENAMIENTO (Official Spotify Desktop Category 7) */}
-        {matchesSearch('almacenamiento caché memoria espacio archivos offline musica-spotifree storage') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Storage' : 'Almacenamiento'}
-            </h2>
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <p className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Track and cover art cache' : 'Caché de canciones y portadas'}
-                </p>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {cacheSize} {language === 'en' ? 'used in secure storage «musica-spotifree».' : 'ocupados en almacenamiento seguro «musica-spotifree».'}
-                </p>
-              </div>
-              <button
-                onClick={handleClearCache}
-                className="px-5 py-2 rounded-full border border-[#727272] hover:border-white text-xs font-bold text-white hover:scale-104 active:scale-95 transition-all cursor-pointer shrink-0"
-              >
-                {cacheCleared ? (language === 'en' ? '✓ Cache cleared!' : '¡Caché borrada!') : (language === 'en' ? 'Clear cache' : 'Borrar caché')}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* 8. SOCIAL Y ACERCA DE (Official Spotify Desktop Category 8) */}
-        {matchesSearch('social acerca de amigos sesión compartida gustos recomendaciones artistas favoritos personalizar taste onboarding versión changelog about') && (
-          <section className="space-y-3">
-            <h2 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
-              {language === 'en' ? 'Social & About' : 'Social y Acerca de'}
-            </h2>
-
-            {/* Shared session listening */}
-            <div className="py-1">
-              <ListeningFriendsSection variant="desktop" />
-            </div>
-
-            {/* Sesión privada */}
-            <div className="flex items-center justify-between py-3 border-b border-white/5">
-              <div>
-                <span className="text-sm font-medium text-white">
-                  {language === 'en' ? 'Private session' : 'Sesión privada'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] mt-0.5">
-                  {language === 'en'
-                    ? 'Start a private session to listen anonymously without updating activity with friends.'
-                    : 'Inicia una sesión privada para escuchar de forma anónima sin compartir tu actividad con amigos.'}
-                </p>
-              </div>
-              <SpotifyToggle
-                checked={privateSession}
-                onChange={handleTogglePrivateSession}
-                ariaLabel="Sesión privada"
-              />
-            </div>
-
-            {/* Gustos Musicales & Recomendaciones */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-3 border-b border-white/5">
-              <div className="space-y-1 max-w-md">
-                <span className="text-sm font-semibold text-white">
-                  {language === 'en' ? 'Personalize favorite artists' : 'Personalizar mis artistas favoritos'}
-                </span>
-                <p className="text-xs text-[#a7a7a7] leading-relaxed">
-                  {language === 'en'
-                    ? 'Choose or update artists you like to improve your Daily Mixes, Discover Weekly, and recommendations.'
-                    : 'Elige o actualiza los artistas que te gustan para afinar tus Mixes diarios, Descubrimiento semanal y recomendaciones estilo Spotify.'}
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => useUIStore.getState().openTasteOnboarding()}
-                className="px-5 py-2 rounded-full bg-[#1ed760] text-black text-xs font-bold hover:scale-105 active:scale-95 transition-all cursor-pointer shadow shrink-0"
-              >
-                {language === 'en' ? 'Adjust taste' : 'Ajustar gustos'}
-              </button>
-            </div>
-
-            {/* Acerca de la aplicación (Versión y Cambios) */}
-            <div className="pt-2">
-              <AboutAppSection variant="desktop" />
-            </div>
-          </section>
-        )}
-      </div>
+          </main>
+        </div>
+      )}
     </div>
   );
 };

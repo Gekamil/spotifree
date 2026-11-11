@@ -1409,13 +1409,13 @@ function dynamicSpotifyPlugin(): Plugin {
               playlists.unshift({
                 id: vaultId,
                 name: `${primaryMatchedArtist.name}: Remixes, Leaks y Slowed`,
-                description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+                description: 'Remixes, versiones slowed, inéditas y temas oficiales',
                 images: primaryMatchedArtist.images?.length
                   ? primaryMatchedArtist.images
                   : soundcloudVariants[0]?.album?.images || [],
                 owner: {
-                  display_name: 'SoundCloud • Spotifree',
-                  id: 'soundcloud',
+                  display_name: 'Spotifree',
+                  id: 'spotifree',
                 },
                 tracks: {
                   total: soundcloudVariants.length + 6,

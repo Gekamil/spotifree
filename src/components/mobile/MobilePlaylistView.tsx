@@ -1658,10 +1658,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                   coverUrl
                 )
               }
-              className="inline-flex items-center gap-1.5 px-3.5 min-h-[36px] rounded-full bg-white/10 active:bg-white/20 text-white text-[11px] font-bold border border-white/10"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 active:bg-white/20 text-white text-[11px] font-bold border border-white/10 cursor-pointer"
             >
-              <span className="w-2 h-2 rounded-full bg-[#ff5500]" aria-hidden="true" />
-              <span>Remixes y Leaks</span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
+                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
+                <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+              </svg>
+              <span>Remixes, Leaks y Slowed</span>
             </button>
           )}
         </div>

@@ -1335,6 +1335,34 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         </div>
       </div>
 
+      {/* Return button if navigated into an artist or into the remixes vault */}
+      {(dynamicPlaylist.id.startsWith('sc-vault-') || isArtist) && (
+        <div className="px-8 pt-4 pb-0 z-20 relative">
+          <button
+            type="button"
+            onClick={() => {
+              if (dynamicPlaylist.id.startsWith('sc-vault-')) {
+                const artistName = dynamicPlaylist.name.split(':')[0].trim();
+                if (artistName && onSelectPlaylistById) {
+                  onSelectPlaylistById(`art-${artistName.toLowerCase().replace(/\s+/g, '-')}`, artistName);
+                } else {
+                  setActiveMainTab('search');
+                }
+              } else {
+                setActiveMainTab('search');
+              }
+            }}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/50 hover:bg-black/80 active:scale-95 text-white text-xs font-bold border border-white/20 transition-all cursor-pointer backdrop-blur-md shadow-md"
+            title={dynamicPlaylist.id.startsWith('sc-vault-') ? 'Volver al perfil del artista' : 'Volver a la búsqueda'}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M11.03.47a.75.75 0 0 1 0 1.06L4.56 8l6.47 6.47a.75.75 0 1 1-1.06 1.06L2.44 8 9.97.47a.75.75 0 0 1 1.06 0" />
+            </svg>
+            <span>{dynamicPlaylist.id.startsWith('sc-vault-') ? 'Volver al artista' : 'Volver a la búsqueda'}</span>
+          </button>
+        </div>
+      )}
+
       {hasBanner ? (
         /* Widescreen Banner Hero (Daily Mixes / Playlists with Wide Banner matching Photos 3 & 4) */
         <div
@@ -1763,39 +1791,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </svg>
             </button>
 
-            {/* Quick Action Buttons for all saved library playlists: Añadir & Editar */}
-            {canManagePlaylist && (
-              <div className="flex items-center gap-2 pl-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const searchSection = document.getElementById('desktop-playlist-search-section');
-                    if (searchSection) {
-                      searchSection.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                  className="px-3.5 py-1.5 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white transition-all flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
-                  title="Añadir canciones a esta playlist"
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75z" />
-                  </svg>
-                  <span>Añadir</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => openEditPlaylistModal(dynamicPlaylist)}
-                  className="px-3.5 py-1.5 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white transition-all flex items-center gap-1.5 hover:scale-105 active:scale-95 cursor-pointer"
-                  title="Editar información de la playlist"
-                >
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M11.838.146a.5.5 0 0 0-.707 0L1.146 10.131a.5.5 0 0 0-.131.232l-1 4a.5.5 0 0 0 .606.606l4-1a.5.5 0 0 0 .232-.131L14.838 3.854a.5.5 0 0 0 0-.708l-3-3zM11.2 1.414l1.386 1.386-8.993 8.993-1.386-1.386L11.2 1.414zM1.866 12.134l1.386 1.386-2.585.646.646-2.585z" />
-                  </svg>
-                  <span>Editar</span>
-                </button>
-              </div>
-            )}
-
             {isArtist && (
               <button
                 type="button"
@@ -1959,10 +1954,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     dynamicPlaylist.images?.[0]?.url
                   )
                 }
-                className="inline-flex items-center gap-2 px-4 min-h-[38px] rounded-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold border border-white/10 transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold border border-white/15 transition-all cursor-pointer shadow-sm"
+                title={`Ver remixes, inéditas y versiones alternativas de ${dynamicPlaylist.name}`}
               >
-                <span className="w-2 h-2 rounded-full bg-[#ff5500]" aria-hidden="true" />
-                <span>Remixes, Slowed e Inéditas (SoundCloud)</span>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
+                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
+                  <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
+                </svg>
+                <span>Remixes, Leaks y Slowed</span>
               </button>
             )}
           </div>

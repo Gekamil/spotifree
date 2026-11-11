@@ -14,7 +14,7 @@ export const SETTINGS_PAGE_TITLES: Record<SettingsPage, string> = {
   about: 'Acerca de',
 };
 
-const ICONS: Record<SettingsPage, React.ReactNode> = {
+export const ICONS: Record<SettingsPage, React.ReactNode> = {
   account: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-8 2-8 5v1h16v-1c0-3-4-5-8-5z" />,
   recover: <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4m5-1v5l3 2" />,
   display: <path d="M3 5h18v11H3zm6 14h6v2H9z" />,
@@ -26,7 +26,7 @@ const ICONS: Record<SettingsPage, React.ReactNode> = {
   about: <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zm0-11v6m0-9h.01" />,
 };
 
-const GROUPS: Array<{ title: string; items: Array<{ id: SettingsPage; subtitle: string }> }> = [
+export const GROUPS: Array<{ title: string; items: Array<{ id: SettingsPage; subtitle: string }> }> = [
   {
     title: 'General',
     items: [

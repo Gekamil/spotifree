@@ -754,11 +754,11 @@ export function scItemToSpotifreeTrack(item, variantInfo = null) {
     artists: [{ id: `sc-art-${item.user?.id || 'sc'}`, name: artistName }],
     album: {
       id: `sc-alb-${item.id}`,
-      name: `SoundCloud • ${cls.label}`,
+      name: cls.label && cls.label !== 'SoundCloud' ? cls.label : 'Versión alternativa',
       images: cover ? [{ url: cover }] : [],
     },
     scVariant: cls.variant,
-    scVariantLabel: cls.label,
+    scVariantLabel: cls.label && cls.label !== 'SoundCloud' ? cls.label : 'Versión alternativa',
     scUrl: item.permalink_url || undefined,
     source: 'soundcloud',
   };
@@ -926,12 +926,27 @@ export async function buildArtistSoundCloudVault(artistName = '') {
     scTracks.push(scT);
   }
 
-  // Prioritize Leaks & Remixes/Slowed up front, interspersed cleanly with a handful of top official tracks
-  const leaks = scTracks.filter((t) => t.scVariant === 'leak');
-  const remixesSlowed = scTracks.filter((t) => t.scVariant === 'remix' || t.scVariant === 'slowed');
-  const others = scTracks.filter((t) => t.scVariant !== 'leak' && t.scVariant !== 'remix' && t.scVariant !== 'slowed');
+  // Only include genuine variants: Leaks, Remixes, Slowed, Instrumental or Live.
+  // Unedited normal songs from SoundCloud are discarded; the original official tracks are used instead.
+  const isRealVariant = (t) => {
+    if (!t) return false;
+    if (t.scVariant === 'leak' || t.scVariant === 'remix' || t.scVariant === 'slowed' || t.scVariant === 'instrumental' || t.scVariant === 'live') {
+      return true;
+    }
+    const n = (t.name || '').toLowerCase();
+    return /\b(remix|slowed|reverb|leak|unreleased|in[eé]dita|ac[uú]stic[ao]|sped up|live|en vivo|mashup|instrumental)\b/i.test(n);
+  };
 
-  const combined = [...remixesSlowed.slice(0, 10), ...leaks.slice(0, 8), ...others.slice(0, 5), ...officialTracks.slice(0, 5)].slice(0, 28);
+  const leaks = scTracks.filter((t) => t.scVariant === 'leak' || /\b(leak|unreleased|in[eé]dita)\b/i.test(t.name || ''));
+  const remixesSlowed = scTracks.filter(
+    (t) => (t.scVariant === 'remix' || t.scVariant === 'slowed') || /\b(remix|slowed|sped up|reverb|mashup)\b/i.test(t.name || '')
+  );
+  const otherVariants = scTracks.filter(
+    (t) => isRealVariant(t) && !leaks.includes(t) && !remixesSlowed.includes(t)
+  );
+
+  // Pure collection: genuine modifications + real official studio originals with authentic album names
+  const combined = [...remixesSlowed.slice(0, 12), ...leaks.slice(0, 10), ...otherVariants.slice(0, 4), ...officialTracks.slice(0, 6)].slice(0, 30);
   if (combined.length === 0) return null;
 
   const coverImg =
@@ -943,10 +958,10 @@ export async function buildArtistSoundCloudVault(artistName = '') {
   return {
     id: `sc-vault-${encodeURIComponent(cleanName)}`,
     name: `${cleanName}: Remixes, Leaks y Slowed`,
-    description: `SoundCloud & oficiales • ${remixesSlowed.length} remixes/slowed, ${leaks.length} inéditas y temas oficiales`,
+    description: `${remixesSlowed.length + otherVariants.length} remixes/versiones, ${leaks.length} inéditas y temas oficiales`,
     type: 'playlist',
     images: coverImg ? [{ url: coverImg }] : [],
-    owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+    owner: { display_name: 'Spotifree', id: 'spotifree' },
     tracks: { total: combined.length, items: combined },
   };
 }

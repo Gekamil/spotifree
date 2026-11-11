@@ -763,9 +763,9 @@ const server = http.createServer(async (req, res) => {
             plItems.unshift({
               id: vId,
               name: `${matchedArtist.name}: Remixes, Leaks y Slowed`,
-              description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+              description: 'Remixes, versiones slowed, inéditas y temas oficiales',
               images: matchedArtist.images?.length ? matchedArtist.images : soundcloudVariants[0]?.album?.images || [],
-              owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+              owner: { display_name: 'Spotifree', id: 'spotifree' },
               tracks: { total: soundcloudVariants.length + 6, items: [] },
             });
             spotifyData.playlists.items = plItems;
@@ -1019,9 +1019,9 @@ const server = http.createServer(async (req, res) => {
           playlists.unshift({
             id: vId,
             name: `${artists[0].name}: Remixes, Leaks y Slowed`,
-            description: 'SoundCloud • Remixes, versiones slowed, inéditas y oficiales sin duplicados',
+            description: 'Remixes, versiones slowed, inéditas y temas oficiales',
             images: artists[0].images?.length ? artists[0].images : soundcloudVariants[0]?.album?.images || [],
-            owner: { display_name: 'SoundCloud • Spotifree', id: 'soundcloud' },
+            owner: { display_name: 'Spotifree', id: 'spotifree' },
             tracks: { total: soundcloudVariants.length + 6, items: [] },
           });
         }
