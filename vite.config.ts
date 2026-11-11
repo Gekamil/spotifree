@@ -13,7 +13,7 @@ import { readExternalPlaylist } from './api/_lib/import-playlist.js';
 // @ts-ignore
 import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
-import { searchSoundCloudCatalog, resolveSoundCloudUrl, findMatchingOfficialTrackIndex } from './api/_lib/musicFallback.js';
+import { searchSoundCloudCatalog, resolveSoundCloudUrl, findMatchingOfficialTrackIndex, buildArtistSoundCloudVault } from './api/_lib/musicFallback.js';
 // @ts-ignore
 import metadataHandler from './api/metadata.js';
 // @ts-ignore
@@ -557,6 +557,17 @@ function dynamicSpotifyPlugin(): Plugin {
         if (!rawId) {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: 'Missing playlist ID' }));
+        }
+
+        // Artist SoundCloud Vault fast-path (/api/spotify/playlist/sc-vault-:artist)
+        if (rawId.startsWith('sc-vault-')) {
+          let artistName = rawId.slice('sc-vault-'.length);
+          try { artistName = decodeURIComponent(artistName); } catch {}
+          const vault = await buildArtistSoundCloudVault(artistName).catch(() => null);
+          if (vault) {
+            res.statusCode = 200;
+            return res.end(JSON.stringify(vault));
+          }
         }
 
         // Deezer Playlist fast-path

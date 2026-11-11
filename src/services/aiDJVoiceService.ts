@@ -7,7 +7,7 @@ import { useLanguageStore } from '../utils/i18n';
 import { audioEngine } from './audioEngine';
 import { usePlayerStore } from '../store/usePlayerStore';
 
-export type DJVoiceId = 'dalia' | 'elevenlabs' | 'sebastian' | 'alvaro' | 'salome' | 'gemini' | 'jorge' | 'elvira';
+export type DJVoiceId = 'dalia' | 'sebastian' | 'alvaro' | 'salome' | 'gemini' | 'jorge' | 'elvira';
 
 export interface DJVoiceOptionItem {
   id: DJVoiceId;
@@ -46,7 +46,7 @@ export interface DJVoiceOptions {
 
 export interface AIDJConfig {
   voice: string;
-  provider: 'edge' | 'openai' | 'elevenlabs' | 'cartesia' | 'gemini';
+  provider: 'edge' | 'openai' | 'cartesia' | 'gemini';
   apiKey?: string;
   voiceId?: string;
   azureKey?: string;
@@ -180,7 +180,7 @@ class AIDJVoiceService {
 
   /** /api/tts parameters: the chosen voice, the presenter's delivery and word timings */
   private ttsParams(text: string, lang: string, voice: DJVoiceId): URLSearchParams {
-    const provider = voice === 'gemini' ? 'gemini' : voice === 'elevenlabs' ? 'elevenlabs' : 'edge';
+    const provider = voice === 'gemini' ? 'gemini' : 'edge';
     const params = new URLSearchParams({ text, voice, provider, format: 'mp3', lang, style: 'dj', timings: '1', v: '5' });
     if (this.config.apiKey) params.set('apiKey', this.config.apiKey);
     if (this.config.voiceId) params.set('voiceId', this.config.voiceId);

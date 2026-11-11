@@ -375,7 +375,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
   return (
     <div
-      className="relative w-full h-full max-h-full text-white flex flex-col justify-between overflow-y-auto scrollbar-none select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3 pb-8 sm:pb-4"
+      className="relative w-full h-full max-h-screen text-white flex flex-col justify-between overflow-hidden select-none font-['SpotifyMixUI'] animate-in fade-in duration-300 p-2 sm:p-3 pb-3 sm:pb-3"
       style={{
         backgroundColor: '#050b18',
       }}
@@ -606,17 +606,77 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         )}
 
         {/* Quick Vibe Chips - Dynamically curated from user library */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center py-2 px-1 max-w-full z-10 mt-auto">
+        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center py-1 px-1 max-w-full z-10 mt-auto">
           {vibeChips.map((chip) => (
             <button
               key={chip}
               type="button"
               onClick={() => handleSendPrompt(chip)}
-              className="px-3 py-1.5 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] sm:text-[12px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+              className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] sm:text-[12px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
             >
               {chip}
             </button>
           ))}
+        </div>
+
+        {/* Interactive DJ Prompt Input & Voice Controls */}
+        <div className="w-full max-w-md sm:max-w-xl flex items-center gap-2 px-1 z-10 mt-1">
+          <button
+            type="button"
+            onClick={toggleMic}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-md ${
+              isMicListening
+                ? 'bg-[#00f2fe] text-black shadow-[0_0_16px_rgba(0,242,254,0.9)] animate-pulse scale-105'
+                : 'bg-white/15 hover:bg-white/25 text-white active:scale-95 border border-white/20'
+            }`}
+            title={isMicListening ? 'Detener micrófono' : 'Hablar al DJ con tu voz'}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+              <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+              <line x1="12" y1="19" x2="12" y2="23" />
+            </svg>
+          </button>
+
+          <div className="flex-1 flex items-center bg-white/10 hover:bg-white/15 focus-within:bg-white/20 border border-white/20 focus-within:border-white/50 rounded-full px-3 py-1.5 transition-all shadow-inner backdrop-blur-xl">
+            <input
+              type="text"
+              value={promptInput}
+              onChange={(e) => setPromptInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSendPrompt();
+              }}
+              placeholder="Pide un estilo, artista o canción al DJ..."
+              className="w-full bg-transparent text-white placeholder-white/50 text-xs sm:text-sm font-medium outline-none"
+            />
+            {promptInput.trim() && (
+              <button
+                type="button"
+                onClick={() => handleSendPrompt()}
+                className="w-6 h-6 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0 ml-1 active:scale-90 transition-transform cursor-pointer"
+                title="Enviar petición"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setShowChatDrawer(true)}
+            className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-md ${
+              showChatDrawer
+                ? 'bg-[#1ed760] text-black'
+                : 'bg-white/10 hover:bg-white/20 text-white/90 active:scale-95 border border-white/15'
+            }`}
+            title="Ver chat e historial con el DJ"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
         </div>
 
         {/* =========================================================================

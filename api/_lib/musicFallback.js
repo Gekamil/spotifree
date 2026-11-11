@@ -473,17 +473,24 @@ function storeHlsBuffer(cacheKey, buf) {
 
 export function getCachedSoundCloudHlsBuffer(cacheKey) {
   const entry = SC_HLS_BUFFER_CACHE.get(cacheKey);
-  if (entry && Date.now() - entry.fetchedAt < 600_000) {
+  if (entry && Date.now() - entry.fetchedAt < 3600_000) {
     return entry.buf;
   }
   return null;
+}
+
+// Background prewarm client ID immediately so first track doesn't pay discovery penalty
+if (typeof setTimeout !== 'undefined') {
+  setTimeout(() => {
+    getSoundCloudClientId().catch(() => {});
+  }, 250);
 }
 
 async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
   const existing = getCachedSoundCloudHlsBuffer(cacheKey);
   if (existing) return existing;
 
-  const m3u8Text = await fetchWithTimeout(m3u8Url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 5000).then((r) => (r.ok ? r.text() : ''));
+  const m3u8Text = await fetchWithTimeout(m3u8Url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 3500).then((r) => (r.ok ? r.text() : ''));
   if (!m3u8Text || /#EXT-X-KEY/i.test(m3u8Text)) return null;
 
   const mapMatch = m3u8Text.match(/#EXT-X-MAP:URI="([^"]+)"/i);
@@ -495,26 +502,21 @@ async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
   if (!mapMatch?.[1] || segUrls.length === 0 || segUrls.length > 160) return null;
 
   const allUrls = [mapMatch[1], ...segUrls];
-  const parts = new Array(allUrls.length);
-  const fetchSegOnce = async (u) => {
+  const fetchSegOnce = async (u, idx) => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const buf = await fetchWithTimeout(u, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 8000)
+      const buf = await fetchWithTimeout(u, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 3500)
         .then((r) => (r.ok ? r.arrayBuffer().then((ab) => Buffer.from(ab)) : null))
         .catch(() => null);
-      if (buf && buf.length > 0) return buf;
+      if (buf && buf.length > 0) return { idx, buf };
     }
-    return null;
+    return { idx, buf: null };
   };
-  const BATCH = 8;
-  for (let i = 0; i < allUrls.length; i += BATCH) {
-    const slice = allUrls.slice(i, i + BATCH);
-    const bufs = await Promise.all(slice.map(fetchSegOnce));
-    if (bufs.some((b) => !b || b.length === 0)) return null;
-    for (let j = 0; j < bufs.length; j++) {
-      parts[i + j] = bufs[j];
-    }
-  }
 
+  // Full parallel segment fetching across all audio chunks
+  const results = await Promise.all(allUrls.map((u, idx) => fetchSegOnce(u, idx)));
+  if (results.some((r) => !r.buf || r.buf.length === 0)) return null;
+
+  const parts = results.sort((a, b) => a.idx - b.idx).map((r) => r.buf);
   const fullBuf = Buffer.concat(parts);
   const sniff = sniffAudioSignature(fullBuf.subarray(0, 32));
   if (!sniff.valid || fullBuf.length < 100_000) return null;
@@ -580,7 +582,7 @@ export async function extractViaSoundCloud({ q = '', title = '', artist = '', ex
     const trackNum = scMatch[1];
     const idKey = `sc:${trackNum}`;
     const cached = SC_TRACK_CACHE.get(idKey);
-    if (cached && Date.now() - cached.fetchedAt < 300_000) {
+    if (cached && Date.now() - cached.fetchedAt < 3600_000) {
       if (cached.streamBuffer || !String(cached.url).startsWith('sc-hls:')) return cached;
       const buf = getCachedSoundCloudHlsBuffer(idKey);
       if (buf) return { ...cached, streamBuffer: buf };

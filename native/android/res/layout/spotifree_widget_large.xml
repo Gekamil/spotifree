@@ -98,6 +98,19 @@
                     android:text=""
                     android:textColor="#D9FFFFFF"
                     android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/widget_lyrics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="#B31ED760"
+                    android:textSize="12sp"
+                    android:fontFamily="sans-serif-medium"
+                    android:visibility="gone" />
             </LinearLayout>
 
             <LinearLayout

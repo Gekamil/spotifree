@@ -17,6 +17,7 @@ import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Bundle;
 import android.support.v4.media.session.PlaybackStateCompat;
+import android.view.View;
 import android.widget.RemoteViews;
 
 import androidx.media.session.MediaButtonReceiver;
@@ -222,6 +223,7 @@ public class SpotifreeWidget extends AppWidgetProvider {
             String[] song = song(ctx);
             String title = song[0];
             String artist = song[1];
+            String lyrics = SpotifreeMediaService.lyricLine;
             boolean playing = SpotifreeMediaService.playing;
             // The app is running (its media session can take the buttons)
             boolean live = SpotifreeMediaService.current != null && SpotifreeMediaPlugin.isAppRunning();
@@ -229,7 +231,7 @@ public class SpotifreeWidget extends AppWidgetProvider {
             int card = color != 0 ? color : DEFAULT_COLOR;
             StringBuilder layouts = new StringBuilder();
             for (int id : ids) layouts.append(layoutFor(mgr, id)).append(',');
-            String sig = title + "|" + artist + "|" + playing + "|" + live + "|" + (cover == null ? 0 : cover.hashCode()) + "|" + card + "|" + layouts;
+            String sig = title + "|" + artist + "|" + (lyrics == null ? "" : lyrics) + "|" + playing + "|" + live + "|" + (cover == null ? 0 : cover.hashCode()) + "|" + card + "|" + layouts;
             if (sig.equals(lastSig)) return;
             lastSig = sig;
 
@@ -247,6 +249,14 @@ public class SpotifreeWidget extends AppWidgetProvider {
                 v.setInt(R.id.widget_bg, "setColorFilter", card);
                 v.setTextViewText(R.id.widget_title, hasSong ? title : "Spotifree");
                 v.setTextViewText(R.id.widget_artist, hasSong ? artist : "Toca para abrir");
+                if (!small) {
+                    if (hasSong && lyrics != null && !lyrics.trim().isEmpty()) {
+                        v.setViewVisibility(R.id.widget_lyrics, View.VISIBLE);
+                        v.setTextViewText(R.id.widget_lyrics, "♫ " + lyrics.trim());
+                    } else {
+                        v.setViewVisibility(R.id.widget_lyrics, View.GONE);
+                    }
+                }
                 Bitmap art = small || large ? artBig : artBar;
                 if (art != null) v.setImageViewBitmap(R.id.widget_art, art);
                 else v.setImageViewResource(R.id.widget_art, R.mipmap.ic_launcher_app_default);

@@ -107,7 +107,7 @@ interface MobilePlaylistViewProps {
 export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   playlist,
   onBack,
-  onSelectPlaylistById,
+  onSelectPlaylistById: _onSelectPlaylistById,
 }) => {
   const {
     currentTrack,
@@ -392,6 +392,16 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false);
   const [isOptionsOpen, setIsOptionsOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Artist SoundCloud Vault inline filter (Remixes, Leaks y Slowed)
+  const [showRemixesOnly, setShowRemixesOnly] = useState(false);
+  const [artistVaultTracks, setArtistVaultTracks] = useState<Track[]>([]);
+  const [isLoadingVault, setIsLoadingVault] = useState(false);
+
+  useEffect(() => {
+    setShowRemixesOnly(false);
+    setArtistVaultTracks([]);
+  }, [playlist.id]);
 
   const [extractedThemeColor, setExtractedThemeColor] = useState<string>(() =>
     resolveVibrantColor(playlist.id, playlist.name, (playlist as any).color)
@@ -741,7 +751,12 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   // Playlist tracks maintain their original sequence (Spotify parity: shuffle does not rearrange the visible list)
   // Ordenar (Spotify): only how the list is shown; the playlist keeps its own order
-  const displayTracks = useMemo(() => sortPlaylistTracks(tracks, sortKey), [tracks, sortKey]);
+  const displayTracks = useMemo(() => {
+    if (isArtist && showRemixesOnly && artistVaultTracks.length > 0) {
+      return sortPlaylistTracks(artistVaultTracks, sortKey);
+    }
+    return sortPlaylistTracks(tracks, sortKey);
+  }, [tracks, sortKey, isArtist, showRemixesOnly, artistVaultTracks]);
 
   // Real-time synchronization for deleted tracks & deleted playlists
   useEffect(() => {
@@ -1646,27 +1661,39 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       {isArtist && (
         <div className="px-5 pt-3 pb-1 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle']">
-            Populares
+            {showRemixesOnly ? 'Remixes, Leaks e Inéditas' : 'Populares'}
           </h2>
-          {onSelectPlaylistById && (
-            <button
-              type="button"
-              onClick={() =>
-                onSelectPlaylistById(
-                  `sc-vault-${encodeURIComponent(playlist.name)}`,
-                  `${playlist.name}: Remixes, Leaks y Slowed`,
-                  coverUrl
-                )
+          <button
+            type="button"
+            onClick={async () => {
+              if (showRemixesOnly) {
+                setShowRemixesOnly(false);
+                return;
               }
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 active:bg-white/20 text-white text-[11px] font-bold border border-white/10 cursor-pointer"
-            >
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
-                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
-                <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
-              </svg>
-              <span>Remixes, Leaks y Slowed</span>
-            </button>
-          )}
+              if (artistVaultTracks.length === 0) {
+                setIsLoadingVault(true);
+                try {
+                  const res = await fetch(`/api/spotify/playlist/sc-vault-${encodeURIComponent(playlist.name)}`);
+                  if (res.ok) {
+                    const data = await res.json();
+                    const items = Array.isArray(data?.tracks?.items) ? data.tracks.items : [];
+                    setArtistVaultTracks(items);
+                  }
+                } catch {} finally {
+                  setIsLoadingVault(false);
+                }
+              }
+              setShowRemixesOnly(true);
+            }}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all cursor-pointer ${
+              showRemixesOnly
+                ? 'bg-white text-black border-white shadow-sm'
+                : 'bg-white/10 active:bg-white/20 text-white/90 border-white/10 hover:border-white/40'
+            }`}
+            title="Filtrar canciones populares por remixes, versiones slowed e inéditas"
+          >
+            <span>{isLoadingVault ? 'Cargando remixes...' : 'Remixes, Leaks y Slowed'}</span>
+          </button>
         </div>
       )}
 

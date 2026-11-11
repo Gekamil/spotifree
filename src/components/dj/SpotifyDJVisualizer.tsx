@@ -51,17 +51,23 @@ export function calculateOrbLayerDisplacement(
   const wave2 = Math.cos(theta * 3 + (mini ? time * 1.0 : time * 0.7)) * 0.35;
   const baseOffset = (wave1 + wave2) * bulgeBase;
 
-  if (layerIndex === 0 || splitAmount <= 0.001) {
-    // Layer 0: Core stable ring responding to voice pulse
+  if (splitAmount <= 0.001) {
+    // Single ring when idle or playing: all layers collapse cleanly
     return baseOffset;
   }
 
   // Angular upper-right Gaussian weight (maximum at -45 deg, smooth roll-off)
   const W = getUpperRightWeight(theta, 0.85);
+  const scaleFactor = mini ? size / 38 : size / 260;
+
+  if (layerIndex === 0) {
+    // Layer 0 (Core ring): Sinks inward ("se hunde") in the upper-right speaking quadrant
+    const inwardDip = (mini ? 2.5 : 14.0) * scaleFactor * (0.35 + voiceLevel * 0.65);
+    return baseOffset - splitAmount * W * inwardDip;
+  }
 
   if (layerIndex === 1) {
     // Layer 1 (Mid ring): displaced ~18-22px toward upper-right with speech harmonics
-    const scaleFactor = mini ? size / 38 : size / 260;
     const midBaseDisplacement = (mini ? 2.2 : 18.0) * scaleFactor;
     const midSpeechHarmonic = (0.3 + voiceLevel * 0.7) * (mini ? 1.2 : 7.0) * scaleFactor * Math.sin(theta * 3 - time * 3.5);
     const midLayerOffset = splitAmount * W * (midBaseDisplacement + midSpeechHarmonic);
@@ -70,7 +76,6 @@ export function calculateOrbLayerDisplacement(
 
   if (layerIndex === 2) {
     // Layer 2 (Outer ring): displaced ~36-44px toward upper-right with high-frequency speech wave flutter
-    const scaleFactor = mini ? size / 38 : size / 260;
     const outerBaseDisplacement = (mini ? 4.2 : 36.0) * scaleFactor;
     const outerSpeechFlutter =
       (0.35 + voiceLevel * 0.65) * (mini ? 1.8 : 9.5) * scaleFactor * Math.cos(theta * 4 + time * 4.5) +
@@ -245,8 +250,8 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         pulseScale = 1 + Math.sin(time * 1.8) * 0.035;
         bulgeBase = 0.35 * (size / 38);
       } else if (isSpeaking) {
-        pulseScale = 1 + Math.sin(time * 2.2) * 0.02 + currentVoice * 0.09;
-        bulgeBase = (1.0 + currentVoice * 1.5) * (size / 260);
+        pulseScale = 1 + Math.sin(time * 1.8) * 0.018;
+        bulgeBase = (1.0 + currentVoice * 0.8) * (size / 260);
       } else if (isPlaying) {
         pulseScale = 1 + Math.sin(time * 1.8) * 0.025 + Math.sin(time * 3.6) * 0.01;
         bulgeBase = 1.4 * (size / 260);

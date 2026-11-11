@@ -1048,8 +1048,52 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     } catch {}
   };
 
+  const [showRemixesOnly, setShowRemixesOnly] = useState(false);
+  const [artistVaultTracks, setArtistVaultTracks] = useState<Track[]>([]);
+  const [isLoadingVault, setIsLoadingVault] = useState(false);
+
+  useEffect(() => {
+    setShowRemixesOnly(false);
+    setArtistVaultTracks([]);
+    setIsLoadingVault(false);
+  }, [dynamicPlaylist.id]);
+
+  const handleToggleRemixes = async () => {
+    if (showRemixesOnly) {
+      setShowRemixesOnly(false);
+      return;
+    }
+    setShowRemixesOnly(true);
+    if (artistVaultTracks.length === 0 && !isLoadingVault) {
+      setIsLoadingVault(true);
+      try {
+        const res = await fetch(`/api/spotify/playlist/sc-vault-${encodeURIComponent(dynamicPlaylist.name)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data?.tracks?.items) && data.tracks.items.length > 0) {
+            setArtistVaultTracks(data.tracks.items);
+          }
+        }
+      } catch {}
+      setIsLoadingVault(false);
+    }
+  };
+
+  // A playlist saved in the library (e.g. imported) is never shown as an artist page
+  const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
+  const isArtist = !isLibraryPlaylist && (
+    dynamicPlaylist.description?.toLowerCase() === 'artista' ||
+    (dynamicPlaylist as any).type === 'artist' ||
+    (dynamicPlaylist as any).is_artist === true ||
+    dynamicPlaylist.id.startsWith('art-') ||
+    dynamicPlaylist.id.startsWith('artist-'));
+
   const tracks = useMemo(() => {
-    let list = sortPlaylistTracks(dynamicTracks, sortKey);
+    let sourceList = dynamicTracks;
+    if (isArtist && showRemixesOnly && artistVaultTracks.length > 0) {
+      sourceList = artistVaultTracks;
+    }
+    let list = sortPlaylistTracks(sourceList, sortKey);
     if (sortDesc && sortKey !== 'custom') list = [...list].reverse();
     const q = filterQuery.trim().toLowerCase();
     if (q) {
@@ -1058,7 +1102,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       );
     }
     return list;
-  }, [dynamicTracks, sortKey, sortDesc, filterQuery]);
+  }, [dynamicTracks, artistVaultTracks, isArtist, showRemixesOnly, sortKey, sortDesc, filterQuery]);
 
   const isDJ = Boolean(
     dynamicPlaylist.id === 'spotify-dj' ||
@@ -1075,15 +1119,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks|saved songs|saved tracks|favoritas|favorites|my favorites|favorite songs)$/i.test(
       (dynamicPlaylist.name || '').trim()
     );
-
-  // A playlist saved in the library (e.g. imported) is never shown as an artist page
-  const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
-  const isArtist = !isLibraryPlaylist && (
-    dynamicPlaylist.description?.toLowerCase() === 'artista' ||
-    (dynamicPlaylist as any).type === 'artist' ||
-    (dynamicPlaylist as any).is_artist === true ||
-    dynamicPlaylist.id.startsWith('art-') ||
-    dynamicPlaylist.id.startsWith('artist-'));
 
   const isFolder =
     dynamicPlaylist.id === 'nueva-carpeta' ||
@@ -1942,28 +1977,20 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         {isArtist && (
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
-              Populares
+              {showRemixesOnly ? 'Remixes, Leaks y Slowed' : 'Populares'}
             </h2>
-            {onSelectPlaylistById && (
-              <button
-                type="button"
-                onClick={() =>
-                  onSelectPlaylistById(
-                    `sc-vault-${encodeURIComponent(dynamicPlaylist.name)}`,
-                    `${dynamicPlaylist.name}: Remixes, Leaks y Slowed`,
-                    dynamicPlaylist.images?.[0]?.url
-                  )
-                }
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white text-xs font-bold border border-white/15 transition-all cursor-pointer shadow-sm"
-                title={`Ver remixes, inéditas y versiones alternativas de ${dynamicPlaylist.name}`}
-              >
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
-                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
-                  <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
-                </svg>
-                <span>Remixes, Leaks y Slowed</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handleToggleRemixes}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer shadow-sm ${
+                showRemixesOnly
+                  ? 'bg-[#1ed760] text-black shadow-md'
+                  : 'bg-white/10 hover:bg-white/20 text-white border border-white/15'
+              }`}
+              title="Filtrar remixes, inéditas y versiones alternativas"
+            >
+              <span>{isLoadingVault ? 'Cargando remixes...' : 'Remixes, Leaks y Slowed'}</span>
+            </button>
           </div>
         )}
         {/* Table Header - Only rendered when tracks exist */}

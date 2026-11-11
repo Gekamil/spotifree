@@ -69,6 +69,19 @@
                 android:text=""
                 android:textColor="#D9FFFFFF"
                 android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/widget_lyrics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:text=""
+                android:textColor="#B31ED760"
+                android:textSize="11sp"
+                android:fontFamily="sans-serif-medium"
+                android:visibility="gone" />
         </LinearLayout>
 
         <ImageView

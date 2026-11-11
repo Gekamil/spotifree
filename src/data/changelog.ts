@@ -11,14 +11,27 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.2.1';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.1',
+    date: '11 de noviembre, 2026',
+    title: 'Aro del DJ interactivo, chat con la IA, filtrado de remixes y widgets animados',
+    isLatest: true,
+    highlights: [
+      'Aro de la IA perfeccionado: se hunde y rebota de forma orgánica solo en la zona donde habla, con 1 aro unificado en reposo.',
+      'Interacción directa con la IA DJ: ahora puedes pedirle estilos (reggaeton, lofi, rock) o canciones similares mediante voz o texto sin pantallas bloqueadas.',
+      'Filtrado de remixes y leaks en artistas: el botón ahora filtra las canciones directamente en la misma vista sin cambiar de pestaña y sin adornos innecesarios.',
+      'Velocidad de reproducción de temas SoundCloud/leaks acelerada con descargas paralelas de segmentos HLS y caché extendida.',
+      'Widgets mejorados: fondos con la carátula difuminada, animaciones de ondas de audio y letras sincronizadas adaptables a cualquier tamaño.',
+      'Eliminación de la API de ElevenLabs, optimizando la voz con Edge Neural sin claves ni cuotas externas.',
+    ],
+  },
   {
     version: '0.2.0',
     date: '10 de noviembre, 2026',
     title: 'Tocadiscos, estadísticas y escuchar con amigos',
-    isLatest: true,
     highlights: [
       'Nuevo widget «Tocadiscos» para la pantalla de inicio: el vinilo gira con la canción que suena, con su portada en la etiqueta, y el brazo baja al darle a reproducir.',
       'Estadísticas de escucha rediseñadas: minutos de la semana comparados con la anterior, gráfico de los últimos 7 días, a qué horas escuchas y tus artistas y canciones más escuchados. El tiempo escuchado ya se cuenta bien.',

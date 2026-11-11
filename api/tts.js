@@ -21,59 +21,6 @@ function getEnvKey(keyName) {
 }
 
 /**
- * ElevenLabs Hyperrealistic Multilingual v2 TTS
- * Uses elevenlabskey or ELEVENLABS_KEY from environment or user parameter
- */
-async function synthesizeWithElevenLabs(text, voiceId = 'pNInz6obpgDQGcFmaJgB', userApiKey = '') {
-  const apiKey = (userApiKey || '').trim() ||
-    getEnvKey('elevenlabskey') ||
-    getEnvKey('ELEVENLABS_KEY') ||
-    getEnvKey('ELEVENLABS_API_KEY') ||
-    getEnvKey('elevenlabs_api_key') ||
-    'sk_debcc33ce4f5b6db483f04131f3c287d01db10031c6c50f8';
-
-  if (!apiKey) throw new Error('ElevenLabs API key is not configured');
-
-  // Default pre-made voices with pristine natural Spanish pronunciation in Multilingual v2:
-  // pNInz6obpgDQGcFmaJgB: Adam (Deep, charismatic radio host)
-  // 21m00Tcm4TlvDq8ikWAM: Rachel (Warm, clear female host)
-  // ErXwobaYiN019PkySvjV: Antoni (Energetic modern host)
-  const targetVoice = voiceId && voiceId !== 'elevenlabs' ? voiceId : 'pNInz6obpgDQGcFmaJgB';
-  const url = `https://api.elevenlabs.io/v1/text-to-speech/${targetVoice}?output_format=mp3_44100_128`;
-
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'xi-api-key': apiKey,
-      'Content-Type': 'application/json',
-      'Accept': 'audio/mpeg',
-    },
-    body: JSON.stringify({
-      text: text,
-      model_id: 'eleven_multilingual_v2',
-      voice_settings: {
-        stability: 0.5,
-        similarity_boost: 0.75,
-        style: 0.0,
-        use_speaker_boost: true,
-      },
-    }),
-    signal: AbortSignal.timeout?.(15000),
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`ElevenLabs TTS error ${response.status}: ${errorText}`);
-  }
-
-  const arrayBuffer = await response.arrayBuffer();
-  return {
-    buffer: Buffer.from(arrayBuffer),
-    contentType: 'audio/mpeg',
-  };
-}
-
-/**
  * Azure Cognitive Services Speech REST API (Official 48kHz / 192kbps Studio Master Quality)
  * Requires AZURE_SPEECH_KEY in .env or passed as parameter
  */
@@ -260,9 +207,7 @@ export default async function handler(req, res) {
   const isEnglish = rawLang.startsWith('en');
 
   let selectedVoice = 'alvaro';
-  if (rawVoice.includes('elevenlabs') || rawProvider === 'elevenlabs') {
-    selectedVoice = 'elevenlabs';
-  } else if (rawVoice.includes('dalia') || rawVoice.includes('mexico') || rawVoice === 'es-mx-dalianeural') {
+  if (rawVoice.includes('dalia') || rawVoice.includes('mexico') || rawVoice === 'es-mx-dalianeural') {
     selectedVoice = 'dalia';
   } else if (rawVoice.includes('alvaro') || rawVoice === 'es-es-alvaroneural' || rawVoice.includes('guy')) {
     selectedVoice = 'alvaro';
@@ -313,7 +258,7 @@ export default async function handler(req, res) {
     }
   }
 
-  const userApiKey = (query.apiKey || body.apiKey || query.elevenlabskey || body.elevenlabskey || '').trim();
+  const userApiKey = (query.apiKey || body.apiKey || '').trim();
   const userVoiceId = (query.voiceId || body.voiceId || '').trim();
   const userAzureKey = (query.azureKey || body.azureKey || '').trim();
   const userAzureRegion = (query.azureRegion || body.azureRegion || '').trim();
@@ -321,27 +266,6 @@ export default async function handler(req, res) {
 
   let result;
   try {
-    // 0. ElevenLabs Studio (Ultra-realistic neural AI) if configured or explicitly requested
-    const hasElevenLabsConfig = Boolean(
-      (userApiKey && userApiKey.startsWith('sk_')) ||
-      getEnvKey('elevenlabskey') ||
-      getEnvKey('ELEVENLABS_KEY') ||
-      getEnvKey('ELEVENLABS_API_KEY')
-    );
-
-    if (!result && (selectedVoice === 'elevenlabs' || rawProvider === 'elevenlabs')) {
-      try {
-        const elevenVoiceId = userVoiceId || 'pNInz6obpgDQGcFmaJgB';
-        result = await synthesizeWithElevenLabs(text, elevenVoiceId, userApiKey);
-        res.setHeader('x-tts-provider', 'elevenlabs-studio');
-      } catch (elevenErr) {
-        console.warn('[ElevenLabs error, seamlessly falling back to Edge Neural]:', elevenErr?.message || elevenErr);
-        if (String(elevenErr?.message || '').includes('429') || String(elevenErr?.message || '').includes('quota')) {
-          res.setHeader('x-elevenlabs-quota-exceeded', 'true');
-        }
-      }
-    }
-
     // 1. Azure Cognitive Services directly if key is configured (48kHz / 192kbps studio master)
     if (!result && (userAzureKey || getEnvKey('AZURE_SPEECH_KEY'))) {
       try {

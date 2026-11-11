@@ -808,7 +808,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({
       isDJModeActive: true,
-      visualizerState: 'speaking',
+      visualizerState: 'idle',
       songsPlayedInSet: 0,
       currentHashtag: dominantTag,
       isThinking: true,
@@ -1514,7 +1514,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const cleanName = firstName();
 
     aiDJVoiceService.stopSpeaking();
-    set({ visualizerState: 'speaking', songsPlayedInSet: 0, isThinking: true });
+    set({ visualizerState: 'idle', songsPlayedInSet: 0, isThinking: true });
 
     let nextSet: Track[] = [];
     let segments: DJSegment[] = [];

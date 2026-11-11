@@ -13,6 +13,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { audioEngine } from '../../services/audioEngine';
 import { getTrackCoverUrl } from '../../utils/trackCovers';
 import { showGlobalToast } from '../../utils/globalToast';
+import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { DeviceNativeIcon, MiniplayerNativeIcon } from '../icons/SpotifyNativeIcons';
 
 // ---------------------------------------------------------------------------
@@ -180,57 +181,153 @@ const MiniPlayerWindow: React.FC = () => {
       toggleLike: s.toggleLike,
     }))
   );
+
+  const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
+  const [currentLine, setCurrentLine] = useState<string>('');
+
+  useEffect(() => {
+    if (!currentTrack) {
+      setSyncedLines([]);
+      setCurrentLine('');
+      return;
+    }
+    let cancelled = false;
+    const durSec = (currentTrack.duration_ms || 0) / 1000;
+    fetchLyricsUnified(currentTrack.name, currentTrack.artists?.[0]?.name || '', durSec)
+      .then((res) => {
+        if (cancelled) return;
+        if (res.syncedLyrics) {
+          const parsed = parseEnhancedLyrics(res.syncedLyrics);
+          setSyncedLines(parsed);
+        } else if (res.plainLyrics) {
+          const lines = res.plainLyrics.split('\n').filter((l) => l.trim().length > 0);
+          setSyncedLines(lines.map((text, idx) => ({ timeMs: idx * 4000, endTimeMs: (idx + 1) * 4000, text, words: [] })));
+        } else {
+          setSyncedLines([]);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [currentTrack?.id]);
+
+  useEffect(() => {
+    if (syncedLines.length === 0) {
+      setCurrentLine('');
+      return;
+    }
+    let found = '';
+    for (let i = syncedLines.length - 1; i >= 0; i--) {
+      if (progressMs >= syncedLines[i].timeMs) {
+        found = syncedLines[i].text;
+        break;
+      }
+    }
+    setCurrentLine(found || (syncedLines[0]?.text ?? ''));
+  }, [progressMs, syncedLines]);
+
   if (!currentTrack) {
-    return <div className="h-full flex items-center justify-center text-[#b3b3b3] text-sm">No suena nada</div>;
+    return (
+      <div className="h-full flex flex-col items-center justify-center text-[#b3b3b3] text-sm bg-[#121212] select-none p-4">
+        <span className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin mb-2" />
+        <span>No suena nada</span>
+      </div>
+    );
   }
+
   const cover = getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url;
   const liked = likedTrackIds.includes(currentTrack.id);
   const pct = durationMs > 0 ? Math.min(100, (progressMs / durationMs) * 100) : 0;
+
   const seek = (e: React.MouseEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
     const ms = ((e.clientX - r.left) / r.width) * durationMs;
     usePlayerStore.getState().setProgress(ms);
     audioEngine.seek(ms / 1000);
   };
+
   return (
-    <div className="relative h-full w-full overflow-hidden select-none font-['SpotifyMixUI',sans-serif] text-white bg-[#121212]">
-      {cover && <img src={cover} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
-      <div className="absolute left-0 right-0 bottom-0 p-4">
-        <div className="flex items-end justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-bold text-base truncate">{currentTrack.name}</p>
-            <p className="text-sm text-white/70 truncate">{(currentTrack.artists || []).map((a) => a.name).join(', ')}</p>
+    <div className="relative h-full w-full overflow-hidden select-none font-['SpotifyMixUI',sans-serif] text-white bg-[#0e0e0e] flex flex-col justify-between">
+      {/* Dynamic blurred cover background with smooth zoom */}
+      {cover && (
+        <div
+          className="absolute inset-0 bg-cover bg-center filter blur-2xl scale-125 opacity-45 brightness-75 transition-all duration-700"
+          style={{ backgroundImage: `url(${cover})` }}
+        />
+      )}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/50 to-black/30" />
+
+      {/* Main Content Area */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 min-h-0">
+        {/* Floating Album Art with soft glow */}
+        {cover && (
+          <div className="relative w-28 h-28 sm:w-36 sm:h-36 rounded-2xl overflow-hidden shadow-[0_12px_32px_rgba(0,0,0,0.8)] border border-white/10 shrink-0 my-auto group">
+            <img src={cover} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-          <button onClick={() => toggleLike(currentTrack.id, currentTrack)} className="shrink-0 p-1 cursor-pointer" title={liked ? 'Quitar de Canciones que te gustan' : 'Guardar en Canciones que te gustan'}>
+        )}
+
+        {/* Live Synced Karaoke Lyrics Line */}
+        {currentLine && (
+          <div className="w-full max-w-xs my-2 px-3 py-1.5 rounded-full bg-white/[0.08] backdrop-blur-md border border-white/10 text-center transition-all duration-300 animate-in fade-in">
+            <p className="text-xs font-bold text-[#1ed760] truncate animate-pulse drop-shadow-md">
+              ♫ {currentLine}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Controls Bar */}
+      <div className="relative z-10 left-0 right-0 p-3 sm:p-4 bg-black/40 backdrop-blur-lg border-t border-white/10 shrink-0">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <p className="font-bold text-sm sm:text-base truncate leading-tight font-['SpotifyMixUITitle']">{currentTrack.name}</p>
+              {isPlaying && (
+                <span className="inline-flex items-end gap-[2px] h-3 px-1 shrink-0" aria-hidden="true">
+                  <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1 h-2.5" />
+                  <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2 h-3" />
+                  <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3 h-1.5" />
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-white/70 truncate mt-0.5">{(currentTrack.artists || []).map((a) => a.name).join(', ')}</p>
+          </div>
+
+          <button onClick={() => toggleLike(currentTrack.id, currentTrack)} className="shrink-0 p-1.5 cursor-pointer active:scale-90 transition-transform" title={liked ? 'Quitar de Canciones que te gustan' : 'Guardar en Canciones que te gustan'}>
             {liked ? (
               <svg width="20" height="20" viewBox="0 0 16 16" fill="#1ed760"><path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m11.748-1.97a.75.75 0 0 0-1.06-1.06l-4.47 4.47-1.405-1.406a.75.75 0 1 0-1.061 1.06l2.466 2.467 5.53-5.53z" /></svg>
             ) : (
-              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0" /><path d="M11.75 8a.75.75 0 0 1-.75.75H8.75V11a.75.75 0 0 1-1.5 0V8.75H5a.75.75 0 0 1 0-1.5h2.25V5a.75.75 0 0 1 1.5 0v2.25H11a.75.75 0 0 1 .75.75" /></svg>
+              <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor" className="text-white/70 hover:text-white"><path d="M1.5 8a6.5 6.5 0 1 1 13 0 6.5 6.5 0 0 1-13 0M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0" /><path d="M11.75 8a.75.75 0 0 1-.75.75H8.75V11a.75.75 0 0 1-1.5 0V8.75H5a.75.75 0 0 1 0-1.5h2.25V5a.75.75 0 0 1 1.5 0v2.25H11a.75.75 0 0 1 .75.75" /></svg>
             )}
           </button>
         </div>
-        <div onClick={seek} className="mt-3 h-3 flex items-center cursor-pointer group">
-          <div className="w-full h-1 rounded-full bg-white/30 overflow-hidden">
-            <div className="h-full bg-white group-hover:bg-[#1ed760]" style={{ width: `${pct}%` }} />
+
+        {/* Progress scrub bar */}
+        <div onClick={seek} className="mt-2.5 h-3 flex items-center cursor-pointer group">
+          <div className="w-full h-1 rounded-full bg-white/20 overflow-hidden">
+            <div className="h-full bg-white group-hover:bg-[#1ed760] transition-colors" style={{ width: `${pct}%` }} />
           </div>
         </div>
-        <div className="flex justify-between text-[11px] text-white/70 tabular-nums">
+        <div className="flex justify-between text-[10.5px] text-white/60 tabular-nums">
           <span>{fmt(progressMs)}</span>
           <span>{fmt(durationMs)}</span>
         </div>
+
+        {/* Media Buttons */}
         <div className="flex items-center justify-center gap-6 mt-1">
-          <button onClick={previousTrack} className="p-1 cursor-pointer text-white/90 hover:text-white" title="Anterior">
+          <button onClick={previousTrack} className="p-1.5 cursor-pointer text-white/80 hover:text-white active:scale-90 transition-transform" title="Anterior">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M3.3 1a.7.7 0 0 1 .7.7v5.15l9.95-5.744a.7.7 0 0 1 1.05.606v12.575a.7.7 0 0 1-1.05.607L4 9.149V14.3a.7.7 0 0 1-.7.7H1.7a.7.7 0 0 1-.7-.7V1.7a.7.7 0 0 1 .7-.7z" /></svg>
           </button>
-          <button onClick={togglePlay} className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer" title={isPlaying ? 'Pausar' : 'Reproducir'}>
+          <button onClick={togglePlay} className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-lg" title={isPlaying ? 'Pausar' : 'Reproducir'}>
             {isPlaying ? (
               <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M2.7 1a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7zm8 0a.7.7 0 0 0-.7.7v12.6a.7.7 0 0 0 .7.7h2.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7z" /></svg>
             ) : (
               <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" className="ml-0.5"><path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z" /></svg>
             )}
           </button>
-          <button onClick={nextTrack} className="p-1 cursor-pointer text-white/90 hover:text-white" title="Siguiente">
+          <button onClick={nextTrack} className="p-1.5 cursor-pointer text-white/80 hover:text-white active:scale-90 transition-transform" title="Siguiente">
             <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor"><path d="M12.7 1a.7.7 0 0 0-.7.7v5.15L2.05 1.107A.7.7 0 0 0 1 1.712v12.575a.7.7 0 0 0 1.05.607L12 9.149V14.3a.7.7 0 0 0 .7.7h1.6a.7.7 0 0 0 .7-.7V1.7a.7.7 0 0 0-.7-.7z" /></svg>
           </button>
         </div>
