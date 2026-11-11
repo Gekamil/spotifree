@@ -11,14 +11,25 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.1';
+export const APP_VERSION = '0.2.2';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.2',
+    date: '11 de noviembre, 2026',
+    title: 'Remixes oficiales en búsquedas, pestaña de álbumes, creación de playlist al añadir y prevención de autoguardado',
+    isLatest: true,
+    highlights: [
+      'Remixes oficiales primero: en la pestaña de remixes de búsqueda ahora aparecen primero los remixes oficiales de catálogo antes que temas de SoundCloud o filtraciones.',
+      'Nuevo apartado de Álbumes en búsquedas: pestaña dedicada a álbumes en ordenador y móvil igual que en Spotify, con navegación a lista completa de canciones.',
+      'Crear playlist al añadir canción: al pulsar la opción inferior de crear nueva playlist en el modal de añadir, la playlist se crea con la canción y se guarda de forma persistente en tu biblioteca.',
+      'Control de guardado en biblioteca: visualizar o abrir playlists buscadas y recomendadas ya no las autoguarda en tu biblioteca a menos que decidas guardarlas explícitamente.',
+    ],
+  },
   {
     version: '0.2.1',
     date: '11 de noviembre, 2026',
     title: 'Aro del DJ interactivo, chat con la IA, filtrado de remixes y widgets animados',
-    isLatest: true,
     highlights: [
       'Aro de la IA perfeccionado: se hunde y rebota de forma orgánica solo en la zona donde habla, con 1 aro unificado en reposo.',
       'Interacción directa con la IA DJ: ahora puedes pedirle estilos (reggaeton, lofi, rock) o canciones similares mediante voz o texto sin pantallas bloqueadas.',

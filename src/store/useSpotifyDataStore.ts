@@ -365,7 +365,7 @@ interface SpotifyDataState {
   playlistDetailsCache: Record<string, Playlist>;
   cachePlaylistDetails: (playlist: Playlist) => void;
   addCustomPlaylist: (playlist: Playlist) => void;
-  createPlaylist: (name?: string) => Playlist;
+  createPlaylist: (name?: string, initialTracks?: Track[]) => Playlist;
   initialize: () => Promise<void>;
   login: () => void;
   logout: () => void;
@@ -482,6 +482,48 @@ export function broadcastCrossTabEvent(type: string, detail: any) {
   }
 }
 
+/**
+ * Sanitizes imported playlists from localStorage by purging any viewed-only playlists
+ * that leaked due to prior auto-save bugs, while strictly preserving:
+ * 1. Custom user-created playlists (is_custom === true, 'custom-', 'pl-custom-', 'imported-', 'local-')
+ * 2. Artist dummy playlists ('art-', 'artist-')
+ * 3. Virtual playlists ('liked-songs', 'spotify-dj', 'collection:tracks')
+ * 4. Explicitly saved playlists whose ID is in 'spotifree_saved_library_playlists'
+ */
+export function sanitizeImportedPlaylists(list: Playlist[]): Playlist[] {
+  if (!Array.isArray(list) || list.length === 0) return [];
+  if (typeof window === 'undefined') return list;
+  try {
+    const rawSaved = window.localStorage.getItem('spotifree_saved_library_playlists');
+    const savedIds: string[] = rawSaved ? JSON.parse(rawSaved) : [];
+    const cleanPid = (val: string) => (val || '').replace(/^spotify:(playlist|album):/i, '').replace(/^(custom|playlist)-/, '').split('?')[0].trim();
+    const rawCleanPid = (val: string) => (val || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+    const savedSet = new Set<string>();
+    for (const sId of savedIds) {
+      if (sId) {
+        savedSet.add(sId);
+        savedSet.add(cleanPid(sId));
+        savedSet.add(rawCleanPid(sId));
+      }
+    }
+
+    return list.filter((p: any) => {
+      if (!p || !p.id) return false;
+      const pid = String(p.id);
+      const cpid = cleanPid(pid);
+      const rawCpid = rawCleanPid(pid);
+      if (pid === 'liked-songs' || cpid === 'liked-songs' || rawCpid === 'liked-songs' || pid.includes('collection:tracks')) return true;
+      if (pid === 'spotify-dj' || cpid === 'spotify-dj' || rawCpid === 'spotify-dj') return true;
+      if (p.is_custom === true || p.owner?.id === 'user') return true;
+      if (pid.startsWith('custom-') || pid.startsWith('pl-custom-') || pid.startsWith('imported-') || pid.startsWith('local-')) return true;
+      if (pid.startsWith('art-') || pid.startsWith('artist-')) return true;
+      return savedSet.has(pid) || savedSet.has(cpid) || savedSet.has(rawCpid);
+    });
+  } catch {
+    return list;
+  }
+}
+
 export function getGuestPlaylists(): Playlist[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -489,7 +531,7 @@ export function getGuestPlaylists(): Playlist[] {
     if (rawImported) {
       const list = JSON.parse(rawImported);
       if (Array.isArray(list) && list.length > 0) {
-        return deduplicateUserPlaylists(list);
+        return deduplicateUserPlaylists(sanitizeImportedPlaylists(list));
       }
     }
   } catch {}
@@ -501,7 +543,8 @@ export function getInitialPlaylists(userId?: string): Playlist[] {
   try {
     const targetId = userId || window.localStorage.getItem('spotifree_active_user_id') || 'active';
     const rawImported = window.localStorage.getItem('user_imported_playlists');
-    const imported: Playlist[] = rawImported ? JSON.parse(rawImported) : [];
+    const rawList: Playlist[] = rawImported ? JSON.parse(rawImported) : [];
+    const imported: Playlist[] = sanitizeImportedPlaylists(rawList);
 
     // 1. Check account session
     const rawAccountSession = window.localStorage.getItem(`spotifree_account_session_${targetId}`);
@@ -691,6 +734,21 @@ const store = create<SpotifyDataState>((set, get) => ({
 
       if (typeof window !== 'undefined') {
         try {
+          // 0. Remove from deleted playlist blacklist so re-saved playlists appear in library and sidebar
+          let updatedDeleted: string[] = [];
+          const rawDeleted = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+          if (rawDeleted) {
+            try {
+              const deletedList: string[] = JSON.parse(rawDeleted);
+              updatedDeleted = deletedList.filter((dId: string) => {
+                if (!dId) return false;
+                const c = dId.replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+                return dId !== playlist.id && dId !== cleanId && c !== cleanId;
+              });
+              window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(updatedDeleted));
+            } catch {}
+          }
+
           // 1. user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           const list = rawImported ? JSON.parse(rawImported) : [];
@@ -711,8 +769,18 @@ const store = create<SpotifyDataState>((set, get) => ({
           }
 
           // 3. sync with cloud Firestore
-          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
-            syncSpotifreeAccount({ playlists: updatedPlaylists }).catch(() => {});
+          import('../services/spotifreeAuth').then(({ syncSpotifreeAccount, getSavedSpotifreeAccount }) => {
+            const savedAcc = getSavedSpotifreeAccount?.();
+            const cloudDeleted = Array.isArray(savedAcc?.deletedPlaylistIds) ? savedAcc.deletedPlaylistIds : updatedDeleted;
+            const cleanDeleted = cloudDeleted.filter((x: string) => {
+              if (!x) return false;
+              const c = x.replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+              return x !== playlist.id && x !== cleanId && c !== cleanId;
+            });
+            syncSpotifreeAccount({
+              playlists: updatedPlaylists,
+              deletedPlaylistIds: cleanDeleted,
+            }).catch(() => {});
           });
         } catch (e) {
           console.warn('Error saving playlist to user library storage:', e);
@@ -730,17 +798,20 @@ const store = create<SpotifyDataState>((set, get) => ({
     });
   },
 
-  createPlaylist: (name?: string) => {
+  createPlaylist: (name?: string, initialTracks?: Track[]) => {
     const s = get();
     const count = s.playlists.filter((p) => (p as any).is_custom).length + 1;
-    const playlistName = name || `Mi lista n.º ${count}`;
+    const playlistName = (name && name.trim()) ? name.trim() : `Mi lista n.º ${count}`;
+    const initialList = Array.isArray(initialTracks) ? [...initialTracks] : [];
+    const coverUrl = initialList[0]?.album?.images?.[0]?.url || '';
+    const newId = `custom-playlist-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
     const newPlaylist: Playlist = {
-      id: `custom-playlist-${Date.now()}`,
+      id: newId,
       name: playlistName,
       description: '',
-      images: [],
+      images: coverUrl ? [{ url: coverUrl }] : [],
       owner: { display_name: s.user?.display_name || 'Tú', id: s.user?.id || 'user' },
-      tracks: { total: 0, items: [] },
+      tracks: { total: initialList.length, items: initialList },
       color: '#303030',
       is_pinned: false,
       is_custom: true,
@@ -750,6 +821,11 @@ const store = create<SpotifyDataState>((set, get) => ({
 
     if (typeof window !== 'undefined') {
       try {
+        // 0. Cache tracks for this playlist immediately
+        if (initialList.length > 0) {
+          window.localStorage.setItem(`spotifree_playlist_tracks_${newId}`, JSON.stringify(initialList));
+        }
+
         // 1. user_imported_playlists
         const rawImported = window.localStorage.getItem('user_imported_playlists');
         const list = rawImported ? JSON.parse(rawImported) : [];
@@ -809,7 +885,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         pid.includes('collection:tracks') ||
         /^(canciones que te gustan|canciones que me gustan|tus me gusta|liked songs|liked tracks)$/i.test((pname || '').trim());
 
-      const isTargetLiked = id === 'liked-songs';
+      const isTargetLiked = id === 'liked-songs' || isLikedTarget(id, updates.name);
       const existingInCache = s.playlistDetailsCache[id];
       const existingInList = s.playlists.find((p) => p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name)));
       const baseEntry = existingInCache || existingInList || { id, name: isTargetLiked ? 'Canciones que te gustan' : 'Playlist', tracks: { total: 0, items: [] } };
@@ -839,19 +915,23 @@ const store = create<SpotifyDataState>((set, get) => ({
           // 1. user_imported_playlists
           const rawImported = window.localStorage.getItem('user_imported_playlists');
           const list = rawImported ? JSON.parse(rawImported) : [];
-          const idx = list.findIndex((p: any) => p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name)));
+          const idx = list.findIndex((p: any) => p.id === id || (cleanId && p.id === cleanId) || (isTargetLiked && isLikedTarget(p.id, p.name)));
           if (idx >= 0) {
             list[idx] = { ...list[idx], ...updates, id: isTargetLiked ? 'liked-songs' : list[idx].id };
-          } else if (!isTargetLiked) {
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
+          } else if (isTargetLiked) {
             list.unshift(updatedCacheEntry);
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
           }
-          window.localStorage.setItem('user_imported_playlists', JSON.stringify(list));
 
           // 2. Playlist details cache
           const userId = s.user?.id || window.localStorage.getItem('spotifree_active_user_id') || 'active';
           const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
           const cacheObj = rawCache ? JSON.parse(rawCache) : {};
           cacheObj[id] = updatedCacheEntry;
+          if (cleanId && cleanId !== id) {
+            cacheObj[cleanId] = updatedCacheEntry;
+          }
           window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
           window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
 
@@ -862,18 +942,21 @@ const store = create<SpotifyDataState>((set, get) => ({
             if (Array.isArray(parsed.playlists)) {
               let extFound = false;
               parsed.playlists = parsed.playlists.map((p: any) => {
-                if (p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name))) {
+                if (p.id === id || (cleanId && p.id === cleanId) || (isTargetLiked && isLikedTarget(p.id, p.name))) {
                   extFound = true;
                   return { ...p, ...updates, id: isTargetLiked ? 'liked-songs' : p.id };
                 }
                 return p;
               });
-              if (!extFound) {
+              if (!extFound && isTargetLiked) {
                 parsed.playlists.unshift(updatedCacheEntry);
               }
             }
             if (parsed.cachedPlaylistDetails) {
               parsed.cachedPlaylistDetails[id] = updatedCacheEntry;
+              if (cleanId && cleanId !== id) {
+                parsed.cachedPlaylistDetails[cleanId] = updatedCacheEntry;
+              }
             }
             window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
           }
@@ -885,13 +968,13 @@ const store = create<SpotifyDataState>((set, get) => ({
             if (Array.isArray(parsed.playlists)) {
               let accFound = false;
               parsed.playlists = parsed.playlists.map((p: any) => {
-                if (p.id === id || (isTargetLiked && isLikedTarget(p.id, p.name))) {
+                if (p.id === id || (cleanId && p.id === cleanId) || (isTargetLiked && isLikedTarget(p.id, p.name))) {
                   accFound = true;
                   return { ...p, ...updates, id: isTargetLiked ? 'liked-songs' : p.id };
                 }
                 return p;
               });
-              if (!accFound) {
+              if (!accFound && isTargetLiked) {
                 parsed.playlists.unshift(updatedCacheEntry);
               }
             }
@@ -1355,6 +1438,17 @@ const store = create<SpotifyDataState>((set, get) => ({
         } catch {}
       }
 
+      // One-time sanitization of user_imported_playlists on initialization to purge leaked viewed-only playlists
+      if (typeof window !== 'undefined' && Array.isArray(importedPlaylists) && importedPlaylists.length > 0) {
+        const sanitized = sanitizeImportedPlaylists(importedPlaylists);
+        if (sanitized.length !== importedPlaylists.length) {
+          importedPlaylists = sanitized;
+          try {
+            window.localStorage.setItem('user_imported_playlists', JSON.stringify(sanitized));
+          } catch {}
+        }
+      }
+
       if (userCookie && validateSpotifyCookie(userCookie).valid) {
         const cleanCookie = cleanSpDc(userCookie);
         let session: any = null;
@@ -1439,6 +1533,7 @@ const store = create<SpotifyDataState>((set, get) => ({
               const cleanedImported = importedPlaylists.filter(
                 (p) => p && p.id !== 'spotify-dj' && p.id !== 'dj' && p.name?.toLowerCase().trim() !== 'dj'
               );
+              importedPlaylists = cleanedImported;
               window.localStorage.setItem('user_imported_playlists', JSON.stringify(cleanedImported));
             } catch {}
           }

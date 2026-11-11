@@ -22,7 +22,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
   const { toggleLike, likedTrackIds } = usePlayerStore(
     useShallow((s) => ({ toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds }))
   );
-  const { playlists, deletePlaylist } = useSpotifyDataStore();
+  const { playlists, deletePlaylist, user } = useSpotifyDataStore();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -235,7 +235,15 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
     !isArtist &&
     !isFolder &&
     targetPlaylist.id !== 'liked-songs' &&
-    targetPlaylist.id !== 'collection:tracks'
+    targetPlaylist.id !== 'collection:tracks' &&
+    (
+      (targetPlaylist as any).is_custom === true ||
+      targetPlaylist.id.startsWith('custom-') ||
+      targetPlaylist.id.startsWith('pl-custom-') ||
+      targetPlaylist.owner?.id === 'user' ||
+      (user?.id && targetPlaylist.owner?.id === user.id) ||
+      (user?.display_name && targetPlaylist.owner?.display_name?.toLowerCase() === user.display_name.toLowerCase())
+    )
   );
 
   const isSavedInLibrary = (() => {

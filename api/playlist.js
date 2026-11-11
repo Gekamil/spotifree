@@ -112,6 +112,59 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     }
   }
 
+  // Deezer album direct fast-path
+  if (cleanId.startsWith('alb-') || cleanId.startsWith('album-')) {
+    const dzId = cleanId.replace(/^(alb-|album-)/, '');
+    try {
+      const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+      });
+      if (dzRes.ok) {
+        const data = await dzRes.json();
+        if (data && data.title) {
+          const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
+          const artistName = data.artist?.name || 'Artista';
+          const tracks = (data.tracks?.data || []).map((t, idx) => ({
+            id: `dz-${t.id}`,
+            name: t.title || t.title_short,
+            artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
+            album: {
+              id: cleanId,
+              name: data.title,
+              images: cover ? [{ url: cover }] : [],
+            },
+            duration_ms: (t.duration || 210) * 1000,
+            preview_url: null,
+            added_at: 'Reciente',
+          }));
+
+          const mapped = {
+            id: cleanId,
+            name: data.title,
+            description: stripHtml(data.description || '') || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
+            type: 'album',
+            images: cover ? [{ url: cover }] : [],
+            owner: {
+              display_name: artistName,
+              id: `user-${data.artist?.id || 'dz'}`,
+            },
+            release_date: data.release_date || '',
+            color: '#303030',
+            tracks: {
+              total: data.nb_tracks || tracks.length,
+              items: tracks,
+            },
+          };
+          MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
+          return mapped;
+        }
+      }
+    } catch (e) {
+      console.warn('[Playlist API] Deezer album fetch error:', e.message);
+    }
+  }
+
   // Deezer playlist direct fast-path
   if (cleanId.startsWith('dz-') || /^\d+$/.test(cleanId)) {
     const dzId = cleanId.replace(/^dz-(pl-)?/, '');

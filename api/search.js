@@ -75,6 +75,8 @@ export default async function handler(req, res) {
 
     // Track search uses withoutPlaylist to avoid searching songs called "playlist"
     const trackSearchQuery = withoutPlaylist;
+    const isAlreadyRemixQuery = /\b(remix|rmx)\b/i.test(trackSearchQuery);
+    const remixSearchQuery = isAlreadyRemixQuery ? trackSearchQuery : `${trackSearchQuery} remix`;
 
     const fetchPromises = [
       // 0. Deezer Track Search
@@ -132,6 +134,11 @@ export default async function handler(req, res) {
         })(),
         new Promise((r) => setTimeout(() => r({ tracks: [], officialAltIds: {}, timedOut: true }), 4500)),
       ]),
+
+      // 8. Deezer Official Remix Search
+      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
     ];
 
     if (significantWords.length > 1) {
@@ -153,9 +160,10 @@ export default async function handler(req, res) {
     const deezerPlaylistsRes2 = results[5];
     const itunesRes = results[6];
     const scCatalogRes = results[7] || { tracks: [] };
-    const deezerExtraRes = results[8] || { data: [] };
+    const deezerRemixRes = results[8] || { data: [] };
+    const extraDeezerData = results.slice(9).flatMap(r => r?.data || []);
 
-    const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
+    const allDeezerRaw = [...(deezerTracksRes.data || []), ...extraDeezerData];
     const deezerTracks = allDeezerRaw.map(t => {
       const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
       return {
@@ -287,9 +295,95 @@ export default async function handler(req, res) {
       });
     }
 
-    // Classify SoundCloud hits against official catalog:
+    // Extract & enrich official catalog remixes (Requirement R1)
+    const remixRegex = /\b(remix|rmx)\b/i;
+    const officialRemixes = [];
+    const seenRemixKeys = new Set();
+    const seenRemixIds = new Set();
+
+    for (const t of (deezerRemixRes.data || [])) {
+      if (!t || !t.id) continue;
+      const title = t.title || t.title_short || '';
+      const albumTitle = t.album?.title || '';
+      if (!remixRegex.test(title) && !remixRegex.test(albumTitle)) continue;
+
+      const fullText = `${title} ${t.artist?.name || ''}`.toLowerCase();
+      if (significantWords.length > 0 && !significantWords.some(w => fullText.includes(w))) {
+        continue;
+      }
+
+      const normName = title.toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+      const primaryArtist = (t.artist?.name || '').toLowerCase().trim();
+      const key = `${normName}:::${primaryArtist}`;
+      if (seenRemixKeys.has(key)) continue;
+
+      seenRemixKeys.add(key);
+      seenRemixIds.add(`dz-${t.id}`);
+
+      const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+      officialRemixes.push({
+        id: `dz-${t.id}`,
+        name: title,
+        duration_ms: (t.duration || 210) * 1000,
+        preview_url: null,
+        artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+        album: {
+          id: `alb-${t.album?.id || 'unknown'}`,
+          name: albumTitle || title,
+          images: cover ? [{ url: toHDImage ? toHDImage(cover) : cover }] : [],
+        },
+        isOfficial: true,
+        scVariant: 'remix',
+        scVariantLabel: 'Remix Oficial',
+        scBadgeColor: '#1ed760',
+        source: 'official',
+      });
+    }
+
+    // Enrich top candidate remixes with contributors
+    const remixCandidatesToEnrich = officialRemixes.slice(0, 4);
+    await Promise.all(
+      remixCandidatesToEnrich.map(async t => {
+        const trackId = t.id.replace('dz-', '');
+        try {
+          const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: AbortSignal.timeout(1500),
+          }).then(r => r.ok ? r.json() : null);
+          if (detail && detail.contributors && detail.contributors.length > 0) {
+            t.artists = detail.contributors.map(c => ({
+              id: `art-${c.id}`,
+              name: c.name,
+            }));
+          }
+        } catch {}
+      })
+    );
+
+    // Also inspect combinedTracks for any official remix releases
+    for (const t of combinedTracks) {
+      if (!t || !t.id || seenRemixIds.has(t.id)) continue;
+      if (t.id.startsWith('sc-')) continue;
+      const isRemix = remixRegex.test(t.name || '') || remixRegex.test(t.album?.name || '');
+      if (!isRemix) continue;
+
+      const normName = (t.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+      const primaryArtist = (t.artists?.[0]?.name || '').toLowerCase().trim();
+      const key = `${normName}:::${primaryArtist}`;
+      if (seenRemixKeys.has(key)) continue;
+
+      seenRemixKeys.add(key);
+      seenRemixIds.add(t.id);
+      t.isOfficial = true;
+      t.scVariant = 'remix';
+      t.scVariantLabel = 'Remix Oficial';
+      t.scBadgeColor = '#1ed760';
+      officialRemixes.push(t);
+    }
+
+    // Classify SoundCloud hits against official catalog & official remixes:
     // literal official duplicates enrich the existing official track with `scAltId`,
-    // while genuine variants (remixes, slowed, leaks/unreleased, live) populate `soundcloudTracks`.
+    // while genuine variants (remixes, slowed, leaks/unreleased, live) populate `soundcloudVariants`.
     const soundcloudVariants = [];
     for (const scT of scCatalogRes?.tracks || []) {
       const scNumId = String(scT.id || '').replace(/^sc-/, '');
@@ -309,15 +403,44 @@ export default async function handler(req, res) {
         }
         continue;
       }
+
+      // Check deduplication against official remixes
+      const isCreativeEdit = /\b(mashup|bootleg|slowed|sped\s*up|reverb|nightcore|drum\s*mix|hype\s*intro)\b/i.test(scT.name);
+      if (!isCreativeEdit) {
+        const normSc = (scT.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+        const scArtist = (scT.artists?.[0]?.name || '').toLowerCase().trim();
+        const matchingOfficial = officialRemixes.find(off => {
+          const normOff = (off.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+          if (normSc === normOff) return true;
+          const offArtists = (off.artists || []).map(a => (a.name || '').toLowerCase());
+          if (offArtists.some(oa => scArtist.includes(oa) || oa.includes(scArtist)) && (normSc.includes(normOff) || normOff.includes(normSc))) {
+            return true;
+          }
+          return false;
+        });
+        if (matchingOfficial) {
+          if (!matchingOfficial.scAltId) {
+            matchingOfficial.scAltId = `sc:${scNumId}`;
+          }
+          continue;
+        }
+      }
+
       soundcloudVariants.push(scT);
     }
+
+    // Official remixes prepended at index 0..N-1 ahead of SoundCloud items
+    const orderedRemixItems = [
+      ...officialRemixes,
+      ...soundcloudVariants,
+    ];
 
     const wantsVariantUpfront =
       /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|soundcloud|sin\s+voces)\b/i.test(cleanQ) ||
       combinedTracks.length < 3;
-    if (wantsVariantUpfront && soundcloudVariants.length > 0) {
+    if (wantsVariantUpfront && orderedRemixItems.length > 0) {
       const existingIds = new Set(combinedTracks.map((t) => t.id));
-      for (const scT of soundcloudVariants.slice(0, 6)) {
+      for (const scT of orderedRemixItems.slice(0, 6)) {
         if (!existingIds.has(scT.id)) {
           combinedTracks.push(scT);
           existingIds.add(scT.id);
@@ -327,7 +450,7 @@ export default async function handler(req, res) {
 
     // Add artist SoundCloud Vault playlist card when searching an artist or variant query
     const primaryMatchedArtist = artists[0];
-    if (primaryMatchedArtist?.name && soundcloudVariants.length > 0) {
+    if (primaryMatchedArtist?.name && orderedRemixItems.length > 0) {
       const vaultId = `sc-vault-${encodeURIComponent(primaryMatchedArtist.name)}`;
       if (!seenPlaylistIds.has(vaultId)) {
         seenPlaylistIds.add(vaultId);
@@ -337,13 +460,13 @@ export default async function handler(req, res) {
           description: 'Remixes, versiones slowed, inéditas y temas oficiales',
           images: primaryMatchedArtist.images?.length
             ? primaryMatchedArtist.images
-            : soundcloudVariants[0]?.album?.images || [],
+            : orderedRemixItems[0]?.album?.images || [],
           owner: {
             display_name: 'Spotifree',
             id: 'spotifree',
           },
           tracks: {
-            total: soundcloudVariants.length + 6,
+            total: orderedRemixItems.length + 6,
             items: [],
           },
         });
@@ -352,13 +475,13 @@ export default async function handler(req, res) {
 
     const payload = {
       tracks: { items: combinedTracks },
-      soundcloudTracks: { items: soundcloudVariants },
+      soundcloudTracks: { items: orderedRemixItems },
       artists: { items: artists },
       albums: { items: albums },
       playlists: { items: playlists },
     };
 
-    if (!scCatalogRes?.timedOut || soundcloudVariants.length > 0) {
+    if (!scCatalogRes?.timedOut || orderedRemixItems.length > 0) {
       searchCache.set(cacheKey, { data: payload, timestamp: Date.now() });
     }
     return res.status(200).json(payload);

@@ -27,6 +27,7 @@ dist-ssr
 *.sw?
 
 .vercel
+.claude/
 *.png
 !public/apple-touch-icon.png
 !public/icon-192.png

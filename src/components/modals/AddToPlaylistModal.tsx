@@ -117,30 +117,17 @@ export const AddToPlaylistModal: React.FC = () => {
   };
 
   const handleCreateNewPlaylist = () => {
+    if (!track) return;
     const finalName = newPlaylistTitle.trim() || `Mi playlist nº ${userPlaylists.length + 1}`;
-    const newId = `pl-custom-${Date.now()}`;
-    const newPlaylist: Playlist = {
-      id: newId,
-      name: finalName,
-      description: '',
-      // No photo of its own: the automatic cover follows its songs
-      images: [],
-      owner: { display_name: user?.display_name || 'Tú', id: user?.id || 'user' },
-      tracks: { total: 1, items: [{ ...track, added_at: track.added_at || 'Hoy' }] },
-      is_custom: true,
-    } as Playlist;
+    const trackWithDate = { ...track, added_at: track.added_at || 'Hoy' };
+    const newPl = useSpotifyDataStore.getState().createPlaylist(finalName, [trackWithDate]);
 
     // Save to user storage
-    saveCustomTrackToStorage(newId, false, track, user?.id);
+    saveCustomTrackToStorage(newPl.id, false, trackWithDate, user?.id);
 
-    // Library + every storage layer + cloud account (same path as "Crear lista")
-    useSpotifyDataStore.getState().addCustomPlaylist(newPlaylist);
-
-    // Auto-select this newly created playlist
-    setSelectedPlaylistIds((prev) => new Set(prev).add(newId));
-    setInitialPlaylistIds((prev) => new Set(prev).add(newId));
     setIsCreatingNew(false);
     setNewPlaylistTitle('');
+    closeAddToPlaylistModal();
   };
 
   const handleSaveAndClose = () => {

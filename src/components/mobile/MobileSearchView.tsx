@@ -25,13 +25,14 @@ const MOBILE_CATEGORIES = BROWSE_CATEGORIES;
 
 export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlaylistById }) => {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ tracks: any[]; soundcloudTracks: any[]; artists: any[]; playlists: any[] }>({
+  const [results, setResults] = useState<{ tracks: any[]; soundcloudTracks: any[]; artists: any[]; albums: any[]; playlists: any[] }>({
     tracks: [],
     soundcloudTracks: [],
     artists: [],
+    albums: [],
     playlists: [],
   });
-  const [filter, setFilter] = useState<'todo' | 'canciones' | 'soundcloud' | 'artistas' | 'playlists'>('todo');
+  const [filter, setFilter] = useState<'todo' | 'canciones' | 'soundcloud' | 'artistas' | 'albumes' | 'playlists'>('todo');
   const [isSearching, setIsSearching] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
   const [selectedCat, setSelectedCat] = useState<(typeof MOBILE_CATEGORIES)[number] | null>(null);
@@ -74,7 +75,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
 
   useEffect(() => {
     if (!query.trim()) {
-      setResults({ tracks: [], soundcloudTracks: [], artists: [], playlists: [] });
+      setResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
       setIsSearching(false);
       return;
     }
@@ -87,10 +88,11 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           tracks: data?.tracks?.items || [],
           soundcloudTracks: data?.soundcloudTracks?.items || [],
           artists: data?.artists?.items || [],
+          albums: data?.albums?.items || [],
           playlists: data?.playlists?.items || [],
         });
       } catch {
-        setResults({ tracks: [], soundcloudTracks: [], artists: [], playlists: [] });
+        setResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
       } finally {
         setIsSearching(false);
       }
@@ -202,7 +204,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
         <div className="space-y-4">
           {/* Filter Pills */}
           <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-            {(['todo', 'canciones', 'soundcloud', 'artistas', 'playlists'] as const).map((f) => (
+            {(['todo', 'canciones', 'soundcloud', 'artistas', 'albumes', 'playlists'] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setFilter(f)}
@@ -214,6 +216,8 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
               >
                 {f === 'soundcloud'
                   ? `Remixes y Leaks${results.soundcloudTracks.length > 0 ? ` (${results.soundcloudTracks.length})` : ''}`
+                  : f === 'albumes'
+                  ? 'Álbumes'
                   : f.charAt(0).toUpperCase() + f.slice(1)}
               </button>
             ))}
@@ -309,7 +313,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                   </button>
                 )}
               </div>
-              {results.soundcloudTracks.slice(0, filter === 'todo' ? 4 : 20).map((trk) => {
+              {results.soundcloudTracks.slice(0, filter === 'todo' ? 4 : 50).map((trk) => {
                 const isThisPlaying = isPlaying && currentTrack?.id === trk.id;
                 const cover = trk.album?.images?.[0]?.url;
 
@@ -321,7 +325,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         id: trk.id,
                         type: 'track',
                         title: trk.name,
-                        subtitle: `SoundCloud • ${parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ') || ''}`,
+                        subtitle: `${trk.isOfficial ? 'Remix Oficial' : 'SoundCloud'} • ${parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ') || ''}`,
                         image: cover,
                         data: trk,
                       });
@@ -349,8 +353,12 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           {trk.name}
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                          <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
-                            {trk.scVariantLabel || 'SoundCloud'}
+                          <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
+                            trk.isOfficial || trk.scVariantLabel === 'Remix Oficial'
+                              ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
+                              : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
+                          }`}>
+                            {trk.isOfficial ? (trk.scVariantLabel || 'Remix Oficial') : (trk.scVariantLabel || 'SoundCloud')}
                           </span>
                           <span className="text-xs text-[#b3b3b3] truncate">
                             {parseTrackArtists(trk.artists).map((a: any) => a.name).join(', ')}
@@ -408,6 +416,56 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Results: Albums */}
+          {(filter === 'todo' || filter === 'albumes') && results.albums && results.albums.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <h3 className="text-sm font-bold text-white mb-2">Álbumes</h3>
+              {results.albums.slice(0, filter === 'todo' ? 4 : 20).map((alb) => {
+                const cover = alb.images?.[0]?.url;
+                const artistName = alb.artists?.map((a: any) => a.name).join(', ') || 'Artista';
+                const year = alb.release_date ? alb.release_date.split('-')[0] : '';
+                const albId = alb.id.startsWith('alb-') ? alb.id : `alb-${alb.id}`;
+
+                return (
+                  <div
+                    key={alb.id}
+                    onClick={() => {
+                      addRecentSearch({
+                        id: albId,
+                        type: 'album',
+                        title: alb.name,
+                        subtitle: `Álbum • ${artistName}${year ? ` • ${year}` : ''}`,
+                        image: cover,
+                        data: alb,
+                      });
+                      onSelectPlaylistById(albId, alb.name, cover);
+                    }}
+                    className="flex items-center gap-3 p-2 rounded-lg active:bg-white/10 cursor-pointer"
+                  >
+                    <div className="w-12 h-12 rounded-md overflow-hidden bg-[#242424] shrink-0 shadow">
+                      {cover && (
+                        <img
+                          src={cover}
+                          alt={alb.name}
+                          onError={handleImageError}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="flex flex-col min-w-0">
+                      <span className="font-bold text-sm text-white truncate">
+                        {alb.name}
+                      </span>
+                      <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                        Álbum • {artistName}{year ? ` • ${year}` : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           )}
 

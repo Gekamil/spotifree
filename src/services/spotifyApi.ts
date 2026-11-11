@@ -169,6 +169,46 @@ export async function fetchTopTracks(): Promise<Track[]> {
   return [];
 }
 
+function extractAndEnrichOfficialRemixes(
+  candidateTracks: Track[],
+  seenIds: Set<string>,
+  seenKeys: Set<string>
+): Track[] {
+  const officialRemixes: Track[] = [];
+  const remixRegex = /\b(remix|rmx)\b/i;
+
+  for (const t of candidateTracks) {
+    if (!t || !t.id || seenIds.has(t.id)) continue;
+    if (t.id.startsWith('sc-')) continue;
+
+    const isRemix = remixRegex.test(t.name) || remixRegex.test(t.album?.name || '');
+    if (!isRemix) continue;
+
+    const normName = t.name
+      .toLowerCase()
+      .replace(/[()[\]{}_-]/g, ' ')
+      .replace(/\b(remix|rmx)\b/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const primaryArtist = (t.artists?.[0]?.name || '').toLowerCase().trim();
+    const key = `${normName}:::${primaryArtist}`;
+
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    seenIds.add(t.id);
+
+    officialRemixes.push({
+      ...t,
+      isOfficial: true,
+      scVariant: 'remix',
+      scVariantLabel: 'Remix Oficial',
+      scBadgeColor: '#1ed760',
+    });
+  }
+
+  return officialRemixes;
+}
+
 export async function searchSpotify(query: string): Promise<any | null> {
   const cleanQ = query.trim();
   if (!cleanQ) return null;
@@ -472,6 +512,87 @@ export async function searchSpotify(query: string): Promise<any | null> {
   } catch (err) {
     console.error('Parallel search enrichment failed:', err);
   }
+
+  // --- PRIORITIZE OFFICIAL REMIXES IN soundcloudTracks (Requirement R1) ---
+  const seenRemixIds = new Set<string>();
+  const seenRemixKeys = new Set<string>();
+  const officialRemixes: Track[] = [];
+
+  // 1. Collect official remixes already returned from backend in soundcloudTracks
+  for (const scT of soundcloudTracks) {
+    if (scT.isOfficial || scT.scVariantLabel === 'Remix Oficial') {
+      seenRemixIds.add(scT.id);
+      const normName = scT.name.toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+      const primaryArtist = (scT.artists?.[0]?.name || '').toLowerCase().trim();
+      seenRemixKeys.add(`${normName}:::${primaryArtist}`);
+      officialRemixes.push({
+        ...scT,
+        isOfficial: true,
+        scVariant: 'remix',
+        scVariantLabel: 'Remix Oficial',
+        scBadgeColor: '#1ed760',
+      });
+    }
+  }
+
+  // 2. Extract official remixes from tracks loaded so far (backend Spotify, Deezer, iTunes, local)
+  const existingRemixes = extractAndEnrichOfficialRemixes(tracks, seenRemixIds, seenRemixKeys);
+  officialRemixes.push(...existingRemixes);
+
+  // 3. Supplement via direct Deezer query for `${cleanQ} remix` if official remixes < 3 or fallback active
+  if (officialRemixes.length < 3) {
+    try {
+      const isAlreadyRemix = /\b(remix|rmx)\b/i.test(cleanQ);
+      const remixTerm = isAlreadyRemix ? cleanQ : `${cleanQ} remix`;
+      const dzRemixRes = await fetch(
+        `https://api.deezer.com/search?q=${encodeURIComponent(remixTerm)}&limit=15`,
+        { signal: AbortSignal.timeout?.(3500) }
+      ).then((r) => (r.ok ? r.json() : { data: [] })).catch(() => ({ data: [] }));
+
+      const dzRemixTracks: Track[] = (dzRemixRes.data || []).map((t: any) => {
+        const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+        return {
+          id: `dz-${t.id}`,
+          name: t.title || t.title_short,
+          duration_ms: (t.duration || 210) * 1000,
+          preview_url: null,
+          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+          album: {
+            id: `alb-${t.album?.id || 'unknown'}`,
+            name: t.album?.title || t.title,
+            images: cover ? [{ url: cover }] : [],
+          },
+        };
+      });
+
+      const newDeezerRemixes = extractAndEnrichOfficialRemixes(dzRemixTracks, seenRemixIds, seenRemixKeys);
+      officialRemixes.push(...newDeezerRemixes);
+
+      // Also add to tracks so users find them under the "Canciones" tab
+      for (const rmx of newDeezerRemixes) {
+        if (!tracks.some((t) => t.id === rmx.id)) {
+          tracks.push(rmx);
+        }
+      }
+    } catch {}
+  }
+
+  // 4. Filter non-official SoundCloud tracks, deduplicating against official remixes
+  const nonOfficialTracks: Track[] = [];
+  for (const scT of soundcloudTracks) {
+    if (scT.isOfficial || scT.scVariantLabel === 'Remix Oficial') continue;
+    const isCreativeEdit = /\b(mashup|bootleg|slowed|sped\s*up|reverb|nightcore|drum\s*mix|hype\s*intro)\b/i.test(scT.name);
+    if (!isCreativeEdit) {
+      const normName = scT.name.toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+      const primaryArtist = (scT.artists?.[0]?.name || '').toLowerCase().trim();
+      const key = `${normName}:::${primaryArtist}`;
+      if (seenRemixKeys.has(key)) continue;
+    }
+    nonOfficialTracks.push(scT);
+  }
+
+  // 5. Official catalog remixes ALWAYS at index 0 .. N-1, followed by non-official SoundCloud items
+  soundcloudTracks = [...officialRemixes, ...nonOfficialTracks];
 
   // Results come from several places (server, your library, Deezer) one after another: order them
   // by how well they match what was typed

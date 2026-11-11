@@ -32,6 +32,8 @@ export interface Track {
   scAltId?: string;
   scVariant?: 'remix' | 'slowed' | 'leak' | 'live' | 'instrumental' | 'official_like';
   scVariantLabel?: string;
+  scBadgeColor?: string;
+  isOfficial?: boolean;
   scUrl?: string;
   source?: string;
 }

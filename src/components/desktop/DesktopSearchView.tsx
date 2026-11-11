@@ -765,7 +765,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                   id: track.id,
                                   type: 'track',
                                   title: track.name,
-                                  subtitle: `SoundCloud • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
+                                  subtitle: `${track.isOfficial ? 'Remix Oficial' : 'SoundCloud'} • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
                                   image: track.album?.images?.[0]?.url,
                                   data: track,
                                 });
@@ -787,8 +787,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                     {track.name}
                                   </p>
                                   <div className="flex items-center gap-2 mt-0.5">
-                                    <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
-                                      {track.scVariantLabel || 'SoundCloud'}
+                                    <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
+                                      track.isOfficial || track.scVariantLabel === 'Remix Oficial'
+                                        ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
+                                        : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
+                                    }`}>
+                                      {track.isOfficial ? (track.scVariantLabel || 'Remix Oficial') : (track.scVariantLabel || 'SoundCloud')}
                                     </span>
                                     <span className="text-xs text-[#b3b3b3] truncate">
                                       {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
@@ -920,7 +924,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                               id: track.id,
                               type: 'track',
                               title: track.name,
-                              subtitle: `SoundCloud • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
+                              subtitle: `${track.isOfficial ? 'Remix Oficial' : 'SoundCloud'} • ${parseTrackArtists(track.artists).map((a: any) => a.name).join(', ') || ''}`,
                               image: track.album?.images?.[0]?.url,
                               data: track,
                             });
@@ -942,8 +946,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 {track.name}
                               </span>
                               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                                <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
-                                  {track.scVariantLabel || 'SoundCloud'}
+                                <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
+                                  track.isOfficial || track.scVariantLabel === 'Remix Oficial'
+                                    ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
+                                    : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
+                                }`}>
+                                  {track.isOfficial ? (track.scVariantLabel || 'Remix Oficial') : (track.scVariantLabel || 'SoundCloud')}
                                 </span>
                                 <span className="text-xs text-[#b3b3b3] truncate">
                                   {parseTrackArtists(track.artists).map((a: any) => a.name).join(', ')}
@@ -959,7 +967,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                     })
                   ) : (
                     <p className="text-sm text-[#b3b3b3] py-6">
-                      No se encontraron remixes, versiones slowed ni inéditas en SoundCloud para «{searchQuery}».
+                      No se encontraron remixes oficiales ni versiones en SoundCloud para «{searchQuery}».
                     </p>
                   )}
                 </div>

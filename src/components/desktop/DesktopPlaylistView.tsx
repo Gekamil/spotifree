@@ -924,13 +924,27 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             setDynamicTracks(hydrated);
             setDynamicPlaylist(updated);
             try {
+              // Always cache playlist details so tracks, cover art, and color remain available for instant viewing and playback
               useSpotifyDataStore.getState().cachePlaylistDetails(updated);
-              useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
-                tracks: { total: filteredDataItems.length, items: filteredDataItems },
-                ...(hasInitialHdImage ? {} : (hasValidScrapedImage ? { images: data.images } : {})),
-                ...(data.color ? { color: data.color } : {}),
-                ...(data.owner ? { owner: data.owner } : {}),
+
+              // Only update library playlist if this playlist is already present in the user's library.
+              // Viewing a searched or recommended playlist must NEVER auto-save it to user_imported_playlists.
+              const cleanPlId = (playlist.id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+              const currentPlaylists = useSpotifyDataStore.getState().playlists || allUserPlaylists || [];
+              const inLibrary = currentPlaylists.some((p) => {
+                if (!p || !p.id) return false;
+                const pClean = (p.id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+                return p.id === playlist.id || p.id === cleanPlId || pClean === cleanPlId;
               });
+
+              if (inLibrary) {
+                useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
+                  tracks: { total: filteredDataItems.length, items: filteredDataItems },
+                  ...(hasInitialHdImage ? {} : (hasValidScrapedImage ? { images: data.images } : {})),
+                  ...(data.color ? { color: data.color } : {}),
+                  ...(data.owner ? { owner: data.owner } : {}),
+                });
+              }
             } catch {}
           }
         } else {

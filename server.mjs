@@ -723,6 +723,72 @@ const server = http.createServer(async (req, res) => {
         }
 
         // Search SoundCloud variants and artist vault for Spotify Web API results
+        const isAlreadyRemixQuery = /\b(remix|rmx)\b/i.test(cleanQ || q);
+        const remixSearchQuery = isAlreadyRemixQuery ? (cleanQ || q) : `${cleanQ || q} remix`;
+        const remixRegex = /\b(remix|rmx)\b/i;
+        const officialRemixes = [];
+        const seenRemixKeys = new Set();
+        const seenRemixIds = new Set();
+
+        // 1. Check existing tracks in spotifyData for remix tracks
+        for (const t of (spotifyData.tracks?.items || [])) {
+          if (!t || !t.id || seenRemixIds.has(t.id)) continue;
+          if (t.id.startsWith('sc-')) continue;
+          if (!remixRegex.test(t.name || '') && !remixRegex.test(t.album?.name || '')) continue;
+          const normName = (t.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+          const primaryArtist = (t.artists?.[0]?.name || '').toLowerCase().trim();
+          const key = `${normName}:::${primaryArtist}`;
+          if (seenRemixKeys.has(key)) continue;
+          seenRemixKeys.add(key);
+          seenRemixIds.add(t.id);
+          t.isOfficial = true;
+          t.scVariant = 'remix';
+          t.scVariantLabel = 'Remix Oficial';
+          t.scBadgeColor = '#1ed760';
+          officialRemixes.push(t);
+        }
+
+        // 2. Fetch Deezer official remix tracks
+        try {
+          const dzRemixRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: AbortSignal.timeout?.(3000),
+          }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }));
+
+          for (const t of (dzRemixRes.data || [])) {
+            if (!t || !t.id) continue;
+            const title = t.title || t.title_short || '';
+            const albumTitle = t.album?.title || '';
+            if (!remixRegex.test(title) && !remixRegex.test(albumTitle)) continue;
+
+            const normName = title.toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+            const primaryArtist = (t.artist?.name || '').toLowerCase().trim();
+            const key = `${normName}:::${primaryArtist}`;
+            if (seenRemixKeys.has(key)) continue;
+
+            seenRemixKeys.add(key);
+            seenRemixIds.add(`dz-${t.id}`);
+            const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+            officialRemixes.push({
+              id: `dz-${t.id}`,
+              name: title,
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: `alb-${t.album?.id || 'unknown'}`,
+                name: albumTitle || title,
+                images: cover ? [{ url: toHDImage(cover) }] : [],
+              },
+              isOfficial: true,
+              scVariant: 'remix',
+              scVariantLabel: 'Remix Oficial',
+              scBadgeColor: '#1ed760',
+              source: 'official',
+            });
+          }
+        } catch {}
+
         const scRes = await Promise.race([
           Promise.all([
             searchSoundCloudCatalog(cleanQ, { limit: 12 }),
@@ -751,12 +817,40 @@ const server = http.createServer(async (req, res) => {
             if (!spotifyData.tracks.items[dupIdx].scAltId) spotifyData.tracks.items[dupIdx].scAltId = `sc:${scNumId}`;
             continue;
           }
+
+          // Check deduplication against officialRemixes
+          const isCreativeEdit = /\b(mashup|bootleg|slowed|sped\s*up|reverb|nightcore|drum\s*mix|hype\s*intro)\b/i.test(scT.name);
+          if (!isCreativeEdit) {
+            const normSc = (scT.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+            const scArtist = (scT.artists?.[0]?.name || '').toLowerCase().trim();
+            const matchingOfficial = officialRemixes.find(off => {
+              const normOff = (off.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+              if (normSc === normOff) return true;
+              const offArtists = (off.artists || []).map(a => (a.name || '').toLowerCase());
+              if (offArtists.some(oa => scArtist.includes(oa) || oa.includes(scArtist)) && (normSc.includes(normOff) || normOff.includes(normSc))) {
+                return true;
+              }
+              return false;
+            });
+            if (matchingOfficial) {
+              if (!matchingOfficial.scAltId) {
+                matchingOfficial.scAltId = `sc:${scNumId}`;
+              }
+              continue;
+            }
+          }
+
           soundcloudVariants.push(scT);
         }
-        spotifyData.soundcloudTracks = { items: soundcloudVariants };
+
+        const orderedRemixItems = [
+          ...officialRemixes,
+          ...soundcloudVariants,
+        ];
+        spotifyData.soundcloudTracks = { items: orderedRemixItems };
 
         const matchedArtist = spotifyData.artists?.items?.[0];
-        if (matchedArtist?.name && soundcloudVariants.length > 0) {
+        if (matchedArtist?.name && orderedRemixItems.length > 0) {
           const vId = `sc-vault-${encodeURIComponent(matchedArtist.name)}`;
           const plItems = spotifyData.playlists?.items || [];
           if (!plItems.some(p => p.id === vId)) {
@@ -764,9 +858,9 @@ const server = http.createServer(async (req, res) => {
               id: vId,
               name: `${matchedArtist.name}: Remixes, Leaks y Slowed`,
               description: 'Remixes, versiones slowed, inéditas y temas oficiales',
-              images: matchedArtist.images?.length ? matchedArtist.images : soundcloudVariants[0]?.album?.images || [],
+              images: matchedArtist.images?.length ? matchedArtist.images : orderedRemixItems[0]?.album?.images || [],
               owner: { display_name: 'Spotifree', id: 'spotifree' },
-              tracks: { total: soundcloudVariants.length + 6, items: [] },
+              tracks: { total: orderedRemixItems.length + 6, items: [] },
             });
             spotifyData.playlists.items = plItems;
           }
@@ -779,6 +873,8 @@ const server = http.createServer(async (req, res) => {
       // Secondary Fallback: Deezer Studio API + YouTube Music + iTunes
       const withoutPlaylist = cleanQ.replace(/\bplaylist(s)?\b/gi, '').trim() || cleanQ;
       const trackSearchQuery = withoutPlaylist;
+      const isAlreadyRemixQuery = /\b(remix|rmx)\b/i.test(trackSearchQuery);
+      const remixSearchQuery = isAlreadyRemixQuery ? trackSearchQuery : `${trackSearchQuery} remix`;
       const words = cleanQ.toLowerCase().split(/\s+/).filter(Boolean);
       const STOPWORDS = new Set(['la', 'el', 'los', 'las', 'de', 'del', 'y', 'en', 'un', 'una', 'ft', 'feat', 'playlist', 'playlists']);
       const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
@@ -808,6 +904,10 @@ const server = http.createServer(async (req, res) => {
         fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        // 8. Deezer Official Remix Search
+        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       ];
 
       if (significantWords.length > 1) {
@@ -835,9 +935,10 @@ const server = http.createServer(async (req, res) => {
       const spotifyPlaylistsRes = results[5] || [];
       const deezerPlaylistsRes1 = results[6] || { data: [] };
       const deezerPlaylistsRes2 = results[7] || { data: [] };
-      const deezerExtraRes = results[8] || { data: [] };
+      const deezerRemixRes = results[8] || { data: [] };
+      const extraDeezerData = results.slice(9).flatMap(r => r?.data || []);
 
-      const allDeezerRaw = [...(deezerTracksRes.data || []), ...(deezerExtraRes.data || [])];
+      const allDeezerRaw = [...(deezerTracksRes.data || []), ...extraDeezerData];
       const deezerTracks = allDeezerRaw.map(t => {
         const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
         return {
@@ -995,6 +1096,72 @@ const server = http.createServer(async (req, res) => {
         );
       }
 
+      // Extract & enrich official catalog remixes (Requirement R1)
+      const remixRegex = /\b(remix|rmx)\b/i;
+      const officialRemixes = [];
+      const seenRemixKeys = new Set();
+      const seenRemixIds = new Set();
+
+      for (const t of (deezerRemixRes.data || [])) {
+        if (!t || !t.id) continue;
+        const title = t.title || t.title_short || '';
+        const albumTitle = t.album?.title || '';
+        if (!remixRegex.test(title) && !remixRegex.test(albumTitle)) continue;
+
+        const fullText = `${title} ${t.artist?.name || ''}`.toLowerCase();
+        if (significantWords.length > 0 && !significantWords.some(w => fullText.includes(w))) {
+          continue;
+        }
+
+        const normName = title.toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+        const primaryArtist = (t.artist?.name || '').toLowerCase().trim();
+        const key = `${normName}:::${primaryArtist}`;
+        if (seenRemixKeys.has(key)) continue;
+
+        seenRemixKeys.add(key);
+        seenRemixIds.add(`dz-${t.id}`);
+
+        const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+        officialRemixes.push({
+          id: `dz-${t.id}`,
+          name: title,
+          duration_ms: (t.duration || 210) * 1000,
+          preview_url: null,
+          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || 'Artista' }],
+          album: {
+            id: `alb-${t.album?.id || 'unknown'}`,
+            name: albumTitle || title,
+            images: cover ? [{ url: toHDImage(cover) }] : [],
+          },
+          isOfficial: true,
+          scVariant: 'remix',
+          scVariantLabel: 'Remix Oficial',
+          scBadgeColor: '#1ed760',
+          source: 'official',
+        });
+      }
+
+      // Check combined tracks for official remixes
+      for (const t of combined) {
+        if (!t || !t.id || seenRemixIds.has(t.id)) continue;
+        if (t.id.startsWith('sc-')) continue;
+        const isRemix = remixRegex.test(t.name || '') || remixRegex.test(t.album?.name || '');
+        if (!isRemix) continue;
+
+        const normName = (t.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+        const primaryArtist = (t.artists?.[0]?.name || '').toLowerCase().trim();
+        const key = `${normName}:::${primaryArtist}`;
+        if (seenRemixKeys.has(key)) continue;
+
+        seenRemixKeys.add(key);
+        seenRemixIds.add(t.id);
+        t.isOfficial = true;
+        t.scVariant = 'remix';
+        t.scVariantLabel = 'Remix Oficial';
+        t.scBadgeColor = '#1ed760';
+        officialRemixes.push(t);
+      }
+
       // Attach SoundCloud variants & artist vault without duplicating literal official tracks
       const scRes = await Promise.race([
         searchSoundCloudCatalog(withoutPlaylist, { limit: 16 }),
@@ -1011,18 +1178,47 @@ const server = http.createServer(async (req, res) => {
           if (!combined[dupIdx].scAltId) combined[dupIdx].scAltId = `sc:${scNumId}`;
           continue;
         }
+
+        // Check deduplication against officialRemixes
+        const isCreativeEdit = /\b(mashup|bootleg|slowed|sped\s*up|reverb|nightcore|drum\s*mix|hype\s*intro)\b/i.test(scT.name);
+        if (!isCreativeEdit) {
+          const normSc = (scT.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+          const scArtist = (scT.artists?.[0]?.name || '').toLowerCase().trim();
+          const matchingOfficial = officialRemixes.find(off => {
+            const normOff = (off.name || '').toLowerCase().replace(/[()[\]{}_-]/g, ' ').replace(/\b(remix|rmx)\b/g, '').replace(/\s+/g, ' ').trim();
+            if (normSc === normOff) return true;
+            const offArtists = (off.artists || []).map(a => (a.name || '').toLowerCase());
+            if (offArtists.some(oa => scArtist.includes(oa) || oa.includes(scArtist)) && (normSc.includes(normOff) || normOff.includes(normSc))) {
+              return true;
+            }
+            return false;
+          });
+          if (matchingOfficial) {
+            if (!matchingOfficial.scAltId) {
+              matchingOfficial.scAltId = `sc:${scNumId}`;
+            }
+            continue;
+          }
+        }
+
         soundcloudVariants.push(scT);
       }
-      if (artists[0]?.name && soundcloudVariants.length > 0) {
+
+      const orderedRemixItems = [
+        ...officialRemixes,
+        ...soundcloudVariants,
+      ];
+
+      if (artists[0]?.name && orderedRemixItems.length > 0) {
         const vId = `sc-vault-${encodeURIComponent(artists[0].name)}`;
         if (!playlists.some((p) => p.id === vId)) {
           playlists.unshift({
             id: vId,
             name: `${artists[0].name}: Remixes, Leaks y Slowed`,
             description: 'Remixes, versiones slowed, inéditas y temas oficiales',
-            images: artists[0].images?.length ? artists[0].images : soundcloudVariants[0]?.album?.images || [],
+            images: artists[0].images?.length ? artists[0].images : orderedRemixItems[0]?.album?.images || [],
             owner: { display_name: 'Spotifree', id: 'spotifree' },
-            tracks: { total: soundcloudVariants.length + 6, items: [] },
+            tracks: { total: orderedRemixItems.length + 6, items: [] },
           });
         }
       }
@@ -1030,7 +1226,7 @@ const server = http.createServer(async (req, res) => {
       res.statusCode = 200;
       return res.end(JSON.stringify({
         tracks: { items: combined },
-        soundcloudTracks: { items: soundcloudVariants },
+        soundcloudTracks: { items: orderedRemixItems },
         artists: { items: artists },
         albums: { items: albums },
         playlists: { items: playlists },
@@ -1062,6 +1258,57 @@ const server = http.createServer(async (req, res) => {
       if (scResolved?.kind === 'playlist' && scResolved.playlist) {
         res.statusCode = 200;
         return res.end(JSON.stringify(scResolved.playlist));
+      }
+    }
+
+    // Deezer Album fast-path
+    if (rawId.startsWith('alb-') || rawId.startsWith('album-')) {
+      const dzId = rawId.replace(/^(alb-|album-)/, '');
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
+        if (dzRes.ok) {
+          const data = await dzRes.json();
+          if (data && data.title) {
+            const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
+            const artistName = data.artist?.name || 'Artista';
+            const tracks = (data.tracks?.data || []).map((t, idx) => ({
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
+              album: {
+                id: rawId,
+                name: data.title,
+                images: cover ? [{ url: cover }] : [],
+              },
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              added_at: 'Reciente',
+            }));
+
+            res.statusCode = 200;
+            return res.end(JSON.stringify({
+              id: rawId,
+              name: data.title,
+              description: data.description || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
+              type: 'album',
+              images: cover ? [{ url: cover }] : [],
+              owner: {
+                display_name: artistName,
+                id: `user-${data.artist?.id || 'dz'}`,
+              },
+              release_date: data.release_date || '',
+              color: '#303030',
+              tracks: {
+                total: data.nb_tracks || tracks.length,
+                items: tracks,
+              },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn(`Deezer album fetch notice ${rawId}:`, err.message);
       }
     }
 
