@@ -11,14 +11,24 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.5';
+export const APP_VERSION = '0.2.6';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.6',
+    date: '12 de noviembre, 2026',
+    title: 'Fundidos limpios, fotos de artistas corregidas y búsqueda mucho más rápida',
+    isLatest: true,
+    highlights: [
+      'Fundido estándar (crossfade) limpio y fiel a la duración configurada (3s, 6s, 12s...): en modo normal ya no aplica cortes de graves de DJ ni doble atenuación sobre el deck de salida, y pre-carga el deck HTML5 secundario para evitar retrasos al inicio de fundidos cortos.',
+      'Fotos de artistas corregidas en el selector de gustos y artistas relacionados: resolución paralela de retratos reales, recuperación automática ante URLs antiguas de CDN y soporte `no-referrer`.',
+      'Búsqueda progresiva mucho más rápida: resultados locales al instante (0 ms), caché en memoria, vía rápida `?fast=1` en paralelo sin esperar SoundCloud/enriquecimiento lento, debounce reducido a 130 ms y cancelación automática con AbortController.',
+    ],
+  },
   {
     version: '0.2.5',
     date: '12 de noviembre, 2026',
     title: 'Búsqueda completa en Android Auto (autores, álbumes y listas) y diseño mejorado en el coche',
-    isLatest: true,
     highlights: [
       'Autores/Artistas, Álbumes y Playlists en las búsquedas de Android Auto: ahora al buscar en el coche aparecen los artistas con su catálogo de temas principales y aleatorio, álbumes, playlists y canciones agrupados.',
       'Tema oficial verde Spotify (#1ED760) en Android Auto (SpotifreeCarTheme), resaltado de tema activo en listas e insignia nativa de descargas sin conexión.',

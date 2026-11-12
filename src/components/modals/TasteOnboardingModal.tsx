@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { handleImageError } from '../../utils/imageFallback';
+import { ARTIST_IMAGE_CACHE, getArtistPicture, persistArtistImage } from '../../utils/artistImage';
 import { showGlobalToast } from '../../utils/globalToast';
 import {
   saveOnboardingArtistSeeds,
@@ -18,182 +19,182 @@ interface OnboardingArtist {
 const DEFAULT_ONBOARDING_ARTISTS: OnboardingArtist[] = [
   {
     name: 'Bad Bunny',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón & Urbano',
   },
   {
     name: 'Taylor Swift',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/9dc37b12d1b8c2ecab76f82db45bb389/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/9dc37b12d1b8c2ecab76f82db45bb389/500x500-000000-80-0-0.jpg',
     genre: 'Pop',
   },
   {
     name: 'Quevedo',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/9f2a4ebcbb0920d0f77ea6bbda756d11/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/9f2a4ebcbb0920d0f77ea6bbda756d11/500x500-000000-80-0-0.jpg',
     genre: 'Urbano Latino',
   },
   {
     name: 'Rosalía',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/335d259fa2bfa2f722c1db49ec85e888/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/335d259fa2bfa2f722c1db49ec85e888/500x500-000000-80-0-0.jpg',
     genre: 'Pop & Flamenco',
   },
   {
     name: 'Feid',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/aa4b4943fcf3f27f8a7e4b9015ba6cf5/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/aa4b4943fcf3f27f8a7e4b9015ba6cf5/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón',
   },
   {
     name: 'Aitana',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/8b965ba9eec81e7d235889ea8848db2c/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/8b965ba9eec81e7d235889ea8848db2c/500x500-000000-80-0-0.jpg',
     genre: 'Pop Español',
   },
   {
     name: 'Rauw Alejandro',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/66258414fa1d6c81bb65c404cf9feef4/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/66258414fa1d6c81bb65c404cf9feef4/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón & R&B',
   },
   {
     name: 'Duki',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/e7ef554a938cbb4fe4ce89ecabfc5577/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/e7ef554a938cbb4fe4ce89ecabfc5577/500x500-000000-80-0-0.jpg',
     genre: 'Trap Argentino',
   },
   {
     name: 'Coldplay',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/4c442cf8da7a5b3f7f985a11c81cbffc/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/4c442cf8da7a5b3f7f985a11c81cbffc/500x500-000000-80-0-0.jpg',
     genre: 'Pop Rock',
   },
   {
     name: 'Billie Eilish',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/605db084c6efcf0da67280fe2ad40d34/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/605db084c6efcf0da67280fe2ad40d34/500x500-000000-80-0-0.jpg',
     genre: 'Alternative Pop',
   },
   {
     name: 'Travis Scott',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/b6f50b86a8ff78b975e11c5e4070a931/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/b6f50b86a8ff78b975e11c5e4070a931/500x500-000000-80-0-0.jpg',
     genre: 'Hip-Hop & Trap',
   },
   {
     name: 'Myke Towers',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/c32906b29f9df3cf090ba285817d2da5/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/c32906b29f9df3cf090ba285817d2da5/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón & Rap',
   },
   {
     name: 'The Weeknd',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/5d2ff903b14e6669fec6f3743cfecaa6/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/5d2ff903b14e6669fec6f3743cfecaa6/500x500-000000-80-0-0.jpg',
     genre: 'R&B & Pop',
   },
   {
     name: 'Estopa',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/cb8d9bc4e4ae328229b0a7aa1dbb1016/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/cb8d9bc4e4ae328229b0a7aa1dbb1016/500x500-000000-80-0-0.jpg',
     genre: 'Rumba & Pop Rock',
   },
   {
     name: 'Mora',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/241dc73ff262d2a4ea9767f3ae34293a/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/241dc73ff262d2a4ea9767f3ae34293a/500x500-000000-80-0-0.jpg',
     genre: 'Trap & Reggaetón',
   },
   {
     name: 'Drake',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/5f8ef858cf09f1dc854749f1dbb15745/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/5f8ef858cf09f1dc854749f1dbb15745/500x500-000000-80-0-0.jpg',
     genre: 'Hip-Hop & Rap',
   },
   {
     name: 'Dua Lipa',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/f1ff2e59df18c32f8dfc7a6e1fe0d453/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/f1ff2e59df18c32f8dfc7a6e1fe0d453/500x500-000000-80-0-0.jpg',
     genre: 'Dance Pop',
   },
   {
     name: 'Melendi',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/c176288b22a6136db6ff4c28c8efd927/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/c176288b22a6136db6ff4c28c8efd927/500x500-000000-80-0-0.jpg',
     genre: 'Pop Rock Español',
   },
   {
     name: 'Bizarrap',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/6f72c0c79ecbe7ba491295fcfaefbe13/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/6f72c0c79ecbe7ba491295fcfaefbe13/500x500-000000-80-0-0.jpg',
     genre: 'EDM & Urban Sessions',
   },
   {
     name: 'C. Tangana',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/91ff1465e903d8d6411dd78e3dbff0d0/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/91ff1465e903d8d6411dd78e3dbff0d0/500x500-000000-80-0-0.jpg',
     genre: 'Música Latina & Fusión',
   },
   {
     name: 'Harry Styles',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/1e74f3d1b7a2ae552ae077a98dbcc221/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/1e74f3d1b7a2ae552ae077a98dbcc221/500x500-000000-80-0-0.jpg',
     genre: 'Pop & Rock',
   },
   {
     name: 'Anuel AA',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/77864df1fb3eebfba1a1c327fc0ff959/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/77864df1fb3eebfba1a1c327fc0ff959/500x500-000000-80-0-0.jpg',
     genre: 'Trap Latino',
   },
   {
     name: 'Morat',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/96815ae1c8a5a40b991da93382717efb/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/96815ae1c8a5a40b991da93382717efb/500x500-000000-80-0-0.jpg',
     genre: 'Folk Pop',
   },
   {
     name: 'Saiko',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/154fa4fb596fc7ae01b547eeae17b62e/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/154fa4fb596fc7ae01b547eeae17b62e/500x500-000000-80-0-0.jpg',
     genre: 'Urbano',
   },
   {
     name: 'Kendrick Lamar',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/145465bb2446ff9d10825e6e87a2d8ff/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/145465bb2446ff9d10825e6e87a2d8ff/500x500-000000-80-0-0.jpg',
     genre: 'Hip-Hop',
   },
   {
     name: 'Imagine Dragons',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/f786851221f7dbfc823fe3df85e5015b/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/f786851221f7dbfc823fe3df85e5015b/500x500-000000-80-0-0.jpg',
     genre: 'Pop Rock & Alt',
   },
   {
     name: 'Ozuna',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/8b0e74f1b5c92c57f20108873041c2c2/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/8b0e74f1b5c92c57f20108873041c2c2/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón',
   },
   {
     name: 'Shakira',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/b619eebe2a50a1e34f811ee361f38e55/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/b619eebe2a50a1e34f811ee361f38e55/500x500-000000-80-0-0.jpg',
     genre: 'Pop Latino',
   },
   {
     name: 'Bruno Mars',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/7339d6cfec9e761005ca7ff1d19d690a/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/7339d6cfec9e761005ca7ff1d19d690a/500x500-000000-80-0-0.jpg',
     genre: 'Funk & Pop',
   },
   {
     name: 'Ed Sheeran',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/a2608447d2f9d695b2909405f69f2010/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/a2608447d2f9d695b2909405f69f2010/500x500-000000-80-0-0.jpg',
     genre: 'Acoustic Pop',
   },
   {
     name: 'Arctic Monkeys',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/3ba222384a86f9eef64cefa351658428/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/3ba222384a86f9eef64cefa351658428/500x500-000000-80-0-0.jpg',
     genre: 'Indie Rock',
   },
   {
     name: 'Queen',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/23049102ef70d24f0c43666d911a3d3c/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/23049102ef70d24f0c43666d911a3d3c/500x500-000000-80-0-0.jpg',
     genre: 'Classic Rock',
   },
   {
     name: 'J Balvin',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/bb8fa3cfa3aa8c92a95c80dfce05d3ee/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/bb8fa3cfa3aa8c92a95c80dfce05d3ee/500x500-000000-80-0-0.jpg',
     genre: 'Reggaetón',
   },
   {
     name: 'Manuel Carrasco',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/931294fc6bca0f5761073cbcf799ff24/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/931294fc6bca0f5761073cbcf799ff24/500x500-000000-80-0-0.jpg',
     genre: 'Pop Español',
   },
   {
     name: 'Eminem',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/19bb70e8a7194d8cb845422896d8b94d/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/19bb70e8a7194d8cb845422896d8b94d/500x500-000000-80-0-0.jpg',
     genre: 'Hip-Hop',
   },
   {
     name: 'Gorillaz',
-    image: 'https://e-cdns-images.dzcdn.net/images/artist/f1ff2e59df18c32f8dfc7a6e1fe0d453/500x500-000000-80-0-0.jpg',
+    image: 'https://cdn-images.dzcdn.net/images/artist/f1ff2e59df18c32f8dfc7a6e1fe0d453/500x500-000000-80-0-0.jpg',
     genre: 'Alternative & Electronic',
   },
 ];
@@ -208,18 +209,56 @@ export const TasteOnboardingModal: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Initialize with any previously saved seeds (if opening from settings to edit)
+  // Initialize with any previously saved seeds & hydrate live portraits in parallel batches
   useEffect(() => {
-    if (isTasteOnboardingOpen) {
-      const existing = getOnboardingArtistSeeds();
-      if (existing.length > 0) {
-        const m = new Map<string, OnboardingArtistSeed>();
-        for (const s of existing) {
-          m.set(s.name.toLowerCase(), s);
-        }
-        setSelectedArtists(m);
+    if (!isTasteOnboardingOpen) return;
+
+    const existing = getOnboardingArtistSeeds();
+    if (existing.length > 0) {
+      const m = new Map<string, OnboardingArtistSeed>();
+      for (const s of existing) {
+        m.set(s.name.toLowerCase(), s);
       }
+      setSelectedArtists(m);
     }
+
+    let cancelled = false;
+    const hydrateArtistPhotos = async () => {
+      const batchSize = 6;
+      for (let i = 0; i < DEFAULT_ONBOARDING_ARTISTS.length; i += batchSize) {
+        if (cancelled) return;
+        const batch = DEFAULT_ONBOARDING_ARTISTS.slice(i, i + batchSize);
+        const resolved = await Promise.all(
+          batch.map(async (artist) => {
+            const cached = ARTIST_IMAGE_CACHE.get(artist.name.toLowerCase());
+            if (cached) return { name: artist.name, image: cached };
+            const live = await getArtistPicture(artist.name).catch(() => null);
+            return live ? { name: artist.name, image: live } : null;
+          })
+        );
+        if (cancelled) return;
+        const updates = new Map<string, string>();
+        for (const r of resolved) {
+          if (r?.image) {
+            updates.set(r.name.toLowerCase(), r.image);
+            persistArtistImage(r.name, r.image);
+          }
+        }
+        if (updates.size > 0) {
+          setArtistList((prev) =>
+            prev.map((item) => {
+              const liveUrl = updates.get(item.name.toLowerCase());
+              return liveUrl && liveUrl !== item.image ? { ...item, image: liveUrl } : item;
+            })
+          );
+        }
+      }
+    };
+    void hydrateArtistPhotos();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isTasteOnboardingOpen]);
 
   // Handle ESC key to dismiss
@@ -248,19 +287,43 @@ export const TasteOnboardingModal: React.FC = () => {
 
     searchTimeoutRef.current = setTimeout(async () => {
       try {
-        // Query Deezer search for artists
-        const res = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(q)}&limit=16`);
+        // Use fast backend search (avoids browser CORS issues with Deezer)
+        const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}&fast=1`);
+        let mapped: OnboardingArtist[] = [];
         if (res.ok) {
           const data = await res.json();
-          if (Array.isArray(data?.data)) {
-            const mapped: OnboardingArtist[] = data.data.map((item: any) => ({
-              name: item.name,
-              image: item.picture_big || item.picture_medium || item.picture || '',
-              genre: 'Artista',
-            }));
-            setSearchResults(mapped);
+          const items = data?.artists?.items;
+          if (Array.isArray(items) && items.length > 0) {
+            mapped = await Promise.all(
+              items.slice(0, 16).map(async (item: any) => {
+                let img = item.images?.[0]?.url || ARTIST_IMAGE_CACHE.get(String(item.name || '').toLowerCase()) || '';
+                if (!img && item.name) {
+                  img = (await getArtistPicture(item.name).catch(() => null)) || '';
+                }
+                if (img && item.name) persistArtistImage(item.name, img);
+                return {
+                  name: item.name,
+                  image: img,
+                  genre: 'Artista',
+                };
+              })
+            );
           }
         }
+        if (mapped.length === 0) {
+          const filtered = artistList.filter((a) =>
+            a.name.toLowerCase().includes(q.toLowerCase())
+          );
+          if (filtered.length > 0) {
+            mapped = filtered;
+          } else {
+            const directPic = await getArtistPicture(q).catch(() => null);
+            if (directPic) {
+              mapped = [{ name: q, image: directPic, genre: 'Artista' }];
+            }
+          }
+        }
+        setSearchResults(mapped);
       } catch {
         // Fallback filter over existing list
         const filtered = artistList.filter((a) =>
@@ -270,7 +333,7 @@ export const TasteOnboardingModal: React.FC = () => {
       } finally {
         setIsSearching(false);
       }
-    }, 240);
+    }, 150);
 
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -435,11 +498,36 @@ export const TasteOnboardingModal: React.FC = () => {
                     className="flex flex-col items-center group relative text-center focus:outline-none cursor-pointer"
                   >
                     {/* Circle Avatar with Selection Rings */}
-                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden transition-all duration-200">
+                    <div className="relative w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full overflow-hidden bg-[#282828] transition-all duration-200">
                       <img
-                        src={artist.image}
+                        src={ARTIST_IMAGE_CACHE.get(key) || artist.image}
                         alt={artist.name}
-                        onError={handleImageError}
+                        referrerPolicy="no-referrer"
+                        loading="lazy"
+                        decoding="async"
+                        onError={(e) => {
+                          const imgEl = e.currentTarget;
+                          if (imgEl.dataset.artistRetried) {
+                            handleImageError(e);
+                            return;
+                          }
+                          imgEl.dataset.artistRetried = '1';
+                          void getArtistPicture(artist.name)
+                            .then((liveUrl) => {
+                              if (liveUrl && imgEl.src !== liveUrl) {
+                                persistArtistImage(artist.name, liveUrl);
+                                imgEl.src = liveUrl;
+                                setArtistList((prev) =>
+                                  prev.map((a) => (a.name.toLowerCase() === key ? { ...a, image: liveUrl } : a))
+                                );
+                              } else {
+                                handleImageError({ currentTarget: imgEl } as React.SyntheticEvent<HTMLImageElement, Event>);
+                              }
+                            })
+                            .catch(() => {
+                              handleImageError({ currentTarget: imgEl } as React.SyntheticEvent<HTMLImageElement, Event>);
+                            });
+                        }}
                         className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
                           isSelected
                             ? 'ring-4 ring-[#1ed760] ring-offset-2 ring-offset-[#121212] brightness-105'

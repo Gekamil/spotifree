@@ -359,6 +359,7 @@ class AudioEngine {
   private setHtml5DeckSource(deckIndex: 0 | 1, srcUrl: string, startSeconds = 0): void {
     const el = this.audios[deckIndex];
     if (!el) return;
+    el.removeAttribute('data-precued-src');
     const oldBlob = this.activeBlobUrls[deckIndex];
     if (oldBlob && oldBlob !== srcUrl && oldBlob.startsWith('blob:')) {
       try { URL.revokeObjectURL(oldBlob); } catch {}
@@ -594,6 +595,22 @@ class AudioEngine {
             secPlayer.cueVideoById({ videoId: videoId1, startSeconds: 0 });
           } catch {}
         }
+
+        // Pre-cue inactive HTML5 audio deck so short crossfades (e.g. 3s) start cleanly without buffering delay
+        const secIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
+        const secAudio = this.audios[secIdx];
+        if (secAudio && !this.isCrossfading && (offlineUrl1 || this.activeEngine === 'html5')) {
+          const preUrl = offlineUrl1 || `${API_BASE}/api/audio/stream?q=${encodeURIComponent(query1)}&trackId=${encodeURIComponent(next1.id)}`;
+          if (secAudio.getAttribute('data-precued-src') !== preUrl) {
+            try {
+              secAudio.pause();
+              secAudio.volume = 0;
+              secAudio.preload = 'auto';
+              this.setHtml5DeckSource(secIdx, preUrl, 0);
+              secAudio.setAttribute('data-precued-src', preUrl);
+            } catch {}
+          }
+        }
       }
 
       // 2. Process track N+2 in background (only when online)
@@ -743,8 +760,17 @@ class AudioEngine {
         const secIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
         const secAudio = this.secondaryAudio;
         secAudio.volume = 0;
+        secAudio.playbackRate = 1;
         const nextUrl = nextOfflineUrl || `${API_BASE}/api/audio/stream?q=${encodeURIComponent(this.preloadedNext.query)}&trackId=${encodeURIComponent(nextTrack.id)}`;
-        this.setHtml5DeckSource(secIdx, nextUrl, mixInSec);
+        const alreadyPreCued = secAudio.getAttribute('data-precued-src') === nextUrl && secAudio.readyState >= 1;
+        secAudio.removeAttribute('data-precued-src');
+        if (alreadyPreCued) {
+          if (mixInSec > 0) {
+            try { secAudio.currentTime = mixInSec; } catch {}
+          }
+        } else {
+          this.setHtml5DeckSource(secIdx, nextUrl, mixInSec);
+        }
         secAudio.play().catch(() => {});
       } catch {}
     }
@@ -765,60 +791,66 @@ class AudioEngine {
       cancelScheduledAutomations(outStrip, now);
       cancelScheduledAutomations(inStrip, now);
 
-      const crossoverTime = now + crossfadeSec * 0.5;
-      const preset = djConfig?.preset || 'automatica';
-      const eqMode = djConfig?.eqMode || 'intercambio_graves_central';
-      const fxMode = djConfig?.fxMode || 'ninguno';
+      if (djConfig) {
+        const crossoverTime = now + crossfadeSec * 0.5;
+        const preset = djConfig.preset || 'automatica';
+        const eqMode = djConfig.eqMode || 'intercambio_graves_central';
+        const fxMode = djConfig.fxMode || 'ninguno';
 
-      // 1. Low-End Clash Prevention & Bass Swap (-40dB cut on outgoing, incoming pre-cut to -40dB then snapping to 0dB)
-      if (eqMode === 'intercambio_graves_central' || preset === 'automatica' || preset === 'corte') {
-        scheduleBassSwap(outStrip, inStrip, crossoverTime, now);
+        // 1. Low-End Clash Prevention & Bass Swap (-40dB cut on outgoing, incoming pre-cut to -40dB then snapping to 0dB)
+        if (eqMode === 'intercambio_graves_central' || preset === 'automatica' || preset === 'corte') {
+          scheduleBassSwap(outStrip, inStrip, crossoverTime, now);
+        }
+
+        // 1b. Vocal Blend (Mezcla de voces): Lows ducked (-36dB) on both decks while mid frequencies (+2.5dB) are lifted
+        if (preset === 'mezcla_voces') {
+          outStrip.eqLow.gain.setValueAtTime(0, now);
+          outStrip.eqLow.gain.setTargetAtTime(-36, now, 0.05);
+          outStrip.eqMid.gain.setValueAtTime(0, now);
+          outStrip.eqMid.gain.setTargetAtTime(2.5, now, 0.05);
+
+          inStrip.eqLow.gain.setValueAtTime(-36, now);
+          inStrip.eqMid.gain.setValueAtTime(0, now);
+          inStrip.eqMid.gain.setTargetAtTime(2.0, now, 0.05);
+
+          inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
+          outStrip.eqMid.gain.setTargetAtTime(0, crossoverTime, 0.1);
+        }
+
+        // 2. Resonant Filter Sweeps
+        if (preset === 'filtro') {
+          scheduleResonantHPFSweep(outStrip, now, crossfadeSec, 20, 18000, 3.0);
+          inStrip.eqLow.gain.setValueAtTime(-40, now);
+          inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
+        } else if (eqMode === 'filtro_paso_bajo') {
+          scheduleResonantLPFSweep(outStrip, now, crossfadeSec, 20000, 80, 2.5);
+        }
+
+        // 3. Beat-Synchronized Echo Delay
+        if (preset === 'eco_out' || fxMode === 'eco') {
+          scheduleBeatDelay(outStrip, crossoverTime, crossfadeSec * 0.5, safeTempo, 0.75, 0.65);
+          inStrip.eqLow.gain.setValueAtTime(0, now);
+        }
+
+        // 4. Accelerating Loop Stutter Roll / Rhythm Repetition
+        if (preset === 'beat_roll' || preset === 'repeticion_ritmo' || fxMode === 'repeticion_loop' || fxMode === 'distorsion_wash') {
+          scheduleLoopStutter(outStrip, now + crossfadeSec * 0.25, crossfadeSec * 0.73, safeTempo);
+          scheduleResonantHPFSweep(outStrip, now + crossfadeSec * 0.3, crossfadeSec * 0.65, 40, 8000, 2.5);
+          inStrip.eqLow.gain.setValueAtTime(-40, now);
+          inStrip.eqLow.gain.setTargetAtTime(0, now + crossfadeSec * 0.98, 0.02);
+        }
+
+        // 5. Channel Faders Output (DJ curve controls strip bus cleanly)
+        outStrip.outputNode.gain.setValueAtTime(masterVolume, now);
+        outStrip.outputNode.gain.linearRampToValueAtTime(0.0001, now + crossfadeSec);
+
+        inStrip.outputNode.gain.setValueAtTime(0.0001, now);
+        inStrip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + crossfadeSec);
+      } else {
+        // Pure standard crossfade (DJ mode OFF): keep strip unity gain and clean EQ, let equal-power sin/cos audio curve handle volume cleanly
+        outStrip.outputNode.gain.setValueAtTime(1.0, now);
+        inStrip.outputNode.gain.setValueAtTime(1.0, now);
       }
-
-      // 1b. Vocal Blend (Mezcla de voces): Lows ducked (-36dB) on both decks while mid frequencies (+2.5dB) are lifted
-      if (preset === 'mezcla_voces') {
-        outStrip.eqLow.gain.setValueAtTime(0, now);
-        outStrip.eqLow.gain.setTargetAtTime(-36, now, 0.05);
-        outStrip.eqMid.gain.setValueAtTime(0, now);
-        outStrip.eqMid.gain.setTargetAtTime(2.5, now, 0.05);
-
-        inStrip.eqLow.gain.setValueAtTime(-36, now);
-        inStrip.eqMid.gain.setValueAtTime(0, now);
-        inStrip.eqMid.gain.setTargetAtTime(2.0, now, 0.05);
-
-        inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
-        outStrip.eqMid.gain.setTargetAtTime(0, crossoverTime, 0.1);
-      }
-
-      // 2. Resonant Filter Sweeps
-      if (preset === 'filtro') {
-        scheduleResonantHPFSweep(outStrip, now, crossfadeSec, 20, 18000, 3.0);
-        inStrip.eqLow.gain.setValueAtTime(-40, now);
-        inStrip.eqLow.gain.setTargetAtTime(0, crossoverTime, 0.02);
-      } else if (eqMode === 'filtro_paso_bajo') {
-        scheduleResonantLPFSweep(outStrip, now, crossfadeSec, 20000, 80, 2.5);
-      }
-
-      // 3. Beat-Synchronized Echo Delay
-      if (preset === 'eco_out' || fxMode === 'eco') {
-        scheduleBeatDelay(outStrip, crossoverTime, crossfadeSec * 0.5, safeTempo, 0.75, 0.65);
-        inStrip.eqLow.gain.setValueAtTime(0, now);
-      }
-
-      // 4. Accelerating Loop Stutter Roll / Rhythm Repetition
-      if (preset === 'beat_roll' || preset === 'repeticion_ritmo' || fxMode === 'repeticion_loop' || fxMode === 'distorsion_wash') {
-        scheduleLoopStutter(outStrip, now + crossfadeSec * 0.25, crossfadeSec * 0.73, safeTempo);
-        scheduleResonantHPFSweep(outStrip, now + crossfadeSec * 0.3, crossfadeSec * 0.65, 40, 8000, 2.5);
-        inStrip.eqLow.gain.setValueAtTime(-40, now);
-        inStrip.eqLow.gain.setTargetAtTime(0, now + crossfadeSec * 0.98, 0.02);
-      }
-
-      // 5. Channel Faders Output
-      outStrip.outputNode.gain.setValueAtTime(masterVolume, now);
-      outStrip.outputNode.gain.linearRampToValueAtTime(0.0001, now + crossfadeSec);
-
-      inStrip.outputNode.gain.setValueAtTime(0.0001, now);
-      inStrip.outputNode.gain.linearRampToValueAtTime(masterVolume, now + crossfadeSec);
     }
 
     const durationMs = crossfadeSec * 1000;

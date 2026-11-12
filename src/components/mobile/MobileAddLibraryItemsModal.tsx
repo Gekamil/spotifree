@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { handleImageError } from '../../utils/imageFallback';
+import { ARTIST_IMAGE_CACHE, getArtistPicture, persistArtistImage } from '../../utils/artistImage';
 
 export interface LibraryCandidateItem {
   id: string;
@@ -160,11 +161,41 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
   const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      setSelectedMap(new Map());
-      setSearchQuery('');
-      setActiveFilter('all');
-    }
+    if (!isOpen) return;
+    setSelectedMap(new Map());
+    setSearchQuery('');
+    setActiveFilter('all');
+
+    let cancelled = false;
+    const hydrateDefaults = async () => {
+      const artistDefaults = DEFAULT_POPULAR_CANDIDATES.filter((c) => c.type === 'artist');
+      const resolved = await Promise.all(
+        artistDefaults.map(async (c) => {
+          const cached = ARTIST_IMAGE_CACHE.get(c.name.toLowerCase());
+          if (cached) return { id: c.id, image: cached };
+          const live = await getArtistPicture(c.name).catch(() => null);
+          if (live) persistArtistImage(c.name, live);
+          return live ? { id: c.id, image: live } : null;
+        })
+      );
+      if (cancelled) return;
+      const updates = new Map<string, string>();
+      for (const r of resolved) {
+        if (r?.image) updates.set(r.id, r.image);
+      }
+      if (updates.size > 0) {
+        setDynamicItems((prev) =>
+          prev.map((item) => {
+            const url = updates.get(item.id);
+            return url && url !== item.image ? { ...item, image: url } : item;
+          })
+        );
+      }
+    };
+    void hydrateDefaults();
+    return () => {
+      cancelled = true;
+    };
   }, [isOpen]);
 
   // Live search lookup with real artist photos & playlist covers
@@ -191,45 +222,43 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
           const data = await itunesRes.json();
           if (data.results && data.results.length > 0) {
             const seenArtists = new Set<string>();
+            const artistQueue: Array<{ artName: string; artistId: any; fallbackImg: string }> = [];
 
             for (const r of data.results) {
               const artName = r.artistName;
+              const fallbackImg = (r.artworkUrl100 || '').replace('100x100bb', '600x600bb');
               if (artName && !seenArtists.has(artName.toLowerCase())) {
                 seenArtists.add(artName.toLowerCase());
-
-                // Try to get artist portrait from artist-image endpoint or use high-res iTunes artwork
-                let artImg = (r.artworkUrl100 || '').replace('100x100bb', '600x600bb');
-                try {
-                  const artRes = await fetch(`/api/artist-image?name=${encodeURIComponent(artName)}`);
-                  if (artRes.ok) {
-                    const artData = await artRes.json();
-                    if (artData.picture) {
-                      artImg = artData.picture;
-                    }
-                  }
-                } catch {}
-
-                foundCandidates.push({
-                  id: `artist:${r.artistId || artName}`,
-                  name: artName,
-                  type: 'artist',
-                  image: artImg || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
-                  subtitle: 'Artista',
-                });
+                artistQueue.push({ artName, artistId: r.artistId, fallbackImg });
               }
 
               // Also add collection/album as playlist candidate
               if (r.collectionName && !foundCandidates.some(c => c.name.toLowerCase() === r.collectionName.toLowerCase())) {
-                const albCover = (r.artworkUrl100 || '').replace('100x100bb', '600x600bb');
                 foundCandidates.push({
                   id: `album:${r.collectionId || r.collectionName}`,
                   name: r.collectionName,
                   type: 'playlist',
-                  image: albCover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+                  image: fallbackImg || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
                   subtitle: `Álbum • ${artName}`,
                 });
               }
             }
+
+            // Resolve artist portraits in parallel instead of awaiting sequentially
+            const resolvedArtists = await Promise.all(
+              artistQueue.map(async ({ artName, artistId, fallbackImg }) => {
+                const live = await getArtistPicture(artName).catch(() => null);
+                if (live) persistArtistImage(artName, live);
+                return {
+                  id: `artist:${artistId || artName}`,
+                  name: artName,
+                  type: 'artist' as const,
+                  image: live || fallbackImg || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg',
+                  subtitle: 'Artista',
+                };
+              })
+            );
+            foundCandidates = [...resolvedArtists, ...foundCandidates];
           }
         }
 
@@ -251,7 +280,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
       } catch {
         if (!cancelled) setIsSearching(false);
       }
-    }, 300);
+    }, 150);
 
     return () => {
       cancelled = true;
@@ -387,9 +416,30 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
             >
               <div className="flex items-center gap-3 min-w-0 flex-1 mr-3">
                 <img
-                  src={item.image}
+                  src={(item.type === 'artist' ? ARTIST_IMAGE_CACHE.get(item.name.toLowerCase()) : undefined) || item.image}
                   alt={item.name}
-                  onError={handleImageError}
+                  referrerPolicy="no-referrer"
+                  decoding="async"
+                  onError={(e) => {
+                    const imgEl = e.currentTarget;
+                    if (item.type !== 'artist' || imgEl.dataset.artistRetried) {
+                      handleImageError(e);
+                      return;
+                    }
+                    imgEl.dataset.artistRetried = '1';
+                    void getArtistPicture(item.name)
+                      .then((liveUrl) => {
+                        if (liveUrl && imgEl.src !== liveUrl) {
+                          persistArtistImage(item.name, liveUrl);
+                          imgEl.src = liveUrl;
+                        } else {
+                          handleImageError({ currentTarget: imgEl } as React.SyntheticEvent<HTMLImageElement, Event>);
+                        }
+                      })
+                      .catch(() => {
+                        handleImageError({ currentTarget: imgEl } as React.SyntheticEvent<HTMLImageElement, Event>);
+                      });
+                  }}
                   className={`w-12 h-12 object-cover bg-[#282828] shadow shrink-0 ${
                     item.type === 'artist' ? 'rounded-full' : 'rounded-[4px]'
                   }`}

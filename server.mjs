@@ -658,6 +658,7 @@ const server = http.createServer(async (req, res) => {
   // 7. Search API (/api/spotify/search) - Official Spotify API + SoundCloud + iTunes + YouTube Music
   if (pathname === '/api/spotify/search' || pathname === '/api/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
+    const isFast = reqUrl.searchParams.get('fast') === '1';
     res.setHeader('Content-Type', 'application/json');
 
     if (!q) {
@@ -682,7 +683,7 @@ const server = http.createServer(async (req, res) => {
 
     try {
       const cleanQ = q.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
-      const spotifyToken = await getSpotifyServerToken();
+      const spotifyToken = isFast ? null : await getSpotifyServerToken();
 
       let spotifyData = null;
       if (spotifyToken) {
@@ -748,13 +749,32 @@ const server = http.createServer(async (req, res) => {
           officialRemixes.push(t);
         }
 
-        // 2. Fetch Deezer official remix tracks
-        try {
-          const dzRemixRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
+        // 2. Fetch Deezer official remix tracks & SoundCloud catalog variants in parallel
+        const scTimeoutMs = isAlreadyRemixQuery ? 3200 : 1800;
+        const [dzRemixRes, scRes] = await Promise.all([
+          fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-            signal: AbortSignal.timeout?.(3000),
-          }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }));
+            signal: AbortSignal.timeout?.(2500),
+          }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+          Promise.race([
+            Promise.all([
+              searchSoundCloudCatalog(cleanQ, { limit: 12 }),
+              searchSoundCloudCatalog(`${cleanQ} remix slowed leak`, { limit: 14 }),
+            ]).then(([baseSc, varSc]) => {
+              const seen = new Set();
+              const merged = [];
+              for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
+                if (!t?.id || seen.has(t.id)) continue;
+                seen.add(t.id);
+                merged.push(t);
+              }
+              return { tracks: merged };
+            }),
+            new Promise((r) => setTimeout(() => r({ tracks: [] }), scTimeoutMs)),
+          ]).catch(() => ({ tracks: [] })),
+        ]);
 
+        try {
           for (const t of (dzRemixRes.data || [])) {
             if (!t || !t.id) continue;
             const title = t.title || t.title_short || '';
@@ -788,23 +808,6 @@ const server = http.createServer(async (req, res) => {
             });
           }
         } catch {}
-
-        const scRes = await Promise.race([
-          Promise.all([
-            searchSoundCloudCatalog(cleanQ, { limit: 12 }),
-            searchSoundCloudCatalog(`${cleanQ} remix slowed leak`, { limit: 14 }),
-          ]).then(([baseSc, varSc]) => {
-            const seen = new Set();
-            const merged = [];
-            for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
-              if (!t?.id || seen.has(t.id)) continue;
-              seen.add(t.id);
-              merged.push(t);
-            }
-            return { tracks: merged };
-          }),
-          new Promise((r) => setTimeout(() => r({ tracks: [] }), 4000)),
-        ]).catch(() => ({ tracks: [] }));
 
         const soundcloudVariants = [];
         for (const scT of scRes?.tracks || []) {
@@ -880,48 +883,60 @@ const server = http.createServer(async (req, res) => {
       const significantWords = words.filter(w => !STOPWORDS.has(w) && w.length >= 3);
       const firstWord = significantWords[0] || words[0] || cleanQ;
 
+      const reqTimeout = isFast ? AbortSignal.timeout?.(2200) : AbortSignal.timeout?.(3500);
       const fetchPromises = [
         fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=25`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
-        searchYouTubeTracks(trackSearchQuery, 15).catch(() => []),
-        // 5. Spotify Public Playlists (direct Pathfinder GraphQL)
-        searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []),
+        isFast ? Promise.resolve([]) : searchYouTubeTracks(trackSearchQuery, 15).catch(() => []),
+        // 5. Spotify Public Playlists (direct Pathfinder GraphQL — skipped in fast mode)
+        isFast ? Promise.resolve([]) : searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []),
         // 6. Deezer Real Community & Curated Playlists (by query)
         fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         // 7. Deezer Real Playlists (without 'playlist' keyword)
-        fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+        isFast
+          ? Promise.resolve({ data: [] })
+          : fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
+              headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              signal: reqTimeout,
+            }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
         // 8. Deezer Official Remix Search
         fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       ];
 
-      if (significantWords.length > 1) {
+      if (!isFast && significantWords.length > 1) {
         for (const sw of [significantWords[0], significantWords[significantWords.length - 1]]) {
           fetchPromises.push(
             fetch(`https://api.deezer.com/search?q=${encodeURIComponent(sw)}&limit=15`, {
               headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+              signal: reqTimeout,
             }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
           );
         }
-      } else if (words.length > 1) {
+      } else if (!isFast && words.length > 1) {
         fetchPromises.push(
           fetch(`https://api.deezer.com/search?q=${encodeURIComponent(firstWord)}&limit=15`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: reqTimeout,
           }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] }))
         );
       }
@@ -971,30 +986,55 @@ const server = http.createServer(async (req, res) => {
       const seenTitles = new Set();
       const combined = [];
 
-      // If multi-word search, enrich candidate tracks matching title words with Deezer contributors
-      if (words.length > 1) {
-        const candidates = deezerTracks.filter(t =>
-          words.some(w => (t.name || '').toLowerCase().includes(w))
-        ).slice(0, 4);
+      // Enrich track contributors and album release dates concurrently (skipped in fast mode)
+      const contributorEnrichPromise = (!isFast && words.length > 1)
+        ? Promise.all(
+            deezerTracks
+              .filter(t => words.some(w => (t.name || '').toLowerCase().includes(w)))
+              .slice(0, 4)
+              .map(async t => {
+                const trackId = t.id.replace('dz-', '');
+                try {
+                  const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+                    headers: { 'User-Agent': 'Mozilla/5.0' },
+                    signal: AbortSignal.timeout(750),
+                  }).then(r => r.ok ? r.json() : null);
+                  if (detail && detail.contributors && detail.contributors.length > 0) {
+                    t.artists = detail.contributors.map(c => ({
+                      id: `art-${c.id}`,
+                      name: c.name,
+                    }));
+                  }
+                } catch {}
+              })
+          )
+        : Promise.resolve();
 
-        await Promise.all(
-          candidates.map(async t => {
-            const trackId = t.id.replace('dz-', '');
+      const albumsPromise = Promise.all(
+        (deezerAlbumsRes.data || []).map(async (a, idx) => {
+          let releaseDate = a.release_date || '';
+          if (!isFast && !releaseDate && idx < 8 && a.id) {
             try {
-              const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+              const detail = await fetch(`https://api.deezer.com/album/${a.id}`, {
                 headers: { 'User-Agent': 'Mozilla/5.0' },
-                signal: AbortSignal.timeout(1500),
-              }).then(r => r.ok ? r.json() : null);
-              if (detail && detail.contributors && detail.contributors.length > 0) {
-                t.artists = detail.contributors.map(c => ({
-                  id: `art-${c.id}`,
-                  name: c.name,
-                }));
-              }
+                signal: AbortSignal.timeout ? AbortSignal.timeout(650) : undefined,
+              }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+              if (detail?.release_date) releaseDate = detail.release_date;
             } catch {}
-          })
-        );
-      }
+          }
+          return {
+            id: `alb-${a.id}`,
+            name: a.title,
+            artists: [{ ...(a.artist?.id ? { id: `art-${a.artist.id}` } : {}), name: a.artist?.name || 'Artista' }],
+            images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
+            release_date: releaseDate,
+            record_type: a.record_type || 'album',
+            type: 'album',
+          };
+        })
+      );
+
+      const [, albums] = await Promise.all([contributorEnrichPromise, albumsPromise]);
 
       // Prioritize Deezer official releases, then YouTube Music, then iTunes
       for (const t of [...deezerTracks, ...ytTracks, ...itunesItems]) {
@@ -1028,30 +1068,6 @@ const server = http.createServer(async (req, res) => {
         name: a.name,
         images: [{ url: a.picture_xl || a.picture_big || a.picture_medium || '' }],
       }));
-
-      const albums = await Promise.all(
-        (deezerAlbumsRes.data || []).map(async (a, idx) => {
-          let releaseDate = a.release_date || '';
-          if (!releaseDate && idx < 8 && a.id) {
-            try {
-              const detail = await fetch(`https://api.deezer.com/album/${a.id}`, {
-                headers: { 'User-Agent': 'Mozilla/5.0' },
-                signal: AbortSignal.timeout ? AbortSignal.timeout(900) : undefined,
-              }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-              if (detail?.release_date) releaseDate = detail.release_date;
-            } catch {}
-          }
-          return {
-            id: `alb-${a.id}`,
-            name: a.title,
-            artists: [{ ...(a.artist?.id ? { id: `art-${a.artist.id}` } : {}), name: a.artist?.name || 'Artista' }],
-            images: [{ url: a.cover_xl || a.cover_big || a.cover_medium || '' }],
-            release_date: releaseDate,
-            record_type: a.record_type || 'album',
-            type: 'album',
-          };
-        })
-      );
 
       // Real Community & Curated Playlists from Deezer
       // Playlists: prioritize genuine Spotify user-created & public playlists
@@ -1179,10 +1195,12 @@ const server = http.createServer(async (req, res) => {
       }
 
       // Attach SoundCloud variants & artist vault without duplicating literal official tracks
-      const scRes = await Promise.race([
-        searchSoundCloudCatalog(withoutPlaylist, { limit: 16 }),
-        new Promise((r) => setTimeout(() => r({ tracks: [] }), 3000)),
-      ]);
+      const scRes = isFast
+        ? { tracks: [] }
+        : await Promise.race([
+            searchSoundCloudCatalog(withoutPlaylist, { limit: 16 }),
+            new Promise((r) => setTimeout(() => r({ tracks: [] }), isAlreadyRemixQuery ? 3000 : 1800)),
+          ]);
       const soundcloudVariants = [];
       for (const scT of scRes?.tracks || []) {
         const scNumId = String(scT.id || '').replace(/^sc-/, '');

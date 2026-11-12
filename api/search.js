@@ -18,6 +18,7 @@ export default async function handler(req, res) {
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const q = (url.searchParams.get('q') || '').trim();
+  const isFast = url.searchParams.get('fast') === '1';
 
   if (!q) {
     return res.status(200).json({
@@ -28,8 +29,13 @@ export default async function handler(req, res) {
     });
   }
 
-  const cacheKey = q.toLowerCase();
-  const cached = searchCache.get(cacheKey);
+  const baseCacheKey = q.toLowerCase();
+  const cacheKey = isFast ? `fast:${baseCacheKey}` : baseCacheKey;
+  const fullCached = searchCache.get(baseCacheKey);
+  if (fullCached && Date.now() - fullCached.timestamp < 120000) {
+    return res.status(200).json(fullCached.data);
+  }
+  const cached = isFast ? searchCache.get(cacheKey) : null;
   if (cached && Date.now() - cached.timestamp < 120000) {
     return res.status(200).json(cached.data);
   }
@@ -78,70 +84,84 @@ export default async function handler(req, res) {
     const isAlreadyRemixQuery = /\b(remix|rmx)\b/i.test(trackSearchQuery);
     const remixSearchQuery = isAlreadyRemixQuery ? trackSearchQuery : `${trackSearchQuery} remix`;
 
+    const hasVarWord = /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|sin\s+voces)\b/i.test(trackSearchQuery);
+    const reqTimeout = isFast ? AbortSignal.timeout?.(2200) : AbortSignal.timeout?.(3500);
+    const scTimeoutMs = hasVarWord ? 3200 : 1800;
+
     const fetchPromises = [
       // 0. Deezer Track Search
       fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=25`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 1. Deezer Artist Search
       fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 2. Deezer Album Search
       fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
-      // 3. Real Spotify Public Playlists (Internal Pathfinder GraphQL search)
-      searchSpotifyPublicPlaylists(cleanQ, 20, cookie).catch(() => []),
+      // 3. Real Spotify Public Playlists (skipped in fast mode to avoid blocking initial results)
+      isFast ? Promise.resolve([]) : searchSpotifyPublicPlaylists(cleanQ, 20, cookie).catch(() => []),
 
       // 4. Deezer Playlist Search (exact query)
       fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 5. Deezer Playlist Search (without "playlist" keyword to find topic playlists)
-      fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
+      isFast
+        ? Promise.resolve({ data: [] })
+        : fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            signal: reqTimeout,
+          }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 6. iTunes tracks
       fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
 
-      // 7. SoundCloud tracks (direct + variant remixes/slowed/unreleased, race-capped so search stays fast)
-      Promise.race([
-        (async () => {
-          const hasVarWord = /\b(remix|slowed|sped\s*up|nightcore|leak|unreleased|inedita|inédita|demo|mashup|bootleg|sin\s+voces)\b/i.test(trackSearchQuery);
-          if (hasVarWord) {
-            return searchSoundCloudCatalog(trackSearchQuery, { limit: 18 });
-          }
-          const [baseSc, varSc] = await Promise.all([
-            searchSoundCloudCatalog(trackSearchQuery, { limit: 12 }),
-            searchSoundCloudCatalog(`${trackSearchQuery} remix slowed leak`, { limit: 14 }),
-          ]);
-          const seen = new Set();
-          const merged = [];
-          for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
-            if (!t?.id || seen.has(t.id)) continue;
-            seen.add(t.id);
-            merged.push(t);
-          }
-          return { tracks: merged, officialAltIds: {} };
-        })(),
-        new Promise((r) => setTimeout(() => r({ tracks: [], officialAltIds: {}, timedOut: true }), 4500)),
-      ]),
+      // 7. SoundCloud tracks (direct + variant remixes/slowed/unreleased, skipped in fast mode)
+      isFast
+        ? Promise.resolve({ tracks: [], officialAltIds: {}, timedOut: false })
+        : Promise.race([
+            (async () => {
+              if (hasVarWord) {
+                return searchSoundCloudCatalog(trackSearchQuery, { limit: 18 });
+              }
+              const [baseSc, varSc] = await Promise.all([
+                searchSoundCloudCatalog(trackSearchQuery, { limit: 12 }),
+                searchSoundCloudCatalog(`${trackSearchQuery} remix slowed leak`, { limit: 14 }),
+              ]);
+              const seen = new Set();
+              const merged = [];
+              for (const t of [...(varSc?.tracks || []), ...(baseSc?.tracks || [])]) {
+                if (!t?.id || seen.has(t.id)) continue;
+                seen.add(t.id);
+                merged.push(t);
+              }
+              return { tracks: merged, officialAltIds: {} };
+            })(),
+            new Promise((r) => setTimeout(() => r({ tracks: [], officialAltIds: {}, timedOut: true }), scTimeoutMs)),
+          ]),
 
       // 8. Deezer Official Remix Search
       fetch(`https://api.deezer.com/search?q=${encodeURIComponent(remixSearchQuery)}&limit=15`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
     ];
 
-    if (significantWords.length > 1) {
+    if (!isFast && significantWords.length > 1) {
       for (const sw of [significantWords[0], significantWords[significantWords.length - 1]]) {
         fetchPromises.push(
           fetch(`https://api.deezer.com/search?q=${encodeURIComponent(sw)}&limit=15`, {
@@ -193,30 +213,55 @@ export default async function handler(req, res) {
       },
     }));
 
-    // If multi-word search, enrich candidate tracks matching title words with Deezer contributors
-    if (words.length > 1) {
-      const candidates = deezerTracks.filter(t =>
-        words.some(w => (t.name || '').toLowerCase().includes(w))
-      ).slice(0, 4);
+    // Enrich track contributors and album release dates concurrently (skipped in fast mode)
+    const contributorEnrichPromise = (!isFast && words.length > 1)
+      ? Promise.all(
+          deezerTracks
+            .filter(t => words.some(w => (t.name || '').toLowerCase().includes(w)))
+            .slice(0, 4)
+            .map(async t => {
+              const trackId = t.id.replace('dz-', '');
+              try {
+                const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+                  headers: { 'User-Agent': 'Mozilla/5.0' },
+                  signal: AbortSignal.timeout(750),
+                }).then(r => r.ok ? r.json() : null);
+                if (detail && detail.contributors && detail.contributors.length > 0) {
+                  t.artists = detail.contributors.map(c => ({
+                    id: `art-${c.id}`,
+                    name: c.name,
+                  }));
+                }
+              } catch {}
+            })
+        )
+      : Promise.resolve();
 
-      await Promise.all(
-        candidates.map(async t => {
-          const trackId = t.id.replace('dz-', '');
+    const albumsPromise = Promise.all(
+      (deezerAlbumsRes.data || []).map(async (a, idx) => {
+        let releaseDate = a.release_date || '';
+        if (!isFast && !releaseDate && idx < 8 && a.id) {
           try {
-            const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+            const detail = await fetch(`https://api.deezer.com/album/${a.id}`, {
               headers: { 'User-Agent': 'Mozilla/5.0' },
-              signal: AbortSignal.timeout(1500),
-            }).then(r => r.ok ? r.json() : null);
-            if (detail && detail.contributors && detail.contributors.length > 0) {
-              t.artists = detail.contributors.map(c => ({
-                id: `art-${c.id}`,
-                name: c.name,
-              }));
-            }
+              signal: AbortSignal.timeout ? AbortSignal.timeout(650) : undefined,
+            }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+            if (detail?.release_date) releaseDate = detail.release_date;
           } catch {}
-        })
-      );
-    }
+        }
+        return {
+          id: `alb-${a.id}`,
+          name: a.title,
+          artists: [{ ...(a.artist?.id ? { id: `art-${a.artist.id}` } : {}), name: a.artist?.name || 'Artista' }],
+          images: [{ url: toHDImage ? toHDImage(a.cover_xl || a.cover_big || a.cover_medium || '') : (a.cover_xl || a.cover_big || a.cover_medium || '') }],
+          release_date: releaseDate,
+          record_type: a.record_type || 'album',
+          type: 'album',
+        };
+      })
+    );
+
+    const [, albums] = await Promise.all([contributorEnrichPromise, albumsPromise]);
 
     const seenTitles = new Set();
     const combinedTracks = [];
@@ -251,30 +296,6 @@ export default async function handler(req, res) {
       name: a.name,
       images: [{ url: toHDImage ? toHDImage(a.picture_xl || a.picture_big || a.picture_medium || '') : (a.picture_xl || a.picture_big || a.picture_medium || '') }],
     }));
-
-    const albums = await Promise.all(
-      (deezerAlbumsRes.data || []).map(async (a, idx) => {
-        let releaseDate = a.release_date || '';
-        if (!releaseDate && idx < 8 && a.id) {
-          try {
-            const detail = await fetch(`https://api.deezer.com/album/${a.id}`, {
-              headers: { 'User-Agent': 'Mozilla/5.0' },
-              signal: AbortSignal.timeout ? AbortSignal.timeout(900) : undefined,
-            }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
-            if (detail?.release_date) releaseDate = detail.release_date;
-          } catch {}
-        }
-        return {
-          id: `alb-${a.id}`,
-          name: a.title,
-          artists: [{ ...(a.artist?.id ? { id: `art-${a.artist.id}` } : {}), name: a.artist?.name || 'Artista' }],
-          images: [{ url: toHDImage ? toHDImage(a.cover_xl || a.cover_big || a.cover_medium || '') : (a.cover_xl || a.cover_big || a.cover_medium || '') }],
-          release_date: releaseDate,
-          record_type: a.record_type || 'album',
-          type: 'album',
-        };
-      })
-    );
 
     // Playlists: prioritize genuine Spotify user-created & public playlists
     const playlists = [];
@@ -356,25 +377,27 @@ export default async function handler(req, res) {
       });
     }
 
-    // Enrich top candidate remixes with contributors
-    const remixCandidatesToEnrich = officialRemixes.slice(0, 4);
-    await Promise.all(
-      remixCandidatesToEnrich.map(async t => {
-        const trackId = t.id.replace('dz-', '');
-        try {
-          const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            signal: AbortSignal.timeout(1500),
-          }).then(r => r.ok ? r.json() : null);
-          if (detail && detail.contributors && detail.contributors.length > 0) {
-            t.artists = detail.contributors.map(c => ({
-              id: `art-${c.id}`,
-              name: c.name,
-            }));
-          }
-        } catch {}
-      })
-    );
+    // Enrich top candidate remixes with contributors (skipped in fast mode)
+    if (!isFast) {
+      const remixCandidatesToEnrich = officialRemixes.slice(0, 4);
+      await Promise.all(
+        remixCandidatesToEnrich.map(async t => {
+          const trackId = t.id.replace('dz-', '');
+          try {
+            const detail = await fetch(`https://api.deezer.com/track/${trackId}`, {
+              headers: { 'User-Agent': 'Mozilla/5.0' },
+              signal: AbortSignal.timeout(750),
+            }).then(r => r.ok ? r.json() : null);
+            if (detail && detail.contributors && detail.contributors.length > 0) {
+              t.artists = detail.contributors.map(c => ({
+                id: `art-${c.id}`,
+                name: c.name,
+              }));
+            }
+          } catch {}
+        })
+      );
+    }
 
     // Also inspect combinedTracks for any official remix releases
     for (const t of combinedTracks) {

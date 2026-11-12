@@ -81,24 +81,46 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
     }
 
     setIsSearching(true);
+    let active = true;
+    const controller = new AbortController();
+    const applySearchData = (data: any) => {
+      if (!active || controller.signal.aborted || !data) return;
+      setResults({
+        tracks: data?.tracks?.items || [],
+        soundcloudTracks: data?.soundcloudTracks?.items || [],
+        artists: data?.artists?.items || [],
+        albums: data?.albums?.items || [],
+        playlists: data?.playlists?.items || [],
+      });
+    };
+
     const timer = setTimeout(async () => {
       try {
-        const data = await searchSpotify(query);
-        setResults({
-          tracks: data?.tracks?.items || [],
-          soundcloudTracks: data?.soundcloudTracks?.items || [],
-          artists: data?.artists?.items || [],
-          albums: data?.albums?.items || [],
-          playlists: data?.playlists?.items || [],
+        const data = await searchSpotify(query, {
+          signal: controller.signal,
+          onQuickResults: (partial) => {
+            if (!active || controller.signal.aborted) return;
+            applySearchData(partial);
+            setIsSearching(false);
+          },
         });
+        if (active && !controller.signal.aborted && data) {
+          applySearchData(data);
+        }
       } catch {
-        setResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
+        if (active && !controller.signal.aborted) {
+          setResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
+        }
       } finally {
-        setIsSearching(false);
+        if (active) setIsSearching(false);
       }
-    }, 280);
+    }, 130);
 
-    return () => clearTimeout(timer);
+    return () => {
+      active = false;
+      controller.abort();
+      clearTimeout(timer);
+    };
   }, [query]);
 
   if (selectedCat) {
