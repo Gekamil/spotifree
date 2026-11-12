@@ -331,6 +331,9 @@ ${services}
             android:name="com.google.android.gms.car.application"
             android:resource="@xml/automotive_app_desc" />
         <meta-data
+            android:name="com.google.android.gms.car.application.theme"
+            android:resource="@style/SpotifreeCarTheme" />
+        <meta-data
             android:name="com.google.android.gms.car.notification.SmallIcon"
             android:resource="@drawable/ic_stat_spotifree" />
         ${END}`;

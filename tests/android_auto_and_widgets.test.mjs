@@ -49,6 +49,28 @@ describe('Spotifree v0.2.4 — Android Auto "Recientes" Tab', () => {
     assert.ok(ts.includes('recentTracks,'));
     assert.ok(ts.includes("window.addEventListener('spotifree:history_updated'"));
   });
+
+  it('Android Auto search returns artists (authors), albums, playlists & songs and exploits native car UI hints/theme', () => {
+    const svc = readRel('native/android/SpotifreeMediaService.java');
+    const plugin = readRel('native/android/SpotifreeMediaPlugin.java');
+    const ts = readRel('src/services/nativeMedia.ts');
+    const setup = readRel('scripts/setup-android-native.mjs');
+    const theme = readRel('native/android/res/values/spotifree_car_theme.xml');
+
+    assert.ok(ts.includes('searchMetaCache'));
+    assert.ok(ts.includes('artists,'));
+    assert.ok(ts.includes('albums,'));
+    assert.ok(plugin.includes('arr(call, "artists")'));
+    assert.ok(plugin.includes('arr(call, "albums")'));
+    assert.ok(svc.includes('tr("Artistas", "Artists")'));
+    assert.ok(svc.includes('tr("Álbumes", "Albums")'));
+    assert.ok(svc.includes('androidx.media.PlaybackStateCompat.Extras.KEY_MEDIA_ID'));
+    assert.ok(svc.includes('android.media.extra.DOWNLOAD_STATUS'));
+    assert.ok(svc.includes('android.media.browse.CONTENT_STYLE_SINGLE_ITEM_HINT'));
+    assert.ok(setup.includes('com.google.android.gms.car.application.theme'));
+    assert.ok(theme.includes('SpotifreeCarTheme'));
+    assert.ok(theme.includes('#1ED760'));
+  });
 });
 
 describe('Spotifree v0.2.4 — Redesigned Smooth Animated Widgets (Bar, Large, Small & Turntable)', () => {

@@ -11,14 +11,24 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.4';
+export const APP_VERSION = '0.2.5';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.5',
+    date: '12 de noviembre, 2026',
+    title: 'Búsqueda completa en Android Auto (autores, álbumes y listas) y diseño mejorado en el coche',
+    isLatest: true,
+    highlights: [
+      'Autores/Artistas, Álbumes y Playlists en las búsquedas de Android Auto: ahora al buscar en el coche aparecen los artistas con su catálogo de temas principales y aleatorio, álbumes, playlists y canciones agrupados.',
+      'Tema oficial verde Spotify (#1ED760) en Android Auto (SpotifreeCarTheme), resaltado de tema activo en listas e insignia nativa de descargas sin conexión.',
+      'Diseño mixto por secciones (rejilla visual para tarjetas y filas compactas para canciones) para navegar más rápido conduciendo.',
+    ],
+  },
   {
     version: '0.2.4',
     date: '12 de noviembre, 2026',
     title: 'Pestaña Recientes en Android Auto y widgets rediseñados con fondo difuminado y giro fluido',
-    isLatest: true,
     highlights: [
       'Nueva pestaña «Recientes» en Android Auto: muestra únicamente tus playlists, álbumes y canciones escuchadas hace poco, sin mezclar recomendaciones.',
       'Ambos widgets rediseñados (Reproductor y Tocadiscos): fondo real con la carátula difuminada, gradiente dinámico de doble tono, borde cristalino, barra de progreso y temporizador en vivo.',

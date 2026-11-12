@@ -150,6 +150,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private static final String GROUP_TITLE = "android.media.browse.CONTENT_STYLE_GROUP_TITLE_HINT";
     private static final String BROWSABLE_HINT = "android.media.browse.CONTENT_STYLE_BROWSABLE_HINT";
     private static final String PLAYABLE_HINT = "android.media.browse.CONTENT_STYLE_PLAYABLE_HINT";
+    private static final String SINGLE_ITEM_STYLE = "android.media.browse.CONTENT_STYLE_SINGLE_ITEM_HINT";
     private static final int STYLE_LIST = 1;
     private static final int STYLE_GRID = 2;
 
@@ -167,6 +168,9 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private static final String CBA_MEDIA_ID = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_MEDIA_ITEM_ID";
     private static final String CBA_RESULT_MESSAGE = "androidx.media.utils.extras.KEY_CUSTOM_BROWSER_ACTION_RESULT_MESSAGE";
     private static final String IS_EXPLICIT = "android.media.IS_EXPLICIT";
+    private static final String DOWNLOAD_STATUS = "android.media.extra.DOWNLOAD_STATUS";
+    private static final long STATUS_DOWNLOADED = 2L;
+    private static final String PLAYBACK_MEDIA_ID_EXTRA = "androidx.media.PlaybackStateCompat.Extras.KEY_MEDIA_ID";
     private static final String ERROR_ACTION_LABEL = "android.media.extras.ERROR_RESOLUTION_ACTION_LABEL";
     private static final String ERROR_ACTION_INTENT = "android.media.extras.ERROR_RESOLUTION_ACTION_INTENT";
     static final String CBA_QUEUE = "spotifree.addToQueue";
@@ -185,6 +189,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static final Map<String, JSONArray> playlistTracks = new ConcurrentHashMap<>(); // id -> [{id,title,artist,image}]
     static volatile JSONArray queue = new JSONArray();
     static volatile String trackId = "";
+    static volatile String activeBrowseMediaId = "";
+    static volatile String activeBrowseForTrackId = "";
     static volatile String title = "";
     static volatile String artist = "";
     static volatile String album = "";
@@ -355,6 +361,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             }
             @Override public void onPlayFromMediaId(String mediaId, Bundle extras) {
                 if ("noop".equals(mediaId)) { openApp(); return; }
+                activeBrowseMediaId = mediaId != null ? mediaId : "";
+                activeBrowseForTrackId = "";
                 sendOrOpen("playFromMediaId", obj("mediaId", mediaId));
             }
             @Override public void onPlayFromSearch(String query, Bundle extras) {
@@ -504,6 +512,17 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_REPEAT + ":" + repeat,
             "one".equals(repeat) ? tr("Repetir una", "Repeat one") : "all".equals(repeat) ? tr("Repetir todo", "Repeat all") : tr("Repetir", "Repeat"),
             "one".equals(repeat) ? R.drawable.ic_car_repeat_one : "all".equals(repeat) ? R.drawable.ic_car_repeat_on : R.drawable.ic_car_repeat).build());
+        if (trackId != null && !trackId.isEmpty()) {
+            if (activeBrowseForTrackId.isEmpty() && !activeBrowseMediaId.isEmpty()) {
+                activeBrowseForTrackId = trackId;
+            } else if (!activeBrowseForTrackId.equals(trackId)) {
+                activeBrowseMediaId = "";
+                activeBrowseForTrackId = "";
+            }
+            Bundle stateExtras = new Bundle();
+            stateExtras.putString(PLAYBACK_MEDIA_ID_EXTRA, !activeBrowseMediaId.isEmpty() ? activeBrowseMediaId : trackId);
+            sb.setExtras(stateExtras);
+        }
         session.setPlaybackState(sb.build());
         session.setShuffleMode(shuffle ? PlaybackStateCompat.SHUFFLE_MODE_ALL : PlaybackStateCompat.SHUFFLE_MODE_NONE);
         session.setRepeatMode("one".equals(repeat) ? PlaybackStateCompat.REPEAT_MODE_ONE
@@ -668,10 +687,12 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         result.sendResult(out);
     }
 
-    /** A song in a list: cover, explicit badge, queue / like buttons */
+    /** A song in a list: cover, explicit badge, offline badge, queue / like buttons */
     private MediaBrowserCompat.MediaItem trackItem(String mediaId, JSONObject t, @Nullable String group) {
         Bundle ex = new Bundle();
         if (t.optBoolean("explicit", false)) ex.putLong(IS_EXPLICIT, 1L);
+        if (t.optBoolean("downloaded", false)) ex.putLong(DOWNLOAD_STATUS, STATUS_DOWNLOADED);
+        ex.putInt(SINGLE_ITEM_STYLE, STYLE_LIST);
         ArrayList<String> ids = new ArrayList<>();
         ids.add(CBA_QUEUE);
         ids.add(CBA_LIKE);
@@ -735,10 +756,16 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         return new MediaBrowserCompat.MediaItem(d.build(), MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
     }
 
-    /** A playlist folder: its songs are shown as a list */
+    /** A playlist / artist / album folder: its songs are shown as a list */
     private MediaBrowserCompat.MediaItem playlistItem(JSONObject p, @Nullable String group) {
+        return playlistItem(p, group, 0);
+    }
+
+    private MediaBrowserCompat.MediaItem playlistItem(JSONObject p, @Nullable String group, int singleStyle) {
         Bundle ex = new Bundle();
         ex.putInt(PLAYABLE_HINT, STYLE_LIST);
+        if (singleStyle > 0) ex.putInt(SINGLE_ITEM_STYLE, singleStyle);
+        if (p.optBoolean("downloaded", false)) ex.putLong(DOWNLOAD_STATUS, STATUS_DOWNLOADED);
         if (group != null) ex.putString(GROUP_TITLE, group);
         ArrayList<String> ids = new ArrayList<>();
         ids.add(CBA_SHUFFLE);
@@ -929,23 +956,35 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         result.sendResult(localSearch(query));
     }
 
-    /** Search results from the app: songs (playable) and playlists (browsable) */
-    void onSearchResults(String reqId, JSONArray tracks, JSONArray playlists) {
+    /** Search results from the app: songs (playable) + artists, albums and playlists (browsable) */
+    void onSearchResults(String reqId, JSONArray tracks, JSONArray artists, JSONArray albums, JSONArray playlists) {
         main.post(() -> {
             Result<List<MediaBrowserCompat.MediaItem>> r = pendingSearch.remove(reqId);
             if (r == null) return;
             List<MediaBrowserCompat.MediaItem> out = new ArrayList<>();
             String songs = tr("Canciones", "Songs");
+            String artistGroup = tr("Artistas", "Artists");
+            String albumGroup = tr("Álbumes", "Albums");
             String lists = tr("Playlists", "Playlists");
-            for (int i = 0; tracks != null && i < tracks.length() && i < 25; i++) {
+
+            for (int i = 0; tracks != null && i < tracks.length() && i < 12; i++) {
                 JSONObject t = tracks.optJSONObject(i);
                 if (t == null) continue;
                 out.add(trackItem("st:" + reqId + ":" + i, t, songs));
             }
-            for (int i = 0; playlists != null && i < playlists.length() && i < 15; i++) {
-                JSONObject p = playlists.optJSONObject(i);
-                if (p != null) out.add(playlistItem(p, lists));
+            for (int i = 0; artists != null && i < artists.length() && i < 8; i++) {
+                JSONObject a = artists.optJSONObject(i);
+                if (a != null) out.add(playlistItem(a, artistGroup, STYLE_GRID));
             }
+            for (int i = 0; albums != null && i < albums.length() && i < 10; i++) {
+                JSONObject al = albums.optJSONObject(i);
+                if (al != null) out.add(playlistItem(al, albumGroup, STYLE_GRID));
+            }
+            for (int i = 0; playlists != null && i < playlists.length() && i < 10; i++) {
+                JSONObject p = playlists.optJSONObject(i);
+                if (p != null) out.add(playlistItem(p, lists, STYLE_GRID));
+            }
+            if (out.isEmpty()) out.add(hint(tr("Sin resultados", "No results found")));
             r.sendResult(out);
         });
     }

@@ -174,12 +174,18 @@ public class SpotifreeMediaPlugin extends Plugin {
         call.resolve();
     }
 
-    /** requestId, tracks: [...], playlists: [...] (answer to a "search" command) */
+    /** requestId, tracks: [...], artists: [...], albums: [...], playlists: [...] (answer to a "search" command) */
     @PluginMethod
     public void setSearchResults(PluginCall call) {
         String reqId = call.getString("requestId", "");
         if (SpotifreeMediaService.current != null) {
-            SpotifreeMediaService.current.onSearchResults(reqId, arr(call, "tracks"), arr(call, "playlists"));
+            SpotifreeMediaService.current.onSearchResults(
+                reqId,
+                arr(call, "tracks"),
+                arr(call, "artists"),
+                arr(call, "albums"),
+                arr(call, "playlists")
+            );
         }
         call.resolve();
     }

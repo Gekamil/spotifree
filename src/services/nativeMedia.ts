@@ -13,6 +13,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { getPlaylistCover } from '../utils/playlistCover';
+import { getDownloadedTracks, isPlaylistDownloaded, onDownloadsChanged } from '../utils/offlineStorage';
 import { useLanguageStore } from '../utils/i18n';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../utils/lyricsService';
 import { toHDImage } from '../utils/formatters';
@@ -39,8 +40,8 @@ interface MediaCommand {
   requestId?: string;
 }
 
-interface CarItem { id: string; name: string; subtitle?: string; image?: string }
-interface CarTrack { id: string; title: string; artist: string; image?: string; explicit?: boolean }
+interface CarItem { id: string; name: string; subtitle?: string; image?: string; downloaded?: boolean }
+interface CarTrack { id: string; title: string; artist: string; image?: string; explicit?: boolean; downloaded?: boolean }
 
 interface SpotifreeMediaPlugin {
   setLibrary(o: {
@@ -54,7 +55,13 @@ interface SpotifreeMediaPlugin {
   setPlaylistTracks(o: { id: string; tracks: CarTrack[] }): Promise<void>;
   setCategoryItems(o: { id: string; items: CarItem[] }): Promise<void>;
   cacheImage(o: { key: string; base64: string }): Promise<void>;
-  setSearchResults(o: { requestId: string; tracks: CarTrack[]; playlists: CarItem[] }): Promise<void>;
+  setSearchResults(o: {
+    requestId: string;
+    tracks: CarTrack[];
+    artists?: CarItem[];
+    albums?: CarItem[];
+    playlists: CarItem[];
+  }): Promise<void>;
   updateNowPlaying(o: Record<string, unknown>): Promise<void>;
   stop(): Promise<void>;
   takePendingCommand(): Promise<{ command?: MediaCommand }>;
@@ -207,12 +214,22 @@ function img(url?: string | null, hd = false): string {
 const coverOf = (t?: Track | null, hd = false) => img(t?.album?.images?.[0]?.url, hd);
 const tracksOf = (p?: Playlist | null): Track[] =>
   ((p?.tracks?.items || []) as any[]).map((x) => x?.track || x).filter((t: any) => t?.id && t?.name);
+let downloadedTrackIds = new Set<string>();
+function refreshDownloadedIds() {
+  try {
+    downloadedTrackIds = new Set(getDownloadedTracks().map((t) => t.id).filter(Boolean));
+  } catch {
+    downloadedTrackIds = new Set();
+  }
+}
+
 const carTrack = (t: Track): CarTrack => ({
   id: t.id,
   title: t.name,
   artist: artistOf(t),
   image: coverOf(t),
   ...((t as any).explicit ? { explicit: true } : {}),
+  ...(downloadedTrackIds.has(t.id) ? { downloaded: true } : {}),
 });
 const playlistItem = (p: Playlist): CarItem => ({
   id: p.id,
@@ -223,6 +240,7 @@ const playlistItem = (p: Playlist): CarItem => ({
       ? `Playlist • ${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
       : `Playlist • ${p.owner?.display_name || 'Spotify'}`,
   image: img(getPlaylistCover(p)),
+  ...(isPlaylistDownloaded(p.id) ? { downloaded: true } : {}),
 });
 
 // ----------------------------------------------------------------- Explorar (category tiles)
@@ -399,6 +417,17 @@ function resolveContextCard(id: string, fallbackTrack?: Track | null): CarItem |
     return { id: hist.id, name: hist.name, subtitle: hist.subtitle, image: img(hist.image) };
   }
 
+  const meta = searchMetaCache.get(id);
+  if (meta) {
+    return {
+      id,
+      name: meta.name,
+      subtitle: meta.subtitle,
+      image: img(meta.image),
+      ...(isPlaylistDownloaded(id) ? { downloaded: true } : {}),
+    };
+  }
+
   const snap = readRecentSnapshots()[id];
   if (snap) return snap;
 
@@ -539,22 +568,26 @@ function pushLibrary() {
   }, 1200);
 }
 
-// ----------------------------------------------------------------- songs of a playlist (on demand)
+// ----------------------------------------------------------------- songs of a playlist / artist / album (on demand)
 const sentTracks = new Map<string, Track[]>();
+const searchMetaCache = new Map<string, { name: string; subtitle?: string; image?: string; type: 'artist' | 'album' | 'playlist' }>();
+
 async function loadPlaylistTracks(id: string): Promise<Track[]> {
   let p = findPlaylist(id);
+  const meta = searchMetaCache.get(id);
   let tracks = tracksOf(p);
 
   const isArtist =
     id.startsWith('art-') ||
     id.startsWith('artist-') ||
     id.startsWith('sf-artist-') ||
+    meta?.type === 'artist' ||
     p?.type === 'artist' ||
     p?.description === 'Artista';
 
   if (tracks.length === 0 && isArtist) {
     try {
-      tracks = await fetchArtistTopTracks(id, p?.name);
+      tracks = await fetchArtistTopTracks(id, p?.name || meta?.name);
     } catch {}
   }
 
@@ -578,7 +611,12 @@ async function answerLoadPlaylist(id: string) {
 
 // ----------------------------------------------------------------- search (car search screen)
 const searchTracks = new Map<string, Track[]>();
-async function runSearch(query: string): Promise<{ tracks: Track[]; playlists: CarItem[] }> {
+async function runSearch(query: string): Promise<{
+  tracks: Track[];
+  artists: CarItem[];
+  albums: CarItem[];
+  playlists: CarItem[];
+}> {
   const res = await searchSpotify(query).catch(() => null);
   const list = (v: any): any[] => (Array.isArray(v) ? v : Array.isArray(v?.items) ? v.items : []);
   // Best matches first: songs BY the searched artist, then songs whose title matches
@@ -595,21 +633,66 @@ async function runSearch(query: string): Promise<{ tracks: Track[]; playlists: C
     .map((t, i) => ({ t, i, s: score(t) }))
     .sort((x, y) => y.s - x.s || x.i - y.i)
     .map((x) => x.t)
-    .slice(0, 25);
+    .slice(0, 20);
+
+  const artists: CarItem[] = list(res?.artists)
+    .filter((a) => a?.id && a?.name)
+    .slice(0, 8)
+    .map((a) => {
+      const imageUrl = a.images?.[0]?.url || a.image || '';
+      const sub = en() ? 'Artist' : 'Artista';
+      searchMetaCache.set(a.id, { name: a.name, subtitle: sub, image: imageUrl, type: 'artist' });
+      return { id: a.id, name: a.name, subtitle: sub, image: img(imageUrl) };
+    });
+
+  const albums: CarItem[] = list(res?.albums)
+    .filter((al) => al?.id && al?.name)
+    .slice(0, 10)
+    .map((al) => {
+      const imageUrl = al.images?.[0]?.url || al.image || '';
+      const artName = al.artists?.[0]?.name || '';
+      const year = al.release_date ? String(al.release_date).slice(0, 4) : '';
+      const sub = [en() ? 'Album' : 'Álbum', artName || year].filter(Boolean).join(' • ');
+      searchMetaCache.set(al.id, { name: al.name, subtitle: sub, image: imageUrl, type: 'album' });
+      return {
+        id: al.id,
+        name: al.name,
+        subtitle: sub,
+        image: img(imageUrl),
+        ...(isPlaylistDownloaded(al.id) ? { downloaded: true } : {}),
+      };
+    });
+
   // Generated "radio" cards of the search page are not real playlists
-  const playlists: CarItem[] = list(res?.playlists).filter((p) => p?.id && !String(p.id).startsWith('search-')).slice(0, 15).map((p) => ({
-    id: p.id,
-    name: p.name,
-    subtitle: p.owner?.display_name || '',
-    image: img(getPlaylistCover(p)),
-  }));
-  return { tracks, playlists };
+  const playlists: CarItem[] = list(res?.playlists)
+    .filter((p) => p?.id && !String(p.id).startsWith('search-'))
+    .slice(0, 10)
+    .map((p) => {
+      const cover = getPlaylistCover(p);
+      const sub = p.owner?.display_name || '';
+      searchMetaCache.set(p.id, { name: p.name, subtitle: sub, image: cover, type: 'playlist' });
+      return {
+        id: p.id,
+        name: p.name,
+        subtitle: sub,
+        image: img(cover),
+        ...(isPlaylistDownloaded(p.id) ? { downloaded: true } : {}),
+      };
+    });
+
+  return { tracks, artists, albums, playlists };
 }
 async function answerSearch(requestId: string, query: string) {
-  const { tracks, playlists } = await runSearch(query);
+  const { tracks, artists, albums, playlists } = await runSearch(query);
   searchTracks.set(requestId, tracks);
   if (searchTracks.size > 10) searchTracks.delete(searchTracks.keys().next().value as string);
-  SpotifreeMedia.setSearchResults({ requestId, tracks: tracks.map(carTrack), playlists }).catch(() => {});
+  SpotifreeMedia.setSearchResults({
+    requestId,
+    tracks: tracks.map(carTrack),
+    artists,
+    albums,
+    playlists,
+  }).catch(() => {});
 }
 
 // ----------------------------------------------------------------- lyrics line
@@ -903,9 +986,15 @@ export function initNativeMedia() {
   }, 400);
 
   const initialCtx = usePlayerStore.getState().currentContextId;
+  refreshDownloadedIds();
   if (initialCtx) rememberContext(initialCtx, usePlayerStore.getState().currentTrack);
   pushLibrary();
   void makeGenreTiles();
+  onDownloadsChanged(() => {
+    refreshDownloadedIds();
+    lastLibrarySig = '';
+    pushLibrary();
+  });
   window.addEventListener('spotifree:history_updated', () => {
     pushLibrary();
   });
