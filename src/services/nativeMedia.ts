@@ -18,6 +18,8 @@ import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../uti
 import { toHDImage } from '../utils/formatters';
 import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
 import { fetchArtistTopTracks } from './artistService';
+import { getListeningHistory } from './listeningHistory';
+import { useSpotifreeMixes } from './spotifreeMixes';
 import type { Playlist, Track } from '../types/spotify';
 import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
 
@@ -41,7 +43,14 @@ interface CarItem { id: string; name: string; subtitle?: string; image?: string 
 interface CarTrack { id: string; title: string; artist: string; image?: string; explicit?: boolean }
 
 interface SpotifreeMediaPlugin {
-  setLibrary(o: { playlists: CarItem[]; home: { title: string; items: CarItem[] }[]; explore: CarItem[]; loggedIn: boolean }): Promise<void>;
+  setLibrary(o: {
+    playlists: CarItem[];
+    home: { title: string; items: CarItem[] }[];
+    recent?: CarItem[];
+    recentTracks?: CarTrack[];
+    explore: CarItem[];
+    loggedIn: boolean;
+  }): Promise<void>;
   setPlaylistTracks(o: { id: string; tracks: CarTrack[] }): Promise<void>;
   setCategoryItems(o: { id: string; items: CarItem[] }): Promise<void>;
   cacheImage(o: { key: string; base64: string }): Promise<void>;
@@ -321,6 +330,7 @@ async function trackForMediaId(mediaId: string): Promise<Track | null> {
     const tracks = sentTracks.get(plId) || (await loadPlaylistTracks(plId));
     return tracks[idx] || null;
   }
+  if (mediaId.startsWith('rec:')) return recentTracksList[Number(mediaId.slice(4))] || null;
   if (mediaId.startsWith('q:')) return (player.getUpcomingTracks?.(30) || [])[Number(mediaId.slice(2))] || null;
   if (mediaId.startsWith('st:')) {
     const [req, idx] = splitId(mediaId.slice(3));
@@ -329,8 +339,12 @@ async function trackForMediaId(mediaId: string): Promise<Track | null> {
   return null;
 }
 
-// ----------------------------------------------------------------- recently played (for "Inicio")
+// ----------------------------------------------------------------- recently played (for "Inicio" & "Recientes")
 const RECENT_KEY = 'spotifree_car_recent';
+const RECENT_SNAPSHOTS_KEY = 'spotifree_car_recent_snapshots';
+let recentTracksList: Track[] = [];
+const enrichingContexts = new Set<string>();
+
 function readRecent(): string[] {
   try {
     return JSON.parse(window.localStorage.getItem(RECENT_KEY) || '[]') || [];
@@ -338,13 +352,117 @@ function readRecent(): string[] {
     return [];
   }
 }
-function rememberContext(id?: string | null) {
-  if (!id) return;
-  const list = [id, ...readRecent().filter((x) => x !== id)].slice(0, 12);
+
+function readRecentSnapshots(): Record<string, CarItem> {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(RECENT_SNAPSHOTS_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeRecentSnapshot(item: CarItem) {
+  if (!item?.id || !item.name) return;
+  try {
+    const map = readRecentSnapshots();
+    map[item.id] = item;
+    // Keep snapshots trimmed to the active recents + a small buffer
+    const keys = new Set([...readRecent(), item.id]);
+    const trimmed: Record<string, CarItem> = {};
+    for (const [k, v] of Object.entries(map)) {
+      if (keys.has(k)) trimmed[k] = v;
+    }
+    window.localStorage.setItem(RECENT_SNAPSHOTS_KEY, JSON.stringify(trimmed));
+  } catch {}
+}
+
+function resolveContextCard(id: string, fallbackTrack?: Track | null): CarItem | null {
+  if (!id) return null;
+  const pl = findPlaylist(id);
+  if (pl) return playlistItem(pl);
+
+  const mixes = useSpotifreeMixes.getState().mixes || [];
+  const mix = mixes.find((m) => m.id === id);
+  if (mix) return playlistItem(mix);
+
+  const st = useSpotifyDataStore.getState();
+  for (const shelf of st.dynamicShelves || []) {
+    const card = (shelf.cards || []).find((c) => c.id === id);
+    if (card) return { id: card.id, name: card.title, subtitle: card.subtitle, image: img(card.image) };
+  }
+  const quick = (st.quickAccessCards || []).find((c) => c.id === id);
+  if (quick) return { id: quick.id, name: quick.name, image: img(quick.image) };
+
+  const hist = getListeningHistory().find((h) => h.id === id && h.type !== 'track');
+  if (hist) {
+    return { id: hist.id, name: hist.name, subtitle: hist.subtitle, image: img(hist.image) };
+  }
+
+  const snap = readRecentSnapshots()[id];
+  if (snap) return snap;
+
+  if (fallbackTrack?.album?.name) {
+    return {
+      id,
+      name: fallbackTrack.album.name,
+      subtitle: artistOf(fallbackTrack) ? `${en() ? 'Album' : 'Álbum'} • ${artistOf(fallbackTrack)}` : en() ? 'Album' : 'Álbum',
+      image: coverOf(fallbackTrack),
+    };
+  }
+  return null;
+}
+
+function rememberContext(id?: string | null, fallbackTrack?: Track | null) {
+  if (!id || id === 'dj-session' || id.startsWith('search-')) return;
+  const list = [id, ...readRecent().filter((x) => x !== id)].slice(0, 16);
   try {
     window.localStorage.setItem(RECENT_KEY, JSON.stringify(list));
   } catch {}
+
+  const card = resolveContextCard(id, fallbackTrack);
+  if (card) writeRecentSnapshot(card);
+
+  if (!findPlaylist(id) && !enrichingContexts.has(id)) {
+    enrichingContexts.add(id);
+    void fetchPlaylistDetails(id)
+      .then((fetched) => {
+        if (fetched) {
+          useSpotifyDataStore.getState().cachePlaylistDetails?.(fetched);
+          writeRecentSnapshot(playlistItem(fetched));
+          pushLibrary();
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        enrichingContexts.delete(id);
+      });
+  }
+
   pushLibrary();
+}
+
+function collectRecentTracks(): Track[] {
+  const out: Track[] = [];
+  const seen = new Set<string>();
+  const add = (t?: Track | null) => {
+    if (!t || !t.id || !t.name || seen.has(t.id)) return;
+    seen.add(t.id);
+    out.push(t);
+  };
+
+  const pState = usePlayerStore.getState();
+  if (pState.currentTrack) add(pState.currentTrack);
+  for (const t of pState.history || []) add(t);
+  for (const h of getListeningHistory()) {
+    if (h.type === 'track' && h.track) add(h.track);
+  }
+  const st = useSpotifyDataStore.getState();
+  for (const item of st.recentlyPlayed || []) {
+    const trk = (item as any)?.track || item;
+    add(trk as Track);
+  }
+  return out.slice(0, 20);
 }
 
 // ----------------------------------------------------------------- library + home
@@ -373,7 +491,20 @@ function pushLibrary() {
       }
     }
     const home: { title: string; items: CarItem[] }[] = [];
-    const recent = readRecent().map((id) => known.get(id)).filter(Boolean) as CarItem[];
+    const recent: CarItem[] = [];
+    const recentSeen = new Set<string>();
+    for (const id of readRecent()) {
+      if (recentSeen.has(id)) continue;
+      const resolved = known.get(id) || resolveContextCard(id);
+      if (resolved) {
+        recentSeen.add(id);
+        recent.push(resolved);
+      }
+    }
+    const recentTrackObjs = collectRecentTracks();
+    recentTracksList = recentTrackObjs;
+    const recentTracks: CarTrack[] = recentTrackObjs.map(carTrack);
+
     if (recent.length) home.push({ title: en() ? 'Recently played' : 'Escuchado recientemente', items: recent.slice(0, 8) });
     const quick = (st.quickAccessCards || [])
       .map((c) => known.get(c.id) || { id: c.id, name: c.name, image: img(c.image) })
@@ -388,10 +519,23 @@ function pushLibrary() {
       if (items.length) home.push({ title: shelf.title, items });
     }
 
-    const sig = JSON.stringify([lib.map((l) => l.id + l.name + l.image), home.map((h) => h.title + h.items.map((i) => i.id + i.image).join()), exploreItems().map((g) => g.name + g.image)]);
+    const sig = JSON.stringify([
+      lib.map((l) => l.id + l.name + l.image),
+      home.map((h) => h.title + h.items.map((i) => i.id + i.image).join()),
+      recent.map((r) => r.id + r.name + r.image),
+      recentTracks.map((t) => t.id + t.title + t.image),
+      exploreItems().map((g) => g.name + g.image),
+    ]);
     if (sig === lastLibrarySig) return;
     lastLibrarySig = sig;
-    SpotifreeMedia.setLibrary({ playlists: lib, home, explore: exploreItems(), loggedIn: Boolean(st.isAuthenticated) }).catch(() => {});
+    SpotifreeMedia.setLibrary({
+      playlists: lib,
+      home,
+      recent: recent.slice(0, 16),
+      recentTracks,
+      explore: exploreItems(),
+      loggedIn: Boolean(st.isAuthenticated),
+    }).catch(() => {});
   }, 1200);
 }
 
@@ -507,8 +651,8 @@ function pushNowPlaying(force = false) {
   const repeat = s.repeatMode || 'off';
   const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
   const now = Date.now();
-  // The system extrapolates the position while playing: resend on changes, or every 15 s
-  if (!force && key === lastSent && now - lastPushAt < 15000) return;
+  // The system extrapolates the position while playing: resend on changes, or every 8 s for widget progress sync
+  if (!force && key === lastSent && now - lastPushAt < (s.isPlaying ? 8000 : 15000)) return;
   lastSent = key;
   lastPushAt = now;
   const upcoming = typeof s.getUpcomingTracks === 'function' ? s.getUpcomingTracks(30) : [];
@@ -647,6 +791,9 @@ async function playMediaId(mediaId: string) {
     if (!tracks.length) return;
     if (!player.isShuffle) player.toggleShuffle();
     playList(tracks, tracks[Math.floor(Math.random() * tracks.length)], plId);
+  } else if (mediaId.startsWith('rec:')) {
+    const idx = Number(mediaId.slice(4));
+    playList(recentTracksList, recentTracksList[idx]);
   } else if (mediaId.startsWith('q:')) {
     const upcoming = player.getUpcomingTracks?.(30) || [];
     const t = upcoming[Number(mediaId.slice(2))];
@@ -755,8 +902,13 @@ export function initNativeMedia() {
       .catch(() => {});
   }, 400);
 
+  const initialCtx = usePlayerStore.getState().currentContextId;
+  if (initialCtx) rememberContext(initialCtx, usePlayerStore.getState().currentTrack);
   pushLibrary();
   void makeGenreTiles();
+  window.addEventListener('spotifree:history_updated', () => {
+    pushLibrary();
+  });
   useSpotifyDataStore.subscribe((s, prev) => {
     if (
       s.playlists !== prev.playlists ||
@@ -770,7 +922,9 @@ export function initNativeMedia() {
   });
 
   usePlayerStore.subscribe((s, prev) => {
-    if (s.currentContextId && s.currentContextId !== prev.currentContextId) rememberContext(s.currentContextId);
+    if (s.currentContextId && (s.currentContextId !== prev.currentContextId || s.currentTrack?.id !== prev.currentTrack?.id)) {
+      rememberContext(s.currentContextId, s.currentTrack);
+    }
     if (s.currentTrack?.id !== prev.currentTrack?.id) {
       void loadLyrics(s.currentTrack).then(() => pushNowPlaying(true));
       pushNowPlaying(true);

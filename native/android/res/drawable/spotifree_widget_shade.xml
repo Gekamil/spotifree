@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Soft darkening over the cover colour (lighter top-left, deeper bottom-right), like Spotify's cards -->
+<!-- Atmospheric glass scrim over blurred album backdrop for readable typography -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
     <gradient
-        android:angle="315"
-        android:startColor="#0D000000"
-        android:centerColor="#40000000"
-        android:endColor="#8C000000"
+        android:angle="270"
+        android:startColor="#14000000"
+        android:centerColor="#45000000"
+        android:endColor="#9A060608"
         android:type="linear" />
     <corners android:radius="24dp" />
 </shape>

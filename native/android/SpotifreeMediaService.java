@@ -55,6 +55,7 @@ import java.util.concurrent.Executors;
  *
  * Browse tree (tabs):
  *   home    "Inicio"           sections (recent, favourites, shelves) -> pl:<id>
+ *   recents "Recientes"        recently played playlists/albums & tracks -> pl:<id> / rec:<index>
  *   lib     "Tu biblioteca"    Liked Songs + playlists                 -> pl:<id>
  *   explore "Explorar"         categories (same as the phone's)        -> ex:<id> -> pl:<id>
  *   pl:<id> -> shuf:<id> ("Reproducir en aleatorio") + tr:<id>:<index>
@@ -177,8 +178,10 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static volatile boolean explicit = false;
 
     // ---- state pushed by the web layer (SpotifreeMediaPlugin)
-    static volatile JSONArray library = null;  // [{id,name,subtitle,image}]
-    static volatile JSONArray home = null;     // [{title, items:[{id,name,subtitle,image}]}]
+    static volatile JSONArray library = null;      // [{id,name,subtitle,image}]
+    static volatile JSONArray home = null;         // [{title, items:[{id,name,subtitle,image}]}]
+    static volatile JSONArray recent = null;       // [{id,name,subtitle,image}] recently played playlists/albums
+    static volatile JSONArray recentTracks = null; // [{id,title,artist,image,explicit}] recently played tracks
     static final Map<String, JSONArray> playlistTracks = new ConcurrentHashMap<>(); // id -> [{id,title,artist,image}]
     static volatile JSONArray queue = new JSONArray();
     static volatile String trackId = "";
@@ -257,13 +260,17 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
 
     // ------------------------------------------------------------------ persistence
 
-    static void saveLibrary(Context ctx, JSONArray lib, JSONArray homeSections) {
+    static void saveLibrary(Context ctx, JSONArray lib, JSONArray homeSections, JSONArray recentItems, JSONArray recentSongs) {
         library = lib;
         if (homeSections != null) home = homeSections;
+        if (recentItems != null) recent = recentItems;
+        if (recentSongs != null) recentTracks = recentSongs;
         try {
             SharedPreferences.Editor e = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit();
             e.putString("library", lib.toString());
             if (homeSections != null) e.putString("home", homeSections.toString());
+            if (recentItems != null) e.putString("recent", recentItems.toString());
+            if (recentSongs != null) e.putString("recentTracks", recentSongs.toString());
             e.apply();
         } catch (Exception ignored) {}
     }
@@ -278,6 +285,14 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             if (home == null) {
                 String raw = p.getString("home", null);
                 if (raw != null) home = new JSONArray(raw);
+            }
+            if (recent == null) {
+                String raw = p.getString("recent", null);
+                if (raw != null) recent = new JSONArray(raw);
+            }
+            if (recentTracks == null) {
+                String raw = p.getString("recentTracks", null);
+                if (raw != null) recentTracks = new JSONArray(raw);
             }
         } catch (Exception ignored) {}
     }
@@ -742,9 +757,24 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         try {
             if ("root".equals(parentId)) {
                 out.add(tabItem("home", tr("Inicio", "Home"), R.drawable.ic_car_tab_home, STYLE_GRID));
+                out.add(tabItem("recents", tr("Recientes", "Recents"), R.drawable.ic_car_tab_recents, STYLE_GRID));
                 out.add(tabItem("lib", tr("Tu biblioteca", "Your Library"), R.drawable.ic_car_tab_library, STYLE_GRID));
                 out.add(tabItem("explore", tr("Explorar", "Browse"), R.drawable.ic_car_tab_explore, STYLE_GRID));
                 // "A continuación" is the queue button of the player (session queue), like Spotify
+            } else if ("recents".equals(parentId)) {
+                JSONArray rec = recent;
+                String recPlaylistsTitle = tr("Playlists y álbumes recientes", "Recent playlists & albums");
+                for (int i = 0; rec != null && i < rec.length(); i++) {
+                    JSONObject p = rec.optJSONObject(i);
+                    if (p != null) out.add(playlistItem(p, recPlaylistsTitle));
+                }
+                JSONArray recTr = recentTracks;
+                String recSongsTitle = tr("Canciones recientes", "Recent songs");
+                for (int j = 0; recTr != null && j < recTr.length() && j < 20; j++) {
+                    JSONObject t = recTr.optJSONObject(j);
+                    if (t != null) out.add(trackItem("rec:" + j, t, recSongsTitle));
+                }
+                if (out.isEmpty()) out.add(hint(loggedIn ? tr("Aún no has escuchado nada recientemente", "Nothing played recently yet") : tr("Inicia sesión en Spotifree", "Sign in to Spotifree")));
             } else if ("explore".equals(parentId)) {
                 JSONArray ex = explore;
                 for (int i = 0; ex != null && i < ex.length(); i++) {
@@ -923,10 +953,22 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private List<MediaBrowserCompat.MediaItem> localSearch(String query) {
         List<MediaBrowserCompat.MediaItem> out = new ArrayList<>();
         String q = query == null ? "" : query.toLowerCase();
+        JSONArray rec = recent;
+        for (int i = 0; rec != null && i < rec.length() && out.size() < 30; i++) {
+            JSONObject p = rec.optJSONObject(i);
+            if (p != null && p.optString("name").toLowerCase().contains(q)) out.add(playlistItem(p, tr("Recientes", "Recents")));
+        }
         JSONArray lib = library;
         for (int i = 0; lib != null && i < lib.length() && out.size() < 30; i++) {
             JSONObject p = lib.optJSONObject(i);
             if (p != null && p.optString("name").toLowerCase().contains(q)) out.add(playlistItem(p, tr("Playlists", "Playlists")));
+        }
+        JSONArray recTr = recentTracks;
+        for (int j = 0; recTr != null && j < recTr.length() && out.size() < 40; j++) {
+            JSONObject t = recTr.optJSONObject(j);
+            if (t != null && (t.optString("title") + " " + t.optString("artist")).toLowerCase().contains(q)) {
+                out.add(trackItem("rec:" + j, t, null));
+            }
         }
         for (Map.Entry<String, JSONArray> e : playlistTracks.entrySet()) {
             JSONArray tracks = e.getValue();
@@ -940,9 +982,10 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         return out;
     }
 
-    /** Tells Android Auto that the library / home changed */
+    /** Tells Android Auto that the library / recents / home changed */
     void notifyLibraryChanged() {
         notifyChildrenChanged("home");
+        notifyChildrenChanged("recents");
         notifyChildrenChanged("lib");
         notifyChildrenChanged("explore");
     }

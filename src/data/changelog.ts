@@ -11,14 +11,24 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.3';
+export const APP_VERSION = '0.2.4';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.4',
+    date: '12 de noviembre, 2026',
+    title: 'Pestaña Recientes en Android Auto y widgets rediseñados con fondo difuminado y giro fluido',
+    isLatest: true,
+    highlights: [
+      'Nueva pestaña «Recientes» en Android Auto: muestra únicamente tus playlists, álbumes y canciones escuchadas hace poco, sin mezclar recomendaciones.',
+      'Ambos widgets rediseñados (Reproductor y Tocadiscos): fondo real con la carátula difuminada, gradiente dinámico de doble tono, borde cristalino, barra de progreso y temporizador en vivo.',
+      'Tocadiscos fluido a 60 FPS: eliminada la rotación a saltos del ViewFlipper por un plato vinilo con surcos y reflejo óptico girando suavemente en el launcher y etiqueta nítida en HD.',
+    ],
+  },
   {
     version: '0.2.3',
     date: '11 de noviembre, 2026',
     title: 'Selector de salida de audio en móvil y APK, carátulas en play directo y mejoras en búsquedas',
-    isLatest: true,
     highlights: [
       'Selector de dispositivo y salida de audio en móvil y Android APK: pulsa el icono de dispositivos en el minirreproductor o «Este teléfono» en el reproductor para elegir altavoz, auriculares, Bluetooth o abrir «Escuchar juntos» con el mismo diseño que ordenador.',
       'Plugin nativo Android (SpotifreeAudioOutput): detección en tiempo real de altavoces, cable y Bluetooth en la app Android con acceso directo al panel de salida de medios del sistema.',

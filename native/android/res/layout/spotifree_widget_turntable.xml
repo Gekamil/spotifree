@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Turntable widget (4x2): the record turns while the song plays (the cover is its label), the
-     tonearm drops onto it; song, artist and controls on the right. Card tinted with the cover's colour. -->
+<!-- Turntable widget (4x2): blurred album art + dynamic gradient backdrop, smoked glass plinth,
+     native 60 FPS smooth vinyl platter + optical label sheen rotation (no choppy ViewFlipper),
+     tonearm, live chronometer, lyric line, progress bar & controls. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -15,6 +16,13 @@
         android:src="@drawable/spotifree_widget_shape" />
 
     <ImageView
+        android:id="@+id/widget_bg_art"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:contentDescription="@null"
+        android:scaleType="fitXY" />
+
+    <ImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:contentDescription="@null"
@@ -26,13 +34,13 @@
         android:layout_height="match_parent"
         android:gravity="center_vertical"
         android:orientation="horizontal"
-        android:padding="10dp">
+        android:padding="11dp">
 
-        <!-- Deck: base, record (turning / still), label (turning frames / still), tonearm -->
+        <!-- Smoked glass deck: base, smooth 60 FPS spinning platter/grooves, crisp center cover + sheen, tonearm -->
         <FrameLayout
             android:id="@+id/tt_deck"
-            android:layout_width="96dp"
-            android:layout_height="96dp">
+            android:layout_width="102dp"
+            android:layout_height="102dp">
 
             <ImageView
                 android:layout_width="match_parent"
@@ -42,8 +50,8 @@
                 android:src="@drawable/spotifree_tt_plinth" />
 
             <FrameLayout
-                android:layout_width="84dp"
-                android:layout_height="84dp"
+                android:layout_width="86dp"
+                android:layout_height="86dp"
                 android:layout_gravity="center">
 
                 <ProgressBar
@@ -53,7 +61,8 @@
                     android:indeterminate="true"
                     android:indeterminateBehavior="repeat"
                     android:indeterminateDrawable="@drawable/spotifree_vinyl_spin"
-                    android:indeterminateDuration="1800"
+                    android:indeterminateDuration="2600"
+                    android:indeterminateOnly="true"
                     android:indeterminateTint="#FFFFFFFF"
                     android:indeterminateTintMode="multiply"
                     android:interpolator="@android:anim/linear_interpolator"
@@ -66,40 +75,29 @@
                     android:contentDescription="@null"
                     android:src="@drawable/spotifree_vinyl_disc" />
 
-                <ViewFlipper
-                    android:id="@+id/tt_flipper"
-                    android:layout_width="31dp"
-                    android:layout_height="31dp"
-                    android:layout_gravity="center"
-                    android:autoStart="true"
-                    android:flipInterval="112"
-                    android:visibility="gone">
-                    <ImageView android:id="@+id/tt_f0" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f1" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f2" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f3" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f4" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f5" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f6" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f7" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f8" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f9" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f10" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f11" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f12" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f13" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f14" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                    <ImageView android:id="@+id/tt_f15" android:layout_width="match_parent" android:layout_height="match_parent" android:contentDescription="@null" android:scaleType="fitXY" />
-                </ViewFlipper>
-
                 <ImageView
                     android:id="@+id/tt_label"
-                    android:layout_width="31dp"
-                    android:layout_height="31dp"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
                     android:layout_gravity="center"
                     android:contentDescription="@null"
                     android:scaleType="fitXY"
                     android:src="@drawable/spotifree_vinyl_label" />
+
+                <ProgressBar
+                    android:id="@+id/tt_label_sheen"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="center"
+                    android:indeterminate="true"
+                    android:indeterminateBehavior="repeat"
+                    android:indeterminateDrawable="@drawable/spotifree_label_sheen"
+                    android:indeterminateDuration="2600"
+                    android:indeterminateOnly="true"
+                    android:indeterminateTint="#FFFFFFFF"
+                    android:indeterminateTintMode="multiply"
+                    android:interpolator="@android:anim/linear_interpolator"
+                    android:visibility="gone" />
             </FrameLayout>
 
             <ImageView
@@ -118,15 +116,54 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/widget_state"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:text="Spotifree"
-                android:textColor="#CCFFFFFF"
-                android:textSize="11sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <ProgressBar
+                    android:id="@+id/widget_live_ring"
+                    android:layout_width="13dp"
+                    android:layout_height="13dp"
+                    android:layout_marginEnd="6dp"
+                    android:indeterminate="true"
+                    android:indeterminateDrawable="@drawable/spotifree_live_ring"
+                    android:indeterminateOnly="true"
+                    android:indeterminateTint="#FFFFFFFF"
+                    android:indeterminateTintMode="multiply"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_state"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text="Tocadiscos"
+                    android:textColor="#D9FFFFFF"
+                    android:textSize="11sp" />
+
+                <Chronometer
+                    android:id="@+id/widget_chronometer"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:textColor="#E6FFFFFF"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+
+                <TextView
+                    android:id="@+id/widget_duration"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text=""
+                    android:textColor="#99FFFFFF"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
+            </LinearLayout>
 
             <LinearLayout
                 android:id="@+id/widget_text"
@@ -143,21 +180,46 @@
                     android:ellipsize="end"
                     android:fontFamily="sans-serif-black"
                     android:maxLines="1"
+                    android:shadowColor="#66000000"
+                    android:shadowRadius="6"
                     android:text="Spotifree"
                     android:textColor="#FFFFFF"
-                    android:textSize="17sp" />
+                    android:textSize="16.5sp" />
 
                 <TextView
                     android:id="@+id/widget_artist"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
+                    android:layout_marginTop="1.5dp"
                     android:ellipsize="end"
                     android:maxLines="1"
                     android:text=""
-                    android:textColor="#D9FFFFFF"
-                    android:textSize="13sp" />
+                    android:textColor="#E0FFFFFF"
+                    android:textSize="12.5sp" />
+
+                <TextView
+                    android:id="@+id/widget_lyrics"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="1"
+                    android:text=""
+                    android:textColor="#9EFFB8"
+                    android:textSize="11sp"
+                    android:visibility="gone" />
             </LinearLayout>
+
+            <ProgressBar
+                android:id="@+id/widget_progress"
+                style="?android:attr/progressBarStyleHorizontal"
+                android:layout_width="match_parent"
+                android:layout_height="3dp"
+                android:layout_marginBottom="7dp"
+                android:max="1000"
+                android:progress="0"
+                android:progressDrawable="@drawable/spotifree_widget_progress" />
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -167,18 +229,19 @@
 
                 <ImageView
                     android:id="@+id/widget_prev"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/spotifree_widget_btn_bg"
                     android:contentDescription="Anterior"
-                    android:padding="9dp"
+                    android:padding="8dp"
                     android:src="@drawable/ic_stat_prev" />
 
                 <ImageView
                     android:id="@+id/widget_play"
-                    android:layout_width="46dp"
-                    android:layout_height="46dp"
-                    android:layout_marginStart="4dp"
-                    android:layout_marginEnd="4dp"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="5dp"
+                    android:layout_marginEnd="5dp"
                     android:background="@drawable/spotifree_widget_play_bg"
                     android:contentDescription="Reproducir"
                     android:padding="12dp"
@@ -186,10 +249,11 @@
 
                 <ImageView
                     android:id="@+id/widget_next"
-                    android:layout_width="40dp"
-                    android:layout_height="40dp"
+                    android:layout_width="38dp"
+                    android:layout_height="38dp"
+                    android:background="@drawable/spotifree_widget_btn_bg"
                     android:contentDescription="Siguiente"
-                    android:padding="9dp"
+                    android:padding="8dp"
                     android:src="@drawable/ic_stat_next" />
             </LinearLayout>
         </LinearLayout>

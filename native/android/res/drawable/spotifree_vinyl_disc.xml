@@ -1,26 +1,36 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Turntable widget: the vinyl record (grooves + two light reflections, so the turn is visible).
-     The centre is the same black as the label frames drawn in SpotifreeTurntableWidget.java. -->
+<!-- Hi-fi vinyl disc with fine grooves, brushed chrome edge highlights & dynamic specular sweeps -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="200dp"
     android:height="200dp"
     android:viewportWidth="200"
     android:viewportHeight="200">
+    <!-- Deep vinyl platter -->
     <path
-        android:fillColor="#FF111111"
+        android:fillColor="#FF0D0D10"
         android:pathData="M100,0 A100,100 0 1,1 100,200 A100,100 0 1,1 100,0 Z" />
+    <!-- Outer silver bevel rim -->
     <path
-        android:strokeColor="#40FFFFFF"
-        android:strokeWidth="1"
+        android:strokeColor="#66FFFFFF"
+        android:strokeWidth="1.5"
         android:pathData="M100,1.5 a98.5,98.5 0 1,1 0,197 a98.5,98.5 0 1,1 0,-197" />
+    <!-- Fine micro-grooves -->
     <path
-        android:strokeColor="#1FFFFFFF"
+        android:strokeColor="#26FFFFFF"
         android:strokeWidth="0.7"
-        android:pathData="M100,5 a95,95 0 1,1 0,190 a95,95 0 1,1 0,-190 M100,11 a89,89 0 1,1 0,178 a89,89 0 1,1 0,-178 M100,17 a83,83 0 1,1 0,166 a83,83 0 1,1 0,-166 M100,23 a77,77 0 1,1 0,154 a77,77 0 1,1 0,-154 M100,29 a71,71 0 1,1 0,142 a71,71 0 1,1 0,-142 M100,35 a65,65 0 1,1 0,130 a65,65 0 1,1 0,-130 M100,41 a59,59 0 1,1 0,118 a59,59 0 1,1 0,-118" />
+        android:pathData="M100,6 a94,94 0 1,1 0,188 a94,94 0 1,1 0,-188 M100,12 a88,88 0 1,1 0,176 a88,88 0 1,1 0,-176 M100,18 a82,82 0 1,1 0,164 a82,82 0 1,1 0,-164 M100,24 a76,76 0 1,1 0,152 a76,76 0 1,1 0,-152 M100,30 a70,70 0 1,1 0,140 a70,70 0 1,1 0,-140 M100,36 a64,64 0 1,1 0,128 a64,64 0 1,1 0,-128 M100,42 a58,58 0 1,1 0,116 a58,58 0 1,1 0,-116" />
+    <!-- Primary bright specular light sweeps (super crisp smooth 60 FPS spin cue) -->
     <path
-        android:fillColor="#22FFFFFF"
-        android:pathData="M178.6,155.1 A96,96 0 0,1 148,183.1 L130,152 A60,60 0 0,0 149.1,134.4 Z" />
+        android:fillColor="#38FFFFFF"
+        android:pathData="M178.6,155.1 A96,96 0 0,1 148,183.1 L126,145 A52,52 0 0,0 144,129 Z" />
     <path
-        android:fillColor="#22FFFFFF"
-        android:pathData="M21.4,44.9 A96,96 0 0,1 52,16.9 L70,48 A60,60 0 0,0 50.9,65.6 Z" />
+        android:fillColor="#38FFFFFF"
+        android:pathData="M21.4,44.9 A96,96 0 0,1 52,16.9 L74,55 A52,52 0 0,0 56,71 Z" />
+    <!-- Secondary green-white rim strobe highlight -->
+    <path
+        android:fillColor="#4D1ED760"
+        android:pathData="M100,4 A96,96 0 0,1 148,16.9 L142,27 A84,84 0 0,0 100,16 Z" />
+    <path
+        android:fillColor="#4D1ED760"
+        android:pathData="M100,196 A96,96 0 0,1 52,183.1 L58,173 A84,84 0 0,0 100,184 Z" />
 </vector>

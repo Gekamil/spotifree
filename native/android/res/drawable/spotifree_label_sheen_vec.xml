@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- Translucent spinning optical specular highlight sweep over the turntable cover label -->
+    <path
+        android:fillColor="#26FFFFFF"
+        android:pathData="M50,50 L82,18 A45,45 0 0,1 95,50 Z" />
+    <path
+        android:fillColor="#1AFFFFFF"
+        android:pathData="M50,50 L18,82 A45,45 0 0,1 5,50 Z" />
+</vector>

@@ -110,15 +110,17 @@ public class SpotifreeMediaPlugin extends Plugin {
         }
     }
 
-    /** playlists: [{id,name,subtitle,image}], home: [{title, items:[...]}], loggedIn */
+    /** playlists: [{id,name,subtitle,image}], home: [{title, items:[...]}], recent: [...], recentTracks: [...], loggedIn */
     @PluginMethod
     public void setLibrary(PluginCall call) {
         JSONArray playlists = arr(call, "playlists");
         JSONArray home = arr(call, "home");
+        JSONArray recent = arr(call, "recent");
+        JSONArray recentTracks = arr(call, "recentTracks");
         JSONArray explore = arr(call, "explore");
         if (explore != null) SpotifreeMediaService.explore = explore;
         SpotifreeMediaService.loggedIn = Boolean.TRUE.equals(call.getBoolean("loggedIn", true));
-        SpotifreeMediaService.saveLibrary(getContext(), playlists != null ? playlists : new JSONArray(), home);
+        SpotifreeMediaService.saveLibrary(getContext(), playlists != null ? playlists : new JSONArray(), home, recent, recentTracks);
         if (SpotifreeMediaService.current != null) {
             SpotifreeMediaService.current.notifyLibraryChanged();
             // e.g. just signed in: clear the "sign in" message in the car
