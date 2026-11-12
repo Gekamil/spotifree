@@ -21,6 +21,7 @@ import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
 import { fetchArtistTopTracks } from './artistService';
 import { getListeningHistory } from './listeningHistory';
 import { useSpotifreeMixes } from './spotifreeMixes';
+import { isTasteRatingActive, isTrackDisliked } from './labsService';
 import type { Playlist, Track } from '../types/spotify';
 import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
 
@@ -28,7 +29,7 @@ interface MediaCommand {
   action:
     | 'play' | 'pause' | 'toggle' | 'next' | 'previous' | 'seek'
     | 'playFromMediaId' | 'playFromSearch' | 'playQueueIndex'
-    | 'toggleLike' | 'toggleShuffle' | 'cycleRepeat'
+    | 'toggleLike' | 'dislike' | 'toggleDislike' | 'toggleShuffle' | 'cycleRepeat'
     | 'loadPlaylist' | 'loadCategory' | 'search' | 'addToQueue' | 'likeItem'
     | 'openUrl';
   url?: string;
@@ -732,7 +733,9 @@ function pushNowPlaying(force = false) {
   const liked = (s.likedTrackIds || []).includes(t.id);
   const shuffle = Boolean(s.isShuffle);
   const repeat = s.repeatMode || 'off';
-  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
+  const dislikeEnabled = isTasteRatingActive();
+  const disliked = isTrackDisliked(t);
+  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${dislikeEnabled}|${disliked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
   const now = Date.now();
   // The system extrapolates the position while playing: resend on changes, or every 8 s for widget progress sync
   if (!force && key === lastSent && now - lastPushAt < (s.isPlaying ? 8000 : 15000)) return;
@@ -753,6 +756,8 @@ function pushNowPlaying(force = false) {
     isPlaying: Boolean(s.isPlaying),
     lyricLine: line,
     liked,
+    dislikeEnabled,
+    disliked,
     shuffle,
     repeat,
     explicit: Boolean((t as any).explicit),
@@ -805,6 +810,10 @@ async function runCommand(c: MediaCommand) {
       break;
     case 'toggleLike':
       if (player.currentTrack) player.toggleLike(player.currentTrack.id, player.currentTrack);
+      break;
+    case 'dislike':
+    case 'toggleDislike':
+      player.dislikeCurrentTrack?.();
       break;
     case 'toggleShuffle':
       player.toggleShuffle();

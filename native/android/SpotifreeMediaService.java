@@ -155,6 +155,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private static final int STYLE_GRID = 2;
 
     static final String ACT_LIKE = "toggleLike";
+    static final String ACT_DISLIKE = "dislike";
     static final String ACT_SHUFFLE = "toggleShuffle";
     static final String ACT_REPEAT = "cycleRepeat";
 
@@ -200,6 +201,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static volatile long positionMs = 0;
     static volatile boolean playing = false;
     static volatile boolean liked = false;
+    static volatile boolean dislikeEnabled = false;
+    static volatile boolean disliked = false;
     static volatile boolean shuffle = false;
     static volatile String repeat = "off";
     static volatile boolean loggedIn = true;
@@ -506,6 +509,11 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_LIKE + (liked ? ":on" : ":off"),
             liked ? tr("Quitar de Me gusta", "Remove from Liked Songs") : tr("Me gusta", "Like"),
             liked ? R.drawable.ic_car_heart_filled : R.drawable.ic_car_heart).build());
+        if (dislikeEnabled) {
+            sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_DISLIKE,
+                tr("No me gusta", "Dislike"),
+                R.drawable.ic_car_dislike).build());
+        }
         sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_SHUFFLE + (shuffle ? ":on" : ":off"),
             shuffle ? tr("Desactivar aleatorio", "Shuffle off") : tr("Aleatorio", "Shuffle"),
             shuffle ? R.drawable.ic_car_shuffle_on : R.drawable.ic_car_shuffle).build());

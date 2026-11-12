@@ -12,6 +12,7 @@ import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openStoryCard } from '../../utils/storyCard';
 import { isTrackDownloaded, isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
+import { useLabsStore, openSpeedControlSheet, isTrackLikedTaste } from '../../services/labsService';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -743,6 +744,63 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
               </svg>
               <span>Compartir en stories</span>
             </button>
+          )}
+
+          {/* Labs: Velocidad de reproducción */}
+          {useLabsStore.getState().labsEnabled && useLabsStore.getState().speedControlEnabled && (
+            <button
+              onClick={() => {
+                openSpeedControlSheet();
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center justify-between text-[13px] text-white"
+            >
+              <div className="flex items-center gap-3">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                <span>Velocidad de reproducción</span>
+              </div>
+              <span className="text-[11px] font-mono font-bold text-[#1ed760] bg-[#1ed760]/10 px-1.5 py-0.5 rounded">
+                {useLabsStore.getState().playbackSpeed.toFixed(2)}x
+              </span>
+            </button>
+          )}
+
+          {/* Labs: Amazon Music-style Like & Dislike */}
+          {useLabsStore.getState().labsEnabled && useLabsStore.getState().tasteRatingEnabled && targetTrack && (
+            <>
+              <button
+                onClick={() => {
+                  const res = useLabsStore.getState().toggleTasteLike(targetTrack);
+                  showGlobalToast(res === 'like' ? 'Te gusta: se tendrá más en cuenta' : 'Se ha retirado tu valoración');
+                  closeContextMenu();
+                }}
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill={isTrackLikedTaste(targetTrack) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isTrackLikedTaste(targetTrack) ? 'text-[#1ed760] shrink-0' : 'text-[#a7a7a7] shrink-0'}>
+                  <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                </svg>
+                <span>{isTrackLikedTaste(targetTrack) ? 'Ya no me gusta esta canción' : 'Me gusta esta canción (afinar recomendaciones)'}</span>
+              </button>
+              <button
+                onClick={() => {
+                  useLabsStore.getState().markTasteDislike(targetTrack);
+                  showGlobalToast('No volveremos a ponerte esta canción');
+                  if (usePlayerStore.getState().currentTrack?.id === targetTrack.id) {
+                    usePlayerStore.getState().nextTrack();
+                  }
+                  closeContextMenu();
+                }}
+                className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-[#ff5c5c]"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                </svg>
+                <span className="font-semibold">No me gusta (no volver a poner)</span>
+              </button>
+            </>
           )}
 
           {/* Compartir */}

@@ -11,14 +11,25 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.6';
+export const APP_VERSION = '0.2.7';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.7',
+    date: '12 de noviembre, 2026',
+    title: 'Modo Labs: velocidad y tono, audio espacial 3D / mono y valoraciones Like/Dislike estilo Amazon Music',
+    isLatest: true,
+    highlights: [
+      'Modo Labs (Spotifree Labs): nuevo interruptor maestro en Ajustes avanzados que desbloquea funciones experimentales de audio y reproducción.',
+      'Control de velocidad y tono al vuelo (0.50x – 2.00x): modifica el ritmo desde el menú de 3 puntos o la barra de reproducción (efecto slowed o nightcore) con interruptor de conservación de tono original.',
+      'Audio mono y balance espacial 3D: conmuta entre audio mono completo o posiciona el sonido en un cuadrante táctil interactivo (delante/detrás, izquierda/derecha) para auriculares.',
+      'Sistema de valoraciones Like / Dislike (estilo Amazon Music): botones 👍 y 👎 para afinar gustos; las canciones con dislike se saltan al instante y quedan bloqueadas de listas, aleatorio y Android Auto.',
+    ],
+  },
   {
     version: '0.2.6',
     date: '12 de noviembre, 2026',
     title: 'Fundidos limpios, fotos de artistas corregidas y búsqueda mucho más rápida',
-    isLatest: true,
     highlights: [
       'Fundido estándar (crossfade) limpio y fiel a la duración configurada (3s, 6s, 12s...): en modo normal ya no aplica cortes de graves de DJ ni doble atenuación sobre el deck de salida, y pre-carga el deck HTML5 secundario para evitar retrasos al inicio de fundidos cortos.',
       'Fotos de artistas corregidas en el selector de gustos y artistas relacionados: resolución paralela de retratos reales, recuperación automática ante URLs antiguas de CDN y soporte `no-referrer`.',

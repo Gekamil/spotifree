@@ -224,6 +224,11 @@ class AudioEngine {
   private masterGain: GainNode | null = null;
   private filterNodes: BiquadFilterNode[] = [];
   private compressorNode: DynamicsCompressorNode | null = null;
+  private spatialPannerNode: StereoPannerNode | null = null;
+  private spatialRearFilter: BiquadFilterNode | null = null;
+  private monoNode: GainNode | null = null;
+  private currentSpeedRate = 1.0;
+  private currentPreservesPitch = true;
   private activeAuxFX: ActiveAuxFX | null = null;
   private currentTrackId: string | null = null;
   private currentTrackQuery: string | null = null;
@@ -366,6 +371,14 @@ class AudioEngine {
     }
     this.activeBlobUrls[deckIndex] = srcUrl.startsWith('blob:') ? srcUrl : null;
     el.src = srcUrl;
+    if (this.currentSpeedRate !== 1 || !this.currentPreservesPitch) {
+      try {
+        el.playbackRate = this.currentSpeedRate;
+        el.preservesPitch = this.currentPreservesPitch;
+        (el as any).mozPreservesPitch = this.currentPreservesPitch;
+        (el as any).webkitPreservesPitch = this.currentPreservesPitch;
+      } catch {}
+    }
     if (startSeconds > 0) {
       const applySeek = () => {
         try {
@@ -2356,7 +2369,38 @@ class AudioEngine {
         this.compressorNode.attack.value = 0.01;
         this.compressorNode.release.value = 0.15;
         lastNode.connect(this.compressorNode);
-        this.compressorNode.connect(this.audioContext.destination);
+
+        // Spatial Audio & Mono Output Bus
+        this.spatialPannerNode = typeof this.audioContext.createStereoPanner === 'function' ? this.audioContext.createStereoPanner() : null;
+        this.spatialRearFilter = this.audioContext.createBiquadFilter();
+        this.spatialRearFilter.type = 'lowshelf';
+        this.spatialRearFilter.frequency.value = 3200;
+        this.spatialRearFilter.gain.value = 0;
+
+        this.monoNode = this.audioContext.createGain();
+        this.monoNode.channelCount = 2;
+        this.monoNode.channelCountMode = 'explicit';
+        this.monoNode.channelInterpretation = 'speakers';
+
+        let postComp: AudioNode = this.compressorNode;
+        if (this.spatialPannerNode) {
+          postComp.connect(this.spatialPannerNode);
+          this.spatialPannerNode.connect(this.spatialRearFilter);
+        } else {
+          postComp.connect(this.spatialRearFilter);
+        }
+        this.spatialRearFilter.connect(this.monoNode);
+        this.monoNode.connect(this.audioContext.destination);
+
+        void import('./labsService')
+          .then(({ getEffectiveSpatialSettings, getEffectiveSpeedSettings }) => {
+            this.setSpatialAndMono(getEffectiveSpatialSettings());
+            const spd = getEffectiveSpeedSettings();
+            if (spd.active) {
+              this.setPlaybackSpeedAndPitch(spd.rate, spd.preservesPitch);
+            }
+          })
+          .catch(() => {});
       }
 
       // 2. Instantiate Dual DJ Channel Strips connected to Master Gain Bus
@@ -3692,6 +3736,71 @@ class AudioEngine {
         }
       }
     });
+  }
+
+  public setPlaybackSpeedAndPitch(rate: number, preservesPitch: boolean): void {
+    const clampedRate = Math.min(2.0, Math.max(0.5, rate || 1.0));
+    this.currentSpeedRate = clampedRate;
+    this.currentPreservesPitch = preservesPitch;
+
+    for (const a of [this.audio, this.secondaryAudio, ...(Array.isArray(this.audios) ? this.audios : [])]) {
+      if (a) {
+        try {
+          a.playbackRate = clampedRate;
+          a.preservesPitch = preservesPitch;
+          (a as any).mozPreservesPitch = preservesPitch;
+          (a as any).webkitPreservesPitch = preservesPitch;
+        } catch {}
+      }
+    }
+
+    for (const p of this.ytPlayers) {
+      if (p && typeof p.setPlaybackRate === 'function') {
+        try { p.setPlaybackRate(clampedRate); } catch {}
+      }
+    }
+  }
+
+  public getPlaybackSpeed(): number {
+    return this.currentSpeedRate;
+  }
+
+  public getPreservesPitch(): boolean {
+    return this.currentPreservesPitch;
+  }
+
+  public setSpatialAndMono(opts: { mono: boolean; spatialEnabled: boolean; x: number; y: number }): void {
+    this.initAudioContext();
+    if (!this.audioContext) return;
+    const now = this.audioContext.currentTime;
+
+    if (this.monoNode) {
+      // 1 channel = L+R summed to both ears, 2 channels = normal stereo
+      this.monoNode.channelCount = opts.mono ? 1 : 2;
+    }
+
+    if (opts.mono || !opts.spatialEnabled) {
+      if (this.spatialPannerNode) {
+        try { this.spatialPannerNode.pan.setValueAtTime(0, now); } catch {}
+      }
+      if (this.spatialRearFilter) {
+        try { this.spatialRearFilter.gain.setValueAtTime(0, now); } catch {}
+      }
+      return;
+    }
+
+    const clampedX = Math.min(1, Math.max(-1, opts.x || 0));
+    const clampedY = Math.min(1, Math.max(-1, opts.y || 0));
+
+    if (this.spatialPannerNode) {
+      try { this.spatialPannerNode.pan.setValueAtTime(clampedX, now); } catch {}
+    }
+
+    if (this.spatialRearFilter) {
+      // Behind listener (Y < 0): damp higher frequencies simulating head shadow
+      const rearDamp = clampedY < 0 ? clampedY * 7 : 0;
+      try { this.spatialRearFilter.gain.setValueAtTime(rearDamp, now); } catch {}
+    }
   }
 
   public getCurrentTrackId(): string | null {

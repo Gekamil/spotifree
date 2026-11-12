@@ -24,6 +24,8 @@ import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 import { DevicePickerButton, MiniPlayerButton, restoreAudioOutput } from './PlayerExtras';
+import { useLabsStore, openSpeedControlSheet, isTrackLikedTaste } from '../../services/labsService';
+import { showGlobalToast } from '../../utils/globalToast';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -31,6 +33,8 @@ interface DesktopPlayerProps {
 
 export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistById }) => {
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
+  const { labsEnabled, speedControlEnabled, playbackSpeed, tasteRatingEnabled, toggleTasteLike } = useLabsStore();
+  const dislikeCurrentTrack = usePlayerStore((s) => s.dislikeCurrentTrack);
   const {
     currentTrack,
     isPlaying,
@@ -311,6 +315,41 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
                 <AddTrackNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
               )}
             </button>
+
+            {/* Labs: Amazon Music-style Like & Dislike ratings */}
+            {tasteRatingEnabled && currentTrack && (
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const res = toggleTasteLike(currentTrack);
+                    showGlobalToast(res === 'like' ? 'Te gusta: se tendrá más en cuenta' : 'Se ha retirado tu valoración');
+                  }}
+                  className={`p-1 transition-transform active:scale-90 cursor-pointer ${
+                    isTrackLikedTaste(currentTrack) ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+                  }`}
+                  title={isTrackLikedTaste(currentTrack) ? 'Te gusta (recomendaciones mejoradas)' : 'Indicar que te gusta'}
+                >
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill={isTrackLikedTaste(currentTrack) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dislikeCurrentTrack();
+                  }}
+                  className="p-1 text-[#b3b3b3] hover:text-[#ff5c5c] transition-transform active:scale-90 cursor-pointer"
+                  title="No me gusta (saltar y no volver a poner)"
+                >
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </>
         ) : (
           <div className="w-14 h-14 rounded bg-[#181818] shrink-0 opacity-40 flex items-center justify-center">
@@ -473,6 +512,21 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           </svg>
           {sleepActive && <span className="absolute -bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-[#1ed760]" />}
         </button>
+
+        {/* Labs Playback Speed Pill */}
+        {labsEnabled && speedControlEnabled && (
+          <button
+            onClick={openSpeedControlSheet}
+            className={`p-1 relative flex items-center justify-center font-mono font-bold rounded transition-all cursor-pointer ${
+              playbackSpeed !== 1.0
+                ? 'text-[#1ed760] bg-[#1ed760]/20 px-2 py-0.5 text-xs shadow-sm'
+                : 'text-[#b3b3b3] hover:text-white text-[11px]'
+            }`}
+            title="Velocidad de reproducción (Spotifree Labs)"
+          >
+            {playbackSpeed !== 1.0 ? `${playbackSpeed.toFixed(2)}x` : '1.0x'}
+          </button>
+        )}
 
         <DevicePickerButton />
 

@@ -9,6 +9,7 @@
  * the shuffle starts with what you haven't heard lately.
  */
 import type { Track } from '../types/spotify';
+import { isTasteRatingActive, isTrackDisliked } from '../services/labsService';
 
 export type ShuffleAlgorithm = 'random' | 'balanced';
 
@@ -86,7 +87,12 @@ function balanced(list: Track[], penaltyOf: (t: Track) => number): Track[] {
  * Shuffled order for the queue. `lastPlayedOf` returns when a song was last heard (ms, 0 = never).
  */
 export function shuffleTracks(list: Track[], lastPlayedOf: (t: Track) => number = () => 0): Track[] {
-  if (list.length <= 2) return fisherYates(list);
+  const effectiveList = isTasteRatingActive()
+    ? list.filter((t) => !isTrackDisliked(t))
+    : list;
+  const targetList = effectiveList.length > 0 ? effectiveList : list;
+
+  if (targetList.length <= 2) return fisherYates(targetList);
   const recentAtEnd = getRecentAtEnd();
   const now = Date.now();
   // Heard today: towards the end; in the last 3 days: second half; this week: a nudge
@@ -98,7 +104,7 @@ export function shuffleTracks(list: Track[], lastPlayedOf: (t: Track) => number 
     return h < 24 ? 1 : h < 72 ? 0.5 : h < 168 ? 0.2 : 0;
   };
   if (getShuffleAlgorithm() === 'random') {
-    const order = fisherYates(list);
+    const order = fisherYates(targetList);
     if (!recentAtEnd) return order;
     // Random, but what was heard lately still goes later
     return order
@@ -106,5 +112,5 @@ export function shuffleTracks(list: Track[], lastPlayedOf: (t: Track) => number 
       .sort((a, b) => a.pos - b.pos)
       .map((x) => x.t);
   }
-  return balanced(list, penaltyOf);
+  return balanced(targetList, penaltyOf);
 }

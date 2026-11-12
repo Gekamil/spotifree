@@ -18,6 +18,7 @@ import { ConfirmDialogHost } from './components/common/ConfirmDialog';
 import { PlaylistVersionsHost } from './components/common/PlaylistVersionsDialog';
 import AudioSourceSheet from './components/common/AudioSourceSheet';
 import SleepTimerSheet from './components/common/SleepTimerSheet';
+import { SpeedControlModal } from './components/common/SpeedControlModal';
 import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
 import StoryCardSheet from './components/common/StoryCardSheet';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
@@ -214,6 +215,7 @@ function App() {
       <SharedSessionCursors />
       <AudioSourceSheet />
       <SleepTimerSheet />
+      <SpeedControlModal />
       <ImportPlaylistDialog />
       <StoryCardSheet />
       <GlobalToast />

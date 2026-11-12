@@ -11,6 +11,8 @@ import {
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { shuffleTracks } from '../utils/shuffleOrder';
 import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } from '../utils/trackCovers';
+import { isTasteRatingActive, isTrackDisliked, useLabsStore } from '../services/labsService';
+import { showGlobalToast } from '../utils/globalToast';
 
 export function matchTrackId(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
@@ -215,6 +217,7 @@ interface PlayerState {
   toggleShuffle: () => void;
   toggleRepeat: () => void;
   toggleLike: (trackId: string, trackObj?: Track) => void;
+  dislikeCurrentTrack: () => void;
   addToQueue: (tracks: Track | Track[]) => void;
   setQueue: (tracks: Track[]) => void;
   reorderQueue: (fromIndex: number, toIndex: number) => void;
@@ -268,6 +271,14 @@ const store = create<PlayerState>((set, get) => ({
   preselectedNextTrackId: null,
 
   setContextId: (id: string | null) => set({ currentContextId: id }),
+
+  dislikeCurrentTrack: () => {
+    const { currentTrack } = get();
+    if (!currentTrack) return;
+    useLabsStore.getState().markTasteDislike(currentTrack);
+    showGlobalToast('No volveremos a ponerte esta canción');
+    get().nextTrack();
+  },
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
@@ -576,7 +587,10 @@ const store = create<PlayerState>((set, get) => ({
       existingTitles.add((track.name || '').toLowerCase().trim());
 
       const validTracks = candidateTracks.filter(
-        (t) => !existingIds.has(t.id) && !existingTitles.has((t.name || '').toLowerCase().trim())
+        (t) =>
+          !existingIds.has(t.id) &&
+          !existingTitles.has((t.name || '').toLowerCase().trim()) &&
+          (!isTasteRatingActive() || !isTrackDisliked(t))
       );
 
       if (validTracks.length > 0) {
@@ -708,22 +722,36 @@ const store = create<PlayerState>((set, get) => ({
 
     // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {
-      return queue[currentIndex + 1];
+      if (isTasteRatingActive()) {
+        for (let i = currentIndex + 1; i < queue.length; i++) {
+          if (!isTrackDisliked(queue[i])) return queue[i];
+        }
+      } else {
+        return queue[currentIndex + 1];
+      }
     }
 
     if (preselectedNextTrackId) {
       const found = queue.find((t) => matchTrackId(t.id, preselectedNextTrackId) && !matchTrackId(t.id, currentTrack?.id));
-      if (found) return found;
+      if (found && (!isTasteRatingActive() || !isTrackDisliked(found))) return found;
     }
 
     // End of queue:
     if (repeatMode === 'all') {
+      if (isTasteRatingActive()) {
+        const firstValid = queue.find((t) => !isTrackDisliked(t));
+        if (firstValid) return firstValid;
+      }
       return queue[0] || null;
     }
 
     // If current track was not in queue (currentIndex === -1) and queue has tracks,
     // play from start of queue rather than returning null!
     if (currentIndex === -1 && queue.length > 0) {
+      if (isTasteRatingActive()) {
+        const firstValid = queue.find((t) => !isTrackDisliked(t));
+        if (firstValid) return firstValid;
+      }
       return queue[0];
     }
 

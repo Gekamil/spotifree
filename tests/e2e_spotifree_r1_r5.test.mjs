@@ -568,22 +568,22 @@ describe('Tier 1: Feature Coverage (Category-Partition & Primary Contracts)', ()
   });
 
   // --------------------------------------------------------------------------
-  // Requirement R5: Version 0.2.6 & Baseline Preservation
+  // Requirement R5: Version 0.2.7 & Baseline Preservation
   // --------------------------------------------------------------------------
-  describe('R5: Version 0.2.6 & Baseline Preservation', () => {
-    it('T1-R5-01: package.json version is 0.2.6', () => {
+  describe('R5: Version 0.2.7 & Baseline Preservation', () => {
+    it('T1-R5-01: package.json version is 0.2.7', () => {
       const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-      assert.equal(pkg.version, '0.2.6', 'package.json version must be 0.2.6');
+      assert.equal(pkg.version, '0.2.7', 'package.json version must be 0.2.7');
     });
 
-    it('T1-R5-02: changelog.ts APP_VERSION is 0.2.6', () => {
-      assert.equal(changelogModule.APP_VERSION, '0.2.6', 'changelog.ts APP_VERSION must be 0.2.6');
+    it('T1-R5-02: changelog.ts APP_VERSION is 0.2.7', () => {
+      assert.equal(changelogModule.APP_VERSION, '0.2.7', 'changelog.ts APP_VERSION must be 0.2.7');
     });
 
-    it('T1-R5-03: changelog.ts includes release notes for 0.2.6', () => {
+    it('T1-R5-03: changelog.ts includes release notes for 0.2.7', () => {
       const latest = changelogModule.CHANGELOG_RELEASES?.[0];
       assert.ok(latest, 'Must contain at least one release');
-      assert.equal(latest.version, '0.2.6', 'Latest release version must be 0.2.6');
+      assert.equal(latest.version, '0.2.7', 'Latest release version must be 0.2.7');
       assert.equal(latest.isLatest, true, 'isLatest flag must be true');
       assert.ok(latest.highlights?.length >= 3, 'Must have at least 3 highlights');
     });
@@ -1251,11 +1251,11 @@ describe('Tier 4: Real-World Application Workloads & User Scenarios', () => {
     assert.ok(mobile.code.includes('soundcloudTracks'), 'Mobile has soundcloudTracks');
   });
 
-  it('T4-S05: Scenario 5 (Full Offline & Cold Boot Release Audit): Cold boot v0.2.6 with intact offline storage', () => {
+  it('T4-S05: Scenario 5 (Full Offline & Cold Boot Release Audit): Cold boot v0.2.7 with intact offline storage', () => {
     // 1. Version checks
     const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-    assert.equal(pkg.version, '0.2.6');
-    assert.equal(changelogModule.APP_VERSION, '0.2.6');
+    assert.equal(pkg.version, '0.2.7');
+    assert.equal(changelogModule.APP_VERSION, '0.2.7');
 
     // 2. Offline storage utility functionality
     const offlinePath = path.join(rootDir, 'src', 'utils', 'offlineStorage.ts');

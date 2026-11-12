@@ -33,6 +33,7 @@ import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
 import { findExactCover, getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
+import { useLabsStore, openSpeedControlSheet, isTrackLikedTaste } from '../../services/labsService';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
@@ -211,6 +212,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     }
   }, [currentTrack?.id, isMenuOpen]);
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
+  const { labsEnabled, speedControlEnabled, playbackSpeed, tasteRatingEnabled, toggleTasteLike } = useLabsStore();
+  const dislikeCurrentTrack = usePlayerStore((s) => s.dislikeCurrentTrack);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(false);
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
@@ -695,6 +698,41 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <AddTrackNativeIcon size={26} className="text-white/80" />
               )}
             </button>
+
+            {/* Labs: Amazon Music-style Like & Dislike ratings */}
+            {tasteRatingEnabled && currentTrack && (
+              <div className="flex items-center gap-1 shrink-0 ml-1">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const res = toggleTasteLike(currentTrack);
+                    showGlobalToast(res === 'like' ? 'Te gusta: se tendrá más en cuenta' : 'Se ha retirado tu valoración');
+                  }}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full transition-transform active:scale-90 cursor-pointer ${
+                    isTrackLikedTaste(currentTrack) ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+                  }`}
+                  title={isTrackLikedTaste(currentTrack) ? 'Te gusta (recomendaciones mejoradas)' : 'Indicar que te gusta'}
+                >
+                  <svg width={20} height={20} viewBox="0 0 24 24" fill={isTrackLikedTaste(currentTrack) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    dislikeCurrentTrack();
+                  }}
+                  className="w-9 h-9 flex items-center justify-center rounded-full text-[#b3b3b3] hover:text-[#ff5c5c] active:scale-90 transition-transform cursor-pointer"
+                  title="No me gusta (saltar y no volver a poner)"
+                >
+                  <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Scrub Bar */}
@@ -713,6 +751,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             />
             <div className="flex justify-between font-['SpotifyMixUI'] tabular-nums text-[11px] font-normal text-[#b3b3b3]">
               <span className="select-none tracking-normal">{formatDuration(progressMs)}</span>
+              {labsEnabled && speedControlEnabled && playbackSpeed !== 1.0 && (
+                <button
+                  type="button"
+                  onClick={openSpeedControlSheet}
+                  className="px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] font-mono font-bold text-[10px] active:scale-95 transition-all"
+                  title="Velocidad modificada"
+                >
+                  {playbackSpeed.toFixed(2)}x
+                </button>
+              )}
               <span className="select-none tracking-normal">{formatDuration(durationMs)}</span>
             </div>
           </div>
@@ -1233,6 +1281,74 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <p className="text-xs text-[#b3b3b3] truncate">Imagen con la portada y la letra</p>
                 </div>
               </button>
+
+              {/* Labs: Velocidad de reproducción */}
+              {labsEnabled && speedControlEnabled && (
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    openSpeedControlSheet();
+                  }}
+                  className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-sm text-white">Velocidad de reproducción</p>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#1ed760]/20 text-[#1ed760]">
+                        {playbackSpeed.toFixed(2)}x
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#b3b3b3] truncate">Modificar ritmo, slowed o nightcore</p>
+                  </div>
+                </button>
+              )}
+
+              {/* Labs: Amazon Music-style Like & Dislike */}
+              {labsEnabled && tasteRatingEnabled && currentTrack && (
+                <>
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      const res = toggleTasteLike(currentTrack);
+                      showGlobalToast(res === 'like' ? 'Te gusta: se tendrá más en cuenta' : 'Se ha retirado tu valoración');
+                    }}
+                    className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <div className={`w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 ${isTrackLikedTaste(currentTrack) ? 'text-[#1ed760]' : 'text-white'}`}>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill={isTrackLikedTaste(currentTrack) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                      </svg>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <p className="font-bold text-sm text-white">{isTrackLikedTaste(currentTrack) ? 'Ya no me gusta' : 'Me gusta esta canción'}</p>
+                      <p className="text-xs text-[#b3b3b3] truncate">Afinar recomendaciones de música similar</p>
+                    </div>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setIsMenuOpen(false);
+                      dislikeCurrentTrack();
+                    }}
+                    className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                  >
+                    <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-[#ff5c5c] shrink-0">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                      </svg>
+                    </div>
+                    <div className="text-left flex-1 min-w-0">
+                      <p className="font-bold text-sm text-[#ff5c5c]">No me gusta esta canción</p>
+                      <p className="text-xs text-[#b3b3b3] truncate">Saltar y no volver a reproducir en listas ni en el coche</p>
+                    </div>
+                  </button>
+                </>
+              )}
 
               {/* Option: sleep timer */}
               <button
