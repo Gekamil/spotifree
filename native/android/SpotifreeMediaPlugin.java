@@ -201,7 +201,7 @@ public class SpotifreeMediaPlugin extends Plugin {
         SpotifreeMediaService.language = call.getString("language", "es");
         SpotifreeMediaService.repeat = call.getString("repeat", "off");
         SpotifreeMediaService.liked = Boolean.TRUE.equals(call.getBoolean("liked", false));
-        SpotifreeMediaService.dislikeEnabled = Boolean.TRUE.equals(call.getBoolean("dislikeEnabled", false));
+        SpotifreeMediaService.dislikeEnabled = Boolean.TRUE.equals(call.getBoolean("dislikeEnabled", true));
         SpotifreeMediaService.disliked = Boolean.TRUE.equals(call.getBoolean("disliked", false));
         SpotifreeMediaService.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
         SpotifreeMediaService.explicit = Boolean.TRUE.equals(call.getBoolean("explicit", false));

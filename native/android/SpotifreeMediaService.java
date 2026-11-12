@@ -201,7 +201,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static volatile long positionMs = 0;
     static volatile boolean playing = false;
     static volatile boolean liked = false;
-    static volatile boolean dislikeEnabled = false;
+    static volatile boolean dislikeEnabled = true;
     static volatile boolean disliked = false;
     static volatile boolean shuffle = false;
     static volatile String repeat = "off";

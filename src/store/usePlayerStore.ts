@@ -12,6 +12,7 @@ import { deduplicateTracks } from '../utils/trackDeduplication';
 import { shuffleTracks } from '../utils/shuffleOrder';
 import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } from '../utils/trackCovers';
 import { isTasteRatingActive, isTrackDisliked, useLabsStore } from '../services/labsService';
+import { isNotInterested, markNotInterested } from '../utils/notInterested';
 import { showGlobalToast } from '../utils/globalToast';
 
 export function matchTrackId(a?: string | null, b?: string | null): boolean {
@@ -275,6 +276,7 @@ const store = create<PlayerState>((set, get) => ({
   dislikeCurrentTrack: () => {
     const { currentTrack } = get();
     if (!currentTrack) return;
+    markNotInterested(currentTrack);
     useLabsStore.getState().markTasteDislike(currentTrack);
     showGlobalToast('No volveremos a ponerte esta canción');
     get().nextTrack();
@@ -590,6 +592,7 @@ const store = create<PlayerState>((set, get) => ({
         (t) =>
           !existingIds.has(t.id) &&
           !existingTitles.has((t.name || '').toLowerCase().trim()) &&
+          !isNotInterested(t) &&
           (!isTasteRatingActive() || !isTrackDisliked(t))
       );
 
@@ -719,39 +722,32 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     const currentIndex = findTrackIndexInQueue(queue, currentTrack);
+    const isExcluded = (t?: Track | null) => !t || isNotInterested(t) || (isTasteRatingActive() && isTrackDisliked(t));
 
     // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {
-      if (isTasteRatingActive()) {
-        for (let i = currentIndex + 1; i < queue.length; i++) {
-          if (!isTrackDisliked(queue[i])) return queue[i];
-        }
-      } else {
-        return queue[currentIndex + 1];
+      for (let i = currentIndex + 1; i < queue.length; i++) {
+        if (!isExcluded(queue[i])) return queue[i];
       }
     }
 
     if (preselectedNextTrackId) {
       const found = queue.find((t) => matchTrackId(t.id, preselectedNextTrackId) && !matchTrackId(t.id, currentTrack?.id));
-      if (found && (!isTasteRatingActive() || !isTrackDisliked(found))) return found;
+      if (found && !isExcluded(found)) return found;
     }
 
     // End of queue:
     if (repeatMode === 'all') {
-      if (isTasteRatingActive()) {
-        const firstValid = queue.find((t) => !isTrackDisliked(t));
-        if (firstValid) return firstValid;
-      }
+      const firstValid = queue.find((t) => !isExcluded(t));
+      if (firstValid) return firstValid;
       return queue[0] || null;
     }
 
     // If current track was not in queue (currentIndex === -1) and queue has tracks,
     // play from start of queue rather than returning null!
     if (currentIndex === -1 && queue.length > 0) {
-      if (isTasteRatingActive()) {
-        const firstValid = queue.find((t) => !isTrackDisliked(t));
-        if (firstValid) return firstValid;
-      }
+      const firstValid = queue.find((t) => !isExcluded(t));
+      if (firstValid) return firstValid;
       return queue[0];
     }
 

@@ -11,14 +11,25 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.7';
+export const APP_VERSION = '0.2.8';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.2.8',
+    date: '12 de noviembre, 2026',
+    title: 'Unificación de "No me gusta", Android Auto siempre activo y minirreproductor de velocidad en cristal',
+    isLatest: true,
+    highlights: [
+      'Unificación de Me gusta y No me gusta: el corazón nativo gestiona los temas favoritos, mientras que "No me gusta" y "No me interesa" quedan unificados como una única función que descarta y salta la pista al instante.',
+      'Android Auto con botón "No me gusta" permanente: disponible en la pantalla del coche siempre (con o sin Modo Labs activo) para descartar temas no deseados con un solo toque.',
+      'Minirreproductor flotante de velocidad en cristal: tarjeta de diseño translúcido situada justo encima del Play/Pausa para ajustar el tempo de 0.5x a 2.0x al vuelo sin tapar la pantalla.',
+      'Ajustes avanzados simplificados: interruptor directo para habilitar la velocidad desde ajustes y gestión unificada del contador de canciones descartadas con restablecimiento.',
+    ],
+  },
   {
     version: '0.2.7',
     date: '12 de noviembre, 2026',
     title: 'Modo Labs: velocidad y tono, audio espacial 3D / mono y valoraciones Like/Dislike estilo Amazon Music',
-    isLatest: true,
     highlights: [
       'Modo Labs (Spotifree Labs): nuevo interruptor maestro en Ajustes avanzados que desbloquea funciones experimentales de audio y reproducción.',
       'Control de velocidad y tono al vuelo (0.50x – 2.00x): modifica el ritmo desde el menú de 3 puntos o la barra de reproducción (efecto slowed o nightcore) con interruptor de conservación de tono original.',

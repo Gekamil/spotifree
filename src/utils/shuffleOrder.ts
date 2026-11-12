@@ -10,6 +10,7 @@
  */
 import type { Track } from '../types/spotify';
 import { isTasteRatingActive, isTrackDisliked } from '../services/labsService';
+import { isNotInterested } from './notInterested';
 
 export type ShuffleAlgorithm = 'random' | 'balanced';
 
@@ -87,9 +88,7 @@ function balanced(list: Track[], penaltyOf: (t: Track) => number): Track[] {
  * Shuffled order for the queue. `lastPlayedOf` returns when a song was last heard (ms, 0 = never).
  */
 export function shuffleTracks(list: Track[], lastPlayedOf: (t: Track) => number = () => 0): Track[] {
-  const effectiveList = isTasteRatingActive()
-    ? list.filter((t) => !isTrackDisliked(t))
-    : list;
+  const effectiveList = list.filter((t) => !isNotInterested(t) && (!isTasteRatingActive() || !isTrackDisliked(t)));
   const targetList = effectiveList.length > 0 ? effectiveList : list;
 
   if (targetList.length <= 2) return fisherYates(targetList);

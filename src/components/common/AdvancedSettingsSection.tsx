@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { getRecentAtEnd, getShuffleAlgorithm, setRecentAtEnd, setShuffleAlgorithm, type ShuffleAlgorithm } from '../../utils/shuffleOrder';
-import { useLabsStore, openSpeedControlSheet } from '../../services/labsService';
+import { useLabsStore } from '../../services/labsService';
+import { clearAllNotInterested, getNotInterestedCount } from '../../utils/notInterested';
 import { SpatialAudioPad } from './SpatialAudioPad';
 
 const OPTIONS: Array<{ id: ShuffleAlgorithm; title: string; desc: string }> = [
@@ -38,6 +39,12 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
     dislikedTasteKeys,
     clearAllDislikes,
   } = useLabsStore();
+
+  const discardedCount = Math.max(dislikedTasteKeys.length, getNotInterestedCount());
+  const handleClearDiscards = () => {
+    clearAllDislikes();
+    clearAllNotInterested();
+  };
 
   if (desktop) {
     return (
@@ -168,13 +175,6 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
             <div className="flex items-center gap-3 shrink-0">
               <button
                 type="button"
-                onClick={openSpeedControlSheet}
-                className="px-3 py-1.5 rounded-full border border-white/20 hover:border-white text-xs font-bold text-white hover:bg-white/5 active:scale-95 transition-all cursor-pointer"
-              >
-                Ajustar velocidad ({playbackSpeed.toFixed(2)}x)
-              </button>
-              <button
-                type="button"
                 role="switch"
                 aria-checked={speedControlEnabled}
                 aria-label="Control de velocidad y tono"
@@ -264,17 +264,17 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
               <p className="text-xs text-[#a7a7a7] leading-relaxed">
                 Muestra botones de pulgar arriba y pulgar abajo. Si marcas No me gusta (👎), la canción salta inmediatamente y no volverá a sonar en listas, aleatorio ni Android Auto.
               </p>
-              {dislikedTasteKeys.length > 0 && (
+              {discardedCount > 0 && (
                 <p className="text-[11px] text-[#1ed760] pt-1">
-                  {dislikedTasteKeys.length} {dislikedTasteKeys.length === 1 ? 'canción descartada' : 'canciones descartadas'}
+                  {discardedCount} {discardedCount === 1 ? 'canción descartada' : 'canciones descartadas'}
                 </p>
               )}
             </div>
             <div className="flex items-center gap-3 shrink-0">
-              {dislikedTasteKeys.length > 0 && (
+              {discardedCount > 0 && (
                 <button
                   type="button"
-                  onClick={clearAllDislikes}
+                  onClick={handleClearDiscards}
                   className="text-xs font-bold text-[#b3b3b3] hover:text-white underline cursor-pointer"
                 >
                   Restablecer descartes
@@ -418,15 +418,6 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
                 <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${speedControlEnabled ? 'left-[22px]' : 'left-0.5'}`} />
               </button>
             </div>
-            {speedControlEnabled && (
-              <button
-                type="button"
-                onClick={openSpeedControlSheet}
-                className="w-full py-2.5 rounded-full bg-white/10 hover:bg-white/15 text-white font-bold text-xs active:scale-95 transition-all cursor-pointer"
-              >
-                Modificar velocidad ({playbackSpeed.toFixed(2)}x)
-              </button>
-            )}
           </div>
 
           {/* Audio Mono & 3D Spatial */}
@@ -492,12 +483,12 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
                 <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${tasteRatingEnabled ? 'left-[22px]' : 'left-0.5'}`} />
               </button>
             </div>
-            {tasteRatingEnabled && dislikedTasteKeys.length > 0 && (
+            {tasteRatingEnabled && discardedCount > 0 && (
               <div className="pt-2 border-t border-white/5 flex items-center justify-between text-xs">
-                <span className="text-[#a7a7a7]">{dislikedTasteKeys.length} canciones descartadas</span>
+                <span className="text-[#a7a7a7]">{discardedCount} {discardedCount === 1 ? 'canción descartada' : 'canciones descartadas'}</span>
                 <button
                   type="button"
-                  onClick={clearAllDislikes}
+                  onClick={handleClearDiscards}
                   className="font-bold text-[#1ed760] hover:underline"
                 >
                   Borrar descartes

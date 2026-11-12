@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 
-describe('v0.2.7 Spotifree Labs: Playback Speed, Spatial 3D / Mono & Like/Dislike System', () => {
+describe('v0.2.8 Spotifree Labs: Playback Speed, Spatial 3D / Mono & Unified Dislike System', () => {
   it('labsService.ts exports all state keys, helpers, and taste rating utilities', () => {
     const src = fs.readFileSync(path.join(ROOT, 'src/services/labsService.ts'), 'utf8');
     assert.ok(src.includes('useLabsStore = create<LabsState>'), 'Must declare useLabsStore with Zustand');

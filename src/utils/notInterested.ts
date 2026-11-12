@@ -65,4 +65,20 @@ export function undoNotInterested(t: Track) {
   const set = load();
   set.delete(keyOf(t));
   save(set);
+  try {
+    window.dispatchEvent(new CustomEvent('spotifree:not-interested', { detail: { track: t, undone: true } }));
+  } catch {}
+}
+
+export function getNotInterestedCount(): number {
+  return load().size;
+}
+
+export function clearAllNotInterested(): void {
+  const set = new Set<string>();
+  save(set);
+  cache = { key: storeKey(), set };
+  try {
+    window.dispatchEvent(new CustomEvent('spotifree:not-interested-cleared'));
+  } catch {}
 }

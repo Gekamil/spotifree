@@ -24,8 +24,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 import { DevicePickerButton, MiniPlayerButton, restoreAudioOutput } from './PlayerExtras';
-import { useLabsStore, openSpeedControlSheet, isTrackLikedTaste } from '../../services/labsService';
-import { showGlobalToast } from '../../utils/globalToast';
+import { useLabsStore, openSpeedControlSheet } from '../../services/labsService';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -33,7 +32,7 @@ interface DesktopPlayerProps {
 
 export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistById }) => {
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
-  const { labsEnabled, speedControlEnabled, playbackSpeed, tasteRatingEnabled, toggleTasteLike } = useLabsStore();
+  const { labsEnabled, speedControlEnabled, playbackSpeed } = useLabsStore();
   const dislikeCurrentTrack = usePlayerStore((s) => s.dislikeCurrentTrack);
   const {
     currentTrack,
@@ -316,39 +315,21 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
               )}
             </button>
 
-            {/* Labs: Amazon Music-style Like & Dislike ratings */}
-            {tasteRatingEnabled && currentTrack && (
-              <div className="flex items-center gap-1 shrink-0 ml-1">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const res = toggleTasteLike(currentTrack);
-                    showGlobalToast(res === 'like' ? 'Te gusta: se tendrá más en cuenta' : 'Se ha retirado tu valoración');
-                  }}
-                  className={`p-1 transition-transform active:scale-90 cursor-pointer ${
-                    isTrackLikedTaste(currentTrack) ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
-                  }`}
-                  title={isTrackLikedTaste(currentTrack) ? 'Te gusta (recomendaciones mejoradas)' : 'Indicar que te gusta'}
-                >
-                  <svg width={15} height={15} viewBox="0 0 24 24" fill={isTrackLikedTaste(currentTrack) ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    dislikeCurrentTrack();
-                  }}
-                  className="p-1 text-[#b3b3b3] hover:text-[#ff5c5c] transition-transform active:scale-90 cursor-pointer"
-                  title="No me gusta (saltar y no volver a poner)"
-                >
-                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                  </svg>
-                </button>
-              </div>
+            {/* No me gusta (descartar y saltar a la siguiente canción) */}
+            {currentTrack && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  dislikeCurrentTrack();
+                }}
+                className="p-1 text-[#b3b3b3] hover:text-[#ff5c5c] transition-all active:scale-90 cursor-pointer opacity-70 hover:opacity-100"
+                title="No me gusta (saltar y no volver a poner)"
+              >
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                </svg>
+              </button>
             )}
           </>
         ) : (
