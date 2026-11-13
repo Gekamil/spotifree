@@ -19,17 +19,23 @@ export default async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
   const q = (url.searchParams.get('q') || '').trim();
   const isFast = url.searchParams.get('fast') === '1';
+  const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+  const limit = Math.min(50, Math.max(1, parseInt(url.searchParams.get('limit') || '25', 10) || 25));
 
   if (!q) {
     return res.status(200).json({
-      tracks: { items: [] },
-      artists: { items: [] },
-      albums: { items: [] },
-      playlists: { items: [] },
+      tracks: { items: [], total: 0, offset, limit, hasMore: false },
+      artists: { items: [], total: 0, offset, limit, hasMore: false },
+      albums: { items: [], total: 0, offset, limit, hasMore: false },
+      playlists: { items: [], total: 0, offset, limit, hasMore: false },
+      total: 0,
+      offset,
+      limit,
+      hasMore: false,
     });
   }
 
-  const baseCacheKey = q.toLowerCase();
+  const baseCacheKey = `${q.toLowerCase()}:${offset}:${limit}`;
   const cacheKey = isFast ? `fast:${baseCacheKey}` : baseCacheKey;
   const fullCached = searchCache.get(baseCacheKey);
   if (fullCached && Date.now() - fullCached.timestamp < 120000) {
@@ -90,34 +96,34 @@ export default async function handler(req, res) {
 
     const fetchPromises = [
       // 0. Deezer Track Search
-      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=25`, {
+      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=${limit}&index=${offset}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 1. Deezer Artist Search
-      fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
+      fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(trackSearchQuery)}&limit=${offset === 0 ? 8 : limit}&index=${offset}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 2. Deezer Album Search
-      fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(trackSearchQuery)}&limit=8`, {
+      fetch(`https://api.deezer.com/search/album?q=${encodeURIComponent(trackSearchQuery)}&limit=${offset === 0 ? 8 : limit}&index=${offset}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
-      // 3. Real Spotify Public Playlists (skipped in fast mode to avoid blocking initial results)
-      isFast ? Promise.resolve([]) : searchSpotifyPublicPlaylists(cleanQ, 20, cookie).catch(() => []),
+      // 3. Real Spotify Public Playlists (skipped in fast mode or when offset > 0 to avoid blocking initial results)
+      (isFast || offset > 0) ? Promise.resolve([]) : searchSpotifyPublicPlaylists(cleanQ, 20, cookie).catch(() => []),
 
       // 4. Deezer Playlist Search (exact query)
-      fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=20`, {
+      fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(cleanQ)}&limit=${offset === 0 ? 20 : limit}&index=${offset}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 5. Deezer Playlist Search (without "playlist" keyword to find topic playlists)
-      isFast
+      (isFast || offset > 0)
         ? Promise.resolve({ data: [] })
         : fetch(`https://api.deezer.com/search/playlist?q=${encodeURIComponent(withoutPlaylist)}&limit=20`, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
@@ -125,7 +131,7 @@ export default async function handler(req, res) {
           }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
 
       // 6. iTunes tracks
-      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
+      fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=${limit}&offset=${offset}`, {
         headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: reqTimeout,
       }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
@@ -512,12 +518,39 @@ export default async function handler(req, res) {
       }
     }
 
+    const totalTracks = typeof deezerTracksRes.total === 'number' ? deezerTracksRes.total : (combinedTracks.length + offset);
+    const hasMoreTracks = typeof deezerTracksRes.total === 'number'
+      ? (offset + combinedTracks.length < deezerTracksRes.total)
+      : combinedTracks.length >= limit;
+
     const payload = {
-      tracks: { items: combinedTracks },
+      tracks: {
+        items: combinedTracks,
+        total: totalTracks,
+        offset,
+        limit,
+        hasMore: hasMoreTracks,
+      },
       soundcloudTracks: { items: orderedRemixItems },
-      artists: { items: artists },
-      albums: { items: albums },
+      artists: {
+        items: artists,
+        total: deezerArtistsRes.total || artists.length,
+        offset,
+        limit,
+        hasMore: typeof deezerArtistsRes.total === 'number' ? (offset + artists.length < deezerArtistsRes.total) : artists.length >= 8,
+      },
+      albums: {
+        items: albums,
+        total: deezerAlbumsRes.total || albums.length,
+        offset,
+        limit,
+        hasMore: typeof deezerAlbumsRes.total === 'number' ? (offset + albums.length < deezerAlbumsRes.total) : albums.length >= 8,
+      },
       playlists: { items: playlists },
+      total: totalTracks,
+      offset,
+      limit,
+      hasMore: hasMoreTracks,
     };
 
     if (!scCatalogRes?.timedOut || orderedRemixItems.length > 0) {

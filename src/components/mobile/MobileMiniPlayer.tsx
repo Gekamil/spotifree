@@ -127,7 +127,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
       data-testid="mobile-mini-player"
       className="fixed left-2 right-2 h-14 rounded-[8px] z-40 flex items-center justify-between px-2 overflow-hidden cursor-pointer select-none transition-all active:scale-[0.99] font-['SpotifyMixUI'] pointer-events-auto shadow-[0_8px_24px_rgba(0,0,0,0.65)] border border-white/[0.08]"
       style={{
-        bottom: 'calc(68px + env(safe-area-inset-bottom, 0px))',
+        bottom: 'calc(68px + var(--sab, 0px))',
         backgroundColor: cardBgColor,
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',

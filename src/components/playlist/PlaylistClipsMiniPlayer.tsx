@@ -89,6 +89,8 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
   const [previewAudioUrl, setPreviewAudioUrl] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const mainVideoRef = useRef<HTMLVideoElement | null>(null);
+  const ambientVideoRef = useRef<HTMLVideoElement | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const touchDeltaXRef = useRef<number>(0);
   const isHoldingRef = useRef<boolean>(false);
@@ -206,6 +208,34 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
       audioRef.current.play().catch(() => {});
     }
   }, [isPaused, previewAudioUrl]);
+
+  // Synchronize playback state between main video and ambient cinema backdrop
+  useEffect(() => {
+    if (mainVideoRef.current) {
+      if (isPaused) {
+        mainVideoRef.current.pause();
+      } else {
+        mainVideoRef.current.play().catch(() => {});
+      }
+    }
+    if (ambientVideoRef.current) {
+      if (isPaused) {
+        ambientVideoRef.current.pause();
+      } else {
+        ambientVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [isPaused, canvasUrl]);
+
+  // Prevent time drift between main canvas video and ambient cinema backdrop
+  const handleVideoTimeUpdate = () => {
+    if (mainVideoRef.current && ambientVideoRef.current) {
+      const delta = Math.abs(mainVideoRef.current.currentTime - ambientVideoRef.current.currentTime);
+      if (delta > 0.15) {
+        ambientVideoRef.current.currentTime = mainVideoRef.current.currentTime;
+      }
+    }
+  };
 
   // 15-second snippet progress timer with smooth volume fade in & fade out
   useEffect(() => {
@@ -345,14 +375,27 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
       className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 bg-black/85 backdrop-blur-xl animate-in fade-in duration-200 select-none font-['SpotifyMixUI'] overflow-hidden"
       onClick={handleClose}
     >
-      {/* Desktop Atmospheric Ambient Glow - Reflects cover colors onto the dark backdrop */}
-      <div className="absolute inset-0 pointer-events-none hidden md:flex items-center justify-center overflow-hidden z-0">
-        <img
-          key={`ambient-glow-${currentTrack.id}`}
-          src={coverUrl}
-          alt=""
-          className="w-[700px] h-[700px] object-cover filter blur-[140px] opacity-25 scale-125 transition-all duration-1000 ease-in-out pointer-events-none"
-        />
+      {/* Dynamic Ambient Cinema Backdrop - Reflects canvas video or cover colors onto the dark backdrop */}
+      <div className="absolute inset-0 pointer-events-none flex items-center justify-center overflow-hidden z-0">
+        {canvasUrl ? (
+          <video
+            ref={ambientVideoRef}
+            key={`ambient-video-${canvasUrl}`}
+            src={canvasUrl}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="w-[700px] h-[700px] md:w-[850px] md:h-[850px] object-cover filter blur-[100px] scale-150 opacity-60 pointer-events-none transition-opacity duration-700 ease-in-out"
+          />
+        ) : (
+          <img
+            key={`ambient-glow-${currentTrack.id}`}
+            src={coverUrl}
+            alt=""
+            className="w-[700px] h-[700px] md:w-[850px] md:h-[850px] object-cover filter blur-[140px] opacity-25 scale-125 transition-all duration-1000 ease-in-out pointer-events-none"
+          />
+        )}
       </div>
 
       {/* Main Centered Content Wrapper with Desktop Arrow Buttons */}
@@ -462,12 +505,14 @@ export const PlaylistClipsMiniPlayer: React.FC<PlaylistClipsMiniPlayerProps> = (
             <div className="relative flex-1 w-full overflow-hidden bg-black flex items-center justify-center">
               {canvasUrl ? (
                 <video
+                  ref={mainVideoRef}
                   key={canvasUrl}
                   src={canvasUrl}
                   autoPlay
                   loop
                   muted
                   playsInline
+                  onTimeUpdate={handleVideoTimeUpdate}
                   className="absolute inset-0 w-full h-full object-cover pointer-events-none"
                 />
               ) : (

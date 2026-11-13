@@ -655,15 +655,54 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // 6c. Artist Discovery & Similar Artists (/api/discover)
+  if (pathname === '/api/discover') {
+    res.setHeader('Content-Type', 'application/json');
+    const artist = (reqUrl.searchParams.get('artist') || '').trim();
+    if (!artist) {
+      res.statusCode = 400;
+      return res.end(JSON.stringify({ error: 'Missing artist parameter' }));
+    }
+    try {
+      if (!res.status) {
+        res.status = function (code) { this.statusCode = code; return this; };
+      }
+      if (!res.json) {
+        res.json = function (data) {
+          this.setHeader('Content-Type', 'application/json');
+          return this.end(JSON.stringify(data));
+        };
+      }
+      const { default: metadataHandler } = await import('./api/metadata.js');
+      req.query = { artist, action: 'discover' };
+      return metadataHandler(req, res);
+    } catch (err) {
+      res.statusCode = 200;
+      return res.end(JSON.stringify({ artist: null, top: [], related: [], recent: [], error: err.message }));
+    }
+  }
+
   // 7. Search API (/api/spotify/search) - Official Spotify API + SoundCloud + iTunes + YouTube Music
   if (pathname === '/api/spotify/search' || pathname === '/api/search') {
     const q = (reqUrl.searchParams.get('q') || '').trim();
     const isFast = reqUrl.searchParams.get('fast') === '1';
+    const offset = Math.max(0, parseInt(reqUrl.searchParams.get('offset') || '0', 10) || 0);
+    const limit = Math.min(50, Math.max(1, parseInt(reqUrl.searchParams.get('limit') || '25', 10) || 25));
     res.setHeader('Content-Type', 'application/json');
 
     if (!q) {
       res.statusCode = 200;
-      return res.end(JSON.stringify({ tracks: { items: [] }, soundcloudTracks: { items: [] }, artists: { items: [] }, albums: { items: [] }, playlists: { items: [] } }));
+      return res.end(JSON.stringify({
+        tracks: { items: [], total: 0, offset, limit, hasMore: false },
+        soundcloudTracks: { items: [] },
+        artists: { items: [], total: 0, offset, limit, hasMore: false },
+        albums: { items: [], total: 0, offset, limit, hasMore: false },
+        playlists: { items: [], total: 0, offset, limit, hasMore: false },
+        total: 0,
+        offset,
+        limit,
+        hasMore: false,
+      }));
     }
 
     if (/^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(q)) {
@@ -689,7 +728,7 @@ const server = http.createServer(async (req, res) => {
       if (spotifyToken) {
         try {
           const sRes = await fetch(
-            `https://api.spotify.com/v1/search?q=${encodeURIComponent(cleanQ || q)}&type=track,artist,album,playlist&limit=25`,
+            `https://api.spotify.com/v1/search?q=${encodeURIComponent(cleanQ || q)}&type=track,artist,album,playlist&limit=${limit}&offset=${offset}`,
             {
               headers: { Authorization: `Bearer ${spotifyToken}` },
               signal: AbortSignal.timeout?.(4000),
@@ -869,6 +908,15 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
+        if (spotifyData.tracks) {
+          spotifyData.tracks.offset = offset;
+          spotifyData.tracks.limit = limit;
+          spotifyData.tracks.hasMore = (spotifyData.tracks.items?.length || 0) >= limit;
+        }
+        spotifyData.offset = offset;
+        spotifyData.limit = limit;
+        spotifyData.hasMore = (spotifyData.tracks?.items?.length || 0) >= limit;
+
         res.statusCode = 200;
         return res.end(JSON.stringify(spotifyData));
       }
@@ -885,7 +933,7 @@ const server = http.createServer(async (req, res) => {
 
       const reqTimeout = isFast ? AbortSignal.timeout?.(2200) : AbortSignal.timeout?.(3500);
       const fetchPromises = [
-        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=25`, {
+        fetch(`https://api.deezer.com/search?q=${encodeURIComponent(trackSearchQuery)}&limit=${limit}&index=${offset}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -897,7 +945,7 @@ const server = http.createServer(async (req, res) => {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
-        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=15`, {
+        fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(trackSearchQuery)}&media=music&entity=song&limit=${limit}&offset=${offset}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           signal: reqTimeout,
         }).then(r => r.ok ? r.json() : { results: [] }).catch(() => ({ results: [] })),
@@ -1257,13 +1305,26 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      const totalTracks = typeof dzTracks.total === 'number' ? dzTracks.total : (combined.length + offset);
+      const hasMoreTracks = typeof dzTracks.total === 'number' ? (offset + combined.length < dzTracks.total) : (combined.length >= limit);
+
       res.statusCode = 200;
       return res.end(JSON.stringify({
-        tracks: { items: combined },
+        tracks: {
+          items: combined,
+          total: totalTracks,
+          offset,
+          limit,
+          hasMore: hasMoreTracks,
+        },
         soundcloudTracks: { items: orderedRemixItems },
         artists: { items: artists },
         albums: { items: albums },
         playlists: { items: playlists },
+        total: totalTracks,
+        offset,
+        limit,
+        hasMore: hasMoreTracks,
       }));
     } catch (e) {
       console.error('[Search error]:', e);

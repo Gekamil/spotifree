@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,6 +8,7 @@ import { saveCustomTrackToStorage, getSavedCustomTracks } from '../../utils/user
 import { showGlobalToast } from '../../utils/globalToast';
 import { handleImageError } from '../../utils/imageFallback';
 import { getPlaylistCover } from '../../utils/playlistCover';
+import { useDragToDismiss } from '../../hooks/useDragToDismiss';
 import type { Playlist } from '../../types/spotify';
 
 export const AddToPlaylistModal: React.FC = () => {
@@ -20,6 +21,8 @@ export const AddToPlaylistModal: React.FC = () => {
   const { language } = useLanguageStore();
 
   const track = trackForAddToPlaylist;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isDesktop, setIsDesktop] = useState(false);
 
   // Track initially liked state and selected playlist IDs
   const [isLikedState, setIsLikedState] = useState(false);
@@ -28,6 +31,14 @@ export const AddToPlaylistModal: React.FC = () => {
   const [isCreatingNew, setIsCreatingNew] = useState(false);
   const [newPlaylistTitle, setNewPlaylistTitle] = useState('');
   const [isAnimatingIn, setIsAnimatingIn] = useState(false);
+
+  // Monitor viewport size to disable drag-to-dismiss on desktop modal view
+  useEffect(() => {
+    const checkViewport = () => setIsDesktop(typeof window !== 'undefined' && window.innerWidth >= 640);
+    checkViewport();
+    window.addEventListener('resize', checkViewport);
+    return () => window.removeEventListener('resize', checkViewport);
+  }, []);
 
   // Load all user playlists (filtering out non-playlists or duplicates)
   const userPlaylists = useMemo(() => {
@@ -86,24 +97,6 @@ export const AddToPlaylistModal: React.FC = () => {
     return () => cancelAnimationFrame(raf);
   }, [isAddToPlaylistModalOpen, track, likedTrackIds, userPlaylists, user?.id]);
 
-  if (!isAddToPlaylistModalOpen || !track) return null;
-
-  const handleTogglePlaylist = (playlistId: string) => {
-    setSelectedPlaylistIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(playlistId)) {
-        next.delete(playlistId);
-      } else {
-        next.add(playlistId);
-      }
-      return next;
-    });
-  };
-
-  const handleToggleLiked = () => {
-    setIsLikedState((prev) => !prev);
-  };
-
   const commitPendingSelections = () => {
     if (!track) return;
 
@@ -160,8 +153,39 @@ export const AddToPlaylistModal: React.FC = () => {
   };
 
   const handleSaveAndClose = () => {
+    // If user typed a playlist name and taps "Hecho", immediately create and save it
+    if (newPlaylistTitle.trim()) {
+      handleCreateNewPlaylist();
+      return;
+    }
     commitPendingSelections();
     closeAddToPlaylistModal();
+  };
+
+  const { dragY, handleProps, contentProps, sheetStyle } = useDragToDismiss({
+    onClose: handleSaveAndClose,
+    scrollRef,
+    threshold: 80,
+    velocityThreshold: 0.5,
+    disabled: isDesktop,
+  });
+
+  if (!isAddToPlaylistModalOpen || !track) return null;
+
+  const handleTogglePlaylist = (playlistId: string) => {
+    setSelectedPlaylistIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(playlistId)) {
+        next.delete(playlistId);
+      } else {
+        next.add(playlistId);
+      }
+      return next;
+    });
+  };
+
+  const handleToggleLiked = () => {
+    setIsLikedState((prev) => !prev);
   };
 
   return (
@@ -169,16 +193,28 @@ export const AddToPlaylistModal: React.FC = () => {
       className={`fixed inset-0 z-[150] bg-black/75 backdrop-blur-sm flex flex-col justify-end sm:justify-center sm:items-center select-none transition-opacity duration-300 ${
         isAnimatingIn ? 'opacity-100' : 'opacity-0'
       }`}
+      style={{
+        opacity: !isDesktop && dragY > 0 ? Math.max(0, 1 - dragY / 400) : undefined,
+      }}
       onClick={handleSaveAndClose}
     >
       <div
         onClick={(e) => e.stopPropagation()}
+        {...contentProps}
         className={`bg-[#181818] w-full sm:w-[440px] rounded-t-3xl sm:rounded-2xl max-h-[82vh] sm:max-h-[640px] flex flex-col shadow-2xl border border-white/10 overflow-hidden transform transition-all duration-350 ease-[cubic-bezier(0.32,0.72,0,1)] ${
           isAnimatingIn ? 'translate-y-0 scale-100 opacity-100' : 'translate-y-12 sm:translate-y-4 scale-95 opacity-0'
         }`}
+        style={!isDesktop ? sheetStyle : undefined}
       >
-        {/* Top Handle (Mobile only) */}
-        <div className="w-10 h-1 bg-white/20 rounded-full mx-auto mt-3 sm:hidden" />
+        {/* Top Handle (Mobile only, with 48px touch target area and touch-none) */}
+        <div
+          {...handleProps}
+          className="w-full min-h-[48px] h-12 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none sm:hidden"
+          aria-label="Arrastrar para cerrar"
+          role="presentation"
+        >
+          <div className="w-10 h-1 bg-white/30 rounded-full" />
+        </div>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10">
@@ -198,8 +234,11 @@ export const AddToPlaylistModal: React.FC = () => {
           </button>
         </div>
 
-        {/* Scrollable list */}
-        <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
+        {/* Scrollable list with bottom safe-area padding replacing deleted footer */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto px-3 pt-3 pb-[calc(16px+var(--sab,0px))] space-y-1"
+        >
           {/* SECTION 1: Canciones que te gustan (Liked Songs) - Separated at top */}
           <div
             onClick={handleToggleLiked}
@@ -239,12 +278,70 @@ export const AddToPlaylistModal: React.FC = () => {
 
           {/* Clean divider between Liked Songs and user playlists */}
           <div className="border-t border-white/10 my-2 pt-2 px-1">
-            <span className="text-[11px] font-bold text-[#727272] uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-[#727272] uppercase tracking-wider font-['SpotifyMixUI']">
               {t('playlists') || 'Playlists'}
             </span>
           </div>
 
-          {/* SECTION 2: User Playlists list */}
+          {/* SECTION 2: Sticky "+ Nueva playlist" action / input (IMMUNE TO KEYBOARD/IME OCCLUSION) */}
+          <div className="sticky top-0 z-10 bg-[#181818]/95 backdrop-blur-md pb-2 pt-1">
+            {!isCreatingNew ? (
+              <button
+                onClick={() => setIsCreatingNew(true)}
+                className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white transition-colors cursor-pointer group"
+              >
+                <div className="w-12 h-12 rounded-lg bg-white/10 group-hover:bg-white/20 flex items-center justify-center shrink-0 transition-colors">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="12" y1="5" x2="12" y2="19" />
+                    <line x1="5" y1="12" x2="19" y2="12" />
+                  </svg>
+                </div>
+                <div className="truncate">
+                  <p className="text-sm font-bold text-white group-hover:text-[#1ed760] transition-colors font-['SpotifyMixUI']">
+                    {t('newPlaylist') || 'Nueva playlist'}
+                  </p>
+                  <p className="text-xs text-[#a7a7a7]">Crear y guardar esta canción</p>
+                </div>
+              </button>
+            ) : (
+              <div className="p-3 bg-white/5 rounded-2xl border border-white/15 space-y-3 animate-in fade-in duration-200">
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder="Nombre de la nueva playlist..."
+                  value={newPlaylistTitle}
+                  onChange={(e) => setNewPlaylistTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleCreateNewPlaylist();
+                    if (e.key === 'Escape') {
+                      setIsCreatingNew(false);
+                      setNewPlaylistTitle('');
+                    }
+                  }}
+                  className="w-full bg-[#242424] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760] transition-colors"
+                />
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => {
+                      setIsCreatingNew(false);
+                      setNewPlaylistTitle('');
+                    }}
+                    className="px-3.5 py-1.5 rounded-full text-xs font-bold text-white/70 hover:text-white cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleCreateNewPlaylist}
+                    className="px-4 py-1.5 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-md"
+                  >
+                    Añadir
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 3: User Playlists list */}
           {userPlaylists.length === 0 ? (
             <div className="text-center py-6 text-sm text-[#727272]">
               No tienes playlists creadas todavía
@@ -295,68 +392,6 @@ export const AddToPlaylistModal: React.FC = () => {
               );
             })
           )}
-
-          {/* SECTION 3: Create New Playlist button at bottom of list */}
-          <div className="pt-2">
-            {!isCreatingNew ? (
-              <button
-                onClick={() => setIsCreatingNew(true)}
-                className="w-full flex items-center gap-3.5 p-3 rounded-xl hover:bg-white/10 active:bg-white/15 text-left text-white transition-colors cursor-pointer group"
-              >
-                <div className="w-12 h-12 rounded-lg bg-white/10 group-hover:bg-white/20 flex items-center justify-center shrink-0 transition-colors">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <line x1="12" y1="5" x2="12" y2="19" />
-                    <line x1="5" y1="12" x2="19" y2="12" />
-                  </svg>
-                </div>
-                <div className="truncate">
-                  <p className="text-sm font-bold text-white group-hover:text-[#1ed760] transition-colors">
-                    {t('newPlaylist') || 'Nueva playlist'}
-                  </p>
-                  <p className="text-xs text-[#a7a7a7]">Crear y guardar esta canción</p>
-                </div>
-              </button>
-            ) : (
-              <div className="p-3 bg-white/5 rounded-2xl border border-white/15 space-y-3 animate-in fade-in duration-200">
-                <input
-                  type="text"
-                  autoFocus
-                  placeholder="Nombre de la nueva playlist..."
-                  value={newPlaylistTitle}
-                  onChange={(e) => setNewPlaylistTitle(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCreateNewPlaylist();
-                    if (e.key === 'Escape') setIsCreatingNew(false);
-                  }}
-                  className="w-full bg-[#242424] border border-white/20 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#1ed760] transition-colors"
-                />
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => setIsCreatingNew(false)}
-                    className="px-3.5 py-1.5 rounded-full text-xs font-bold text-white/70 hover:text-white cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    onClick={handleCreateNewPlaylist}
-                    className="px-4 py-1.5 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-                  >
-                    Crear y añadir
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Footer: Prominent bottom "Hecho" button */}
-        <div className="p-4 border-t border-white/10 bg-[#141414]">
-          <button
-            onClick={handleSaveAndClose}
-            className="w-full py-3 rounded-full bg-white text-black font-black text-sm tracking-wide hover:scale-[1.02] active:scale-95 transition-transform cursor-pointer shadow-lg"
-          >
-            {t('done') || (language === 'en' ? 'Done' : 'Hecho')}
-          </button>
         </div>
       </div>
     </div>

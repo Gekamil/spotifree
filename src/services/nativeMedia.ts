@@ -15,7 +15,7 @@ import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { getPlaylistCover } from '../utils/playlistCover';
 import { getDownloadedTracks, isPlaylistDownloaded, onDownloadsChanged } from '../utils/offlineStorage';
 import { useLanguageStore } from '../utils/i18n';
-import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../utils/lyricsService';
+import { fetchLyricsUnified, parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../utils/lyricsService';
 import { toHDImage } from '../utils/formatters';
 import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
 import { fetchArtistTopTracks } from './artistService';
@@ -712,11 +712,12 @@ async function loadLyrics(t: Track | null) {
     lyricLines = [];
   }
 }
-function currentLyricLine(progressMs: number): string {
+function currentLyricLine(progressMs: number, durationMs?: number): string {
   if (!getCarLyricsEnabled() || lyricLines.length === 0) return '';
+  const syncProgress = getSynchronizedLyricProgress(progressMs, durationMs);
   let line = '';
   for (const l of lyricLines) {
-    if (l.timeMs <= progressMs + 250) line = l.text;
+    if (l.timeMs <= syncProgress) line = l.text;
     else break;
   }
   return line;
@@ -730,13 +731,14 @@ function pushNowPlaying(force = false) {
   const s = usePlayerStore.getState();
   const t = s.currentTrack;
   if (!t) return;
-  const line = currentLyricLine(s.progressMs || 0);
+  const line = currentLyricLine(s.progressMs || 0, s.durationMs || t.duration_ms || 0);
   const liked = (s.likedTrackIds || []).includes(t.id);
+  const useStar = Boolean((s as any).useStarFavorite);
   const shuffle = Boolean(s.isShuffle);
   const repeat = s.repeatMode || 'off';
   const dislikeEnabled = true;
   const disliked = Boolean((t ? isNotInterested(t) : false) || isTrackDisliked(t));
-  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${dislikeEnabled}|${disliked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
+  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${useStar}|${dislikeEnabled}|${disliked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
   const now = Date.now();
   // The system extrapolates the position while playing: resend on changes, or every 8 s for widget progress sync
   if (!force && key === lastSent && now - lastPushAt < (s.isPlaying ? 8000 : 15000)) return;
@@ -757,6 +759,7 @@ function pushNowPlaying(force = false) {
     isPlaying: Boolean(s.isPlaying),
     lyricLine: line,
     liked,
+    useStar,
     dislikeEnabled,
     disliked,
     shuffle,
@@ -815,6 +818,7 @@ async function runCommand(c: MediaCommand) {
     case 'dislike':
     case 'toggleDislike':
       player.dislikeCurrentTrack?.();
+      pushNowPlaying(true);
       break;
     case 'toggleShuffle':
       player.toggleShuffle();

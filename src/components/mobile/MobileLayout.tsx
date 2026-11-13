@@ -601,7 +601,13 @@ export const MobileLayout: React.FC = () => {
       style={{ paddingTop: 'var(--sat)' }}
     >
       {/* Scrollable Center Content */}
-      <div data-mobile-scroll className={`flex-1 overflow-y-auto overflow-x-hidden ${mobileTab === 'dj' ? 'pb-0' : 'pb-32'}`}>
+      <div
+        data-mobile-scroll
+        className="flex-1 overflow-y-auto overflow-x-hidden"
+        style={{
+          paddingBottom: mobileTab === 'dj' ? '0px' : 'calc(144px + var(--sab, 0px))',
+        }}
+      >
         {/* HOME → "Mostrar todo" of a section: the whole section in a grid */}
         {mobileTab === 'home' && seeAllShelf && (
           <div className="min-h-full spf-page-push pb-6">
@@ -1818,7 +1824,14 @@ export const MobileLayout: React.FC = () => {
 
       {/* Toast Feedback */}
       {toastMessage && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-[#282828] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200">
+        <div
+          style={{
+            bottom: currentTrack
+              ? 'calc(134px + var(--sab, 0px))'
+              : 'calc(74px + var(--sab, 0px))',
+          }}
+          className="fixed left-1/2 -translate-x-1/2 z-50 bg-[#282828] text-white text-xs font-bold px-4 py-2.5 rounded-full shadow-2xl border border-white/10 animate-in fade-in zoom-in-95 duration-200"
+        >
           {toastMessage}
         </div>
       )}

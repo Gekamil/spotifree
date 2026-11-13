@@ -254,7 +254,7 @@ public class SpotifreeWidget extends AppWidgetProvider {
                 Paint gradPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
                 gradPaint.setShader(new LinearGradient(
                         0f, 0f, width, height,
-                        new int[] { withAlpha(c1, 145), withAlpha(c2, 185), withAlpha(0xFF0A0B0E, 212) },
+                        new int[] { withAlpha(c1, 125), withAlpha(c2, 165), withAlpha(0xFF0A0B0E, 195) },
                         new float[] { 0f, 0.55f, 1f },
                         Shader.TileMode.CLAMP
                 ));
@@ -296,8 +296,8 @@ public class SpotifreeWidget extends AppWidgetProvider {
             border.setStrokeWidth(2f);
             border.setShader(new LinearGradient(
                     0f, 0f, width, height,
-                    new int[] { 0x55FFFFFF, 0x1AFFFFFF, 0x22FFFFFF },
-                    new float[] { 0f, 0.5f, 1f },
+                    new int[] { 0x66FFFFFF, 0x1AFFFFFF, 0x33FFFFFF },
+                    new float[] { 0f, 0.45f, 1f },
                     Shader.TileMode.CLAMP
             ));
             oc.drawRoundRect(new RectF(1f, 1f, width - 1f, height - 1f), cornerRadius - 1f, cornerRadius - 1f, border);
@@ -331,7 +331,7 @@ public class SpotifreeWidget extends AppWidgetProvider {
         Bitmap cover = source;
         if (cover == null) {
             if (defaultBgWide == null) defaultBgWide = renderBackdrop(null, 400, 188, 30f, DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_ACCENT);
-            if (defaultBgBar == null) defaultBgBar = renderBackdrop(null, 400, 140, 26f, DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_ACCENT);
+            if (defaultBgBar == null) defaultBgBar = renderBackdrop(null, 400, 140, 28f, DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_ACCENT);
             if (defaultBgSquare == null) defaultBgSquare = renderBackdrop(null, 320, 320, 30f, DEFAULT_PRIMARY, DEFAULT_SECONDARY, DEFAULT_ACCENT);
             return;
         }
@@ -339,10 +339,10 @@ public class SpotifreeWidget extends AppWidgetProvider {
         int c1 = primaryColor != 0 ? primaryColor : DEFAULT_PRIMARY;
         int c2 = secondaryColor != 0 ? secondaryColor : DEFAULT_SECONDARY;
         int cAcc = accentColor != 0 ? accentColor : DEFAULT_ACCENT;
-        cachedArtBar = rounded(cover, 172, 20f);
+        cachedArtBar = rounded(cover, 172, 22f);
         cachedArtBig = rounded(cover, 248, 24f);
         cachedBgWide = renderBackdrop(cover, 400, 188, 30f, c1, c2, cAcc);
-        cachedBgBar = renderBackdrop(cover, 400, 140, 26f, c1, c2, cAcc);
+        cachedBgBar = renderBackdrop(cover, 400, 140, 28f, c1, c2, cAcc);
         cachedBgSquare = renderBackdrop(cover, 320, 320, 30f, c1, c2, cAcc);
         cachedArtFor = cover;
     }
@@ -514,8 +514,10 @@ public class SpotifreeWidget extends AppWidgetProvider {
                     if (hasSong && lyrics != null && !lyrics.trim().isEmpty()) {
                         v.setViewVisibility(R.id.widget_lyrics, View.VISIBLE);
                         v.setTextViewText(R.id.widget_lyrics, "♫ " + lyrics.trim());
+                        v.setBoolean(R.id.widget_lyrics, "setSelected", true);
                     } else {
                         v.setViewVisibility(R.id.widget_lyrics, View.GONE);
+                        v.setBoolean(R.id.widget_lyrics, "setSelected", false);
                     }
                 }
 

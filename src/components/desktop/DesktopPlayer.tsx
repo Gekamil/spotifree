@@ -24,7 +24,9 @@ import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 import { DevicePickerButton, MiniPlayerButton, restoreAudioOutput } from './PlayerExtras';
-import { useLabsStore, openSpeedControlSheet } from '../../services/labsService';
+import { useLabsStore, openSpeedControlSheet, isTrackDisliked } from '../../services/labsService';
+import { isNotInterested, undoNotInterested } from '../../utils/notInterested';
+import { showGlobalToast } from '../../utils/globalToast';
 
 interface DesktopPlayerProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
@@ -316,21 +318,36 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
             </button>
 
             {/* No me gusta (descartar y saltar a la siguiente canción) */}
-            {currentTrack && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dislikeCurrentTrack();
-                }}
-                className="p-1 text-[#b3b3b3] hover:text-[#ff5c5c] transition-all active:scale-90 cursor-pointer opacity-70 hover:opacity-100"
-                title="No me gusta (saltar y no volver a poner)"
-              >
-                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                </svg>
-              </button>
-            )}
+            {currentTrack && (() => {
+              const isCurrentDisliked = Boolean(
+                isNotInterested(currentTrack) || isTrackDisliked(currentTrack)
+              );
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isCurrentDisliked) {
+                      undoNotInterested(currentTrack);
+                      useLabsStore.getState().clearAllDislikes();
+                      showGlobalToast('Podremos volver a ponértela');
+                    } else {
+                      dislikeCurrentTrack();
+                    }
+                  }}
+                  className={`p-1 transition-all active:scale-90 cursor-pointer ${
+                    isCurrentDisliked
+                      ? 'text-[#ff5c5c] opacity-100'
+                      : 'text-[#b3b3b3] hover:text-white opacity-70 hover:opacity-100'
+                  }`}
+                  title={isCurrentDisliked ? 'Ya no te disgusta' : 'No me gusta (saltar y no volver a poner)'}
+                >
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill={isCurrentDisliked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+              );
+            })()}
           </>
         ) : (
           <div className="w-14 h-14 rounded bg-[#181818] shrink-0 opacity-40 flex items-center justify-center">
@@ -498,14 +515,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
         {labsEnabled && speedControlEnabled && (
           <button
             onClick={openSpeedControlSheet}
-            className={`p-1 relative flex items-center justify-center font-mono font-bold rounded transition-all cursor-pointer ${
-              playbackSpeed !== 1.0
-                ? 'text-[#1ed760] bg-[#1ed760]/20 px-2 py-0.5 text-xs shadow-sm'
-                : 'text-[#b3b3b3] hover:text-white text-[11px]'
-            }`}
+            className="px-2.5 py-0.5 relative flex items-center justify-center font-mono font-bold rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#1ed760]/30 hover:border-[#1ed760] text-[#1ed760] text-xs transition-all cursor-pointer shadow-sm active:scale-95"
             title="Velocidad de reproducción (Spotifree Labs)"
           >
-            {playbackSpeed !== 1.0 ? `${playbackSpeed.toFixed(2)}x` : '1.0x'}
+            {playbackSpeed.toFixed(2)}x
           </button>
         )}
 

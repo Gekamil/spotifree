@@ -151,8 +151,10 @@ public class SpotifreeTurntableWidget extends AppWidgetProvider {
                 if (hasSong && lyrics != null && !lyrics.trim().isEmpty()) {
                     v.setViewVisibility(R.id.widget_lyrics, View.VISIBLE);
                     v.setTextViewText(R.id.widget_lyrics, "♫ " + lyrics.trim());
+                    v.setBoolean(R.id.widget_lyrics, "setSelected", true);
                 } else {
                     v.setViewVisibility(R.id.widget_lyrics, View.GONE);
+                    v.setBoolean(R.id.widget_lyrics, "setSelected", false);
                 }
 
                 v.setProgressBar(R.id.widget_progress, 1000, hasSong ? progPermille : 0, false);

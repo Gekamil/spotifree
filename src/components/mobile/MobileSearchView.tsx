@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { searchSpotify } from '../../services/spotifyApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -38,6 +38,11 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
   const [selectedCat, setSelectedCat] = useState<(typeof MOBILE_CATEGORIES)[number] | null>(null);
   // Changes every day: curated playlists reshuffled + today's live picks
   const catShelves = useDailyCategoryHub(selectedCat?.id);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore(
     useShallow((s) => ({ playTrack: s.playTrack, currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay }))
@@ -77,21 +82,30 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
     if (!query.trim()) {
       setResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
       setIsSearching(false);
+      setHasMore(false);
+      offsetRef.current = 0;
       return;
     }
 
     setIsSearching(true);
+    setHasMore(true);
+    offsetRef.current = 0;
+    isLoadingMoreRef.current = false;
+    setIsLoadingMore(false);
     let active = true;
     const controller = new AbortController();
     const applySearchData = (data: any) => {
       if (!active || controller.signal.aborted || !data) return;
+      const initialTracks = data?.tracks?.items || [];
       setResults({
-        tracks: data?.tracks?.items || [],
+        tracks: initialTracks,
         soundcloudTracks: data?.soundcloudTracks?.items || [],
         artists: data?.artists?.items || [],
         albums: data?.albums?.items || [],
         playlists: data?.playlists?.items || [],
       });
+      offsetRef.current = initialTracks.length;
+      setHasMore(data?.tracks?.hasMore ?? (initialTracks.length >= 25));
     };
 
     const timer = setTimeout(async () => {
@@ -122,6 +136,96 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
       clearTimeout(timer);
     };
   }, [query]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMore || isSearching || !query.trim()) return;
+
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const nextOffset = offsetRef.current;
+      const data = await searchSpotify(query, {
+        offset: nextOffset,
+        limit: 25,
+      });
+
+      if (!data) {
+        setHasMore(false);
+        return;
+      }
+
+      const newTracks = data.tracks?.items || [];
+      const newSc = data.soundcloudTracks?.items || [];
+      const newArtists = data.artists?.items || [];
+      const newAlbums = data.albums?.items || [];
+      const newPlaylists = data.playlists?.items || [];
+
+      if (newTracks.length === 0 && newSc.length === 0 && newArtists.length === 0 && newAlbums.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      offsetRef.current = nextOffset + (newTracks.length || 25);
+      setHasMore(data.tracks?.hasMore ?? (newTracks.length >= 25));
+
+      setResults((prev) => {
+        const trackIds = new Set(prev.tracks.map((t: any) => t.id));
+        const scIds = new Set(prev.soundcloudTracks.map((t: any) => t.id));
+        const artIds = new Set(prev.artists.map((a: any) => a.id));
+        const albIds = new Set(prev.albums.map((a: any) => a.id));
+        const plIds = new Set(prev.playlists.map((p: any) => p.id));
+
+        return {
+          tracks: [...prev.tracks, ...newTracks.filter((t: any) => !trackIds.has(t.id))],
+          soundcloudTracks: [...prev.soundcloudTracks, ...newSc.filter((t: any) => !scIds.has(t.id))],
+          artists: [...prev.artists, ...newArtists.filter((a: any) => !artIds.has(a.id))],
+          albums: [...prev.albums, ...newAlbums.filter((a: any) => !albIds.has(a.id))],
+          playlists: [...prev.playlists, ...newPlaylists.filter((p: any) => !plIds.has(p.id))],
+        };
+      });
+    } catch {
+      setHasMore(false);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isSearching, query]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || isSearching) return;
+
+    const scrollContainer = (sentinel.closest('[data-mobile-scroll]') || sentinel.closest('.overflow-y-auto')) as HTMLElement | null;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadMore();
+        }
+      },
+      {
+        root: scrollContainer || null,
+        rootMargin: '250px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    const handleScroll = () => {
+      if (!scrollContainer) return;
+      if (scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < 300) {
+        void loadMore();
+      }
+    };
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      scrollContainer?.removeEventListener('scroll', handleScroll);
+    };
+  }, [hasMore, isSearching, loadMore]);
 
   if (selectedCat) {
     return (
@@ -256,7 +360,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           {(filter === 'todo' || filter === 'canciones') && results.tracks.length > 0 && (
             <div className="space-y-1">
               <h3 className="text-sm font-bold text-white mb-2">Canciones</h3>
-              {results.tracks.slice(0, filter === 'todo' ? 5 : 20).map((trk) => {
+              {(filter === 'todo' ? results.tracks.slice(0, 5) : results.tracks).map((trk) => {
                 const isThisPlaying = isPlaying && currentTrack?.id === trk.id;
                 const cover = trk.album?.images?.[0]?.url;
 
@@ -401,7 +505,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           {(filter === 'todo' || filter === 'artistas') && results.artists.length > 0 && (
             <div className="space-y-2 pt-2">
               <h3 className="text-sm font-bold text-white mb-2">Artistas</h3>
-              {results.artists.slice(0, filter === 'todo' ? 4 : 12).map((art) => (
+              {(filter === 'todo' ? results.artists.slice(0, 4) : results.artists).map((art) => (
                 <div
                   key={art.id}
                   onClick={() => {
@@ -445,7 +549,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           {(filter === 'todo' || filter === 'albumes') && results.albums && results.albums.length > 0 && (
             <div className="space-y-2 pt-2">
               <h3 className="text-sm font-bold text-white mb-2">Álbumes</h3>
-              {results.albums.slice(0, filter === 'todo' ? 4 : 20).map((alb) => {
+              {(filter === 'todo' ? results.albums.slice(0, 4) : results.albums).map((alb) => {
                 const cover = alb.images?.[0]?.url;
                 const artistName = alb.artists?.map((a: any) => a.name).join(', ') || 'Artista';
                 const year = alb.release_date ? alb.release_date.split('-')[0] : '';
@@ -495,7 +599,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           {(filter === 'todo' || filter === 'playlists') && results.playlists.length > 0 && (
             <div className="space-y-2 pt-2">
               <h3 className="text-sm font-bold text-white mb-2">Playlists</h3>
-              {results.playlists.slice(0, filter === 'todo' ? 4 : 12).map((pl) => (
+              {(filter === 'todo' ? results.playlists.slice(0, 4) : results.playlists).map((pl) => (
                 <div
                   key={pl.id}
                   onClick={() => {
@@ -530,6 +634,17 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Sentinel for Infinite Scroll */}
+          <div ref={sentinelRef} className="h-6 -mt-6 pointer-events-none" />
+
+          {/* Infinite Scroll Spinner */}
+          {isLoadingMore && (
+            <div className="py-6 text-center text-xs text-[#b3b3b3] flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-white/20 border-t-[#1ed760] rounded-full animate-spin" />
+              <span>Cargando más canciones...</span>
             </div>
           )}
 

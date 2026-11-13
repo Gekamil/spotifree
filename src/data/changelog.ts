@@ -11,14 +11,31 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.2.8';
+export const APP_VERSION = '0.3';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.3',
+    date: '13 de noviembre, 2026',
+    title: 'Spotifree 0.3: navegación segura, gestos táctiles, sincronización de letras, widgets renovados y discografía completa',
+    isLatest: true,
+    highlights: [
+      'Protección para barra de 3 botones Android: zona segura inferior (--sab) para evitar pulsaciones accidentales entre los controles de la app y el sistema operativo.',
+      'Nueva pestaña "Añadir a playlist": formulario limpio sin botones duplicados, botón fijo "+ Nueva playlist", y guardado instantáneo al escribir el nombre y pulsar "Hecho".',
+      'Gestos universales de arrastrar para cerrar (drag-to-dismiss): desliza cómodamente hacia abajo desde el tirador superior en el menú de 3 puntos, añadir a playlist y todas las hojas flotantes.',
+      'Control de velocidad transparente y persistente: el indicador permanece visible incluso a 1.0x con estilo cristalino y acento verde Spotify, desplegando un minirreproductor compacto sobre los controles.',
+      'Gestión limpia de "No me gusta": al descartar una canción avanza a la siguiente sin dejar el botón marcado erróneamente en el nuevo tema, y sin loop de repetición.',
+      'Android Auto con iluminación de estados: botones de aleatorio, repetición y favoritos con iluminación verde nativa (#1ED760) y acción de dislike reactiva.',
+      'Sincronización milimétrica de letras: compensación de avance de audio (lead) para que el texto resalte exactamente con el inicio del canto de cada verso.',
+      'Búsqueda con scroll infinito y discografía completa de artistas: exploración continua sin límites artificiales, resolución exhaustiva del catálogo y recomendaciones reales de artistas similares.',
+      'Recomendaciones de playlists rotativas diarias y efecto cine ambiental: mezclas que se renuevan cada día y reproductor de videoclips cortos con fondo ambiental expansivo.',
+      'Widgets de inicio modernizados: tocadiscos con vinilo lateral giratorio a 60 FPS, letras en marquesina fluida y portadas de alta definición en fondo difuminado.',
+    ],
+  },
   {
     version: '0.2.8',
     date: '12 de noviembre, 2026',
     title: 'Unificación de "No me gusta", Android Auto siempre activo y minirreproductor de velocidad en cristal',
-    isLatest: true,
     highlights: [
       'Unificación de Me gusta y No me gusta: el corazón nativo gestiona los temas favoritos, mientras que "No me gusta" y "No me interesa" quedan unificados como una única función que descarta y salta la pista al instante.',
       'Android Auto con botón "No me gusta" permanente: disponible en la pantalla del coche siempre (con o sin Modo Labs activo) para descartar temas no deseados con un solo toque.',
@@ -34,7 +51,7 @@ export const CHANGELOG_RELEASES: ChangelogRelease[] = [
       'Modo Labs (Spotifree Labs): nuevo interruptor maestro en Ajustes avanzados que desbloquea funciones experimentales de audio y reproducción.',
       'Control de velocidad y tono al vuelo (0.50x – 2.00x): modifica el ritmo desde el menú de 3 puntos o la barra de reproducción (efecto slowed o nightcore) con interruptor de conservación de tono original.',
       'Audio mono y balance espacial 3D: conmuta entre audio mono completo o posiciona el sonido en un cuadrante táctil interactivo (delante/detrás, izquierda/derecha) para auriculares.',
-      'Sistema de valoraciones Like / Dislike (estilo Amazon Music): botones 👍 y 👎 para afinar gustos; las canciones con dislike se saltan al instante y quedan bloqueadas de listas, aleatorio y Android Auto.',
+      'Sistema de valoraciones Like / Dislike (estilo Amazon Music): botones de afinidad para afinar gustos; las canciones con dislike se saltan al instante y quedan bloqueadas de listas, aleatorio y Android Auto.',
     ],
   },
   {

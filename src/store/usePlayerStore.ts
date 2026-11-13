@@ -274,11 +274,14 @@ const store = create<PlayerState>((set, get) => ({
   setContextId: (id: string | null) => set({ currentContextId: id }),
 
   dislikeCurrentTrack: () => {
-    const { currentTrack } = get();
+    const { currentTrack, repeatMode } = get();
     if (!currentTrack) return;
     markNotInterested(currentTrack);
     useLabsStore.getState().markTasteDislike(currentTrack);
     showGlobalToast('No volveremos a ponerte esta canción');
+    if (repeatMode === 'one') {
+      set({ repeatMode: 'off' });
+    }
     get().nextTrack();
   },
 
@@ -717,12 +720,13 @@ const store = create<PlayerState>((set, get) => ({
     const { queue, currentTrack, repeatMode, preselectedNextTrackId } = get();
     if (queue.length === 0) return null;
 
-    if (repeatMode === 'one' && currentTrack) {
+    const isExcluded = (t?: Track | null) => !t || isNotInterested(t) || (isTasteRatingActive() && isTrackDisliked(t));
+
+    if (repeatMode === 'one' && currentTrack && !isExcluded(currentTrack)) {
       return currentTrack;
     }
 
     const currentIndex = findTrackIndexInQueue(queue, currentTrack);
-    const isExcluded = (t?: Track | null) => !t || isNotInterested(t) || (isTasteRatingActive() && isTrackDisliked(t));
 
     // Follow the queue sequentially (works for both sequential mode AND pre-shuffled queue!)
     if (currentIndex >= 0 && currentIndex < queue.length - 1) {

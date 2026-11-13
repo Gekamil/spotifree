@@ -8,6 +8,7 @@ import { createPortal } from 'react-dom';
 import type { Track } from '../../types/spotify';
 import { useKaraokeMode } from '../../utils/useKaraokeMode';
 import { KaraokeMicButton } from '../common/KaraokeMicButton';
+import { getSynchronizedLyricProgress } from '../../utils/lyricsService';
 
 export interface LyricLine {
   timeMs: number;
@@ -83,7 +84,7 @@ export function LyricsFullscreen(p: Props) {
     resumeTimer.current = setTimeout(() => setFollowing(true), 5000);
   };
   const percent = p.durationMs > 0 ? Math.min(100, (p.progressMs / p.durationMs) * 100) : 0;
-  const vocalMs = p.progressMs + 220;
+  const vocalMs = getSynchronizedLyricProgress(p.progressMs, p.durationMs);
 
   return createPortal(
     <div

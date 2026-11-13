@@ -20,7 +20,7 @@ import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { artistLibraryId, toggleFollowArtist } from '../../utils/artistFollow';
-import { parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
+import { parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../../utils/lyricsService';
 import { useKaraokeMode } from '../../utils/useKaraokeMode';
 import { KaraokeMicButton } from '../common/KaraokeMicButton';
 import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
@@ -403,9 +403,10 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
     };
   }, [currentTrack?.id, currentTrack?.name, primaryArtist]);
 
-  // Compute active synced lyric line with 150ms vocal lead for human timing sync
+  // Compute active synced lyric line with calibrated vocal lead for human timing sync
+  const syncProgress = getSynchronizedLyricProgress(progressMs, currentTrack?.duration_ms);
   const activeLineIndex = syncedLyrics.length > 0
-    ? syncedLyrics.reduce((acc, line, idx) => (line.timeMs <= progressMs + 150 ? idx : acc), -1)
+    ? syncedLyrics.reduce((acc, line, idx) => (line.timeMs <= syncProgress ? idx : acc), -1)
     : -1;
 
   // Auto-scroll lyrics view to active line
@@ -640,7 +641,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                         >
                           {isCurrent && line.words.length > 0 ? (
                             line.words.map((w, wIdx) => {
-                              const vocalMs = progressMs + 220;
+                              const vocalMs = syncProgress;
                               const isSung = vocalMs >= w.timeMs;
                               const isCurrentWord = isSung && (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
                               return (
@@ -1077,7 +1078,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                         >
                         {isCurrent && line.words.length > 0
                           ? line.words.map((w, wIdx) => {
-                              const vocalMs = progressMs + 220;
+                              const vocalMs = syncProgress;
                               const isWordSung = vocalMs >= w.timeMs;
                               const isCurrentWord = isWordSung && (wIdx === line.words.length - 1 || vocalMs < (line.words[wIdx + 1]?.timeMs || Infinity));
                               return (

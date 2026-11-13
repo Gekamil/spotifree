@@ -13,7 +13,7 @@ import { useUIStore } from '../../store/useUIStore';
 import { audioEngine } from '../../services/audioEngine';
 import { getTrackCoverUrl } from '../../utils/trackCovers';
 import { showGlobalToast } from '../../utils/globalToast';
-import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
+import { fetchLyricsUnified, parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../../utils/lyricsService';
 import { DeviceNativeIcon, MiniplayerNativeIcon } from '../icons/SpotifyNativeIcons';
 import { AUDIO_SINK_KEY, applyOutput, canChooseWebOutput, restoreAudioOutput } from '../../services/audioOutputService';
 
@@ -193,15 +193,16 @@ const MiniPlayerWindow: React.FC = () => {
       setCurrentLine('');
       return;
     }
+    const syncProgress = getSynchronizedLyricProgress(progressMs, durationMs);
     let found = '';
     for (let i = syncedLines.length - 1; i >= 0; i--) {
-      if (progressMs >= syncedLines[i].timeMs) {
+      if (syncProgress >= syncedLines[i].timeMs) {
         found = syncedLines[i].text;
         break;
       }
     }
     setCurrentLine(found || (syncedLines[0]?.text ?? ''));
-  }, [progressMs, syncedLines]);
+  }, [progressMs, durationMs, syncedLines]);
 
   if (!currentTrack) {
     return (

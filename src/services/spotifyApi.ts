@@ -212,6 +212,8 @@ function extractAndEnrichOfficialRemixes(
 export interface SearchSpotifyOptions {
   onQuickResults?: (partial: any) => void;
   signal?: AbortSignal;
+  offset?: number;
+  limit?: number;
 }
 
 const CLIENT_SEARCH_CACHE = new Map<string, { data: any; timestamp: number }>();
@@ -248,15 +250,20 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   const cleanQ = query.trim();
   if (!cleanQ || options?.signal?.aborted) return null;
 
+  const offset = options?.offset ?? 0;
+  const limit = options?.limit ?? 25;
+
   // Normalized query removing parentheses, brackets, and extra punctuation
   // so queries like "body(remix) eladio carrion" cleanly match "body remix eladio carrion"
   const normalizedQ = cleanQ.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const cacheKey = (normalizedQ || cleanQ).toLowerCase();
+  const cacheKey = `${(normalizedQ || cleanQ).toLowerCase()}:${offset}:${limit}`;
 
   // 0. Instant memory cache hit (0ms)
   const cachedEntry = CLIENT_SEARCH_CACHE.get(cacheKey);
   if (cachedEntry && Date.now() - cachedEntry.timestamp < 180_000) {
-    options?.onQuickResults?.(cachedEntry.data);
+    if (offset === 0) {
+      options?.onQuickResults?.(cachedEntry.data);
+    }
     return cachedEntry.data;
   }
 
@@ -274,59 +281,61 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   }> = [];
 
   // 1. Search in-app loaded playlists, menus, top tracks & library for instant 0ms matching
-  try {
-    const { useSpotifyDataStore } = await import('../store/useSpotifyDataStore');
-    const { usePlayerStore } = await import('../store/usePlayerStore');
-    const spotifyState = useSpotifyDataStore.getState();
-    const playerState = usePlayerStore.getState();
+  if (offset === 0) {
+    try {
+      const { useSpotifyDataStore } = await import('../store/useSpotifyDataStore');
+      const { usePlayerStore } = await import('../store/usePlayerStore');
+      const spotifyState = useSpotifyDataStore.getState();
+      const playerState = usePlayerStore.getState();
 
-    const allPlaylists = spotifyState.playlists || [];
-    const topTracks = spotifyState.topTracks || [];
-    const newReleases = (spotifyState.newReleases || []).flatMap((nr: any) => nr.tracks?.items || [nr]);
-    const recentlyPlayed = spotifyState.recentlyPlayed || [];
-    const queueTracks = playerState.queue || [];
+      const allPlaylists = spotifyState.playlists || [];
+      const topTracks = spotifyState.topTracks || [];
+      const newReleases = (spotifyState.newReleases || []).flatMap((nr: any) => nr.tracks?.items || [nr]);
+      const recentlyPlayed = spotifyState.recentlyPlayed || [];
+      const queueTracks = playerState.queue || [];
 
-    const candidateTracks: Track[] = [];
-    for (const p of allPlaylists) {
-      if (p.tracks?.items) candidateTracks.push(...p.tracks.items);
-    }
-    candidateTracks.push(...topTracks, ...newReleases, ...recentlyPlayed, ...queueTracks);
-
-    const searchWords = (normalizedQ || cleanQ).toLowerCase().split(' ').filter(Boolean);
-    const seenLocal = new Set<string>();
-
-    for (const t of candidateTracks) {
-      if (!t || !t.id || seenLocal.has(t.id)) continue;
-      const rawTarget = `${t.name} ${t.artists?.map((a) => a.name).join(' ') || ''}`.toLowerCase();
-      const targetNormalized = rawTarget.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ');
-
-      const matchesAll = searchWords.every(
-        (word) => rawTarget.includes(word) || targetNormalized.includes(word)
-      );
-      if (matchesAll) {
-        seenLocal.add(t.id);
-        tracks.push(t);
+      const candidateTracks: Track[] = [];
+      for (const p of allPlaylists) {
+        if (p.tracks?.items) candidateTracks.push(...p.tracks.items);
       }
-    }
+      candidateTracks.push(...topTracks, ...newReleases, ...recentlyPlayed, ...queueTracks);
 
-    const localArtists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
-    const topArtists = spotifyState.topArtists || [];
-    for (const a of topArtists) {
-      if (a?.name && searchWords.every((w) => a.name.toLowerCase().includes(w))) {
-        localArtists.push(a);
+      const searchWords = (normalizedQ || cleanQ).toLowerCase().split(' ').filter(Boolean);
+      const seenLocal = new Set<string>();
+
+      for (const t of candidateTracks) {
+        if (!t || !t.id || seenLocal.has(t.id)) continue;
+        const rawTarget = `${t.name} ${t.artists?.map((a) => a.name).join(' ') || ''}`.toLowerCase();
+        const targetNormalized = rawTarget.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ');
+
+        const matchesAll = searchWords.every(
+          (word) => rawTarget.includes(word) || targetNormalized.includes(word)
+        );
+        if (matchesAll) {
+          seenLocal.add(t.id);
+          tracks.push(t);
+        }
       }
-    }
 
-    if (options?.onQuickResults && !options.signal?.aborted && (tracks.length > 0 || localArtists.length > 0)) {
-      options.onQuickResults({
-        tracks: { items: rankSearchTracks(cleanQ, [...tracks]) },
-        soundcloudTracks: { items: [] },
-        artists: { items: localArtists },
-        albums: { items: [] },
-        playlists: { items: [] },
-      });
-    }
-  } catch {}
+      const localArtists: Array<{ id: string; name: string; images: Array<{ url: string }> }> = [];
+      const topArtists = spotifyState.topArtists || [];
+      for (const a of topArtists) {
+        if (a?.name && searchWords.every((w) => a.name.toLowerCase().includes(w))) {
+          localArtists.push(a);
+        }
+      }
+
+      if (options?.onQuickResults && !options.signal?.aborted && (tracks.length > 0 || localArtists.length > 0)) {
+        options.onQuickResults({
+          tracks: { items: rankSearchTracks(cleanQ, [...tracks]) },
+          soundcloudTracks: { items: [] },
+          artists: { items: localArtists },
+          albums: { items: [] },
+          playlists: { items: [] },
+        });
+      }
+    } catch {}
+  }
 
   if (options?.signal?.aborted) return null;
 
@@ -335,9 +344,10 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
 
   // 2. Query Backend Search API (/api/spotify/search) — progressive fast pass + full pass in parallel
   const fullSignal = createSearchSignal(7500, options?.signal);
-  const fullPromise = fetch(`/api/spotify/search?q=${encodeURIComponent(cleanQ)}`, {
-    signal: fullSignal.signal,
-  })
+  const fullPromise = fetch(
+    `/api/spotify/search?q=${encodeURIComponent(cleanQ)}&offset=${offset}&limit=${limit}`,
+    { signal: fullSignal.signal }
+  )
     .then(async (res) => (res.ok ? await res.json() : null))
     .catch(() => null)
     .finally(() => {
@@ -345,7 +355,7 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
       fullSignal.cleanup();
     });
 
-  if (options?.onQuickResults) {
+  if (options?.onQuickResults && offset === 0) {
     const quickSignal = createSearchSignal(3000, options?.signal);
     void fetch(`/api/spotify/search?q=${encodeURIComponent(cleanQ)}&fast=1`, {
       signal: quickSignal.signal,
@@ -380,8 +390,10 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
       .finally(() => quickSignal.cleanup());
   }
 
+  let backendData: any = null;
   try {
     const data = await fullPromise;
+    backendData = data;
     if (options?.signal?.aborted) return null;
     if (data) {
       if (Array.isArray(data.soundcloudTracks?.items) && data.soundcloudTracks.items.length > 0) {
@@ -389,14 +401,18 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
       }
       if (data.tracks?.items?.length) {
         gotBackendResults = true;
-        // Put official search results at the forefront
-        const newSpotifyTracks: Track[] = [];
-        for (const item of data.tracks.items) {
-          if (!tracks.some((t) => t.id === item.id || (t.name.toLowerCase() === item.name.toLowerCase() && t.artists?.[0]?.name.toLowerCase() === item.artists?.[0]?.name.toLowerCase()))) {
-            newSpotifyTracks.push(item);
+        if (offset === 0) {
+          // Put official search results at the forefront
+          const newSpotifyTracks: Track[] = [];
+          for (const item of data.tracks.items) {
+            if (!tracks.some((t) => t.id === item.id || (t.name.toLowerCase() === item.name.toLowerCase() && t.artists?.[0]?.name.toLowerCase() === item.artists?.[0]?.name.toLowerCase()))) {
+              newSpotifyTracks.push(item);
+            }
           }
+          tracks = [...newSpotifyTracks, ...tracks];
+        } else {
+          tracks = data.tracks.items;
         }
-        tracks = [...newSpotifyTracks, ...tracks];
       } else if (data.artists?.items?.length || data.albums?.items?.length || data.soundcloudTracks?.items?.length) {
         gotBackendResults = true;
       }
@@ -428,7 +444,7 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
     const withoutPlaylist = (normalizedQ || cleanQ).replace(/\bplaylist(s)?\b/gi, '').trim() || (normalizedQ || cleanQ);
     const queryForDeezer = withoutPlaylist;
     const [dzTracksRes, dzArtistsRes, dzAlbumsRes, dzPlaylistsRes1, dzPlaylistsRes2] = await Promise.all([
-      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(queryForDeezer)}&limit=25`, { signal: AbortSignal.timeout?.(3500) })
+      fetch(`https://api.deezer.com/search?q=${encodeURIComponent(queryForDeezer)}&limit=${limit}&index=${offset}`, { signal: AbortSignal.timeout?.(3500) })
         .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
       fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(queryForDeezer)}&limit=6`, { signal: AbortSignal.timeout?.(3500) })
         .then((r) => r.ok ? r.json() : { data: [] }).catch(() => ({ data: [] })),
@@ -714,12 +730,43 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   // by how well they match what was typed
   tracks = rankSearchTracks(cleanQ, tracks);
 
+  const totalTracks = backendData?.tracks?.total ?? (tracks.length + offset);
+  const hasMoreTracks = backendData?.tracks?.hasMore ?? (tracks.length >= limit);
+
   const finalPayload = {
-    tracks: { items: tracks },
+    tracks: {
+      items: tracks,
+      total: totalTracks,
+      offset,
+      limit,
+      hasMore: hasMoreTracks,
+    },
     soundcloudTracks: { items: soundcloudTracks },
-    artists: { items: artists },
-    albums: { items: albums },
-    playlists: { items: playlists },
+    artists: {
+      items: artists,
+      total: backendData?.artists?.total ?? artists.length,
+      offset,
+      limit,
+      hasMore: backendData?.artists?.hasMore ?? (artists.length >= 8),
+    },
+    albums: {
+      items: albums,
+      total: backendData?.albums?.total ?? albums.length,
+      offset,
+      limit,
+      hasMore: backendData?.albums?.hasMore ?? (albums.length >= 8),
+    },
+    playlists: {
+      items: playlists,
+      total: backendData?.playlists?.total ?? playlists.length,
+      offset,
+      limit,
+      hasMore: false,
+    },
+    total: totalTracks,
+    offset,
+    limit,
+    hasMore: hasMoreTracks,
   };
 
   if (!options?.signal?.aborted && (tracks.length > 0 || artists.length > 0 || albums.length > 0 || playlists.length > 0)) {

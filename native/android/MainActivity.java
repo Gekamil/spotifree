@@ -6,7 +6,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.view.KeyEvent;
+import android.view.View;
+import android.webkit.WebView;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import com.getcapacitor.BridgeActivity;
+import java.util.Locale;
 import org.json.JSONObject;
 
 /**
@@ -29,6 +35,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(SpotifreeLocalMusicPlugin.class);
         super.onCreate(savedInstanceState);
         configureWebView();
+        setupWindowInsets();
         handleIncomingIntent(getIntent());
     }
 
@@ -36,6 +43,59 @@ public class MainActivity extends BridgeActivity {
     public void onResume() {
         super.onResume();
         configureWebView();
+        applyWindowInsets();
+    }
+
+    private void setupWindowInsets() {
+        try {
+            View decorView = getWindow().getDecorView();
+            ViewCompat.setOnApplyWindowInsetsListener(decorView, (v, windowInsets) -> {
+                try {
+                    Insets insets = windowInsets.getInsets(
+                        WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
+                    );
+                    float density = getResources().getDisplayMetrics().density;
+                    int bottomDp = Math.round(insets.bottom / density);
+                    int topDp = Math.round(insets.top / density);
+                    int leftDp = Math.round(insets.left / density);
+                    int rightDp = Math.round(insets.right / density);
+
+                    injectSafeAreaInsets(topDp, bottomDp, leftDp, rightDp);
+                } catch (Exception ignored) {}
+                return windowInsets;
+            });
+            applyWindowInsets();
+        } catch (Exception ignored) {}
+    }
+
+    private void applyWindowInsets() {
+        try {
+            View decorView = getWindow().getDecorView();
+            ViewCompat.requestApplyInsets(decorView);
+        } catch (Exception ignored) {}
+    }
+
+    private void injectSafeAreaInsets(int topDp, int bottomDp, int leftDp, int rightDp) {
+        try {
+            if (getBridge() != null && getBridge().getWebView() != null) {
+                WebView webView = getBridge().getWebView();
+                String js = String.format(Locale.US,
+                    "(function() {" +
+                    "  var root = document.documentElement.style;" +
+                    "  root.setProperty('--safe-area-inset-top', '%dpx');" +
+                    "  root.setProperty('--sat', '%dpx');" +
+                    "  root.setProperty('--safe-area-inset-bottom', '%dpx');" +
+                    "  root.setProperty('--sab', '%dpx');" +
+                    "  root.setProperty('--safe-area-inset-left', '%dpx');" +
+                    "  root.setProperty('--sal', '%dpx');" +
+                    "  root.setProperty('--safe-area-inset-right', '%dpx');" +
+                    "  root.setProperty('--sar', '%dpx');" +
+                    "})();",
+                    topDp, topDp, bottomDp, bottomDp, leftDp, leftDp, rightDp, rightDp
+                );
+                webView.post(() -> webView.evaluateJavascript(js, null));
+            }
+        } catch (Exception ignored) {}
     }
 
     private void configureWebView() {

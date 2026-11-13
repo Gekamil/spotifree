@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useUIStore } from '../../store/useUIStore';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -261,6 +261,11 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [recentSearches, setRecentSearches] = useState<RecentSearchItem[]>(() => getRecentSearches());
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const offsetRef = useRef(0);
+  const isLoadingMoreRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const handleUpdate = () => {
@@ -283,21 +288,30 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       setSearchResults({ tracks: [], soundcloudTracks: [], artists: [], albums: [], playlists: [] });
       setIsSearching(false);
       setHasSearched(false);
+      setHasMore(false);
+      offsetRef.current = 0;
       return;
     }
 
     setIsSearching(true);
+    setHasMore(true);
+    offsetRef.current = 0;
+    isLoadingMoreRef.current = false;
+    setIsLoadingMore(false);
     let active = true;
     const controller = new AbortController();
     const applySearchData = (data: any) => {
       if (!active || controller.signal.aborted || !data) return;
+      const initialTracks = data?.tracks?.items || [];
       setSearchResults({
-        tracks: data?.tracks?.items || [],
+        tracks: initialTracks,
         soundcloudTracks: data?.soundcloudTracks?.items || [],
         artists: data?.artists?.items || [],
         albums: data?.albums?.items || [],
         playlists: data?.playlists?.items || [],
       });
+      offsetRef.current = initialTracks.length;
+      setHasMore(data?.tracks?.hasMore ?? (initialTracks.length >= 25));
       setHasSearched(true);
     };
 
@@ -330,6 +344,96 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       clearTimeout(timer);
     };
   }, [searchQuery]);
+
+  const loadMore = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMore || isSearching || !searchQuery.trim()) return;
+
+    isLoadingMoreRef.current = true;
+    setIsLoadingMore(true);
+
+    try {
+      const nextOffset = offsetRef.current;
+      const data = await searchSpotify(searchQuery, {
+        offset: nextOffset,
+        limit: 25,
+      });
+
+      if (!data) {
+        setHasMore(false);
+        return;
+      }
+
+      const newTracks = data.tracks?.items || [];
+      const newSc = data.soundcloudTracks?.items || [];
+      const newArtists = data.artists?.items || [];
+      const newAlbums = data.albums?.items || [];
+      const newPlaylists = data.playlists?.items || [];
+
+      if (newTracks.length === 0 && newSc.length === 0 && newArtists.length === 0 && newAlbums.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      offsetRef.current = nextOffset + (newTracks.length || 25);
+      setHasMore(data.tracks?.hasMore ?? (newTracks.length >= 25));
+
+      setSearchResults((prev) => {
+        const trackIds = new Set(prev.tracks.map((t: any) => t.id));
+        const scIds = new Set(prev.soundcloudTracks.map((t: any) => t.id));
+        const artIds = new Set(prev.artists.map((a: any) => a.id));
+        const albIds = new Set(prev.albums.map((a: any) => a.id));
+        const plIds = new Set(prev.playlists.map((p: any) => p.id));
+
+        return {
+          tracks: [...prev.tracks, ...newTracks.filter((t: any) => !trackIds.has(t.id))],
+          soundcloudTracks: [...prev.soundcloudTracks, ...newSc.filter((t: any) => !scIds.has(t.id))],
+          artists: [...prev.artists, ...newArtists.filter((a: any) => !artIds.has(a.id))],
+          albums: [...prev.albums, ...newAlbums.filter((a: any) => !albIds.has(a.id))],
+          playlists: [...prev.playlists, ...newPlaylists.filter((p: any) => !plIds.has(p.id))],
+        };
+      });
+    } catch {
+      setHasMore(false);
+    } finally {
+      isLoadingMoreRef.current = false;
+      setIsLoadingMore(false);
+    }
+  }, [hasMore, isSearching, searchQuery]);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel || !hasMore || isSearching) return;
+
+    const scrollContainer = sentinel.closest('.overflow-y-auto') as HTMLElement | null;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void loadMore();
+        }
+      },
+      {
+        root: scrollContainer || null,
+        rootMargin: '300px',
+        threshold: 0,
+      }
+    );
+
+    observer.observe(sentinel);
+
+    const handleScroll = () => {
+      if (!scrollContainer) return;
+      if (scrollContainer.scrollHeight - scrollContainer.scrollTop - scrollContainer.clientHeight < 350) {
+        void loadMore();
+      }
+    };
+    scrollContainer?.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      observer.disconnect();
+      scrollContainer?.removeEventListener('scroll', handleScroll);
+    };
+  }, [hasMore, isSearching, loadMore]);
 
   const handleTrackClick = (track: any) => {
     addRecentSearch({
@@ -1100,6 +1204,17 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Sentinel for Infinite Scroll */}
+              <div ref={sentinelRef} className="h-6 -mt-6 pointer-events-none" />
+
+              {/* Infinite Scroll Spinner */}
+              {isLoadingMore && (
+                <div className="flex items-center justify-center py-6 gap-2 text-xs text-[#b3b3b3]">
+                  <div className="w-4 h-4 border-2 border-white/20 border-t-[#1ed760] rounded-full animate-spin" />
+                  <span>Cargando más canciones...</span>
                 </div>
               )}
             </div>

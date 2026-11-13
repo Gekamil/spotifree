@@ -521,6 +521,7 @@ async function handleDiscover(req, res) {
       artist: { id: artist.id, name: artist.name, picture: artist.picture_xl || artist.picture_big || null, fans: artist.nb_fan || 0 },
       top: (top.data || []).map((t) => dzTrack(t, artist.name)).filter(Boolean),
       related: rel.map((r, i) => ({
+        id: r.id ? String(r.id) : undefined,
         name: r.name,
         picture: r.picture_xl || r.picture_big || null,
         fans: r.nb_fan || 0,

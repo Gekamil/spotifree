@@ -262,7 +262,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
             <div className="space-y-0.5 max-w-md">
               <span className="text-sm font-semibold text-white">Sistema de valoración (Like / Dislike)</span>
               <p className="text-xs text-[#a7a7a7] leading-relaxed">
-                Muestra botones de pulgar arriba y pulgar abajo. Si marcas No me gusta (👎), la canción salta inmediatamente y no volverá a sonar en listas, aleatorio ni Android Auto.
+                Control de afinidad musical. Si marcas No me gusta, la canción salta inmediatamente y no volverá a sonar en listas, aleatorio ni Android Auto.
               </p>
               {discardedCount > 0 && (
                 <p className="text-[11px] text-[#1ed760] pt-1">
@@ -470,7 +470,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
               <div className="min-w-0">
                 <p className="text-[15px] font-bold text-white">Valoraciones (Like / Dislike)</p>
                 <p className="text-[12px] text-[#a7a7a7] mt-0.5">
-                  Botones de 👍 y 👎 estilo Amazon Music. Descartar una canción la salta y la bloquea de tus listas y Android Auto.
+                  Control de afinidad musical estilo Amazon Music. Descartar una canción la salta y la bloquea de tus listas y Android Auto.
                 </p>
               </div>
               <button

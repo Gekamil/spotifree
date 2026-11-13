@@ -30,10 +30,11 @@ import { openStoryCard } from '../../utils/storyCard';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
-import { fetchLyricsUnified, parseEnhancedLyrics, type SyncedLine } from '../../utils/lyricsService';
+import { fetchLyricsUnified, parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../../utils/lyricsService';
 import { findExactCover, getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
-import { useLabsStore, openSpeedControlSheet } from '../../services/labsService';
+import { useLabsStore, openSpeedControlSheet, isTrackDisliked } from '../../services/labsService';
+import { useDragToDismiss } from '../../hooks/useDragToDismiss';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useUIStore } from '../../store/useUIStore';
@@ -203,6 +204,18 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const [syncedLines, setSyncedLines] = useState<SyncedLine[]>([]);
   const [isLyricsExpanded, setIsLyricsExpanded] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuScrollRef = useRef<HTMLDivElement>(null);
+  const {
+    dragY: menuDragY,
+    handleProps: menuHandleProps,
+    contentProps: menuContentProps,
+    sheetStyle: menuSheetStyle,
+  } = useDragToDismiss({
+    onClose: () => setIsMenuOpen(false),
+    scrollRef: menuScrollRef,
+    threshold: 80,
+    velocityThreshold: 0.5,
+  });
   const [isTrackDownloadedState, setIsTrackDownloadedState] = useState(false);
   const [isDownloadingTrackState, setIsDownloadingTrackState] = useState(false);
 
@@ -439,7 +452,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     };
   }, [currentTrack?.id, currentTrack?.name]);
 
-  const vocalProgressMs = progressMs + 220;
+  const vocalProgressMs = getSynchronizedLyricProgress(progressMs, durationMs);
 
   const activeLineIndex = syncedLines.length > 0
     ? syncedLines.findIndex((line, i) => {
@@ -700,21 +713,36 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </button>
 
             {/* No me gusta (saltar y descartar canción) */}
-            {currentTrack && (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  dislikeCurrentTrack();
-                }}
-                className="w-9 h-9 flex items-center justify-center rounded-full text-[#b3b3b3] hover:text-[#ff5c5c] active:scale-90 transition-transform cursor-pointer shrink-0"
-                title="No me gusta (saltar y no volver a poner)"
-              >
-                <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                </svg>
-              </button>
-            )}
+            {currentTrack && (() => {
+              const isCurrentDisliked = Boolean(
+                isNotInterested(currentTrack) || isTrackDisliked(currentTrack)
+              );
+              return (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (isCurrentDisliked) {
+                      undoNotInterested(currentTrack);
+                      useLabsStore.getState().clearAllDislikes();
+                      showGlobalToast('Podremos volver a ponértela');
+                    } else {
+                      dislikeCurrentTrack();
+                    }
+                  }}
+                  className={`w-9 h-9 flex items-center justify-center rounded-full active:scale-90 transition-transform cursor-pointer shrink-0 ${
+                    isCurrentDisliked
+                      ? 'text-[#ff5c5c]'
+                      : 'text-[#b3b3b3] hover:text-white'
+                  }`}
+                  title={isCurrentDisliked ? 'Ya no te disgusta' : 'No me gusta (saltar y no volver a poner)'}
+                >
+                  <svg width={20} height={20} viewBox="0 0 24 24" fill={isCurrentDisliked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                </button>
+              );
+            })()}
           </div>
 
           {/* Scrub Bar */}
@@ -733,12 +761,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             />
             <div className="flex justify-between font-['SpotifyMixUI'] tabular-nums text-[11px] font-normal text-[#b3b3b3]">
               <span className="select-none tracking-normal">{formatDuration(progressMs)}</span>
-              {labsEnabled && speedControlEnabled && playbackSpeed !== 1.0 && (
+              {labsEnabled && speedControlEnabled && (
                 <button
                   type="button"
                   onClick={openSpeedControlSheet}
-                  className="px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] font-mono font-bold text-[10px] active:scale-95 transition-all"
-                  title="Velocidad modificada"
+                  className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#1ed760]/30 hover:border-[#1ed760] text-[#1ed760] font-mono font-bold text-[10px] active:scale-95 transition-all cursor-pointer shadow-sm tracking-tight"
+                  title="Velocidad de reproducción"
                 >
                   {playbackSpeed.toFixed(2)}x
                 </button>
@@ -921,7 +949,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     >
                       {isCurrent && line.words.length > 0 ? (
                         line.words.map((w, wIdx) => {
-                          const vocalMs = progressMs + 220;
+                          const vocalMs = vocalProgressMs;
                           const isWordSung = vocalMs >= w.timeMs;
                           return (
                             <span
@@ -1138,11 +1166,28 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           {/* Backdrop */}
           <div
             onClick={() => setIsMenuOpen(false)}
+            style={{
+              opacity: menuDragY > 0 ? Math.max(0, 1 - menuDragY / 400) : undefined,
+            }}
             className="fixed inset-0 bg-black/75 backdrop-blur-sm animate-fade-in"
           />
 
-          {/* Bottom Sheet */}
-          <div className="relative z-10 bg-[#242424] rounded-t-[32px] p-6 space-y-5 animate-slide-up-modal max-h-[85vh] overflow-y-auto border-t border-white/10 shadow-2xl">
+          {/* Bottom Sheet with Drag-to-Dismiss */}
+          <div
+            ref={menuScrollRef}
+            {...menuContentProps}
+            style={menuSheetStyle}
+            className="relative z-10 bg-[#242424] rounded-t-[32px] px-6 pb-6 pt-2 space-y-4 animate-slide-up-modal max-h-[85vh] overflow-y-auto border-t border-white/10 shadow-2xl"
+          >
+            {/* Top Drag Handle (48px touch target area) */}
+            <div
+              {...menuHandleProps}
+              className="w-full min-h-[44px] h-11 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none -mt-1 -mb-1"
+              aria-label="Arrastrar para cerrar"
+              role="presentation"
+            >
+              <div className="w-10 h-1 bg-white/30 rounded-full" />
+            </div>
             {/* Header info */}
             <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
               <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#181818] shrink-0 shadow">

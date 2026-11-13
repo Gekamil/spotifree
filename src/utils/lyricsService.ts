@@ -27,6 +27,64 @@ function persistLyrics(key: string, data: { syncedLyrics: string | null; plainLy
   }
 }
 
+export const LYRIC_SYNC_OFFSET_KEY = 'spotifree_lyric_sync_offset';
+export const DEFAULT_LYRIC_SYNC_OFFSET_MS = 850;
+
+let memoryLyricSyncOffset: number | null = null;
+
+/**
+ * Returns the active lyric sync offset in milliseconds (default 850ms).
+ * Reads from localStorage ('spotifree_lyric_sync_offset') when available in browser or test environments.
+ */
+export function getLyricSyncOffsetMs(): number {
+  if (typeof window !== 'undefined' || typeof localStorage !== 'undefined') {
+    try {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : window.localStorage;
+      if (storage) {
+        const saved = storage.getItem(LYRIC_SYNC_OFFSET_KEY);
+        if (saved !== null) {
+          if (saved.trim() === '') return DEFAULT_LYRIC_SYNC_OFFSET_MS;
+          const val = parseInt(saved, 10);
+          return !isNaN(val) ? val : DEFAULT_LYRIC_SYNC_OFFSET_MS;
+        }
+        return DEFAULT_LYRIC_SYNC_OFFSET_MS;
+      }
+    } catch {}
+  }
+  if (memoryLyricSyncOffset !== null) return memoryLyricSyncOffset;
+  return DEFAULT_LYRIC_SYNC_OFFSET_MS;
+}
+
+/**
+ * Sets the active lyric sync offset in milliseconds and persists it to localStorage.
+ */
+export function setLyricSyncOffsetMs(offsetMs: number): void {
+  const safeVal = isNaN(Number(offsetMs)) ? DEFAULT_LYRIC_SYNC_OFFSET_MS : Math.round(Number(offsetMs));
+  memoryLyricSyncOffset = safeVal;
+  if (typeof window !== 'undefined' || typeof localStorage !== 'undefined') {
+    try {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : window.localStorage;
+      if (storage) {
+        storage.setItem(LYRIC_SYNC_OFFSET_KEY, String(safeVal));
+      }
+    } catch {}
+  }
+}
+
+/**
+ * Calculates the synchronized lyric progress in milliseconds compensating for
+ * audio stream lead delay (~850ms). Clamps between 0 and optional maxDurationMs.
+ */
+export function getSynchronizedLyricProgress(progressMs: number, maxDurationMs?: number): number {
+  const raw = typeof progressMs === 'number' && !isNaN(progressMs) ? progressMs : 0;
+  const offset = getLyricSyncOffsetMs();
+  const synced = Math.max(0, Math.round(raw + offset));
+  if (typeof maxDurationMs === 'number' && maxDurationMs > 0 && !isNaN(maxDurationMs)) {
+    return Math.min(maxDurationMs, synced);
+  }
+  return synced;
+}
+
 export function cleanTrackTitle(title: string): string {
   return (title || '')
     .replace(/\s*-\s*Remastered(\s*\d+)?/gi, '')

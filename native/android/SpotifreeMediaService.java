@@ -201,6 +201,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static volatile long positionMs = 0;
     static volatile boolean playing = false;
     static volatile boolean liked = false;
+    static volatile boolean useStar = false;
     static volatile boolean dislikeEnabled = true;
     static volatile boolean disliked = false;
     static volatile boolean shuffle = false;
@@ -506,11 +507,14 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         // Spotify-style buttons on the car's "now playing" screen. Each state has its own action
         // id: Android Auto keeps the icon of an id it already knows, so with a single id the
         // shuffle / repeat / like buttons did not show the phone's state.
+        int likeIcon = useStar
+            ? (liked ? R.drawable.ic_car_star_filled : R.drawable.ic_car_star)
+            : (liked ? R.drawable.ic_car_heart_filled : R.drawable.ic_car_heart);
         sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_LIKE + (liked ? ":on" : ":off"),
             liked ? tr("Quitar de Me gusta", "Remove from Liked Songs") : tr("Me gusta", "Like"),
-            liked ? R.drawable.ic_car_heart_filled : R.drawable.ic_car_heart).build());
+            likeIcon).build());
         if (dislikeEnabled) {
-            sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_DISLIKE,
+            sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_DISLIKE + (disliked ? ":on" : ":off"),
                 tr("No me gusta", "Dislike"),
                 R.drawable.ic_car_dislike).build());
         }
@@ -661,7 +665,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         // Buttons on the items of a list: queue / like on songs, shuffle on playlists
         ArrayList<Bundle> actions = new ArrayList<>();
         actions.add(browseAction(CBA_QUEUE, tr("Añadir a la cola", "Add to queue"), R.drawable.ic_car_queue_add));
-        actions.add(browseAction(CBA_LIKE, tr("Me gusta", "Like"), R.drawable.ic_car_heart));
+        int browseLikeIcon = useStar ? R.drawable.ic_car_star : R.drawable.ic_car_heart;
+        actions.add(browseAction(CBA_LIKE, tr("Me gusta", "Like"), browseLikeIcon));
         actions.add(browseAction(CBA_SHUFFLE, tr("Reproducir en aleatorio", "Shuffle play"), R.drawable.ic_car_shuffle));
         extras.putParcelableArrayList(CBA_ROOT_LIST, actions);
         return new BrowserRoot("root", extras);

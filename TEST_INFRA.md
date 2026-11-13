@@ -1,182 +1,168 @@
-# TEST_INFRA: Spotifree E2E Testing Infrastructure & Specification (v0.2.2)
+# Spotifree v0.3 — Test Infrastructure & E2E Test Suite Specification
 
-## 1. Test Philosophy & Principles
+## 1. Test Philosophy
 
-### 1.1 Opaque-Box & Requirement-Driven Architecture
-The Spotifree E2E testing infrastructure is designed around strictly **opaque-box, requirement-driven** principles. Rather than testing internal private variables or implementation details, each test exercises public application contracts, observable states, network responses, and persistent storage tiers:
-- **Observable Inputs**: Search queries, filter selections, user interactions (e.g. playlist creation from add modal, playlist navigation, library follow/save actions).
-- **Observable Outputs**: Ranked track and album arrays, UI badge annotations (`isOfficial`, `scVariantLabel`), HTTP response payloads from serverless/proxy endpoints (`/api/search`, `/api/playlist/alb-*`), and client-side store states.
-- **Storage Tier Invariants**: Persistence across `user_imported_playlists`, `spotifree_saved_library_playlists`, `spotifree_playlist_cache_*`, `spotifree_playlist_tracks_*`, and active session caches.
-
-### 1.2 4-Tier Testing Methodology
-Testing is divided into four distinct verification tiers:
-1. **Tier 1 — Feature Coverage (Category-Partition & Primary Contracts)**:
-   - Covers the primary happy-path contracts for requirements R1 through R5.
-   - At least 5 dedicated test cases per feature (25 tests minimum).
-2. **Tier 2 — Boundary, Resource & Adversarial Stress (BVA & Error Handling)**:
-   - Exercises boundary conditions: empty search results, special/unicode characters, missing album/cover art, rapid concurrent actions, corrupt cache recovery, and extreme tracklist sizes.
-   - At least 5 dedicated test cases per feature (25 tests minimum).
-3. **Tier 3 — Cross-Feature Pairwise Combinations (Interaction Verification)**:
-   - Tests interactions between two or more requirements (e.g. R1 Remixes + R2 Playlist Creation, R4 Albums + R3 Auto-Save Prevention, R4 Albums + R2 Modal Add).
-   - Verifies state isolation, filter switching, and regression resistance across features.
-4. **Tier 4 — Real-World Application Workloads & User Scenarios**:
-   - High-fidelity simulated user journeys (DJ workflow, Curator workflow, Casual Explorer browsing, Mobile vs Desktop parity, Cold Boot Release verification).
+Spotifree v0.3 uses an **opaque-box, requirement-driven** end-to-end testing methodology. Rather than asserting on arbitrary private internal functions or implementation trivia, tests verify the system from the outside:
+- **Public Interface Contracts**: Zustand store actions, REST and serverless endpoints (`/api/search`, `/api/playlist`, `/api/discover`), and public service utilities.
+- **State Mutations & Storage Persistence**: Deterministic assertions on `localStorage` state keys (`spotifree_saved_library_playlists`, `user_imported_playlists`, `spotifree_track_covers_v2`, `spotifree_labs_*`).
+- **Layout & CSS Invariants**: AST and DOM attribute verification of safe-area variables (`--sab`), padding offsets, pointer-event dead zones, and responsive container constraints.
+- **Platform Wire Protocols**: Android Auto MediaSession custom actions, notification drawables, color hex values (`#1ED760`), and RemoteViews widget layouts.
+- **Zero Production Source Code Mutations**: The test suite executes in a non-destructive manner without modifying production source code, configuration files, or database fixtures.
 
 ---
 
-## 2. Feature Inventory (Requirements R1 to R5)
+## 2. Feature Inventory (F1 to F22)
 
-| Req ID | Feature Name | Core Contract & Behavior | Authoritative Spec Source |
-|---|---|---|---|
-| **R1** | Official Remixes Prioritization | In the "Remixes" search tab, official catalog remixes for searched artists MUST sort before SoundCloud/bootleg tracks. Official tracks carry `isOfficial: true`, green official badges (`scVariantLabel: 'Oficial'`), and valid playable metadata. Both Desktop and Mobile search views must maintain parity. | `ORIGINAL_REQUEST § R1`, `PROJECT.md § F1, F2` |
-| **R2** | Playlist Creation from Add Modal | `createPlaylist` accepts `initialTracks?: Track[]`. When called from `AddToPlaylistModal`/`AddToPlaylistSheet`, the new playlist is created with `tracks.total === 1`, the track in `items[0]`, persisted in `user_imported_playlists`, `spotifree_saved_library_playlists`, `spotifree_playlist_cache_*`, and the modal displays confirmation and auto-closes. | `ORIGINAL_REQUEST § R2`, `PROJECT.md § F8, F9` |
-| **R3** | Prevent Auto-Save on Playlist Viewing | Opening, viewing, or loading tracks of recommended, searched, or external playlists (e.g. `dz-*`, `alb-*`) MUST NOT save them to `user_imported_playlists` or `spotifree_saved_library_playlists`, nor push to `s.playlists`. Caching is strictly isolated to `playlistDetailsCache` and `spotifree_playlist_cache_*`. Explicit save button remains the only mechanism to add to user library. | `ORIGINAL_REQUEST § R3`, `PROJECT.md § F6, F7` |
-| **R4** | Albums Filter Tab & `alb-*` Resolver | Search views (Desktop and Mobile) provide a dedicated "Álbumes" filter tab. Results display cover art, album title, artist, and release year. Clicking navigates to `alb-*`. The backend/proxy resolver (`resolveSpotifyPlaylist('alb-${dzId}')`) resolves full tracklists with duration and streamable metadata from `api.deezer.com/album/${dzId}`. | `ORIGINAL_REQUEST § R4`, `PROJECT.md § F3, F4, F5` |
-| **R5** | Version 0.2.2 & Baseline Preservation | `package.json` and `src/data/changelog.ts` updated to version `0.2.2` with descriptive changelog highlights. All 7 offline/downloads files (`api/_lib/musicFallback.js`, `api/audio.js`, `scripts/audioService.mjs`, `server.mjs`, `native/android/SpotifreeLocalMusicPlugin.java`, `src/utils/offlineStorage.ts`, `tests/offline_downloads.test.js`) remain 100% intact and passing. | `ORIGINAL_REQUEST § R5`, `PROJECT.md § F10, F11` |
+The 22 features derived from Requirements R1 through R7 in `ORIGINAL_REQUEST.md` and `PROJECT.md` are mapped below:
+
+| Feature ID | Name | Requirement | Milestone | Target Scope & Contract |
+|---|---|---|---|---|
+| **F01** | 3-Button Nav Bar & Bottom Safe Area Insets | R1 | M1 | Decouple navigation tab buttons from bottom safe area using `--sab` and safe-area spacers; container height `calc(64px + var(--sab, 0px))`, mini player at `calc(68px + var(--sab, 0px))`, scroll padding `calc(144px + var(--sab, 0px))`. |
+| **F02** | Navigation Touch Collision Prevention | R1 | M1 | Prevent accidental touch triggers near bottom 3-button system navigation bar via pointer-events-none safe area dead zone spacer. |
+| **F03** | Playlist Modal Redundancy Removal | R2 | M1 | Eliminate duplicate "Hecho" button in `AddToPlaylistModal.tsx` footer/header for clean Spotify-standard modal layout. |
+| **F04** | "Añadir" Button Accessibility During Text Input | R2 | M1 | Keep playlist creation form and "Añadir" button sticky and visible during soft keyboard text entry. |
+| **F05** | Playlist Creation on Typing Name & "Hecho" | R2 | M1 | Ensure typing a playlist name and tapping "Hecho" saves and creates the playlist with the selected song placed at index 0. |
+| **F06** | Drag-to-Dismiss Gesture on Modal Sheets & Menus | R2 | M1 | Standardize drag-to-dismiss gesture from top handle (threshold > 80px or velocity > 0.5px/ms) across `AddToPlaylistModal`, `MobileSheet`, and option menus. |
+| **F07** | Playback Speed Indicator at 1.0x Visibility | R3 | M2 | Keep playback speed indicator visible in playback bar / now-playing modal even when set to 1.0x speed. |
+| **F08** | Transparent Speed Adjustment Button Styling | R3 | M2 | Update speed adjustment button styling to a transparent background with Spotify green accents (`border border-[#1ed760]/30`, `text-[#1ed760] font-mono`) instead of solid green. |
+| **F09** | Floating Popups, Sheets & Menus Polish | R3 | M2 | Modernize visual styling, borders (`border-white/10`), rounded corners (`rounded-t-[32px]`), and backdrop blurs of all mobile floating sheets and popups. |
+| **F10** | Non-Sticky Dislike Button Track Advance | R3 | M2 | Disliking a track advances playback to next track without retaining dislike state on subsequent track; bypasses `repeatMode === 'one'` loop; updates head units via `pushNowPlaying(true)`. |
+| **F11** | Refreshed Emoji Like/Dislike Rating Interface | R3 | M2 | Modernize emoji-based like/dislike rating interface with micro-interaction pill design, mutually exclusive rating state, and accessible labels. |
+| **F12** | Android Auto Control States & Green Illumination | R4 | M3 | Ensure shuffle, repeat, and star/favorite playback modes in Android Auto clearly illuminate in green (`#1ED760`) with matching vector drawables and dynamic custom actions. |
+| **F13** | Lyric Synchronization Calibration | R4 | M3 | Eliminate 1-2s audio lead delay in lyrics display, centralizing offset in `getSynchronizedLyricProgress(progressMs)` with ~850ms audio lead compensation. |
+| **F14** | Search Pagination & Infinite Scroll | R5 | M4 | Implement pagination and infinite scroll in `DesktopSearchView.tsx`, `MobileSearchView.tsx`, and backend search APIs (`offset` and `limit` support). |
+| **F15** | Complete Artist Profile Track Catalogue | R5 | M4 | Deep-fetch Deezer and search tracks so artist profiles display their full catalogue without omitting tracks present in global search. |
+| **F16** | Similar Artist Recommendations on Artist Profiles | R5 | M4 | Wire `/api/discover?artist={name}` to render similar artist recommendations carousel on artist profile pages (`playlist.type === 'artist'`). |
+| **F17** | Daily Rotating Playlist Recommendations | R5 | M4 | Rotate community and public playlists daily on home feed using deterministic date-seeded recommendation curation (`YYYY-MM-DD`). |
+| **F18** | Ambient Cinema Backdrop for Video Canvas Preview | R5 | M4 | Render a dynamic blurred, scaled ambient `<video>` glow layer in `PlaylistClipsMiniPlayer.tsx` matching the playing video canvas loop. |
+| **F19** | Album Cover Art Background in Native Widgets | R6 | M5 | Render current track album cover art as blurred, frosted-glass background (`renderBackdrop` to `R.id.widget_bg_art`) across home screen widgets. |
+| **F20** | Turntable Widget Rotating Vinyl & Scrolling Lyrics | R6 | M5 | Redesign turntable widget with lateral 60 FPS spinning vinyl platter (`tt_spin`), 192px circular label (`buildLabel`), and marquee scrolling lyrics (`widget_lyrics`, `setSelected(true)`). |
+| **F21** | Modernized Mini-Player Widget Layout | R6 | M5 | Modernize visual layout of 4x1 mini-player widget with 42dp play button, 3dp progress bar, and live pulse ring. |
+| **F22** | Version Bump to 0.3 & Test Verification | R7 | M6 | Verify version bump to 0.3 across `package.json`, `changelog.ts`, and Android build scripts, passing 100% of the automated test suite. |
 
 ---
 
 ## 3. Test Architecture & Directory Layout
 
-### 3.1 Framework & Harnesses
-- **Test Framework**: Node.js native test runner (`node:test` + `node:assert/strict`).
-- **Module Resolution**: Dynamic ECMAScript loader hooks (`registerHooks` from `node:module`) and `ts.transpileModule` for compiling TypeScript (`.ts`) and React TSX (`.tsx`) on-the-fly in Node without build artifacts.
-- **In-Memory Storage Harness**: `MemoryStorage` polyfill for `globalThis.localStorage`, providing atomic isolation between test cases.
-- **Browser Environment Shims**: Lightweight headless shims for `window`, `document`, `CustomEvent`, `EventTarget`, and `navigator.onLine`.
-- **Network Stubbing / Mocking**: Deterministic mock interceptors for external API contracts (`api.deezer.com`, Spotify Web API, and SoundCloud).
+### 3.1 Runner Configuration
+- **Runtime**: Node.js v24+ Native Test Runner (`node:test`, `node:assert/strict`).
+- **Dynamic TypeScript/JSX Transpilation**: Node.js ESM module hooks via `registerHooks` from `node:module` and `typescript.transpileModule` targeting `ESNext` and `ReactJSX`.
+- **In-Memory Harness**:
+  - `MemoryStorage`: Pure JavaScript Map-backed Web Storage implementation replacing `localStorage`.
+  - `Browser Shims`: Global mocks for `window`, `document`, `navigator`, `CustomEvent`, `matchMedia`, `getComputedStyle`, and `requestAnimationFrame`.
+  - `Network Interceptor`: Deterministic in-memory response multiplexer for external services (Deezer, iTunes, SoundCloud, LRCLIB) without network flakiness.
+- **AST Contract Analyzer**: Abstract Syntax Tree parser using `ts.createSourceFile` to guarantee JSX element bindings, CSS property alignments, and accessibility attributes without heavyweight browser rendering.
 
 ### 3.2 Directory Layout
 ```
 c:\Users\jorge\Documents\antigravity\delightful-borg\
-├── package.json                          # Scripts & dependency definitions
-├── TEST_INFRA.md                         # This architecture and test matrix specification
-├── tests/
-│   ├── e2e_spotifree_r1_r5.test.mjs      # Main 4-tier E2E test suite (60+ tests)
-│   ├── offline_downloads.test.js         # PRESERVED: R5 Offline storage and airplane mode
-│   ├── app_logic.test.js                 # App logic & ranking baseline
-│   ├── challenger_m3_edge_cases.test.mjs # AST & component integrity baseline
-│   └── ... (Other baseline suites)
+├── TEST_INFRA.md                   # This document
+├── PROJECT.md                      # Project architecture & contracts
+├── package.json                    # Script configuration & version definition
+├── api/                            # Serverless API endpoints
+│   ├── search.js                   # Search endpoint with pagination
+│   └── playlist.js                 # Playlist resolver
+├── native/android/                 # Android native components
+│   ├── SpotifreeMediaService.java  # Media session, notification & Android Auto actions
+│   ├── SpotifreeWidget.java        # Home screen 4x1, 2x2, 4x2 widgets
+│   ├── SpotifreeTurntableWidget.java# Turntable widget with rotating vinyl & marquee
+│   └── res/                        # Android layouts, drawables & themes
+├── src/                            # React 19 / TypeScript application
+│   ├── components/                 # Desktop & mobile views, modals, widgets
+│   ├── services/                   # Audio engine, Spotify API, artist, lyrics
+│   ├── store/                      # Zustand state management stores
+│   └── utils/                      # Helper libraries & lyrics calibration
+└── tests/                          # Automated test suites
+    ├── e2e_spotifree_v03.test.mjs  # Comprehensive 253-test E2E suite
+    └── e2e_spotifree_r1_r5.test.mjs# Baseline v0.2.8 regression suite
 ```
 
-### 3.3 Test Runner Commands
-- **Run E2E Test Suite**:
-  ```powershell
-  node tests/e2e_spotifree_r1_r5.test.mjs
-  ```
-- **Run Full Project Test Suite (Windows PowerShell)**:
-  ```powershell
-  npm.cmd test
-  ```
+---
+
+## 4. Real-World Application Scenarios (Tier 4)
+
+Tier 4 tests execute complete, multi-step user workflows simulating real-world application sessions across devices and operational modes:
+
+1. **T4-S01: Android 3-Button Device Navigation & Playback Flow (F01, F02, F07, F08)**
+   - Simulates launch on an Android device with 3-button system navigation enabled (`--sab = 48px`).
+   - Verifies bottom navigation is positioned 48px above the bottom bezel.
+   - Dispatches touches within the bottom safe area dead zone; confirms 0 false-positive tab switches.
+   - Starts playback; confirms mini-player sits at `calc(68px + 48px)`.
+   - Opens full-screen player; confirms speed pill displays transparent `1.00x` styling.
+
+2. **T4-S02: Mobile Bottom Sheet Drag-to-Dismiss Workflow (F06, F09)**
+   - Opens the 3-dots track options sheet.
+   - Validates translucent backdrop blur and rounded corner styling.
+   - Simulates downward drag of 40px followed by release (snaps back to 0px without dismissal).
+   - Simulates high-speed swipe (> 0.5px/ms) or drag > 80px; confirms clean sheet dismissal and body scroll un-locking.
+
+3. **T4-S03: Rapid Playlist Creation & Persistence from Track View (F03, F04, F05)**
+   - User discovers a new song and taps "Añadir a playlist".
+   - Verifies header contains a single "Hecho" button and no duplicate footer button exists.
+   - Taps "Nueva playlist"; verifies input is focused and "Añadir" button remains sticky and visible.
+   - Types playlist name and taps "Hecho"; confirms playlist is created with track at index 0 and saved to `user_imported_playlists` and `spotifree_saved_library_playlists`.
+
+4. **T4-S04: Speed Tuning & Dislike Queue Recovery (F07, F08, F10, F11)**
+   - User opens the now-playing view with playback speed at `1.00x`.
+   - Taps speed pill, selects `1.25x (Nightcore)`; verifies transparent button styling with green accents.
+   - Taps dislike on the emoji rating pill; verifies queue immediately advances to the next track.
+   - Confirms next track is NOT disliked, repeat-one loop is bypassed, and speed setting persists.
+
+5. **T4-S05: Android Auto In-Car Commute Session (F12, F13, F10)**
+   - Connects device to Android Auto head unit.
+   - Toggles shuffle and repeat; verifies `#1ED760` green illumination and active drawables on car display.
+   - Streams synchronized lyrics; confirms ~850ms audio lead calibration eliminates lyric lag.
+   - Dispatches car dislike custom action; verifies track advance and state synchronization on phone.
+
+6. **T4-S06: Deep Discography & Infinite Scroll Search Exploration (F14, F15, F16)**
+   - Searches for an artist in search view.
+   - Scrolls down search results; infinite scroll fetches pages with `offset=25` and `offset=50` appending seamlessly.
+   - Navigates to artist profile; verifies complete catalogue (>50 tracks) rendered without omissions.
+   - Verifies "Artistas similares" shelf loads related artists from `/api/discover`.
+
+7. **T4-S07: Daily Recommendations & Ambient Cinema Session (F17, F18)**
+   - Opens home feed on Day 1; confirms daily rotating recommendations seeded by calendar date (`YYYY-MM-DD`).
+   - Browsing playlists does NOT write to user library (auto-save prevention).
+   - Opens preview video player; ambient cinema `<video>` backdrop displays blurred, scaled canvas loop in sync with foreground player.
+   - Simulates date seed rollover; confirms fresh playlist rotation for Day 2.
+
+8. **T4-S08: Android Home Screen Widgets Multi-Instance (F19, F20, F21)**
+   - Places 4x1 mini-player and 4x2 turntable widget on home screen launcher.
+   - Starts playback; both widgets render blurred album cover art in background (`R.id.widget_bg_art`).
+   - Turntable vinyl platter spins at 60 FPS and marquee lyrics scroll continuously across `widget_lyrics`.
+   - Pausing stops vinyl spin and preserves widget progress.
+
+9. **T4-S09: Cross-Device State Sync: Mobile Web, Car & Launcher (F10, F12, F13, F20)**
+   - Disliking a track on mobile advances queue, updates Android Auto MediaSession, refreshes widget cover art, and synchronizes turntable lyrics within 200ms.
+
+10. **T4-S10: Adversarial Network, Offline Fallbacks & Cache Preservation (F14, F15, F17, F18)**
+    - Simulates network drops during search pagination and canvas streaming.
+    - Search pagination retains loaded items and shows retry indicator.
+    - Video canvas falls back smoothly to blurred cover image.
+    - Daily recommendations serve cached entries without blanking home feed.
+
+11. **T4-S11: Spotifree v0.3 Release Audit & Baseline Integrity (F22 + All Features)**
+    - Comprehensive release gate: verifies version consistency, release highlights across changelog, intact offline modules, and 100% test pass rate across all 253 test cases.
 
 ---
 
-## 4. Comprehensive Test Matrix (61 Test Cases)
+## 5. Coverage Thresholds & Test Suite Metrics
 
-### Tier 1: Feature Coverage (Category-Partition & Primary Contracts)
+The test matrix enforces strict coverage minimums across all 4 tiers:
 
-| Test ID | Req | Test Title / Objective | Test Input & Scenario | Authoritative Expected Output / Invariant | Baseline Status |
-|---|---|---|---|---|---|
-| `T1-R1-01` | R1 | Official Catalog Remix Head Prioritization | Query: "quevedo remix" with mixed official and SoundCloud candidates | Official catalog tracks matching `/remix\|rmx/i` sort at index 0..N-1 before unofficial tracks | PENDING (M1) |
-| `T1-R1-02` | R1 | Official Badge and Metadata Flagging | Official catalog remix candidates | `track.isOfficial === true` and `track.scVariantLabel === 'Oficial'` | PENDING (M1) |
-| `T1-R1-03` | R1 | Remix Query Intent Extraction | Query strings: `"duki rmx"`, `"bizarrap remix"`, `"bad bunny slowed"` | Recognizes remix intent and prioritizes official releases | PENDING (M1) |
-| `T1-R1-04` | R1 | Official Remix Playable Metadata Completeness | Extracted official remix item | Has `id`, `name`, `artists` array, `album.images` cover, and duration | PENDING (M1) |
-| `T1-R1-05` | R1 | Desktop & Mobile Remix View Parity | Check AST / View contract for Remixes tab in Desktop and Mobile views | Both search views bind to `results.soundcloudTracks` with official badges | PASS (Structural) |
-| `T1-R2-01` | R2 | `createPlaylist` Initial Tracks Parameter | Call `createPlaylist('My List', [trackA])` | Function accepts optional second parameter without error | PENDING (M4) |
-| `T1-R2-02` | R2 | Playlist Initial Track Placement | Create playlist with single track | Returned playlist has `tracks.total === 1` and `tracks.items[0].id === trackA.id` | PENDING (M4) |
-| `T1-R2-03` | R2 | Persistence in `user_imported_playlists` | Inspect `localStorage['user_imported_playlists']` after creation | List contains new playlist object with `tracks.items` populated | PENDING (M4) |
-| `T1-R2-04` | R2 | Persistence in `spotifree_saved_library_playlists` | Inspect `localStorage['spotifree_saved_library_playlists']` after creation | Array includes new playlist ID | PENDING (M4) |
-| `T1-R2-05` | R2 | Modal Creation Auto-Close & Notification | Analyze `AddToPlaylistModal.tsx` creation handler | Handler triggers store creation, closes modal (`closeAddToPlaylistModal`), shows toast | PENDING (M4) |
-| `T1-R3-01` | R3 | Recommended Playlist View Does Not Write Imported | View recommended playlist `dz-3155776842` | `user_imported_playlists` remains unchanged, does NOT contain `dz-3155776842` | PENDING (M3) |
-| `T1-R3-02` | R3 | Searched Playlist View Does Not Write Saved Library | View searched playlist `pl-external-123` | `spotifree_saved_library_playlists` does NOT contain `pl-external-123` | PENDING (M3) |
-| `T1-R3-03` | R3 | Viewing Playlist Does Not Mutate Store Library | Call `updatePlaylist` for non-library playlist | `s.playlists.length` does not increase; playlist not added to user lists | PENDING (M3) |
-| `T1-R3-04` | R3 | Details Caching Isolation | Call `updatePlaylist` for external playlist | Details are stored in `playlistDetailsCache` and `spotifree_playlist_cache_*` only | PENDING (M3) |
-| `T1-R3-05` | R3 | Explicit Save Invariant | User clicks save (`addCustomPlaylist` or like) | Playlist is added to library and `spotifree_saved_library_playlists` | PASS |
-| `T1-R4-01` | R4 | "Álbumes" Filter Tab Present in Desktop & Mobile | Check filter tabs in `MobileSearchView.tsx` & `DesktopSearchView.tsx` | Both components define `'albumes'` in filter state and render tab pill | PENDING (M2) |
-| `T1-R4-02` | R4 | Album Search Results Data Model | Execute search query "un verano sin ti" | Returns `results.albums` containing objects with `id`, `name`, `images`, `artists`, `release_date` | PASS |
-| `T1-R4-03` | R4 | Album Navigation Format `alb-*` | Click album card in search view | Triggers navigation callback with `id: alb-${dzId}` | PENDING (M2) |
-| `T1-R4-04` | R4 | Deezer Album Resolver Contract | Call `resolveSpotifyPlaylist('alb-316164367')` | Returns `Playlist` with `type: 'album'`, correct name, owner, and tracks | PENDING (M2) |
-| `T1-R4-05` | R4 | Resolved Album Track Playability | Inspect tracks of resolved album `alb-316164367` | Each track contains duration, artists, album reference, and valid ID | PENDING (M2) |
-| `T1-R5-01` | R5 | `package.json` Version is 0.2.2 | Read `package.json` | `parsed.version === '0.2.2'` | PENDING (M5) |
-| `T1-R5-02` | R5 | `src/data/changelog.ts` Version is 0.2.2 | Import `APP_VERSION` from `changelog.ts` | `APP_VERSION === '0.2.2'` | PENDING (M5) |
-| `T1-R5-03` | R5 | Changelog 0.2.2 Release Notes Published | Inspect `CHANGELOG_RELEASES` | First release has `version: '0.2.2'`, `isLatest: true`, and mentions R1-R4 fixes | PENDING (M5) |
-| `T1-R5-04` | R5 | Offline Files Existence & Non-Empty Content | Inspect all 7 R5 preserved files on disk | All 7 files exist and have `stat.size > 100` | PASS |
-| `T1-R5-05` | R5 | Offline Downloads Test Suite Integrity | Run `tests/offline_downloads.test.js` | All 7 offline tests pass with 0 errors | PASS |
-
----
-
-### Tier 2: Boundary & Corner Cases (BVA & Error Handling)
-
-| Test ID | Req | Test Title / Objective | Test Input & Scenario | Authoritative Expected Output / Invariant | Baseline Status |
-|---|---|---|---|---|---|
-| `T2-R1-01` | R1 | Artist with 0 Official Remixes | Query artist with only unofficial SoundCloud tracks | Returns SoundCloud tracks gracefully without crash or empty screen | PASS |
-| `T2-R1-02` | R1 | Special Characters & Whitespace in Remix Query | Query: `"   Bizarrap & Quevedo #52 (Remix)   "` | Trims query, escapes regex specials, returns correct ranked list | PASS |
-| `T2-R1-03` | R1 | Strict Segregation of Bootlegs vs Official | Feed pool of 10 tracks (3 official, 7 bootlegs/leaks) | Exactly 3 official tracks occupy indices 0, 1, 2; rest follow | PENDING (M1) |
-| `T2-R1-04` | R1 | Duplicate Track Deduplication in Remixes | Same song ID present in both catalog and SoundCloud feed | Deduplicates by ID or ISMN, avoiding double entries in remix list | PASS |
-| `T2-R1-05` | R1 | Empty & Single-Character Query Handling | Queries: `""`, `"   "`, `"a"` | Empty returns `{ items: [] }`, single character does not throw | PASS |
-| `T2-R2-01` | R2 | Default Playlist Name Fallback | Call `createPlaylist('')` or `createPlaylist(undefined, [track])` | Name defaults to `"Mi lista n.º X"` based on custom count | PENDING (M4) |
-| `T2-R2-02` | R2 | Rapid Concurrent Playlist Creation Calls | Call `createPlaylist` 5 times in rapid succession | Generates 5 distinct IDs, persists all 5 without race-condition data loss | PENDING (M4) |
-| `T2-R2-03` | R2 | Track Missing Optional Cover Art | Create playlist with track having `album.images = []` | Handles missing cover art without error, falls back to default cover | PENDING (M4) |
-| `T2-R2-04` | R2 | Track with Special Characters in Title | Track title: `"Rock & Roll <script>alert(1)</script> / 'Quotes'"` | Safely JSON-encoded and preserved in storage without corruption | PENDING (M4) |
-| `T2-R2-05` | R2 | Storage Re-Hydration Integrity | Persist playlist + track, simulate fresh page load | Re-hydrated store contains new playlist with tracks array intact | PENDING (M4) |
-| `T2-R3-01` | R3 | Stress: Sequential Viewing of 10 External Playlists | Sequentially update 10 non-library playlist IDs | `user_imported_playlists` and `spotifree_saved_library_playlists` add 0 entries | PENDING (M3) |
-| `T2-R3-02` | R3 | Viewing Already-Saved Library Playlist | View playlist that is already in user library | Updates cache and tracks without creating duplicate entry in library | PASS |
-| `T2-R3-03` | R3 | Back/Forward Navigation Library Cleanliness | Navigate: Library -> External 1 -> External 2 -> Library | Library count remains identical to initial count | PENDING (M3) |
-| `T2-R3-04` | R3 | Viewing Empty Playlist (0 Tracks) | Call `updatePlaylist` with `tracks: { total: 0, items: [] }` | Details cached cleanly, does not add to library | PENDING (M3) |
-| `T2-R3-05` | R3 | Multi-User Cache Isolation | Cache playlist under user A, switch to user B | User B does not inherit user A's imported list or cache | PASS |
-| `T2-R4-01` | R4 | Query with 0 Album Matches | Query nonsense string: `"xyznonexistentartist12345"` | Returns `albums.items: []`, UI displays empty state gracefully | PASS |
-| `T2-R4-02` | R4 | Multi-Disc / 30+ Track Album Resolution | Resolve album with 35 tracks (e.g. deluxe/boxset) | All 35 tracks mapped with correct track indices, zero truncated | PENDING (M2) |
-| `T2-R4-03` | R4 | Single / EP Release as Album Resolution | Resolve 2-track single release | Correctly mapped as album type with `tracks.total === 2` | PENDING (M2) |
-| `T2-R4-04` | R4 | Malformed `alb-*` Identifier Handling | Pass `alb-invalid-string` or non-existent Deezer ID | Throws handled error or returns fallback; does NOT crash process | PENDING (M2) |
-| `T2-R4-05` | R4 | Album Track Queue & Context Playback | Select track index 3 from resolved album | Player state sets queue to remaining album tracks with album context | PASS |
-| `T2-R5-01` | R5 | Strict SemVer Regex Validation | Validate versions against `^[0-9]+\.[0-9]+\.[0-9]+$` | Both `package.json` and `changelog.ts` conform to strict SemVer | PASS |
-| `T2-R5-02` | R5 | Offline Download Routes Byte Integrity | Check route handlers in `server.mjs` and `api/audio.js` | Endpoints `/api/audio`, `/api/download` contain intact Range and streaming logic | PASS |
-| `T2-R5-03` | R5 | Offline Storage Utility Required Exports | Inspect `src/utils/offlineStorage.ts` | Exports all 6 functions: `downloadPlaylist`, `isPlaylistDownloaded`, etc. | PASS |
-| `T2-R5-04` | R5 | Audio Service Script Integrity | Inspect `scripts/audioService.mjs` | File exists, exports valid audio engine helpers | PASS |
-| `T2-R5-05` | R5 | Android Local Music Plugin Integrity | Inspect `native/android/SpotifreeLocalMusicPlugin.java` | File exists, contains Java package and plugin methods | PASS |
-
----
-
-### Tier 3: Cross-Feature Pairwise Combinations
-
-| Test ID | Req Pair | Test Description & Workflow | Authoritative Expected Invariant | Baseline Status |
+| Tier | Category | Minimum Tests Required | Tests Implemented | Pass Requirement |
 |---|---|---|---|---|
-| `T3-01` | R1 + R2 | Search official remix -> Add to playlist modal -> Create new playlist with remix | New playlist created with official remix as item[0], persisted in all tiers | PENDING (M1/M4) |
-| `T3-02` | R4 + R3 | Search album -> Resolve tracklist -> View tracks -> Check library persistence | Album tracks are fully loaded, but album is NOT saved to user library | PENDING (M2/M3) |
-| `T3-03` | R4 + R2 | View resolved album -> Select track -> Create new playlist via modal | Track from album successfully seeds new custom playlist with album cover art | PENDING (M2/M4) |
-| `T3-04` | R1 + R4 | Search query returning remixes & albums -> Toggle between Remixes & Albums tabs | Filter states switch cleanly; Remix tab shows official remixes, Album tab shows albums | PENDING (M1/M2) |
-| `T3-05` | R2 + R3 | Create playlist explicitly -> View 5 external playlists -> Check library state | Library contains ONLY the explicitly created playlist; 0 external playlists auto-saved | PENDING (M3/M4) |
-| `T3-06` | R5 + All | Version 0.2.2 changelog aligns with R1, R2, R3, R4 feature delivery | Changelog highlights explicitly describe remix priority, album tab, auto-save fix, modal fix | PENDING (M5) |
+| **Tier 1** | Feature Coverage (Primary contracts across F01..F22) | $\ge 110$ (5 per feature) | 110 | 100% |
+| **Tier 2** | Boundary & Corner Cases (Stress, bounds, errors) | $\ge 110$ (5 per feature) | 110 | 100% |
+| **Tier 3** | Pairwise Cross-Feature Interactions | $\ge 22$ | 22 | 100% |
+| **Tier 4** | Real-World Application Workloads & User Scenarios | $\ge 11$ | 11 | 100% |
+| **Total** | Full E2E Test Suite (`tests/e2e_spotifree_v03.test.mjs`) | $\ge 253$ | **253** | **100% Pass** |
 
----
+### Execution Commands
+```powershell
+# Run the comprehensive Spotifree v0.3 E2E test suite
+node tests/e2e_spotifree_v03.test.mjs
 
-### Tier 4: Real-World Application Workloads & User Scenarios
-
-| Test ID | Scenario Name | User Persona & Simulated Journey | Authoritative Expected Behavior | Baseline Status |
-|---|---|---|---|---|
-| `T4-S01` | S1: The DJ / Music Fan | Search "Quevedo" -> Select Remixes tab -> Select official remix -> Trigger playback | Official remix appears at top with green badge; playback state receives stream url | PENDING (M1) |
-| `T4-S02` | S2: The Music Curator | Search "Un Verano Sin Ti" -> View album -> Pick track -> Create playlist "Favoritos 2026" | Album not auto-saved; "Favoritos 2026" created with track and saved in library | PENDING (M2/M3/M4) |
-| `T4-S03` | S3: The Casual Explorer | Browse 5 external playlists + 3 albums in single session -> Check user library | Library remains 100% clean (zero pollution); all viewed items cached in memory/details | PENDING (M2/M3) |
-| `T4-S04` | S4: Desktop vs Mobile Parity | Run identical search across simulated DesktopSearchView and MobileSearchView contracts | Both render Album tab, Remix tab, and identical data structures | PENDING (M1/M2) |
-| `T4-S05` | S5: Cold Boot & Offline Release Audit | Cold boot app in v0.2.2 -> Verify changelog announcement -> Verify offline storage ops | App starts cleanly, reports v0.2.2, all offline download operations remain operational | PENDING (M5) |
-
----
-
-## 5. Verification Protocol & Execution Instructions
-
-1. **Syntax & Test Runner Validation**:
-   ```powershell
-   node tests/e2e_spotifree_r1_r5.test.mjs
-   ```
-2. **Full Regression Suite**:
-   ```powershell
-   npm.cmd test
-   ```
-3. **Compilation & Type Check**:
-   ```powershell
-   npx.cmd tsc --noEmit
-   npm.cmd run build
-   ```
-4. **Interpreting Baseline Results**:
-   - In Milestone M0 (prior to M1-M5 implementation), baseline tests (e.g. offline integrity, static AST contracts, semver validation) will PASS.
-   - Tests covering new features (R1 prioritization, R2 initial tracks, R3 auto-save bug fix, R4 albums resolver) will FAIL with descriptive assertions.
-   - Once implementation milestones M1 through M5 complete, all 61 tests will transition from FAIL to PASS.
+# Run full project test verification (all baseline and new suites)
+cmd.exe /c npm test
+```

@@ -51,8 +51,8 @@
 
             <ProgressBar
                 android:id="@+id/widget_live_ring"
-                android:layout_width="14dp"
-                android:layout_height="14dp"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
                 android:layout_gravity="bottom|end"
                 android:layout_margin="2dp"
                 android:indeterminate="true"
@@ -77,10 +77,10 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:ellipsize="end"
-                android:fontFamily="sans-serif-medium"
+                android:fontFamily="sans-serif-bold"
                 android:maxLines="1"
-                android:shadowColor="#66000000"
-                android:shadowRadius="4"
+                android:shadowColor="#80000000"
+                android:shadowRadius="5"
                 android:text="Spotifree"
                 android:textColor="#FFFFFF"
                 android:textSize="14.5sp" />
@@ -93,7 +93,7 @@
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:text=""
-                android:textColor="#D9FFFFFF"
+                android:textColor="#B3FFFFFF"
                 android:textSize="12.5sp" />
 
             <TextView
@@ -101,9 +101,13 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="1dp"
-                android:ellipsize="end"
+                android:ellipsize="marquee"
+                android:focusable="true"
+                android:focusableInTouchMode="true"
                 android:fontFamily="sans-serif-medium"
-                android:maxLines="1"
+                android:marqueeRepeatLimit="marquee_forever"
+                android:scrollHorizontally="true"
+                android:singleLine="true"
                 android:text=""
                 android:textColor="#9EFFB8"
                 android:textSize="11sp"

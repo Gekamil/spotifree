@@ -26,6 +26,7 @@ import { stripHtml } from '../utils/formatters';
 import { getCustomLikedSongs, getActiveUserId, removeCustomTrackFromStorage, getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { getPlaylistCover } from '../utils/playlistCover';
+import { buildDailyRotatingShelf } from '../services/recommendations';
 
 export const SPOTIFY_DJ_COVER_IMAGE =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300"><defs><linearGradient id="djgrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stop-color="%231ed760"/><stop offset="50%" stop-color="%2300f2fe"/><stop offset="100%" stop-color="%231ed760"/></linearGradient></defs><rect width="300" height="300" fill="%230c52cc"/><circle cx="150" cy="150" r="80" fill="none" stroke="url(%23djgrad)" stroke-width="22" stroke-linecap="round"/><text x="150" y="270" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="900" font-size="26" letter-spacing="4">DJ</text></svg>';
@@ -262,7 +263,8 @@ export const DEFAULT_PUBLIC_SHELVES: DynamicShelf[] = [
 ];
 
 export function buildExtractedShelves(_userName: string = 'Para ti'): DynamicShelf[] {
-  return DEFAULT_PUBLIC_SHELVES;
+  const dailyShelf = buildDailyRotatingShelf();
+  return [dailyShelf, ...DEFAULT_PUBLIC_SHELVES];
 }
 
 export const DEFAULT_PUBLIC_PLAYLISTS: Playlist[] = [

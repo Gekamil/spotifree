@@ -1344,6 +1344,35 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     };
   }, [dynamicPlaylist.id, dynamicPlaylist.images, tracks, hasBanner, bannerImgUrl]);
 
+  const [similarArtists, setSimilarArtists] = useState<Array<{ id?: string; name: string; picture?: string | null; fans?: number }>>([]);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+
+  useEffect(() => {
+    if (!isArtist) {
+      setSimilarArtists([]);
+      return;
+    }
+    let cancelled = false;
+    const cleanArtistName = resolveArtistName(dynamicPlaylist.id, dynamicPlaylist.name);
+    setIsLoadingSimilar(true);
+
+    fetch(`/api/discover?artist=${encodeURIComponent(cleanArtistName)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.related)) {
+          setSimilarArtists(data.related.filter((r: any) => r && r.name));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoadingSimilar(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [dynamicPlaylist.id, dynamicPlaylist.name, isArtist]);
+
   const themeColor = extractedThemeColor;
 
   if (isDJ) {
@@ -2428,6 +2457,76 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           </div>
         )}
       </div>
+
+      {/* Similar Artists Shelf ("Fans también escuchan") - Only on Artist Profiles */}
+      {isArtist && (similarArtists.length > 0 || isLoadingSimilar) && (
+        <div className="px-8 pt-10 pb-12 mt-6 border-t border-white/10">
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+              Fans también escuchan
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+            {isLoadingSimilar && similarArtists.length === 0
+              ? [1, 2, 3, 4, 5, 6].map((idx) => (
+                  <div key={`skeleton-art-${idx}`} className="p-4 rounded-lg bg-[#181818] animate-pulse flex flex-col items-center">
+                    <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full bg-[#282828] mb-3" />
+                    <div className="h-4 w-20 bg-[#282828] rounded mb-2" />
+                    <div className="h-3 w-12 bg-[#282828] rounded" />
+                  </div>
+                ))
+              : similarArtists.slice(0, 6).map((relArtist) => {
+                  const artId = relArtist.id ? `art-${relArtist.id}` : `art-${relArtist.name.toLowerCase().replace(/[\s&]+/g, '-')}`;
+                  const formattedFans = relArtist.fans && relArtist.fans > 1000
+                    ? relArtist.fans >= 1000000
+                      ? `${(relArtist.fans / 1000000).toFixed(1)} M oyentes`
+                      : `${Math.round(relArtist.fans / 1000)} mil oyentes`
+                    : 'Artista';
+
+                  return (
+                    <div
+                      key={artId}
+                      onClick={() => onSelectPlaylistById?.(artId, relArtist.name, relArtist.picture || undefined)}
+                      className="p-4 rounded-lg bg-[#181818] hover:bg-[#282828] transition-all cursor-pointer group flex flex-col items-center text-center shadow-md hover:shadow-xl relative"
+                    >
+                      <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden mb-3 relative shadow-lg bg-[#242424] flex items-center justify-center">
+                        {relArtist.picture ? (
+                          <img
+                            src={relArtist.picture}
+                            alt={relArtist.name}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="w-full h-full rounded-full bg-gradient-to-tr from-[#5018f0] to-[#1ed760] flex items-center justify-center text-black font-black text-2xl shadow">
+                            {relArtist.name.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onSelectPlaylistById?.(artId, relArtist.name, relArtist.picture || undefined);
+                          }}
+                          className="absolute bottom-1 right-1 w-10 h-10 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-106 shadow-xl flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 cursor-pointer"
+                          title={`Ver perfil de ${relArtist.name}`}
+                        >
+                          <PlayNativeIcon size={16} className="text-black ml-0.5" />
+                        </button>
+                      </div>
+                      <span className="font-bold text-white text-sm truncate w-full group-hover:underline">
+                        {relArtist.name}
+                      </span>
+                      <span className="text-xs text-[#b3b3b3] mt-1 truncate w-full">
+                        {formattedFans}
+                      </span>
+                    </div>
+                  );
+                })}
+          </div>
+        </div>
+      )}
 
       {/* Spotify "Busquemos algo para tu lista" Section (Only shown if user can add tracks: saved or owned playlist, never on artists) */}
       {canAddTracksToThisList && (

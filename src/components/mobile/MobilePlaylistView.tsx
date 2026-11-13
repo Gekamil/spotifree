@@ -107,7 +107,7 @@ interface MobilePlaylistViewProps {
 export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   playlist,
   onBack,
-  onSelectPlaylistById: _onSelectPlaylistById,
+  onSelectPlaylistById,
 }) => {
   const {
     currentTrack,
@@ -158,6 +158,35 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     playlist.description === 'Artista' ||
     cleanId.startsWith('art-') ||
     cleanId.startsWith('artist-');
+
+  const [similarArtists, setSimilarArtists] = useState<Array<{ id?: string; name: string; picture?: string | null; fans?: number }>>([]);
+  const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+
+  useEffect(() => {
+    if (!isArtist) {
+      setSimilarArtists([]);
+      return;
+    }
+    let cancelled = false;
+    const cleanArtistName = resolveArtistName(cleanId, playlist.name);
+    setIsLoadingSimilar(true);
+
+    fetch(`/api/discover?artist=${encodeURIComponent(cleanArtistName)}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data && Array.isArray(data.related)) {
+          setSimilarArtists(data.related.filter((r: any) => r && r.name));
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setIsLoadingSimilar(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [cleanId, playlist.name, isArtist]);
 
   const [tracks, setTracks] = useState<Track[]>(() => {
     const removedSet = getRemovedTrackIdsForPlaylist(isLikedPlaylist ? 'liked-songs' : cleanId);
@@ -2080,6 +2109,65 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 </React.Fragment>
               );
             })}
+
+            {/* Similar Artists Shelf ("Fans también escuchan") - Spotify Mobile Carousel */}
+            {isArtist && (similarArtists.length > 0 || isLoadingSimilar) && (
+              <div className="pt-6 pb-6 border-t border-white/10 mt-6 px-1">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-base font-bold text-white font-['SpotifyMixUITitle']">
+                    Fans también escuchan
+                  </h3>
+                </div>
+
+                <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4 snap-x">
+                  {isLoadingSimilar && similarArtists.length === 0
+                    ? [1, 2, 3, 4, 5].map((idx) => (
+                        <div key={`m-skel-${idx}`} className="w-28 shrink-0 flex flex-col items-center animate-pulse">
+                          <div className="w-24 h-24 rounded-full bg-[#242424] mb-2" />
+                          <div className="h-3 w-16 bg-[#242424] rounded mb-1" />
+                          <div className="h-2.5 w-10 bg-[#242424] rounded" />
+                        </div>
+                      ))
+                    : similarArtists.map((relArtist) => {
+                        const artId = relArtist.id ? `art-${relArtist.id}` : `art-${relArtist.name.toLowerCase().replace(/[\s&]+/g, '-')}`;
+                        const formattedFans = relArtist.fans && relArtist.fans > 1000
+                          ? relArtist.fans >= 1000000
+                            ? `${(relArtist.fans / 1000000).toFixed(1)} M oyentes`
+                            : `${Math.round(relArtist.fans / 1000)} mil oyentes`
+                          : 'Artista';
+
+                        return (
+                          <div
+                            key={artId}
+                            onClick={() => onSelectPlaylistById?.(artId, relArtist.name, relArtist.picture || undefined)}
+                            className="w-28 sm:w-32 shrink-0 flex flex-col items-center text-center cursor-pointer active:scale-95 transition-transform snap-start"
+                          >
+                            <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden mb-2 shadow-lg bg-[#242424] flex items-center justify-center relative">
+                              {relArtist.picture ? (
+                                <img
+                                  src={relArtist.picture}
+                                  alt={relArtist.name}
+                                  className="w-full h-full object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="w-full h-full rounded-full bg-gradient-to-tr from-[#5018f0] to-[#1ed760] flex items-center justify-center text-black font-black text-xl shadow">
+                                  {relArtist.name.charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
+                            <p className="font-bold text-white text-xs truncate w-full">
+                              {relArtist.name}
+                            </p>
+                            <p className="text-[11px] text-[#b3b3b3] mt-0.5 truncate w-full">
+                              {formattedFans}
+                            </p>
+                          </div>
+                        );
+                      })}
+                </div>
+              </div>
+            )}
 
             {/* Bottom Recommendations & Add Songs section matching Spotify Mobile (Only shown if user can add tracks) */}
             {canAddTracksToThisList && (
