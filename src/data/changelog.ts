@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.3';
+export const APP_VERSION = '0.4';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.4',
+    date: '15 de noviembre, 2026',
+    title: 'Spotifree 0.4: Sincronización completa con APK y buscador, menú de 3 puntos perfeccionado y audio 3D/mono real',
+    isLatest: true,
+    highlights: [
+      'Sincronización instantánea de la APK con el buscador: todas las listas creadas, importadas y canciones guardadas se indexan y priorizan de inmediato en los resultados de búsqueda.',
+      'Cabecera de playlist limpia y auténtica Spotify: se retira el botón de recarga de la barra de acciones superior, integrando la opción «Actualizar canciones de la lista» de forma natural dentro del menú de 3 puntos.',
+      'Audio mono por suma de fases real: mezcla matemática perfecta (50% canal izquierdo + 50% canal derecho) audible en ambos auriculares para accesibilidad y escucha con un solo auricular.',
+      'Campo acústico y balance 3D: posicionamiento espacial tridimensional con paneo panorámico y filtro de elevación/presencia frontal y atenuación de sombra craneal para sonido envolvente en auriculares.',
+      'Procesamiento DSP directo: activación inmediata del motor de procesamiento de audio nativo al conmutar efectos avanzados de sonido.',
+    ],
+  },
   {
     version: '0.3',
     date: '13 de noviembre, 2026',
     title: 'Spotifree 0.3: navegación segura, gestos táctiles, sincronización de letras, widgets renovados y discografía completa',
-    isLatest: true,
     highlights: [
       'Protección para barra de 3 botones Android: zona segura inferior (--sab) para evitar pulsaciones accidentales entre los controles de la app y el sistema operativo.',
       'Nueva pestaña "Añadir a playlist": formulario limpio sin botones duplicados, botón fijo "+ Nueva playlist", y guardado instantáneo al escribir el nombre y pulsar "Hecho".',

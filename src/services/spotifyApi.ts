@@ -351,28 +351,94 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
     description?: string;
     tracks?: { total: number; items?: any[] };
   }> = [];
+  let userMatchedPlaylists: any[] = [];
 
   // 1. Search in-app loaded playlists, menus, top tracks & library for instant 0ms matching
   if (offset === 0) {
     try {
-      const { useSpotifyDataStore } = await import('../store/useSpotifyDataStore');
+      const { useSpotifyDataStore, getDeletedPlaylistIds } = await import('../store/useSpotifyDataStore');
       const { usePlayerStore } = await import('../store/usePlayerStore');
+      const { getCustomLikedSongs, getActiveUserId } = await import('../utils/userStorage');
       const spotifyState = useSpotifyDataStore.getState();
       const playerState = usePlayerStore.getState();
+      const deletedIds = getDeletedPlaylistIds();
 
-      const allPlaylists = spotifyState.playlists || [];
+      const rawUserPlaylists: any[] = [];
+      const seenPlIds = new Set<string>();
+
+      // A) In-memory user playlists from store
+      (spotifyState.playlists || []).forEach((p) => {
+        if (p?.id && !deletedIds.has(p.id) && !seenPlIds.has(p.id)) {
+          seenPlIds.add(p.id);
+          rawUserPlaylists.push(p);
+        }
+      });
+
+      // B) Cached playlist details
+      if (spotifyState.playlistDetailsCache) {
+        Object.values(spotifyState.playlistDetailsCache).forEach((p: any) => {
+          if (p?.id && !deletedIds.has(p.id) && !seenPlIds.has(p.id)) {
+            seenPlIds.add(p.id);
+            rawUserPlaylists.push(p);
+          }
+        });
+      }
+
+      // C) LocalStorage imported / created playlists (survives app reloads / APK sync)
+      if (typeof window !== 'undefined') {
+        try {
+          const rawImp = window.localStorage.getItem('user_imported_playlists');
+          if (rawImp) {
+            const parsed = JSON.parse(rawImp);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((p: any) => {
+                if (p?.id && !deletedIds.has(p.id) && !seenPlIds.has(p.id)) {
+                  seenPlIds.add(p.id);
+                  rawUserPlaylists.push(p);
+                }
+              });
+            }
+          }
+        } catch {}
+      }
+
+      const candidateTracks: Track[] = [];
+      const seenCandidateTrackIds = new Set<string>();
+      const addCandidateTrack = (t: Track | null | undefined) => {
+        if (!t || !t.id || seenCandidateTrackIds.has(t.id)) return;
+        seenCandidateTrackIds.add(t.id);
+        candidateTracks.push(t);
+      };
+
+      // 1. Tracks inside all user and imported playlists
+      for (const p of rawUserPlaylists) {
+        if (Array.isArray(p.tracks?.items)) {
+          p.tracks.items.forEach(addCandidateTrack);
+        }
+        if (typeof window !== 'undefined') {
+          try {
+            const rawPlTrk = window.localStorage.getItem(`spotifree_playlist_tracks_${p.id}`);
+            if (rawPlTrk) {
+              const parsedTrk = JSON.parse(rawPlTrk);
+              if (Array.isArray(parsedTrk)) parsedTrk.forEach(addCandidateTrack);
+            }
+          } catch {}
+        }
+      }
+
+      // 2. User liked songs
+      const customLiked = getCustomLikedSongs(getActiveUserId());
+      customLiked.forEach(addCandidateTrack);
+
+      // 3. Top tracks, new releases, recently played, queue
       const topTracks = spotifyState.topTracks || [];
       const newReleases = (spotifyState.newReleases || []).flatMap((nr: any) => nr.tracks?.items || [nr]);
       const recentlyPlayed = spotifyState.recentlyPlayed || [];
       const queueTracks = playerState.queue || [];
-
-      const candidateTracks: Track[] = [];
-      for (const p of allPlaylists) {
-        if (p.tracks?.items) candidateTracks.push(...p.tracks.items);
-      }
-      candidateTracks.push(...topTracks, ...newReleases, ...recentlyPlayed, ...queueTracks);
+      [...topTracks, ...newReleases, ...recentlyPlayed, ...queueTracks].forEach(addCandidateTrack);
 
       const searchWords = (normalizedQ || cleanQ).toLowerCase().split(' ').filter(Boolean);
+      const cleanLower = cleanQ.toLowerCase().trim();
       const seenLocal = new Set<string>();
 
       for (const t of candidateTracks) {
@@ -397,13 +463,46 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
         }
       }
 
-      if (options?.onQuickResults && !options.signal?.aborted && (tracks.length > 0 || localArtists.length > 0)) {
+      // Match user playlists
+      for (const p of rawUserPlaylists) {
+        if (!p || !p.id) continue;
+        const name = (p.name || '').toLowerCase().trim();
+        const desc = (p.description || '').toLowerCase().trim();
+        const owner = (p.owner?.display_name || '').toLowerCase().trim();
+
+        const matches = searchWords.every(
+          (w) => name.includes(w) || desc.includes(w) || owner.includes(w)
+        );
+
+        if (matches) {
+          const cover = p.images?.[0]?.url || (p.tracks?.items?.[0]?.album?.images?.[0]?.url) || '';
+          userMatchedPlaylists.push({
+            ...p,
+            images: cover ? [{ url: cover }] : (p.images || []),
+            owner: p.owner || { display_name: 'Tú' },
+            description: p.description || `${p.tracks?.total || p.tracks?.items?.length || 0} canciones • Tu biblioteca`,
+            is_user_playlist: true,
+          });
+        }
+      }
+
+      userMatchedPlaylists.sort((a, b) => {
+        const aName = (a.name || '').toLowerCase().trim();
+        const bName = (b.name || '').toLowerCase().trim();
+        if (aName === cleanLower) return -1;
+        if (bName === cleanLower) return 1;
+        if (aName.startsWith(cleanLower) && !bName.startsWith(cleanLower)) return -1;
+        if (!aName.startsWith(cleanLower) && bName.startsWith(cleanLower)) return 1;
+        return aName.localeCompare(bName);
+      });
+
+      if (options?.onQuickResults && !options.signal?.aborted && (tracks.length > 0 || localArtists.length > 0 || userMatchedPlaylists.length > 0)) {
         options.onQuickResults({
           tracks: { items: rankSearchTracks(cleanQ, [...tracks]) },
           soundcloudTracks: { items: [] },
           artists: { items: localArtists },
           albums: { items: [] },
-          playlists: { items: [] },
+          playlists: { items: userMatchedPlaylists },
         });
       }
     } catch {}
@@ -450,12 +549,18 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
         }
         const quickRanked = rankSearchTracks(cleanQ, quickTracks);
         const quickRemixes = extractAndEnrichOfficialRemixes(quickRanked, new Set<string>(), new Set<string>());
+        const quickPlaylists = [...userMatchedPlaylists];
+        for (const pl of qData.playlists?.items || []) {
+          if (!quickPlaylists.some((p) => p.id === pl.id)) {
+            quickPlaylists.push(pl);
+          }
+        }
         options.onQuickResults?.({
           tracks: { items: quickRanked },
           soundcloudTracks: { items: quickRemixes },
           artists: { items: qData.artists?.items || [] },
           albums: { items: qData.albums?.items || [] },
-          playlists: { items: qData.playlists?.items || [] },
+          playlists: { items: quickPlaylists },
         });
       })
       .catch(() => {})
@@ -805,6 +910,13 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   const totalTracks = backendData?.tracks?.total ?? (tracks.length + offset);
   const hasMoreTracks = backendData?.tracks?.hasMore ?? (tracks.length >= limit);
 
+  const mergedPlaylists: any[] = [...userMatchedPlaylists];
+  for (const pl of playlists) {
+    if (!mergedPlaylists.some((p) => p.id === pl.id)) {
+      mergedPlaylists.push(pl);
+    }
+  }
+
   const finalPayload = {
     tracks: {
       items: tracks,
@@ -829,8 +941,8 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
       hasMore: backendData?.albums?.hasMore ?? (albums.length >= 8),
     },
     playlists: {
-      items: playlists,
-      total: backendData?.playlists?.total ?? playlists.length,
+      items: mergedPlaylists,
+      total: (backendData?.playlists?.total ?? playlists.length) + userMatchedPlaylists.length,
       offset,
       limit,
       hasMore: false,

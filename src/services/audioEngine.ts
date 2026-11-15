@@ -227,6 +227,11 @@ class AudioEngine {
   private spatialPannerNode: StereoPannerNode | null = null;
   private spatialRearFilter: BiquadFilterNode | null = null;
   private monoNode: GainNode | null = null;
+  private stereoPassGain: GainNode | null = null;
+  private monoPassGain: GainNode | null = null;
+  private monoSumNode: GainNode | null = null;
+  private monoSplitter: ChannelSplitterNode | null = null;
+  private monoMerger: ChannelMergerNode | null = null;
   private currentSpeedRate = 1.0;
   private currentPreservesPitch = true;
   private activeAuxFX: ActiveAuxFX | null = null;
@@ -2377,11 +2382,6 @@ class AudioEngine {
         this.spatialRearFilter.frequency.value = 3200;
         this.spatialRearFilter.gain.value = 0;
 
-        this.monoNode = this.audioContext.createGain();
-        this.monoNode.channelCount = 2;
-        this.monoNode.channelCountMode = 'explicit';
-        this.monoNode.channelInterpretation = 'speakers';
-
         let postComp: AudioNode = this.compressorNode;
         if (this.spatialPannerNode) {
           postComp.connect(this.spatialPannerNode);
@@ -2389,8 +2389,30 @@ class AudioEngine {
         } else {
           postComp.connect(this.spatialRearFilter);
         }
-        this.spatialRearFilter.connect(this.monoNode);
-        this.monoNode.connect(this.audioContext.destination);
+
+        // Stereo direct branch
+        this.stereoPassGain = this.audioContext.createGain();
+        this.stereoPassGain.gain.value = 1.0;
+        this.spatialRearFilter.connect(this.stereoPassGain);
+        this.stereoPassGain.connect(this.audioContext.destination);
+
+        // Mono summed branch (pure 50% L + 50% R to both ears)
+        this.monoSplitter = this.audioContext.createChannelSplitter(2);
+        this.monoMerger = this.audioContext.createChannelMerger(2);
+        this.monoSumNode = this.audioContext.createGain();
+        this.monoSumNode.gain.value = 0.5;
+        this.monoPassGain = this.audioContext.createGain();
+        this.monoPassGain.gain.value = 0.0;
+
+        this.spatialRearFilter.connect(this.monoSplitter);
+        this.monoSplitter.connect(this.monoSumNode, 0); // L
+        this.monoSplitter.connect(this.monoSumNode, 1); // R
+        this.monoSumNode.connect(this.monoMerger, 0, 0); // Out L
+        this.monoSumNode.connect(this.monoMerger, 0, 1); // Out R
+        this.monoMerger.connect(this.monoPassGain);
+        this.monoPassGain.connect(this.audioContext.destination);
+
+        this.monoNode = this.monoPassGain;
 
         void import('./labsService')
           .then(({ getEffectiveSpatialSettings, getEffectiveSpeedSettings }) => {
@@ -2663,7 +2685,8 @@ class AudioEngine {
       sourceId === 'offline' ||
       sourceId.startsWith('sc:') ||
       sourceId.startsWith('sc-') ||
-      sourceId.startsWith('mono:');
+      sourceId.startsWith('mono:') ||
+      sourceId.startsWith('dsp:');
 
     this.isTransitioning = true;
     setTimeout(() => { this.isTransitioning = false; }, 3500);
@@ -2682,7 +2705,13 @@ class AudioEngine {
       if (sourceId === 'offline') {
         srcUrl = await this.resolveOfflinePlaybackUrl(track);
       } else {
-        const normId = sourceId.startsWith('sc-') ? `sc:${sourceId.slice(3)}` : sourceId;
+        const normId = sourceId.startsWith('dsp:')
+          ? sourceId.slice(4)
+          : sourceId.startsWith('mono:')
+          ? sourceId.slice(5)
+          : sourceId.startsWith('sc-')
+          ? `sc:${sourceId.slice(3)}`
+          : sourceId;
         srcUrl = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(track.id)}`;
       }
       if (!srcUrl) return false;
@@ -3149,6 +3178,28 @@ class AudioEngine {
 
       if (videoId) {
         this.currentVideoId = videoId;
+
+        // If user has Audio Mono or 3D Spatial enabled, route directly to HTML5 stream for real-time DSP
+        let wantsDSP = false;
+        try {
+          const { getEffectiveSpatialSettings } = await import('./labsService');
+          const spat = getEffectiveSpatialSettings();
+          wantsDSP = spat.mono || spat.spatialEnabled;
+        } catch {}
+
+        if (wantsDSP) {
+          const ok = await this.loadAudioSourceAtPosition(
+            `dsp:${videoId}`,
+            startSeconds,
+            true,
+            curTrk || ({ id: trackId, name: tTitle || query, artists: [{ name: tArtist || '' }] } as any)
+          );
+          if (ok) {
+            this.isTransitioning = false;
+            return;
+          }
+        }
+
         this.activeEngine = 'youtube';
         await this.ensureYouTubeReady();
         if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
@@ -3772,34 +3823,60 @@ class AudioEngine {
   public setSpatialAndMono(opts: { mono: boolean; spatialEnabled: boolean; x: number; y: number }): void {
     this.initAudioContext();
     if (!this.audioContext) return;
+    if (this.audioContext.state === 'suspended') {
+      this.audioContext.resume().catch(() => {});
+    }
     const now = this.audioContext.currentTime;
 
+    if (this.stereoPassGain && this.monoPassGain) {
+      if (opts.mono) {
+        this.stereoPassGain.gain.setTargetAtTime(0, now, 0.03);
+        this.monoPassGain.gain.setTargetAtTime(1, now, 0.03);
+      } else {
+        this.stereoPassGain.gain.setTargetAtTime(1, now, 0.03);
+        this.monoPassGain.gain.setTargetAtTime(0, now, 0.03);
+      }
+    }
+
     if (this.monoNode) {
-      // 1 channel = L+R summed to both ears, 2 channels = normal stereo
       this.monoNode.channelCount = opts.mono ? 1 : 2;
     }
 
     if (opts.mono || !opts.spatialEnabled) {
       if (this.spatialPannerNode) {
-        try { this.spatialPannerNode.pan.setValueAtTime(0, now); } catch {}
+        try { this.spatialPannerNode.pan.setTargetAtTime(0, now, 0.03); } catch {}
       }
       if (this.spatialRearFilter) {
-        try { this.spatialRearFilter.gain.setValueAtTime(0, now); } catch {}
+        try { this.spatialRearFilter.gain.setTargetAtTime(0, now, 0.03); } catch {}
       }
-      return;
+    } else {
+      const clampedX = Math.min(1, Math.max(-1, opts.x || 0));
+      const clampedY = Math.min(1, Math.max(-1, opts.y || 0));
+
+      if (this.spatialPannerNode) {
+        try { this.spatialPannerNode.pan.setTargetAtTime(clampedX, now, 0.03); } catch {}
+      }
+
+      if (this.spatialRearFilter) {
+        const filterGain = clampedY < 0 ? clampedY * 8 : clampedY * 3.5;
+        try {
+          this.spatialRearFilter.frequency.setTargetAtTime(3200, now, 0.03);
+          this.spatialRearFilter.gain.setTargetAtTime(filterGain, now, 0.03);
+        } catch {}
+      }
     }
 
-    const clampedX = Math.min(1, Math.max(-1, opts.x || 0));
-    const clampedY = Math.min(1, Math.max(-1, opts.y || 0));
-
-    if (this.spatialPannerNode) {
-      try { this.spatialPannerNode.pan.setValueAtTime(clampedX, now); } catch {}
+    if ((opts.mono || opts.spatialEnabled) && this.activeEngine === 'youtube' && this.currentVideoId) {
+      this.ensureDSPProcessingMode();
     }
+  }
 
-    if (this.spatialRearFilter) {
-      // Behind listener (Y < 0): damp higher frequencies simulating head shadow
-      const rearDamp = clampedY < 0 ? clampedY * 7 : 0;
-      try { this.spatialRearFilter.gain.setValueAtTime(rearDamp, now); } catch {}
+  public ensureDSPProcessingMode(): void {
+    const currentTrack = usePlayerStore.getState().currentTrack;
+    if (this.activeEngine === 'youtube' && this.currentVideoId && currentTrack) {
+      const posSec = this.getCurrentTime();
+      const wasPlaying = usePlayerStore.getState().isPlaying;
+      this.loadAudioSourceAtPosition(`dsp:${this.currentVideoId}`, posSec, wasPlaying, currentTrack).catch(() => {});
     }
   }
 

@@ -138,8 +138,8 @@ function syncAudioEngineSnapshot(st: {
     const useSpeed = st.labsEnabled && st.speedControlEnabled;
     engine.setPlaybackSpeedAndPitch?.(useSpeed ? st.playbackSpeed : 1, useSpeed ? st.preservesPitch : true);
     engine.setSpatialAndMono?.({
-      mono: st.audioMono,
-      spatialEnabled: st.labsEnabled && st.spatialEnabled && !st.audioMono,
+      mono: Boolean(st.audioMono),
+      spatialEnabled: Boolean(st.spatialEnabled && !st.audioMono),
       x: st.spatialX,
       y: st.spatialY,
     });
@@ -307,8 +307,8 @@ export function getEffectiveSpeedSettings(): { active: boolean; rate: number; pr
 export function getEffectiveSpatialSettings(): { mono: boolean; spatialEnabled: boolean; x: number; y: number } {
   const st = useLabsStore.getState();
   return {
-    mono: st.audioMono,
-    spatialEnabled: st.labsEnabled && st.spatialEnabled && !st.audioMono,
+    mono: Boolean(st.audioMono),
+    spatialEnabled: Boolean(st.spatialEnabled && !st.audioMono),
     x: st.spatialX,
     y: st.spatialY,
   };
