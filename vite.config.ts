@@ -13,7 +13,7 @@ import { readExternalPlaylist } from './api/_lib/import-playlist.js';
 // @ts-ignore
 import { extractSpotifySession, searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
 // @ts-ignore
-import { searchSoundCloudCatalog, resolveSoundCloudUrl, findMatchingOfficialTrackIndex, buildArtistSoundCloudVault } from './api/_lib/musicFallback.js';
+import { searchSoundCloudCatalog, resolveSoundCloudUrl, findMatchingOfficialTrackIndex, buildArtistSoundCloudVault, findTrackByLyrics } from './api/_lib/musicFallback.js';
 // @ts-ignore
 import metadataHandler from './api/metadata.js';
 // @ts-ignore
@@ -1222,7 +1222,14 @@ function dynamicSpotifyPlugin(): Plugin {
             );
           }
 
-          const results = await Promise.all(fetchPromises);
+          const lyricsMatchPromise = (words.length >= 2)
+            ? findTrackByLyrics(cleanQ).catch(() => null)
+            : Promise.resolve(null);
+
+          const [results, lyricsMatchedTrack] = await Promise.all([
+            Promise.all(fetchPromises),
+            lyricsMatchPromise,
+          ]);
           const deezerTracksRes = results[0];
           const deezerArtistsRes = results[1];
           const deezerAlbumsRes = results[2];
@@ -1231,7 +1238,7 @@ function dynamicSpotifyPlugin(): Plugin {
           const deezerPlaylistsRes1 = results[5] || { data: [] };
           const deezerPlaylistsRes2 = results[6] || { data: [] };
           const deezerRemixRes = results[7] || { data: [] };
-          const extraDeezerData = results.slice(8).flatMap(r => r?.data || []);
+          const extraDeezerData = results.slice(8).flatMap((r: any) => r?.data || []);
 
           const allDeezerRaw = [...(deezerTracksRes.data || []), ...extraDeezerData];
           const deezerTracks = allDeezerRaw.map((t: any) => {
@@ -1341,6 +1348,23 @@ function dynamicSpotifyPlugin(): Plugin {
             };
             return scoreTrack(b) - scoreTrack(a);
           });
+
+          if (lyricsMatchedTrack) {
+            const matchKey = `${(lyricsMatchedTrack.name || '').toLowerCase()} ${(lyricsMatchedTrack.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+            const existingIdx = combined.findIndex((t: any) => {
+              const k = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+              return k === matchKey || t.id === lyricsMatchedTrack.id;
+            });
+            if (existingIdx >= 0) {
+              combined[existingIdx].isLyricsMatch = true;
+              combined[existingIdx].lyricsSnippet = cleanQ;
+              combined[existingIdx].lyricsBadge = 'Coincidencia por letra';
+              const [found] = combined.splice(existingIdx, 1);
+              combined.unshift(found);
+            } else {
+              combined.unshift(lyricsMatchedTrack);
+            }
+          }
 
           const artists = (deezerArtistsRes.data || []).map((a: any) => ({
             id: `art-${a.id}`,

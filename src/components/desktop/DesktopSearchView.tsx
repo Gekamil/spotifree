@@ -245,6 +245,7 @@ interface DesktopSearchViewProps {
 
 export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPlaylistById }) => {
   const { searchQuery } = useUIStore();
+  const isAuthenticated = useSpotifyDataStore((s) => s.isAuthenticated);
   const { playTrack, currentTrack, isPlaying, togglePlay } = usePlayerStore(
     useShallow((s) => ({ playTrack: s.playTrack, currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay }))
   );
@@ -548,6 +549,28 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
     }
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 select-none">
+        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4 text-[#1ed760]">
+          <SearchNativeIcon size={32} />
+        </div>
+        <h2 className="text-2xl font-bold text-white mb-2 font-['SpotifyMixUITitle']">
+          Inicia sesión para buscar
+        </h2>
+        <p className="text-sm text-[#b3b3b3] max-w-[320px] mb-6">
+          Encuentra tus canciones favoritas, letras, artistas, podcasts y playlists.
+        </p>
+        <button
+          onClick={() => useUIStore.getState().openLoginModal()}
+          className="px-8 py-3 rounded-full bg-[#1ed760] text-black font-bold text-sm hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
+        >
+          Iniciar sesión
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 pb-16 space-y-6 select-none bg-[#121212] min-h-full">
       {!searchQuery.trim() ? (
@@ -792,9 +815,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             }`}>
                               {topTrack.name}
                             </h3>
-                            <p className="text-sm text-[#b3b3b3] mt-1">
-                              Canción • {topTrack.artists?.map((a: any) => a.name).join(', ')}
-                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                              {(topTrack as any).isLyricsMatch && (
+                                <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
+                                  <span>🎵</span> Coincidencia por letra
+                                </span>
+                              )}
+                              <p className="text-sm text-[#b3b3b3] truncate">
+                                Canción • {topTrack.artists?.map((a: any) => a.name).join(', ')}
+                              </p>
+                            </div>
                           </div>
                           <button
                             onClick={(e) => {
@@ -853,6 +883,11 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                   {track.name}
                                 </span>
                                 <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                                  {(track as any).isLyricsMatch && (
+                                    <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
+                                      <span>🎵</span> Coincidencia por letra
+                                    </span>
+                                  )}
                                   {track.scVariantLabel && (
                                     <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
                                       {track.scVariantLabel}
@@ -1068,6 +1103,11 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                               {track.name}
                             </span>
                             <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                              {(track as any).isLyricsMatch && (
+                                <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
+                                  <span>🎵</span> Coincidencia por letra
+                                </span>
+                              )}
                               {track.scVariantLabel && (
                                 <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
                                   {track.scVariantLabel}

@@ -1,5 +1,7 @@
 import React from 'react';
 import { SearchActiveNativeIcon } from '../icons/SpotifyNativeIcons';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { useUIStore } from '../../store/useUIStore';
 
 interface MobileBottomNavProps {
   activeTab: 'home' | 'search' | 'library' | 'create';
@@ -14,6 +16,8 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
   onOpenCreate,
   isCreateOpen = false,
 }) => {
+  const isAuthenticated = useSpotifyDataStore((s) => s.isAuthenticated);
+
   return (
     <nav
       data-testid="bottom-tab-navigation"
@@ -58,7 +62,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
         {/* 2. Buscar */}
         <button
-          onClick={() => onTabChange('search')}
+          onClick={() => {
+            if (!isAuthenticated) {
+              useUIStore.getState().openLoginModal();
+              return;
+            }
+            onTabChange('search');
+          }}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer group active:scale-95 ${
             activeTab === 'search' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
           }`}
@@ -85,7 +95,13 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
 
         {/* 3. Tu biblioteca */}
         <button
-          onClick={() => onTabChange('library')}
+          onClick={() => {
+            if (!isAuthenticated) {
+              useUIStore.getState().openLoginModal();
+              return;
+            }
+            onTabChange('library');
+          }}
           className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer group active:scale-95 ${
             activeTab === 'library' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
           }`}
@@ -115,6 +131,10 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
         {/* 4. Crear with smooth + to × rotation and label hiding */}
         <button
           onClick={() => {
+            if (!isAuthenticated) {
+              useUIStore.getState().openLoginModal();
+              return;
+            }
             if (onOpenCreate) {
               onOpenCreate();
             }

@@ -743,6 +743,95 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       }
     }
 
+    // 3b. Official Spotify Web API v1/playlists/:id fallback with pagination up to 10,000 tracks
+    if (activeToken) {
+      try {
+        const plApiRes = await fetch(`https://api.spotify.com/v1/playlists/${cleanId}`, {
+          headers: {
+            'Authorization': `Bearer ${activeToken}`,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+          },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
+        });
+
+        if (plApiRes.ok) {
+          const plData = await plApiRes.json();
+          if (plData && plData.name) {
+            const rawCover = plData.images?.[0]?.url || '';
+            const coverUrl = toHDImage(rawCover);
+            let allItems = Array.isArray(plData.tracks?.items) ? [...plData.tracks.items] : [];
+            let nextUrl = plData.tracks?.next;
+            let pageCount = 0;
+            const totalReported = plData.tracks?.total || allItems.length;
+
+            while (nextUrl && allItems.length < 10000 && pageCount < 200) {
+              pageCount++;
+              try {
+                const pageRes = await fetch(nextUrl, {
+                  headers: {
+                    'Authorization': `Bearer ${activeToken}`,
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                  },
+                  signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
+                });
+                if (!pageRes.ok) break;
+                const pageData = await pageRes.json();
+                if (Array.isArray(pageData.items)) {
+                  allItems.push(...pageData.items);
+                }
+                nextUrl = pageData.next;
+              } catch {
+                break;
+              }
+            }
+
+            const tracks = allItems
+              .map((it, idx) => {
+                const tr = it.track || it;
+                if (!tr || !tr.name) return null;
+                const trCover = toHDImage(tr.album?.images?.[0]?.url || rawCover);
+                return {
+                  id: tr.id || `track-${idx}`,
+                  name: tr.name,
+                  artists: (tr.artists || []).map((a, i) => ({ id: a.id || `art-${idx}-${i}`, name: a.name })),
+                  album: {
+                    id: tr.album?.id || `alb-${idx}`,
+                    name: tr.album?.name || plData.name,
+                    images: trCover ? [{ url: trCover }] : [],
+                  },
+                  duration_ms: tr.duration_ms || 180000,
+                  preview_url: tr.preview_url || null,
+                  added_at: it.added_at ? new Date(it.added_at).toLocaleDateString('es-ES') : 'Reciente',
+                };
+              })
+              .filter(Boolean);
+
+            const result = {
+              id: cleanId,
+              name: plData.name,
+              description: stripHtml(plData.description || ''),
+              type: 'playlist',
+              images: coverUrl ? [{ url: coverUrl }] : [],
+              owner: {
+                display_name: plData.owner?.display_name || plData.owner?.id || 'Spotify',
+                id: plData.owner?.id || 'spotify',
+              },
+              color: '#303030',
+              tracks: {
+                total: totalReported || tracks.length,
+                items: tracks,
+              },
+              _cachedAt: Date.now(),
+            };
+            MEMORY_PLAYLIST_CACHE.set(cleanId, result);
+            return result;
+          }
+        }
+      } catch (err) {
+        console.warn('[Playlist API] Spotify Web API v1/playlists error:', err.message);
+      }
+    }
+
     // 4. Album Resolution via Pathfinder getAlbum
     try {
       const albRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {

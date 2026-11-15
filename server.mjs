@@ -5,11 +5,13 @@ import path from 'node:path';
 import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks, findBestInstrumentalNode } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
 import { searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
+import { resolveSpotifyPlaylist } from './api/playlist.js';
 import {
   searchSoundCloudCatalog,
   resolveSoundCloudUrl,
   findMatchingOfficialTrackIndex,
   buildArtistSoundCloudVault,
+  findTrackByLyrics,
 } from './api/_lib/musicFallback.js';
 
 const PORT = process.env.PORT || 10000;
@@ -989,7 +991,14 @@ const server = http.createServer(async (req, res) => {
         );
       }
 
-      const results = await Promise.all(fetchPromises);
+      const lyricsMatchPromise = (offset === 0 && words.length >= 2)
+        ? findTrackByLyrics(trackSearchQuery).catch(() => null)
+        : Promise.resolve(null);
+
+      const [results, lyricsMatchedTrack] = await Promise.all([
+        Promise.all(fetchPromises),
+        lyricsMatchPromise,
+      ]);
       const deezerTracksRes = results[0];
       const deezerArtistsRes = results[1];
       const deezerAlbumsRes = results[2];
@@ -1110,6 +1119,23 @@ const server = http.createServer(async (req, res) => {
         };
         return scoreTrack(b) - scoreTrack(a);
       });
+
+      if (lyricsMatchedTrack) {
+        const matchKey = `${(lyricsMatchedTrack.name || '').toLowerCase()} ${(lyricsMatchedTrack.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+        const existingIdx = combined.findIndex(t => {
+          const k = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+          return k === matchKey || t.id === lyricsMatchedTrack.id;
+        });
+        if (existingIdx >= 0) {
+          combined[existingIdx].isLyricsMatch = true;
+          combined[existingIdx].lyricsSnippet = cleanQ;
+          combined[existingIdx].lyricsBadge = 'Coincidencia por letra';
+          const [found] = combined.splice(existingIdx, 1);
+          combined.unshift(found);
+        } else {
+          combined.unshift(lyricsMatchedTrack);
+        }
+      }
 
       const artists = (deezerArtistsRes.data || []).map(a => ({
         id: `art-${a.id}`,
@@ -1521,6 +1547,21 @@ const server = http.createServer(async (req, res) => {
       } catch (err) {
         console.warn(`Artist fetch notice ${rawId}:`, err.message);
       }
+    }
+
+    const cookie = req.headers['x-spotify-cookie'] || '';
+    const authHeader = req.headers['authorization'] || '';
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const refresh = url.searchParams.get('refresh') === '1' || url.searchParams.get('refresh') === 'true';
+
+    try {
+      const playlist = await resolveSpotifyPlaylist(rawId, { cookie, token, refresh });
+      if (playlist && playlist.tracks && playlist.tracks.items && playlist.tracks.items.length > 0) {
+        res.statusCode = 200;
+        return res.end(JSON.stringify(playlist));
+      }
+    } catch (err) {
+      console.warn(`[server.mjs] resolveSpotifyPlaylist error ${rawId}:`, err.message);
     }
 
     try {

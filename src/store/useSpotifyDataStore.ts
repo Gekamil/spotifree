@@ -832,11 +832,29 @@ const store = create<SpotifyDataState>((set, get) => ({
       is_custom: true,
     } as any;
 
-    const updated = deduplicateUserPlaylists([newPlaylist, ...s.playlists]);
+    set((state) => {
+      const remaining = state.playlists.filter((p) => p.id !== newId);
+      const updated = deduplicateUserPlaylists([newPlaylist, ...remaining]);
+      return {
+        playlists: updated,
+        playlistDetailsCache: {
+          ...state.playlistDetailsCache,
+          [newPlaylist.id]: newPlaylist,
+        },
+      };
+    });
 
     if (typeof window !== 'undefined') {
       try {
-        // 0. Cache tracks for this playlist immediately
+        // 0. Remove from deleted blacklist if present
+        const rawDeleted = window.localStorage.getItem('spotifree_deleted_playlist_ids');
+        if (rawDeleted) {
+          const list: string[] = JSON.parse(rawDeleted);
+          const filtered = list.filter((x: string) => x !== newId);
+          window.localStorage.setItem('spotifree_deleted_playlist_ids', JSON.stringify(filtered));
+        }
+
+        // Cache tracks for this playlist immediately
         if (initialList.length > 0) {
           window.localStorage.setItem(`spotifree_playlist_tracks_${newId}`, JSON.stringify(initialList));
         }
@@ -871,22 +889,14 @@ const store = create<SpotifyDataState>((set, get) => ({
           window.localStorage.setItem('spotify_extracted_session', JSON.stringify(parsed));
         }
 
-        // 5. Cloud account sync
+        // 5. Cloud account sync with live current playlists
         import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
-          syncSpotifreeAccount({ playlists: updated }).catch(() => {});
+          syncSpotifreeAccount({ playlists: get().playlists }).catch(() => {});
         });
       } catch (e) {
         console.error('Error creating playlist in storage:', e);
       }
     }
-
-    set((state) => ({
-      playlists: updated,
-      playlistDetailsCache: {
-        ...state.playlistDetailsCache,
-        [newPlaylist.id]: newPlaylist,
-      },
-    }));
 
     return newPlaylist;
   },
@@ -1088,6 +1098,8 @@ const store = create<SpotifyDataState>((set, get) => ({
           const userId = window.localStorage.getItem('spotifree_active_user_id') || 'active';
           window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(newCache));
           window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(newCache));
+          window.localStorage.removeItem(`spotifree_playlist_tracks_${id}`);
+          window.localStorage.removeItem(`spotifree_playlist_tracks_${cleanId}`);
 
           const rawAccountSession = window.localStorage.getItem(`spotifree_account_session_${userId}`);
           if (rawAccountSession) {
@@ -1114,10 +1126,10 @@ const store = create<SpotifyDataState>((set, get) => ({
             window.localStorage.setItem('spotifree_downloaded_playlists_list', JSON.stringify(list));
           }
 
-          // 5. Cloud sync to Spotifree account if logged in
+          // 5. Cloud sync to Spotifree account if logged in using current live playlists
           import('../services/spotifreeAuth').then(({ syncSpotifreeAccount }) => {
             syncSpotifreeAccount({
-              playlists: remainingPlaylists,
+              playlists: get().playlists,
               deletedPlaylistIds: deletedList,
               // the trash travels with the account, so it can be recovered from another device
               stats: trashForCloud(),
@@ -1457,8 +1469,20 @@ const store = create<SpotifyDataState>((set, get) => ({
 
       // 2. Prioritize active validated cookie session if present
       const isLoggedOut = typeof window !== 'undefined' && window.localStorage.getItem('spotify_logged_out') === 'true';
+      if (isLoggedOut) {
+        set({
+          isAuthenticated: false,
+          user: null,
+          playlists: [],
+          dynamicShelves: DEFAULT_PUBLIC_SHELVES,
+          quickAccessCards: [],
+          isLoading: false,
+        });
+        return;
+      }
+
       let userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') : null;
-      if (!userCookie && cloudAcc?.spotifyCookie && !isLoggedOut) {
+      if (!userCookie && cloudAcc?.spotifyCookie) {
         userCookie = cloudAcc.spotifyCookie || null;
         if (typeof window !== 'undefined' && userCookie) {
           window.localStorage.setItem('user_spotify_cookie', userCookie);
@@ -1734,43 +1758,6 @@ const store = create<SpotifyDataState>((set, get) => ({
         return;
       }
 
-      if (importedPlaylists && importedPlaylists.length > 0) {
-        const guestUser: UserProfile = {
-          id: 'spotify-user',
-          display_name: 'Invitado',
-          images: [],
-          email: '',
-        } as any;
-
-        // Same list the user saw before reloading: Liked Songs + DJ + their lists (minus deleted ones)
-        const guestPlaylists = deduplicateUserPlaylists(importedPlaylists);
-        const shelves = buildDynamicShelves(
-          guestUser,
-          guestPlaylists,
-          'Tus listas importadas',
-          [],
-          []
-        );
-
-        set({
-          isAuthenticated: true,
-          user: guestUser,
-          playlists: guestPlaylists,
-          dynamicShelves: shelves,
-          quickAccessCards: guestPlaylists
-            .filter((p) => p.id !== 'spotify-dj' && (p.id !== 'liked-songs' || (p.tracks?.items?.length || 0) > 0))
-            .slice(0, 8)
-            .map((p) => ({
-              id: p.id,
-              name: p.name,
-              image: getPlaylistCover(p),
-              color: (p as any).color || '#303030',
-            })),
-          isLoading: false,
-        });
-        return;
-      }
-
       // 4. If Cloud Account is logged in without Spotify session yet
       if (cloudAcc) {
         const cloudUser = {
@@ -1831,12 +1818,15 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotify_expires_at');
       window.localStorage.removeItem('spotify_session_synced');
       window.localStorage.removeItem('user_spotify_cookie');
+      window.localStorage.removeItem('spotify_sp_dc');
       window.localStorage.removeItem('user_imported_playlists');
+      window.localStorage.removeItem('spotifree_saved_library_playlists');
       window.localStorage.removeItem('spotify_extracted_session');
       window.localStorage.removeItem('spotifree_active_user_id');
       window.localStorage.removeItem('spotifree_current_cloud_account');
       window.localStorage.removeItem('spotifree_account');
       window.localStorage.removeItem('spotifree_saved_accounts');
+      window.localStorage.removeItem('spotifree_playlist_cache_active');
       window.localStorage.removeItem('spotifree_liked_tracks');
       window.localStorage.removeItem('spotifree_guest_liked_songs');
       window.localStorage.setItem('spotify_logged_out', 'true');
@@ -1851,10 +1841,23 @@ const store = create<SpotifyDataState>((set, get) => ({
       authWarning: null,
       isLoading: false,
     });
-    // Reset player liked tracks and stats
+    // Immediately stop audio engine and reset player store so music CANNOT continue playing
     try {
+      import('../services/audioEngine').then(({ audioEngine }) => {
+        audioEngine.pause();
+      });
       import('./usePlayerStore').then(({ usePlayerStore }) => {
-        usePlayerStore.setState({ likedTrackIds: [] });
+        usePlayerStore.setState({
+          isPlaying: false,
+          currentTrack: null,
+          queue: [],
+          originalQueue: [],
+          likedTrackIds: [],
+        });
+      });
+      import('./useUIStore').then(({ useUIStore }) => {
+        useUIStore.getState().setActiveMainTab('home');
+        useUIStore.getState().openLoginModal();
       });
     } catch {}
     try { useStatsStore.getState().resetStats(); } catch {}

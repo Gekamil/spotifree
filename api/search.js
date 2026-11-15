@@ -3,6 +3,7 @@ import {
   searchSoundCloudCatalog,
   resolveSoundCloudUrl,
   findMatchingOfficialTrackIndex,
+  findTrackByLyrics,
 } from './_lib/musicFallback.js';
 
 const searchCache = new Map();
@@ -177,7 +178,14 @@ export default async function handler(req, res) {
       }
     }
 
-    const results = await Promise.all(fetchPromises);
+    const lyricsMatchPromise = (offset === 0 && words.length >= 2)
+      ? findTrackByLyrics(trackSearchQuery).catch(() => null)
+      : Promise.resolve(null);
+
+    const [results, lyricsMatchedTrack] = await Promise.all([
+      Promise.all(fetchPromises),
+      lyricsMatchPromise,
+    ]);
     const deezerTracksRes = results[0];
     const deezerArtistsRes = results[1];
     const deezerAlbumsRes = results[2];
@@ -296,6 +304,23 @@ export default async function handler(req, res) {
       };
       return scoreTrack(b) - scoreTrack(a);
     });
+
+    if (lyricsMatchedTrack) {
+      const matchKey = `${(lyricsMatchedTrack.name || '').toLowerCase()} ${(lyricsMatchedTrack.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+      const existingIdx = combinedTracks.findIndex(t => {
+        const k = `${(t.name || '').toLowerCase()} ${(t.artists?.[0]?.name || '').toLowerCase()}`.replace(/[^a-z0-9]/g, '');
+        return k === matchKey || t.id === lyricsMatchedTrack.id;
+      });
+      if (existingIdx >= 0) {
+        combinedTracks[existingIdx].isLyricsMatch = true;
+        combinedTracks[existingIdx].lyricsSnippet = cleanQ;
+        combinedTracks[existingIdx].lyricsBadge = 'Coincidencia por letra';
+        const [found] = combinedTracks.splice(existingIdx, 1);
+        combinedTracks.unshift(found);
+      } else {
+        combinedTracks.unshift(lyricsMatchedTrack);
+      }
+    }
 
     const artists = (deezerArtistsRes.data || []).map(a => ({
       id: `art-${a.id}`,

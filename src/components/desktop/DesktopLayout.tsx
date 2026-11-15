@@ -24,12 +24,24 @@ import { useSpotifreeMixes } from '../../services/spotifreeMixes';
 export const DesktopLayout: React.FC = () => {
   const { activeMainTab, setActiveMainTab, activeRightSidebar, toggleRightSidebar } = useUIStore();
   const playlists = useSpotifyDataStore((s) => s.playlists);
+  const isAuthenticated = useSpotifyDataStore((s) => s.isAuthenticated);
   const [selectedPlaylist, setSelectedPlaylist] = React.useState<Playlist | null>(null);
   const mainScrollRef = useRef<HTMLDivElement>(null);
+
+  // Require login when navigating or switching tabs without an authenticated session
+  useEffect(() => {
+    if (!isAuthenticated && activeMainTab !== 'home') {
+      useUIStore.getState().openLoginModal();
+    }
+  }, [activeMainTab, isAuthenticated]);
 
   const activePlaylist = (selectedPlaylist ? playlists.find((p) => p.id === selectedPlaylist.id) || selectedPlaylist : playlists[0]) || null;
 
   const handleSelectPlaylist = (playlist: Playlist) => {
+    if (!isAuthenticated) {
+      useUIStore.getState().openLoginModal();
+      return;
+    }
     if (
       playlist.id === 'spotify-dj' ||
       playlist.id === 'dj' ||
@@ -47,6 +59,10 @@ export const DesktopLayout: React.FC = () => {
   };
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
+    if (!isAuthenticated) {
+      useUIStore.getState().openLoginModal();
+      return;
+    }
     const cleanId = id
       .replace(/^spotify:playlist:/, '')
       .replace(/^spotify:album:/, '')

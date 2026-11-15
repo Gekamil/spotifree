@@ -44,6 +44,8 @@ export const CreateMenuDropdown: React.FC = () => {
     };
   }, [isCreateMenuOpen, closeCreateMenu]);
 
+  const isAuthenticated = useSpotifyDataStore((s) => s.isAuthenticated);
+
   if (!mounted) return null;
 
   const Item = ({ icon, title, subtitle, onClick }: { icon: React.ReactNode; title: string; subtitle: string; onClick: () => void }) => (
@@ -75,9 +77,13 @@ export const CreateMenuDropdown: React.FC = () => {
         title="Playlist"
         subtitle="Crea una playlist con canciones"
         onClick={() => {
+          closeCreateMenu();
+          if (!isAuthenticated) {
+            useUIStore.getState().openLoginModal();
+            return;
+          }
           const newPl = useSpotifyDataStore.getState().createPlaylist();
           (newPl as any).is_new = true;
-          closeCreateMenu();
           useUIStore.getState().openEditPlaylistModal(newPl);
         }}
       />
@@ -87,6 +93,10 @@ export const CreateMenuDropdown: React.FC = () => {
         subtitle="De YouTube Music, Apple Music, Deezer o Spotify"
         onClick={() => {
           closeCreateMenu();
+          if (!isAuthenticated) {
+            useUIStore.getState().openLoginModal();
+            return;
+          }
           openImportPlaylistDialog();
         }}
       />

@@ -171,6 +171,10 @@ export const MobileLayout: React.FC = () => {
 
   useEffect(() => {
     const handleOpen = (e: any) => {
+      if (!useSpotifyDataStore.getState().isAuthenticated) {
+        useUIStore.getState().openLoginModal();
+        return;
+      }
       if (e.detail) {
         setSelectedPlaylist(e.detail);
         setMobileTab('playlist');
@@ -178,6 +182,10 @@ export const MobileLayout: React.FC = () => {
     };
     window.addEventListener('spotifree_open_playlist', handleOpen);
     (window as any).__mobileSelectPlaylist = (pl: Playlist) => {
+      if (!useSpotifyDataStore.getState().isAuthenticated) {
+        useUIStore.getState().openLoginModal();
+        return;
+      }
       setSelectedPlaylist(pl);
       setMobileTab('playlist');
     };
@@ -381,10 +389,19 @@ export const MobileLayout: React.FC = () => {
   const autoCoverVersion = useAutoCovers((s) => s.version); // playlist collages ready → repaint
   // "Mostrar todo" of a Home section (a grid page; closes when leaving Home)
   const [seeAllShelf, setSeeAllShelf] = useState<{ title: string; prefix?: string; cards: Array<{ id: string; title: string; subtitle: string; image: string }> } | null>(null);
+  const { openLoginModal, sortOrder, setSortOrder, viewMode, setViewMode } = useUIStore();
+
   useEffect(() => {
     if (mobileTab !== 'home') setSeeAllShelf(null);
   }, [mobileTab]);
-  const { openLoginModal, sortOrder, setSortOrder, viewMode, setViewMode } = useUIStore();
+
+  useEffect(() => {
+    if (!isAuthenticated && mobileTab !== 'home') {
+      setMobileTab('home');
+      setSelectedPlaylist(null);
+      openLoginModal();
+    }
+  }, [isAuthenticated, mobileTab, openLoginModal]);
   const [isMobileSortSheetOpen, setIsMobileSortSheetOpen] = useState(false);
   const [isProfileDrawerOpen, setIsProfileDrawerOpen] = useState(false);
 
@@ -502,6 +519,10 @@ export const MobileLayout: React.FC = () => {
   }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, sfArtists, shortcuts, autoCoverVersion]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
+    if (!isAuthenticated) {
+      openLoginModal();
+      return;
+    }
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
     if (cleanId === 'spotify-dj' || cleanId === 'dj' || customName?.toLowerCase().trim() === 'dj') {
       setMobileTab('dj');

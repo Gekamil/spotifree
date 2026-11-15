@@ -39,8 +39,47 @@ export async function fetchPlaylistDetails(id: string, options?: { refresh?: boo
                 break;
               }
             }
-            data.tracks.items = allTracks;
-            data.tracks.total = Math.max(data.tracks.total || 0, allTracks.length);
+            const normalizedTracks: Track[] = allTracks
+              .map((it: any, idx: number) => {
+                const tr = it.track || it;
+                if (!tr || !tr.name) return null;
+                return {
+                  id: tr.id || `track-${idx}`,
+                  name: tr.name,
+                  artists: (tr.artists || []).map((a: any, i: number) => ({ id: a.id || `art-${idx}-${i}`, name: a.name })),
+                  album: {
+                    id: tr.album?.id || `alb-${idx}`,
+                    name: tr.album?.name || data.name,
+                    images: tr.album?.images || data.images || [],
+                  },
+                  duration_ms: tr.duration_ms || 180000,
+                  preview_url: tr.preview_url || null,
+                  added_at: it.added_at ? new Date(it.added_at).toLocaleDateString('es-ES') : 'Reciente',
+                };
+              })
+              .filter(Boolean) as Track[];
+            data.tracks.items = normalizedTracks;
+            data.tracks.total = Math.max(data.tracks.total || 0, normalizedTracks.length);
+          } else if (data && data.tracks && Array.isArray(data.tracks.items)) {
+            data.tracks.items = data.tracks.items
+              .map((it: any, idx: number) => {
+                const tr = it.track || it;
+                if (!tr || !tr.name) return null;
+                return {
+                  id: tr.id || `track-${idx}`,
+                  name: tr.name,
+                  artists: (tr.artists || []).map((a: any, i: number) => ({ id: a.id || `art-${idx}-${i}`, name: a.name })),
+                  album: {
+                    id: tr.album?.id || `alb-${idx}`,
+                    name: tr.album?.name || data.name,
+                    images: tr.album?.images || data.images || [],
+                  },
+                  duration_ms: tr.duration_ms || 180000,
+                  preview_url: tr.preview_url || null,
+                  added_at: it.added_at ? new Date(it.added_at).toLocaleDateString('es-ES') : 'Reciente',
+                };
+              })
+              .filter(Boolean) as Track[];
           }
           return data;
         }

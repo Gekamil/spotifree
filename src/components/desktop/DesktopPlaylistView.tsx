@@ -185,6 +185,45 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
 
+  const [isRefreshingTracks, setIsRefreshingTracks] = useState(false);
+
+  const handleSyncPlaylistSongs = async () => {
+    if (isRefreshingTracks) return;
+    setIsRefreshingTracks(true);
+    showGlobalToast('Sincronizando canciones...');
+    try {
+      const plId = dynamicPlaylist.id || playlist.id;
+      const isLiked = isLikedInitially;
+      const fetchId = isLiked ? 'collection-tracks' : plId;
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+      const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (userCookie) headers['x-spotify-cookie'] = userCookie;
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(fetchId)}?refresh=1`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.tracks?.items) {
+          useSpotifyDataStore.getState().cachePlaylistDetails(data);
+          useSpotifyDataStore.getState().updatePlaylist(plId, {
+            tracks: data.tracks,
+          });
+          window.dispatchEvent(
+            new CustomEvent('spotifree:playlist-refreshed', { detail: { playlistId: plId, data } })
+          );
+          showGlobalToast(`Lista actualizada (${data.tracks.items.length} canciones)`);
+          return;
+        }
+      }
+      showGlobalToast('No se pudieron obtener canciones nuevas');
+    } catch {
+      showGlobalToast('Error al actualizar la lista');
+    } finally {
+      setIsRefreshingTracks(false);
+    }
+  };
+
   const [loading, setLoading] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [reloadCounter, setReloadCounter] = useState(0);
@@ -1928,6 +1967,22 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 <path d="M12 6.05a1 1 0 0 1 1 1v7.486l1.793-1.793a1 1 0 1 1 1.414 1.414L12 18.364l-4.207-4.207a1 1 0 1 1 1.414-1.414L11 14.536V7.05a1 1 0 0 1 1-1" />
               </svg>
             </button>
+
+            {/* Sync / Refresh playlist songs */}
+            {!isArtist && (
+              <button
+                onClick={handleSyncPlaylistSongs}
+                disabled={isRefreshingTracks}
+                className={`text-[#b3b3b3] hover:text-white hover:scale-106 transition-all p-1 cursor-pointer ${
+                  isRefreshingTracks ? 'text-[#1ed760] animate-spin' : ''
+                }`}
+                title="Actualizar canciones de la lista"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16" />
+                </svg>
+              </button>
+            )}
 
             {/* More options (...) */}
             <button

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { searchSpotify } from '../../services/spotifyApi';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { useUIStore } from '../../store/useUIStore';
 import { useShallow } from 'zustand/react/shallow';
 import { formatDuration } from '../../utils/formatters';
 import { handleImageError } from '../../utils/imageFallback';
@@ -24,6 +26,7 @@ interface MobileSearchViewProps {
 const MOBILE_CATEGORIES = BROWSE_CATEGORIES;
 
 export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlaylistById }) => {
+  const isAuthenticated = useSpotifyDataStore((s) => s.isAuthenticated);
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ tracks: any[]; soundcloudTracks: any[]; artists: any[]; albums: any[]; playlists: any[] }>({
     tracks: [],
@@ -227,6 +230,28 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
     };
   }, [hasMore, isSearching, loadMore]);
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 select-none">
+        <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center mb-4 text-[#1ed760]">
+          <SearchNativeIcon size={32} />
+        </div>
+        <h2 className="text-xl font-bold text-white mb-2 font-['SpotifyMixUITitle']">
+          Inicia sesión para buscar
+        </h2>
+        <p className="text-sm text-[#b3b3b3] max-w-[280px] mb-6">
+          Encuentra tus canciones favoritas, letras, artistas, podcasts y playlists.
+        </p>
+        <button
+          onClick={() => useUIStore.getState().openLoginModal()}
+          className="px-8 py-3 rounded-full bg-[#1ed760] text-black font-bold text-sm hover:scale-105 active:scale-95 transition-all shadow-lg cursor-pointer"
+        >
+          Iniciar sesión
+        </button>
+      </div>
+    );
+  }
+
   if (selectedCat) {
     return (
       <div className="select-none text-white font-['SpotifyMixUI'] pb-36 -mx-4 -mt-4 spf-page-enter">
@@ -406,6 +431,11 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           {trk.name}
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5 truncate">
+                          {(trk as any).isLyricsMatch && (
+                            <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
+                              <span>🎵</span> Coincidencia por letra
+                            </span>
+                          )}
                           {trk.scVariantLabel && (
                             <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
                               {trk.scVariantLabel}

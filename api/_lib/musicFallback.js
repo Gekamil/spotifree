@@ -967,3 +967,138 @@ export async function buildArtistSoundCloudVault(artistName = '') {
     tracks: { total: combined.length, items: combined },
   };
 }
+
+/**
+ * Lightweight YouTube video/track search via ytInitialData scraper
+ */
+export async function searchYouTubeTracks(query, limit = 15) {
+  const cleanQ = (query || '').replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!cleanQ) return [];
+
+  try {
+    const url = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(cleanQ);
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+    const startIdx = html.indexOf('var ytInitialData = ');
+    if (startIdx === -1) return [];
+    const jsonStr = html.slice(startIdx + 20, html.indexOf(';</script>', startIdx));
+    const data = JSON.parse(jsonStr);
+    const contents = data.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents || [];
+    const tracks = [];
+    const seen = new Set();
+
+    for (const c of contents) {
+      const items = c.itemSectionRenderer?.contents || [];
+      for (const item of items) {
+        const vr = item.videoRenderer;
+        if (!vr) continue;
+        const videoId = vr.videoId;
+        if (!videoId || seen.has(videoId)) continue;
+        seen.add(videoId);
+
+        const title = vr.title?.runs?.[0]?.text;
+        const artist = vr.ownerText?.runs?.[0]?.text || vr.shortBylineText?.runs?.[0]?.text || 'Artista';
+        const thumb = vr.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+        const durText = vr.lengthText?.simpleText;
+        let durMs = 210000;
+        if (durText) {
+          const parts = durText.split(':').map(Number);
+          durMs = parts.length === 2 ? (parts[0] * 60 + parts[1]) * 1000 : (parts[0] * 3600 + parts[1] * 60 + parts[2]) * 1000;
+        }
+
+        if (title) {
+          tracks.push({
+            id: `yt-${videoId}`,
+            name: title,
+            duration_ms: durMs,
+            preview_url: null,
+            artists: [{ id: `art-${videoId}`, name: artist }],
+            album: {
+              id: `alb-${videoId}`,
+              name: title,
+              images: [{ url: thumb }],
+            },
+          });
+        }
+        if (tracks.length >= limit) break;
+      }
+      if (tracks.length >= limit) break;
+    }
+    return tracks;
+  } catch (err) {
+    console.error('[searchYouTubeTracks error]:', err?.message || err);
+    return [];
+  }
+}
+
+/**
+ * Detects songs by their lyrics using YouTube semantic matching and resolves studio metadata from Deezer.
+ */
+export async function findTrackByLyrics(query) {
+  if (!query || typeof query !== 'string') return null;
+  const cleanQ = query.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = cleanQ.split(/\s+/).filter(Boolean);
+  if (words.length < 2 && cleanQ.length < 10) return null;
+
+  try {
+    const ytMatches = await searchYouTubeTracks(`${cleanQ} letra lyrics`, 3);
+    if (!ytMatches || ytMatches.length === 0) return null;
+
+    const top = ytMatches[0];
+    const rawTitle = top.name || '';
+    const artist = top.artists?.[0]?.name || '';
+
+    // Strip common YouTube fluff from title
+    const cleanTitle = rawTitle
+      .replace(/\b(letra|lyrics|video oficial|official video|audio|remix|ft\.?|feat\.?|videoclip|subtitulad[ao]s?)\b.*$/i, '')
+      .replace(/[()[\]{}_-]/g, ' ')
+      .trim();
+
+    // Try resolving studio Deezer track for official studio audio & album art
+    const searchTerms = [artist ? `${artist} ${cleanTitle}` : cleanTitle, cleanTitle];
+    for (const term of searchTerms) {
+      if (!term || term.length < 2) continue;
+      const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=1`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(2000) : undefined,
+      }).then(r => r.ok ? r.json() : null).catch(() => null);
+
+      if (dzRes && dzRes.data && dzRes.data.length > 0) {
+        const t = dzRes.data[0];
+        const cover = t.album?.cover_xl || t.album?.cover_big || t.album?.cover_medium || '';
+        return {
+          id: `dz-${t.id}`,
+          name: t.title || t.title_short,
+          duration_ms: (t.duration || 210) * 1000,
+          preview_url: null,
+          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || artist || 'Artista' }],
+          album: {
+            id: `alb-${t.album?.id || 'unknown'}`,
+            name: t.album?.title || t.title,
+            images: cover ? [{ url: cover }] : [],
+          },
+          isLyricsMatch: true,
+          lyricsSnippet: cleanQ,
+          lyricsBadge: 'Coincidencia por letra',
+        };
+      }
+    }
+
+    // Return the YouTube top track tagged as lyrics match
+    return {
+      ...top,
+      isLyricsMatch: true,
+      lyricsSnippet: cleanQ,
+      lyricsBadge: 'Coincidencia por letra',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+

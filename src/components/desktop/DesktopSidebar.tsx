@@ -181,7 +181,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         <div className="relative">
           <button
             data-create-button
-            onClick={toggleCreateMenu}
+            onClick={() => {
+              if (!isAuthenticated) {
+                useUIStore.getState().openLoginModal();
+                return;
+              }
+              toggleCreateMenu();
+            }}
             title="Crear"
             aria-label="Crear"
             className="w-8 h-8 rounded-full bg-[#1f1f1f] hover:bg-[#2a2a2a] flex items-center justify-center text-white cursor-pointer transition-colors"
@@ -191,7 +197,19 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           <CreateMenuDropdown />
         </div>
         <div className="flex-1 w-full overflow-y-auto scrollbar-none flex flex-col items-center gap-1 pt-1">
-          {processedPlaylists.map((playlist) => {
+          {!isAuthenticated ? (
+            <button
+              onClick={() => useUIStore.getState().openLoginModal()}
+              title="Iniciar sesión"
+              aria-label="Iniciar sesión"
+              className="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-[#1ed760] cursor-pointer transition-colors"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+              </svg>
+            </button>
+          ) : (
+            processedPlaylists.map((playlist) => {
             const isLiked = playlist.id === 'liked-songs';
             const autoCover = getPlaylistCover(playlist);
             const cover = isLiked ? 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' : autoCover === EMPTY_PLAYLIST_COVER ? '' : toHDImage(autoCover);
@@ -224,7 +242,7 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 )}
               </button>
             );
-          })}
+          }))}
         </div>
       </aside>
     );
@@ -248,7 +266,13 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         <div className="flex items-center gap-1 relative">
           <button
             data-create-button
-            onClick={toggleCreateMenu}
+            onClick={() => {
+              if (!isAuthenticated) {
+                useUIStore.getState().openLoginModal();
+                return;
+              }
+              toggleCreateMenu();
+            }}
             title="Crea o importa una playlist"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white hover:bg-[#1f1f1f] hover:scale-104 active:scale-95 transition-all"
           >
@@ -271,100 +295,104 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         </div>
       </div>
 
-      {/* Filter Pills */}
-      <div className="px-4 py-2 flex items-center gap-2">
-        <button
-          onClick={() => setFilter(filter === 'playlists' ? 'all' : 'playlists')}
-          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-            filter === 'playlists'
-              ? 'bg-white text-black'
-              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
-          }`}
-        >
-          Listas
-        </button>
-        <button
-          onClick={() => setFilter(filter === 'artists' ? 'all' : 'artists')}
-          className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-            filter === 'artists'
-              ? 'bg-white text-black'
-              : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
-          }`}
-        >
-          Artistas
-        </button>
-      </div>
+      {isAuthenticated && (
+        <>
+          {/* Filter Pills */}
+          <div className="px-4 py-2 flex items-center gap-2">
+            <button
+              onClick={() => setFilter(filter === 'playlists' ? 'all' : 'playlists')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                filter === 'playlists'
+                  ? 'bg-white text-black'
+                  : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
+              }`}
+            >
+              Listas
+            </button>
+            <button
+              onClick={() => setFilter(filter === 'artists' ? 'all' : 'artists')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                filter === 'artists'
+                  ? 'bg-white text-black'
+                  : 'bg-[#242424] text-white hover:bg-[#2a2a2a]'
+              }`}
+            >
+              Artistas
+            </button>
+          </div>
 
-      {/* 1:1 Spotify "Importa tu música" Card (matching authentic Spotify library announcement style) */}
-      {showImportCard && (
-        <div className="mx-2 my-2 p-4 rounded-lg bg-[#242424] relative text-white select-none animate-in fade-in duration-300">
-          {/* Close button X */}
-          <button
-            onClick={handleDismissImportCard}
-            className="absolute top-3 right-3 w-6 h-6 rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
-            title="Descartar"
-            aria-label="Descartar"
-          >
-            <CloseNativeIcon size={12} />
-          </button>
-
-          <div className="space-y-1 pr-6">
-            <h4 className="font-bold text-[14px] leading-tight text-white font-['SpotifyMixUITitle']">
-              Importa tu música
-            </h4>
-            <p className="text-[12px] text-[#b3b3b3] font-medium leading-snug">
-              Trae tus playlists de YouTube Music, YouTube, Apple Music, Deezer o Spotify.
-            </p>
-            <div className="pt-2">
+          {/* 1:1 Spotify "Importa tu música" Card (matching authentic Spotify library announcement style) */}
+          {showImportCard && (
+            <div className="mx-2 my-2 p-4 rounded-lg bg-[#242424] relative text-white select-none animate-in fade-in duration-300">
+              {/* Close button X */}
               <button
-                onClick={() => openImportPlaylistDialog()}
-                className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
+                onClick={handleDismissImportCard}
+                className="absolute top-3 right-3 w-6 h-6 rounded-full hover:bg-white/10 text-[#b3b3b3] hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                title="Descartar"
+                aria-label="Descartar"
               >
-                Importar playlist
+                <CloseNativeIcon size={12} />
               </button>
+
+              <div className="space-y-1 pr-6">
+                <h4 className="font-bold text-[14px] leading-tight text-white font-['SpotifyMixUITitle']">
+                  Importa tu música
+                </h4>
+                <p className="text-[12px] text-[#b3b3b3] font-medium leading-snug">
+                  Trae tus playlists de YouTube Music, YouTube, Apple Music, Deezer o Spotify.
+                </p>
+                <div className="pt-2">
+                  <button
+                    onClick={() => openImportPlaylistDialog()}
+                    className="px-4 py-1.5 rounded-full bg-white text-black font-bold text-xs hover:scale-104 active:scale-95 transition-all cursor-pointer shadow-md inline-block font-['SpotifyMixUI']"
+                  >
+                    Importar playlist
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Search & Sort inside Library */}
+          <div className="px-4 py-1.5 flex items-center justify-between text-[#b3b3b3] text-xs relative">
+            {showSearchInput ? (
+              <div className="flex items-center bg-[#242424] rounded px-2 py-1 flex-1 mr-2">
+                <SearchLibraryNativeIcon size={14} className="text-[#b3b3b3] mr-1 shrink-0" />
+                <input
+                  type="text"
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  placeholder="Buscar en tu biblioteca"
+                  autoFocus
+                  onBlur={() => !librarySearch && setShowSearchInput(false)}
+                  className="bg-transparent text-white text-xs outline-none w-full"
+                />
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSearchInput(true)}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:text-white hover:bg-[#1f1f1f] transition-colors"
+                title="Buscar en tu biblioteca"
+              >
+                <SearchLibraryNativeIcon size={16} />
+              </button>
+            )}
+
+            {/* Sort Menu Button */}
+            <div className="relative">
+              <button
+                onClick={toggleSortMenu}
+                className="flex items-center gap-1.5 hover:text-white font-medium transition-colors py-1 px-2 rounded hover:bg-[#1f1f1f]"
+              >
+                <span>{getSortLabel()}</span>
+                <SortListNativeIcon size={16} className="text-[#b3b3b3]" />
+              </button>
+
+              <SortMenuDropdown />
             </div>
           </div>
-        </div>
+        </>
       )}
-
-      {/* Search & Sort inside Library */}
-      <div className="px-4 py-1.5 flex items-center justify-between text-[#b3b3b3] text-xs relative">
-        {showSearchInput ? (
-          <div className="flex items-center bg-[#242424] rounded px-2 py-1 flex-1 mr-2">
-            <SearchLibraryNativeIcon size={14} className="text-[#b3b3b3] mr-1 shrink-0" />
-            <input
-              type="text"
-              value={librarySearch}
-              onChange={(e) => setLibrarySearch(e.target.value)}
-              placeholder="Buscar en tu biblioteca"
-              autoFocus
-              onBlur={() => !librarySearch && setShowSearchInput(false)}
-              className="bg-transparent text-white text-xs outline-none w-full"
-            />
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowSearchInput(true)}
-            className="w-8 h-8 rounded-full flex items-center justify-center hover:text-white hover:bg-[#1f1f1f] transition-colors"
-            title="Buscar en tu biblioteca"
-          >
-            <SearchLibraryNativeIcon size={16} />
-          </button>
-        )}
-
-        {/* Sort Menu Button */}
-        <div className="relative">
-          <button
-            onClick={toggleSortMenu}
-            className="flex items-center gap-1.5 hover:text-white font-medium transition-colors py-1 px-2 rounded hover:bg-[#1f1f1f]"
-          >
-            <span>{getSortLabel()}</span>
-            <SortListNativeIcon size={16} className="text-[#b3b3b3]" />
-          </button>
-
-          <SortMenuDropdown />
-        </div>
-      </div>
 
       {/* Playlists Container */}
       <div className="flex-1 overflow-y-auto px-2 pb-2">

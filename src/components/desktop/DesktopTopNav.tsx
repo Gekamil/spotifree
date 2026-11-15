@@ -46,6 +46,10 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
   }, []);
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!isAuthenticated) {
+      openLoginModal();
+      return;
+    }
     const val = e.target.value;
     setSearchQuery(val);
     setActiveMainTab('search');
@@ -146,7 +150,13 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
           <input
             type="text"
             value={searchQuery}
-            onFocus={() => setActiveMainTab('search')}
+            onFocus={() => {
+              if (!isAuthenticated) {
+                openLoginModal();
+                return;
+              }
+              setActiveMainTab('search');
+            }}
             onChange={handleSearchChange}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && searchQuery.trim()) {
@@ -163,7 +173,13 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
           />
           <div className="h-6 w-px bg-[#3e3e3e] mx-2 shrink-0" />
           <button
-            onClick={() => setActiveMainTab('search')}
+            onClick={() => {
+              if (!isAuthenticated) {
+                openLoginModal();
+                return;
+              }
+              setActiveMainTab('search');
+            }}
             title="Explorar"
             className="text-[#a7a7a7] hover:text-white p-1 transition-colors shrink-0 relative w-8 h-8 flex items-center justify-center overflow-hidden cursor-pointer"
           >

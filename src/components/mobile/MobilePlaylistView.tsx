@@ -1201,6 +1201,46 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     }
   };
 
+  const [isRefreshingTracks, setIsRefreshingTracks] = useState(false);
+
+  const handleSyncPlaylistSongs = async () => {
+    if (isRefreshingTracks) return;
+    setIsRefreshingTracks(true);
+    setToastMessage('Sincronizando canciones...');
+    try {
+      const plId = activePlaylist.id || playlist.id;
+      const isLiked = isLikedPlaylist;
+      const fetchId = isLiked ? 'collection-tracks' : plId;
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+      const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (userCookie) headers['x-spotify-cookie'] = userCookie;
+      if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(fetchId)}?refresh=1`, { headers });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.tracks?.items) {
+          useSpotifyDataStore.getState().cachePlaylistDetails(data);
+          useSpotifyDataStore.getState().updatePlaylist(plId, {
+            tracks: data.tracks,
+          });
+          window.dispatchEvent(
+            new CustomEvent('spotifree:playlist-refreshed', { detail: { playlistId: plId, data } })
+          );
+          setToastMessage(`Lista actualizada (${data.tracks.items.length} canciones)`);
+          return;
+        }
+      }
+      setToastMessage('No se pudieron obtener canciones nuevas');
+    } catch {
+      setToastMessage('Error al actualizar la lista');
+    } finally {
+      setIsRefreshingTracks(false);
+      setTimeout(() => setToastMessage(null), 3000);
+    }
+  };
+
   const handleSavePlaylistEdit = () => {
     const trimmedName = editName.trim() || activePlaylist.name;
     const trimmedDesc = editDesc.trim();
@@ -1641,6 +1681,22 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               ) : (
                 <DownloadCircleNativeIcon size={21} className="text-white/80 hover:text-white" />
               )}
+            </button>
+          )}
+
+          {/* Sincronizar / Actualizar canciones */}
+          {!isArtist && (
+            <button
+              onClick={handleSyncPlaylistSongs}
+              disabled={isRefreshingTracks}
+              className={`hover:scale-105 active:scale-90 transition-transform cursor-pointer p-0.5 ${
+                isRefreshingTracks ? 'text-[#1ed760] animate-spin' : 'text-white/80 hover:text-white'
+              }`}
+              title="Actualizar y sincronizar canciones de la lista"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16" />
+              </svg>
             </button>
           )}
         </div>

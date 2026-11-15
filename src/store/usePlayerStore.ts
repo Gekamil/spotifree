@@ -14,6 +14,8 @@ import { TRACK_COVER_CACHE, isPlaylistOrGenericCover, resolveTrackCoversBatch } 
 import { isTasteRatingActive, isTrackDisliked, useLabsStore } from '../services/labsService';
 import { isNotInterested, markNotInterested } from '../utils/notInterested';
 import { showGlobalToast } from '../utils/globalToast';
+import { useUIStore } from './useUIStore';
+import { useSpotifyDataStore } from './useSpotifyDataStore';
 
 export function matchTrackId(a?: string | null, b?: string | null): boolean {
   if (!a || !b) return false;
@@ -314,6 +316,12 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
+    if (typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.release?.name === 'node')) {
+      if (!useSpotifyDataStore.getState().isAuthenticated) {
+        useUIStore.getState().openLoginModal();
+        return;
+      }
+    }
     const state = get();
     const hydrateCoverSync = (t: Track): Track => {
       if (!t) return t;
@@ -470,6 +478,12 @@ const store = create<PlayerState>((set, get) => ({
   },
 
   togglePlay: () => {
+    if (typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.release?.name === 'node')) {
+      if (!useSpotifyDataStore.getState().isAuthenticated) {
+        useUIStore.getState().openLoginModal();
+        return;
+      }
+    }
     const nextState = !get().isPlaying;
     set({ isPlaying: nextState });
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
