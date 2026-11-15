@@ -6,6 +6,7 @@
 export interface RankableTrack {
   name: string;
   artists?: Array<{ name: string }>;
+  isLyricsMatch?: boolean;
 }
 
 export const normText = (s: string) =>
@@ -19,6 +20,7 @@ export const normText = (s: string) =>
 const VERSION_WORDS = /\b(karaoke|instrumental|cover|tribute|lullaby|lullabies|rendition|8 bit|piano version|workout|made famous|in the style of|originally performed|cancion de cuna|nana)\b/;
 
 export function searchScore(query: string, t: RankableTrack): number {
+  if (t.isLyricsMatch) return 500;
   const q = normText(query);
   if (!q) return 0;
   const tokens = q.split(' ').filter(Boolean);

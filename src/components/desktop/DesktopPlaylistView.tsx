@@ -2391,7 +2391,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                             {track.name}
                           </p>
                           {track.scVariant && track.scVariant !== 'official_like' && track.scVariantLabel && (
-                            <span className="shrink-0 rounded px-1.5 py-px text-[10px] font-bold bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30">
+                            <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                               {track.scVariantLabel}
                             </span>
                           )}

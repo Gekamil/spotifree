@@ -750,9 +750,15 @@ export async function extractSpotifySession(spDcCookie) {
       it.totalCount ??
       0;
 
+    const playlistName = (it.name || '').trim();
+    // Exclude phantom/untitled zombie playlists with 0 tracks and no cover
+    if ((!playlistName || playlistName.toLowerCase() === 'lista sin título' || playlistName.toLowerCase() === 'untitled playlist') && trackTotal === 0 && !playlistCover) {
+      continue;
+    }
+
     playlists.push({
       id: cleanId,
-      name: it.name || 'Lista sin título',
+      name: playlistName || 'Mi playlist',
       description: desc,
       type: isAlbum ? 'album' : 'playlist',
       images: playlistCover ? [{ url: playlistCover }] : [],
@@ -856,7 +862,9 @@ export async function extractSpotifySession(spDcCookie) {
 
   // Quick access cards (top 8 valid items from library)
   const quickAccess = [];
-  const validItems = playlists.filter(p => p.type !== 'folder');
+  const validItems = playlists.filter(
+    p => p.type !== 'folder' && p.id && p.name && p.name.toLowerCase() !== 'lista sin título' && (p.tracks?.total > 0 || p.images?.[0]?.url)
+  );
   for (const pl of validItems.slice(0, 8)) {
     quickAccess.push({
       id: pl.id,

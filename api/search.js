@@ -314,7 +314,7 @@ export default async function handler(req, res) {
       if (existingIdx >= 0) {
         combinedTracks[existingIdx].isLyricsMatch = true;
         combinedTracks[existingIdx].lyricsSnippet = cleanQ;
-        combinedTracks[existingIdx].lyricsBadge = 'Coincidencia por letra';
+        combinedTracks[existingIdx].lyricsBadge = 'Coincidencia en la letra';
         const [found] = combinedTracks.splice(existingIdx, 1);
         combinedTracks.unshift(found);
       } else {

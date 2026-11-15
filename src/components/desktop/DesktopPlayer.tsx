@@ -515,10 +515,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
         {labsEnabled && speedControlEnabled && (
           <button
             onClick={openSpeedControlSheet}
-            className="px-2.5 py-0.5 relative flex items-center justify-center font-mono font-bold rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#1ed760]/30 hover:border-[#1ed760] text-[#1ed760] text-xs transition-all cursor-pointer shadow-sm active:scale-95"
-            title="Velocidad de reproducción (Spotifree Labs)"
+            className="px-2.5 py-0.5 relative flex items-center justify-center font-medium rounded-full bg-[#242424] hover:bg-[#2e2e2e] text-[#b3b3b3] hover:text-white text-xs transition-colors cursor-pointer active:scale-95"
+            title="Velocidad de reproducción"
           >
-            {playbackSpeed.toFixed(2)}x
+            {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
           </button>
         )}
 

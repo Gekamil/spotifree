@@ -26,7 +26,7 @@ export const AboutAppSection: React.FC<AboutAppSectionProps> = ({ variant = 'mob
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-sm font-bold text-white font-['SpotifyMixUITitle']">Spotifree</span>
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30 tracking-wide">
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3] tracking-wide">
                   v{APP_VERSION}
                 </span>
               </div>

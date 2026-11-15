@@ -359,13 +359,15 @@ export const MobileLayout: React.FC = () => {
   const djThemeColor = useAIDJStore((s) => s.djThemeColor);
 
   const isCardPlaying = (cardId: string, cardName: string) => {
-    if (!isPlaying) return false;
-    if (currentContextId && (currentContextId === cardId || currentContextId.includes(cardId) || cardId.includes(currentContextId))) return true;
+    if (!isPlaying || !cardId) return false;
+    const cleanCardId = String(cardId).trim();
+    if (!cleanCardId) return false;
+    if (currentContextId && (currentContextId === cleanCardId)) return true;
     if (cardId === 'liked-songs' && currentTrack && likedTrackIds.includes(currentTrack.id)) return true;
     if (currentTrack) {
-      if (currentTrack.album?.id === cardId) return true;
+      if (currentTrack.album?.id && currentTrack.album.id === cleanCardId) return true;
       if (currentTrack.album?.name && cardName && currentTrack.album.name.toLowerCase() === cardName.toLowerCase()) return true;
-      if ((currentTrack as any).playlistId === cardId) return true;
+      if ((currentTrack as any).playlistId && (currentTrack as any).playlistId === cleanCardId) return true;
     }
     return false;
   };
@@ -438,8 +440,15 @@ export const MobileLayout: React.FC = () => {
   // Quick Access Shortcuts matching user's active session
   const shortcuts = useMemo(() => {
     if (!isAuthenticated) return [];
-    if (quickAccessCards && quickAccessCards.length >= 6) {
-      return quickAccessCards.slice(0, 8);
+    if (quickAccessCards && quickAccessCards.length > 0) {
+      return quickAccessCards
+        .filter((c) => {
+          if (!c || !c.id || !c.name) return false;
+          const name = c.name.trim().toLowerCase();
+          if (name === '' || (name === 'lista sin título' && !c.image)) return false;
+          return true;
+        })
+        .slice(0, 8);
     }
     return [];
   }, [quickAccessCards, isAuthenticated]);
@@ -725,13 +734,21 @@ export const MobileLayout: React.FC = () => {
                             className="h-12 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2"
                           >
                             <div className="flex items-center min-w-0 flex-1 mr-1">
-                              <img
-                                src={card.image}
-                                alt={card.name}
-                                onError={handleImageError}
-                                referrerPolicy="no-referrer"
-                                className="w-12 h-12 object-cover shrink-0 rounded-l-[4px]"
-                              />
+                              {card.image ? (
+                                <img
+                                  src={card.image}
+                                  alt={card.name}
+                                  onError={handleImageError}
+                                  referrerPolicy="no-referrer"
+                                  className="w-12 h-12 object-cover shrink-0 rounded-l-[4px]"
+                                />
+                              ) : (
+                                <div className="w-12 h-12 bg-[#242424] flex items-center justify-center shrink-0 rounded-l-[4px] text-[#b3b3b3]">
+                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                                  </svg>
+                                </div>
+                              )}
                               <span
                                 className={`font-bold text-[12px] leading-[15px] line-clamp-2 px-2 ${
                                   isPlayingThis ? 'text-[#1ed760]' : 'text-white'

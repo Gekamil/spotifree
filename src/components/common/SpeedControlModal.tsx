@@ -42,10 +42,10 @@ export const SpeedControlModal: React.FC = () => {
           {/* Header */}
           <div className="flex items-center justify-between pb-2 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760]" />
               <span className="text-xs font-bold uppercase tracking-wider text-[#b3b3b3]">Velocidad</span>
-              <span className="px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760] font-mono font-bold text-xs">
-                {playbackSpeed.toFixed(2)}x
+              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white font-medium text-xs">
+                {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
               </span>
             </div>
             <button
@@ -62,8 +62,8 @@ export const SpeedControlModal: React.FC = () => {
 
           {/* Live Indicator & Status */}
           <div className="text-center py-0.5">
-            <div className="text-2xl font-black text-[#1ed760] tracking-tight tabular-nums font-mono">
-              {playbackSpeed.toFixed(2)}x
+            <div className="text-2xl font-black text-white tracking-tight tabular-nums font-['SpotifyMixUITitle']">
+              {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
             </div>
             <p className="text-[11px] font-semibold text-[#b3b3b3]">
               {getSpeedLabel(playbackSpeed)}
@@ -84,7 +84,7 @@ export const SpeedControlModal: React.FC = () => {
               }}
               className="w-full h-1.5 rounded-lg appearance-none cursor-pointer accent-[#1ed760] touch-none"
             />
-            <div className="flex justify-between text-[10px] font-bold text-[#727272]">
+            <div className="flex justify-between text-[10px] font-bold text-[#727272] font-mono tabular-nums">
               <span>0.5x</span>
               <span>1.0x</span>
               <span>2.0x</span>

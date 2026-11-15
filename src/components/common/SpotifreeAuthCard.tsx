@@ -191,8 +191,8 @@ export const SpotifreeAuthCard: React.FC<{ onAuthSuccess?: () => void; showCooki
             <p className="text-sm font-bold text-white truncate">{currentAccount.displayName}</p>
             <p className="text-xs text-[#b3b3b3] truncate">{currentAccount.email}</p>
           </div>
-          <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-[#1ed760]/10 border border-[#1ed760]/20 text-[10px] font-bold text-[#1ed760] shrink-0">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+          <span className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 text-[11px] font-medium text-white/80 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760]" />
             Firebase
           </span>
         </div>

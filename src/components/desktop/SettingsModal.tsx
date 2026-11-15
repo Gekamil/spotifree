@@ -242,7 +242,7 @@ export const SettingsModal: React.FC = () => {
             </div>
 
             {testResult && (
-              <div className="p-3 bg-[#1ed760]/10 border border-[#1ed760]/30 rounded-lg text-xs text-[#1ed760]">
+              <div className="p-3 bg-[#181818] border border-white/5 rounded-lg text-xs text-white">
                 {testResult}
               </div>
             )}
@@ -250,7 +250,7 @@ export const SettingsModal: React.FC = () => {
 
           {/* Section 3: Gustos Musicales */}
           <section className="space-y-3">
-            <h3 className="text-xs font-bold text-[#1ed760] uppercase tracking-wider">
+            <h3 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider">
               Gustos Musicales & Recomendaciones
             </h3>
             <div className="bg-[#282828] p-3.5 rounded-lg border border-white/5 flex items-center justify-between gap-4">

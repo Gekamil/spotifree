@@ -765,10 +765,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 <button
                   type="button"
                   onClick={openSpeedControlSheet}
-                  className="px-2 py-0.5 rounded-full bg-white/5 hover:bg-white/10 backdrop-blur-md border border-[#1ed760]/30 hover:border-[#1ed760] text-[#1ed760] font-mono font-bold text-[10px] active:scale-95 transition-all cursor-pointer shadow-sm tracking-tight"
+                  className="px-2 py-0.5 rounded-full bg-[#242424] hover:bg-[#2e2e2e] text-[#b3b3b3] hover:text-white font-medium text-[10px] active:scale-95 transition-colors cursor-pointer"
                   title="Velocidad de reproducción"
                 >
-                  {playbackSpeed.toFixed(2)}x
+                  {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
                 </button>
               )}
               <span className="select-none tracking-normal">{formatDuration(durationMs)}</span>
@@ -1129,7 +1129,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               onClick={handleToggleFollowArtist}
               className={`px-4 py-1.5 rounded-full font-bold text-xs active:scale-95 transition-all cursor-pointer ${
                 isFollowingArtist
-                  ? 'border border-[#1ed760] text-[#1ed760] bg-[#1ed760]/10'
+                  ? 'border border-white/40 text-white bg-transparent hover:border-white'
                   : 'border border-white/30 text-white hover:border-white'
               }`}
             >
@@ -1327,8 +1327,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <div className="text-left flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="font-bold text-sm text-white">Velocidad de reproducción</p>
-                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[#1ed760]/20 text-[#1ed760]">
-                        {playbackSpeed.toFixed(2)}x
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
+                        {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
                       </span>
                     </div>
                     <p className="text-xs text-[#b3b3b3] truncate">Modificar ritmo, slowed o nightcore</p>

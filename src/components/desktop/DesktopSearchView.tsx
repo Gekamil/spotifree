@@ -817,8 +817,8 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             </h3>
                             <div className="flex items-center gap-2 mt-1">
                               {(topTrack as any).isLyricsMatch && (
-                                <span className="shrink-0 rounded px-2 py-0.5 text-[10px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
-                                  <span>🎵</span> Coincidencia por letra
+                                <span className="text-xs text-[#a7a7a7] font-normal shrink-0">
+                                  Coincidencia en la letra
                                 </span>
                               )}
                               <p className="text-sm text-[#b3b3b3] truncate">
@@ -884,12 +884,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 </span>
                                 <div className="flex items-center gap-1.5 mt-0.5 truncate">
                                   {(track as any).isLyricsMatch && (
-                                    <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
-                                      <span>🎵</span> Coincidencia por letra
+                                    <span className="text-[11px] text-[#a7a7a7] font-normal shrink-0">
+                                      Coincidencia en la letra
                                     </span>
                                   )}
                                   {track.scVariantLabel && (
-                                    <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                                    <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                                       {track.scVariantLabel}
                                     </span>
                                   )}
@@ -998,11 +998,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                     {track.name}
                                   </p>
                                   <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
-                                      track.isOfficial || track.scVariantLabel === 'Remix Oficial'
-                                        ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
-                                        : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
-                                    }`}>
+                                    <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                                       {track.isOfficial ? (track.scVariantLabel || 'Remix Oficial') : (track.scVariantLabel || 'SoundCloud')}
                                     </span>
                                     <span className="text-xs text-[#b3b3b3] truncate">
@@ -1104,12 +1100,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             </span>
                             <div className="flex items-center gap-1.5 mt-0.5 truncate">
                               {(track as any).isLyricsMatch && (
-                                <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
-                                  <span>🎵</span> Coincidencia por letra
+                                <span className="text-[11px] text-[#a7a7a7] font-normal shrink-0">
+                                  Coincidencia en la letra
                                 </span>
                               )}
                               {track.scVariantLabel && (
-                                <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                                <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                                   {track.scVariantLabel}
                                 </span>
                               )}
@@ -1170,11 +1166,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                                 {track.name}
                               </span>
                               <div className="flex items-center gap-2 mt-0.5 min-w-0">
-                                <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
-                                  track.isOfficial || track.scVariantLabel === 'Remix Oficial'
-                                    ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
-                                    : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
-                                }`}>
+                                <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                                   {track.isOfficial ? (track.scVariantLabel || 'Remix Oficial') : (track.scVariantLabel || 'SoundCloud')}
                                 </span>
                                 <span className="text-xs text-[#b3b3b3] truncate">

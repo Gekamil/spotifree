@@ -547,12 +547,14 @@ export const DesktopSettingsView: React.FC = () => {
 
       {/* Verified cookie status notification */}
       {spotifyCookie && !cookieError && (
-        <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-lg bg-[#1ed760]/10 border border-[#1ed760]/30 text-white text-xs">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
-            <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
-          </svg>
+        <div className="flex items-center gap-3 p-3 rounded-lg bg-[#181818] border border-white/5 text-white text-xs">
+          <div className="w-6 h-6 rounded-full bg-[#1ed760]/10 flex items-center justify-center shrink-0">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760]">
+              <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z" />
+            </svg>
+          </div>
           <div className="min-w-0">
-            <p className="font-bold text-[#1ed760]">Clave sp_dc verificada y activa</p>
+            <p className="font-semibold text-white">Clave sp_dc verificada y activa</p>
             <p className="text-[#a7a7a7] text-[11px] truncate">
               Conectada con la cuenta de <strong>{user?.display_name || 'Spotify'}</strong>. Tus canciones, playlists y biblioteca están sincronizadas.
             </p>

@@ -806,8 +806,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 </svg>
                 <span>Velocidad de reproducción</span>
               </div>
-              <span className="text-[11px] font-mono font-bold text-[#1ed760] bg-[#1ed760]/10 px-1.5 py-0.5 rounded">
-                {useLabsStore.getState().playbackSpeed.toFixed(2)}x
+              <span className="text-[11px] font-medium text-[#b3b3b3] bg-white/10 px-2 py-0.5 rounded-full">
+                {useLabsStore.getState().playbackSpeed === 1 ? '1x' : `${useLabsStore.getState().playbackSpeed.toFixed(2)}x`}
               </span>
             </button>
           )}

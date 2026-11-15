@@ -135,8 +135,14 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     };
   }, []);
 
-  const { currentTrack, isPlaying, playTrack, togglePlay } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay }))
+  const { currentTrack, isPlaying, playTrack, togglePlay, currentContextId } = usePlayerStore(
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      isPlaying: s.isPlaying,
+      playTrack: s.playTrack,
+      togglePlay: s.togglePlay,
+      currentContextId: s.currentContextId,
+    }))
   );
   const {
     isAuthenticated,
@@ -152,10 +158,17 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   const currentShortcuts = useMemo(() => {
     if (!isAuthenticated) return [];
     const raw = storeQuickAccess && storeQuickAccess.length > 0 ? storeQuickAccess : DEFAULT_SHORTCUTS;
-    return raw.map((item) => ({
-      ...item,
-      color: resolveVibrantColor(item.id, item.name, item.color),
-    }));
+    return raw
+      .filter((item) => {
+        if (!item || !item.id || !item.name) return false;
+        const name = item.name.trim().toLowerCase();
+        if (name === '' || (name === 'lista sin título' && !item.image)) return false;
+        return true;
+      })
+      .map((item) => ({
+        ...item,
+        color: resolveVibrantColor(item.id, item.name, item.color),
+      }));
   }, [storeQuickAccess, isAuthenticated]);
   const shortcutIds = useMemo(() => new Set(currentShortcuts.map((s) => s.id)), [currentShortcuts]);
 
@@ -553,7 +566,10 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             {currentShortcuts.map((item) => {
               const isPlayingThis =
                 isPlaying &&
-                ((currentTrack as any)?.playlistId === item.id || currentTrack?.id === item.id);
+                Boolean(item.id) &&
+                (currentContextId === item.id ||
+                  (currentTrack as any)?.playlistId === item.id ||
+                  currentTrack?.id === item.id);
 
               return (
                 <div
@@ -562,14 +578,22 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   onMouseEnter={() => setActiveBg(extractedColors[item.id] || item.color)}
                   className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
                 >
-                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow">
-                    <img
-                      src={toHDImage(item.image)}
-                      alt={item.name}
-                      onError={handleImageError}
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
+                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow flex items-center justify-center overflow-hidden">
+                    {item.image ? (
+                      <img
+                        src={toHDImage(item.image)}
+                        alt={item.name}
+                        onError={handleImageError}
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                        </svg>
+                      </div>
+                    )}
                   </div>
 
                   <span className={`text-[14px] font-bold px-3 truncate flex-1 font-['SpotifyMixUI'] ${isPlayingThis ? 'text-[#1ed760]' : 'text-white'}`}>

@@ -1038,7 +1038,7 @@ export async function searchYouTubeTracks(query, limit = 15) {
 }
 
 /**
- * Detects songs by their lyrics using YouTube semantic matching and resolves studio metadata from Deezer.
+ * Detects songs by their lyrics using multi-source matching (Lrclib + YouTube) and resolves studio metadata from Deezer.
  */
 export async function findTrackByLyrics(query) {
   if (!query || typeof query !== 'string') return null;
@@ -1047,27 +1047,52 @@ export async function findTrackByLyrics(query) {
   if (words.length < 2 && cleanQ.length < 10) return null;
 
   try {
-    const ytMatches = await searchYouTubeTracks(`${cleanQ} letra lyrics`, 3);
-    if (!ytMatches || ytMatches.length === 0) return null;
+    let candidateTitle = '';
+    let candidateArtist = '';
 
-    const top = ytMatches[0];
-    const rawTitle = top.name || '';
-    const artist = top.artists?.[0]?.name || '';
+    // 1. Direct lyrics database search via Lrclib
+    const lrcPromise = fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(cleanQ)}`, {
+      headers: { 'User-Agent': 'Spotifree/1.0 (https://spotifree.app)' },
+      signal: AbortSignal.timeout ? AbortSignal.timeout(2200) : undefined,
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .catch(() => []);
 
-    // Strip common YouTube fluff from title
-    const cleanTitle = rawTitle
-      .replace(/\b(letra|lyrics|video oficial|official video|audio|remix|ft\.?|feat\.?|videoclip|subtitulad[ao]s?)\b.*$/i, '')
-      .replace(/[()[\]{}_-]/g, ' ')
-      .trim();
+    // 2. YouTube semantic lyrics video search
+    const ytPromise = searchYouTubeTracks(`${cleanQ} letra`, 3).catch(() => []);
+
+    const [lrcResults, ytMatches] = await Promise.all([lrcPromise, ytPromise]);
+
+    if (Array.isArray(lrcResults) && lrcResults.length > 0 && lrcResults[0].trackName) {
+      candidateTitle = lrcResults[0].trackName;
+      candidateArtist = lrcResults[0].artistName || '';
+    } else if (Array.isArray(ytMatches) && ytMatches.length > 0) {
+      const top = ytMatches[0];
+      const rawTitle = top.name || '';
+      candidateArtist = top.artists?.[0]?.name || '';
+      // Strip common YouTube fluff: (Letra), [Video Oficial], Audio, Remix, etc.
+      candidateTitle = rawTitle
+        .replace(/\b(letra|lyrics|video oficial|official video|audio|remix|ft\.?|feat\.?|videoclip|subtitulad[ao]s?)\b.*$/i, '')
+        .replace(/[()[\]{}_-]/g, ' ')
+        .trim();
+    }
+
+    if (!candidateTitle && (!ytMatches || ytMatches.length === 0)) return null;
 
     // Try resolving studio Deezer track for official studio audio & album art
-    const searchTerms = [artist ? `${artist} ${cleanTitle}` : cleanTitle, cleanTitle];
+    const searchTerms = [
+      candidateArtist ? `${candidateArtist} ${candidateTitle}` : candidateTitle,
+      candidateTitle,
+    ].filter(Boolean);
+
     for (const term of searchTerms) {
       if (!term || term.length < 2) continue;
       const dzRes = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=1`, {
-        headers: { 'User-Agent': 'Mozilla/5.0' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
         signal: AbortSignal.timeout ? AbortSignal.timeout(2000) : undefined,
-      }).then(r => r.ok ? r.json() : null).catch(() => null);
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null);
 
       if (dzRes && dzRes.data && dzRes.data.length > 0) {
         const t = dzRes.data[0];
@@ -1077,7 +1102,7 @@ export async function findTrackByLyrics(query) {
           name: t.title || t.title_short,
           duration_ms: (t.duration || 210) * 1000,
           preview_url: null,
-          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || artist || 'Artista' }],
+          artists: [{ id: `art-${t.artist?.id || 'unknown'}`, name: t.artist?.name || candidateArtist || 'Artista' }],
           album: {
             id: `alb-${t.album?.id || 'unknown'}`,
             name: t.album?.title || t.title,
@@ -1085,18 +1110,21 @@ export async function findTrackByLyrics(query) {
           },
           isLyricsMatch: true,
           lyricsSnippet: cleanQ,
-          lyricsBadge: 'Coincidencia por letra',
+          lyricsBadge: 'Coincidencia en la letra',
         };
       }
     }
 
-    // Return the YouTube top track tagged as lyrics match
-    return {
-      ...top,
-      isLyricsMatch: true,
-      lyricsSnippet: cleanQ,
-      lyricsBadge: 'Coincidencia por letra',
-    };
+    if (Array.isArray(ytMatches) && ytMatches.length > 0) {
+      return {
+        ...ytMatches[0],
+        isLyricsMatch: true,
+        lyricsSnippet: cleanQ,
+        lyricsBadge: 'Coincidencia en la letra',
+      };
+    }
+
+    return null;
   } catch (e) {
     return null;
   }

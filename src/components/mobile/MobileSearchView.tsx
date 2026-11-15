@@ -432,12 +432,12 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5 truncate">
                           {(trk as any).isLyricsMatch && (
-                            <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/40 flex items-center gap-1">
-                              <span>🎵</span> Coincidencia por letra
+                            <span className="text-[11px] text-[#a7a7a7] font-normal shrink-0">
+                              Coincidencia en la letra
                             </span>
                           )}
                           {trk.scVariantLabel && (
-                            <span className="shrink-0 rounded px-1.5 py-px text-[9px] font-bold bg-[#ff5500]/20 text-[#ff8a4c] border border-[#ff5500]/40">
+                            <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                               {trk.scVariantLabel}
                             </span>
                           )}
@@ -513,11 +513,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           {trk.name}
                         </span>
                         <div className="flex items-center gap-1.5 mt-0.5 min-w-0">
-                          <span className={`shrink-0 rounded px-1.5 py-px text-[10px] font-bold ${
-                            trk.isOfficial || trk.scVariantLabel === 'Remix Oficial'
-                              ? 'bg-[#1ed760]/15 text-[#1ed760] border border-[#1ed760]/30'
-                              : 'bg-[#ff5500]/15 text-[#ff8a4c] border border-[#ff5500]/30'
-                          }`}>
+                          <span className="shrink-0 rounded-[2px] px-1.5 py-0.5 text-[9px] font-semibold bg-white/10 text-[#b3b3b3]">
                             {trk.isOfficial ? (trk.scVariantLabel || 'Remix Oficial') : (trk.scVariantLabel || 'SoundCloud')}
                           </span>
                           <span className="text-xs text-[#b3b3b3] truncate">

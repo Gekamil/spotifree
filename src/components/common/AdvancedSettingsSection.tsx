@@ -130,7 +130,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
           <div className="space-y-0.5 max-w-md">
             <div className="flex items-center gap-2">
               <span className="text-sm font-bold text-white">Modo Labs (Spotifree Labs)</span>
-              <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#1ed760]/20 text-[#1ed760]">
+              <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
                 Experimental
               </span>
             </div>
@@ -163,7 +163,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
               <div className="flex items-center gap-2">
                 <span className="text-sm font-semibold text-white">Control de velocidad y tono</span>
                 {playbackSpeed !== 1.0 && (
-                  <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#1ed760]/20 text-[#1ed760]">
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
                     {playbackSpeed.toFixed(2)}x
                   </span>
                 )}
@@ -369,7 +369,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <p className="text-[15px] font-bold text-white">Activar Modo Labs</p>
-              <span className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded bg-[#1ed760]/20 text-[#1ed760]">
+              <span className="text-[9px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
                 Experimental
               </span>
             </div>
@@ -399,7 +399,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
                 <div className="flex items-center gap-2">
                   <p className="text-[15px] font-bold text-white">Velocidad de reproducción</p>
                   {playbackSpeed !== 1.0 && (
-                    <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-[#1ed760]/20 text-[#1ed760]">
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
                       {playbackSpeed.toFixed(2)}x
                     </span>
                   )}

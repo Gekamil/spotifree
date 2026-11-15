@@ -1358,7 +1358,7 @@ function dynamicSpotifyPlugin(): Plugin {
             if (existingIdx >= 0) {
               combined[existingIdx].isLyricsMatch = true;
               combined[existingIdx].lyricsSnippet = cleanQ;
-              combined[existingIdx].lyricsBadge = 'Coincidencia por letra';
+              combined[existingIdx].lyricsBadge = 'Coincidencia en la letra';
               const [found] = combined.splice(existingIdx, 1);
               combined.unshift(found);
             } else {
