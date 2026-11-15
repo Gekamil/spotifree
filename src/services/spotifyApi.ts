@@ -4,7 +4,7 @@ import { filterMusicTracksOnly } from '../utils/trackFilter';
 import { withoutNotInterested } from '../utils/notInterested';
 import { rankSearchTracks } from '../utils/searchRanking';
 
-export async function fetchPlaylistDetails(id: string): Promise<Playlist | null> {
+export async function fetchPlaylistDetails(id: string, options?: { refresh?: boolean }): Promise<Playlist | null> {
   try {
     const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
     const storedToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
@@ -17,7 +17,32 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
           headers: { Authorization: `Bearer ${activeToken}` },
         });
         if (res.ok) {
-          return await res.json();
+          const data = await res.json();
+          // Paginate tracks.next if present up to 10,000 tracks
+          if (data && data.tracks && data.tracks.next) {
+            let allTracks = [...(data.tracks.items || [])];
+            let nextTracksUrl = data.tracks.next;
+            let pages = 0;
+            while (nextTracksUrl && allTracks.length < 10000 && pages < 100) {
+              pages++;
+              try {
+                const nextRes = await fetch(nextTracksUrl, {
+                  headers: { Authorization: `Bearer ${activeToken}` },
+                });
+                if (!nextRes.ok) break;
+                const nextData = await nextRes.json();
+                if (Array.isArray(nextData.items)) {
+                  allTracks.push(...nextData.items);
+                }
+                nextTracksUrl = nextData.next;
+              } catch {
+                break;
+              }
+            }
+            data.tracks.items = allTracks;
+            data.tracks.total = Math.max(data.tracks.total || 0, allTracks.length);
+          }
+          return data;
         }
       } catch {}
     }
@@ -28,7 +53,8 @@ export async function fetchPlaylistDetails(id: string): Promise<Playlist | null>
       headers['Authorization'] = `Bearer ${activeToken}`;
     }
 
-    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}`, { headers });
+    const refreshQuery = options?.refresh ? '?refresh=1' : '';
+    const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(id)}${refreshQuery}`, { headers });
     if (res.ok) {
       return await res.json();
     }
@@ -125,15 +151,22 @@ export async function fetchUserPlaylists(): Promise<Playlist[]> {
     const validToken = await getValidAccessToken();
     if (!validToken) return [];
 
-    const res = await fetch('https://api.spotify.com/v1/me/playlists?limit=50', {
-      headers: { Authorization: `Bearer ${validToken}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      return (data.items || []).filter(Boolean);
+    let allPlaylists: any[] = [];
+    let nextUrl: string | null = 'https://api.spotify.com/v1/me/playlists?limit=50';
+    let pages = 0;
+    while (nextUrl && pages < 10) {
+      pages++;
+      const pRes: Response = await fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${validToken}` },
+      });
+      if (!pRes.ok) break;
+      const pData: any = await pRes.json();
+      if (Array.isArray(pData.items)) {
+        allPlaylists.push(...pData.items.filter(Boolean));
+      }
+      nextUrl = pData.next;
     }
-    console.warn(`Spotify /v1/me/playlists returned ${res.status}`);
-    return [];
+    return allPlaylists;
   } catch (err) {
     console.error('Error fetching user playlists from Spotify API:', err);
     return [];

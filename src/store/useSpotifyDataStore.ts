@@ -400,6 +400,19 @@ function startDailySpotifyRefreshTimer() {
   });
 }
 
+if (typeof window !== 'undefined') {
+  window.addEventListener('spotifree:playlist-refreshed', ((e: CustomEvent) => {
+    const { playlistId, data } = e.detail || {};
+    if (playlistId && data) {
+      useSpotifyDataStore.getState().cachePlaylistDetails(data);
+      useSpotifyDataStore.getState().updatePlaylist(playlistId, {
+        tracks: data.tracks,
+        ...(data.images ? { images: data.images } : {}),
+      });
+    }
+  }) as EventListener);
+}
+
 /** Local calendar day (YYYY-MM-DD), used for the once-a-day Spotify refresh. */
 export function localDayStamp(d = new Date()): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -1213,8 +1226,28 @@ const store = create<SpotifyDataState>((set, get) => ({
         // Fresh songs for lists the read brought with songs (overlays still apply on top)
         const cache = { ...get().playlistDetailsCache };
         for (const p of freshPlaylists) {
-          if (p?.id && p.tracks?.items?.length && cache[p.id]) cache[p.id] = { ...cache[p.id], tracks: p.tracks };
+          if (p?.id) {
+            const cachedPl = cache[p.id];
+            const cachedItemsCount = cachedPl?.tracks?.items?.length || 0;
+            const newTotal = p.tracks?.total || 0;
+
+            if (p.tracks?.items?.length) {
+              cache[p.id] = { ...(cachedPl || {}), ...p, tracks: p.tracks };
+            } else if (newTotal > cachedItemsCount) {
+              // Spotify reports more tracks on this playlist than our cache; invalidate cache so full list is pulled
+              delete cache[p.id];
+              delete cache[p.id.replace(/^spotify:(playlist|album):/i, '')];
+            }
+          }
         }
+        // Invalidate cached liked songs if fresh likedCount is higher than cached count
+        const likedTotal = fresh.likedCount || freshPlaylists.find((p) => p.id === 'collection-tracks' || p.id === 'liked-songs')?.tracks?.total || 0;
+        const cachedLikedCount = cache['liked-songs']?.tracks?.items?.length || cache['collection-tracks']?.tracks?.items?.length || 0;
+        if (likedTotal > cachedLikedCount) {
+          delete cache['liked-songs'];
+          delete cache['collection-tracks'];
+        }
+
         if (fresh.cachedPlaylistDetails) {
           for (const [id, p] of Object.entries<any>(fresh.cachedPlaylistDetails)) {
             if (p?.tracks?.items?.length) cache[id] = { ...(cache[id] || {}), ...p, ...(cache[id]?.name && imported.some((x) => x.id === id) ? { name: cache[id].name, images: cache[id].images } : {}) };

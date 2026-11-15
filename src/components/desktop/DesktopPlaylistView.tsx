@@ -907,15 +907,22 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         return;
       }
 
-      if (isLikedInitially || (playlist.tracks?.items && playlist.tracks.items.length > 0)) return;
+      const hasExistingTracks = Boolean(playlist.tracks?.items && playlist.tracks.items.length > 0);
+
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
-        setNetworkError(true);
+        if (!hasExistingTracks) setNetworkError(true);
         setLoading(false);
         return;
       }
-      setNetworkError(false);
-      setLoading(true);
+
+      // If we already have tracks and it's marked complete, we can skip blocking loading but revalidate in background if needed
+      if (!hasExistingTracks) {
+        setNetworkError(false);
+        setLoading(true);
+      }
+
       try {
+        const fetchId = isLikedInitially ? 'collection-tracks' : playlist.id;
         const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
         const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
 
@@ -923,7 +930,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         if (userCookie) headers['x-spotify-cookie'] = userCookie;
         if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(playlist.id)}`, {
+        // Always query with refresh=1 when revalidating or fetching Liked Songs / incomplete lists
+        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(fetchId)}?refresh=1`, {
           headers,
         });
         if (res.ok) {
@@ -940,6 +948,17 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             };
             const filteredDataItems = (data.tracks?.items || []).filter(isNotRemoved);
 
+            // Merge with current custom tracks to preserve user additions
+            const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
+            const customIds = new Set(currentCustom.map((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+            const combinedTracks = deduplicateTracks([
+              ...currentCustom.filter(isNotRemoved),
+              ...filteredDataItems.filter((t: Track) => {
+                const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+                return !customIds.has(c) && isNotRemoved(t);
+              }),
+            ]);
+
             const updated: Playlist = {
               ...playlist,
               ...data,
@@ -948,9 +967,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               images: hasInitialHdImage ? playlist.images : (hasValidScrapedImage ? data.images : playlist.images),
               color: data.color || playlist.color,
               owner: data.owner || playlist.owner,
-              tracks: { total: filteredDataItems.length, items: filteredDataItems },
+              tracks: { total: Math.max(data.tracks?.total || 0, combinedTracks.length), items: combinedTracks },
             };
-            const hydrated = filteredDataItems.map((t: Track) => {
+            const hydrated = combinedTracks.map((t: Track) => {
               if (TRACK_COVER_CACHE.has(t.id)) {
                 return {
                   ...t,
@@ -982,7 +1001,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
               if (inLibrary) {
                 useSpotifyDataStore.getState().updatePlaylist(playlist.id, {
-                  tracks: { total: filteredDataItems.length, items: filteredDataItems },
+                  tracks: { total: Math.max(data.tracks?.total || 0, combinedTracks.length), items: combinedTracks },
                   ...(hasInitialHdImage ? {} : (hasValidScrapedImage ? { images: data.images } : {})),
                   ...(data.color ? { color: data.color } : {}),
                   ...(data.owner ? { owner: data.owner } : {}),
@@ -991,11 +1010,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             } catch {}
           }
         } else {
-          setNetworkError(true);
+          if (!hasExistingTracks) setNetworkError(true);
         }
       } catch (err) {
         console.error('Error loading dynamic tracks:', err);
-        setNetworkError(true);
+        if (!hasExistingTracks) setNetworkError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -1012,6 +1031,42 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setDynamicPlaylist(playlist);
     setHeroCoverError(false);
   }, [playlist.id, playlist.images?.[0]?.url, playlist.name, playlist.description]);
+
+  // Synchronize dynamicTracks when a playlist is refreshed via context menu
+  useEffect(() => {
+    const handlePlaylistRefreshed = (e: any) => {
+      const { playlistId, data } = e.detail || {};
+      if (
+        (playlistId === playlist.id ||
+          (isLikedInitially && (playlistId === 'liked-songs' || playlistId === 'collection-tracks'))) &&
+        data?.tracks?.items
+      ) {
+        const removedSet = getRemovedTrackIdsForPlaylist(playlist.id);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return !removedSet.has(t.id) && !removedSet.has(c);
+        };
+        const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
+        const customIds = new Set(currentCustom.map((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+        const filtered = (data.tracks.items || []).filter(isNotRemoved);
+        const merged = deduplicateTracks([
+          ...currentCustom.filter(isNotRemoved),
+          ...filtered.filter((t: Track) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return !customIds.has(c) && isNotRemoved(t);
+          }),
+        ]);
+        setDynamicTracks(merged);
+        setDynamicPlaylist((prev) => ({
+          ...prev,
+          ...data,
+          tracks: { total: Math.max(data.tracks?.total || 0, merged.length), items: merged },
+        }));
+      }
+    };
+    window.addEventListener('spotifree:playlist-refreshed', handlePlaylistRefreshed);
+    return () => window.removeEventListener('spotifree:playlist-refreshed', handlePlaylistRefreshed);
+  }, [playlist.id, isLikedInitially, user?.id]);
 
   // Asynchronously resolve individual album covers for all tracks in parallel
   useEffect(() => {

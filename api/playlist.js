@@ -92,7 +92,7 @@ function parseEmbedHtml(html, cleanId) {
  * Resolves a real Spotify Playlist / Album / Liked Songs directly from Spotify's
  * internal Pathfinder GraphQL and Web API with zero mock/fake tracks.
  */
-export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = '' } = {}) {
+export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = '', refresh = false } = {}) {
   const cleanId = (playlistId || '')
     .replace(/^spotify:playlist:/, '')
     .replace(/^spotify:album:/, '')
@@ -104,10 +104,11 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     throw new Error('ID de playlist no proporcionado');
   }
 
-  // Check in-memory instant cache
-  if (MEMORY_PLAYLIST_CACHE.has(cleanId)) {
+  // Check in-memory instant cache (valid for 3 minutes unless refresh is requested)
+  if (!refresh && MEMORY_PLAYLIST_CACHE.has(cleanId)) {
     const cached = MEMORY_PLAYLIST_CACHE.get(cleanId);
-    if (cached?.tracks?.items?.length > 0) {
+    const age = Date.now() - (cached?._cachedAt || 0);
+    if (age < 180_000 && cached?.tracks?.items?.length > 0) {
       return cached;
     }
   }
@@ -374,19 +375,35 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     cleanId === 'collection:tracks';
 
   if (isLiked) {
-    // 2a. Try official Web API v1/me/tracks with active user token
+    // 2a. Try official Web API v1/me/tracks with active user token (paginating up to 10,000 tracks)
     if (activeToken) {
       try {
-        const meTracksRes = await fetch('https://api.spotify.com/v1/me/tracks?limit=50', {
-          headers: {
-            'Authorization': `Bearer ${activeToken}`,
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-          },
-        });
+        let allItems = [];
+        let nextUrl = 'https://api.spotify.com/v1/me/tracks?limit=50';
+        let pageCount = 0;
+        let totalReported = 0;
 
-        if (meTracksRes.ok) {
+        while (nextUrl && allItems.length < 10000 && pageCount < 200) {
+          pageCount++;
+          const meTracksRes = await fetch(nextUrl, {
+            headers: {
+              'Authorization': `Bearer ${activeToken}`,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            },
+            signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
+          });
+
+          if (!meTracksRes.ok) break;
           const data = await meTracksRes.json();
-          const tracks = (data.items || []).map((it, idx) => {
+          totalReported = data.total || totalReported;
+          if (Array.isArray(data.items)) {
+            allItems.push(...data.items);
+          }
+          nextUrl = data.next;
+        }
+
+        if (allItems.length > 0) {
+          const tracks = allItems.map((it, idx) => {
             const tr = it.track || it;
             const cover = toHDImage(tr.album?.images?.[0]?.url || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg');
             return {
@@ -404,26 +421,31 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             };
           });
 
-          return {
+          const result = {
             id: 'collection-tracks',
             name: 'Canciones que te gustan',
-            description: `${data.total || tracks.length} canciones guardadas`,
+            description: `${totalReported || tracks.length} canciones guardadas`,
             type: 'playlist',
             images: [{ url: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg' }],
             owner: { display_name: 'Tú', id: 'me' },
             color: '#5018F0',
             tracks: {
-              total: data.total || tracks.length,
+              total: totalReported || tracks.length,
               items: tracks,
             },
+            _cachedAt: Date.now(),
           };
+          MEMORY_PLAYLIST_CACHE.set(cleanId, result);
+          MEMORY_PLAYLIST_CACHE.set('collection-tracks', result);
+          MEMORY_PLAYLIST_CACHE.set('liked-songs', result);
+          return result;
         }
       } catch (err) {
         console.warn('[Playlist API] Failed to fetch me/tracks with token:', err.message);
       }
     }
 
-    // 2b. Try Pathfinder fetchLibraryTracks
+    // 2b. Try Pathfinder fetchLibraryTracks (paginating up to 10,000 tracks)
     if (activeToken) {
       try {
         const libQueryRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
@@ -439,18 +461,77 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               },
             },
           }),
+          signal: AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined,
         });
 
         if (libQueryRes.ok) {
           const libData = await libQueryRes.json();
-          const items =
-            libData.data?.me?.library?.tracks?.items ||
-            libData.data?.me?.libraryTracks?.items ||
-            libData.data?.me?.tracks?.items ||
-            [];
+          const rawItems = [
+            ...(libData.data?.me?.library?.tracks?.items ||
+              libData.data?.me?.libraryTracks?.items ||
+              libData.data?.me?.tracks?.items ||
+              []),
+          ];
 
-          if (items.length > 0) {
-            const tracks = items.map((it, idx) => {
+          const totalCount =
+            libData.data?.me?.library?.tracks?.totalCount ||
+            libData.data?.me?.libraryTracks?.totalCount ||
+            libData.data?.me?.tracks?.totalCount ||
+            (rawItems.length === 50 ? 10000 : rawItems.length);
+
+          if (rawItems.length === 50 && totalCount > rawItems.length) {
+            const maxFetch = Math.min(totalCount, 10000);
+            const offsets = [];
+            for (let off = 50; off < maxFetch; off += 50) {
+              offsets.push(off);
+            }
+            const fetchLibPage = async (offset) => {
+              try {
+                const pRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
+                  method: 'POST',
+                  headers: pathfinderHeaders,
+                  body: JSON.stringify({
+                    operationName: 'fetchLibraryTracks',
+                    variables: { offset, limit: 50 },
+                    extensions: {
+                      persistedQuery: {
+                        version: 1,
+                        sha256Hash: '087278b20b743578a6262c2b0b4bcd20d879c503cc359a2285baf083ef944240',
+                      },
+                    },
+                  }),
+                  signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
+                });
+                if (pRes.ok) {
+                  const pData = await pRes.json();
+                  return (
+                    pData.data?.me?.library?.tracks?.items ||
+                    pData.data?.me?.libraryTracks?.items ||
+                    pData.data?.me?.tracks?.items ||
+                    []
+                  );
+                }
+              } catch {}
+              return [];
+            };
+
+            for (let i = 0; i < offsets.length; i += 4) {
+              const batch = offsets.slice(i, i + 4);
+              const results = await Promise.all(batch.map(fetchLibPage));
+              let hadEmpty = false;
+              for (const chunk of results) {
+                if (chunk && chunk.length) {
+                  rawItems.push(...chunk);
+                } else {
+                  hadEmpty = true;
+                }
+              }
+              if (hadEmpty) break;
+            }
+          }
+
+          if (rawItems.length > 0) {
+            const tracks = rawItems.map((it, idx) => {
               const tr = it.track?.data || it.item?.data || it.track || it;
               const coverUrl = toHDImage(
                 tr.albumOfTrack?.coverArt?.sources?.[0]?.url ||
@@ -476,7 +557,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               };
             });
 
-            return {
+            const result = {
               id: 'collection-tracks',
               name: 'Canciones que te gustan',
               description: `${tracks.length} canciones guardadas`,
@@ -485,10 +566,15 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               owner: { display_name: 'Tú', id: 'me' },
               color: '#5018F0',
               tracks: {
-                total: tracks.length,
+                total: Math.max(totalCount, tracks.length),
                 items: tracks,
               },
+              _cachedAt: Date.now(),
             };
+            MEMORY_PLAYLIST_CACHE.set(cleanId, result);
+            MEMORY_PLAYLIST_CACHE.set('collection-tracks', result);
+            MEMORY_PLAYLIST_CACHE.set('liked-songs', result);
+            return result;
           }
         }
       } catch (err) {
@@ -550,7 +636,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             const totalCount = pl.content?.totalCount || rawItems.length;
 
             if (totalCount > rawItems.length) {
-              const maxFetch = Math.min(totalCount, 5000);
+              const maxFetch = Math.min(totalCount, 10000);
               const offsets = [];
               for (let off = rawItems.length; off < maxFetch; off += 100) {
                 offsets.push(off);
@@ -630,7 +716,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               null;
             const bannerUrl = rawBanner ? toHDImage(rawBanner) : undefined;
 
-            return {
+            const result = {
               id: cleanId,
               name: pl.name,
               description: stripHtml(pl.description || ''),
@@ -646,7 +732,10 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
                 total: pl.content?.totalCount || tracks.length,
                 items: tracks,
               },
+              _cachedAt: Date.now(),
             };
+            MEMORY_PLAYLIST_CACHE.set(cleanId, result);
+            return result;
           }
         }
       } catch (err) {
@@ -706,7 +795,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             };
           });
 
-          return {
+          const result = {
             id: cleanId,
             name: alb.name,
             description: `Álbum • ${alb.date?.isoString?.slice(0, 4) || ''}`,
@@ -721,7 +810,10 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
               total: alb.tracksV2?.totalCount || tracks.length,
               items: tracks,
             },
+            _cachedAt: Date.now(),
           };
+          MEMORY_PLAYLIST_CACHE.set(cleanId, result);
+          return result;
         }
       }
     } catch (err) {
@@ -1354,8 +1446,9 @@ export default async function handler(req, res) {
     const cookie = req.headers['x-spotify-cookie'] || '';
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
+    const refresh = url.searchParams.get('refresh') === '1' || req.headers['cache-control']?.includes('no-cache');
 
-    const result = await resolveSpotifyPlaylist(id, { cookie, token });
+    const result = await resolveSpotifyPlaylist(id, { cookie, token, refresh });
     return res.status(200).json(result);
   } catch (err) {
     console.error('[api/playlist] Error:', err.message);

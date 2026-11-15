@@ -429,6 +429,56 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             </button>
           )}
 
+          {/* Sincronizar / Actualizar canciones desde Spotify */}
+          {!isFolder && (
+            <button
+              onClick={async () => {
+                const plId = targetPlaylist?.id || contextMenu.playlistId;
+                closeContextMenu();
+                if (!plId) return;
+                showGlobalToast('Sincronizando canciones...');
+                try {
+                  const isLiked =
+                    plId === 'liked-songs' ||
+                    plId === 'tracks' ||
+                    plId.includes('collection:tracks') ||
+                    plId.includes('collection-tracks');
+                  const fetchId = isLiked ? 'collection-tracks' : plId;
+                  const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+                  const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+                  const headers: Record<string, string> = {};
+                  if (userCookie) headers['x-spotify-cookie'] = userCookie;
+                  if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+                  const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(fetchId)}?refresh=1`, { headers });
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data?.tracks?.items) {
+                      useSpotifyDataStore.getState().cachePlaylistDetails(data);
+                      useSpotifyDataStore.getState().updatePlaylist(plId, {
+                        tracks: data.tracks,
+                      });
+                      window.dispatchEvent(
+                        new CustomEvent('spotifree:playlist-refreshed', { detail: { playlistId: plId, data } })
+                      );
+                      showGlobalToast(`Lista actualizada (${data.tracks.items.length} canciones)`);
+                      return;
+                    }
+                  }
+                  showGlobalToast('No se pudieron obtener canciones nuevas');
+                } catch {
+                  showGlobalToast('Error al actualizar la lista');
+                }
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16" />
+              </svg>
+              <span className="truncate">Actualizar canciones</span>
+            </button>
+          )}
+
           {isUserCreatedPlaylist && (
             <>
               {/* 3. Editar datos (Pencil Icon) -> Opens Modal */}

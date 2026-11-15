@@ -544,7 +544,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       if (merged.length > 0) {
         setTracks(merged);
       }
-      return;
+      // Continue to fetchTracks() below to ensure complete and up-to-date liked songs from Spotify
     }
 
     // C. REGULAR PLAYLIST: Merge with any saved custom tracks
@@ -565,9 +565,11 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     };
 
     // 1. Direct items
-    if (playlist.tracks?.items && playlist.tracks.items.length > 0) {
+    if (!isLikedPlaylist && playlist.tracks?.items && playlist.tracks.items.length > 0) {
       setTracks(mergeWithCustom(playlist.tracks.items));
-      return;
+      if (playlist.tracks.total && playlist.tracks.items.length >= playlist.tracks.total) {
+        return;
+      }
     }
 
     // 1b. Check Spotifree mixes store
@@ -672,12 +674,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         if (userCookie) headers['x-spotify-cookie'] = userCookie;
         if (accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
 
-        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(cleanId)}`, { headers });
+        const fetchId = isLikedPlaylist ? 'collection-tracks' : cleanId;
+        const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(fetchId)}?refresh=1`, { headers });
         if (res.ok) {
           setNetworkError(false);
           const data = await res.json();
           if (!cancelled && data.tracks?.items && data.tracks.items.length > 0) {
-            const merged = mergeWithCustom(data.tracks.items);
+            const merged = isLikedPlaylist
+              ? deduplicateTracks([...getCustomLikedSongs(user?.id), ...data.tracks.items])
+              : mergeWithCustom(data.tracks.items);
             const hasInitialHd = playlist.images && playlist.images.length > 0 && playlist.images[0].url && !playlist.images[0].url.includes('liked-songs');
             const hasScrapedImg = data.images?.length > 0 && data.images[0].url && !data.images[0].url.includes('liked-songs');
             const isSlugName = data.name && data.name.toLowerCase() === playlist.id.replace(/[-_]/g, ' ').toLowerCase();
@@ -689,7 +694,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               images: hasInitialHd ? playlist.images : (hasScrapedImg ? data.images : playlist.images),
               color: data.color || playlist.color,
               owner: data.owner || playlist.owner,
-              tracks: { total: merged.length, items: merged },
+              tracks: { total: Math.max(data.tracks?.total || 0, merged.length), items: merged },
             };
             setTracks(merged);
             setActivePlaylist(updatedActive);
@@ -718,6 +723,44 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       cancelled = true;
     };
   }, [playlist.id, playlist.name, isLikedPlaylist, user?.id, reloadCounter]);
+
+  // Synchronize tracks when refreshed from ContextMenu or account refresh
+  useEffect(() => {
+    const handlePlaylistRefreshed = (e: any) => {
+      const { playlistId, data } = e.detail || {};
+      const cleanPlId = (playlist.id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+      if (
+        (playlistId === playlist.id ||
+          playlistId === cleanPlId ||
+          (isLikedPlaylist && (playlistId === 'liked-songs' || playlistId === 'collection-tracks'))) &&
+        data?.tracks?.items
+      ) {
+        const removedSet = getRemovedTrackIdsForPlaylist(cleanPlId);
+        const isNotRemoved = (t: Track) => {
+          const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+          return !removedSet.has(t.id) && !removedSet.has(c);
+        };
+        const currentCustom = getSavedCustomTracks(cleanPlId, isLikedPlaylist, user?.id);
+        const customIds = new Set(currentCustom.map((t) => (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim()));
+        const filtered = (data.tracks.items || []).filter(isNotRemoved);
+        const merged = deduplicateTracks([
+          ...currentCustom.filter(isNotRemoved),
+          ...filtered.filter((t: Track) => {
+            const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+            return !customIds.has(c) && isNotRemoved(t);
+          }),
+        ]);
+        setTracks(merged);
+        setActivePlaylist((prev) => ({
+          ...prev,
+          ...data,
+          tracks: { total: Math.max(data.tracks?.total || 0, merged.length), items: merged },
+        }));
+      }
+    };
+    window.addEventListener('spotifree:playlist-refreshed', handlePlaylistRefreshed);
+    return () => window.removeEventListener('spotifree:playlist-refreshed', handlePlaylistRefreshed);
+  }, [playlist.id, isLikedPlaylist, user?.id]);
 
   // Batch resolve individual track covers asynchronously on mobile
   useEffect(() => {
