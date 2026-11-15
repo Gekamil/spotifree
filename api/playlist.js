@@ -315,6 +315,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   const cleanCookie = cleanSpDcString(cookie);
   const isLikedCheck = cleanId === 'collection-tracks' || cleanId === 'liked-songs' || cleanId === 'tracks' || cleanId === 'collection:tracks';
 
+  let embedFallback = null;
   // Instant fast-path for public playlists: resolve in < 700ms via embed instead of slow auth handshake
   if (!cleanCookie && !isLikedCheck) {
     for (const et of ['playlist', 'album', 'artist']) {
@@ -327,8 +328,14 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
           const html = await res.text();
           const parsed = parseEmbedHtml(html, cleanId);
           if (parsed && parsed.tracks?.items?.length > 0) {
-            MEMORY_PLAYLIST_CACHE.set(cleanId, parsed);
-            return parsed;
+            // If the playlist has less than 100 tracks, embed is already complete
+            if (parsed.tracks.items.length < 100) {
+              MEMORY_PLAYLIST_CACHE.set(cleanId, parsed);
+              return parsed;
+            }
+            // If it has >= 100 tracks, save as fallback and proceed to Pathfinder for full pagination
+            embedFallback = parsed;
+            break;
           }
         }
       } catch {}
@@ -539,7 +546,54 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
           if (pl && pl.name) {
             const rawCover = pl.images?.items?.[0]?.sources?.[0]?.url || '';
             const coverUrl = toHDImage(rawCover);
-            const rawItems = pl.content?.items || [];
+            const rawItems = [...(pl.content?.items || [])];
+            const totalCount = pl.content?.totalCount || rawItems.length;
+
+            if (totalCount > rawItems.length) {
+              const maxFetch = Math.min(totalCount, 5000);
+              const offsets = [];
+              for (let off = rawItems.length; off < maxFetch; off += 100) {
+                offsets.push(off);
+              }
+              const fetchPage = async (offset) => {
+                try {
+                  const pRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
+                    method: 'POST',
+                    headers: pathfinderHeaders,
+                    body: JSON.stringify({
+                      operationName: 'fetchPlaylist',
+                      variables: {
+                        uri: `spotify:playlist:${cleanId}`,
+                        offset,
+                        limit: 100,
+                        enableWatchFeedEntrypoint: false,
+                      },
+                      extensions: {
+                        persistedQuery: {
+                          version: 1,
+                          sha256Hash: hash,
+                        },
+                      },
+                    }),
+                    signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
+                  });
+                  if (pRes.ok) {
+                    const pData = await pRes.json();
+                    return pData.data?.playlistV2?.content?.items || [];
+                  }
+                } catch {}
+                return [];
+              };
+
+              // Fetch concurrently in groups of 4
+              for (let i = 0; i < offsets.length; i += 4) {
+                const batch = offsets.slice(i, i + 4);
+                const results = await Promise.all(batch.map(fetchPage));
+                for (const chunk of results) {
+                  if (chunk && chunk.length) rawItems.push(...chunk);
+                }
+              }
+            }
 
             const tracks = rawItems.map((c, idx) => {
               const tr = c.itemV2?.data || c.item?.data || c.track || c;
@@ -698,7 +752,13 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     } catch {}
   }
 
-  // 6. Safe empty fallback
+  // 6. If Pathfinder / Web API couldn't resolve all, return embedFallback if available
+  if (embedFallback && embedFallback.tracks?.items?.length > 0) {
+    MEMORY_PLAYLIST_CACHE.set(cleanId, embedFallback);
+    return embedFallback;
+  }
+
+  // 7. Safe empty fallback
   return {
     id: cleanId,
     name: cleanId.replace(/[-_]/g, ' '),

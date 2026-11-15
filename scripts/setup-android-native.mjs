@@ -360,7 +360,7 @@ ${services}
         </provider>
         <receiver
             android:name=".SpotifreeWidget"
-            android:exported="false"
+            android:exported="true"
             android:label="Spotifree">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
@@ -371,7 +371,7 @@ ${services}
         </receiver>
         <receiver
             android:name=".SpotifreeTurntableWidget"
-            android:exported="false"
+            android:exported="true"
             android:label="Tocadiscos">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />

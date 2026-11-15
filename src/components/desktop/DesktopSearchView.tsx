@@ -15,6 +15,7 @@ import {
   type RecentSearchItem,
 } from '../../utils/recentSearches';
 import { parseTrackArtists } from '../../utils/trackArtists';
+import { handleImageError, INLINE_SVG_FALLBACK } from '../../utils/imageFallback';
 
 import { useDailyCategoryHub } from '../../services/dailyCategoryHub';
 
@@ -776,11 +777,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           className="lg:col-span-5 bg-[#181818] hover:bg-[#282828] p-5 rounded-lg cursor-pointer transition-colors group relative flex flex-col justify-between"
                         >
                           <div>
-                            <img
-                              src={topTrack.album?.images[0]?.url}
-                              alt={topTrack.name}
-                              className="w-24 h-24 rounded-lg object-cover shadow-xl mb-4"
-                            />
+                            <div className="w-24 h-24 rounded-lg overflow-hidden bg-[#282828] shadow-xl mb-4 shrink-0">
+                              <img
+                                src={topTrack.album?.images?.[0]?.url || INLINE_SVG_FALLBACK}
+                                alt=""
+                                onError={handleImageError}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                             <h3 className={`text-3xl font-black leading-tight font-['SpotifyMixUITitle'] ${
                               currentTrack?.id === topTrack.id ? 'text-[#1ed760]' : 'text-white'
                             }`}>
@@ -830,11 +836,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                             }`}
                           >
                             <div className="flex items-center gap-3 min-w-0">
-                              <img
-                                src={track.album?.images[0]?.url}
-                                alt={track.name}
-                                className="w-10 h-10 rounded object-cover shadow"
-                              />
+                              <div className="w-10 h-10 rounded overflow-hidden bg-[#282828] shrink-0 shadow">
+                                <img
+                                  src={track.album?.images?.[0]?.url || INLINE_SVG_FALLBACK}
+                                  alt=""
+                                  onError={handleImageError}
+                                  loading="lazy"
+                                  decoding="async"
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
                               <div className="flex flex-col min-w-0">
                                 <span className={`font-medium truncate ${
                                   isThisPlaying ? 'text-[#1ed760]' : 'text-white group-hover:text-white'
@@ -937,11 +948,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                               }`}
                             >
                               <div className="flex items-center gap-3 min-w-0 pr-3">
-                                <img
-                                  src={track.album?.images?.[0]?.url}
-                                  alt={track.name}
-                                  className="w-11 h-11 rounded object-cover shadow bg-[#242424] shrink-0"
-                                />
+                                <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow">
+                                  <img
+                                    src={track.album?.images?.[0]?.url || INLINE_SVG_FALLBACK}
+                                    alt=""
+                                    onError={handleImageError}
+                                    loading="lazy"
+                                    decoding="async"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
                                 <div className="min-w-0">
                                   <p className={`text-sm font-semibold truncate ${isThisPlaying ? 'text-[#1ed760]' : 'text-white'}`}>
                                     {track.name}
@@ -1035,11 +1051,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                         }`}
                       >
                         <div className="flex items-center gap-3.5 min-w-0">
-                          <img
-                            src={track.album?.images[0]?.url}
-                            alt={track.name}
-                            className="w-11 h-11 rounded object-cover shadow"
-                          />
+                          <div className="w-11 h-11 rounded overflow-hidden bg-[#282828] shrink-0 shadow">
+                            <img
+                              src={track.album?.images?.[0]?.url || INLINE_SVG_FALLBACK}
+                              alt=""
+                              onError={handleImageError}
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
                           <div className="flex flex-col min-w-0">
                             <span className={`font-semibold text-sm truncate ${
                               isThisPlaying ? 'text-[#1ed760]' : 'text-white'
@@ -1094,11 +1115,16 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
                           }`}
                         >
                           <div className="flex items-center gap-3.5 min-w-0 pr-3">
-                            <img
-                              src={track.album?.images?.[0]?.url}
-                              alt={track.name}
-                              className="w-11 h-11 rounded object-cover shadow bg-[#242424] shrink-0"
-                            />
+                            <div className="w-11 h-11 rounded overflow-hidden bg-[#242424] shrink-0 shadow">
+                              <img
+                                src={track.album?.images?.[0]?.url || INLINE_SVG_FALLBACK}
+                                alt=""
+                                onError={handleImageError}
+                                loading="lazy"
+                                decoding="async"
+                                className="w-full h-full object-cover"
+                              />
+                            </div>
                             <div className="flex flex-col min-w-0">
                               <span className={`font-semibold text-sm truncate ${isThisPlaying ? 'text-[#1ed760]' : 'text-white'}`}>
                                 {track.name}

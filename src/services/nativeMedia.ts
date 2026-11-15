@@ -21,7 +21,7 @@ import { fetchPlaylistDetails, searchSpotify } from './spotifyApi';
 import { fetchArtistTopTracks } from './artistService';
 import { getListeningHistory } from './listeningHistory';
 import { useSpotifreeMixes } from './spotifreeMixes';
-import { isTrackDisliked } from './labsService';
+import { isTrackDisliked, isTasteRatingActive } from './labsService';
 import { isNotInterested } from '../utils/notInterested';
 import type { Playlist, Track } from '../types/spotify';
 import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
@@ -736,7 +736,7 @@ function pushNowPlaying(force = false) {
   const useStar = Boolean((s as any).useStarFavorite);
   const shuffle = Boolean(s.isShuffle);
   const repeat = s.repeatMode || 'off';
-  const dislikeEnabled = true;
+  const dislikeEnabled = isTasteRatingActive();
   const disliked = Boolean((t ? isNotInterested(t) : false) || isTrackDisliked(t));
   const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${useStar}|${dislikeEnabled}|${disliked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
   const now = Date.now();

@@ -34,7 +34,7 @@ interface DesktopPlayerProps {
 
 export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistById }) => {
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
-  const { labsEnabled, speedControlEnabled, playbackSpeed } = useLabsStore();
+  const { labsEnabled, speedControlEnabled, tasteRatingEnabled, playbackSpeed } = useLabsStore();
   const dislikeCurrentTrack = usePlayerStore((s) => s.dislikeCurrentTrack);
   const {
     currentTrack,
@@ -317,8 +317,8 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
               )}
             </button>
 
-            {/* No me gusta (descartar y saltar a la siguiente canción) */}
-            {currentTrack && (() => {
+            {/* No me gusta (solo si está activado el modo Labs y Taste Rating) */}
+            {labsEnabled && tasteRatingEnabled && currentTrack && (() => {
               const isCurrentDisliked = Boolean(
                 isNotInterested(currentTrack) || isTrackDisliked(currentTrack)
               );

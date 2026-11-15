@@ -389,8 +389,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         {cover && (
                           <img
                             src={cover}
-                            alt={trk.name}
+                            alt=""
                             onError={handleImageError}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         )}
@@ -468,8 +470,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                         {cover && (
                           <img
                             src={cover}
-                            alt={trk.name}
+                            alt=""
                             onError={handleImageError}
+                            loading="lazy"
+                            decoding="async"
                             className="w-full h-full object-cover"
                           />
                         )}
@@ -524,8 +528,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                     {art.images?.[0]?.url ? (
                       <img
                         src={art.images[0].url}
-                        alt={art.name}
+                        alt=""
                         onError={handleImageError}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                     ) : (
@@ -575,8 +581,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                       {cover && (
                         <img
                           src={cover}
-                          alt={alb.name}
+                          alt=""
                           onError={handleImageError}
+                          loading="lazy"
+                          decoding="async"
                           className="w-full h-full object-cover"
                         />
                       )}
@@ -618,8 +626,10 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                     {pl.images?.[0]?.url && (
                       <img
                         src={pl.images[0].url}
-                        alt={pl.name}
+                        alt=""
                         onError={handleImageError}
+                        loading="lazy"
+                        decoding="async"
                         className="w-full h-full object-cover"
                       />
                     )}

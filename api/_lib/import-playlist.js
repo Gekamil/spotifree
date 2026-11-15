@@ -6,7 +6,7 @@
  */
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
-const MAX_TRACKS = 300;
+const MAX_TRACKS = 10000;
 
 function walk(o, fn, depth = 0) {
   if (!o || typeof o !== 'object' || depth > 60) return;
@@ -90,7 +90,7 @@ async function readDeezer({ kind, id }) {
   add(data.tracks?.data);
   // Long playlists come in pages
   let next = data.tracks?.next;
-  for (let page = 0; next && tracks.length < MAX_TRACKS && page < 6; page++) {
+  for (let page = 0; next && tracks.length < MAX_TRACKS && page < 400; page++) {
     const p = await (await fetch(next, { headers: { 'User-Agent': UA } })).json();
     add(p?.data);
     next = p?.next;
@@ -151,7 +151,7 @@ async function readYouTubeMusic({ id, browseId }) {
   });
   const tracks = [];
   let token = ytmRows(first, tracks);
-  for (let page = 0; token && tracks.length < MAX_TRACKS && page < 4; page++) {
+  for (let page = 0; token && tracks.length < MAX_TRACKS && page < 100; page++) {
     const next = await ytmBrowse({ continuation: token });
     token = ytmRows(next, tracks);
   }

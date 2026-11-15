@@ -12,8 +12,10 @@ import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
 import { openStoryCard } from '../../utils/storyCard';
 import { isTrackDownloaded, isPlaylistDownloaded, downloadPlaylist, deleteDownloadedPlaylist } from '../../utils/offlineStorage';
 import { downloadTrackEverywhere, removeTrackDownload } from '../../utils/downloadTrack';
-import { useLabsStore, openSpeedControlSheet } from '../../services/labsService';
+import { useLabsStore, openSpeedControlSheet, isTasteRatingActive } from '../../services/labsService';
 import { isNotInterested, markNotInterested, undoNotInterested } from '../../utils/notInterested';
+import { PinIcon } from '../icons/SpotifyIcons';
+import { AddTrackNativeIcon, CheckTrackNativeIcon, TrashNativeIcon } from '../icons/SpotifyNativeIcons';
 
 interface ContextMenuProps {
   onSelectPlaylistById?: (id: string, name?: string) => void;
@@ -324,9 +326,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
               }}
               className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                <path d="M8.822.797a2.72 2.72 0 0 1 3.847 0l2.534 2.534a2.72 2.72 0 0 1 0 3.847l-1.82 1.82 1.408 5.163a.75.75 0 0 1-.948.91l-4.723-1.574-3.58 3.58a.75.75 0 0 1-1.06-1.06l3.58-3.58-1.574-4.723a.75.75 0 0 1 .91-.948l5.163 1.408 1.82-1.82a1.22 1.22 0 0 0 0-1.727L11.845 2.11a1.22 1.22 0 0 0-1.727 0L8.298 3.93 6.945 2.577z" />
-              </svg>
+              <PinIcon size={16} className="text-[#a7a7a7] shrink-0" />
               <span className="truncate">{(targetPlaylist as any)?.is_pinned ? 'Desfijar de tu biblioteca' : 'Fijar en tu biblioteca'}</span>
             </button>
           )}
@@ -380,13 +380,11 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
               }}
               className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
             >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                {isSavedInLibrary ? (
-                  <path d="M12.5 0a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0-7zm.354 2.146a.5.5 0 0 0-.708 0L10.5 3.793l-.646-.647a.5.5 0 0 0-.708.708l1 1a.5.5 0 0 0 .708 0l2-2a.5.5 0 0 0 0-.708zM8 2a5.5 5.5 0 1 0 5.498 5.002 4.49 4.49 0 0 0-1.002-.002A4.5 4.5 0 1 1 8 3c.334 0 .66.036.974.105.156-.34.354-.653.586-.93A5.474 5.474 0 0 0 8 2z" />
-                ) : (
-                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m8.75-4.5a.75.75 0 0 0-1.5 0v3.25H4a.75.75 0 0 0 0 1.5h3.25V11.5a.75.75 0 0 0 1.5 0V8.25H12a.75.75 0 0 0 0-1.5H8.75z" />
-                )}
-              </svg>
+              {isSavedInLibrary ? (
+                <CheckTrackNativeIcon size={16} className="text-[#a7a7a7] shrink-0" />
+              ) : (
+                <AddTrackNativeIcon size={16} className="text-[#a7a7a7] shrink-0" />
+              )}
               <span className="truncate">{isSavedInLibrary ? 'Eliminar de Tu biblioteca' : 'Añadir a Tu biblioteca'}</span>
             </button>
           )}
@@ -494,10 +492,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 onClick={handleDeletePlaylist}
                 className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
-                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-                  <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
-                </svg>
+                <TrashNativeIcon size={16} className="text-[#a7a7a7] shrink-0" />
                 <span className="truncate">Eliminar de Tu biblioteca</span>
               </button>
 
@@ -521,8 +516,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
               >
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className={`${excluded ? 'text-[#1ed760]' : 'text-[#a7a7a7]'} shrink-0`}>
-                  <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-                  <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
+                  <path fillRule="evenodd" clipRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm10.854-2.854a.5.5 0 0 0-.708-.708L8 6.586 5.854 4.438a.5.5 0 1 0-.708.708L7.293 7.293l-2.147 2.147a.5.5 0 0 0 .708.708L8 8.001l2.146 2.147a.5.5 0 0 0 .708-.708L8.707 7.293l2.147-2.147z" />
                 </svg>
                 <span className="truncate">{excluded ? 'Incluir en tu perfil de gustos' : 'Excluir de tu perfil de gustos'}</span>
               </button>
@@ -638,8 +632,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
               className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-[#ff5c5c]"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="shrink-0">
-                <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8" />
-                <path d="M11.005 4.995a.75.75 0 0 1 0 1.06L9.061 8l1.944 1.945a.75.75 0 1 1-1.06 1.06L8 9.061l-1.945 1.944a.75.75 0 1 1-1.06-1.06L6.939 8 4.995 6.055a.75.75 0 1 1 1.06-1.06L8 6.939l1.945-1.944a.75.75 0 0 1 1.06 0" />
+                <path fillRule="evenodd" clipRule="evenodd" d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm10.854-2.854a.5.5 0 0 0-.708-.708L8 6.586 5.854 4.438a.5.5 0 1 0-.708.708L7.293 7.293l-2.147 2.147a.5.5 0 0 0 .708.708L8 8.001l2.146 2.147a.5.5 0 0 0 .708-.708L8.707 7.293l2.147-2.147z" />
               </svg>
               <span className="font-bold">Eliminar de esta lista</span>
             </button>
@@ -769,8 +762,8 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             </button>
           )}
 
-          {/* No me gusta (combinado con no me interesa y Labs dislike) */}
-          {targetTrack && (
+          {/* No me gusta (solo si está activado el modo) */}
+          {isTasteRatingActive() && targetTrack && (
             <button
               onClick={() => {
                 if (isNotInterested(targetTrack)) {

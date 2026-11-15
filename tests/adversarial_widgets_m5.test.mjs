@@ -434,6 +434,18 @@ describe('M5 Adversarial Suite 3: Layout XML Syntax & RemoteViews Whitelist Comp
     assert.ok(widgetInfo.includes('@layout/spotifree_widget'), 'spotifree_widget_info must point to @layout/spotifree_widget');
     assert.ok(turntableInfo.includes('@layout/spotifree_widget_turntable'), 'spotifree_turntable_info must point to @layout/spotifree_widget_turntable');
   });
+
+  it('Both widget receivers must be declared android:exported="true" in AndroidManifest template', () => {
+    const setupScript = readRel('scripts/setup-android-native.mjs').replace(/\r\n/g, '\n');
+    assert.ok(
+      setupScript.includes('android:name=".SpotifreeWidget"\n            android:exported="true"'),
+      'SpotifreeWidget receiver must be android:exported="true" so launcher can bind/update it'
+    );
+    assert.ok(
+      setupScript.includes('android:name=".SpotifreeTurntableWidget"\n            android:exported="true"'),
+      'SpotifreeTurntableWidget receiver must be android:exported="true" so launcher can bind/update it'
+    );
+  });
 });
 
 describe('M5 Adversarial Suite 4: Forbidden APIs & Invalidation Anti-Patterns', () => {

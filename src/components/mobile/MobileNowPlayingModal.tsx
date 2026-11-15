@@ -225,7 +225,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     }
   }, [currentTrack?.id, isMenuOpen]);
   const sleepActive = useSleepTimer((s) => s.endsAt !== null || Boolean(s.trackId));
-  const { labsEnabled, speedControlEnabled, playbackSpeed } = useLabsStore();
+  const { labsEnabled, speedControlEnabled, tasteRatingEnabled, playbackSpeed } = useLabsStore();
   const dislikeCurrentTrack = usePlayerStore((s) => s.dislikeCurrentTrack);
   const [artistPicture, setArtistPicture] = useState<string | null>(null);
   const [isCanvasMode, setIsCanvasMode] = useState(false);
@@ -712,8 +712,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               )}
             </button>
 
-            {/* No me gusta (saltar y descartar canción) */}
-            {currentTrack && (() => {
+            {/* No me gusta (solo si está activado el modo Labs y Taste Rating) */}
+            {labsEnabled && tasteRatingEnabled && currentTrack && (() => {
               const isCurrentDisliked = Boolean(
                 isNotInterested(currentTrack) || isTrackDisliked(currentTrack)
               );
@@ -1235,30 +1235,32 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 </div>
               </button>
 
-              {/* No me gusta (combinado con no me interesa) */}
-              <button
-                onClick={() => {
-                  const t = currentTrack;
-                  setIsMenuOpen(false);
-                  if (isNotInterested(t)) {
-                    undoNotInterested(t);
-                    showGlobalToast('Podremos volver a ponértela');
-                  } else {
-                    dislikeCurrentTrack();
-                  }
-                }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                  </svg>
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">{isNotInterested(currentTrack) ? 'Ya no te disgusta' : 'No me gusta esta canción'}</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">{isNotInterested(currentTrack) ? 'Volverá a sonar en listas y recomendaciones' : 'Saltar y no volver a poner'}</p>
-                </div>
-              </button>
+              {/* No me gusta (solo si está activado el modo) */}
+              {labsEnabled && tasteRatingEnabled && (
+                <button
+                  onClick={() => {
+                    const t = currentTrack;
+                    setIsMenuOpen(false);
+                    if (isNotInterested(t)) {
+                      undoNotInterested(t);
+                      showGlobalToast('Podremos volver a ponértela');
+                    } else {
+                      dislikeCurrentTrack();
+                    }
+                  }}
+                  className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                >
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
+                    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                    </svg>
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <p className="font-bold text-sm text-white">{isNotInterested(currentTrack) ? 'Ya no te disgusta' : 'No me gusta esta canción'}</p>
+                    <p className="text-xs text-[#b3b3b3] truncate">{isNotInterested(currentTrack) ? 'Volverá a sonar en listas y recomendaciones' : 'Saltar y no volver a poner'}</p>
+                  </div>
+                </button>
+              )}
 
               {/* Option 3: Ir al artista */}
               <button

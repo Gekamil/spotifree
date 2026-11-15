@@ -116,6 +116,49 @@ interface DesktopPlaylistViewProps {
   onSelectPlaylistById?: (id: string, customName?: string, customImage?: string) => void;
 }
 
+const PlaylistClipsThumbButton: React.FC<{
+  tracks: Track[];
+  fallbackCover?: string;
+  isClipsModalOpen?: boolean;
+  onOpen: () => void;
+}> = React.memo(({ tracks, fallbackCover, isClipsModalOpen, onOpen }) => {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    if (!tracks || tracks.length <= 1 || isClipsModalOpen) return;
+    const interval = setInterval(() => {
+      setIndex((prev) => (prev + 1) % tracks.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [tracks, isClipsModalOpen]);
+
+  const current = tracks[index] || tracks[0];
+  const cover =
+    current?.album?.images?.[0]?.url ||
+    (current as any)?.image ||
+    fallbackCover;
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/15 hover:border-[#1ed760] transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/10 hover:ring-[#1ed760]/50"
+      title="Ver clips y avances de la playlist"
+    >
+      <img
+        key={current?.id || index}
+        src={cover}
+        alt=""
+        onError={handleImageError}
+        className="w-full h-full object-cover transition-all duration-700 group-hover/thumb:scale-110"
+      />
+      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
+        <PlayNativeIcon size={14} className="text-white ml-0.5 drop-shadow" />
+      </div>
+    </button>
+  );
+});
+
 export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playlist, onSelectPlaylistById }) => {
   const {
     currentTrack,
@@ -1170,7 +1213,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const isCurrentPlaylistPlaying =
     isPlaying && tracks.some((t) => t.id === currentTrack?.id || matchTrackId(t.id, currentTrack?.id));
 
-  const [rotatingTrackIndex, setRotatingTrackIndex] = useState(0);
   const [isClipsModalOpen, setIsClipsModalOpen] = useState(false);
   const [clipsTracks, setClipsTracks] = useState<Track[]>([]);
   const [clipsInitialIndex, setClipsInitialIndex] = useState(0);
@@ -1246,14 +1288,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       openAddToPlaylistModal(track);
     }
   };
-
-  useEffect(() => {
-    if (!tracks || tracks.length <= 1 || isClipsModalOpen) return;
-    const interval = setInterval(() => {
-      setRotatingTrackIndex((prev) => (prev + 1) % tracks.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [tracks, isClipsModalOpen]);
 
   const handlePlayAll = () => {
     if (loading) {
@@ -1748,30 +1782,15 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
             {/* Small Rotating Track Cover Thumbnail (Clips Preview Trigger - available in both normal & banner mode) */}
             {tracks.length > 0 && (
-              <button
-                type="button"
-                onClick={() => setIsClipsModalOpen(true)}
-                className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/15 hover:border-[#1ed760] transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/10 hover:ring-[#1ed760]/50"
-                title="Ver clips y avances de la playlist"
-              >
-                <img
-                  key={tracks[rotatingTrackIndex]?.id || rotatingTrackIndex}
-                  src={
-                    tracks[rotatingTrackIndex]?.album?.images?.[0]?.url ||
-                    (tracks[rotatingTrackIndex] as any)?.image ||
-                    bannerImgUrl ||
-                    dynamicPlaylist.images?.[0]?.url
-                  }
-                  alt={tracks[rotatingTrackIndex]?.name || 'Preview clip'}
-                  onError={handleImageError}
-                  className="w-full h-full object-cover transition-all duration-700 group-hover/thumb:scale-110"
-                />
-
-                {/* Hover Play icon overlay */}
-                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/thumb:opacity-100 flex items-center justify-center transition-opacity">
-                  <PlayNativeIcon size={14} className="text-white ml-0.5 drop-shadow" />
-                </div>
-              </button>
+              <PlaylistClipsThumbButton
+                tracks={tracks}
+                fallbackCover={bannerImgUrl || dynamicPlaylist.images?.[0]?.url}
+                isClipsModalOpen={isClipsModalOpen}
+                onOpen={() => {
+                  setClipsTracks([]);
+                  setIsClipsModalOpen(true);
+                }}
+              />
             )}
 
             {/* Shuffle button */}
@@ -2690,7 +2709,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       {/* 15s Clips Mini-Player Modal */}
       <PlaylistClipsMiniPlayer
         tracks={clipsTracks.length > 0 ? clipsTracks : tracks}
-        initialTrackIndex={clipsTracks.length > 0 ? clipsInitialIndex : rotatingTrackIndex}
+        initialTrackIndex={clipsTracks.length > 0 ? clipsInitialIndex : 0}
         skipShuffle={clipsTracks.length > 0}
         playlistTitle={dynamicPlaylist.name}
         isOpen={isClipsModalOpen}

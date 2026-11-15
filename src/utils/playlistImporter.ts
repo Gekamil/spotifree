@@ -113,7 +113,7 @@ async function matchAll(songs: ExternalSong[], cover: string, onProgress?: Impor
       onProgress?.(done, songs.length);
     }
   };
-  await Promise.all([worker(), worker(), worker()]);
+  await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
   // The same song twice (it happens in YouTube playlists): keep the first
   const seen = new Set<string>();
   const tracks = (out.filter(Boolean) as Track[]).filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
