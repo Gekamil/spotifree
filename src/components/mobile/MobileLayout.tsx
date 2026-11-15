@@ -52,9 +52,12 @@ import { handleImageError } from '../../utils/imageFallback';
 import { getPlaylistCover, onPlaylistCoverError, useAutoCovers } from '../../utils/playlistCover';
 import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
+import { SpotifyImage } from '../common/SpotifyImage';
+import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
 
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local' | 'recents' | 'stats'>('home');
+  const [scrollOffset, setScrollOffset] = useState(0);
   const [localCount, setLocalCount] = useState(0);
   useEffect(() => {
     const load = () =>
@@ -385,7 +388,7 @@ export const MobileLayout: React.FC = () => {
     );
   };
 
-  const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage } = useSpotifyDataStore();
+  const { isAuthenticated, user, playlists, dynamicShelves, quickAccessCards, featuredMessage, isLoading } = useSpotifyDataStore();
   const sfMixes = useSpotifreeMixes((s) => s.mixes);
   const sfArtists = useSpotifreeMixes((s) => s.suggestedArtists);
   const autoCoverVersion = useAutoCovers((s) => s.version); // playlist collages ready → repaint
@@ -633,8 +636,10 @@ export const MobileLayout: React.FC = () => {
       {/* Scrollable Center Content */}
       <div
         data-mobile-scroll
-        className="flex-1 overflow-y-auto overflow-x-hidden"
+        onScroll={(e) => setScrollOffset(e.currentTarget.scrollTop)}
+        className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth overscroll-contain"
         style={{
+          WebkitOverflowScrolling: 'touch',
           paddingBottom: mobileTab === 'dj' ? '0px' : 'calc(144px + var(--sab, 0px))',
         }}
       >
@@ -666,7 +671,13 @@ export const MobileLayout: React.FC = () => {
                     className="text-left active:scale-[0.97] transition-transform cursor-pointer"
                   >
                     <div className={`aspect-square w-full overflow-hidden bg-[#242424] shadow-lg ${round ? 'rounded-full' : 'rounded-md'}`}>
-                      <img src={card.image} alt={card.title} onError={handleImageError} referrerPolicy="no-referrer" loading="lazy" className="w-full h-full object-cover" />
+                      <SpotifyImage
+                        src={card.image}
+                        alt={card.title}
+                        round={round}
+                        fallbackType={round ? 'artist' : 'music'}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <p className={`mt-2 text-[13px] font-bold text-white line-clamp-1 ${round ? 'text-center' : ''}`}>{card.title}</p>
                     <p className={`text-xs text-[#a7a7a7] line-clamp-2 leading-snug ${round ? 'text-center' : ''}`}>{stripHtml(card.subtitle)}</p>
@@ -679,47 +690,68 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 1: HOME */}
         {mobileTab === 'home' && !seeAllShelf && (
-          <div
-            className="min-h-full transition-colors duration-500 spf-page-enter"
-            style={{
-              background: `linear-gradient(180deg, ${lastVibrantColor}cc 0%, rgba(18, 18, 18, 0.98) 320px, #121212 100%)`,
-            }}
-          >
-            <MobileHeader
-              activeTab={homeFilter}
-              onTabChange={setHomeFilter}
-              onOpenDrawer={() => setIsProfileDrawerOpen(true)}
-              onOpenProfile={() => setIsProfileDrawerOpen(true)}
-              onOpenSettings={() => setMobileTab('settings')}
-              onOpenNotifications={() => setIsNotificationsOpen(true)}
+          <div className="min-h-full transition-colors duration-500 spf-page-enter relative">
+            {/* Ambient Parallax Gradient Background */}
+            <div
+              className="pointer-events-none absolute inset-x-0 top-0 h-[380px] transition-colors duration-700 z-0 will-change-transform"
+              style={{
+                background: `linear-gradient(180deg, ${lastVibrantColor}bf 0%, rgba(18, 18, 18, 0.94) 280px, #121212 100%)`,
+                transform: `translate3d(0, ${-Math.min(scrollOffset * 0.45, 140)}px, 0)`,
+              }}
             />
 
-            {!isAuthenticated ? (
-              <div className="px-6 py-16 text-center flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-300">
-                <div className="w-16 h-16 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-xl mb-2">
-                  <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 2C6.477 2 2 6.477 2 12c0 5.524 4.477 10 10 10s10-4.476 10-10c0-5.523-4.477-10-10-10zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.793-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.722 1.115.294.18.386.563.207.855zm1.226-2.72c-.226.367-.706.482-1.072.257-2.687-1.652-6.785-2.131-9.965-1.166-.413.127-.848-.106-.973-.518-.125-.413.108-.848.52-.973 3.632-1.102 8.147-.568 11.233 1.328.366.226.481.707.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.073 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.28.327z" />
-                  </svg>
-                </div>
-                <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
-                  Música para todos
-                </h2>
-                <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs">
-                  Inicia sesión con tu cuenta de Spotify para acceder a tu biblioteca, tus playlists y tus recomendaciones personalizadas.
-                </p>
-                <button
-                  onClick={openLoginModal}
-                  className="px-8 py-3.5 rounded-full bg-[#1ed760] text-black font-bold text-xs uppercase tracking-wider active:scale-95 shadow-xl mt-2 cursor-pointer"
-                >
-                  Conectar cuenta
-                </button>
+            <div className="relative z-10">
+              <div
+                className={`sticky top-0 z-30 transition-all duration-300 ${
+                  scrollOffset > 15
+                    ? 'bg-[#121212]/85 backdrop-blur-xl border-b border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.55)]'
+                    : 'bg-transparent'
+                }`}
+              >
+                <MobileHeader
+                  activeTab={homeFilter}
+                  onTabChange={setHomeFilter}
+                  onOpenDrawer={() => setIsProfileDrawerOpen(true)}
+                  onOpenProfile={() => setIsProfileDrawerOpen(true)}
+                  onOpenSettings={() => setMobileTab('settings')}
+                  onOpenNotifications={() => setIsNotificationsOpen(true)}
+                />
               </div>
-            ) : (
-              <>
-                {/* Greeting Header matching Spotify Mobile */}
-                <h1 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] px-4 pt-1 pb-3">
-                  {greeting}
-                </h1>
+
+              {!isAuthenticated ? (
+                <div className="px-6 py-16 text-center flex flex-col items-center justify-center space-y-4 animate-in fade-in duration-300">
+                  <div className="w-16 h-16 rounded-full bg-[#1ed760] text-black flex items-center justify-center shadow-xl mb-2">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2C6.477 2 2 6.477 2 12c0 5.524 4.477 10 10 10s10-4.476 10-10c0-5.523-4.477-10-10-10zm4.586 14.424c-.18.295-.563.387-.857.207-2.35-1.435-5.308-1.76-8.793-.963-.335.077-.67-.133-.746-.468-.077-.334.132-.67.467-.746 3.808-.87 7.076-.496 9.722 1.115.294.18.386.563.207.855zm1.226-2.72c-.226.367-.706.482-1.072.257-2.687-1.652-6.785-2.131-9.965-1.166-.413.127-.848-.106-.973-.518-.125-.413.108-.848.52-.973 3.632-1.102 8.147-.568 11.233 1.328.366.226.481.707.257 1.072zm.105-2.835C14.692 8.95 9.375 8.775 6.297 9.71c-.494.15-1.018-.13-1.168-.624-.15-.494.13-1.018.624-1.168 3.532-1.073 9.404-.866 13.115 1.337.445.264.59.838.327 1.282-.264.443-.838.59-1.28.327z" />
+                    </svg>
+                  </div>
+                  <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle']">
+                    Música para todos
+                  </h2>
+                  <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs">
+                    Inicia sesión con tu cuenta de Spotify para acceder a tu biblioteca, tus playlists y tus recomendaciones personalizadas.
+                  </p>
+                  <button
+                    onClick={openLoginModal}
+                    className="px-8 py-3.5 rounded-full bg-[#1ed760] text-black font-bold text-xs uppercase tracking-wider active:scale-95 shadow-xl mt-2 cursor-pointer"
+                  >
+                    Conectar cuenta
+                  </button>
+                </div>
+              ) : isAuthenticated && (isLoading || (shortcuts.length === 0 && shelves.length === 0)) ? (
+                <SpotifyHomeSkeleton isMobile={true} />
+              ) : (
+                <>
+                  {/* Greeting Header matching Spotify Mobile */}
+                  <h1
+                    className="text-2xl font-black text-white font-['SpotifyMixUITitle'] px-4 pt-1 pb-3 transition-all duration-200"
+                    style={{
+                      opacity: Math.max(0.2, 1 - scrollOffset / 180),
+                      transform: `translate3d(0, ${scrollOffset * 0.08}px, 0)`,
+                    }}
+                  >
+                    {greeting}
+                  </h1>
 
                 {/* Quick Access 2-Column Grid matching Spotify Mobile */}
                 {shortcuts && shortcuts.length > 0 && (
@@ -734,21 +766,14 @@ export const MobileLayout: React.FC = () => {
                             className="h-12 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2"
                           >
                             <div className="flex items-center min-w-0 flex-1 mr-1">
-                              {card.image ? (
-                                <img
+                              <div className="w-12 h-12 shrink-0 rounded-l-[4px] overflow-hidden">
+                                <SpotifyImage
                                   src={card.image}
                                   alt={card.name}
-                                  onError={handleImageError}
-                                  referrerPolicy="no-referrer"
-                                  className="w-12 h-12 object-cover shrink-0 rounded-l-[4px]"
+                                  fallbackType="music"
+                                  className="w-12 h-12 object-cover"
                                 />
-                              ) : (
-                                <div className="w-12 h-12 bg-[#242424] flex items-center justify-center shrink-0 rounded-l-[4px] text-[#b3b3b3]">
-                                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                                  </svg>
-                                </div>
-                              )}
+                              </div>
                               <span
                                 className={`font-bold text-[12px] leading-[15px] line-clamp-2 px-2 ${
                                   isPlayingThis ? 'text-[#1ed760]' : 'text-white'
@@ -901,11 +926,10 @@ export const MobileLayout: React.FC = () => {
                           >
                             <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-3">
                               <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#242424] shadow-lg shrink-0 relative">
-                                <img
+                                <SpotifyImage
                                   src={single.image}
                                   alt={single.title}
-                                  onError={handleImageError}
-                                  referrerPolicy="no-referrer"
+                                  fallbackType="music"
                                   className="w-full h-full object-cover"
                                 />
                               </div>
@@ -938,11 +962,10 @@ export const MobileLayout: React.FC = () => {
                                 className="w-36 shrink-0 space-y-2 cursor-pointer active:scale-95 transition-transform"
                               >
                                 <div className="w-36 h-36 rounded-md overflow-hidden bg-[#242424] shadow-md relative">
-                                  <img
+                                  <SpotifyImage
                                     src={card.image}
                                     alt={card.title}
-                                    onError={handleImageError}
-                                    referrerPolicy="no-referrer"
+                                    fallbackType="music"
                                     className={`w-full h-full object-cover ${
                                       card.image?.includes('/img/radio/') || card.id?.startsWith('rad-')
                                         ? 'scale-[1.10] origin-bottom'
@@ -968,6 +991,7 @@ export const MobileLayout: React.FC = () => {
                 </div>
               </>
             )}
+            </div>
           </div>
         )}
 

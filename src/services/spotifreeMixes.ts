@@ -561,7 +561,162 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
 // 5. Building the playlists
 // ---------------------------------------------------------------------------
 export interface SpotifreeMix extends Playlist {
-  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud';
+  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud' | 'era';
+}
+
+function makeEraCoverSvg(decade: string, color: string): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+    <defs>
+      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${color}"/>
+        <stop offset="100%" stop-color="#121212"/>
+      </linearGradient>
+    </defs>
+    <rect width="600" height="600" fill="url(#g)"/>
+    <circle cx="500" cy="100" r="190" fill="${color}" opacity="0.32"/>
+    <circle cx="100" cy="500" r="230" fill="#000000" opacity="0.55"/>
+    <rect x="0" y="440" width="600" height="160" fill="rgba(0,0,0,0.5)"/>
+    <text x="48" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="114" fill="#ffffff" letter-spacing="-2">${decade}</text>
+    <text x="48" y="492" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="700" font-size="40" fill="#ffffff">Mix de los ${decade}</text>
+    <text x="48" y="540" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="22" fill="rgba(255,255,255,0.7)">Lo mejor de la época · Spotifree</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const ERA_PLAYLIST_DEFINITIONS = [
+  {
+    id: 'sf-era-2010s',
+    decade: '2010s',
+    name: 'Mix de los 2010s',
+    color: '#3d4085',
+    description: 'Los temas que definieron la década de 2010 a 2019: Avicii, The Weeknd, Drake y más.',
+    tracks: [
+      { name: 'Wake Me Up', artist: 'Avicii', album: 'True', duration_ms: 247000 },
+      { name: 'Starboy', artist: 'The Weeknd, Daft Punk', album: 'Starboy', duration_ms: 230000 },
+      { name: 'One Dance', artist: 'Drake, WizKid, Kyla', album: 'Views', duration_ms: 173000 },
+      { name: 'One Kiss', artist: 'Calvin Harris, Dua Lipa', album: 'One Kiss', duration_ms: 214000 },
+      { name: 'Callaita', artist: 'Bad Bunny', album: 'Callaita', duration_ms: 250000 },
+      { name: 'Get Lucky', artist: 'Daft Punk, Pharrell Williams', album: 'Random Access Memories', duration_ms: 248000 },
+      { name: 'Chandelier', artist: 'Sia', album: '1000 Forms of Fear', duration_ms: 216000 },
+      { name: 'Uptown Funk', artist: 'Mark Ronson, Bruno Mars', album: 'Uptown Special', duration_ms: 269000 },
+      { name: 'Shape of You', artist: 'Ed Sheeran', album: '÷ (Divide)', duration_ms: 233000 },
+      { name: 'Mi Gente', artist: 'J Balvin, Willy William', album: 'Vibras', duration_ms: 185000 },
+      { name: 'Lean On', artist: 'Major Lazer, DJ Snake, MØ', album: 'Peace Is the Mission', duration_ms: 176000 },
+      { name: 'bad guy', artist: 'Billie Eilish', album: 'WHEN WE ALL FALL ASLEEP, WHERE DO WE GO?', duration_ms: 194000 },
+      { name: 'Radioactive', artist: 'Imagine Dragons', album: 'Night Visions', duration_ms: 186000 },
+      { name: 'Sunflower', artist: 'Post Malone, Swae Lee', album: 'Spider-Man: Into the Spider-Verse', duration_ms: 158000 },
+      { name: 'Antes de morirme', artist: 'C. Tangana, Rosalía', album: 'Antes de morirme', duration_ms: 202000 },
+      { name: 'Titanium', artist: 'David Guetta, Sia', album: 'Nothing but the Beat', duration_ms: 245000 },
+      { name: "Don't You Worry Child", artist: 'Swedish House Mafia', album: 'Until Now', duration_ms: 212000 },
+      { name: 'Adventure of a Lifetime', artist: 'Coldplay', album: 'A Head Full of Dreams', duration_ms: 263000 },
+      { name: 'Señorita', artist: 'Shawn Mendes, Camila Cabello', album: 'Shawn Mendes', duration_ms: 190000 },
+      { name: 'Con Altura', artist: 'Rosalía, J Balvin, El Guincho', album: 'Con Altura', duration_ms: 161000 },
+    ],
+  },
+  {
+    id: 'sf-era-2000s',
+    decade: '2000s',
+    name: 'Mix de los 2000s',
+    color: '#e65100',
+    description: 'Nostalgia pura de los 2000: Eminem, Coldplay, Linkin Park, Daddy Yankee y más.',
+    tracks: [
+      { name: 'Lose Yourself', artist: 'Eminem', album: '8 Mile', duration_ms: 326000 },
+      { name: 'Viva La Vida', artist: 'Coldplay', album: 'Viva La Vida or Death and All His Friends', duration_ms: 242000 },
+      { name: 'In the End', artist: 'Linkin Park', album: 'Hybrid Theory', duration_ms: 216000 },
+      { name: 'Mr. Brightside', artist: 'The Killers', album: 'Hot Fuss', duration_ms: 222000 },
+      { name: 'Gasolina', artist: 'Daddy Yankee', album: 'Barrio Fino', duration_ms: 192000 },
+      { name: 'Toxic', artist: 'Britney Spears', album: 'In the Zone', duration_ms: 198000 },
+      { name: 'Hey Ya!', artist: 'Outkast', album: 'Speakerboxxx/The Love Below', duration_ms: 235000 },
+      { name: 'I Gotta Feeling', artist: 'The Black Eyed Peas', album: 'The E.N.D.', duration_ms: 289000 },
+      { name: 'Umbrella', artist: 'Rihanna, JAY-Z', album: 'Good Girl Gone Bad', duration_ms: 275000 },
+      { name: 'Feel Good Inc.', artist: 'Gorillaz', album: 'Demon Days', duration_ms: 221000 },
+      { name: 'Californication', artist: 'Red Hot Chili Peppers', album: 'Californication', duration_ms: 329000 },
+      { name: 'Boulevard of Broken Dreams', artist: 'Green Day', album: 'American Idiot', duration_ms: 260000 },
+      { name: "Hips Don't Lie", artist: 'Shakira, Wyclef Jean', album: 'Oral Fixation Vol. 2', duration_ms: 218000 },
+      { name: 'Dile', artist: 'Don Omar', album: 'The Last Don', duration_ms: 204000 },
+      { name: 'This Love', artist: 'Maroon 5', album: 'Songs About Jane', duration_ms: 206000 },
+      { name: 'Crazy In Love', artist: 'Beyoncé, JAY-Z', album: 'Dangerously in Love', duration_ms: 236000 },
+      { name: 'Take Me Out', artist: 'Franz Ferdinand', album: 'Franz Ferdinand', duration_ms: 237000 },
+      { name: 'Vino Tinto', artist: 'Estopa', album: 'Destrangis', duration_ms: 197000 },
+      { name: 'La Camisa Negra', artist: 'Juanes', album: 'Mi Sangre', duration_ms: 216000 },
+      { name: 'Maneater', artist: 'Nelly Furtado', album: 'Loose', duration_ms: 258000 },
+    ],
+  },
+  {
+    id: 'sf-era-90s',
+    decade: '90s',
+    name: 'Mix de los 90s',
+    color: '#7b1fa2',
+    description: 'El sonido auténtico de los noventa: Nirvana, Oasis, Red Hot Chili Peppers y Backstreet Boys.',
+    tracks: [
+      { name: 'Smells Like Teen Spirit', artist: 'Nirvana', album: 'Nevermind', duration_ms: 301000 },
+      { name: 'Wonderwall', artist: 'Oasis', album: "(What's the Story) Morning Glory?", duration_ms: 258000 },
+      { name: 'I Want It That Way', artist: 'Backstreet Boys', album: 'Millennium', duration_ms: 213000 },
+      { name: 'Under the Bridge', artist: 'Red Hot Chili Peppers', album: 'Blood Sugar Sex Magik', duration_ms: 264000 },
+      { name: 'No Scrubs', artist: 'TLC', album: 'FanMail', duration_ms: 214000 },
+      { name: 'California Love', artist: '2Pac, Dr. Dre', album: 'All Eyez on Me', duration_ms: 284000 },
+      { name: 'Wannabe', artist: 'Spice Girls', album: 'Spice', duration_ms: 172000 },
+      { name: 'Losing My Religion', artist: 'R.E.M.', album: 'Out of Time', duration_ms: 268000 },
+      { name: 'Zombie', artist: 'The Cranberries', album: 'No Need to Argue', duration_ms: 306000 },
+      { name: 'Creep', artist: 'Radiohead', album: 'Pablo Honey', duration_ms: 238000 },
+      { name: 'Macarena', artist: 'Los del Río', album: 'A mí me gusta', duration_ms: 249000 },
+      { name: 'Song 2', artist: 'Blur', album: 'Blur', duration_ms: 121000 },
+      { name: "Gangsta's Paradise", artist: 'Coolio, L.V.', album: "Gangsta's Paradise", duration_ms: 240000 },
+      { name: "Don't Speak", artist: 'No Doubt', album: 'Tragic Kingdom', duration_ms: 263000 },
+      { name: 'Corazón Partio', artist: 'Alejandro Sanz', album: 'Más', duration_ms: 345000 },
+      { name: "Livin' la Vida Loca", artist: 'Ricky Martin', album: 'Ricky Martin', duration_ms: 243000 },
+      { name: 'Killing Me Softly With His Song', artist: 'Fugees', album: 'The Score', duration_ms: 298000 },
+      { name: 'Basket Case', artist: 'Green Day', album: 'Dookie', duration_ms: 181000 },
+      { name: '...Baby One More Time', artist: 'Britney Spears', album: '...Baby One More Time', duration_ms: 211000 },
+      { name: 'Enter Sandman', artist: 'Metallica', album: 'Metallica', duration_ms: 331000 },
+    ],
+  },
+  {
+    id: 'sf-era-80s',
+    decade: '80s',
+    name: 'Mix de los 80s',
+    color: '#c2185b',
+    description: 'Los himnos inolvidables de los 80: Michael Jackson, Queen, Madonna, a-ha y más.',
+    tracks: [
+      { name: 'Billie Jean', artist: 'Michael Jackson', album: 'Thriller', duration_ms: 294000 },
+      { name: 'Another One Bites the Dust', artist: 'Queen', album: 'The Game', duration_ms: 215000 },
+      { name: 'Take On Me', artist: 'a-ha', album: 'Hunting High and Low', duration_ms: 225000 },
+      { name: 'Like a Prayer', artist: 'Madonna', album: 'Like a Prayer', duration_ms: 341000 },
+      { name: 'I Wanna Dance with Somebody', artist: 'Whitney Houston', album: 'Whitney', duration_ms: 291000 },
+      { name: "Sweet Child O' Mine", artist: "Guns N' Roses", album: 'Appetite for Destruction', duration_ms: 355000 },
+      { name: "Livin' on a Prayer", artist: 'Bon Jovi', album: 'Slippery When Wet', duration_ms: 249000 },
+      { name: 'Girls Just Want to Have Fun', artist: 'Cyndi Lauper', album: "She's So Unusual", duration_ms: 238000 },
+      { name: 'Every Breath You Take', artist: 'The Police', album: 'Synchronicity', duration_ms: 253000 },
+      { name: "Let's Groove", artist: 'Earth, Wind & Fire', album: 'Raise!', duration_ms: 332000 },
+      { name: 'Africa', artist: 'Toto', album: 'Toto IV', duration_ms: 295000 },
+      { name: "Don't Stop Believin'", artist: 'Journey', album: 'Escape', duration_ms: 250000 },
+      { name: 'Never Gonna Give You Up', artist: 'Rick Astley', album: 'Whenever You Need Somebody', duration_ms: 213000 },
+      { name: 'Devuélveme a mi chica', artist: 'Hombres G', album: 'Hombres G', duration_ms: 195000 },
+      { name: 'A quién le importa', artist: 'Alaska y Dinarama', album: 'No es pecado', duration_ms: 206000 },
+      { name: 'Hijo de la Luna', artist: 'Mecano', album: 'Entre el cielo y el suelo', duration_ms: 261000 },
+      { name: 'Careless Whisper', artist: 'George Michael', album: 'Make It Big', duration_ms: 300000 },
+      { name: 'Wake Me Up Before You Go-Go', artist: 'Wham!', album: 'Make It Big', duration_ms: 231000 },
+      { name: 'With or Without You', artist: 'U2', album: 'The Joshua Tree', duration_ms: 296000 },
+      { name: 'Sweet Dreams (Are Made of This)', artist: 'Eurythmics', album: 'Sweet Dreams', duration_ms: 216000 },
+    ],
+  },
+];
+
+function toEraTrack(item: { name: string; artist: string; album: string; duration_ms: number }, decade: string, idx: number): Track {
+  const artistNames = item.artist.split(/\s*[,&]\s*/);
+  return {
+    id: `sf-era-${decade}-track-${idx + 1}`,
+    name: item.name,
+    artists: artistNames.map((name) => ({ id: `art-${norm(name).replace(/\s+/g, '-')}`, name })),
+    album: {
+      id: `alb-${norm(item.album).replace(/\s+/g, '-')}`,
+      name: item.album,
+      images: [],
+    },
+    duration_ms: item.duration_ms,
+    uri: `spotify:track:era_${decade}_${idx + 1}`,
+    type: 'track',
+  } as Track;
 }
 
 function dedupe(list: Track[], known?: Set<string>, perArtist = 99): Track[] {
@@ -801,6 +956,13 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (vm) out.push(vm);
   }
 
+  // Decade / Era Mixes ("Playlists de épocas"): Mix 2010s, Mix 2000s, Mix 90s, Mix 80s
+  for (const def of ERA_PLAYLIST_DEFINITIONS) {
+    const items = def.tracks.map((t, idx) => toEraTrack(t, def.decade, idx));
+    const cover = makeEraCoverSvg(def.decade, def.color);
+    out.push(mix(def.id, 'era', def.name, def.description, items, cover, userName));
+  }
+
   // "Artistas que te pueden gustar": similar to several of the user's artists, not heard yet
   const relCount = new Map<string, { name: string; picture: string | null; n: number; fans: number }>();
   for (const s of seeds) {
@@ -1024,9 +1186,10 @@ export function withSpotifreeShelves(
   suggestedArtists: SuggestedArtist[] = []
 ): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
-  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud').map(cardOf);
+  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
   const soundcloudMixes = mixes.filter((m) => m.sfKind === 'soundcloud').map(cardOf);
+  const eraMixes = mixes.filter((m) => m.sfKind === 'era').map(cardOf);
   const name = (userName || '').split(' ')[0];
 
   // Extend Spotify's first "Hecho para / Made for" section, only that one
@@ -1047,6 +1210,42 @@ export function withSpotifreeShelves(
   if (soundcloudMixes.length) {
     ours.push({ id: 'sf-sc-vaults', title: 'Remixes, Slowed e Inéditas · SoundCloud', subtitle: 'Basado en los artistas que más escuchas', type: 'mixes', cards: soundcloudMixes, hasSeeAll: true });
   }
+
+  // Dynamic Era shelf rotation ("que salgan a veces otras no y vaya cambiando de epoca")
+  if (eraMixes.length) {
+    const eraCycle = Math.floor(Date.now() / (18 * 3600 * 1000));
+    // Appears on 2 out of 3 cycles (e.g. active 36h, rests 18h)
+    const showEraShelf = (eraCycle % 3) !== 2;
+    if (showEraShelf) {
+      const rotationStep = eraCycle % 2;
+      let rotatedCards = eraMixes;
+      let shelfTitle = 'Mixes por época';
+      let shelfPrefix = 'VIAJE EN EL TIEMPO';
+      if (rotationStep === 0) {
+        rotatedCards = [
+          ...eraMixes.filter((c) => c.id.includes('2010') || c.id.includes('2000')),
+          ...eraMixes.filter((c) => !c.id.includes('2010') && !c.id.includes('2000')),
+        ];
+        shelfTitle = 'Mixes de los 2000s y 2010s';
+      } else {
+        rotatedCards = [
+          ...eraMixes.filter((c) => c.id.includes('90') || c.id.includes('80')),
+          ...eraMixes.filter((c) => !c.id.includes('90') && !c.id.includes('80')),
+        ];
+        shelfTitle = 'Nostalgia: Los 80s y 90s';
+      }
+      ours.push({
+        id: 'sf-era-mixes',
+        title: shelfTitle,
+        prefix: shelfPrefix,
+        subtitle: 'Lo mejor de cada época adaptado a tu estilo',
+        type: 'mixes',
+        cards: rotatedCards,
+        hasSeeAll: true,
+      });
+    }
+  }
+
   shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];
   // Like Spotify, a bit further down: artists similar to yours that you don't listen to yet
   if (suggestedArtists.length >= 3) {

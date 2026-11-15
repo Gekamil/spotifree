@@ -15,6 +15,8 @@ import { getArtistPicture } from '../../utils/artistImage';
 import { stripHtml, toHDImage } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
+import { SpotifyImage } from '../common/SpotifyImage';
+import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -151,6 +153,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     dynamicShelves,
     quickAccessCards: storeQuickAccess,
     featuredMessage,
+    isLoading,
   } = useSpotifyDataStore();
   const sfMixes = useSpotifreeMixes((s) => s.mixes);
   const sfArtists = useSpotifreeMixes((s) => s.suggestedArtists);
@@ -396,6 +399,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     );
   }
 
+  // Dark pulsing skeleton while home feed is loading or hydrating
+  if (isAuthenticated && (isLoading || (currentShortcuts.length === 0 && (!playlists || playlists.length === 0)))) {
+    return <SpotifyHomeSkeleton isMobile={false} />;
+  }
+
   if (expandedShelf) {
     const shelfAmbientColor = resolveVibrantColor(expandedShelf.id, expandedShelf.title);
     return (
@@ -446,20 +454,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                 className="p-3 rounded-lg hover:bg-[#1f1f1f] active:bg-[#181818] transition-colors cursor-pointer group flex flex-col relative"
               >
                 <div className={`relative aspect-square w-full overflow-hidden mb-2.5 bg-[#242424] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${round ? 'rounded-full' : 'rounded-md'}`}>
-                  {card.image ? (
-                    <img
-                      src={toHDImage(card.image)}
-                      alt={card.title}
-                      onError={handleImageError}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-[#535353]">
-                      <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                      </svg>
-                    </div>
-                  )}
+                  <SpotifyImage
+                    src={toHDImage(card.image)}
+                    alt={card.title}
+                    fallbackType={round ? 'artist' : 'music'}
+                    round={round}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  />
 
                   <button
                     onClick={(e) => {
@@ -578,22 +579,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   onMouseEnter={() => setActiveBg(extractedColors[item.id] || item.color)}
                   className="group h-[56px] flex items-center bg-white/[0.08] hover:bg-white/[0.2] rounded-[4px] overflow-hidden cursor-pointer transition-all duration-200 relative pr-3 shadow-sm"
                 >
-                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow flex items-center justify-center overflow-hidden">
-                    {item.image ? (
-                      <img
-                        src={toHDImage(item.image)}
-                        alt={item.name}
-                        onError={handleImageError}
-                        referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-[#282828] text-[#b3b3b3]">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                          <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
-                        </svg>
-                      </div>
-                    )}
+                  <div className="w-[56px] h-[56px] shrink-0 bg-[#282828] shadow overflow-hidden">
+                    <SpotifyImage
+                      src={toHDImage(item.image)}
+                      alt={item.name}
+                      fallbackType="music"
+                      className="w-full h-full object-cover"
+                    />
                   </div>
 
                   <span className={`text-[14px] font-bold px-3 truncate flex-1 font-['SpotifyMixUI'] ${isPlayingThis ? 'text-[#1ed760]' : 'text-white'}`}>
