@@ -1,12 +1,17 @@
 {
   "name": "delightful-borg",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.4.2",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0",
+    "npm": ">=10.0.0"
+  },
   "scripts": {
     "start": "node server.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "render-build": "npm install --include=dev && tsc -b && vite build",
     "lint": "oxlint",
     "test": "node tests/dj_transitions.test.js && node tests/dj_planner.test.js && node tests/offline_downloads.test.js && node tests/soundcloud_karaoke.test.js && node tests/app_logic.test.js && node tests/cover_art_performance.test.mjs && node tests/lyrics_controls.test.mjs && node tests/adversarial_lyrics_controls.test.mjs && node tests/challenger_m2_lyrics_adversarial.test.mjs && node tests/desktop_settings_playlist.test.mjs && node tests/challenger_m3_edge_cases.test.mjs && node tests/dj_interface_orb.test.mjs && node tests/crossfade_artists_search_perf.test.mjs && node tests/labs_speed_spatial_dislike.test.mjs && node tests/era_mixes_skeletons_scroll.test.mjs",
     "preview": "vite preview",
@@ -21,31 +26,31 @@
     "@capacitor/core": "^8.6.0",
     "@capacitor/status-bar": "^8.0.4",
     "@distube/ytdl-core": "^4.16.12",
-    "clsx": "^2.1.1",
-    "firebase": "^13.1.0",
-    "hls.js": "1.7.3",
-    "msedge-tts": "^2.1.1",
-    "peerjs": "^1.5.5",
-    "play-dl": "^1.9.7",
-    "qrcode": "^1.5.4",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
-    "tailwind-merge": "^3.7.0",
-    "youtubei.js": "^18.3.0",
-    "zustand": "^5.0.16"
-  },
-  "devDependencies": {
     "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.2",
     "autoprefixer": "^10.6.1",
-    "oxlint": "^1.88.0",
+    "clsx": "^2.1.1",
+    "firebase": "^13.1.0",
+    "hls.js": "1.7.3",
+    "msedge-tts": "^2.1.1",
+    "peerjs": "^1.5.5",
+    "play-dl": "^1.9.7",
     "postcss": "^8.5.31",
-    "puppeteer-core": "^25.16.0",
+    "qrcode": "^1.5.4",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
     "tailwindcss": "^3.4.19",
     "typescript": "~6.0.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "youtubei.js": "^18.3.0",
+    "zustand": "^5.0.16"
+  },
+  "devDependencies": {
+    "oxlint": "^1.88.0",
+    "puppeteer-core": "^25.16.0"
   }
 }

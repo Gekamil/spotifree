@@ -1,6 +1,6 @@
-FROM node:20-slim
+FROM node:22-slim
 
-# Install system dependencies: Python 3, pip, ffmpeg
+# Install system dependencies: Python 3, pip, ffmpeg, curl
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
@@ -8,14 +8,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install yt-dlp with system packages flag (latest version with ejs and deno support)
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default,deno]"
+# Install yt-dlp with system packages flag with fallback
+RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]" || python3 -m pip install --no-cache-dir -U yt-dlp
 
 WORKDIR /app
 
 # Copy dependency manifests
 COPY package*.json ./
-RUN npm install
+RUN npm install --include=dev
 
 # Copy application files
 COPY . .

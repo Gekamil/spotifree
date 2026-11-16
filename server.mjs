@@ -1748,6 +1748,6 @@ const server = http.createServer(async (req, res) => {
   return res.end(JSON.stringify({ error: 'Route not found' }));
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Spotifree Backend] Running on http://0.0.0.0:${PORT}`);
 });
