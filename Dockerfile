@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install yt-dlp with system packages flag with fallback
-RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]" || python3 -m pip install --no-cache-dir -U yt-dlp
+RUN python3 -m pip install --no-cache-dir --break-system-packages -U "yt-dlp[default]" || python3 -m pip install --no-cache-dir --break-system-packages -U yt-dlp
 
 WORKDIR /app
 

@@ -1,6 +1,5 @@
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
-import puppeteer from 'puppeteer-core';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -324,6 +323,9 @@ async function scrapeSpotifyEmbed(playlistId: string) {
 async function extractLiveFeedFromSpotify() {
   let browser: any = null;
   try {
+    const puppeteerModule = await import('puppeteer-core').catch(() => null);
+    const puppeteer = puppeteerModule?.default || puppeteerModule;
+    if (!puppeteer) return null;
     browser = await puppeteer.connect({
       browserURL: 'http://127.0.0.1:9222',
       defaultViewport: null,

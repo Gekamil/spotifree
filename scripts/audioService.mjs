@@ -184,6 +184,16 @@ function ensureWorker() {
     }
   });
 
+  pythonProcess.on('error', (err) => {
+    console.warn('[audioWorker] Python process error:', err.message);
+    pythonProcess = null;
+    isReady = false;
+    for (const [, { reject }] of pendingRequests) {
+      reject(new Error(`Python worker error: ${err.message}`));
+    }
+    pendingRequests.clear();
+  });
+
   pythonProcess.on('exit', (code) => {
     console.log('[audioWorker] Python worker exited with code', code);
     pythonProcess = null;
@@ -195,8 +205,8 @@ function ensureWorker() {
   });
 }
 
-// Ensure worker starts immediately
-ensureWorker();
+// Worker will be initialized lazily on first resolveAudio call
+// ensureWorker();
 
 export async function resolveAudio(target) {
   if (!target) throw new Error('Missing audio target');

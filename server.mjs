@@ -14,7 +14,7 @@ import {
   findTrackByLyrics,
 } from './api/_lib/musicFallback.js';
 
-const PORT = process.env.PORT || 10000;
+const PORT = parseInt(process.env.PORT, 10) || 10000;
 let currentPlayingTrackId = null;
 
 function setCorsHeaders(res) {
@@ -1742,10 +1742,22 @@ const server = http.createServer(async (req, res) => {
     return fs.createReadStream(indexPath).pipe(res);
   }
 
+  // Root fallback if dist is not built yet
+  if (pathname === '/') {
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.3' }));
+  }
+
   // 404 fallback
   res.statusCode = 404;
   res.setHeader('Content-Type', 'application/json');
   return res.end(JSON.stringify({ error: 'Route not found' }));
+});
+
+server.on('error', (err) => {
+  console.error(`[Spotifree Backend] Server error:`, err);
+  process.exit(1);
 });
 
 server.listen(PORT, '0.0.0.0', () => {

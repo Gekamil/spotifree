@@ -9,9 +9,10 @@
   },
   "scripts": {
     "start": "node server.mjs",
+    "server": "node server.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "render-build": "npm install --include=dev && tsc -b && vite build",
+    "render-build": "npm install --include=dev && npm run build",
     "lint": "oxlint",
     "test": "node tests/dj_transitions.test.js && node tests/dj_planner.test.js && node tests/offline_downloads.test.js && node tests/soundcloud_karaoke.test.js && node tests/app_logic.test.js && node tests/cover_art_performance.test.mjs && node tests/lyrics_controls.test.mjs && node tests/adversarial_lyrics_controls.test.mjs && node tests/challenger_m2_lyrics_adversarial.test.mjs && node tests/desktop_settings_playlist.test.mjs && node tests/challenger_m3_edge_cases.test.mjs && node tests/dj_interface_orb.test.mjs && node tests/crossfade_artists_search_perf.test.mjs && node tests/labs_speed_spatial_dislike.test.mjs && node tests/era_mixes_skeletons_scroll.test.mjs",
     "preview": "vite preview",
@@ -39,6 +40,7 @@
     "peerjs": "^1.5.5",
     "play-dl": "^1.9.7",
     "postcss": "^8.5.31",
+    "puppeteer-core": "^25.16.0",
     "qrcode": "^1.5.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
@@ -50,7 +52,6 @@
     "zustand": "^5.0.16"
   },
   "devDependencies": {
-    "oxlint": "^1.88.0",
-    "puppeteer-core": "^25.16.0"
+    "oxlint": "^1.88.0"
   }
 }
