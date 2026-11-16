@@ -211,7 +211,7 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
   return (
     <div className="select-none min-h-full pb-32 bg-[#121212] font-['SpotifyMixUI'] text-white">
       {/* Top Header */}
-      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/90 backdrop-blur-md flex items-center justify-between border-b border-white/[0.06]">
+      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/90 backdrop-blur-md flex items-center justify-between shadow-sm">
         <button
           onClick={() => (page ? setPage(null) : onBack())}
           className="p-1.5 text-white hover:text-white/80 active:scale-90 transition-transform -ml-1 cursor-pointer"

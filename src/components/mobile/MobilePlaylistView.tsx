@@ -1468,7 +1468,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           <div
             className={`sticky top-0 z-30 px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between transition-colors duration-200 ${
               scrollY > 160
-                ? 'bg-[#121212]/95 backdrop-blur-md border-b border-white/5 shadow-md'
+                ? 'bg-[#121212]/95 backdrop-blur-md shadow-md'
                 : 'bg-transparent'
             }`}
           >

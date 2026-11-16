@@ -106,7 +106,7 @@ export const MobileProfileView: React.FC<MobileProfileViewProps> = ({
   return (
     <div className="select-none min-h-full pb-28 relative bg-[#121212] font-['SpotifyMixUI'] text-white">
       {/* Top Sticky Navigation Bar */}
-      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/90 backdrop-blur-md flex items-center justify-between border-b border-white/[0.06]">
+      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/90 backdrop-blur-md flex items-center justify-between shadow-sm">
         <button
           onClick={onBack}
           className="w-9 h-9 rounded-full flex items-center justify-center text-white/90 hover:text-white active:scale-90 transition-transform cursor-pointer"

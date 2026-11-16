@@ -704,7 +704,7 @@ export const MobileLayout: React.FC = () => {
               <div
                 className={`sticky top-0 z-30 transition-all duration-300 ${
                   scrollOffset > 15
-                    ? 'bg-[#121212]/85 backdrop-blur-xl border-b border-white/[0.06] shadow-[0_4px_24px_rgba(0,0,0,0.55)]'
+                    ? 'bg-[#121212]/90 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.55)]'
                     : 'bg-transparent'
                 }`}
               >

@@ -326,7 +326,7 @@ export const MobileAddLibraryItemsModal: React.FC<MobileAddLibraryItemsModalProp
       style={{ paddingTop: 'var(--sat)' }}
     >
       {/* Top Header */}
-      <div className="sticky top-0 z-20 px-4 pt-3 pb-2 bg-[#121212]/95 backdrop-blur-md border-b border-white/5 space-y-3">
+      <div className="sticky top-0 z-20 px-4 pt-3 pb-2 bg-[#121212]/95 backdrop-blur-md shadow-sm space-y-3">
         <div className="flex items-center justify-between">
           <button
             onClick={onClose}

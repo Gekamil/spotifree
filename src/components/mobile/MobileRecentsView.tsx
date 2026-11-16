@@ -163,7 +163,7 @@ export const MobileRecentsView: React.FC<MobileRecentsViewProps> = ({
   return (
     <div className="select-none min-h-full pb-28 bg-[#121212] font-['SpotifyMixUI'] text-white">
       {/* Top Sticky Header */}
-      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/95 backdrop-blur-md flex items-center justify-between border-b border-white/[0.06]">
+      <div className="sticky top-0 z-30 px-4 py-3 bg-[#121212]/95 backdrop-blur-md flex items-center justify-between shadow-sm">
         <button
           type="button"
           onClick={onBack}
