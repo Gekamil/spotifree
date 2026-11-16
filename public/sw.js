@@ -12,7 +12,7 @@
 // App shell cache: lets the app open with no connection (airplane mode), so the songs in
 // "Archivos locales" can be played. Only this cache's own older versions are ever deleted:
 // "musica-spotifree" (downloads) and other caches are left alone.
-const CACHE_NAME = 'spotifree-shell-v4';
+const CACHE_NAME = 'spotifree-shell-v5';
 const SHELL = ['/', '/index.html', '/offline.html', '/silence.wav', '/manifest.webmanifest', '/favicon.svg', '/icon-192.png'];
 const MAX_ASSETS = 180;
 

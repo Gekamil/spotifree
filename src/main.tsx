@@ -61,6 +61,8 @@ if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js', { scope: '/' })
       .then((reg) => {
         console.log('[SW] Registered, scope:', reg.scope);
+        // Actively check for Service Worker updates so visitors never get stuck on stale bundles
+        reg.update().catch(() => {});
 
         const cacheActiveShellAssets = () => {
           try {

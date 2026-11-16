@@ -165,7 +165,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       .filter((item) => {
         if (!item || !item.id || !item.name) return false;
         const name = item.name.trim().toLowerCase();
-        if (name === '' || (name === 'lista sin título' && !item.image)) return false;
+        if (name === '' || name === 'lista sin título' || name === 'untitled playlist') return false;
         return true;
       })
       .map((item) => ({
