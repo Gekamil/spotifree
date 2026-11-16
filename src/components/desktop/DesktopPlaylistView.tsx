@@ -142,7 +142,7 @@ const PlaylistClipsThumbButton: React.FC<{
     <button
       type="button"
       onClick={onOpen}
-      className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/15 hover:border-[#1ed760] transition-all hover:scale-105 active:scale-95 cursor-pointer ring-1 ring-white/10 hover:ring-[#1ed760]/50"
+      className="group/thumb relative w-11 h-11 rounded-lg overflow-hidden shadow-lg bg-[#282828] shrink-0 border border-white/10 hover:border-white/30 transition-all hover:scale-105 active:scale-95 cursor-pointer"
       title="Ver clips y avances de la playlist"
     >
       <img

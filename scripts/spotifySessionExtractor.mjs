@@ -382,9 +382,14 @@ export async function extractSpotifySession(spDcCookie) {
     const isAlbum = it.__typename === 'Album';
     const desc = it.description || (isAlbum ? 'Álbum' : 'Playlist');
 
+    const playlistName = (it.name || '').trim();
+    if (!playlistName || /^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(playlistName)) {
+      continue;
+    }
+
     playlists.push({
       id: cleanId,
-      name: it.name || 'Lista sin título',
+      name: playlistName,
       description: desc,
       type: isAlbum ? 'album' : 'playlist',
       images: playlistCover ? [{ url: playlistCover }] : [],

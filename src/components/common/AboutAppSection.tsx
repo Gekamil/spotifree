@@ -73,7 +73,7 @@ export const AboutAppSection: React.FC<AboutAppSectionProps> = ({ variant = 'mob
                   key={rel.version}
                   className={`p-3 rounded-xl border transition-colors ${
                     rel.isLatest
-                      ? 'bg-white/[0.04] border-[#1ed760]/30'
+                      ? 'bg-white/[0.06] border-white/15'
                       : 'bg-white/[0.02] border-white/5'
                   }`}
                 >

@@ -567,7 +567,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                     onClick={() => handleTrackClick(tr)}
                     className={`group w-28 sm:w-32 shrink-0 p-2 rounded-xl transition-all cursor-pointer ${
                       isThisPlaying
-                        ? 'bg-white/20 border border-[#1ed760]/60 shadow-[0_0_12px_rgba(30,215,96,0.25)]'
+                        ? 'bg-white/20 border border-white/30'
                         : 'bg-white/5 hover:bg-white/15 border border-white/10'
                     }`}
                   >

@@ -751,8 +751,8 @@ export async function extractSpotifySession(spDcCookie) {
       0;
 
     const playlistName = (it.name || '').trim();
-    // Exclude phantom/untitled zombie playlists with 0 tracks and no cover
-    if ((!playlistName || playlistName.toLowerCase() === 'lista sin título' || playlistName.toLowerCase() === 'untitled playlist') && trackTotal === 0 && !playlistCover) {
+    // Exclude phantom/untitled zombie playlists
+    if (!playlistName || /^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(playlistName) || (playlistName.toLowerCase().startsWith('lista sin t') && trackTotal === 0 && !playlistCover)) {
       continue;
     }
 

@@ -491,7 +491,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
               setNewFolderName('');
               setIsCreatingFolder(true);
             }}
-            className="h-8 px-3.5 rounded-full text-xs font-bold bg-[#242424] text-[#1ed760] hover:bg-[#2e2e2e] border border-[#1ed760]/30 hover:border-[#1ed760] transition-all flex items-center gap-1.5 cursor-pointer"
+            className="h-8 px-3.5 rounded-full text-xs font-bold bg-[#242424] text-white hover:bg-[#2e2e2e] border border-white/15 hover:border-white transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
               <path d="M15.25 8a.75.75 0 0 1-.75.75H8.75v5.75a.75.75 0 0 1-1.5 0V8.75H1.5a.75.75 0 0 1 0-1.5h5.75V1.5a.75.75 0 0 1 1.5 0v5.75h5.75a.75.75 0 0 1 .75.75" />
@@ -766,7 +766,7 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
               })}
               <SheetItem
                 icon={
-                  <div className="w-5 h-5 rounded-full border border-[#1ed760] flex items-center justify-center text-[#1ed760]">
+                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold">
                     +
                   </div>
                 }

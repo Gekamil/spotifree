@@ -165,7 +165,8 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       .filter((item) => {
         if (!item || !item.id || !item.name) return false;
         const name = item.name.trim().toLowerCase();
-        if (name === '' || name === 'lista sin título' || name === 'untitled playlist') return false;
+        if (name === '' || /^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(name)) return false;
+        if (name.startsWith('lista sin t')) return false;
         return true;
       })
       .map((item) => ({
@@ -567,10 +568,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             {currentShortcuts.map((item) => {
               const isPlayingThis =
                 isPlaying &&
-                Boolean(item.id) &&
+                Boolean(item.id && item.id.trim()) &&
                 (currentContextId === item.id ||
-                  (currentTrack as any)?.playlistId === item.id ||
-                  currentTrack?.id === item.id);
+                  (currentTrack as any)?.playlistId === item.id);
 
               return (
                 <div

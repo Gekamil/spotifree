@@ -364,12 +364,20 @@ export const MobileLayout: React.FC = () => {
   const isCardPlaying = (cardId: string, cardName: string) => {
     if (!isPlaying || !cardId) return false;
     const cleanCardId = String(cardId).trim();
-    if (!cleanCardId) return false;
+    if (!cleanCardId || cleanCardId === 'undefined' || cleanCardId === 'null') return false;
     if (currentContextId && (currentContextId === cleanCardId)) return true;
     if (cardId === 'liked-songs' && currentTrack && likedTrackIds.includes(currentTrack.id)) return true;
     if (currentTrack) {
       if (currentTrack.album?.id && currentTrack.album.id === cleanCardId) return true;
-      if (currentTrack.album?.name && cardName && currentTrack.album.name.toLowerCase() === cardName.toLowerCase()) return true;
+      if (
+        currentTrack.album?.name &&
+        cardName &&
+        cardName.trim().length > 2 &&
+        !/^(lista sin t[íi]tulo|untitled)/i.test(cardName) &&
+        currentTrack.album.name.trim().toLowerCase() === cardName.trim().toLowerCase()
+      ) {
+        return true;
+      }
       if ((currentTrack as any).playlistId && (currentTrack as any).playlistId === cleanCardId) return true;
     }
     return false;
@@ -448,7 +456,8 @@ export const MobileLayout: React.FC = () => {
         .filter((c) => {
           if (!c || !c.id || !c.name) return false;
           const name = c.name.trim().toLowerCase();
-          if (name === '' || (name === 'lista sin título' && !c.image)) return false;
+          if (name === '' || /^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(name)) return false;
+          if (name.startsWith('lista sin t')) return false;
           return true;
         })
         .slice(0, 8);

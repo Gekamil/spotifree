@@ -86,7 +86,7 @@ export const SettingsModal: React.FC = () => {
                   onClick={() => setAudioSource('ytmusic')}
                   className={`p-3 rounded-md text-left flex items-center justify-between border transition-all ${
                     audioSource === 'ytmusic'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                      ? 'border-white/30 bg-white/[0.08] text-white'
                       : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
                   }`}
                 >
@@ -105,7 +105,7 @@ export const SettingsModal: React.FC = () => {
                   onClick={() => setAudioSource('youtube')}
                   className={`p-3 rounded-md text-left flex items-center justify-between border transition-all ${
                     audioSource === 'youtube'
-                      ? 'border-[#1ed760] bg-[#1ed760]/10 text-white'
+                      ? 'border-white/30 bg-white/[0.08] text-white'
                       : 'border-white/10 bg-[#222] text-[#b3b3b3] hover:border-white/20'
                   }`}
                 >

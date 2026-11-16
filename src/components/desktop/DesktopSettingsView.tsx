@@ -965,7 +965,7 @@ export const DesktopSettingsView: React.FC = () => {
           </div>
 
           {crossfadeEnabled && (
-            <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 space-y-3 animate-in fade-in">
+            <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-white/15 space-y-3 animate-in fade-in">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="text-xs text-[#b3b3b3]">
                   <span>

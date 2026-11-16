@@ -83,7 +83,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-bold text-white truncate">{o.title}</span>
                       {o.id === 'balanced' && (
-                        <span className="text-[10px] font-bold px-1.5 py-0.2 rounded-sm bg-[#1ed760]/15 text-[#1ed760]">
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-[2px] bg-white/10 text-[#b3b3b3]">
                           Recomendado
                         </span>
                       )}
@@ -249,7 +249,7 @@ export const AdvancedSettingsSection: React.FC<{ variant?: 'mobile' | 'desktop' 
               </button>
             </div>
             {spatialEnabled && (
-              <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-[#1ed760]/30 animate-in fade-in">
+              <div className="pt-2 pl-2 sm:pl-4 border-l-2 border-white/15 animate-in fade-in">
                 <SpatialAudioPad />
               </div>
             )}

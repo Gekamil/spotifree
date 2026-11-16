@@ -118,6 +118,16 @@ export function deduplicateUserPlaylists(list: Playlist[]): Playlist[] {
     if (seenIds.has(pl.id)) continue;
     seenIds.add(pl.id);
 
+    const nameNorm = (pl.name || '').trim().toLowerCase();
+    const isUntitledZombie =
+      !nameNorm ||
+      /^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(nameNorm) ||
+      (nameNorm.startsWith('lista sin t') && (!pl.tracks?.total || pl.tracks.total === 0) && (!pl.images || pl.images.length === 0));
+
+    if (isUntitledZombie && !(pl as any).is_custom) {
+      continue;
+    }
+
     const removedTrackIds = getRemovedTrackIdsForPlaylist(pl.id);
     let finalPl = pl;
     if (pl.tracks?.items && removedTrackIds.size > 0) {
@@ -1775,12 +1785,19 @@ const store = create<SpotifyDataState>((set, get) => ({
           user: cloudUser as any,
           playlists: uniquePl,
           dynamicShelves: buildDynamicShelves(cloudUser, uniquePl, 'Recomendado para ti'),
-          quickAccessCards: uniquePl.filter((p) => p.id !== 'spotify-dj').slice(0, 6).map((p) => ({
-            id: p.id,
-            name: p.name,
-            image: getPlaylistCover(p),
-            color: (p as any).color || '#303030',
-          })),
+          quickAccessCards: uniquePl
+            .filter((p) => {
+              if (!p || !p.id || !p.name || p.id === 'spotify-dj') return false;
+              const n = p.name.trim().toLowerCase();
+              return !/^(lista sin t[íi]tulo|untitled playlist|untitled|sin t[íi]tulo)$/i.test(n);
+            })
+            .slice(0, 6)
+            .map((p) => ({
+              id: p.id,
+              name: p.name,
+              image: getPlaylistCover(p),
+              color: (p as any).color || '#303030',
+            })),
           playlistDetailsCache: {},
           isLoading: false,
         });
