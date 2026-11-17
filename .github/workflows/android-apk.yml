@@ -41,7 +41,7 @@ jobs:
           node-version: 22
           cache: npm
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
@@ -115,12 +115,47 @@ jobs:
           NOTES="APK compilado automáticamente desde ${GITHUB_SHA::7}. Descárgalo desde https://spotifreeweb.vercel.app/instalar
 
           native: ${NATIVE}"
+
+          echo "=== Step 1: Checking release android-latest ==="
           if gh release view android-latest >/dev/null 2>&1; then
-            gh release upload android-latest Spotifree.apk --clobber
-            gh release edit android-latest --notes "$NOTES" --latest
+            echo "Release android-latest exists. Deleting previous asset if present to prevent clobber collision..."
+            gh release delete-asset android-latest Spotifree.apk -y 2>/dev/null || true
+            sleep 3
+
+            echo "=== Step 2: Uploading Spotifree.apk ==="
+            UPLOAD_OK=0
+            for attempt in 1 2 3 4; do
+              echo "Uploading Spotifree.apk (attempt $attempt of 4)..."
+              if gh release upload android-latest Spotifree.apk --clobber; then
+                UPLOAD_OK=1
+                echo "Upload successful!"
+                break
+              fi
+              echo "Upload attempt $attempt failed; waiting 5 seconds before retrying..."
+              sleep 5
+            done
+
+            if [ "$UPLOAD_OK" -ne 1 ]; then
+              echo "::error::Failed to upload Spotifree.apk after 4 attempts"
+              exit 1
+            fi
+
+            echo "=== Step 3: Updating release metadata ==="
+            gh release edit android-latest --notes "$NOTES" --latest || gh release edit android-latest --notes "$NOTES"
           else
-            gh release create android-latest Spotifree.apk --title "Spotifree para Android" --notes "$NOTES" --latest
+            echo "Release android-latest does not exist. Creating new release..."
+            if ! gh release create android-latest Spotifree.apk --title "Spotifree para Android" --notes "$NOTES" --latest; then
+              echo "Release creation encountered conflict. Retrying update path..."
+              gh release delete-asset android-latest Spotifree.apk -y 2>/dev/null || true
+              sleep 2
+              gh release upload android-latest Spotifree.apk --clobber
+              gh release edit android-latest --notes "$NOTES" --latest || gh release edit android-latest --notes "$NOTES"
+            fi
           fi
+
+          echo "=== Verification ==="
+          gh release view android-latest
+          echo "=== Release publishing finished successfully! ==="
 
       # Optional: republish the website so spotifreeweb.vercel.app/Spotifree.apk is the new APK
       # right away (Vercel → Settings → Git → Deploy Hooks, saved as the VERCEL_DEPLOY_HOOK secret).
