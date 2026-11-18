@@ -184,8 +184,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [downloadingTrackIds, setDownloadingTrackIds] = useState<Set<string>>(new Set());
 
 
-  const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
-
   const [isRefreshingTracks, setIsRefreshingTracks] = useState(false);
 
   const handleSyncPlaylistSongs = async () => {
@@ -1988,6 +1986,24 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               </svg>
             </button>
 
+            {/* Sincronizar canciones con Spotify */}
+            {!isArtist && !playlist.id.startsWith('sf-') && (
+              <button
+                onClick={handleSyncPlaylistSongs}
+                disabled={isRefreshingTracks}
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                  isRefreshingTracks
+                    ? 'text-[#1ed760] animate-spin'
+                    : 'text-[#b3b3b3] hover:text-white hover:scale-106 active:scale-95'
+                }`}
+                title="Sincronizar canciones con Spotify ahora"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                </svg>
+              </button>
+            )}
+
             {isArtist && (
               <button
                 type="button"
@@ -2305,7 +2321,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               const isThisTrackPlaying = isPlaying && currentTrack?.id === track.id;
               const isThisTrackSelected = currentTrack?.id === track.id;
               const isLiked = isTrackLiked(track.id, track);
-              const isHovered = hoveredTrackId === track.id;
 
               const cleanId = (track.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
               const feat: AudioFeature =
@@ -2317,14 +2332,12 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 <React.Fragment key={`${track.id}-${index}`}>
                   <div
                     data-testid="track-row"
-                    onMouseEnter={() => setHoveredTrackId(track.id)}
-                    onMouseLeave={() => setHoveredTrackId(null)}
                     onClick={() => handleTrackClick(track)}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
                     }}
-                    className={`grid ${
+                    className={`track-row-contain grid ${
                       isAutomixActive
                         ? 'grid-cols-[20px_4fr_2.5fr_100px_90px_2fr_minmax(80px,1fr)]'
                         : 'grid-cols-[20px_4fr_3fr_2fr_minmax(80px,1fr)]'
@@ -2334,30 +2347,40 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                   >
                     {/* Index / Play / Pause / Equalizer */}
                     <div className="flex items-center justify-center text-sm font-normal text-[#b3b3b3] w-5">
-                      {isHovered ? (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTrackClick(track);
-                          }}
-                          className="text-white hover:scale-110 transition-transform"
-                        >
-                          {isThisTrackPlaying ? (
+                      {isThisTrackPlaying ? (
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTrackClick(track);
+                            }}
+                            className="hidden group-hover:flex text-white hover:scale-110 transition-transform items-center justify-center"
+                            title="Pausar"
+                          >
                             <PauseNativeIcon size={14} className="text-white" />
-                          ) : (
-                            <PlayNativeIcon size={14} className="text-white ml-0.5" />
-                          )}
-                        </button>
-                      ) : isThisTrackPlaying ? (
-                        <div className="w-4 h-4 flex items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
-                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
-                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
-                          <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
-                        </div>
+                          </button>
+                          <div className="flex group-hover:hidden w-4 h-4 items-end justify-center gap-[2.5px] pb-0.5" title="Reproduciendo">
+                            <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                            <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                            <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                          </div>
+                        </>
                       ) : (
-                        <span className="font-['SpotifyMixUI'] tabular-nums text-xs">
-                          {index + 1}
-                        </span>
+                        <>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTrackClick(track);
+                            }}
+                            className="hidden group-hover:flex text-white hover:scale-110 transition-transform items-center justify-center"
+                            title={`Reproducir ${track.name}`}
+                          >
+                            <PlayNativeIcon size={14} className="text-white ml-0.5" />
+                          </button>
+                          <span className="group-hover:hidden font-['SpotifyMixUI'] tabular-nums text-xs">
+                            {index + 1}
+                          </span>
+                        </>
                       )}
                     </div>
 
@@ -2502,9 +2525,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                             e.stopPropagation();
                             handleToggleTrackDownload(track);
                           }}
-                          className={`text-[#b3b3b3] hover:text-white hover:scale-110 active:scale-95 transition-all shrink-0 cursor-pointer ${
-                            isHovered ? 'opacity-100' : 'opacity-0'
-                          }`}
+                          className="text-[#b3b3b3] hover:text-white hover:scale-110 active:scale-95 transition-all shrink-0 cursor-pointer opacity-0 group-hover:opacity-100"
                           title="Descargar para escuchar sin conexión (Modo avión)"
                         >
                           <DownloadCircleNativeIcon size={16} className="text-[#b3b3b3] hover:text-white" />
@@ -2521,9 +2542,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                           e.stopPropagation();
                           openContextMenu(e.clientX, e.clientY, track.id, dynamicPlaylist.id);
                         }}
-                        className={`p-1 text-[#b3b3b3] hover:text-white transition-opacity ${
-                          isHovered ? 'opacity-100' : 'opacity-0'
-                        }`}
+                        className="p-1 text-[#b3b3b3] hover:text-white transition-opacity opacity-0 group-hover:opacity-100"
                         title="Más opciones de la canción"
                       >
                         <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">

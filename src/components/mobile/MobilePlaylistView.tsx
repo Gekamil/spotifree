@@ -585,6 +585,10 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
     if (cached?.tracks?.items && cached.tracks.items.length > 0) {
       setTracks(mergeWithCustom(cached.tracks.items));
+      // SWR: Revalidate in background so songs added on Spotify appear without delay
+      if (typeof navigator !== 'undefined' && navigator.onLine && !cleanId.startsWith('sf-')) {
+        fetchTracks().catch(() => {});
+      }
       return;
     }
 
@@ -592,6 +596,9 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     const storePl = useSpotifyDataStore.getState().playlists.find((p) => p.id === cleanId || p.id === playlist.id);
     if (storePl?.tracks?.items && storePl.tracks.items.length > 0) {
       setTracks(mergeWithCustom(storePl.tracks.items));
+      if (typeof navigator !== 'undefined' && navigator.onLine && !cleanId.startsWith('sf-')) {
+        fetchTracks().catch(() => {});
+      }
       return;
     }
 
@@ -664,7 +671,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         return;
       }
       setNetworkError(false);
-      if (switchedPlaylist || tracks.length === 0) {
+      if ((switchedPlaylist || tracks.length === 0) && !cached?.tracks?.items?.length && !storePl?.tracks?.items?.length) {
         setLoading(true);
       }
       try {

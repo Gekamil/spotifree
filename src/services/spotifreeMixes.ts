@@ -561,7 +561,7 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
 // 5. Building the playlists
 // ---------------------------------------------------------------------------
 export interface SpotifreeMix extends Playlist {
-  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud' | 'era';
+  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud' | 'era' | 'mood' | 'trending';
 }
 
 
@@ -1010,6 +1010,348 @@ export const ERA_PLAYLIST_DEFINITIONS = [
     },
   },
 ];
+
+function makeMoodCoverSvg(title: string, color: string, subtitle = 'Spotifree Mix'): string {
+  const cleanTitle = title.replace(/^Mix\s+/i, '');
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+    <defs>
+      <linearGradient id="mg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${color}"/>
+        <stop offset="65%" stop-color="#161616"/>
+        <stop offset="100%" stop-color="#0a0a0a"/>
+      </linearGradient>
+    </defs>
+    <rect width="600" height="600" fill="url(#mg)"/>
+    <circle cx="500" cy="110" r="210" fill="${color}" opacity="0.38"/>
+    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.6"/>
+    <rect x="0" y="430" width="600" height="170" fill="rgba(0,0,0,0.65)"/>
+    <text x="48" y="270" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="64" fill="#ffffff" letter-spacing="-1">${cleanTitle}</text>
+    <text x="48" y="490" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="34" fill="#ffffff">${title}</text>
+    <text x="48" y="538" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="22" fill="rgba(255,255,255,0.72)">${subtitle} · Actualizado esta semana</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function toCuratedCategoryTrack(item: { name: string; artist: string; album: string; duration_ms: number }, prefix: string, idx: number): Track {
+  const artistNames = item.artist.split(/\s*[,&]\s*/);
+  return {
+    id: `sf-${prefix}-track-${idx + 1}`,
+    name: item.name,
+    artists: artistNames.map((name) => ({ id: `art-${norm(name).replace(/\s+/g, '-')}`, name })),
+    album: {
+      id: `alb-${norm(item.album).replace(/\s+/g, '-')}`,
+      name: item.album,
+      images: [],
+    },
+    duration_ms: item.duration_ms,
+    uri: `spotify:track:${prefix}_${idx + 1}`,
+    type: 'track',
+  } as Track;
+}
+
+export const MOOD_PLAYLIST_DEFINITIONS = [
+  {
+    id: 'sf-mood-entreno',
+    key: 'entreno',
+    name: 'Mix Entrenamiento & Gym',
+    color: '#ff3d00',
+    description: 'Máxima energía, BPM y motivación para tus sesiones de pesas, cardio y entrenamiento.',
+    pool: [
+      { name: 'Lose Yourself', artist: 'Eminem', album: '8 Mile', duration_ms: 326000 },
+      { name: 'Physical', artist: 'Dua Lipa', album: 'Future Nostalgia', duration_ms: 193000 },
+      { name: "I'm Good (Blue)", artist: 'David Guetta, Bebe Rexha', album: "I'm Good (Blue)", duration_ms: 175000 },
+      { name: 'The Business', artist: 'Tiësto', album: 'The Business', duration_ms: 164000 },
+      { name: 'Rumble', artist: 'Skrillex, Fred again.., Flowdan', album: 'Quest For Fire', duration_ms: 146000 },
+      { name: 'Eye of the Tiger', artist: 'Survivor', album: 'Eye of the Tiger', duration_ms: 245000 },
+      { name: 'Thunderstruck', artist: 'AC/DC', album: 'The Razors Edge', duration_ms: 292000 },
+      { name: 'Losing It', artist: 'FISHER', album: 'Losing It', duration_ms: 248000 },
+      { name: 'WANDA', artist: 'Quevedo', album: 'DONDE QUIERO ESTAR', duration_ms: 160000 },
+      { name: 'Bzrp Music Sessions, Vol. 52', artist: 'Bizarrap, Quevedo', album: 'Bzrp Music Sessions, Vol. 52', duration_ms: 198000 },
+      { name: 'Summer', artist: 'Calvin Harris', album: 'Motion', duration_ms: 222000 },
+      { name: 'Stronger', artist: 'Kanye West', album: 'Graduation', duration_ms: 311000 },
+      { name: "Can't Hold Us", artist: 'Macklemore, Ryan Lewis, Ray Dalton', album: 'The Heist', duration_ms: 258000 },
+      { name: 'Pepas', artist: 'Farruko', album: 'La 167', duration_ms: 287000 },
+      { name: 'Breathe', artist: 'The Prodigy', album: 'The Fat of the Land', duration_ms: 335000 },
+      { name: 'Levels', artist: 'Avicii', album: 'Levels', duration_ms: 199000 },
+      { name: 'Ferrari', artist: 'James Hype, Miggy Dela Rosa', album: 'Ferrari', duration_ms: 186000 },
+      { name: 'In The End', artist: 'Linkin Park', album: 'Hybrid Theory', duration_ms: 216000 },
+      { name: 'Till I Collapse', artist: 'Eminem, Nate Dogg', album: 'The Eminem Show', duration_ms: 297000 },
+      { name: 'Animals', artist: 'Martin Garrix', album: 'Gold Skies', duration_ms: 176000 },
+      { name: 'Cinema', artist: 'Benny Benassi, Skrillex, Gary Go', album: 'Electroman', duration_ms: 307000 },
+      { name: 'Gasolina', artist: 'Daddy Yankee', album: 'Barrio Fino', duration_ms: 192000 },
+      { name: 'Midnight City', artist: 'M83', album: "Hurry Up, We're Dreaming", duration_ms: 243000 },
+      { name: 'Turn Down for What', artist: 'DJ Snake, Lil Jon', album: 'Turn Down for What', duration_ms: 213000 },
+      { name: 'Heads Will Roll', artist: 'Yeah Yeah Yeahs, A-Trak', album: "It's Blitz!", duration_ms: 203000 },
+      { name: 'Satisfaction', artist: 'Benny Benassi', album: 'Hypnotica', duration_ms: 144000 },
+      { name: 'One More Time', artist: 'Daft Punk', album: 'Discovery', duration_ms: 320000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 21);
+    },
+  },
+  {
+    id: 'sf-mood-relax',
+    key: 'relax',
+    name: 'Mix Chill & Relax Acústico',
+    color: '#00b4d8',
+    description: 'Desconecta con los sonidos más cálidos, indie, guitarras y melodías acústicas.',
+    pool: [
+      { name: 'Thinking Out Loud', artist: 'Ed Sheeran', album: 'x', duration_ms: 281000 },
+      { name: 'ocean eyes', artist: 'Billie Eilish', album: 'dont smile at me', duration_ms: 200000 },
+      { name: 'Riptide', artist: 'Vance Joy', album: 'Dream Your Life Away', duration_ms: 204000 },
+      { name: 'Let Her Go', artist: 'Passenger', album: 'All the Little Lights', duration_ms: 252000 },
+      { name: 'Sparks', artist: 'Coldplay', album: 'Parachutes', duration_ms: 227000 },
+      { name: 'Apocalypse', artist: 'Cigarettes After Sex', album: 'Cigarettes After Sex', duration_ms: 290000 },
+      { name: 'The Night We Met', artist: 'Lord Huron', album: 'Strange Trails', duration_ms: 208000 },
+      { name: 'Better Together', artist: 'Jack Johnson', album: 'In Between Dreams', duration_ms: 207000 },
+      { name: 'Gravity', artist: 'John Mayer', album: 'Continuum', duration_ms: 245000 },
+      { name: 'Wonderwall (Acoustic)', artist: 'Oasis', album: "(What's the Story) Morning Glory?", duration_ms: 258000 },
+      { name: 'Skinny Love', artist: 'Bon Iver', album: 'For Emma, Forever Ago', duration_ms: 239000 },
+      { name: 'Fast Car', artist: 'Tracy Chapman', album: 'Tracy Chapman', duration_ms: 296000 },
+      { name: 'Budapest', artist: 'George Ezra', album: 'Wanted on Voyage', duration_ms: 200000 },
+      { name: 'Ho Hey', artist: 'The Lumineers', album: 'The Lumineers', duration_ms: 163000 },
+      { name: 'Banana Pancakes', artist: 'Jack Johnson', album: 'In Between Dreams', duration_ms: 192000 },
+      { name: 'Heather', artist: 'Conan Gray', album: 'Kid Krow', duration_ms: 198000 },
+      { name: 'Yellow', artist: 'Coldplay', album: 'Parachutes', duration_ms: 266000 },
+      { name: 'Sweet Creature', artist: 'Harry Styles', album: 'Harry Styles', duration_ms: 224000 },
+      { name: 'Cherry Wine', artist: 'Hozier', album: 'Hozier', duration_ms: 240000 },
+      { name: 'Landslide', artist: 'Fleetwood Mac', album: 'Fleetwood Mac', duration_ms: 199000 },
+      { name: 'Photograph', artist: 'Ed Sheeran', album: 'x', duration_ms: 258000 },
+      { name: 'Stubborn Love', artist: 'The Lumineers', album: 'The Lumineers', duration_ms: 279000 },
+      { name: 'Flightless Bird, American Mouth', artist: 'Iron & Wine', album: "The Shepherd's Dog", duration_ms: 242000 },
+      { name: 'I Will Follow You into the Dark', artist: 'Death Cab for Cutie', album: 'Plans', duration_ms: 189000 },
+      { name: 'Lost Stars', artist: 'Adam Levine', album: 'Begin Again', duration_ms: 267000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 22);
+    },
+  },
+  {
+    id: 'sf-mood-focus',
+    key: 'focus',
+    name: 'Mix Concentración & Flow',
+    color: '#7209b7',
+    description: 'Beats instrumentales, lofi y electrónica ambiental para estudiar, programar y fluir.',
+    pool: [
+      { name: 'Awake', artist: 'Tycho', album: 'Awake', duration_ms: 283000 },
+      { name: 'Kerala', artist: 'Bonobo', album: 'Migration', duration_ms: 237000 },
+      { name: 'Nuvole Bianche', artist: 'Ludovico Einaudi', album: 'Una Mattina', duration_ms: 357000 },
+      { name: 'Time', artist: 'Hans Zimmer', album: 'Inception', duration_ms: 275000 },
+      { name: 'Affection', artist: 'Jinsang', album: 'Life', duration_ms: 130000 },
+      { name: 'controlla', artist: 'Idealism', album: 'Rainy Evening', duration_ms: 145000 },
+      { name: 'Gymnopédie No. 1', artist: 'Erik Satie, Philippe Entremont', album: 'Satie: Piano Music', duration_ms: 195000 },
+      { name: 'A Model of the Universe', artist: 'Jóhann Jóhannsson', album: 'The Theory of Everything', duration_ms: 172000 },
+      { name: 'Resonance', artist: 'HOME', album: 'Odyssey', duration_ms: 212000 },
+      { name: 'Daylight', artist: 'Kudasaibeats', album: 'Falling', duration_ms: 132000 },
+      { name: 'Divenire', artist: 'Ludovico Einaudi', album: 'Divenire', duration_ms: 402000 },
+      { name: 'Epilogue', artist: 'Ólafur Arnalds', album: 'Broadchurch', duration_ms: 190000 },
+      { name: 'Intro', artist: 'The xx', album: 'xx', duration_ms: 128000 },
+      { name: 'Weightless', artist: 'Marconi Union', album: 'Weightless', duration_ms: 480000 },
+      { name: 'Clair de Lune', artist: 'Claude Debussy, Martin Jones', album: 'Debussy Piano Works', duration_ms: 302000 },
+      { name: 'Avril 14th', artist: 'Aphex Twin', album: 'Drukqs', duration_ms: 125000 },
+      { name: 'A Walk', artist: 'Tycho', album: 'Dive', duration_ms: 316000 },
+      { name: 'Kiara', artist: 'Bonobo', album: 'Black Sands', duration_ms: 230000 },
+      { name: 'Coffee', artist: 'Kudasaibeats', album: 'Silver', duration_ms: 154000 },
+      { name: 'Snowman', artist: 'Wun Two', album: 'Rio', duration_ms: 124000 },
+      { name: 'Experience', artist: 'Ludovico Einaudi', album: 'In a Time Lapse', duration_ms: 315000 },
+      { name: 'River Flows In You', artist: 'Yiruma', album: 'First Love', duration_ms: 188000 },
+      { name: "Comptine d'un autre été, l'après-midi", artist: 'Yann Tiersen', album: 'Amélie', duration_ms: 140000 },
+      { name: 'An Ending (Ascent)', artist: 'Brian Eno', album: 'Apollo', duration_ms: 266000 },
+      { name: 'Horizon Variations', artist: 'Max Richter', album: 'The Blue Notebooks', duration_ms: 112000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 23);
+    },
+  },
+  {
+    id: 'sf-mood-fiesta',
+    key: 'fiesta',
+    name: 'Mix Fiesta & Fin de Semana',
+    color: '#ff007f',
+    description: 'Los ritmos urbanos, pop latino y reggaeton comercial que hacen vibrar el fin de semana.',
+    pool: [
+      { name: 'Tití Me Preguntó', artist: 'Bad Bunny', album: 'Un Verano Sin Ti', duration_ms: 243000 },
+      { name: 'Feliz Cumpleaños Ferxxo', artist: 'Feid', album: 'Feliz Cumpleaños Ferxxo', duration_ms: 156000 },
+      { name: 'PROVENZA', artist: 'Karol G', album: 'MAÑANA SERÁ BONITO', duration_ms: 210000 },
+      { name: 'Todo De Ti', artist: 'Rauw Alejandro', album: 'VICE VERSA', duration_ms: 199000 },
+      { name: 'Bzrp Music Sessions, Vol. 53', artist: 'Bizarrap, Shakira', album: 'Bzrp Music Sessions, Vol. 53', duration_ms: 213000 },
+      { name: 'Columbia', artist: 'Quevedo', album: 'Columbia', duration_ms: 186000 },
+      { name: 'Danza Kuduro', artist: 'Don Omar, Lucenzo', album: 'Meet the Orphans', duration_ms: 198000 },
+      { name: 'Despacito', artist: 'Luis Fonsi, Daddy Yankee', album: 'VIDA', duration_ms: 228000 },
+      { name: 'Pepas', artist: 'Farruko', album: 'La 167', duration_ms: 287000 },
+      { name: 'La Jumpa', artist: 'Arcángel, Bad Bunny', album: 'Sr. Santos', duration_ms: 255000 },
+      { name: 'LALA', artist: 'Myke Towers', album: 'LA VIDA ES UNA', duration_ms: 197000 },
+      { name: 'Classy 101', artist: 'Feid, Young Miko', album: 'Classy 101', duration_ms: 195000 },
+      { name: 'Mi Gente', artist: 'J Balvin, Willy William', album: 'Vibras', duration_ms: 185000 },
+      { name: 'Dakiti', artist: 'Bad Bunny, Jhayco', album: 'EL ÚLTIMO TOUR DEL MUNDO', duration_ms: 205000 },
+      { name: 'Bailando', artist: 'Enrique Iglesias, Descemer Bueno, Gente De Zona', album: 'SEX AND LOVE', duration_ms: 243000 },
+      { name: 'El Merengue', artist: 'Marshmello, Manuel Turizo', album: 'El Merengue', duration_ms: 189000 },
+      { name: 'Tusa', artist: 'Karol G, Nicki Minaj', album: 'KG0516', duration_ms: 200000 },
+      { name: 'Fireball', artist: 'Pitbull, John Ryan', album: 'Globalization', duration_ms: 236000 },
+      { name: 'Tacones Rojos', artist: 'Sebastián Yatra', album: 'Dharma', duration_ms: 189000 },
+      { name: 'Beso', artist: 'Rosalía, Rauw Alejandro', album: 'RR', duration_ms: 194000 },
+      { name: 'Yonaguni', artist: 'Bad Bunny', album: 'Yonaguni', duration_ms: 206000 },
+      { name: 'Playa del Inglés', artist: 'Quevedo, Myke Towers', album: 'DONDE QUIERO ESTAR', duration_ms: 238000 },
+      { name: 'Hey Mor', artist: 'Ozuna, Feid', album: 'Ozutochi', duration_ms: 196000 },
+      { name: 'Quevedo: Bzrp Music Sessions, Vol. 52', artist: 'Bizarrap, Quevedo', album: 'Bzrp Music Sessions, Vol. 52', duration_ms: 198000 },
+      { name: 'SUPERNOVA', artist: 'Saiko', album: 'SUPERNOVA', duration_ms: 195000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 24);
+    },
+  },
+  {
+    id: 'sf-mood-coche',
+    key: 'coche',
+    name: 'Mix En Carretera & Roadtrip',
+    color: '#3a86ff',
+    description: 'Himnos atemporales y estribillos épicos para cantar al volante en cada viaje.',
+    pool: [
+      { name: 'Mr. Brightside', artist: 'The Killers', album: 'Hot Fuss', duration_ms: 222000 },
+      { name: 'Dreams', artist: 'Fleetwood Mac', album: 'Rumours', duration_ms: 257000 },
+      { name: "Don't Stop Me Now", artist: 'Queen', album: 'Jazz', duration_ms: 209000 },
+      { name: 'As It Was', artist: 'Harry Styles', album: "Harry's House", duration_ms: 167000 },
+      { name: 'Californication', artist: 'Red Hot Chili Peppers', album: 'Californication', duration_ms: 329000 },
+      { name: "Summer of '69", artist: 'Bryan Adams', album: 'Reckless', duration_ms: 216000 },
+      { name: 'Fortunate Son', artist: 'Creedence Clearwater Revival', album: 'Willy and the Poor Boys', duration_ms: 140000 },
+      { name: "Don't Stop Believin'", artist: 'Journey', album: 'Escape', duration_ms: 250000 },
+      { name: 'Take Me Home, Country Roads', artist: 'John Denver', album: 'Poems, Prayers & Promises', duration_ms: 198000 },
+      { name: 'Sweet Home Alabama', artist: 'Lynyrd Skynyrd', album: 'Second Helping', duration_ms: 284000 },
+      { name: "Livin' on a Prayer", artist: 'Bon Jovi', album: 'Slippery When Wet', duration_ms: 249000 },
+      { name: 'Africa', artist: 'TOTO', album: 'Toto IV', duration_ms: 295000 },
+      { name: 'Take on Me', artist: 'a-ha', album: 'Hunting High and Low', duration_ms: 225000 },
+      { name: 'Go Your Own Way', artist: 'Fleetwood Mac', album: 'Rumours', duration_ms: 223000 },
+      { name: 'Shut Up and Dance', artist: 'WALK THE MOON', album: 'TALKING IS HARD', duration_ms: 199000 },
+      { name: 'Counting Stars', artist: 'OneRepublic', album: 'Native', duration_ms: 257000 },
+      { name: 'Viva La Vida', artist: 'Coldplay', album: 'Viva La Vida', duration_ms: 242000 },
+      { name: 'Midnight City', artist: 'M83', album: "Hurry Up, We're Dreaming", duration_ms: 243000 },
+      { name: 'Pompeii', artist: 'Bastille', album: 'Bad Blood', duration_ms: 214000 },
+      { name: 'Blinding Lights', artist: 'The Weeknd', album: 'After Hours', duration_ms: 200000 },
+      { name: 'Somebody Told Me', artist: 'The Killers', album: 'Hot Fuss', duration_ms: 197000 },
+      { name: "Free Fallin'", artist: 'Tom Petty', album: 'Full Moon Fever', duration_ms: 256000 },
+      { name: "Sweet Child O' Mine", artist: 'Guns N\' Roses', album: 'Appetite for Destruction', duration_ms: 356000 },
+      { name: 'Under the Bridge', artist: 'Red Hot Chili Peppers', album: 'Blood Sugar Sex Magik', duration_ms: 264000 },
+      { name: 'Learn to Fly', artist: 'Foo Fighters', album: 'There Is Nothing Left to Lose', duration_ms: 235000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 25);
+    },
+  },
+];
+
+export const TRENDING_PLAYLIST_DEFINITIONS = [
+  {
+    id: 'sf-trend-global',
+    key: 'trend_global',
+    name: 'Top Éxitos Globales 2026',
+    color: '#1ed760',
+    description: 'Los temas más virales, reproducidos y aclamados del planeta en este momento.',
+    pool: [
+      { name: 'Espresso', artist: 'Sabrina Carpenter', album: "Short n' Sweet", duration_ms: 175000 },
+      { name: 'BIRDS OF A FEATHER', artist: 'Billie Eilish', album: 'HIT ME HARD AND SOFT', duration_ms: 190000 },
+      { name: 'Die With A Smile', artist: 'Lady Gaga, Bruno Mars', album: 'Die With A Smile', duration_ms: 251000 },
+      { name: 'Good Luck, Babe!', artist: 'Chappell Roan', album: 'Good Luck, Babe!', duration_ms: 218000 },
+      { name: 'Not Like Us', artist: 'Kendrick Lamar', album: 'Not Like Us', duration_ms: 274000 },
+      { name: 'I Had Some Help', artist: 'Post Malone, Morgan Wallen', album: 'F-1 Trillion', duration_ms: 178000 },
+      { name: 'Dancing in the Flames', artist: 'The Weeknd', album: 'Hurry Up Tomorrow', duration_ms: 220000 },
+      { name: 'Beautiful Things', artist: 'Benson Boone', album: 'Fireworks & Rollerblades', duration_ms: 180000 },
+      { name: 'Taste', artist: 'Sabrina Carpenter', album: "Short n' Sweet", duration_ms: 157000 },
+      { name: 'Please Please Please', artist: 'Sabrina Carpenter', album: "Short n' Sweet", duration_ms: 186000 },
+      { name: 'Lose Control', artist: 'Teddy Swims', album: "I've Tried Everything But Therapy", duration_ms: 210000 },
+      { name: 'LUNCH', artist: 'Billie Eilish', album: 'HIT ME HARD AND SOFT', duration_ms: 179000 },
+      { name: 'Too Sweet', artist: 'Hozier', album: 'Unheard', duration_ms: 251000 },
+      { name: 'MILLION DOLLAR BABY', artist: 'Tommy Richman', album: 'MILLION DOLLAR BABY', duration_ms: 155000 },
+      { name: 'A Bar Song (Tipsy)', artist: 'Shaboozey', album: "Where I've Been, Isn't Where I'm Going", duration_ms: 171000 },
+      { name: 'Greedy', artist: 'Tate McRae', album: 'THINK LATER', duration_ms: 131000 },
+      { name: 'Cruel Summer', artist: 'Taylor Swift', album: 'Lover', duration_ms: 178000 },
+      { name: 'Houdini', artist: 'Dua Lipa', album: 'Radical Optimism', duration_ms: 185000 },
+      { name: 'Water', artist: 'Tyla', album: 'TYLA', duration_ms: 200000 },
+      { name: "Texas Hold 'Em", artist: 'Beyoncé', album: 'COWBOY CARTER', duration_ms: 233000 },
+      { name: "we can't be friends", artist: 'Ariana Grande', album: 'eternal sunshine', duration_ms: 228000 },
+      { name: 'Paint The Town Red', artist: 'Doja Cat', album: 'Scarlet', duration_ms: 231000 },
+      { name: 'Lovin On Me', artist: 'Jack Harlow', album: 'Lovin On Me', duration_ms: 138000 },
+      { name: 'Flowers', artist: 'Miley Cyrus', album: 'Endless Summer Vacation', duration_ms: 200000 },
+      { name: 'As It Was', artist: 'Harry Styles', album: "Harry's House", duration_ms: 167000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 31);
+    },
+  },
+  {
+    id: 'sf-trend-spain',
+    key: 'trend_spain',
+    name: 'Top 50 España',
+    color: '#e63946',
+    description: 'Los mayores éxitos y números 1 en España: urbano, reggaeton, pop y trap.',
+    pool: [
+      { name: 'DURO', artist: 'Quevedo', album: 'DURO', duration_ms: 182000 },
+      { name: 'SUPERNOVA', artist: 'Saiko', album: 'SUPERNOVA', duration_ms: 195000 },
+      { name: 'La Reina', artist: 'Lola Índigo', album: 'NAVE DRAGÓN', duration_ms: 160000 },
+      { name: 'MONACO', artist: 'Bad Bunny', album: 'nadie sabe lo que va a pasar mañana', duration_ms: 267000 },
+      { name: 'Sigue', artist: 'Morad, Beny Jr', album: 'Capítulo 1', duration_ms: 180000 },
+      { name: 'Manos Rotas', artist: 'Dellafuente, Morad', album: 'Zikrayat', duration_ms: 215000 },
+      { name: 'Columbia', artist: 'Quevedo', album: 'Columbia', duration_ms: 186000 },
+      { name: 'Fiel', artist: 'JC Reyes', album: 'Fiel', duration_ms: 175000 },
+      { name: 'Cangrinaje', artist: 'Cruz Cafuné', album: 'Me Muevo Con Dios', duration_ms: 202000 },
+      { name: 'Lo Que Tiene', artist: 'Beny Jr, Morad', album: 'K y B', duration_ms: 190000 },
+      { name: 'POLARIS', artist: 'Saiko, Quevedo, Feid, Mora', album: 'POLARIS Remix', duration_ms: 275000 },
+      { name: 'Corazón Vacío', artist: 'Maria Becerra', album: 'Corazón Vacío', duration_ms: 164000 },
+      { name: 'Classy 101', artist: 'Feid, Young Miko', album: 'Classy 101', duration_ms: 195000 },
+      { name: 'Lollipop', artist: 'Darell', album: 'Everybody Go to the Discotek', duration_ms: 194000 },
+      { name: 'Buenas', artist: 'Quevedo, Saiko', album: 'Buenas', duration_ms: 188000 },
+      { name: 'YO LO SOÑÉ', artist: 'Saiko, Omar Montes', album: 'SAKURA', duration_ms: 170000 },
+      { name: 'El Merengue', artist: 'Marshmello, Manuel Turizo', album: 'El Merengue', duration_ms: 189000 },
+      { name: 'Si Antes Te Hubiera Conocido', artist: 'Karol G', album: 'Si Antes Te Hubiera Conocido', duration_ms: 195000 },
+      { name: 'Gata Only', artist: 'FloyyMenor, Cris Mj', album: 'EL COMIENZO', duration_ms: 222000 },
+      { name: 'HOLANDA', artist: 'Jhayco', album: 'Le Clique: Vida Rockstar', duration_ms: 201000 },
+      { name: 'REINA', artist: 'Mora, Saiko', album: 'ESTRELLA', duration_ms: 209000 },
+      { name: 'BABY HELLO', artist: 'Rauw Alejandro, Bizarrap', album: 'PLAYA SATURNO', duration_ms: 222000 },
+      { name: 'DESPECHÁ', artist: 'Rosalía', album: 'MOTOMAMI +', duration_ms: 157000 },
+      { name: 'PUNTO G', artist: 'Quevedo', album: 'DONDE QUIERO ESTAR', duration_ms: 151000 },
+      { name: 'APA', artist: 'Mora, Quevedo', album: 'PARAÍSO', duration_ms: 198000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 32);
+    },
+  },
+  {
+    id: 'sf-trend-virales',
+    key: 'trend_virales',
+    name: 'Descubrimiento Semanal Spotifree',
+    color: '#fb5607',
+    description: 'Canciones en auge, sonidos virales de TikTok y descubrimientos seleccionados para ti.',
+    pool: [
+      { name: 'i like the way you kiss me', artist: 'Artemas', album: 'i like the way you kiss me', duration_ms: 142000 },
+      { name: 'End of Beginning', artist: 'Djo', album: 'DECIDE', duration_ms: 159000 },
+      { name: 'A Bar Song (Tipsy)', artist: 'Shaboozey', album: "Where I've Been, Isn't Where I'm Going", duration_ms: 171000 },
+      { name: 'MILLION DOLLAR BABY', artist: 'Tommy Richman', album: 'MILLION DOLLAR BABY', duration_ms: 155000 },
+      { name: 'Gata Only', artist: 'FloyyMenor, Cris Mj', album: 'EL COMIENZO', duration_ms: 222000 },
+      { name: 'Stargazing', artist: 'Myles Smith', album: 'Stargazing', duration_ms: 172000 },
+      { name: 'Santa', artist: 'Rvssian, Rauw Alejandro, Ayra Starr', album: 'Santa', duration_ms: 195000 },
+      { name: 'Belong Together', artist: 'Mark Ambor', album: 'Rockwood', duration_ms: 148000 },
+      { name: 'Alibi', artist: 'Sevdaliza, Pabllo Vittar, Yseult', album: 'Alibi', duration_ms: 161000 },
+      { name: 'Austin', artist: 'Dasha', album: 'What Happens Now?', duration_ms: 171000 },
+      { name: 'Pedro', artist: 'Jaxomy, Agatino Romero, Raffaella Carrà', album: 'Pedro', duration_ms: 144000 },
+      { name: 'Slow It Down', artist: 'Benson Boone', album: 'Fireworks & Rollerblades', duration_ms: 161000 },
+      { name: 'Daylight', artist: 'David Kushner', album: 'The Dichotomy', duration_ms: 212000 },
+      { name: 'Strangers', artist: 'Kenya Grace', album: 'The After Thought', duration_ms: 172000 },
+      { name: 'Prada', artist: 'cassö, RAYE, D-Block Europe', album: 'Prada', duration_ms: 132000 },
+      { name: 'Paint The Town Red', artist: 'Doja Cat', album: 'Scarlet', duration_ms: 231000 },
+      { name: 'Make You Mine', artist: 'Madison Beer', album: 'Make You Mine', duration_ms: 222000 },
+      { name: 'Si No Estás', artist: 'Iñigo Quintero', album: 'Si No Estás', duration_ms: 184000 },
+      { name: 'Greedy', artist: 'Tate McRae', album: 'THINK LATER', duration_ms: 131000 },
+      { name: 'Cruel Summer', artist: 'Taylor Swift', album: 'Lover', duration_ms: 178000 },
+      { name: 'Agora Hills', artist: 'Doja Cat', album: 'Scarlet', duration_ms: 265000 },
+      { name: 'Water', artist: 'Tyla', album: 'TYLA', duration_ms: 200000 },
+      { name: 'Lil Boo Thang', artist: 'Paul Russell', album: 'Lil Boo Thang', duration_ms: 114000 },
+      { name: 'Standing Next to You', artist: 'Jung Kook', album: 'GOLDEN', duration_ms: 206000 },
+      { name: 'Seven', artist: 'Jung Kook, Latto', album: 'GOLDEN', duration_ms: 184000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 33);
+    },
+  },
+];
 function toEraTrack(item: { name: string; artist: string; album: string; duration_ms: number }, decade: string, idx: number): Track {
   const artistNames = item.artist.split(/\s*[,&]\s*/);
   return {
@@ -1271,6 +1613,20 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     out.push(mix(def.id, 'era', def.name, def.description, items, cover, userName));
   }
 
+  // Mood / Ambience Mixes ("Estados de ánimo y Momentos")
+  for (const def of MOOD_PLAYLIST_DEFINITIONS) {
+    const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
+    const cover = makeMoodCoverSvg(def.name, def.color, 'Mix por ambiente');
+    out.push(mix(def.id, 'mood', def.name, def.description, items, cover, userName));
+  }
+
+  // Trending & Global Mixes ("Tendencias & Virales")
+  for (const def of TRENDING_PLAYLIST_DEFINITIONS) {
+    const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
+    const cover = makeMoodCoverSvg(def.name, def.color, 'Tendencias');
+    out.push(mix(def.id, 'trending', def.name, def.description, items, cover, userName));
+  }
+
   // "Artistas que te pueden gustar": similar to several of the user's artists, not heard yet
   const relCount = new Map<string, { name: string; picture: string | null; n: number; fans: number }>();
   for (const s of seeds) {
@@ -1494,10 +1850,12 @@ export function withSpotifreeShelves(
   suggestedArtists: SuggestedArtist[] = []
 ): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
-  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era').map(cardOf);
+  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era' && m.sfKind !== 'mood' && m.sfKind !== 'trending').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
   const soundcloudMixes = mixes.filter((m) => m.sfKind === 'soundcloud').map(cardOf);
   const eraMixes = mixes.filter((m) => m.sfKind === 'era').map(cardOf);
+  const moodMixes = mixes.filter((m) => m.sfKind === 'mood').map(cardOf);
+  const trendingMixes = mixes.filter((m) => m.sfKind === 'trending').map(cardOf);
   const name = (userName || '').split(' ')[0];
 
   // Extend Spotify's first "Hecho para / Made for" section, only that one
@@ -1558,6 +1916,30 @@ export function withSpotifreeShelves(
         hasSeeAll: true,
       });
     }
+  }
+
+  if (moodMixes.length) {
+    ours.push({
+      id: 'sf-mood-mixes',
+      title: 'Estados de ánimo y Momentos',
+      prefix: 'PARA CADA MOMENTO',
+      subtitle: 'Playlists diseñadas según tu energía y actividad',
+      type: 'mixes',
+      cards: moodMixes,
+      hasSeeAll: true,
+    });
+  }
+
+  if (trendingMixes.length) {
+    ours.push({
+      id: 'sf-trending-mixes',
+      title: 'Tendencias & Virales del Momento',
+      prefix: 'LO MÁS ESCUCHADO',
+      subtitle: 'Los mayores éxitos en España y el mundo',
+      type: 'mixes',
+      cards: trendingMixes,
+      hasSeeAll: true,
+    });
   }
 
   shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];

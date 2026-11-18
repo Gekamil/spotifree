@@ -401,10 +401,18 @@ function startDailySpotifyRefreshTimer() {
   if (typeof window === 'undefined' || dailyRefreshTimer !== null) return;
   const check = () => {
     try {
-      useSpotifyDataStore.getState().refreshSpotifySession(false).catch(() => {});
+      let saved: any = null;
+      try {
+        saved = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
+      } catch {}
+      const lastExtractedAt = Number(saved?._lastExtractedAt || 0);
+      const isStale = (Date.now() - lastExtractedAt) > 3 * 60 * 1000;
+      if (isStale) {
+        useSpotifyDataStore.getState().refreshSpotifySession(true).catch(() => {});
+      }
     } catch {}
   };
-  dailyRefreshTimer = window.setInterval(check, 30 * 60 * 1000);
+  dailyRefreshTimer = window.setInterval(check, 5 * 60 * 1000);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) check();
   });
@@ -1190,6 +1198,7 @@ const store = create<SpotifyDataState>((set, get) => ({
         playlists: mergeFreshSpotifyPlaylists(savedPlaylists, freshPlaylists, imported, { addEdits: false }),
         _cookie: cookie,
         _extractedDate: today,
+        _lastExtractedAt: Date.now(),
       })
     );
     if (session.user.id) window.localStorage.setItem('spotifree_active_user_id', session.user.id);
@@ -1217,11 +1226,14 @@ const store = create<SpotifyDataState>((set, get) => ({
       saved = JSON.parse(window.localStorage.getItem('spotify_extracted_session') || 'null');
     } catch {}
     const today = localDayStamp();
+    const now = Date.now();
+    const lastExtractedAt = Number(saved?._lastExtractedAt || 0);
+    const isStale = (now - lastExtractedAt) > 3 * 60 * 1000;
     // Also once for sessions read before the home rows had their full "Mostrar todos" lists
     const hasFullHome = (saved?.homeSectionLimit || 0) >= EXPECTED_HOME_SECTION_LIMIT;
     // …and once for sessions read before the account's taste (top artists / recent plays) came with it
     const hasTaste = Array.isArray(saved?.topArtists);
-    if (!force && saved?._extractedDate === today && hasFullHome && hasTaste) return false;
+    if (!force && !isStale && saved?._extractedDate === today && hasFullHome && hasTaste) return false;
     if (refreshInFlight) return refreshInFlight;
     refreshInFlight = (async () => {
       try {
@@ -1242,7 +1254,15 @@ const store = create<SpotifyDataState>((set, get) => ({
         const sessionPlaylists = mergeFreshSpotifyPlaylists(savedPlaylists, freshPlaylists, imported, { addEdits: false });
         window.localStorage.setItem(
           'spotify_extracted_session',
-          JSON.stringify({ ...(saved || {}), ...fresh, user: saved?.user || fresh.user, playlists: sessionPlaylists, _cookie: cookie, _extractedDate: today })
+          JSON.stringify({
+            ...(saved || {}),
+            ...fresh,
+            user: saved?.user || fresh.user,
+            playlists: sessionPlaylists,
+            _cookie: cookie,
+            _extractedDate: today,
+            _lastExtractedAt: Date.now(),
+          })
         );
 
         // Fresh songs for lists the read brought with songs (overlays still apply on top)
@@ -1643,13 +1663,16 @@ const store = create<SpotifyDataState>((set, get) => ({
           // Daily automatic refresh with the saved cookie: Spotify's recommendations (home
           // shelves, mixes, new lists) follow the real account, merged without undoing the
           // user's changes. Also re-checked while the app stays open across days.
+          const lastExtractedAt = Number(session._lastExtractedAt || 0);
+          const isStale = (Date.now() - lastExtractedAt) > 3 * 60 * 1000;
           if (
             !session.playlists ||
             session.playlists.length === 0 ||
+            isStale ||
             session._extractedDate !== localDayStamp() ||
             (session.homeSectionLimit || 0) < EXPECTED_HOME_SECTION_LIMIT
           ) {
-            get().refreshSpotifySession(true).catch(() => {});
+            get().refreshSpotifySession(isStale).catch(() => {});
           }
           startDailySpotifyRefreshTimer();
           return;
@@ -1663,6 +1686,7 @@ const store = create<SpotifyDataState>((set, get) => ({
               ...session,
               _cookie: userCookie,
               _extractedDate: new Date().toISOString().slice(0, 10),
+              _lastExtractedAt: Date.now(),
             }));
             if (session.user?.id) {
               window.localStorage.setItem('spotifree_active_user_id', session.user.id);

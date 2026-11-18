@@ -11,14 +11,28 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.4.4';
+export const APP_VERSION = '0.5';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.5',
+    date: '18 de noviembre, 2026',
+    title: 'Spotifree 0.5: Rendimiento 120 FPS ultrafluido en ordenador, sincronización en tiempo real de playlists de Spotify y nuevas estanterías por momento y tendencias',
+    isLatest: true,
+    highlights: [
+      'Fluidez 120 FPS sin tirones en ordenador: eliminación total de recálculos de renderizado en hover en listas de reproducción mediante estados puros CSS y content-visibility nativo que optimiza el scroll de listas largas de más de 500 temas.',
+      'Sincronización en vivo con Spotify (SWR): se elimina el bloqueo de 24 horas; los cambios y nuevas canciones añadidos en Spotify se actualizan en segundo plano en Spotifree al abrir la lista o cambiar de pestaña.',
+      'Botón de sincronización manual instantánea: botón directo en la cabecera de la playlist en ordenador y menú de opciones para forzar la recarga inmediata de canciones desde los servidores de Spotify.',
+      'Nuevas estanterías «Estados de ánimo y Momentos»: playlists adaptadas con selección semanal para Entrenamiento & Gym, Chill & Relax Acústico, Concentración & Flow, Fiesta & Fin de Semana y En Carretera.',
+      'Nuevas estanterías «Tendencias & Virales del Momento»: acceso instantáneo a los temas más escuchados con Top Éxitos Globales 2026, Top 50 España y Descubrimiento Semanal Spotifree.',
+      'Optimización de consumo en inicio de escritorio: aceleración por hardware en cabecera sticky y memoización de extracción cromática para navegación instantánea sin retardos de GPU.',
+    ],
+  },
   {
     version: '0.4.4',
     date: '18 de noviembre, 2026',
     title: 'Spotifree 0.4.4: Carátulas ultrarrápidas de bajo consumo, DJ con locución en Android Auto y mixes de épocas con rotación semanal',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Caché de carátulas ultrarrápido y bajo consumo de red: miniaturas optimizadas a 64px y 150px en listas y tarjetas, reduciendo el consumo de datos en más de un 90% para conexiones lentas o inestables.',
       'Cero parpadeos en Spotifree Web: memoria persistente de imágenes precargadas que mantiene las carátulas siempre cargadas al salir y volver de la pestaña sin parpadeos ni skeletons innecesarios.',

@@ -19,6 +19,8 @@ import { SpotifyImage } from '../common/SpotifyImage';
 import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
 import { isAIDJPlaylist } from '../../utils/djIdentifiers';
 
+const DOMINANT_COLOR_CACHE = new Map<string, string>();
+
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
   { id: '37i9dQZF1DXcBWIGoYBM5M', name: 'Éxitos España', image: 'https://i.scdn.co/image/ab67706f00000002e8ccdd567fff6a597b87586b', color: '#1a4b4c' },
@@ -184,8 +186,14 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     let cancelled = false;
     currentShortcuts.forEach((item) => {
       if (item.image) {
+        if (DOMINANT_COLOR_CACHE.has(item.image)) {
+          const cachedHex = DOMINANT_COLOR_CACHE.get(item.image)!;
+          setExtractedColors((prev) => (prev[item.id] === cachedHex ? prev : { ...prev, [item.id]: cachedHex }));
+          return;
+        }
         extractDominantColorFromImage(item.image).then((hex) => {
           if (!cancelled && hex) {
+            DOMINANT_COLOR_CACHE.set(item.image, hex);
             setExtractedColors((prev) => ({ ...prev, [item.id]: hex }));
           }
         });
@@ -504,7 +512,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       }}
     >
       {/* Top Filter Pills (Matching Spotify 1:1 Pixel & Animation Fidelity) */}
-      <div className="sticky top-0 z-30 px-6 pt-4 pb-3 flex items-center gap-2 backdrop-blur-md bg-[#121212]/75">
+      <div className="sticky top-0 z-30 px-6 pt-4 pb-3 flex items-center gap-2 bg-[#121212]/95 border-b border-white/5 gpu-accelerated">
         {activeTab !== 'musica' && activeTab !== 'siguiendo' ? (
           <>
             <button

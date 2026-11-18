@@ -70,20 +70,23 @@ const CarouselCard: React.FC<{
   const handleImageLoad = () => {
     setImageLoaded(true);
     if (isRadioCard && imgRef.current) {
-      try {
-        const img = imgRef.current;
-        const c = document.createElement('canvas');
-        c.width = 1;
-        c.height = 1;
-        const ctx = c.getContext('2d');
-        if (ctx && img.naturalWidth > 10) {
-          const sampleX = Math.floor(img.naturalWidth / 2);
-          const sampleY = Math.max(2, Math.floor(img.naturalHeight * 0.04));
-          ctx.drawImage(img, sampleX, sampleY, 1, 1, 0, 0, 1, 1);
-          const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-          setRadioBgColor(`rgb(${r}, ${g}, ${b})`);
-        }
-      } catch {}
+      requestAnimationFrame(() => {
+        try {
+          const img = imgRef.current;
+          if (!img || img.naturalWidth <= 10) return;
+          const c = document.createElement('canvas');
+          c.width = 1;
+          c.height = 1;
+          const ctx = c.getContext('2d');
+          if (ctx) {
+            const sampleX = Math.floor(img.naturalWidth / 2);
+            const sampleY = Math.max(2, Math.floor(img.naturalHeight * 0.04));
+            ctx.drawImage(img, sampleX, sampleY, 1, 1, 0, 0, 1, 1);
+            const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+            setRadioBgColor(`rgb(${r}, ${g}, ${b})`);
+          }
+        } catch {}
+      });
     }
   };
 
@@ -260,7 +263,7 @@ export const DesktopShelfCarousel: React.FC<DesktopShelfCarouselProps> = ({
 
   return (
     <section
-      className="space-y-3 relative group/shelf"
+      className="space-y-3 relative group/shelf shelf-contain"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >

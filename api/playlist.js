@@ -105,7 +105,13 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   }
 
   // Check in-memory instant cache (valid for 3 minutes unless refresh is requested)
-  if (!refresh && MEMORY_PLAYLIST_CACHE.has(cleanId)) {
+  if (refresh) {
+    MEMORY_PLAYLIST_CACHE.delete(cleanId);
+    if (cleanId === 'collection-tracks' || cleanId === 'liked-songs') {
+      MEMORY_PLAYLIST_CACHE.delete('collection-tracks');
+      MEMORY_PLAYLIST_CACHE.delete('liked-songs');
+    }
+  } else if (MEMORY_PLAYLIST_CACHE.has(cleanId)) {
     const cached = MEMORY_PLAYLIST_CACHE.get(cleanId);
     const age = Date.now() - (cached?._cachedAt || 0);
     if (age < 180_000 && cached?.tracks?.items?.length > 0) {
@@ -300,7 +306,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       // Only Spotify's editorial playlists (37i9dQZF1D…, the same for everyone). Personal lists of
       // the account the file was extracted from (its mixes, its own playlists) are never served.
       const isEditorial = /^37i9dQZF1D/.test(cleanId);
-      if (isEditorial && sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
+      if (!refresh && isEditorial && sessionData.cachedPlaylistDetails && sessionData.cachedPlaylistDetails[cleanId]) {
         const cached = sessionData.cachedPlaylistDetails[cleanId];
         if (cached?.tracks?.items && cached.tracks.items.length > 0) {
           const cover = cached.images?.[0]?.url || '';

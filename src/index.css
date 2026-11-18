@@ -449,6 +449,12 @@
   contain-intrinsic-size: 56px;
 }
 
+.shelf-contain {
+  contain: layout style;
+  content-visibility: auto;
+  contain-intrinsic-size: 320px;
+}
+
 .gpu-accelerated {
   transform: translateZ(0);
   backface-visibility: hidden;
