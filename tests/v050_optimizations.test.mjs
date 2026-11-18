@@ -98,4 +98,37 @@ describe('Spotifree v0.5 Optimizations, Live Extraction & Mood Shelves', () => {
       assert.ok(mixesCode.includes('Tendencias & Virales del Momento'), 'Must have proper title');
     });
   });
+
+  describe('5. Genre Mixes Separation & Photo-Blended Themed Covers', () => {
+    it('defines GENRE_PLAYLIST_DEFINITIONS and categorizes Rock, Pop, Urbano and EDM as genres', () => {
+      const mixesCode = fs.readFileSync(path.resolve('src/services/spotifreeMixes.ts'), 'utf-8');
+      assert.ok(mixesCode.includes('export const GENRE_PLAYLIST_DEFINITIONS'), 'Must export GENRE_PLAYLIST_DEFINITIONS');
+      assert.ok(mixesCode.includes("category: 'genre' as const"), 'Must categorize genres separately from eras');
+      assert.ok(mixesCode.includes("category: 'era' as const"), 'Must categorize decades as era');
+    });
+
+    it('withSpotifreeShelves isolates genres into "Playlists por género" shelf (sf-genre-mixes)', () => {
+      const mixesCode = fs.readFileSync(path.resolve('src/services/spotifreeMixes.ts'), 'utf-8');
+      assert.ok(mixesCode.includes('sf-genre-mixes'), 'Must define sf-genre-mixes shelf');
+      assert.ok(mixesCode.includes('Playlists por género'), 'Must set title to Playlists por género');
+      assert.ok(mixesCode.includes('GÉNEROS Y ESTILOS'), 'Must have GÉNEROS Y ESTILOS prefix');
+    });
+
+    it('sf-era-mixes strictly rotates decades without mixing in Rock, Pop or Urbano', () => {
+      const mixesCode = fs.readFileSync(path.resolve('src/services/spotifreeMixes.ts'), 'utf-8');
+      const eraSection = mixesCode.split('if (eraMixes.length)')[1]?.split('if (moodMixes.length)')[0] || '';
+      assert.strictEqual(eraSection.includes("c.id.includes('pop')"), false, 'Decade shelf must not contain pop');
+      assert.strictEqual(eraSection.includes("c.id.includes('rock')"), false, 'Decade shelf must not contain rock');
+      assert.strictEqual(eraSection.includes("c.id.includes('urbano')"), false, 'Decade shelf must not contain urbano');
+      assert.strictEqual(eraSection.includes("c.id.includes('edm')"), false, 'Decade shelf must not contain edm');
+    });
+
+    it('makeCuratedThemedCover generates canvas cover with blended photos, glow flares and SVG fallback', () => {
+      const mixesCode = fs.readFileSync(path.resolve('src/services/spotifreeMixes.ts'), 'utf-8');
+      assert.ok(mixesCode.includes('export async function makeCuratedThemedCover'), 'Must export makeCuratedThemedCover');
+      assert.ok(mixesCode.includes('ctx.globalAlpha = 0.38'), 'Must blend photos with atmospheric opacity');
+      assert.ok(mixesCode.includes('hexToRgba(color, 0.38)'), 'Must draw glowing circular flare in theme color');
+      assert.ok(mixesCode.includes('makeEraCoverSvg(badgeText, color, title)'), 'Must fallback to SVG when in headless environment');
+    });
+  });
 });

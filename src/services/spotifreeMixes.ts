@@ -21,6 +21,7 @@ import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../
 import { useStatsStore } from '../store/useStatsStore';
 import { getRecentSearches } from '../utils/recentSearches';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from './spotifreeAuth';
+import { TRACK_COVER_CACHE } from '../utils/trackCovers';
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -561,7 +562,7 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
 // 5. Building the playlists
 // ---------------------------------------------------------------------------
 export interface SpotifreeMix extends Playlist {
-  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud' | 'era' | 'mood' | 'trending';
+  sfKind: 'daily' | 'discover' | 'radar' | 'repeat' | 'classics' | 'artist' | 'soundcloud' | 'era' | 'genre' | 'mood' | 'trending';
 }
 
 
@@ -589,34 +590,200 @@ export function selectWeeklyTracks<T>(pool: T[], count = 25, seedOffset = 0): T[
   return copy.slice(0, count);
 }
 
-function makeEraCoverSvg(decadeOrStyle: string, color: string, customTitle?: string): string {
+function hexToRgba(hex: string, alpha = 1): string {
+  let c = hex.replace('#', '');
+  if (c.length === 3) c = c.split('').map((x) => x + x).join('');
+  const num = parseInt(c, 16);
+  if (isNaN(num)) return `rgba(30, 50, 100, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+function loadCoverPhoto(url: string, timeoutMs = 3000): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    if (!url) return resolve(null);
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    let done = false;
+    const timer = setTimeout(() => {
+      if (!done) {
+        done = true;
+        resolve(null);
+      }
+    }, timeoutMs);
+    img.onload = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        resolve(img);
+      }
+    };
+    img.onerror = () => {
+      if (!done) {
+        done = true;
+        clearTimeout(timer);
+        resolve(null);
+      }
+    };
+    img.src = url;
+  });
+}
+
+export function makeEraCoverSvg(decadeOrStyle: string, color: string, customTitle?: string): string {
   const displayTitle = customTitle || `Mix de los ${decadeOrStyle}`;
   const isStyle = decadeOrStyle.length > 5;
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
     <defs>
       <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${color}"/>
-        <stop offset="100%" stop-color="#121212"/>
+        <stop offset="65%" stop-color="#161616"/>
+        <stop offset="100%" stop-color="#0c0c0c"/>
       </linearGradient>
     </defs>
     <rect width="600" height="600" fill="url(#g)"/>
-    <circle cx="500" cy="100" r="190" fill="${color}" opacity="0.32"/>
-    <circle cx="100" cy="500" r="230" fill="#000000" opacity="0.55"/>
-    <rect x="0" y="440" width="600" height="160" fill="rgba(0,0,0,0.5)"/>
-    <text x="48" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="${isStyle ? 82 : 114}" fill="#ffffff" letter-spacing="-2">${decadeOrStyle}</text>
-    <text x="48" y="492" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="700" font-size="38" fill="#ffffff">${displayTitle}</text>
-    <text x="48" y="540" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="22" fill="rgba(255,255,255,0.7)">Actualizado esta semana · Spotifree</text>
+    <circle cx="500" cy="100" r="200" fill="${color}" opacity="0.38"/>
+    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.58"/>
+    <rect x="0" y="420" width="600" height="180" fill="rgba(0,0,0,0.55)"/>
+    <rect x="0" y="420" width="600" height="2" fill="${color}" opacity="0.4"/>
+    <text x="48" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="${isStyle ? 76 : 108}" fill="#ffffff" letter-spacing="-2">${decadeOrStyle}</text>
+    <text x="48" y="488" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="36" fill="#ffffff">${displayTitle}</text>
+    <text x="48" y="538" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="21" fill="rgba(255,255,255,0.72)">Actualizado esta semana · Spotifree</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export async function makeCuratedThemedCover(
+  badgeText: string,
+  title: string,
+  color: string,
+  images: string[] = [],
+  subtitle = 'Actualizado esta semana · Spotifree'
+): Promise<string> {
+  const S = 600;
+  // If in node or without DOM canvas (e.g. unit tests), gracefully return high-res SVG
+  if (typeof document === 'undefined') {
+    return makeEraCoverSvg(badgeText, color, title);
+  }
+
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    if (!ctx) return makeEraCoverSvg(badgeText, color, title);
+
+    // 1. Atmospheric base background gradient
+    const bg = ctx.createLinearGradient(0, 0, S, S);
+    bg.addColorStop(0, color);
+    bg.addColorStop(0.55, '#161616');
+    bg.addColorStop(1, '#0c0c0c');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, S, S);
+
+    // 2. Song & artist photos blended into background with authentic duotone wash
+    const validUrls = images.filter(Boolean);
+    const loadedImgs = (
+      await Promise.all(validUrls.slice(0, 4).map((u) => loadCoverPhoto(u, 2500)))
+    ).filter(Boolean) as HTMLImageElement[];
+
+    if (loadedImgs.length > 0) {
+      ctx.save();
+      // Subtle transparency so the photo is clearly recognizable but seamlessly integrated into the background
+      ctx.globalAlpha = 0.38;
+
+      if (loadedImgs.length === 1) {
+        // 1 photo: Full canvas center-crop
+        const im = loadedImgs[0];
+        const s = Math.min(im.naturalWidth, im.naturalHeight);
+        ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, S, S);
+      } else if (loadedImgs.length === 2) {
+        // 2 photos: Split left / right
+        const half = S / 2;
+        loadedImgs.forEach((im, i) => {
+          const s = Math.min(im.naturalWidth, im.naturalHeight);
+          ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, i * half, 0, half, S);
+        });
+      } else {
+        // 3 or 4 photos: 2x2 collage
+        const half = S / 2;
+        loadedImgs.slice(0, 4).forEach((im, i) => {
+          const s = Math.min(im.naturalWidth, im.naturalHeight);
+          const x = (i % 2) * half;
+          const y = Math.floor(i / 2) * half;
+          ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, x, y, half, half);
+        });
+      }
+      ctx.restore();
+
+      // Atmospheric duotone color tint over the photos
+      const tint = ctx.createLinearGradient(0, 0, S, S);
+      tint.addColorStop(0, hexToRgba(color, 0.72));
+      tint.addColorStop(0.65, 'rgba(18, 18, 18, 0.75)');
+      tint.addColorStop(1, 'rgba(12, 12, 12, 0.88)');
+      ctx.fillStyle = tint;
+      ctx.fillRect(0, 0, S, S);
+    }
+
+    // 3. Glowing circular flares (preserving the visual style the user loved)
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(500, 100, 200, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(color, 0.38);
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(90, 510, 240, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
+    ctx.fill();
+    ctx.restore();
+
+    // 4. Bottom dark contrast banner for crisp legibility
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    ctx.fillRect(0, 420, S, 180);
+
+    // Accent line above the banner
+    ctx.fillStyle = hexToRgba(color, 0.4);
+    ctx.fillRect(0, 420, S, 2);
+
+    // 5. Typography
+    ctx.save();
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowBlur = 12;
+
+    const isStyle = badgeText.length > 5;
+    ctx.font = `900 ${isStyle ? '76px' : '108px'} "SpotifyMixUITitle", "Circular", system-ui, sans-serif`;
+    ctx.fillText(badgeText, 48, 320);
+
+    ctx.shadowBlur = 6;
+    ctx.font = '800 36px "SpotifyMixUI", "Circular", system-ui, sans-serif';
+    ctx.fillText(title, 48, 488);
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
+    ctx.font = '500 21px "SpotifyMixUI", "Circular", system-ui, sans-serif';
+    ctx.fillText(subtitle, 48, 538);
+    ctx.restore();
+
+    return c.toDataURL('image/jpeg', 0.85);
+  } catch {
+    return makeEraCoverSvg(badgeText, color, title);
+  }
 }
 
 export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-2010s',
     decade: '2010s',
+    category: 'era' as const,
     name: 'Mix de los 2010s',
     color: '#3d4085',
     description: 'Los temas que definieron la década de 2010 a 2019: Avicii, The Weeknd, Drake y más.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/b8/02/bd/b802bd1d-c601-74a9-c194-b2fea8d5ed1b/5026854930541.jpg/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67616d00004851c0ca1263b2966ddff794d3bb',
+    ],
     pool: [
       { name: 'Wake Me Up', artist: 'Avicii', album: 'True', duration_ms: 247000 },
       { name: 'Starboy', artist: 'The Weeknd, Daft Punk', album: 'Starboy', duration_ms: 230000 },
@@ -661,9 +828,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-2000s',
     decade: '2000s',
+    category: 'era' as const,
     name: 'Mix de los 2000s',
     color: '#e65100',
     description: 'Nostalgia pura de los 2000: Eminem, Coldplay, Linkin Park, Daddy Yankee y más.',
+    sampleImages: [
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3d/ac/6a/3dac6a5f-d4be-32c6-6e4a-c7a79fe5bfd9/715187754720.png/600x600bb.jpg',
+    ],
     pool: [
       { name: 'Lose Yourself', artist: 'Eminem', album: '8 Mile', duration_ms: 326000 },
       { name: 'Viva La Vida', artist: 'Coldplay', album: 'Viva La Vida or Death and All His Friends', duration_ms: 242000 },
@@ -708,9 +880,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-90s',
     decade: '90s',
+    category: 'era' as const,
     name: 'Mix de los 90s',
     color: '#7b1fa2',
     description: 'El sonido auténtico de los noventa: Nirvana, Oasis, Red Hot Chili Peppers y Backstreet Boys.',
+    sampleImages: [
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+      'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/53/f3/fc/53f3fccd-2024-789e-8858-c9562cc1edfa/886449216321.jpg/600x600bb.jpg',
+    ],
     pool: [
       { name: 'Smells Like Teen Spirit', artist: 'Nirvana', album: 'Nevermind', duration_ms: 301000 },
       { name: 'Wonderwall', artist: 'Oasis', album: "(What's the Story) Morning Glory?", duration_ms: 258000 },
@@ -755,9 +932,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-80s',
     decade: '80s',
+    category: 'era' as const,
     name: 'Mix de los 80s',
     color: '#c2185b',
     description: 'Los himnos inolvidables de los 80: Michael Jackson, Queen, Madonna, a-ha y más.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3d/ac/6a/3dac6a5f-d4be-32c6-6e4a-c7a79fe5bfd9/715187754720.png/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+    ],
     pool: [
       { name: 'Billie Jean', artist: 'Michael Jackson', album: 'Thriller', duration_ms: 294000 },
       { name: 'Another One Bites the Dust', artist: 'Queen', album: 'The Game', duration_ms: 215000 },
@@ -802,9 +984,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-70s',
     decade: '70s',
+    category: 'era' as const,
     name: 'Mix de los 70s',
     color: '#00796b',
     description: 'Los clásicos dorados de los 70: Queen, ABBA, Bee Gees, Fleetwood Mac, Elton John y más.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3d/ac/6a/3dac6a5f-d4be-32c6-6e4a-c7a79fe5bfd9/715187754720.png/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+    ],
     pool: [
       { name: 'Bohemian Rhapsody', artist: 'Queen', album: 'A Night at the Opera', duration_ms: 354000 },
       { name: 'Dancing Queen', artist: 'ABBA', album: 'Arrival', duration_ms: 230000 },
@@ -844,9 +1031,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-rock',
     decade: 'Rock',
-    name: 'Mix Rock de Épocas',
+    category: 'genre' as const,
+    name: 'Mix Rock Clásico & Himnos',
     color: '#d32f2f',
     description: 'Los grandes himnos del rock de los 70s, 80s, 90s y 2000s: Queen, Guns N\' Roses, Nirvana y AC/DC.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3d/ac/6a/3dac6a5f-d4be-32c6-6e4a-c7a79fe5bfd9/715187754720.png/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+    ],
     pool: [
       { name: 'Welcome to the Jungle', artist: 'Guns N\' Roses', album: 'Appetite for Destruction', duration_ms: 273000 },
       { name: 'We Will Rock You', artist: 'Queen', album: 'News of the World', duration_ms: 121000 },
@@ -886,9 +1078,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-pop',
     decade: 'Pop',
-    name: 'Mix Pop Nostalgia',
+    category: 'genre' as const,
+    name: 'Mix Pop Legendario',
     color: '#e91e63',
     description: 'Los mayores éxitos del pop de los 2000s y 2010s: Britney Spears, Rihanna, Dua Lipa y Katy Perry.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/b8/02/bd/b802bd1d-c601-74a9-c194-b2fea8d5ed1b/5026854930541.jpg/600x600bb.jpg',
+      'https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/33/87/c8/3387c827-adaa-681d-bd10-ce7d8e888b9c/22UMGIM21054.rgb.jpg/600x600bb.jpg',
+    ],
     pool: [
       { name: 'Oops!... I Did It Again', artist: 'Britney Spears', album: 'Oops!... I Did It Again', duration_ms: 211000 },
       { name: "Don't Stop The Music", artist: 'Rihanna', album: 'Good Girl Gone Bad', duration_ms: 267000 },
@@ -928,9 +1125,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-urbano',
     decade: 'Urbano',
+    category: 'genre' as const,
     name: 'Mix Reggaeton Clásico',
     color: '#ff6f00',
     description: 'Los pioneros e himnos del género urbano: Daddy Yankee, Don Omar, Wisin & Yandel y J Balvin.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b1/e2/3f/b1e23f6e-29ba-c816-cd4a-2f995c19a25d/886447345481.jpg/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67706f00000002964880811c74069be12f02b5',
+    ],
     pool: [
       { name: 'Lo Que Pasó, Pasó', artist: 'Daddy Yankee', album: 'Barrio Fino', duration_ms: 210000 },
       { name: 'Danza Kuduro', artist: 'Don Omar, Lucenzo', album: 'Meet The Orphans', duration_ms: 198000 },
@@ -970,9 +1172,14 @@ export const ERA_PLAYLIST_DEFINITIONS = [
   {
     id: 'sf-era-edm',
     decade: 'EDM',
+    category: 'genre' as const,
     name: 'Mix Electrónica 2010s',
     color: '#00b0ff',
     description: 'La época de oro de los festivales: Avicii, David Guetta, Calvin Harris y Swedish House Mafia.',
+    sampleImages: [
+      'https://e-cdns-images.dzcdn.net/images/cover/b4ea39ef6ea328ecf4b16260ea8d1159/1000x1000-000000-80-0-0.jpg',
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/4a/b8/51/4ab851d0-7c24-2406-6647-d6622f99d39b/199066743287.jpg/600x600bb.jpg',
+    ],
     pool: [
       { name: 'Levels', artist: 'Avicii', album: 'Levels', duration_ms: 199000 },
       { name: 'Sexy Bitch', artist: 'David Guetta, Akon', album: 'One Love', duration_ms: 195000 },
@@ -1010,6 +1217,8 @@ export const ERA_PLAYLIST_DEFINITIONS = [
     },
   },
 ];
+
+export const GENRE_PLAYLIST_DEFINITIONS = ERA_PLAYLIST_DEFINITIONS.filter((d: any) => d.category === 'genre');
 
 function makeMoodCoverSvg(title: string, color: string, subtitle = 'Spotifree Mix'): string {
   const cleanTitle = title.replace(/^Mix\s+/i, '');
@@ -1606,24 +1815,80 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (vm) out.push(vm);
   }
 
-  // Decade / Era Mixes ("Playlists de épocas"): Mix 2010s, Mix 2000s, Mix 90s, Mix 80s
+  // Decade / Era Mixes & Genre Mixes ("Mixes por época" y "Playlists por género")
   for (const def of ERA_PLAYLIST_DEFINITIONS) {
+    const isGenre = (def as any).category === 'genre';
+    const kind: SpotifreeMix['sfKind'] = isGenre ? 'genre' : 'era';
     const items = def.tracks.map((t, idx) => toEraTrack(t, def.decade, idx));
-    const cover = makeEraCoverSvg(def.decade, def.color, def.name);
-    out.push(mix(def.id, 'era', def.name, def.description, items, cover, userName));
+
+    const songPhotos = def.pool
+      .slice(0, 8)
+      .map((t) => {
+        const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
+        if (fromCache) return fromCache;
+        const fromProfile = profile.tracks.find(
+          (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
+        )?.track?.album?.images?.[0]?.url;
+        if (fromProfile) return fromProfile;
+        const artPic = pictureOf(t.artist);
+        if (artPic) return artPic;
+        return '';
+      })
+      .filter(Boolean);
+
+    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
+    const cover = (await makeCuratedThemedCover(
+      def.decade,
+      def.name,
+      def.color,
+      finalImages,
+      isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree'
+    )) || makeEraCoverSvg(def.decade, def.color, def.name);
+
+    out.push(mix(def.id, kind, def.name, def.description, items, cover, userName));
   }
 
   // Mood / Ambience Mixes ("Estados de ánimo y Momentos")
   for (const def of MOOD_PLAYLIST_DEFINITIONS) {
     const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
-    const cover = makeMoodCoverSvg(def.name, def.color, 'Mix por ambiente');
+    const cleanBadge = def.name.replace(/^Mix\s+/i, '').split('&')[0].trim();
+    const songPhotos = def.pool
+      .slice(0, 8)
+      .map((t) => {
+        const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
+        if (fromCache) return fromCache;
+        const fromProfile = profile.tracks.find(
+          (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
+        )?.track?.album?.images?.[0]?.url;
+        if (fromProfile) return fromProfile;
+        return pictureOf(t.artist) || '';
+      })
+      .filter(Boolean);
+    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
+    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Mix por ambiente · Spotifree')) ||
+      makeMoodCoverSvg(def.name, def.color, 'Mix por ambiente');
     out.push(mix(def.id, 'mood', def.name, def.description, items, cover, userName));
   }
 
   // Trending & Global Mixes ("Tendencias & Virales")
   for (const def of TRENDING_PLAYLIST_DEFINITIONS) {
     const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
-    const cover = makeMoodCoverSvg(def.name, def.color, 'Tendencias');
+    const cleanBadge = def.name.replace(/^Top\s+/i, '').replace(/^Mix\s+/i, '').split(':')[0].trim();
+    const songPhotos = def.pool
+      .slice(0, 8)
+      .map((t) => {
+        const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
+        if (fromCache) return fromCache;
+        const fromProfile = profile.tracks.find(
+          (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
+        )?.track?.album?.images?.[0]?.url;
+        if (fromProfile) return fromProfile;
+        return pictureOf(t.artist) || '';
+      })
+      .filter(Boolean);
+    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
+    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Tendencias · Spotifree')) ||
+      makeMoodCoverSvg(def.name, def.color, 'Tendencias');
     out.push(mix(def.id, 'trending', def.name, def.description, items, cover, userName));
   }
 
@@ -1850,10 +2115,11 @@ export function withSpotifreeShelves(
   suggestedArtists: SuggestedArtist[] = []
 ): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
-  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era' && m.sfKind !== 'mood' && m.sfKind !== 'trending').map(cardOf);
+  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era' && m.sfKind !== 'genre' && m.sfKind !== 'mood' && m.sfKind !== 'trending').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
   const soundcloudMixes = mixes.filter((m) => m.sfKind === 'soundcloud').map(cardOf);
   const eraMixes = mixes.filter((m) => m.sfKind === 'era').map(cardOf);
+  const genreMixes = mixes.filter((m) => m.sfKind === 'genre').map(cardOf);
   const moodMixes = mixes.filter((m) => m.sfKind === 'mood').map(cardOf);
   const trendingMixes = mixes.filter((m) => m.sfKind === 'trending').map(cardOf);
   const name = (userName || '').split(' ')[0];
@@ -1870,6 +2136,20 @@ export function withSpotifreeShelves(
       ours.push({ id: 'sf-made-for', title: name ? `Hecho para ${name}` : 'Hecho para ti', subtitle: 'Por Spotifree, con lo que escuchas', type: 'made_for', cards: made, hasSeeAll: true });
     }
   }
+
+  // Playlists por género ("playlist genericas o algo asi")
+  if (genreMixes.length) {
+    ours.push({
+      id: 'sf-genre-mixes',
+      title: 'Playlists por género',
+      prefix: 'GÉNEROS Y ESTILOS',
+      subtitle: 'Grandes éxitos de Rock, Pop, Urbano, Electrónica y más',
+      type: 'mixes',
+      cards: genreMixes,
+      hasSeeAll: true,
+    });
+  }
+
   if (artists.length) {
     ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
   }
@@ -1877,7 +2157,7 @@ export function withSpotifreeShelves(
     ours.push({ id: 'sf-sc-vaults', title: 'Remixes, Slowed e Inéditas · SoundCloud', subtitle: 'Basado en los artistas que más escuchas', type: 'mixes', cards: soundcloudMixes, hasSeeAll: true });
   }
 
-  // Dynamic Era shelf rotation ("que salgan a veces otras no y vaya cambiando de epoca")
+  // Dynamic Era shelf rotation ("Viaje en el tiempo" / Nostalgia de las décadas)
   if (eraMixes.length) {
     const eraCycle = Math.floor(Date.now() / (18 * 3600 * 1000));
     // Appears on 2 out of 3 cycles (e.g. active 36h, rests 18h)
@@ -1889,22 +2169,22 @@ export function withSpotifreeShelves(
       const triStep = eraCycle % 3;
       if (triStep === 0) {
         rotatedCards = [
-          ...eraMixes.filter((c) => c.id.includes('2010') || c.id.includes('2000') || c.id.includes('pop') || c.id.includes('edm')),
-          ...eraMixes.filter((c) => !c.id.includes('2010') && !c.id.includes('2000') && !c.id.includes('pop') && !c.id.includes('edm')),
+          ...eraMixes.filter((c) => c.id.includes('2010') || c.id.includes('2000')),
+          ...eraMixes.filter((c) => !c.id.includes('2010') && !c.id.includes('2000')),
         ];
         shelfTitle = 'Mixes de los 2000s y 2010s';
       } else if (triStep === 1) {
         rotatedCards = [
-          ...eraMixes.filter((c) => c.id.includes('90') || c.id.includes('80') || c.id.includes('rock')),
-          ...eraMixes.filter((c) => !c.id.includes('90') && !c.id.includes('80') && !c.id.includes('rock')),
+          ...eraMixes.filter((c) => c.id.includes('90') || c.id.includes('80')),
+          ...eraMixes.filter((c) => !c.id.includes('90') && !c.id.includes('80')),
         ];
         shelfTitle = 'Nostalgia: Los 80s y 90s';
       } else {
         rotatedCards = [
-          ...eraMixes.filter((c) => c.id.includes('70') || c.id.includes('urbano') || c.id.includes('rock')),
-          ...eraMixes.filter((c) => !c.id.includes('70') && !c.id.includes('urbano') && !c.id.includes('rock')),
+          ...eraMixes.filter((c) => c.id.includes('70') || c.id.includes('80')),
+          ...eraMixes.filter((c) => !c.id.includes('70') && !c.id.includes('80')),
         ];
-        shelfTitle = 'Grandes Épocas y Estilos';
+        shelfTitle = 'Clásicos de los 70s y 80s';
       }
       ours.push({
         id: 'sf-era-mixes',
