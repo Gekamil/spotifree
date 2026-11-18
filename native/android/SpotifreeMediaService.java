@@ -769,21 +769,41 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         return new MediaBrowserCompat.MediaItem(d.build(), MediaBrowserCompat.MediaItem.FLAG_BROWSABLE);
     }
 
+    private boolean isDJ(JSONObject p) {
+        if (p == null) return false;
+        if (p.optBoolean("is_dj", false)) return true;
+        String id = p.optString("id", "").toLowerCase().trim();
+        String name = p.optString("name", "").toLowerCase().trim();
+        if (id.equals("spotify-dj") || id.equals("dj") || id.equals("ai-dj") || id.equals("tu-dj") || id.contains("37i9dqzf1eykqdzj48dyyq")) return true;
+        if (name.equals("dj") || name.equals("spotify dj") || name.equals("tu dj") || name.equals("tu dj personal") || name.startsWith("dj ")) return true;
+        return false;
+    }
+
+    private boolean isDJId(String id) {
+        if (id == null) return false;
+        String s = id.toLowerCase().trim();
+        return s.equals("spotify-dj") || s.equals("dj") || s.equals("ai-dj") || s.equals("tu-dj") || s.contains("37i9dqzf1eykqdzj48dyyq") || s.contains("spotify-dj");
+    }
+
     /** A playlist / artist / album folder: its songs are shown as a list */
     private MediaBrowserCompat.MediaItem playlistItem(JSONObject p, @Nullable String group) {
         return playlistItem(p, group, 0);
     }
 
     private MediaBrowserCompat.MediaItem playlistItem(JSONObject p, @Nullable String group, int singleStyle) {
+        boolean dj = isDJ(p);
         Bundle ex = new Bundle();
         ex.putInt(PLAYABLE_HINT, STYLE_LIST);
         if (singleStyle > 0) ex.putInt(SINGLE_ITEM_STYLE, singleStyle);
         if (p.optBoolean("downloaded", false)) ex.putLong(DOWNLOAD_STATUS, STATUS_DOWNLOADED);
         if (group != null) ex.putString(GROUP_TITLE, group);
-        ArrayList<String> ids = new ArrayList<>();
-        ids.add(CBA_SHUFFLE);
-        ex.putStringArrayList(CBA_ITEM_IDS, ids);
-        return item("pl:" + p.optString("id"), p.optString("name"), p.optString("subtitle", null), p.optString("image", null), true, ex);
+        if (!dj) {
+            ArrayList<String> ids = new ArrayList<>();
+            ids.add(CBA_SHUFFLE);
+            ex.putStringArrayList(CBA_ITEM_IDS, ids);
+        }
+        // In Android Auto, DJ is directly PLAYABLE: tapping it starts playback & voice introduction directly
+        return item("pl:" + p.optString("id"), p.optString("name"), p.optString("subtitle", null), p.optString("image", null), !dj, ex);
     }
 
     private MediaBrowserCompat.MediaItem hint(String text) {
@@ -872,6 +892,25 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 if (out.isEmpty()) out.add(item("noop", tr("No hay nada en la cola", "Nothing up next"), tr("Elige una playlist", "Pick a playlist"), null, false, null));
             } else if (parentId.startsWith("pl:")) {
                 String plId = parentId.substring(3);
+                if (isDJId(plId)) {
+                    // Safety guard: if Android Auto navigates into DJ, trigger DJ playback immediately
+                    sendOrOpen("playFromMediaId", obj("mediaId", "pl:" + plId));
+                    MediaDescriptionCompat.Builder djAction = new MediaDescriptionCompat.Builder()
+                        .setMediaId("pl:" + plId)
+                        .setTitle(tr("Reproducir Tu DJ", "Play Your DJ"))
+                        .setSubtitle(tr("Sesión personalizada con voz", "Personalized session with voice"))
+                        .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                    out.add(new MediaBrowserCompat.MediaItem(djAction.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
+                    JSONArray tracks = playlistTracks.get(plId);
+                    if (tracks != null) {
+                        for (int j = 0; j < tracks.length() && j < 50; j++) {
+                            JSONObject t = tracks.optJSONObject(j);
+                            if (t != null) out.add(trackItem("tr:" + plId + ":" + j, t, null));
+                        }
+                    }
+                    result.sendResult(out);
+                    return;
+                }
                 JSONArray tracks = playlistTracks.get(plId);
                 if (tracks == null) {
                     // Songs not known yet: ask the app, answer when they arrive (or after 8 s)
@@ -911,7 +950,18 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             JSONObject t = tracks.optJSONObject(j);
             if (t != null) out.add(trackItem("tr:" + plId + ":" + j, t, null));
         }
-        if (out.isEmpty()) out.add(item("noop", tr("Esta playlist está vacía", "This playlist is empty"), "", null, false, null));
+        if (out.isEmpty()) {
+            if (isDJId(plId)) {
+                MediaDescriptionCompat.Builder djAction = new MediaDescriptionCompat.Builder()
+                    .setMediaId("pl:" + plId)
+                    .setTitle(tr("Reproducir Tu DJ", "Play Your DJ"))
+                    .setSubtitle(tr("Sesión personalizada con voz", "Personalized session with voice"))
+                    .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                out.add(new MediaBrowserCompat.MediaItem(djAction.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
+            } else {
+                out.add(item("noop", tr("Esta playlist está vacía", "This playlist is empty"), "", null, false, null));
+            }
+        }
         return out;
     }
 

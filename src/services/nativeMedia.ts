@@ -44,7 +44,7 @@ interface MediaCommand {
   requestId?: string;
 }
 
-interface CarItem { id: string; name: string; subtitle?: string; image?: string; downloaded?: boolean }
+interface CarItem { id: string; name: string; subtitle?: string; image?: string; downloaded?: boolean; is_dj?: boolean }
 interface CarTrack { id: string; title: string; artist: string; image?: string; explicit?: boolean; downloaded?: boolean }
 
 interface SpotifreeMediaPlugin {
@@ -235,17 +235,22 @@ const carTrack = (t: Track): CarTrack => ({
   ...((t as any).explicit ? { explicit: true } : {}),
   ...(downloadedTrackIds.has(t.id) ? { downloaded: true } : {}),
 });
-const playlistItem = (p: Playlist): CarItem => ({
-  id: p.id,
-  name: p.name || '',
-  // Same subtitles as the Spotify car app: "Playlist • Owner"
-  subtitle:
-    p.id === 'liked-songs'
-      ? `Playlist • ${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
-      : `Playlist • ${p.owner?.display_name || 'Spotify'}`,
-  image: img(getPlaylistCover(p)),
-  ...(isPlaylistDownloaded(p.id) ? { downloaded: true } : {}),
-});
+const playlistItem = (p: Playlist): CarItem => {
+  const isDj = isAIDJPlaylist(p);
+  return {
+    id: p.id,
+    name: p.name || '',
+    // Same subtitles as the Spotify car app: "Playlist • Owner", or "DJ • Spotifree AI"
+    subtitle: isDj
+      ? 'DJ • Spotifree AI'
+      : p.id === 'liked-songs'
+        ? `Playlist • ${tracksOf(p).length || p.tracks?.total || 0} ${en() ? 'songs' : 'canciones'}`
+        : `Playlist • ${p.owner?.display_name || 'Spotify'}`,
+    image: img(getPlaylistCover(p)),
+    ...(isPlaylistDownloaded(p.id) ? { downloaded: true } : {}),
+    ...(isDj ? { is_dj: true } : {}),
+  };
+};
 
 // ----------------------------------------------------------------- Explorar (category tiles)
 // The phone's "Explorar todo" tiles (same colours and photos): colour, name, tilted photo
@@ -520,7 +525,16 @@ function pushLibrary() {
     for (const p of playlists) known.set(p.id, playlistItem(p));
     for (const shelf of st.dynamicShelves || []) {
       for (const c of shelf.cards || []) {
-        if (!known.has(c.id)) known.set(c.id, { id: c.id, name: c.title, subtitle: c.subtitle, image: img(c.image) });
+        if (!known.has(c.id)) {
+          const isDj = isAIDJPlaylist({ id: c.id, name: c.title });
+          known.set(c.id, {
+            id: c.id,
+            name: c.title,
+            subtitle: isDj ? 'DJ • Spotifree AI' : c.subtitle,
+            image: img(c.image),
+            ...(isDj ? { is_dj: true } : {}),
+          });
+        }
       }
     }
     const home: { title: string; items: CarItem[] }[] = [];
@@ -540,7 +554,18 @@ function pushLibrary() {
 
     if (recent.length) home.push({ title: en() ? 'Recently played' : 'Escuchado recientemente', items: recent.slice(0, 8) });
     const quick = (st.quickAccessCards || [])
-      .map((c) => known.get(c.id) || { id: c.id, name: c.name, image: img(c.image) })
+      .map((c) => {
+        const isDj = isAIDJPlaylist({ id: c.id, name: c.name });
+        return (
+          known.get(c.id) || {
+            id: c.id,
+            name: c.name,
+            subtitle: isDj ? 'DJ • Spotifree AI' : undefined,
+            image: img(c.image),
+            ...(isDj ? { is_dj: true } : {}),
+          }
+        );
+      })
       .filter((c) => !recent.some((r) => r.id === c.id));
     if (quick.length) home.push({ title: en() ? 'Your favourites' : 'Tus favoritos', items: quick.slice(0, 8) });
     // A few short rows, like the Spotify car app (a long Inicio is slow and hard to use driving)
@@ -577,6 +602,24 @@ const sentTracks = new Map<string, Track[]>();
 const searchMetaCache = new Map<string, { name: string; subtitle?: string; image?: string; type: 'artist' | 'album' | 'playlist' }>();
 
 async function loadPlaylistTracks(id: string): Promise<Track[]> {
+  if (isAIDJPlaylist({ id })) {
+    const djState = useAIDJStore.getState();
+    if (djState.djTracks && djState.djTracks.length > 0) {
+      sentTracks.set(id, djState.djTracks);
+      return djState.djTracks;
+    }
+    const recent = collectRecentTracks();
+    if (recent.length > 0) {
+      sentTracks.set(id, recent);
+      return recent;
+    }
+    const q = usePlayerStore.getState().queue;
+    if (q && q.length > 0) {
+      sentTracks.set(id, q);
+      return q;
+    }
+  }
+
   let p = findPlaylist(id);
   const meta = searchMetaCache.get(id);
   let tracks = tracksOf(p);
@@ -609,6 +652,16 @@ async function loadPlaylistTracks(id: string): Promise<Track[]> {
   return tracks;
 }
 async function answerLoadPlaylist(id: string) {
+  if (isAIDJPlaylist({ id })) {
+    const dj = useAIDJStore.getState();
+    let tracks = dj.djTracks;
+    if (!tracks || tracks.length === 0) {
+      tracks = collectRecentTracks();
+      if (!tracks.length) tracks = usePlayerStore.getState().queue;
+    }
+    SpotifreeMedia.setPlaylistTracks({ id, tracks: tracks.slice(0, 300).map(carTrack) }).catch(() => {});
+    return;
+  }
   const tracks = await loadPlaylistTracks(id);
   SpotifreeMedia.setPlaylistTracks({ id, tracks: tracks.slice(0, 300).map(carTrack) }).catch(() => {});
 }
@@ -883,7 +936,9 @@ async function playMediaId(mediaId: string) {
 
   // If DJ was triggered from Android Auto or Bluetooth browse tree:
   // Speak the intro greeting first, then start the personalized DJ tracks!
+  const rawPlId = mediaId.startsWith('pl:') ? mediaId.slice(3) : mediaId.startsWith('shuf:') ? mediaId.slice(5) : '';
   if (
+    (rawPlId && isAIDJPlaylist({ id: rawPlId })) ||
     mediaId === 'pl:spotify-dj' ||
     mediaId === 'shuf:spotify-dj' ||
     mediaId.includes('spotify-dj') ||

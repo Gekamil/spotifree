@@ -109,6 +109,17 @@ describe('Spotifree v0.4.4 Optimizations & Features', () => {
     it('Android Auto nativeMedia plays DJ with speakFirst option', () => {
       const code = fs.readFileSync(path.resolve('src/services/nativeMedia.ts'), 'utf-8');
       assert.ok(code.includes('startSession({ speakFirst: true })'), 'Should start DJ session with speakFirst');
+      assert.ok(code.includes('is_dj: true'), 'Should tag DJ items with is_dj in pushLibrary');
+      assert.ok(code.includes('if (isAIDJPlaylist({ id }))'), 'loadPlaylistTracks should intercept DJ');
+    });
+
+    it('SpotifreeMediaService.java sets DJ as directly playable and prevents empty playlist on Android Auto', () => {
+      const java = fs.readFileSync(path.resolve('native/android/SpotifreeMediaService.java'), 'utf-8');
+      assert.ok(java.includes('boolean isDJ(JSONObject p)'), 'Should define isDJ helper in SpotifreeMediaService');
+      assert.ok(java.includes('boolean isDJId(String id)'), 'Should define isDJId helper in SpotifreeMediaService');
+      assert.ok(java.includes('!dj, ex);'), 'playlistItem should set browsable=false for DJ making it directly playable');
+      assert.ok(java.includes('if (isDJId(plId))'), 'onLoadChildren should intercept DJ IDs');
+      assert.ok(java.includes('Reproducir Tu DJ'), 'Should provide Play DJ action instead of empty list');
     });
 
     it('aiDJService starts speech before track playback when speakFirst is enabled', () => {
