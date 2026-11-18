@@ -47,3 +47,37 @@ export const toHDImage = (url: string | null | undefined): string => {
 
   return cleaned;
 };
+
+/**
+ * Fast lightweight thumbnail helper: 64-300px for mobile lists, cards, and queue.
+ * Reduces image payload from ~200KB down to ~4-15KB, saving 90%+ bandwidth on mobile/slow connections!
+ */
+export const toThumbnailImage = (url: string | null | undefined, size: 64 | 150 | 300 = 150): string => {
+  if (!url) return '';
+  if (url.includes('mosaic.scdn.co')) {
+    return url.replace('mosaic.scdn.co/640/', `mosaic.scdn.co/${size <= 80 ? '60' : '300'}/`);
+  }
+  let cleaned = url;
+  if (size <= 80) {
+    // 64x64 tiny thumbnail for track list rows & queue
+    cleaned = cleaned
+      .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67616d00004851$1')
+      .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706f00004851$1')
+      .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67616100004851$1')
+      .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706c00004851$1')
+      .replace(/\/ab67706d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706d00004851$1')
+      .replace('600x600bb', '100x100bb')
+      .replace(/\/500x500-000000-80-0-0\.jpg/i, '/120x120-000000-80-0-0.jpg');
+  } else {
+    // 300x300 for grid cards
+    cleaned = cleaned
+      .replace(/\/ab67616d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67616d00001e02$1')
+      .replace(/\/ab67706f[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706f00001e02$1')
+      .replace(/\/ab676161[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67616100005174$1')
+      .replace(/\/ab67706c[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706c0000da84$1')
+      .replace(/\/ab67706d[0-9a-f]{8}([0-9a-f]{24})/i, '/ab67706d00001e02$1')
+      .replace('600x600bb', '250x250bb')
+      .replace(/\/500x500-000000-80-0-0\.jpg/i, '/250x250-000000-80-0-0.jpg');
+  }
+  return cleaned;
+};

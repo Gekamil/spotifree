@@ -17,6 +17,23 @@ interface SpotifyImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElemen
  * placeholder icon if the image fails or is empty.
  * Never displays browser broken-image icons.
  */
+// Global memory cache of successfully loaded image URLs to prevent flicker when navigating or re-entering views
+const LOADED_IMAGE_URLS = new Set<string>();
+
+export function isImageAlreadyLoaded(url?: string | null): boolean {
+  if (!url || typeof url !== 'string') return false;
+  if (LOADED_IMAGE_URLS.has(url)) return true;
+  if (typeof window !== 'undefined') {
+    const img = new window.Image();
+    img.src = url;
+    if (img.complete && img.naturalWidth > 0) {
+      LOADED_IMAGE_URLS.add(url);
+      return true;
+    }
+  }
+  return false;
+}
+
 export const SpotifyImage: React.FC<SpotifyImageProps> = ({
   src,
   alt,
@@ -30,6 +47,7 @@ export const SpotifyImage: React.FC<SpotifyImageProps> = ({
 }) => {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>(() => {
     if (!src || typeof src !== 'string' || src.trim() === '') return 'error';
+    if (isImageAlreadyLoaded(src)) return 'loaded';
     return 'loading';
   });
 
@@ -41,7 +59,11 @@ export const SpotifyImage: React.FC<SpotifyImageProps> = ({
       setCurrentSrc(null);
     } else if (src !== currentSrc) {
       setCurrentSrc(src);
-      setStatus('loading');
+      if (isImageAlreadyLoaded(src)) {
+        setStatus('loaded');
+      } else {
+        setStatus('loading');
+      }
     }
   }, [src, currentSrc]);
 
@@ -86,12 +108,16 @@ export const SpotifyImage: React.FC<SpotifyImageProps> = ({
         src={currentSrc}
         alt={alt}
         loading={loading}
+        decoding="async"
         referrerPolicy="no-referrer"
-        onLoad={() => setStatus('loaded')}
+        onLoad={() => {
+          if (currentSrc) LOADED_IMAGE_URLS.add(currentSrc);
+          setStatus('loaded');
+        }}
         onError={() => setStatus('error')}
         className={`${className} ${
           status === 'loaded' ? 'opacity-100' : 'opacity-0'
-        } transition-opacity duration-300 ease-out`}
+        } ${isImageAlreadyLoaded(currentSrc) ? '' : 'transition-opacity duration-300 ease-out'}`}
         {...rest}
       />
     </div>

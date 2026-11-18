@@ -71,7 +71,8 @@ export interface AIDJState {
   setTranscript: (text: string) => void;
   setDJThemeColor: (color: string) => void;
   setDJTracks: (tracks: Track[]) => void;
-  startDJSession: (forceReset?: boolean) => Promise<void>;
+  startDJSession: (forceReset?: boolean, options?: { speakFirst?: boolean }) => Promise<void>;
+  startSession: (options?: { speakFirst?: boolean }) => Promise<void>;
   cancelDJIntroIfNotStarted: () => void;
   stopDJSession: () => void;
   handleUserPrompt: (promptText: string) => Promise<void>;
@@ -779,8 +780,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   /**
    * Start DJ session: gathers tracks, plays set with ducking, and greets user warmly.
    * If already active and tracks exist, does not wipe or reset current session unless forceReset=true.
+   * If speakFirst=true (e.g. Android Auto), the DJ speaks before playback begins.
    */
-  startDJSession: async (forceReset = false) => {
+  startDJSession: async (forceReset = false, options?: { speakFirst?: boolean }) => {
     const currentState = get();
     if (!forceReset && currentState.isDJModeActive && currentState.djTracks.length > 0) {
       // Session already active! Keep current track and playlist intact!
@@ -868,11 +870,28 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     });
 
     get().stopVoiceListening();
-    if (tracks.length > 0) {
-      usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+    const shouldSpeakFirst = options?.speakFirst ?? true;
+
+    if (shouldSpeakFirst) {
+      // Speak intro greeting first, then start music playback seamlessly
+      await djSpeak(introText, set);
+      if (run === introRun) {
+        introPending = false;
+        if (tracks.length > 0) {
+          usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+        }
+      }
+    } else {
+      if (tracks.length > 0) {
+        usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+      }
+      await djSpeak(introText, set);
+      if (run === introRun) introPending = false;
     }
-    await djSpeak(introText, set);
-    if (run === introRun) introPending = false;
+  },
+
+  startSession: async (options?: { speakFirst?: boolean }) => {
+    return get().startDJSession(true, options);
   },
 
   /**

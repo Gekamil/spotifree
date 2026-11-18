@@ -17,6 +17,7 @@ import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
 import { SpotifyImage } from '../common/SpotifyImage';
 import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
+import { isAIDJPlaylist } from '../../utils/djIdentifiers';
 
 const DEFAULT_SHORTCUTS = [
   { id: 'liked-songs', name: 'Canciones que te gustan', image: 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg', color: '#5018F0' },
@@ -276,14 +277,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       user?.display_name,
       sfArtists
     );
-    const isDJCard = (c: { id: string; title?: string }) =>
-      c.id === 'spotify-dj' ||
-      c.id === 'dj' ||
-      c.id === 'ai-dj' ||
-      (c.title || '').toLowerCase().trim() === 'dj' ||
-      (c.title || '').toLowerCase().includes('spotify dj') ||
-      (c.title || '').toLowerCase() === 'tu dj' ||
-      (c.title || '').toLowerCase().includes('personal dj');
+    const isDJCard = (c: { id: string; title?: string }) => isAIDJPlaylist({ id: c.id, name: c.title });
 
     return base
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
@@ -300,7 +294,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
   ) => {
     if (e && e.stopPropagation) e.stopPropagation();
 
-    if (card.id === 'spotify-dj' || card.name.toLowerCase().trim() === 'dj') {
+    if (isAIDJPlaylist({ id: card.id, name: card.name })) {
       useUIStore.getState().setActiveMainTab('dj');
       return;
     }
@@ -400,8 +394,9 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     );
   }
 
-  // Dark pulsing skeleton while home feed is loading or hydrating
-  if (isAuthenticated && (isLoading || (currentShortcuts.length === 0 && (!playlists || playlists.length === 0)))) {
+  // Dark pulsing skeleton ONLY on cold initial load when no cached playlists or shortcuts exist
+  const hasCachedContent = (playlists && playlists.length > 0) || currentShortcuts.length > 0;
+  if (isAuthenticated && isLoading && !hasCachedContent) {
     return <SpotifyHomeSkeleton isMobile={false} />;
   }
 

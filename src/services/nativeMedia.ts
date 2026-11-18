@@ -23,6 +23,8 @@ import { getListeningHistory } from './listeningHistory';
 import { useSpotifreeMixes } from './spotifreeMixes';
 import { isTrackDisliked, isTasteRatingActive } from './labsService';
 import { isNotInterested } from '../utils/notInterested';
+import { useAIDJStore } from './aiDJService';
+import { isAIDJPlaylist } from '../utils/djIdentifiers';
 import type { Playlist, Track } from '../types/spotify';
 import { BROWSE_CATEGORIES, type BrowseCategory } from '../data/browseCategories';
 
@@ -878,12 +880,35 @@ function splitId(rest: string): [string, number] {
 
 async function playMediaId(mediaId: string) {
   const player = usePlayerStore.getState();
+
+  // If DJ was triggered from Android Auto or Bluetooth browse tree:
+  // Speak the intro greeting first, then start the personalized DJ tracks!
+  if (
+    mediaId === 'pl:spotify-dj' ||
+    mediaId === 'shuf:spotify-dj' ||
+    mediaId.includes('spotify-dj') ||
+    mediaId === 'pl:dj' ||
+    mediaId.includes(':dj') ||
+    mediaId.includes('ai-dj')
+  ) {
+    void useAIDJStore.getState().startSession({ speakFirst: true });
+    return;
+  }
+
   if (mediaId.startsWith('tr:')) {
     const [plId, idx] = splitId(mediaId.slice(3));
+    if (isAIDJPlaylist({ id: plId })) {
+      void useAIDJStore.getState().startSession({ speakFirst: true });
+      return;
+    }
     const tracks = sentTracks.get(plId) || (await loadPlaylistTracks(plId));
     playList(tracks, tracks[idx], plId);
   } else if (mediaId.startsWith('shuf:')) {
     const plId = mediaId.slice(5);
+    if (isAIDJPlaylist({ id: plId })) {
+      void useAIDJStore.getState().startSession({ speakFirst: true });
+      return;
+    }
     const tracks = sentTracks.get(plId) || (await loadPlaylistTracks(plId));
     if (!tracks.length) return;
     if (!player.isShuffle) player.toggleShuffle();
@@ -901,6 +926,10 @@ async function playMediaId(mediaId: string) {
     playList(tracks, tracks[idx]);
   } else if (mediaId.startsWith('pl:')) {
     const plId = mediaId.slice(3);
+    if (isAIDJPlaylist({ id: plId })) {
+      void useAIDJStore.getState().startSession({ speakFirst: true });
+      return;
+    }
     const tracks = sentTracks.get(plId) || (await loadPlaylistTracks(plId));
     playList(tracks, tracks[0], plId);
   }
@@ -910,6 +939,11 @@ async function playMediaId(mediaId: string) {
 export async function playVoiceSearch(query: string) {
   const q = query.trim().toLowerCase();
   let st = useSpotifyDataStore.getState();
+
+  if (q.includes('dj') || q.includes('tu dj') || q.includes('personal dj')) {
+    void useAIDJStore.getState().startSession({ speakFirst: true });
+    return;
+  }
 
   // If store is still hydrating on cold start, wait briefly up to ~1.2s
   if (st.isLoading || (!st.playlists?.length && typeof window !== 'undefined')) {

@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.4';
+export const APP_VERSION = '0.4.4';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.4.4',
+    date: '18 de noviembre, 2026',
+    title: 'Spotifree 0.4.4: Carátulas ultrarrápidas de bajo consumo, DJ con locución en Android Auto y mixes de épocas con rotación semanal',
+    isLatest: true,
+    highlights: [
+      'Caché de carátulas ultrarrápido y bajo consumo de red: miniaturas optimizadas a 64px y 150px en listas y tarjetas, reduciendo el consumo de datos en más de un 90% para conexiones lentas o inestables.',
+      'Cero parpadeos en Spotifree Web: memoria persistente de imágenes precargadas que mantiene las carátulas siempre cargadas al salir y volver de la pestaña sin parpadeos ni skeletons innecesarios.',
+      'DJ en Android Auto con saludo vocal inicial: al pulsar sobre el DJ en Android Auto o mediante voz, el DJ habla e introduce la sesión en primer lugar antes de reproducir las canciones.',
+      'Corrección de lista vacía en DJ de escritorio: apertura directa de la consola del DJ con orbe interactivo al hacer clic en playlists o tarjetas de DJ desde el ordenador.',
+      'Mixes de Épocas y Estilos ampliados con rotación semanal: repertorio enriquecido para 70s, 80s, 90s, 2000s, 2010s, Rock Clásico, Pop Nostalgia, Urbano & Reggaeton Clásico y EDM que renueva sus temas determinísticamente cada semana.',
+    ],
+  },
   {
     version: '0.4',
     date: '15 de noviembre, 2026',
     title: 'Spotifree 0.4: Sincronización completa con APK y buscador, menú de 3 puntos perfeccionado y audio 3D/mono real',
-    isLatest: true,
     highlights: [
       'Sincronización instantánea de la APK con el buscador: todas las listas creadas, importadas y canciones guardadas se indexan y priorizan de inmediato en los resultados de búsqueda.',
       'Cabecera de playlist limpia y auténtica Spotify: se retira el botón de recarga de la barra de acciones superior, integrando la opción «Actualizar canciones de la lista» de forma natural dentro del menú de 3 puntos.',

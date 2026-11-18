@@ -39,6 +39,7 @@ import { buildDJSetOrder, getSessionFlavour, mixStyleName, mixStyleOf, SET_STRAT
 import { prepareDJAnalyses } from '../../services/trackAnalysisService';
 import { TransitionEditorModal } from '../modals/TransitionEditorModal';
 import { AIDJView } from '../dj/AIDJView';
+import { isAIDJPlaylist } from '../../utils/djIdentifiers';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import { filterMusicTracksOnly } from '../../utils/trackFilter';
 
@@ -1265,12 +1266,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     return list;
   }, [dynamicTracks, artistVaultTracks, isArtist, showRemixesOnly, sortKey, sortDesc, filterQuery]);
 
-  const isDJ = Boolean(
-    dynamicPlaylist.id === 'spotify-dj' ||
-    dynamicPlaylist.id === 'dj' ||
-    dynamicPlaylist.name?.toLowerCase().trim() === 'dj' ||
-    (dynamicPlaylist as any).is_dj
-  );
+  const isDJ = isAIDJPlaylist(dynamicPlaylist) || isAIDJPlaylist(playlist);
 
   const isLikedPlaylist =
     dynamicPlaylist.id === 'liked-songs' ||

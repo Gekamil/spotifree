@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Track } from '../types/spotify';
+import { toThumbnailImage } from './formatters';
 
 export const TRACK_COVER_CACHE = new Map<string, string>();
 
@@ -273,7 +274,12 @@ export const TrackArtwork: React.FC<{
     setError(false);
   }, [src]);
 
-  if (!src || error) {
+  const optimizedSrc = React.useMemo(() => {
+    if (!src) return '';
+    return toThumbnailImage(src, size <= 80 ? 64 : 150);
+  }, [src, size]);
+
+  if (!optimizedSrc || error) {
     return (
       <div
         className={`${className} overflow-hidden bg-[#242424] shrink-0 shadow flex items-center justify-center text-[#727272]`}
@@ -288,11 +294,12 @@ export const TrackArtwork: React.FC<{
 
   return (
     <img
-      src={src}
+      src={optimizedSrc}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       onError={() => setError(true)}
       referrerPolicy="no-referrer"
-      decoding="async"
       className={`${className} object-cover shrink-0 shadow bg-[#242424]`}
       style={{ width: size, height: size }}
     />

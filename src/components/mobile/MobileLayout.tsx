@@ -54,6 +54,7 @@ import { stripHtml } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 import { SpotifyImage } from '../common/SpotifyImage';
 import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
+import { isAIDJPlaylist } from '../../utils/djIdentifiers';
 
 export const MobileLayout: React.FC = () => {
   const [mobileTab, setMobileTab] = useState<'home' | 'search' | 'library' | 'playlist' | 'profile' | 'settings' | 'dj' | 'local' | 'recents' | 'stats'>('home');
@@ -545,7 +546,7 @@ export const MobileLayout: React.FC = () => {
       return;
     }
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
-    if (cleanId === 'spotify-dj' || cleanId === 'dj' || customName?.toLowerCase().trim() === 'dj') {
+    if (isAIDJPlaylist({ id: cleanId, name: customName })) {
       setMobileTab('dj');
       return;
     }
@@ -747,7 +748,7 @@ export const MobileLayout: React.FC = () => {
                     Conectar cuenta
                   </button>
                 </div>
-              ) : isAuthenticated && (isLoading || (shortcuts.length === 0 && shelves.length === 0)) ? (
+              ) : isAuthenticated && isLoading && (shortcuts.length === 0 && shelves.length === 0) ? (
                 <SpotifyHomeSkeleton isMobile={true} />
               ) : (
                 <>

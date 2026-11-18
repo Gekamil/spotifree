@@ -20,6 +20,7 @@ import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useSpotifreeMixes } from '../../services/spotifreeMixes';
+import { isAIDJPlaylist } from '../../utils/djIdentifiers';
 
 export const DesktopLayout: React.FC = () => {
   const { activeMainTab, setActiveMainTab, activeRightSidebar, toggleRightSidebar } = useUIStore();
@@ -42,12 +43,7 @@ export const DesktopLayout: React.FC = () => {
       useUIStore.getState().openLoginModal();
       return;
     }
-    if (
-      playlist.id === 'spotify-dj' ||
-      playlist.id === 'dj' ||
-      playlist.name?.toLowerCase().trim() === 'dj' ||
-      (playlist as any).is_dj
-    ) {
+    if (isAIDJPlaylist(playlist)) {
       setActiveMainTab('dj');
       return;
     }
@@ -69,11 +65,7 @@ export const DesktopLayout: React.FC = () => {
       .replace(/^spotify:collection:/, '')
       .split('?')[0];
 
-    if (
-      cleanId === 'spotify-dj' ||
-      cleanId === 'dj' ||
-      customName?.toLowerCase().trim() === 'dj'
-    ) {
+    if (isAIDJPlaylist({ id: cleanId, name: customName })) {
       setActiveMainTab('dj');
       return;
     }
