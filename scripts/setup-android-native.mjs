@@ -316,17 +316,23 @@ if (!manifest.includes('android.speech.RecognitionService')) {
     `<queries>\n        <intent>\n            <action android:name="android.speech.RecognitionService" />\n        </intent>\n    </queries>\n    <application`
   );
 }
+// Android Auto / Automotive hardware features (explicitly non-required so phone installs without restriction)
+const CAR_FEATURES = [
+  'android.hardware.type.automotive',
+  'android.software.car.mode',
+];
+for (const f of CAR_FEATURES) {
+  if (!manifest.includes(`"${f}"`)) {
+    manifest = manifest.replace(/<application/, `<uses-feature android:name="${f}" android:required="false" />\n    <application`);
+  }
+}
 const START = '<!-- spotifree-media:start -->';
 const END = '<!-- spotifree-media:end -->';
 manifest = manifest.replace(new RegExp(`\\s*${START}[\\s\\S]*?${END}`), '');
-// One media service per app icon (Android Auto shows the service's icon); only the one of the
-// chosen icon is enabled (SpotifreeMediaService.useIcon). Keep in sync with ICONS in
-// setup-android-app-icons.mjs and VARIANTS in SpotifreeMediaService.java.
-const ICON_IDS = ['default', 'disco-2026', 'anniversary-20', 'black-2024', 'classic-2015', 'retro-2013', 'original-2008'];
-const suffix = (id) => id.split('-').map((p) => p[0].toUpperCase() + p.slice(1)).join('');
 
-// Primary top-level MediaBrowserService (ensures Android Auto and car launchers always discover Spotifree)
-const baseService = `        <service
+// Canonical MediaBrowserService: declared once with explicit label and icon so Android Auto
+// and vehicle head units always find Spotifree in the car's app launcher without collision
+const mediaService = `        <service
             android:name=".SpotifreeMediaService"
             android:label="@string/app_name"
             android:enabled="true"
@@ -344,28 +350,8 @@ const baseService = `        <service
             </intent-filter>
         </service>`;
 
-const services = ICON_IDS.map(
-  (id) => `        <service
-            android:name=".SpotifreeMediaService$Icon${suffix(id)}"
-            android:label="@string/app_name"
-            android:enabled="${id === 'default' ? 'true' : 'false'}"
-            android:exported="true"
-            android:icon="@mipmap/ic_launcher_app_${id.replace(/-/g, '_')}"
-            android:foregroundServiceType="mediaPlayback">
-            <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
-                <action android:name="android.intent.action.MEDIA_BUTTON" />
-                <action android:name="com.spotifree.music.ACTION_PLAY" />
-                <action android:name="com.spotifree.music.ACTION_PAUSE" />
-                <action android:name="com.spotifree.music.ACTION_NEXT" />
-                <action android:name="com.spotifree.music.ACTION_PREVIOUS" />
-                <action android:name="com.spotifree.music.ACTION_TOGGLE" />
-            </intent-filter>
-        </service>`
-).join('\n');
 const media = `        ${START}
-${baseService}
-${services}
+${mediaService}
         <provider
             android:name=".SpotifreeArtProvider"
             android:authorities="\${applicationId}.art"

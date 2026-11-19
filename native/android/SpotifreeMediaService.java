@@ -83,48 +83,24 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     };
 
     private static Class<?> variantFor(String iconId) {
-        if (iconId == null || iconId.isEmpty() || "default".equals(iconId)) return SpotifreeMediaService.class;
-        String suffix = "Icon" + SpotifreeAppIconPlugin.aliasSuffix(iconId);
-        for (Class<?> c : VARIANTS) if (c.getSimpleName().equals(suffix)) return c;
         return SpotifreeMediaService.class;
     }
 
     /** The enabled media service (the one for the current app icon) */
     static Class<?> activeClass(Context ctx) {
-        PackageManager pm = ctx.getPackageManager();
-        for (Class<?> c : VARIANTS) {
-            try {
-                int st = pm.getComponentEnabledSetting(new ComponentName(ctx, c));
-                if (st == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return c;
-            } catch (Exception ignored) {}
-        }
-        return SpotifreeMediaService.class; // enabled in the manifest
+        return SpotifreeMediaService.class; // Canonical MediaBrowserService always enabled
     }
 
-    /** The app icon changed: the car shows the media service with that icon */
+    /** The app icon changed: refresh media session without disabling components */
     static void useIcon(Context ctx, String iconId) {
-        Class<?> want = variantFor(iconId);
-        if (want == activeClass(ctx)) return;
-        PackageManager pm = ctx.getPackageManager();
-        try {
-            pm.setComponentEnabledSetting(new ComponentName(ctx, want),
-                PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);
-            // Then the others: there is always exactly one (Android Auto and media buttons find it)
-            for (Class<?> c : VARIANTS) {
-                if (c == want) continue;
-                pm.setComponentEnabledSetting(new ComponentName(ctx, c),
-                    PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);
-            }
-        } catch (Exception ignored) {}
-        // The old one is stopped by the system: bring the notification / car session back
         if (playing || (title != null && !title.isEmpty())) {
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 try {
-                    Intent i = new Intent(ctx, activeClass(ctx)).setAction(ACTION_UPDATE);
+                    Intent i = new Intent(ctx, SpotifreeMediaService.class).setAction(ACTION_UPDATE);
                     if (playing) androidx.core.content.ContextCompat.startForegroundService(ctx, i);
                     else ctx.startService(i);
                 } catch (Exception ignored) {}
-            }, 800);
+            }, 500);
         }
     }
 
@@ -306,6 +282,99 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 if (raw != null) recentTracks = new JSONArray(raw);
             }
         } catch (Exception ignored) {}
+        if (home == null || home.length() == 0) {
+            home = createDefaultStarterHome();
+        }
+        if (library == null || library.length() == 0) {
+            library = createDefaultStarterLibrary();
+        }
+    }
+
+    private JSONArray createDefaultStarterHome() {
+        JSONArray arr = new JSONArray();
+        try {
+            JSONObject s1 = new JSONObject();
+            s1.put("title", tr("Recomendados para ti", "Recommended for you"));
+            JSONArray i1 = new JSONArray();
+
+            JSONObject dj = new JSONObject();
+            dj.put("id", "spotify-dj");
+            dj.put("name", tr("Tu DJ Personal", "Your Personal DJ"));
+            dj.put("subtitle", tr("Sesión personalizada con voz", "Personalized session with voice"));
+            dj.put("is_dj", true);
+            i1.put(dj);
+
+            JSONObject liked = new JSONObject();
+            liked.put("id", "liked-songs");
+            liked.put("name", tr("Canciones que te gustan", "Liked Songs"));
+            liked.put("subtitle", tr("Tus favoritas guardadas", "Your saved favorites"));
+            i1.put(liked);
+
+            JSONObject topHits = new JSONObject();
+            topHits.put("id", "sf-trending-global");
+            topHits.put("name", tr("Top Éxitos Global", "Top Hits Global"));
+            topHits.put("subtitle", tr("Lo más escuchado ahora", "Most played right now"));
+            i1.put(topHits);
+
+            JSONObject urbano = new JSONObject();
+            urbano.put("id", "sf-genre-urbano");
+            urbano.put("name", "Mix Urbano");
+            urbano.put("subtitle", "Reggaetón, trap & ritmos latinos");
+            i1.put(urbano);
+
+            JSONObject rock = new JSONObject();
+            rock.put("id", "sf-genre-rock");
+            rock.put("name", "Mix Rock");
+            rock.put("subtitle", "Grandes clásicos y guitarras");
+            i1.put(rock);
+
+            JSONObject pop = new JSONObject();
+            pop.put("id", "sf-genre-pop");
+            pop.put("name", "Mix Pop");
+            pop.put("subtitle", "Hits contagiosos y novedades");
+            i1.put(pop);
+
+            JSONObject retro = new JSONObject();
+            retro.put("id", "sf-decade-2000s");
+            retro.put("name", "Mix 2000s");
+            retro.put("subtitle", "Nostalgia y temazos de los 2000");
+            i1.put(retro);
+
+            s1.put("items", i1);
+            arr.put(s1);
+        } catch (Exception ignored) {}
+        return arr;
+    }
+
+    private JSONArray createDefaultStarterLibrary() {
+        JSONArray arr = new JSONArray();
+        try {
+            JSONObject liked = new JSONObject();
+            liked.put("id", "liked-songs");
+            liked.put("name", tr("Canciones que te gustan", "Liked Songs"));
+            liked.put("subtitle", tr("Tus favoritas guardadas", "Your saved favorites"));
+            arr.put(liked);
+
+            JSONObject dj = new JSONObject();
+            dj.put("id", "spotify-dj");
+            dj.put("name", tr("Tu DJ Personal", "Your Personal DJ"));
+            dj.put("subtitle", tr("Sesión personalizada con voz", "Personalized session with voice"));
+            dj.put("is_dj", true);
+            arr.put(dj);
+
+            JSONObject topHits = new JSONObject();
+            topHits.put("id", "sf-trending-global");
+            topHits.put("name", tr("Top Éxitos Global", "Top Hits Global"));
+            topHits.put("subtitle", tr("Lo más escuchado ahora", "Most played right now"));
+            arr.put(topHits);
+
+            JSONObject urbano = new JSONObject();
+            urbano.put("id", "sf-genre-urbano");
+            urbano.put("name", "Mix Urbano");
+            urbano.put("subtitle", "Reggaetón, trap & ritmos latinos");
+            arr.put(urbano);
+        } catch (Exception ignored) {}
+        return arr;
     }
 
     // ------------------------------------------------------------------ lifecycle
@@ -365,7 +434,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 send(cut > 0 ? action.substring(0, cut) : action, null);
             }
             @Override public void onPlayFromMediaId(String mediaId, Bundle extras) {
-                if ("noop".equals(mediaId)) { openApp(); return; }
+                if ("noop".equals(mediaId)) { sendOrOpen("play", null); return; }
                 activeBrowseMediaId = mediaId != null ? mediaId : "";
                 activeBrowseForTrackId = "";
                 sendOrOpen("playFromMediaId", obj("mediaId", mediaId));
@@ -395,6 +464,13 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     }
 
     private void sendOrOpen(String action, JSONObject data) {
+        if (session != null) {
+            session.setPlaybackState(new PlaybackStateCompat.Builder()
+                .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE |
+                            PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
+                .setState(PlaybackStateCompat.STATE_BUFFERING, 0, 1.0f)
+                .build());
+        }
         if (!SpotifreeMediaPlugin.emit(action, data)) {
             // App UI not running: open it, the command is delivered when it loads
             SpotifreeMediaPlugin.setPending(action, data);
@@ -405,30 +481,33 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private void openApp() {
         try {
             Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
-            if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-                // Android 10-15 Background Activity Launch (BAL) bypass via PendingIntent with explicit start mode
-                if (Build.VERSION.SDK_INT >= 34) {
-                    try {
-                        android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
-                        opts.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
-                        PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
-                            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT, opts.toBundle());
-                        pi.send();
-                        return;
-                    } catch (Throwable ignored) {}
-                }
-                PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
-                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            if (launch == null) {
+                launch = new Intent();
+                launch.setComponent(new ComponentName(this, "com.spotifree.music.MainActivity"));
+            }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            // Android 10-15 Background Activity Launch (BAL) bypass via PendingIntent with explicit start mode
+            if (Build.VERSION.SDK_INT >= 34) {
                 try {
+                    android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
+                    opts.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                    PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT, opts.toBundle());
                     pi.send();
                     return;
                 } catch (Throwable ignored) {}
-                startActivity(launch);
-                return;
             }
-        } catch (Exception ignored) {}
-        setError(tr("Abre Spotifree en el móvil", "Open Spotifree on your phone"));
+            PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+            try {
+                pi.send();
+                return;
+            } catch (Throwable ignored) {}
+            startActivity(launch);
+            return;
+        } catch (Exception e) {
+            android.util.Log.w("SpotifreeMedia", "Could not start activity from service: " + e.getMessage());
+        }
     }
 
     /** Error on the car screen, with an "Abrir Spotifree" button that opens the app on the phone */
@@ -828,7 +907,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     }
 
     private MediaBrowserCompat.MediaItem hint(String text) {
-        return item("noop", text, tr("Abre Spotifree en el móvil", "Open Spotifree on your phone"), null, false, null);
+        return item("noop", text, tr("Toca para reproducir", "Tap to play"), null, false, null);
     }
 
     @Override
@@ -946,7 +1025,13 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                         main.postDelayed(() -> resolvePending(parentId), 8000);
                         return;
                     }
-                    out.add(hint(tr("Abre Spotifree para ver las canciones", "Open Spotifree to see the songs")));
+                    sendOrOpen("loadPlaylist", obj("id", plId));
+                    MediaDescriptionCompat.Builder playNow = new MediaDescriptionCompat.Builder()
+                        .setMediaId("pl:" + plId)
+                        .setTitle(tr("Reproducir lista", "Play playlist"))
+                        .setSubtitle(tr("Toca para empezar la reproducción", "Tap to start playing"))
+                        .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                    out.add(new MediaBrowserCompat.MediaItem(playNow.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
                 } else {
                     out.addAll(playlistChildren(plId, tracks));
                 }
