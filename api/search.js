@@ -328,6 +328,20 @@ export default async function handler(req, res) {
       images: [{ url: toHDImage ? toHDImage(a.picture_xl || a.picture_big || a.picture_medium || '') : (a.picture_xl || a.picture_big || a.picture_medium || '') }],
     }));
 
+    // Prioritize exact artist matches over substring collisions (e.g. "Vibra Eterna" vs "Eterna")
+    artists.sort((a, b) => {
+      const aName = (a.name || '').toLowerCase().trim();
+      const bName = (b.name || '').toLowerCase().trim();
+      const qNorm = cleanQ.toLowerCase().trim();
+      if (aName === qNorm && bName !== qNorm) return -1;
+      if (bName === qNorm && aName !== qNorm) return 1;
+      const aStarts = aName.startsWith(qNorm);
+      const bStarts = bName.startsWith(qNorm);
+      if (aStarts && !bStarts) return -1;
+      if (!aStarts && bStarts) return 1;
+      return 0;
+    });
+
     // Playlists: prioritize genuine Spotify user-created & public playlists
     const playlists = [];
     const seenPlaylistIds = new Set();

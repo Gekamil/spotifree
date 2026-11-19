@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.5';
+export const APP_VERSION = '0.5.1';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.5.1',
+    date: '19 de noviembre, 2026',
+    title: 'Spotifree 0.5.1: Búsqueda estricta de artistas, modo aleatorio musical inteligente y recuperación total de Android Auto',
+    isLatest: true,
+    highlights: [
+      'Búsqueda estricta de artistas: eliminación total de colisiones y filtraciones por subcadenas. Al añadir o buscar un artista (ej. «Vibra Eterna»), no se mezclan canciones de otros artistas con nombres similares (ej. «Eterna»).',
+      'Modo aleatorio inteligente por estilo y género musical: el modo aleatorio inteligente añade temas del mismo estilo musical, género y coherencia rítmica en vez de buscar únicamente por el nombre del artista actual, descubriendo temas complementarios.',
+      'Android Auto en el coche recuperado: registro explícito de servicio multimedia con etiqueta y descripción para garantizar su aparición inmediata en el menú de aplicaciones del vehículo.',
+      'Inicio directo desde el coche: compatibilidad mejorada con restricciones de inicio en segundo plano en Android 10 a 15, permitiendo iniciar la reproducción y navegación directamente desde la pantalla del coche sin necesidad de abrir la app previamente en el móvil.',
+    ],
+  },
   {
     version: '0.5',
     date: '18 de noviembre, 2026',
     title: 'Spotifree 0.5: Rendimiento 120 FPS ultrafluido en ordenador, sincronización en tiempo real de playlists de Spotify y nuevas estanterías por momento y tendencias',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Fluidez 120 FPS sin tirones en ordenador: eliminación total de recálculos de renderizado en hover en listas de reproducción mediante estados puros CSS y content-visibility nativo que optimiza el scroll de listas largas de más de 500 temas.',
       'Sincronización en vivo con Spotify (SWR): se elimina el bloqueo de 24 horas; los cambios y nuevas canciones añadidos en Spotify se actualizan en segundo plano en Spotifree al abrir la lista o cambiar de pestaña.',

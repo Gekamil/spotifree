@@ -324,9 +324,30 @@ manifest = manifest.replace(new RegExp(`\\s*${START}[\\s\\S]*?${END}`), '');
 // setup-android-app-icons.mjs and VARIANTS in SpotifreeMediaService.java.
 const ICON_IDS = ['default', 'disco-2026', 'anniversary-20', 'black-2024', 'classic-2015', 'retro-2013', 'original-2008'];
 const suffix = (id) => id.split('-').map((p) => p[0].toUpperCase() + p.slice(1)).join('');
+
+// Primary top-level MediaBrowserService (ensures Android Auto and car launchers always discover Spotifree)
+const baseService = `        <service
+            android:name=".SpotifreeMediaService"
+            android:label="@string/app_name"
+            android:enabled="true"
+            android:exported="true"
+            android:icon="@mipmap/ic_launcher"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="android.media.browse.MediaBrowserService" />
+                <action android:name="android.intent.action.MEDIA_BUTTON" />
+                <action android:name="com.spotifree.music.ACTION_PLAY" />
+                <action android:name="com.spotifree.music.ACTION_PAUSE" />
+                <action android:name="com.spotifree.music.ACTION_NEXT" />
+                <action android:name="com.spotifree.music.ACTION_PREVIOUS" />
+                <action android:name="com.spotifree.music.ACTION_TOGGLE" />
+            </intent-filter>
+        </service>`;
+
 const services = ICON_IDS.map(
   (id) => `        <service
             android:name=".SpotifreeMediaService$Icon${suffix(id)}"
+            android:label="@string/app_name"
             android:enabled="${id === 'default' ? 'true' : 'false'}"
             android:exported="true"
             android:icon="@mipmap/ic_launcher_app_${id.replace(/-/g, '_')}"
@@ -343,6 +364,7 @@ const services = ICON_IDS.map(
         </service>`
 ).join('\n');
 const media = `        ${START}
+${baseService}
 ${services}
         <provider
             android:name=".SpotifreeArtProvider"

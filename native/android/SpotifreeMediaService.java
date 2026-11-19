@@ -78,14 +78,15 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     public static class IconOriginal2008 extends SpotifreeMediaService {}
 
     private static final Class<?>[] VARIANTS = {
-        IconDefault.class, IconDisco2026.class, IconAnniversary20.class, IconBlack2024.class,
+        SpotifreeMediaService.class, IconDefault.class, IconDisco2026.class, IconAnniversary20.class, IconBlack2024.class,
         IconClassic2015.class, IconRetro2013.class, IconOriginal2008.class
     };
 
     private static Class<?> variantFor(String iconId) {
-        String suffix = "Icon" + SpotifreeAppIconPlugin.aliasSuffix(iconId == null ? "default" : iconId);
+        if (iconId == null || iconId.isEmpty() || "default".equals(iconId)) return SpotifreeMediaService.class;
+        String suffix = "Icon" + SpotifreeAppIconPlugin.aliasSuffix(iconId);
         for (Class<?> c : VARIANTS) if (c.getSimpleName().equals(suffix)) return c;
-        return IconDefault.class;
+        return SpotifreeMediaService.class;
     }
 
     /** The enabled media service (the one for the current app icon) */
@@ -97,7 +98,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 if (st == PackageManager.COMPONENT_ENABLED_STATE_ENABLED) return c;
             } catch (Exception ignored) {}
         }
-        return IconDefault.class; // enabled in the manifest
+        return SpotifreeMediaService.class; // enabled in the manifest
     }
 
     /** The app icon changed: the car shows the media service with that icon */
@@ -387,7 +388,10 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     }
 
     private void send(String action, JSONObject data) {
-        if (!SpotifreeMediaPlugin.emit(action, data)) setError(tr("Abre Spotifree en el móvil", "Open Spotifree on your phone"));
+        if (!SpotifreeMediaPlugin.emit(action, data)) {
+            SpotifreeMediaPlugin.setPending(action, data);
+            openApp();
+        }
     }
 
     private void sendOrOpen(String action, JSONObject data) {
@@ -402,7 +406,24 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         try {
             Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
             if (launch != null) {
-                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+                launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                // Android 10-15 Background Activity Launch (BAL) bypass via PendingIntent with explicit start mode
+                if (Build.VERSION.SDK_INT >= 34) {
+                    try {
+                        android.app.ActivityOptions opts = android.app.ActivityOptions.makeBasic();
+                        opts.setPendingIntentBackgroundActivityStartMode(android.app.ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED);
+                        PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
+                            PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT, opts.toBundle());
+                        pi.send();
+                        return;
+                    } catch (Throwable ignored) {}
+                }
+                PendingIntent pi = PendingIntent.getActivity(this, 1001, launch,
+                    PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
+                try {
+                    pi.send();
+                    return;
+                } catch (Throwable ignored) {}
                 startActivity(launch);
                 return;
             }

@@ -63,3 +63,61 @@ export function parseTrackArtists(
 
   return result.length > 0 ? result : [{ id: 'art-unknown', name: 'Artista' }];
 }
+
+/**
+ * Canonical artist name normalization for strict matching:
+ * Lowercases, strips diacritics/accents, replaces punctuation with space, collapses whitespace.
+ */
+export function normalizeArtistName(s?: string | null): string {
+  return String(s || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Strict artist matcher:
+ * Checks whether candidate artist is an authentic match for target artist.
+ * Prevents lexical substring leakage where "Eterna" matches "Vibra Eterna" or vice-versa.
+ */
+export function isStrictArtistMatch(candidate?: string | null, target?: string | null): boolean {
+  const normC = normalizeArtistName(candidate);
+  const normT = normalizeArtistName(target);
+  if (!normC || !normT) return false;
+  if (normC === normT) return true;
+
+  // Split candidate by standard collaboration delimiters into individual artist names
+  const parsed = parseTrackArtists(candidate);
+  for (const a of parsed) {
+    if (normalizeArtistName(a.name) === normT) return true;
+  }
+
+  // Also check if target is a collaboration string
+  const targetParsed = parseTrackArtists(target);
+  if (targetParsed.length > 1) {
+    for (const ta of targetParsed) {
+      if (normalizeArtistName(ta.name) === normC) return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Verifies if any artist of a track strictly matches the target artist name.
+ */
+export function trackMatchesArtist(
+  track?: { artists?: Array<{ name?: string }> | string | null } | null,
+  targetArtist?: string | null
+): boolean {
+  if (!track || !targetArtist) return false;
+  const targetNorm = normalizeArtistName(targetArtist);
+  if (!targetNorm) return false;
+
+  const artists = parseTrackArtists(track.artists);
+  return artists.some((a) => normalizeArtistName(a.name) === targetNorm);
+}
+

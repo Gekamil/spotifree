@@ -639,16 +639,40 @@ const store = create<PlayerState>((set, get) => ({
 
   triggerSmartShuffleRecommendation: async (track: Track) => {
     try {
-      const { searchSpotify } = await import('../services/spotifyApi');
-      const artist = track.artists?.[0]?.name || track.name;
-      const res = await searchSpotify(artist);
+      const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
+        '../services/musicTaggingService'
+      );
+      const { trackMatchesArtist } = await import('../utils/trackArtists');
+
+      // 1. Identify track's musical style/genre
+      const tags = classifyTrackHashtags(track);
+      const targetTag = tags[0] || getDominantUserHashtag() || '#pop';
+
       const existingIds = new Set(get().queue.map((t) => t.id));
       existingIds.add(track.id);
-      const items: Track[] = res?.tracks?.items || [];
-      const candidate = items.find((t: Track) => !existingIds.has(t.id));
-      if (candidate) {
+      const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
+
+      // 2. Fetch tracks of that exact musical genre/style
+      const candidates = await getCuratedSetForHashtag(targetTag, 15, existingIds);
+
+      // 3. Recommend by musical style/genre, prioritizing complementary artists (not looping the same artist name)
+      const currentArtist = track.artists?.[0]?.name || '';
+      let bestCandidate = candidates.find((c) => {
+        if (!c?.id || existingIds.has(c.id)) return false;
+        const cTitle = (c.name || '').toLowerCase().trim();
+        if (existingTitles.has(cTitle)) return false;
+        // Prioritize different artist in the same musical style
+        return !trackMatchesArtist(c, currentArtist);
+      });
+
+      // Fallback: if all candidates were by same artist, accept another candidate
+      if (!bestCandidate) {
+        bestCandidate = candidates.find((c) => c?.id && !existingIds.has(c.id));
+      }
+
+      if (bestCandidate) {
         const smartTrack: Track = {
-          ...candidate,
+          ...bestCandidate,
           isSmartRecommendation: true,
         };
         const currentQueue = get().queue;
@@ -665,41 +689,49 @@ const store = create<PlayerState>((set, get) => ({
 
   populateSmartShuffleRecommendations: async (baseTracks?: Track[]) => {
     try {
+      const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
+        '../services/musicTaggingService'
+      );
+
       const currentQ = get().queue;
       const tracksToAnalyze = baseTracks || currentQ.filter((t: any) => !t.isSmartRecommendation);
       if (tracksToAnalyze.length === 0) return;
 
-      const artists = Array.from(
-        new Set(
-          tracksToAnalyze
-            .map((t) => t.artists?.[0]?.name)
-            .filter((name): name is string => Boolean(name && name.length > 1))
-        )
-      ).slice(0, 4);
+      // 1. Analyze dominant musical genres/styles across the queue
+      const tagCounts = new Map<string, number>();
+      for (const t of tracksToAnalyze.slice(0, 15)) {
+        const tags = classifyTrackHashtags(t);
+        for (const tag of tags) {
+          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+        }
+      }
 
-      if (artists.length === 0) return;
+      const sortedTags = Array.from(tagCounts.entries())
+        .sort((a, b) => b[1] - a[1])
+        .map(([tag]) => tag as any);
 
-      const { searchSpotify } = await import('../services/spotifyApi');
+      const dominantTags = sortedTags.length > 0 ? sortedTags.slice(0, 2) : [getDominantUserHashtag() || '#pop'];
+
       const existingIds = new Set(get().queue.map((t) => t.id));
-      const existingNames = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
+      const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
 
       const recommendedCandidates: Track[] = [];
 
-      for (const artist of artists) {
+      for (const tag of dominantTags) {
         try {
-          const res = await searchSpotify(artist);
-          const items: Track[] = res?.tracks?.items || [];
+          const items = await getCuratedSetForHashtag(tag, 10, existingIds);
           for (const item of items) {
-            const cleanName = (item.name || '').toLowerCase().trim();
-            if (!existingIds.has(item.id) && !existingNames.has(cleanName)) {
-              existingIds.add(item.id);
-              existingNames.add(cleanName);
-              recommendedCandidates.push({
-                ...item,
-                isSmartRecommendation: true,
-              });
-              if (recommendedCandidates.length >= 6) break;
-            }
+            if (!item?.id || existingIds.has(item.id)) continue;
+            const cleanTitle = (item.name || '').toLowerCase().trim();
+            if (existingTitles.has(cleanTitle)) continue;
+
+            existingIds.add(item.id);
+            existingTitles.add(cleanTitle);
+            recommendedCandidates.push({
+              ...item,
+              isSmartRecommendation: true,
+            });
+            if (recommendedCandidates.length >= 6) break;
           }
         } catch {}
         if (recommendedCandidates.length >= 6) break;
@@ -712,7 +744,7 @@ const store = create<PlayerState>((set, get) => ({
 
         for (let i = 0; i < cleanQueue.length; i++) {
           interspersed.push(cleanQueue[i]);
-          // Insert a recommended track every 3 tracks (and not on track 0)
+          // Insert a recommended track of matching musical style every 3 tracks (and not on track 0)
           if ((i + 1) % 3 === 0 && recIdx < recommendedCandidates.length) {
             interspersed.push(recommendedCandidates[recIdx]);
             recIdx++;
@@ -729,6 +761,7 @@ const store = create<PlayerState>((set, get) => ({
       console.warn('[SmartShuffle] Error populating recommendations:', e);
     }
   },
+
 
   getNextTrack: (): Track | null => {
     const { queue, currentTrack, repeatMode, preselectedNextTrackId } = get();

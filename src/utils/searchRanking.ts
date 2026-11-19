@@ -3,6 +3,8 @@
  * Bad Bunny's songs before songs that are just called "Bad", and the real song before karaoke,
  * lullaby or cover versions. Pure function (tests/search_ranking.test.js).
  */
+import { isStrictArtistMatch } from './trackArtists';
+
 export interface RankableTrack {
   name: string;
   artists?: Array<{ name: string }>;
@@ -31,12 +33,21 @@ export function searchScore(query: string, t: RankableTrack): number {
   const words = new Set(all.split(' '));
 
   let score = 0;
-  if (artists.includes(q)) score += 100; // typed the artist's name exactly
-  else if (artistStr.includes(q)) score += 50;
+  if (artists.includes(q)) {
+    score += 120; // typed the artist's name exactly
+  } else if (artists.some((a) => isStrictArtistMatch(a, q))) {
+    score += 100;
+  } else if (tokens.length === 1 && artists.some((a) => a.split(' ').includes(q))) {
+    score += 35;
+  }
+
   if (title === q) score += 90; // typed the song's title exactly
   else if (title.startsWith(q)) score += 35;
-  else if (title.includes(q)) score += 25;
-  if (q.includes(title) && artists.some((a) => q.includes(a))) score += 80; // "song artist"
+  else if (title.includes(q)) score += 20;
+
+  if (q.includes(title) && artists.some((a) => isStrictArtistMatch(a, q) || q.includes(a))) {
+    score += 85; // "song artist"
+  }
 
   let missing = 0;
   for (const tok of tokens) {
@@ -47,10 +58,23 @@ export function searchScore(query: string, t: RankableTrack): number {
     else missing++;
   }
   score -= missing * 30;
+
+  // Penalize partial substring artist collision when searching multi-word artist
+  // e.g. searching "Vibra Eterna" must penalize songs from artist "Eterna"
+  if (tokens.length > 1) {
+    for (const a of artists) {
+      const aTokens = a.split(' ').filter(Boolean);
+      if (aTokens.length < tokens.length && tokens.includes(a)) {
+        score -= 60;
+      }
+    }
+  }
+
   // Versions nobody asked for
   if (VERSION_WORDS.test(`${title} ${artistStr}`) && !VERSION_WORDS.test(q)) score -= 25;
   return score;
 }
+
 
 /** Stable sort by relevance (equal scores keep the original order) */
 export function rankSearchTracks<T extends RankableTrack>(query: string, tracks: T[]): T[] {

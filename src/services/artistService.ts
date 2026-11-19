@@ -1,6 +1,7 @@
 import type { Track, Playlist } from '../types/spotify';
 import { getArtistPicture, ARTIST_IMAGE_CACHE } from '../utils/artistImage';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { isStrictArtistMatch, trackMatchesArtist } from '../utils/trackArtists';
 
 /**
  * Resolves clean artist name from an artist ID or playlist name
@@ -111,12 +112,16 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
     try {
       let resolvedId = dzArtistId;
       if (!resolvedId) {
-        const sRes = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(cleanName)}&limit=1`, {
+        const sRes = await fetch(`https://api.deezer.com/search/artist?q=${encodeURIComponent(cleanName)}&limit=5`, {
           signal: AbortSignal.timeout(3500),
         });
         if (sRes.ok) {
           const sData = await sRes.json();
-          if (sData.data?.[0]?.id) resolvedId = String(sData.data[0].id);
+          if (Array.isArray(sData.data)) {
+            // Strictly match artist name to avoid picking a substring collision (e.g. 'Eterna' for 'Vibra Eterna')
+            const exactArtist = sData.data.find((a: any) => isStrictArtistMatch(a?.name, cleanName));
+            if (exactArtist?.id) resolvedId = String(exactArtist.id);
+          }
         }
       }
       if (resolvedId) {
@@ -127,12 +132,14 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
           const topData = await topRes.json();
           if (Array.isArray(topData.data)) {
             topData.data.forEach((t: any) => {
+              const tArtist = t.artist?.name || cleanName;
+              if (!isStrictArtistMatch(tArtist, cleanName)) return; // Strictly verify artist
               rawCandidates.push({
                 id: `dz-${t.id}`,
                 name: t.title || t.title_short || 'Canción',
                 duration_ms: (t.duration || 210) * 1000,
                 preview_url: t.preview || null,
-                artists: [{ id: `art-${t.artist?.id || resolvedId}`, name: t.artist?.name || cleanName }],
+                artists: [{ id: `art-${t.artist?.id || resolvedId}`, name: tArtist }],
                 album: {
                   id: `alb-${t.album?.id || t.id}`,
                   name: t.album?.title || t.title,
@@ -156,12 +163,14 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
         const dzData = await dzRes.json();
         if (Array.isArray(dzData.data)) {
           dzData.data.forEach((t: any) => {
+            const tArtist = t.artist?.name || cleanName;
+            if (!isStrictArtistMatch(tArtist, cleanName)) return; // Strictly verify artist
             rawCandidates.push({
               id: `dz-${t.id}`,
               name: t.title || t.title_short || 'Canción',
               duration_ms: (t.duration || 210) * 1000,
               preview_url: t.preview || null,
-              artists: [{ id: `art-${t.artist?.id || ''}`, name: t.artist?.name || cleanName }],
+              artists: [{ id: `art-${t.artist?.id || ''}`, name: tArtist }],
               album: {
                 id: `alb-${t.album?.id || t.id}`,
                 name: t.album?.title || t.title,
@@ -184,8 +193,8 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
         const sData = await sRes.json();
         if (Array.isArray(sData.tracks?.items)) {
           sData.tracks.items.forEach((t: Track) => {
-            const matches = !t.artists?.length || t.artists.some((a) => a.name.toLowerCase().includes(lowerName) || lowerName.includes(a.name.toLowerCase()));
-            if (matches) rawCandidates.push(t);
+            // Must strictly match artist, never substring overlap
+            if (trackMatchesArtist(t, cleanName)) rawCandidates.push(t);
           });
         }
       }
@@ -201,11 +210,13 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
       if (discRes.ok) {
         const discData = await discRes.json();
         if (Array.isArray(discData.top)) {
-          rawCandidates.push(...discData.top);
+          rawCandidates.push(...discData.top.filter((t: Track) => trackMatchesArtist(t, cleanName)));
         }
         if (Array.isArray(discData.recent)) {
           discData.recent.forEach((r: any) => {
-            if (Array.isArray(r.tracks)) rawCandidates.push(...r.tracks);
+            if (Array.isArray(r.tracks)) {
+              rawCandidates.push(...r.tracks.filter((t: Track) => trackMatchesArtist(t, cleanName)));
+            }
           });
         }
         if (discData.artist?.picture) {
@@ -226,7 +237,7 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
         if (Array.isArray(pData.tracks?.items)) {
           pData.tracks.items.forEach((x: any) => {
             const tr = x.track ? x.track : x;
-            if (tr) rawCandidates.push(tr);
+            if (tr && trackMatchesArtist(tr, cleanName)) rawCandidates.push(tr);
           });
         }
         if (pData.images?.[0]?.url) {
@@ -245,7 +256,7 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
     for (const pl of allPlaylists) {
       const items = (pl.tracks?.items || []).map((x: any) => (x.track ? x.track : x)).filter(Boolean);
       for (const t of items) {
-        if (t.artists?.some((a: any) => a.name.toLowerCase().includes(lowerName))) {
+        if (trackMatchesArtist(t, cleanName)) {
           rawCandidates.push(t);
         }
       }
@@ -257,6 +268,9 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
 
   for (const track of rawCandidates) {
     if (!track || !track.name) continue;
+    // Extra validation: track must strictly match target artist
+    if (!trackMatchesArtist(track, cleanName)) continue;
+
     const key = normalizeTrackKey(track.name);
     if (!key) continue;
 
