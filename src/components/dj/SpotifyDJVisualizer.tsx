@@ -156,9 +156,9 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    // Ring tuned with room for 3-layer upper-right expansion without clipping
-    const baseRadius = size * (mini ? 0.30 : 0.31);
-    const strokeWidth = Math.max(3.5, size * (mini ? 0.12 : 0.078));
+    // Refined Spotify DJ Halo radius and stroke (~5.8px on size 140 for crisp presence)
+    const baseRadius = size * (mini ? 0.32 : 0.35);
+    const strokeWidth = Math.max(4.0, size * (mini ? 0.095 : 0.041));
     const numPoints = mini ? 70 : 160;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 

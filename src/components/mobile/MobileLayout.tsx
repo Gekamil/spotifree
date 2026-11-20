@@ -28,7 +28,6 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
-import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -810,36 +809,31 @@ export const MobileLayout: React.FC = () => {
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl p-4 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px]"
+                    className="relative w-full rounded-2xl p-5 overflow-hidden cursor-pointer shadow-2xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[164px]"
                     style={{
-                      backgroundColor: djThemeColor || '#0a52cc',
-                      backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0a52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
-                      boxShadow: `0 8px 32px ${djThemeColor || '#0a52cc'}55`,
+                      backgroundColor: djThemeColor || '#0c3b88',
+                      backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0c3b88'} 0%, #060f22 100%)`,
+                      boxShadow: `0 12px 36px ${djThemeColor || '#0c3b88'}55`,
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Audio Waves covering widget background */}
-                    <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
-                      <InteractiveMusicWaves
-                        isPlaying={isPlaying}
-                        isSpeaking={visualizerState === 'speaking' || visualizerState === 'listening'}
-                        voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
-                        themeColor={djThemeColor || '#1ed760'}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                    {/* Subtle Ambient Radial Glow behind the Orb */}
+                    <div
+                      className="absolute left-1/2 top-12 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
+                      style={{
+                        background: 'radial-gradient(circle, rgba(0, 242, 254, 0.35) 0%, rgba(30, 215, 96, 0.12) 45%, rgba(0,0,0,0) 70%)',
+                        filter: 'blur(20px)',
+                      }}
+                    />
 
-                    {/* Center Visualizer: Animated Orb reacting dynamically with multiple speech waves (static non-rotating, smooth fluid flow) */}
-                    <div className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10">
-                      <div className="w-full h-full flex items-center justify-center opacity-95 transition-all duration-700">
-                        <SpotifyDJVisualizer
-                          size={150}
-                          state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
-                          voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.35 : 0.25}
-                          themeColor={djThemeColor}
-                          forceWaves={true}
-                        />
-                      </div>
+                    {/* Center Visualizer: Clean Neon Liquid Halo */}
+                    <div className="relative w-full flex items-center justify-center my-0.5 z-10 pointer-events-none">
+                      <SpotifyDJVisualizer
+                        size={140}
+                        state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
+                        voiceLevel={voiceLevel}
+                        themeColor={djThemeColor}
+                      />
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
