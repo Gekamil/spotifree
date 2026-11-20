@@ -28,6 +28,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -802,65 +803,76 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 )}
 
-                {/* YOUR OWN PERSONAL DJ CARD (Refined Spotify Studio Design - Sleek, Compact & Authentic) */}
+                {/* YOUR OWN PERSONAL DJ CARD (Sleek Spotify widget proportions matching improvements) */}
                 <div className="px-4 mb-6">
-                  <h2 className="text-xl font-bold text-white font-['SpotifyMixUITitle'] mb-2.5">
+                  <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2.5">
                     Tu DJ personal
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="w-full rounded-2xl p-3 bg-[#181818] border border-white/[0.08] shadow-xl hover:bg-[#202020] active:scale-[0.99] transition-all cursor-pointer flex items-center gap-3.5 relative overflow-hidden group select-none"
+                    className="relative w-full rounded-2xl p-4 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px]"
                     style={{
-                      background: visualizerState === 'speaking'
-                        ? 'radial-gradient(circle at 18% 50%, rgba(30,215,96,0.18) 0%, transparent 65%), #181818'
-                        : 'radial-gradient(circle at 18% 50%, rgba(30,215,96,0.08) 0%, transparent 60%), #181818',
-                      boxShadow: visualizerState === 'speaking'
-                        ? '0 8px 30px rgba(30, 215, 96, 0.22)'
-                        : '0 6px 20px rgba(0, 0, 0, 0.35)',
+                      backgroundColor: djThemeColor || '#0a52cc',
+                      backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0a52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
+                      boxShadow: `0 8px 32px ${djThemeColor || '#0a52cc'}55`,
+                      transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Left: Spotify DJ Emblem with Live Animated Visualizer */}
-                    <div className="w-16 h-16 rounded-xl overflow-hidden bg-gradient-to-br from-[#152a1d] to-[#0d1410] border border-[#1ed760]/30 relative flex items-center justify-center shrink-0 shadow-md group-hover:scale-105 transition-transform duration-200">
-                      <div className="w-full h-full flex items-center justify-center">
+                    {/* Audio Waves covering widget background */}
+                    <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
+                      <InteractiveMusicWaves
+                        isPlaying={isPlaying}
+                        isSpeaking={visualizerState === 'speaking' || visualizerState === 'listening'}
+                        voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
+                        themeColor={djThemeColor || '#1ed760'}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    {/* Center Visualizer: Animated Orb reacting dynamically when DJ is speaking */}
+                    <div
+                      className="absolute left-1/2 -translate-x-1/2 -top-1 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10"
+                      style={{
+                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
+                        maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
+                      }}
+                    >
+                      <div
+                        className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700"
+                        style={{
+                          WebkitMaskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                          maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
+                        }}
+                      >
                         <SpotifyDJVisualizer
-                          size={54}
+                          size={150}
                           state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                           voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
-                          themeColor={djThemeColor || '#1ed760'}
+                          themeColor={djThemeColor}
                         />
                       </div>
-                      <span className="absolute bottom-1 right-1 px-1 py-0.2 rounded-[3px] bg-[#1ed760] text-black text-[9px] font-black uppercase tracking-wider leading-none shadow">
-                        DJ
-                      </span>
                     </div>
 
-                    {/* Middle: Clean Typography & Rotating Commentary */}
-                    <div className="flex-1 min-w-0 pr-1">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-                        <span className="text-[11px] font-bold uppercase tracking-wider text-[#1ed760]">
-                          {visualizerState === 'speaking' ? 'Hablando ahora…' : 'Para ti'}
-                        </span>
+                    {/* Bottom Row: Text on left, White circular arrow on right */}
+                    <div className="flex items-end justify-between relative z-20 mt-auto pt-2 w-full">
+                      <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
+                        <RotatingDJBannerText className="text-base font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                       </div>
-                      <RotatingDJBannerText className="text-[15px] font-bold text-white font-['SpotifyMixUITitle'] leading-tight truncate block" />
-                      <p className="text-[12px] text-[#b3b3b3] mt-0.5 truncate leading-snug">
-                        Sesión personalizada con mezclas en directo
-                      </p>
-                    </div>
 
-                    {/* Right: Iconic Green Circular Play Button */}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelectPlaylistById('spotify-dj');
-                      }}
-                      className="w-11 h-11 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0 shadow-lg group-hover:scale-105 active:scale-95 transition-all cursor-pointer ml-auto mr-1"
-                      title="Abrir DJ"
-                    >
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" className="ml-0.5 text-black">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectPlaylistById('spotify-dj');
+                        }}
+                        className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
+                        title="Abrir DJ"
+                      >
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <line x1="5" y1="12" x2="19" y2="12"></line>
+                          <polyline points="12 5 19 12 12 19"></polyline>
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
