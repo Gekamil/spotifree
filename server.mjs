@@ -322,6 +322,39 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  // 3c. Image Proxy with CORS headers & caching (/api/image-proxy)
+  if (pathname === '/api/image-proxy') {
+    const targetUrl = reqUrl.searchParams.get('url');
+    if (!targetUrl) {
+      res.statusCode = 400;
+      res.end('Missing url');
+      return;
+    }
+    try {
+      const upstream = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+      });
+      if (!upstream.ok) {
+        res.statusCode = upstream.status;
+        res.end();
+        return;
+      }
+      res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      setCorsHeaders(res);
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      res.end(buf);
+      return;
+    } catch {
+      res.statusCode = 502;
+      res.end();
+      return;
+    }
+  }
+
   // 4a. Spotify App Token Endpoint (/api/spotify/app-token)
   if (pathname === '/api/spotify/app-token') {
     res.setHeader('Content-Type', 'application/json');

@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.5.2';
+export const APP_VERSION = '0.5.3';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.5.3',
+    date: '20 de noviembre, 2026',
+    title: 'Spotifree 0.5.3: Transición instantánea de karaoke (0ms de silencio), biblioteca móvil con espaciado nativo Spotify y carátulas fotográficas en playlists temáticas',
+    isLatest: true,
+    highlights: [
+      'Transición instantánea de karaoke sin pausas (0ms de silencio): el reproductor secundario precarga la pista instrumental en segundo plano y realiza un crossfade gapless sin interrupción audible al alternar el modo karaoke o ajustar la voz.',
+      'Biblioteca móvil rediseñada con espaciado nativo de Spotify: eliminación de paddings excesivos, fila de filtros horizontales deslizables con botón de limpieza, carátulas compactas de 48x48px y tipografía ajustada idéntica a la app oficial.',
+      'Separación de «Viaje en el tiempo» y «Playlists genéricas»: los grandes géneros (Rock, Pop, Urbano, EDM, Indie, Hip-Hop) ahora tienen su propio carrusel independiente («GRANDES GÉNEROS»), separándolos limpiamente de las décadas (80s, 90s, 2000s, 2010s).',
+      'Carátulas con fotos reales de canciones: integración con proxy de imágenes seguro y composiciones enriquecidas que muestran las portadas de los artistas y canciones detrás de las tipografías y degradados temáticos.',
+    ],
+  },
   {
     version: '0.5.2',
     date: '20 de noviembre, 2026',
     title: 'Spotifree 0.5.2: Motor de recomendaciones armónicas, control vertical de karaoke estilo Spotify, controles móviles sin recortes y detector acústico instantáneo',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Motor de recomendaciones ampliado a 14 géneros: taxonomía ampliada con más de 350 artistas contemporáneos y canciones insignia (#indie, #corridos, #rnb, #trap, #reggaeton, #rock, etc.). En modo aleatorio inteligente, las canciones recomendadas son armónicamente compatibles y de artistas complementarios, con distintivo «✨ Recomendado» en cola.',
       'Control de volumen vocal de karaoke estilo Spotify: barra vertical lateral deslizante al pulsar el icono de karaoke con lectura numérica de porcentaje (0% a 100%), permitiendo atenuar la voz del cantante con diseño nativo y fluido.',

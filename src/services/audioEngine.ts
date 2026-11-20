@@ -2696,6 +2696,20 @@ class AudioEngine {
         if (this.karaokeState.trackId === clean) {
           this.karaokeState = { ...this.karaokeState, instrumental: cand };
           this.emitKaraokeChange();
+
+          // Warm pre-cue instrumental on secondary YouTube player for instantaneous activation
+          if (
+            cand?.sourceId &&
+            cand.provider === 'youtube' &&
+            !this.isCrossfading &&
+            !this.isTransitioning &&
+            this.secondaryYtPlayer &&
+            typeof this.secondaryYtPlayer.cueVideoById === 'function'
+          ) {
+            try {
+              this.secondaryYtPlayer.cueVideoById({ videoId: cand.sourceId, startSeconds: 0 });
+            } catch {}
+          }
         }
         return cand;
       } catch {
@@ -2707,6 +2721,190 @@ class AudioEngine {
 
     this.instrumentalPending.set(clean, p);
     return p;
+  }
+
+  /**
+   * Seamless 0ms hot-swap between original audio and instrumental track.
+   * Keeps the currently audible deck playing smoothly while buffering the target deck,
+   * then crossfades and swaps active decks without a single millisecond of silence.
+   */
+  private async seamlessAudioSourceSwap(
+    sourceId: string,
+    startSeconds: number,
+    wasPlaying: boolean,
+    track: Track
+  ): Promise<boolean> {
+    const cleanTargetTrack = AudioEngine.cleanId(track.id);
+    const isHtml5Target =
+      sourceId === 'offline' ||
+      sourceId.startsWith('sc:') ||
+      sourceId.startsWith('sc-') ||
+      sourceId.startsWith('mono:') ||
+      sourceId.startsWith('dsp:');
+
+    // If not actively playing, use standard load
+    if (!wasPlaying) {
+      return this.loadAudioSourceAtPosition(sourceId, startSeconds, false, track);
+    }
+
+    const { isMuted } = usePlayerStore.getState();
+    const masterVol = isMuted ? 0 : this.getEffectiveVolume();
+
+    // Case 1: Both current engine and incoming target are YouTube
+    if (!isHtml5Target && this.activeEngine === 'youtube') {
+      await this.ensureYouTubeReady();
+      const currentActiveYt = this.ytPlayer;
+      const targetSecYt = this.secondaryYtPlayer;
+
+      if (!targetSecYt || typeof targetSecYt.loadVideoById !== 'function' || !currentActiveYt) {
+        return this.loadAudioSourceAtPosition(sourceId, startSeconds, wasPlaying, track);
+      }
+
+      this.isTransitioning = true;
+      try {
+        // 1. Target secondary player starts silently in background while original plays continuously!
+        if (typeof targetSecYt.setVolume === 'function') targetSecYt.setVolume(0);
+        if (typeof targetSecYt.unMute === 'function') targetSecYt.unMute();
+
+        const safeSec = startSeconds > 0.5 ? startSeconds : 0;
+        targetSecYt.loadVideoById({ videoId: sourceId, startSeconds: safeSec });
+        targetSecYt.playVideo();
+
+        // 2. Poll until target player is rolling (playing audio) while the current player keeps playing audibly!
+        let started = false;
+        const maxWaitMs = 3000;
+        const startPoll = Date.now();
+
+        while (Date.now() - startPoll < maxWaitMs) {
+          if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) !== cleanTargetTrack) {
+            try { targetSecYt.pauseVideo(); } catch {}
+            this.isTransitioning = false;
+            return false;
+          }
+          const st = typeof targetSecYt.getPlayerState === 'function' ? targetSecYt.getPlayerState() : -1;
+          const ct = typeof targetSecYt.getCurrentTime === 'function' ? targetSecYt.getCurrentTime() : 0;
+          if (st === 1 || ct > 0.1) {
+            started = true;
+            break;
+          }
+          await new Promise((r) => setTimeout(r, 40));
+        }
+
+        if (started && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === cleanTargetTrack) {
+          // Sync positions tightly if drift > 0.4s
+          const curTime = typeof currentActiveYt.getCurrentTime === 'function' ? currentActiveYt.getCurrentTime() : safeSec;
+          const nextTime = typeof targetSecYt.getCurrentTime === 'function' ? targetSecYt.getCurrentTime() : safeSec;
+          if (Math.abs(curTime - nextTime) > 0.35 && typeof targetSecYt.seekTo === 'function') {
+            try { targetSecYt.seekTo(curTime, true); } catch {}
+          }
+
+          // 3. Fast 80ms crossfade between the two decks (0-ms silence!)
+          const steps = 4;
+          for (let i = 1; i <= steps; i++) {
+            const frac = i / steps;
+            const inVol = Math.round(masterVol * frac * 100);
+            const outVol = Math.round(masterVol * (1 - frac) * 100);
+            try {
+              if (typeof targetSecYt.setVolume === 'function') targetSecYt.setVolume(inVol);
+              if (typeof currentActiveYt.setVolume === 'function') currentActiveYt.setVolume(outVol);
+            } catch {}
+            await new Promise((r) => setTimeout(r, 20));
+          }
+
+          // 4. Swap active YouTube deck index
+          this.activeYtIndex = this.activeYtIndex === 0 ? 1 : 0;
+          this.currentVideoId = sourceId;
+          this.lastTrackStartTime = Date.now();
+
+          // 5. Pause old player
+          try { currentActiveYt.pauseVideo(); } catch {}
+
+          this.startProgressTicker();
+          this.startCarrier();
+          return true;
+        }
+      } catch (e) {
+        console.warn('[AudioEngine] Seamless YouTube hot-swap failed, fallback:', e);
+      } finally {
+        this.isTransitioning = false;
+      }
+    }
+
+    // Case 2: Target is HTML5 while YouTube was playing
+    if (isHtml5Target && this.activeEngine === 'youtube') {
+      let srcUrl: string | null = null;
+      if (sourceId === 'offline') {
+        srcUrl = await this.resolveOfflinePlaybackUrl(track);
+      } else {
+        const normId = sourceId.startsWith('dsp:')
+          ? sourceId.slice(4)
+          : sourceId.startsWith('mono:')
+          ? sourceId.slice(5)
+          : sourceId.startsWith('sc-')
+          ? `sc:${sourceId.slice(3)}`
+          : sourceId;
+        srcUrl = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(track.id)}`;
+      }
+      if (!srcUrl) return this.loadAudioSourceAtPosition(sourceId, startSeconds, wasPlaying, track);
+
+      const targetAudio = this.secondaryAudio || this.audio;
+      targetAudio.volume = 0;
+      this.setHtml5DeckSource(this.activeAudioIndex === 0 ? 1 : 0, srcUrl, Math.max(0, startSeconds));
+      try {
+        await targetAudio.play();
+        const curYt = this.ytPlayer;
+        for (let i = 1; i <= 4; i++) {
+          const frac = i / 4;
+          targetAudio.volume = masterVol * frac;
+          if (curYt?.setVolume) curYt.setVolume(Math.round(masterVol * (1 - frac) * 100));
+          await new Promise((r) => setTimeout(r, 25));
+        }
+        if (curYt?.pauseVideo) curYt.pauseVideo();
+        this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
+        this.activeEngine = 'html5';
+        this.currentVideoId = sourceId === 'offline' ? null : sourceId;
+        this.startProgressTicker();
+        return true;
+      } catch {}
+    }
+
+    // Case 3: Target is YouTube while HTML5 was playing
+    if (!isHtml5Target && this.activeEngine === 'html5') {
+      await this.ensureYouTubeReady();
+      const p = this.ytPlayer;
+      if (p && typeof p.loadVideoById === 'function') {
+        try {
+          p.setVolume?.(0);
+          p.loadVideoById({ videoId: sourceId, startSeconds: Math.max(0, startSeconds) });
+          p.playVideo?.();
+          let started = false;
+          const startPoll = Date.now();
+          while (Date.now() - startPoll < 2500) {
+            if (p.getPlayerState?.() === 1 || p.getCurrentTime?.() > 0.1) {
+              started = true;
+              break;
+            }
+            await new Promise((r) => setTimeout(r, 40));
+          }
+          if (started) {
+            for (let i = 1; i <= 4; i++) {
+              const frac = i / 4;
+              p.setVolume?.(Math.round(masterVol * frac * 100));
+              if (this.audio) this.audio.volume = masterVol * (1 - frac);
+              await new Promise((r) => setTimeout(r, 25));
+            }
+            try { this.audio?.pause(); } catch {}
+            this.activeEngine = 'youtube';
+            this.currentVideoId = sourceId;
+            this.startProgressTicker();
+            return true;
+          }
+        } catch {}
+      }
+    }
+
+    // Default fallback
+    return this.loadAudioSourceAtPosition(sourceId, startSeconds, wasPlaying, track);
   }
 
   private async loadAudioSourceAtPosition(sourceId: string, startSeconds: number, wasPlaying: boolean, track: Track): Promise<boolean> {
@@ -2824,7 +3022,7 @@ class AudioEngine {
           }
         }
 
-        const ok = await this.loadAudioSourceAtPosition(inst.sourceId, posSec, wasPlaying, track);
+        const ok = await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
         if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
           this.karaokeState = {
             trackId: clean,
@@ -2848,7 +3046,7 @@ class AudioEngine {
           }
         }
         if (restoreId) {
-          await this.loadAudioSourceAtPosition(restoreId, posSec, wasPlaying, track);
+          await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
         }
         if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
           this.karaokeState = {

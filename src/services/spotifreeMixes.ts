@@ -601,12 +601,22 @@ function hexToRgba(hex: string, alpha = 1): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-function loadCoverPhoto(url: string, timeoutMs = 3000): Promise<HTMLImageElement | null> {
+function toProxiedImageUrl(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('/api/')) return url;
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    return `/api/image-proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
+}
+
+function loadCoverPhoto(url: string, timeoutMs = 2800): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     if (!url) return resolve(null);
     const img = new Image();
     img.crossOrigin = 'anonymous';
     let done = false;
+    let triedProxy = false;
     const timer = setTimeout(() => {
       if (!done) {
         done = true;
@@ -621,35 +631,63 @@ function loadCoverPhoto(url: string, timeoutMs = 3000): Promise<HTMLImageElement
       }
     };
     img.onerror = () => {
+      if (!done && !triedProxy && !url.includes('/api/image-proxy')) {
+        triedProxy = true;
+        img.src = toProxiedImageUrl(url);
+        return;
+      }
       if (!done) {
         done = true;
         clearTimeout(timer);
         resolve(null);
       }
     };
-    img.src = url;
+    img.src = toProxiedImageUrl(url);
   });
 }
 
-export function makeEraCoverSvg(decadeOrStyle: string, color: string, customTitle?: string): string {
+export function makeEraCoverSvg(
+  decadeOrStyle: string,
+  color: string,
+  customTitle?: string,
+  images: string[] = [],
+  subtitle = 'Actualizado esta semana · Spotifree'
+): string {
   const displayTitle = customTitle || `Mix de los ${decadeOrStyle}`;
   const isStyle = decadeOrStyle.length > 5;
+  const validImages = (images || []).filter(Boolean);
+  let imageLayers = '';
+  if (validImages.length === 1) {
+    imageLayers = `<image href="${validImages[0]}" x="0" y="0" width="600" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>`;
+  } else if (validImages.length >= 2) {
+    imageLayers = `
+      <image href="${validImages[0]}" x="0" y="0" width="300" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>
+      <image href="${validImages[1]}" x="300" y="0" width="300" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>
+    `;
+  }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
     <defs>
       <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${color}"/>
-        <stop offset="65%" stop-color="#161616"/>
+        <stop offset="55%" stop-color="#161616"/>
         <stop offset="100%" stop-color="#0c0c0c"/>
+      </linearGradient>
+      <linearGradient id="tint" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.45"/>
+        <stop offset="55%" stop-color="#121212" stop-opacity="0.40"/>
+        <stop offset="100%" stop-color="#0c0c0c" stop-opacity="0.85"/>
       </linearGradient>
     </defs>
     <rect width="600" height="600" fill="url(#g)"/>
-    <circle cx="500" cy="100" r="200" fill="${color}" opacity="0.38"/>
-    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.58"/>
-    <rect x="0" y="420" width="600" height="180" fill="rgba(0,0,0,0.55)"/>
-    <rect x="0" y="420" width="600" height="2" fill="${color}" opacity="0.4"/>
-    <text x="48" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="${isStyle ? 76 : 108}" fill="#ffffff" letter-spacing="-2">${decadeOrStyle}</text>
-    <text x="48" y="488" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="36" fill="#ffffff">${displayTitle}</text>
-    <text x="48" y="538" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="21" fill="rgba(255,255,255,0.72)">Actualizado esta semana · Spotifree</text>
+    ${imageLayers}
+    ${imageLayers ? '<rect width="600" height="600" fill="url(#tint)"/>' : ''}
+    <circle cx="500" cy="100" r="200" fill="${color}" opacity="0.35"/>
+    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.50"/>
+    <rect x="0" y="410" width="600" height="190" fill="rgba(0,0,0,0.65)"/>
+    <rect x="0" y="410" width="600" height="2.5" fill="${color}" opacity="0.5"/>
+    <text x="44" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="${isStyle ? 76 : 108}" fill="#ffffff" letter-spacing="-2">${decadeOrStyle}</text>
+    <text x="44" y="480" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="34" fill="#ffffff">${displayTitle}</text>
+    <text x="44" y="532" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="20" fill="rgba(255,255,255,0.75)">${subtitle}</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
@@ -664,14 +702,14 @@ export async function makeCuratedThemedCover(
   const S = 600;
   // If in node or without DOM canvas (e.g. unit tests), gracefully return high-res SVG
   if (typeof document === 'undefined') {
-    return makeEraCoverSvg(badgeText, color, title);
+    return makeEraCoverSvg(badgeText, color, title, images, subtitle);
   }
 
   try {
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const ctx = c.getContext('2d');
-    if (!ctx) return makeEraCoverSvg(badgeText, color, title);
+    if (!ctx) return makeEraCoverSvg(badgeText, color, title, images, subtitle);
 
     // 1. Atmospheric base background gradient
     const bg = ctx.createLinearGradient(0, 0, S, S);
@@ -689,8 +727,8 @@ export async function makeCuratedThemedCover(
 
     if (loadedImgs.length > 0) {
       ctx.save();
-      // Subtle transparency so the photo is clearly recognizable but seamlessly integrated into the background
-      ctx.globalAlpha = 0.38;
+      // Photos with clear visibility so songs/artists are recognizable
+      ctx.globalAlpha = 0.58;
 
       if (loadedImgs.length === 1) {
         // 1 photo: Full canvas center-crop
@@ -716,11 +754,11 @@ export async function makeCuratedThemedCover(
       }
       ctx.restore();
 
-      // Atmospheric duotone color tint over the photos
+      // Atmospheric duotone color tint over the photos (soft enough to let photos show through beautifully)
       const tint = ctx.createLinearGradient(0, 0, S, S);
-      tint.addColorStop(0, hexToRgba(color, 0.72));
-      tint.addColorStop(0.65, 'rgba(18, 18, 18, 0.75)');
-      tint.addColorStop(1, 'rgba(12, 12, 12, 0.88)');
+      tint.addColorStop(0, hexToRgba(color, 0.45));
+      tint.addColorStop(0.55, 'rgba(18, 18, 18, 0.40)');
+      tint.addColorStop(1, 'rgba(12, 12, 12, 0.85)');
       ctx.fillStyle = tint;
       ctx.fillRect(0, 0, S, S);
     }
@@ -729,46 +767,46 @@ export async function makeCuratedThemedCover(
     ctx.save();
     ctx.beginPath();
     ctx.arc(500, 100, 200, 0, Math.PI * 2);
-    ctx.fillStyle = hexToRgba(color, 0.38);
+    ctx.fillStyle = hexToRgba(color, 0.35);
     ctx.fill();
 
     ctx.beginPath();
     ctx.arc(90, 510, 240, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.50)';
     ctx.fill();
     ctx.restore();
 
     // 4. Bottom dark contrast banner for crisp legibility
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.55)';
-    ctx.fillRect(0, 420, S, 180);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
+    ctx.fillRect(0, 410, S, 190);
 
     // Accent line above the banner
-    ctx.fillStyle = hexToRgba(color, 0.4);
-    ctx.fillRect(0, 420, S, 2);
+    ctx.fillStyle = hexToRgba(color, 0.5);
+    ctx.fillRect(0, 410, S, 2.5);
 
     // 5. Typography
     ctx.save();
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
     ctx.shadowBlur = 12;
 
     const isStyle = badgeText.length > 5;
     ctx.font = `900 ${isStyle ? '76px' : '108px'} "SpotifyMixUITitle", "Circular", system-ui, sans-serif`;
-    ctx.fillText(badgeText, 48, 320);
+    ctx.fillText(badgeText, 44, 320);
 
     ctx.shadowBlur = 6;
-    ctx.font = '800 36px "SpotifyMixUI", "Circular", system-ui, sans-serif';
-    ctx.fillText(title, 48, 488);
+    ctx.font = '800 34px "SpotifyMixUI", "Circular", system-ui, sans-serif';
+    ctx.fillText(title, 44, 480);
 
     ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.72)';
-    ctx.font = '500 21px "SpotifyMixUI", "Circular", system-ui, sans-serif';
-    ctx.fillText(subtitle, 48, 538);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.font = '500 20px "SpotifyMixUI", "Circular", system-ui, sans-serif';
+    ctx.fillText(subtitle, 44, 532);
     ctx.restore();
 
     return c.toDataURL('image/jpeg', 0.85);
   } catch {
-    return makeEraCoverSvg(badgeText, color, title);
+    return makeEraCoverSvg(badgeText, color, title, images, subtitle);
   }
 }
 
@@ -1214,6 +1252,90 @@ export const ERA_PLAYLIST_DEFINITIONS = [
     ],
     get tracks() {
       return selectWeeklyTracks(this.pool, 25, 9);
+    },
+  },
+  {
+    id: 'sf-genre-indie',
+    decade: 'Indie',
+    category: 'genre' as const,
+    name: 'Mix Indie & Alternativo',
+    color: '#00897b',
+    description: 'Sonidos orgánicos, guitarras y joyas del indie rock: Arctic Monkeys, The Strokes, The Killers y Phoenix.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/53/f3/fc/53f3fccd-2024-789e-8858-c9562cc1edfa/886449216321.jpg/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67706f000000022072b736ac89da8c376e3fe6',
+    ],
+    pool: [
+      { name: 'Do I Wanna Know?', artist: 'Arctic Monkeys', album: 'AM', duration_ms: 272000 },
+      { name: 'Last Nite', artist: 'The Strokes', album: 'Is This It', duration_ms: 193000 },
+      { name: 'Somebody Told Me', artist: 'The Killers', album: 'Hot Fuss', duration_ms: 197000 },
+      { name: 'Take Me Out', artist: 'Franz Ferdinand', album: 'Franz Ferdinand', duration_ms: 237000 },
+      { name: 'Dog Days Are Over', artist: 'Florence + The Machine', album: 'Lungs', duration_ms: 252000 },
+      { name: 'The Less I Know The Better', artist: 'Tame Impala', album: 'Currents', duration_ms: 216000 },
+      { name: '1901', artist: 'Phoenix', album: 'Wolfgang Amadeus Phoenix', duration_ms: 193000 },
+      { name: 'A-Punk', artist: 'Vampire Weekend', album: 'Vampire Weekend', duration_ms: 137000 },
+      { name: 'Ain\'t No Rest for the Wicked', artist: 'Cage The Elephant', album: 'Cage The Elephant', duration_ms: 175000 },
+      { name: 'My Number', artist: 'Foals', album: 'Holy Fire', duration_ms: 240000 },
+      { name: 'Royals', artist: 'Lorde', album: 'Pure Heroine', duration_ms: 190000 },
+      { name: 'Riptide', artist: 'Vance Joy', album: 'Dream Your Life Away', duration_ms: 204000 },
+      { name: 'Little Talks', artist: 'Of Monsters and Men', album: 'My Head Is an Animal', duration_ms: 266000 },
+      { name: 'Pumped Up Kicks', artist: 'Foster The People', album: 'Torches', duration_ms: 239000 },
+      { name: 'Kids', artist: 'MGMT', album: 'Oracular Spectacular', duration_ms: 302000 },
+      { name: 'Breezeblocks', artist: 'alt-J', album: 'An Awesome Wave', duration_ms: 227000 },
+      { name: 'Midnight City', artist: 'M83', album: 'Hurry Up, We\'re Dreaming', duration_ms: 243000 },
+      { name: 'Sweater Weather', artist: 'The Neighbourhood', album: 'I Love You.', duration_ms: 240000 },
+      { name: 'Sit Next to Me', artist: 'Foster The People', album: 'Sacred Hearts Club', duration_ms: 243000 },
+      { name: 'Tongue Tied', artist: 'GROUPLOVE', album: 'Never Trust a Happy Song', duration_ms: 218000 },
+      { name: 'Safe and Sound', artist: 'Capital Cities', album: 'In a Tidal Wave of Mystery', duration_ms: 192000 },
+      { name: 'Shut Up and Dance', artist: 'WALK THE MOON', album: 'TALKING IS HARD', duration_ms: 199000 },
+      { name: 'Ex\'s & Oh\'s', artist: 'Elle King', album: 'Love Stuff', duration_ms: 202000 },
+      { name: 'Home', artist: 'Edward Sharpe & The Magnetic Zeros', album: 'Up From Below', duration_ms: 303000 },
+      { name: 'Ophelia', artist: 'The Lumineers', album: 'Cleopatra', duration_ms: 160000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 10);
+    },
+  },
+  {
+    id: 'sf-genre-hiphop',
+    decade: 'Hip-Hop',
+    category: 'genre' as const,
+    name: 'Mix Hip-Hop & Rap',
+    color: '#3949ab',
+    description: 'Los mayores himnos del rap y hip-hop: Eminem, 50 Cent, Snoop Dogg, Kendrick Lamar y Travis Scott.',
+    sampleImages: [
+      'https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3d/ac/6a/3dac6a5f-d4be-32c6-6e4a-c7a79fe5bfd9/715187754720.png/600x600bb.jpg',
+      'https://i.scdn.co/image/ab67616d00004851c0ca1263b2966ddff794d3bb',
+    ],
+    pool: [
+      { name: 'In Da Club', artist: '50 Cent', album: 'Get Rich or Die Tryin\'', duration_ms: 193000 },
+      { name: 'The Real Slim Shady', artist: 'Eminem', album: 'The Marshall Mathers LP', duration_ms: 284000 },
+      { name: 'Drop It Like It\'s Hot', artist: 'Snoop Dogg, Pharrell Williams', album: 'R&G: The Masterpiece', duration_ms: 266000 },
+      { name: 'Still D.R.E.', artist: 'Dr. Dre, Snoop Dogg', album: '2001', duration_ms: 270000 },
+      { name: 'HUMBLE.', artist: 'Kendrick Lamar', album: 'DAMN.', duration_ms: 177000 },
+      { name: 'SICKO MODE', artist: 'Travis Scott', album: 'ASTROWORLD', duration_ms: 312000 },
+      { name: 'God\'s Plan', artist: 'Drake', album: 'Scorpion', duration_ms: 198000 },
+      { name: 'Stronger', artist: 'Kanye West', album: 'Graduation', duration_ms: 311000 },
+      { name: 'Empire State of Mind', artist: 'JAY-Z, Alicia Keys', album: 'The Blueprint 3', duration_ms: 276000 },
+      { name: 'No Role Modelz', artist: 'J. Cole', album: '2014 Forest Hills Drive', duration_ms: 292000 },
+      { name: 'California Love', artist: '2Pac, Roger Troutman, Dr. Dre', album: 'All Eyez On Me', duration_ms: 284000 },
+      { name: 'Juicy', artist: 'The Notorious B.I.G.', album: 'Ready to Die', duration_ms: 302000 },
+      { name: 'Without Me', artist: 'Eminem', album: 'The Eminem Show', duration_ms: 290000 },
+      { name: 'Candy Shop', artist: '50 Cent, Olivia', album: 'The Massacre', duration_ms: 209000 },
+      { name: 'Gold Digger', artist: 'Kanye West, Jamie Foxx', album: 'Late Registration', duration_ms: 207000 },
+      { name: 'Alright', artist: 'Kendrick Lamar', album: 'To Pimp a Butterfly', duration_ms: 219000 },
+      { name: 'Mask Off', artist: 'Future', album: 'FUTURE', duration_ms: 204000 },
+      { name: 'XO Tour Llif3', artist: 'Lil Uzi Vert', album: 'Luv Is Rage 2', duration_ms: 182000 },
+      { name: 'Praise The Lord', artist: 'A$AP Rocky, Skepta', album: 'TESTING', duration_ms: 205000 },
+      { name: 'Hotline Bling', artist: 'Drake', album: 'Views', duration_ms: 267000 },
+      { name: 'Sunflower', artist: 'Post Malone, Swae Lee', album: 'Hollywood\'s Bleeding', duration_ms: 158000 },
+      { name: 'Rockstar', artist: 'Post Malone, 21 Savage', album: 'beerbongs & bentleys', duration_ms: 218000 },
+      { name: 'Can\'t Hold Us', artist: 'Macklemore & Ryan Lewis, Ray Dalton', album: 'The Heist', duration_ms: 258000 },
+      { name: 'Gangsta\'s Paradise', artist: 'Coolio, L.V.', album: 'Gangsta\'s Paradise', duration_ms: 240000 },
+      { name: 'Hypnotize', artist: 'The Notorious B.I.G.', album: 'Life After Death', duration_ms: 230000 },
+    ],
+    get tracks() {
+      return selectWeeklyTracks(this.pool, 25, 11);
     },
   },
 ];
@@ -1843,7 +1965,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
       def.color,
       finalImages,
       isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree'
-    )) || makeEraCoverSvg(def.decade, def.color, def.name);
+    )) || makeEraCoverSvg(def.decade, def.color, def.name, finalImages, isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree');
 
     out.push(mix(def.id, kind, def.name, def.description, items, cover, userName));
   }
@@ -2196,6 +2318,19 @@ export function withSpotifreeShelves(
         hasSeeAll: true,
       });
     }
+  }
+
+  // Generic genre playlists ("Playlists genéricas" / "Grandes Géneros")
+  if (genreMixes.length) {
+    ours.push({
+      id: 'sf-genre-mixes',
+      title: 'Playlists genéricas',
+      prefix: 'GRANDES GÉNEROS',
+      subtitle: 'Lo mejor del Rock, Pop, Urbano, Electrónica e Indie adaptado a ti',
+      type: 'mixes',
+      cards: genreMixes,
+      hasSeeAll: true,
+    });
   }
 
   if (moodMixes.length) {

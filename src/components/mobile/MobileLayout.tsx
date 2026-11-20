@@ -1007,14 +1007,14 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 2: SEARCH */}
         {mobileTab === 'search' && (
-          <div className="p-4 space-y-4 spf-page-enter">
+          <div className="px-4 pt-2 pb-28 spf-page-enter">
             <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
           </div>
         )}
 
         {/* TAB 3: LIBRARY */}
         {mobileTab === 'library' && (
-          <div className="p-4 space-y-4 spf-page-enter">
+          <div className="px-4 pt-2.5 pb-28 space-y-2.5 spf-page-enter">
             {/* Header */}
             <div className="flex items-center justify-between pt-1 gap-2 flex-nowrap">
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -1088,22 +1088,37 @@ export const MobileLayout: React.FC = () => {
               </div>
             )}
 
-            {/* Filter Chips (Fits cleanly on mobile with zero scroll) */}
-            <div className="grid grid-cols-3 gap-2 w-full pb-1">
+            {/* Filter Chips (Spotify Horizontal Scrollable Chips) */}
+            <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-4 px-4 py-0.5">
+              {libraryFilter !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => setLibraryFilter('all')}
+                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white shrink-0 transition-transform cursor-pointer"
+                  title="Borrar filtro"
+                  aria-label="Borrar filtro"
+                >
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M14.7 1.3a1 1 0 0 0-1.4 0L8 6.6 2.7 1.3A1 1 0 0 0 1.3 2.7L6.6 8l-5.3 5.3a1 1 0 1 0 1.4 1.4L8 9.4l5.3 5.3a1 1 0 0 0 1.4-1.4L9.4 8l5.3-5.3a1 1 0 0 0 0-1.4z" />
+                  </svg>
+                </button>
+              )}
               {[
                 { id: 'playlists', label: 'Playlists' },
                 { id: 'artists', label: 'Artistas' },
+                { id: 'albums', label: 'Álbumes' },
                 { id: 'downloaded', label: 'Descargas' },
               ].map((chip) => {
                 const isSelected = libraryFilter === chip.id;
                 return (
                   <button
                     key={chip.id}
+                    type="button"
                     onClick={() => setLibraryFilter(isSelected ? 'all' : (chip.id as any))}
-                    className={`h-8 px-2 rounded-full text-xs font-bold transition-all text-center flex items-center justify-center cursor-pointer ${
+                    className={`h-8 px-3.5 rounded-full text-[13px] font-medium shrink-0 transition-all cursor-pointer flex items-center justify-center ${
                       isSelected
-                        ? 'bg-[#1ed760] text-black font-black shadow-sm'
-                        : 'bg-white/10 text-white hover:bg-white/15'
+                        ? 'bg-[#1ed760] text-black font-bold shadow-sm'
+                        : 'bg-[#282828] text-white hover:bg-[#323232] active:scale-95'
                     }`}
                   >
                     {chip.label}
@@ -1112,14 +1127,14 @@ export const MobileLayout: React.FC = () => {
               })}
             </div>
 
-            {/* Subheader Toolbar: Sort (< | > rotated 90deg / Up-Down arrows) & View Mode (4-squares) */}
+            {/* Subheader Toolbar: Sort & View Mode */}
             {isAuthenticated && (
-              <div className="flex items-center justify-between pt-2 pb-1.5 px-1 select-none">
+              <div className="flex items-center justify-between pt-1 pb-1 px-0.5 select-none">
                 {/* Left: Sort Button with Spotify's official Up/Down arrows icon */}
                 <button
                   type="button"
                   onClick={() => setIsMobileSortSheetOpen(true)}
-                  className="flex items-center gap-2 text-white/90 hover:text-white active:scale-95 transition-all text-xs font-bold cursor-pointer group"
+                  className="flex items-center gap-1.5 text-white/90 hover:text-white active:scale-95 transition-all text-xs font-bold cursor-pointer group"
                   aria-label="Ordenar biblioteca"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-white/80 group-hover:text-white shrink-0">
@@ -1238,7 +1253,7 @@ export const MobileLayout: React.FC = () => {
 
               if (isGrid) {
                 return (
-                  <div className="grid grid-cols-2 gap-3 pt-2 pb-6">
+                  <div className="grid grid-cols-2 gap-3 pt-1 pb-6">
                     {/* Liked songs card */}
                     {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
                       <div
@@ -1249,7 +1264,7 @@ export const MobileLayout: React.FC = () => {
                             'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
                           )
                         }
-                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors group select-none"
+                        className="p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all group select-none"
                       >
                         <img
                           src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
@@ -1257,12 +1272,14 @@ export const MobileLayout: React.FC = () => {
                           onError={handleImageError}
                           className="w-full aspect-square rounded-[6px] object-cover shadow-md shrink-0"
                         />
-                        <span className="font-bold text-white text-sm truncate mt-2">
-                          Canciones que te gustan
-                        </span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                          Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
-                        </span>
+                        <div className="pt-1.5 pb-1 px-0.5 min-w-0">
+                          <span className="font-bold text-white text-[13px] leading-tight truncate block">
+                            Canciones que te gustan
+                          </span>
+                          <span className="text-[11px] text-[#b3b3b3] mt-0.5 truncate block">
+                            Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -1270,7 +1287,7 @@ export const MobileLayout: React.FC = () => {
                     {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
                       <div
                         onClick={() => setMobileTab('dj')}
-                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors group select-none"
+                        className="p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all group select-none"
                       >
                         <img
                           src={SPOTIFY_DJ_COVER_IMAGE}
@@ -1278,13 +1295,15 @@ export const MobileLayout: React.FC = () => {
                           onError={handleImageError}
                           className="w-full aspect-square rounded-[6px] object-cover shadow-md shrink-0"
                         />
-                        <span className="font-bold text-white text-sm truncate mt-2 flex items-center gap-1.5">
-                          <span>DJ</span>
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
-                        </span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                          Playlist • Hecho para ti
-                        </span>
+                        <div className="pt-1.5 pb-1 px-0.5 min-w-0">
+                          <span className="font-bold text-white text-[13px] leading-tight truncate flex items-center gap-1.5">
+                            <span>DJ</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
+                          </span>
+                          <span className="text-[11px] text-[#b3b3b3] mt-0.5 truncate block">
+                            Playlist • Hecho para ti
+                          </span>
+                        </div>
                       </div>
                     )}
 
@@ -1310,8 +1329,8 @@ export const MobileLayout: React.FC = () => {
                             cancelLongPress();
                             handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
                           }}
-                          className={`p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors relative group select-none ${
-                            isLongPressed ? 'bg-white/15 z-30' : ''
+                          className={`p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all relative group select-none ${
+                            isLongPressed ? 'bg-white/10 p-1.5 rounded-lg z-30' : ''
                           }`}
                         >
                           <img
@@ -1322,30 +1341,32 @@ export const MobileLayout: React.FC = () => {
                               isArt ? 'rounded-full' : 'rounded-[6px]'
                             }`}
                           />
-                          <div className="flex items-center justify-between mt-2 min-w-0">
-                            <span className="font-bold text-white text-sm truncate">
-                              {pl.name}
+                          <div className="pt-1.5 pb-1 px-0.5 min-w-0">
+                            <div className="flex items-center justify-between min-w-0">
+                              <span className="font-bold text-white text-[13px] leading-tight truncate">
+                                {pl.name}
+                              </span>
+                              {isLongPressed && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    openPlaylistOptions(pl);
+                                  }}
+                                  className="w-6 h-6 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white shrink-0 ml-1"
+                                >
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                                    <circle cx="5" cy="12" r="2" />
+                                    <circle cx="12" cy="12" r="2" />
+                                    <circle cx="19" cy="12" r="2" />
+                                  </svg>
+                                </button>
+                              )}
+                            </div>
+                            <span className="text-[11px] text-[#b3b3b3] mt-0.5 truncate block">
+                              {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
                             </span>
-                            {isLongPressed && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openPlaylistOptions(pl);
-                                }}
-                                className="w-7 h-7 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white shrink-0 ml-1"
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                  <circle cx="5" cy="12" r="2" />
-                                  <circle cx="12" cy="12" r="2" />
-                                  <circle cx="19" cy="12" r="2" />
-                                </svg>
-                              </button>
-                            )}
                           </div>
-                          <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
-                            {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
-                          </span>
                         </div>
                       );
                     })}
@@ -1354,7 +1375,7 @@ export const MobileLayout: React.FC = () => {
                     {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
                       <div
                         onClick={() => setMobileTab('local')}
-                        className="p-2 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer flex flex-col transition-colors select-none"
+                        className="p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all select-none"
                       >
                         <div
                           className="w-full aspect-square rounded-[6px] flex items-center justify-center shadow-md overflow-hidden"
@@ -1364,25 +1385,27 @@ export const MobileLayout: React.FC = () => {
                             <path d="M3 5a2 2 0 0 1 2-2h4.6l2 2H19a2 2 0 0 1 2 2v1H3zm-0 4h18v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2zm11 2v4.27A2 2 0 1 0 15 17v-4h2v-2z" />
                           </svg>
                         </div>
-                        <span className="font-bold text-white text-sm truncate mt-2">Archivos locales</span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
-                          <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
-                          <span>Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}</span>
-                        </span>
+                        <div className="pt-1.5 pb-1 px-0.5 min-w-0">
+                          <span className="font-bold text-white text-[13px] leading-tight truncate block">Archivos locales</span>
+                          <span className="text-[11px] text-[#b3b3b3] mt-0.5 flex items-center gap-1 truncate">
+                            <DownloadActiveCircleNativeIcon size={11} className="text-[#1ed760] shrink-0" />
+                            <span>Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}</span>
+                          </span>
+                        </div>
                       </div>
                     )}
 
                     {/* Spotify Native "Añadir a tu biblioteca" Card in Grid */}
                     <div
                       onClick={() => setIsAddLibraryModalOpen(true)}
-                      className="p-2 rounded-lg hover:bg-white/5 active:bg-white/10 cursor-pointer flex flex-col items-center justify-center text-center aspect-square rounded-[6px] border border-dashed border-white/20 select-none transition-colors"
+                      className="p-0 cursor-pointer flex flex-col items-center justify-center text-center aspect-square rounded-[6px] border border-dashed border-white/20 select-none active:scale-[0.98] transition-all hover:border-white/40"
                     >
-                      <div className="w-12 h-12 rounded-full bg-[#242424] flex items-center justify-center text-white/80 mb-2 shadow-sm">
+                      <div className="w-11 h-11 rounded-full bg-[#242424] flex items-center justify-center text-white/80 mb-2 shadow-sm">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
                         </svg>
                       </div>
-                      <span className="text-xs font-bold text-white/80">Añadir más</span>
+                      <span className="text-[11px] font-bold text-white/80">Añadir más</span>
                     </div>
                   </div>
                 );
@@ -1390,7 +1413,7 @@ export const MobileLayout: React.FC = () => {
 
               // List / Compact rendering
               return (
-                <div className={`pt-1 ${isCompact ? 'space-y-0.5' : 'space-y-1.5'}`}>
+                <div className={`pt-1 ${isCompact ? 'space-y-0.5' : 'space-y-1'}`}>
                   {/* Liked songs item */}
                   {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
                     <div
@@ -1401,21 +1424,21 @@ export const MobileLayout: React.FC = () => {
                           'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'
                         )
                       }
-                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
-                        isCompact ? 'p-1.5' : 'p-2'
+                      className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
+                        isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
                       }`}
                     >
                       <img
                         src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
                         alt="Canciones que te gustan"
                         onError={handleImageError}
-                        className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-[4px] object-cover shadow shrink-0`}
+                        className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} rounded-[4px] object-cover shadow-sm shrink-0`}
                       />
                       <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-white text-sm truncate">
+                        <span className="font-semibold text-white text-[15px] leading-tight truncate">
                           Canciones que te gustan
                         </span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5">
+                        <span className="text-[12px] text-[#b3b3b3] mt-0.5 leading-tight truncate">
                           Playlist • {playlists.find((p) => p.id === 'liked-songs')?.tracks?.total || getCustomLikedSongs().length || 0} canciones
                         </span>
                       </div>
@@ -1426,22 +1449,22 @@ export const MobileLayout: React.FC = () => {
                   {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
                     <div
                       onClick={() => setMobileTab('dj')}
-                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
-                        isCompact ? 'p-1.5' : 'p-2'
+                      className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
+                        isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
                       }`}
                     >
                       <img
                         src={SPOTIFY_DJ_COVER_IMAGE}
                         alt="DJ"
                         onError={handleImageError}
-                        className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-[4px] object-cover shadow shrink-0`}
+                        className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} rounded-[4px] object-cover shadow-sm shrink-0`}
                       />
                       <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-white text-sm truncate flex items-center gap-1.5">
+                        <span className="font-semibold text-white text-[15px] leading-tight truncate flex items-center gap-1.5">
                           <span>DJ</span>
                           <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-pulse" />
                         </span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5">
+                        <span className="text-[12px] text-[#b3b3b3] mt-0.5 leading-tight truncate">
                           Playlist • Hecho para ti
                         </span>
                       </div>
@@ -1478,8 +1501,8 @@ export const MobileLayout: React.FC = () => {
                           cancelLongPress();
                           handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
                         }}
-                        className={`flex items-center justify-between rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors relative group select-none ${
-                          isCompact ? 'p-1.5' : 'p-2'
+                        className={`flex items-center justify-between rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors relative group select-none ${
+                          isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
                         } ${isLongPressed ? 'bg-white/15 z-30' : ''}`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
@@ -1487,15 +1510,15 @@ export const MobileLayout: React.FC = () => {
                             src={getPlaylistCover(pl)}
                             alt={pl.name}
                             onError={onPlaylistCoverError(pl)}
-                            className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} object-cover bg-[#242424] shadow shrink-0 ${
+                            className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} object-cover bg-[#242424] shadow-sm shrink-0 ${
                               isArt ? 'rounded-full' : 'rounded-[4px]'
                             }`}
                           />
                           <div className="flex flex-col min-w-0">
-                            <span className="font-bold text-white text-sm truncate">
+                            <span className="font-semibold text-white text-[15px] leading-tight truncate">
                               {pl.name}
                             </span>
-                            <span className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                            <span className="text-[12px] text-[#b3b3b3] mt-0.5 leading-tight truncate">
                               {isArt ? 'Artista' : `Playlist • ${pl.owner?.display_name || user?.display_name || 'Spotify'}`}
                             </span>
                           </div>
@@ -1527,16 +1550,16 @@ export const MobileLayout: React.FC = () => {
                   {(libraryFilter === 'all' || libraryFilter === 'playlists' || libraryFilter === 'downloaded') && (
                     <div
                       onClick={() => setMobileTab('local')}
-                      className={`flex items-center gap-3 rounded-lg hover:bg-white/10 active:bg-white/15 cursor-pointer transition-colors ${
-                        isCompact ? 'p-1.5' : 'p-2'
+                      className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
+                        isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
                       }`}
                     >
-                      <LocalFilesCover size={isCompact ? 40 : 56} className="rounded-[4px] shrink-0" />
+                      <LocalFilesCover size={isCompact ? 40 : 48} className="rounded-[4px] shrink-0" />
                       <div className="flex flex-col min-w-0">
-                        <span className="font-bold text-white text-sm truncate">Archivos locales</span>
-                        <span className="text-xs text-[#b3b3b3] mt-0.5 flex items-center gap-1">
-                          <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760]" />
-                          Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}
+                        <span className="font-semibold text-white text-[15px] leading-tight truncate">Archivos locales</span>
+                        <span className="text-[12px] text-[#b3b3b3] mt-0.5 flex items-center gap-1 leading-tight truncate">
+                          <DownloadActiveCircleNativeIcon size={12} className="text-[#1ed760] shrink-0" />
+                          <span>Playlist • {localCount} {localCount === 1 ? 'canción' : 'canciones'}</span>
                         </span>
                       </div>
                     </div>
@@ -1545,9 +1568,9 @@ export const MobileLayout: React.FC = () => {
                   {/* Spotify Native "Añadir a tu biblioteca" Row in List */}
                   <div
                     onClick={() => setIsAddLibraryModalOpen(true)}
-                    className="mt-3 p-2.5 rounded-xl flex items-center gap-3.5 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group bg-white/[0.02]"
+                    className="mt-2 py-1.5 px-1 rounded-md flex items-center gap-3 hover:bg-white/5 active:bg-white/10 cursor-pointer transition-all active:scale-[0.99] group"
                   >
-                    <div className={`${isCompact ? 'w-10 h-10' : 'w-14 h-14'} rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5`}>
+                    <div className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} rounded-full bg-[#242424] group-hover:bg-[#2e2e2e] flex items-center justify-center text-white/80 group-hover:text-white transition-colors shrink-0 shadow-sm border border-white/5`}>
                       <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M11 4.5a1 1 0 0 1 2 0v6.5H19.5a1 1 0 0 1 0 2H13V19.5a1 1 0 0 1-2 0V13H4.5a1 1 0 0 1 0-2H11V4.5z" />
                       </svg>
