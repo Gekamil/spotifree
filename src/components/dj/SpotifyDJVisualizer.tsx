@@ -10,6 +10,7 @@ export interface SpotifyDJVisualizerProps {
   className?: string;
   mini?: boolean; // For floating button icon
   themeColor?: string; // Dynamic track dominant color
+  forceWaves?: boolean; // Keep the multi-layer undulating speech waves active
 }
 
 /**
@@ -112,10 +113,12 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   className = '',
   mini = false,
   themeColor,
+  forceWaves = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const stateRef = useRef(state);
   const voiceLevelRef = useRef(voiceLevel);
+  const forceWavesRef = useRef(forceWaves);
   const smoothedVoiceRef = useRef(0);
   const splitAmountRef = useRef(0);
   const themeColorRef = useRef(themeColor);
@@ -127,6 +130,10 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
   useEffect(() => {
     voiceLevelRef.current = voiceLevel;
   }, [voiceLevel]);
+
+  useEffect(() => {
+    forceWavesRef.current = forceWaves;
+  }, [forceWaves]);
 
   useEffect(() => {
     themeColorRef.current = themeColor;
@@ -208,10 +215,12 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const draw = () => {
       const currentState = stateRef.current;
-      const targetVoice = voiceLevelRef.current;
-
-      const isSpeaking = currentState === 'speaking' || currentState === 'listening';
+      const hasForceWaves = Boolean(forceWavesRef.current);
+      const isSpeaking = currentState === 'speaking' || currentState === 'listening' || hasForceWaves;
       const isPlaying = currentState === 'playing';
+      const targetVoice = hasForceWaves && currentState !== 'speaking'
+        ? Math.max(0.42, voiceLevelRef.current || 0.42)
+        : voiceLevelRef.current;
 
       // Speed of rotation & wave travel: faster when speaking or playing, gentle when idle
       const speed = mini

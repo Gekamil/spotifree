@@ -829,26 +829,23 @@ export const MobileLayout: React.FC = () => {
                       />
                     </div>
 
-                    {/* Center Visualizer: Animated Orb reacting dynamically when DJ is speaking */}
+                    {/* Center Visualizer: Animated Orb reacting dynamically with multiple speech waves */}
                     <div
-                      className="absolute left-1/2 -translate-x-1/2 -top-1 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10"
+                      className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10"
                       style={{
-                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
-                        maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
+                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 78%, rgba(0, 0, 0, 0.25) 100%)',
+                        maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 78%, rgba(0, 0, 0, 0.25) 100%)',
                       }}
                     >
                       <div
                         className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700"
-                        style={{
-                          WebkitMaskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
-                          maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
-                        }}
                       >
                         <SpotifyDJVisualizer
                           size={150}
                           state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
-                          voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
+                          voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.35 : 0.25}
                           themeColor={djThemeColor}
+                          forceWaves={true}
                         />
                       </div>
                     </div>
