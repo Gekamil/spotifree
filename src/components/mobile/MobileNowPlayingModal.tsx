@@ -85,11 +85,21 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   );
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
-  const [queueDragY, setQueueDragY] = useState(0);
-  const [isQueueDragging, setIsQueueDragging] = useState(false);
-  const queueStartYRef = useRef(0);
-  const queueCurrentYRef = useRef(0);
   const queueScrollRef = useRef<HTMLDivElement>(null);
+  const {
+    dragY: queueDragY,
+    isDismissing: isQueueDismissing,
+    handleProps: queueHandleProps,
+    contentProps: queueContentProps,
+    sheetStyle: queueSheetStyle,
+    resetDrag: resetQueueDrag,
+    triggerDismiss: dismissQueue,
+  } = useDragToDismiss({
+    onClose: () => setIsQueueOpen(false),
+    scrollRef: queueScrollRef,
+    threshold: 70,
+    velocityThreshold: 0.4,
+  });
 
   // Queue: press and hold a song, then drag it to move it (the row takes the grey it already
   // shows when pressed). Moving the finger before the hold is a normal scroll.
@@ -122,8 +132,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       holdStartIdx.current = idx;
       setReorder({ idx, offset: 0 });
       // the swipe-down-to-close of the queue doesn't apply while moving a song
-      setIsQueueDragging(false);
-      setQueueDragY(0);
+      resetQueueDrag();
       try {
         navigator.vibrate?.(12);
       } catch {}
@@ -156,43 +165,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     }
   };
 
-  const handleQueueTouchStart = (e: React.TouchEvent) => {
-    queueStartYRef.current = e.touches[0].clientY;
-    queueCurrentYRef.current = e.touches[0].clientY;
-    setIsQueueDragging(true);
-  };
-
-  const handleQueueBodyTouchStart = (e: React.TouchEvent) => {
-    if (queueScrollRef.current && queueScrollRef.current.scrollTop <= 5) {
-      queueStartYRef.current = e.touches[0].clientY;
-      queueCurrentYRef.current = e.touches[0].clientY;
-      setIsQueueDragging(true);
-    }
-  };
-
-  const handleQueueTouchMove = (e: React.TouchEvent) => {
-    if (!isQueueDragging) return;
-    const delta = e.touches[0].clientY - queueStartYRef.current;
-    if (delta > 0) {
-      queueCurrentYRef.current = e.touches[0].clientY;
-      setQueueDragY(delta);
-    }
-  };
-
-  const handleQueueTouchEnd = () => {
-    if (!isQueueDragging) return;
-    setIsQueueDragging(false);
-    const delta = queueCurrentYRef.current - queueStartYRef.current;
-    if (delta > 80) {
-      setQueueDragY(window.innerHeight || 800);
-      setTimeout(() => {
-        setIsQueueOpen(false);
-        setQueueDragY(0);
-      }, 200);
-    } else {
-      setQueueDragY(0);
-    }
-  };
   const isDJActive =
     currentContextId === 'dj-session' ||
     currentContextId === 'spotify-dj' ||
@@ -208,14 +180,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const menuScrollRef = useRef<HTMLDivElement>(null);
   const {
     dragY: menuDragY,
+    isDismissing: isMenuDismissing,
     handleProps: menuHandleProps,
     contentProps: menuContentProps,
     sheetStyle: menuSheetStyle,
+    triggerDismiss: dismissMenu,
   } = useDragToDismiss({
     onClose: () => setIsMenuOpen(false),
     scrollRef: menuScrollRef,
-    threshold: 80,
-    velocityThreshold: 0.5,
+    threshold: 70,
+    velocityThreshold: 0.4,
   });
   const [isTrackDownloadedState, setIsTrackDownloadedState] = useState(false);
   const [isDownloadingTrackState, setIsDownloadingTrackState] = useState(false);
@@ -1176,11 +1150,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       {/* Track More Options Menu / Bottom Sheet ("Más opciones") */}
       {isMenuOpen && (
         <div className="fixed inset-0 z-[120] flex flex-col justify-end">
-          {/* Backdrop */}
+          {/* Backdrop with animated fade */}
           <div
-            onClick={() => setIsMenuOpen(false)}
+            onClick={() => dismissMenu()}
             style={{
-              opacity: menuDragY > 0 ? Math.max(0, 1 - menuDragY / 400) : undefined,
+              opacity: isMenuDismissing ? 0 : menuDragY > 0 ? Math.max(0, 1 - menuDragY / 400) : undefined,
+              transition: isMenuDismissing ? 'opacity 0.22s ease' : undefined,
             }}
             className="fixed inset-0 bg-black/65 backdrop-blur-sm animate-fade-in"
           />
@@ -1190,12 +1165,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             ref={menuScrollRef}
             {...menuContentProps}
             style={menuSheetStyle}
-            className="relative z-10 bg-[#242424] rounded-t-[22px] px-5 pb-5 pt-2 animate-slide-up-modal max-h-[75vh] overflow-y-auto border-t border-white/10 shadow-2xl select-none"
+            className={`relative z-10 bg-[#242424] rounded-t-[22px] px-5 pb-5 pt-2 max-h-[75vh] overflow-y-auto border-t border-white/10 shadow-2xl select-none ${
+              isMenuDismissing ? '' : 'animate-slide-up-modal'
+            }`}
           >
             {/* Top Drag Handle (44px touch target area) */}
             <div
               {...menuHandleProps}
-              className="w-full min-h-[36px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+              className="w-full min-h-[38px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
               aria-label="Arrastrar para cerrar"
               role="presentation"
             >
@@ -1230,7 +1207,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 1: Compartir */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (navigator.share) {
                     navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
                   } else {
@@ -1257,7 +1234,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 onClick={() => {
                   toggleLike(currentTrack.id, currentTrack);
                   showGlobalToast(!isLiked ? 'Añadida a Canciones que te gustan' : 'Eliminada de Canciones que te gustan');
-                  setIsMenuOpen(false);
+                  dismissMenu();
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
@@ -1277,7 +1254,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <button
                 onClick={() => {
                   const t = currentTrack;
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   setTimeout(() => useUIStore.getState().openAddToPlaylistModal(t), 150);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
@@ -1296,7 +1273,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <button
                 onClick={() => {
                   const t = currentTrack;
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (isNotInterested(t)) {
                     undoNotInterested(t);
                     showGlobalToast('Podremos volver a ponértela');
@@ -1321,7 +1298,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 onClick={() => {
                   addToQueue(currentTrack);
                   showGlobalToast('Añadida a la cola');
-                  setIsMenuOpen(false);
+                  dismissMenu();
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
@@ -1340,8 +1317,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 6: Ir a la cola */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
-                  setTimeout(() => setIsQueueOpen(true), 120);
+                  dismissMenu();
+                  setTimeout(() => setIsQueueOpen(true), 150);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
@@ -1358,7 +1335,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 7: Ir al álbum */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (currentTrack.album?.id && onSelectPlaylistById) {
                     onClose();
                     onSelectPlaylistById(currentTrack.album.id, currentTrack.album.name);
@@ -1380,7 +1357,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 8: Ir al artista */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (artistName && onSelectPlaylistById) {
                     onClose();
                     onSelectPlaylistById(
@@ -1404,7 +1381,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 9: Temporizador de apagado */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   openSleepTimerSheet();
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
@@ -1425,7 +1402,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 10: Cambiar fuente de audio */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   openAudioSourceSheet(currentTrack);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
@@ -1441,7 +1418,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* 11: Descargar */}
               <button
                 onClick={async () => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (isTrackDownloadedState) {
                     await removeTrackDownload(currentTrack);
                     setIsTrackDownloadedState(false);
@@ -1476,7 +1453,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {labsEnabled && speedControlEnabled && (
                 <button
                   onClick={() => {
-                    setIsMenuOpen(false);
+                    dismissMenu();
                     openSpeedControlSheet();
                   }}
                   className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
@@ -1499,7 +1476,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               {/* Stories Card */}
               <button
                 onClick={() => {
-                  setIsMenuOpen(false);
+                  dismissMenu();
                   if (currentTrack) openStoryCard(currentTrack);
                 }}
                 className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
@@ -1521,29 +1498,27 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
       {/* Mobile Queue Bottom Sheet (1:1 Spotify Mobile Parity with Swipe-to-Dismiss) */}
       {isQueueOpen && (
         <div className="fixed inset-0 z-[120] flex flex-col justify-end pointer-events-auto">
-          {/* Backdrop */}
+          {/* Backdrop with animated fade */}
           <div
-            onClick={() => setIsQueueOpen(false)}
+            onClick={() => dismissQueue()}
             style={{
-              opacity: queueDragY > 0 ? Math.max(0, 1 - queueDragY / 400) : undefined,
+              opacity: isQueueDismissing ? 0 : queueDragY > 0 ? Math.max(0, 1 - queueDragY / 400) : undefined,
+              transition: isQueueDismissing ? 'opacity 0.22s ease' : undefined,
             }}
             className="fixed inset-0 bg-black/65 backdrop-blur-[2px] animate-fade-in"
           />
 
           {/* Drawer Sheet */}
           <div
-            className="relative z-10 bg-[#1e1e1e] rounded-t-[24px] max-h-[82vh] h-[78vh] flex flex-col shadow-2xl border-t border-white/10 animate-slide-up-modal select-none font-['SpotifyMixUI']"
-            style={{
-              transform: `translateY(${queueDragY}px)`,
-              transition: isQueueDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-            }}
+            style={queueSheetStyle}
+            className={`relative z-10 bg-[#1e1e1e] rounded-t-[24px] max-h-[82vh] h-[78vh] flex flex-col shadow-2xl border-t border-white/10 select-none font-['SpotifyMixUI'] ${
+              isQueueDismissing ? '' : 'animate-slide-up-modal'
+            }`}
           >
-            {/* Top Drag Handle */}
+            {/* Top Drag Handle (pointer + touch universal capture) */}
             <div
-              onTouchStart={handleQueueTouchStart}
-              onTouchMove={handleQueueTouchMove}
-              onTouchEnd={handleQueueTouchEnd}
-              className="w-full min-h-[34px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+              {...queueHandleProps}
+              className="w-full min-h-[38px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
               aria-label="Arrastrar para cerrar"
               role="presentation"
             >
@@ -1552,10 +1527,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             {/* Header: Cola + Reproduciendo <source> (1:1 with Screenshot 2) */}
             <div
-              onTouchStart={handleQueueTouchStart}
-              onTouchMove={handleQueueTouchMove}
-              onTouchEnd={handleQueueTouchEnd}
-              className="px-5 pt-1 pb-2 shrink-0"
+              {...queueHandleProps}
+              className="px-5 pt-1 pb-2 shrink-0 cursor-grab active:cursor-grabbing touch-none select-none"
             >
               <h3 className="font-bold text-white text-2xl font-['SpotifyMixUITitle']">
                 Cola
@@ -1628,9 +1601,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             {/* Upcoming Queue Section (scrollable) */}
             <div
               ref={queueScrollRef}
-              onTouchStart={handleQueueBodyTouchStart}
-              onTouchMove={handleQueueTouchMove}
-              onTouchEnd={handleQueueTouchEnd}
+              {...queueContentProps}
               className="flex-1 overflow-y-auto px-5 pb-3 space-y-1.5"
             >
               {(() => {
@@ -1665,7 +1636,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                           onClick={() => {
                             if (suppressClick.current) return;
                             playTrack(t, queue);
-                            setIsQueueOpen(false);
+                            dismissQueue();
                           }}
                           style={
                             dragging

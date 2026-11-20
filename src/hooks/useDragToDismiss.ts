@@ -65,6 +65,10 @@ export interface UseDragToDismissReturn {
     onTouchMove: (e: React.TouchEvent) => void;
     onTouchEnd: (e: React.TouchEvent) => void;
     onTouchCancel: (e: React.TouchEvent) => void;
+    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: (e: React.PointerEvent) => void;
+    onPointerCancel: (e: React.PointerEvent) => void;
   };
 
   /** Event handlers to attach to the sheet content / body */
@@ -73,6 +77,10 @@ export interface UseDragToDismissReturn {
     onTouchMove: (e: React.TouchEvent) => void;
     onTouchEnd: (e: React.TouchEvent) => void;
     onTouchCancel: (e: React.TouchEvent) => void;
+    onPointerDown: (e: React.PointerEvent) => void;
+    onPointerMove: (e: React.PointerEvent) => void;
+    onPointerUp: (e: React.PointerEvent) => void;
+    onPointerCancel: (e: React.PointerEvent) => void;
   };
 
   /** Inline styles providing real-time transform and transition for the sheet container */
@@ -80,6 +88,9 @@ export interface UseDragToDismissReturn {
 
   /** Manually reset drag displacement to 0 */
   resetDrag: () => void;
+
+  /** Programmatically triggers animated dismissal with exit slide-down transition */
+  triggerDismiss: () => void;
 }
 
 /**
@@ -212,11 +223,111 @@ export function useDragToDismiss({
     setDragY(0);
   }, []);
 
+  const startPointerDrag = useCallback(
+    (e: React.PointerEvent, checkScroll: boolean) => {
+      if (disabled || isDismissingRef.current) return;
+      if (e.pointerType === 'mouse' && e.button !== 0) return;
+
+      if (checkScroll && scrollRef?.current) {
+        if (scrollRef.current.scrollTop > maxScrollTop) {
+          return;
+        }
+      }
+
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {}
+
+      const clientY = e.clientY;
+      startYRef.current = clientY;
+      currentYRef.current = clientY;
+      lastTimeRef.current = Date.now();
+      velocityRef.current = 0;
+
+      isDraggingRef.current = true;
+      setIsDragging(true);
+    },
+    [disabled, maxScrollTop, scrollRef]
+  );
+
+  const handlePointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDraggingRef.current || isDismissingRef.current || disabled) return;
+
+      const clientY = e.clientY;
+      const delta = clientY - startYRef.current;
+      const now = Date.now();
+      const dt = now - lastTimeRef.current;
+
+      if (dt > 0) {
+        velocityRef.current = (clientY - currentYRef.current) / dt;
+        lastTimeRef.current = now;
+      }
+      currentYRef.current = clientY;
+
+      if (delta > 0) {
+        setDragY(delta);
+      } else {
+        setDragY(0);
+      }
+    },
+    [disabled]
+  );
+
+  const handlePointerUp = useCallback(
+    (e: React.PointerEvent) => {
+      if (!isDraggingRef.current || isDismissingRef.current || disabled) return;
+
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+
+      handleTouchEnd();
+    },
+    [disabled, handleTouchEnd]
+  );
+
+  const handlePointerCancel = useCallback(
+    (e: React.PointerEvent) => {
+      try {
+        if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+          e.currentTarget.releasePointerCapture(e.pointerId);
+        }
+      } catch {}
+      handleTouchCancel();
+    },
+    [handleTouchCancel]
+  );
+
+  const triggerDismiss = useCallback(() => {
+    if (isDismissingRef.current) return;
+    isDismissingRef.current = true;
+    setIsDismissing(true);
+
+    const resolvedExit =
+      exitDistance ?? (typeof window !== 'undefined' && window.innerHeight ? window.innerHeight : 800);
+
+    setDragY(resolvedExit);
+
+    timeoutRef.current = window.setTimeout(() => {
+      onClose();
+      setDragY(0);
+      isDismissingRef.current = false;
+      setIsDismissing(false);
+    }, exitDuration);
+  }, [exitDistance, exitDuration, onClose]);
+
   const handleProps = {
     onTouchStart: (e: React.TouchEvent) => startDrag(e, false),
     onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
     onTouchCancel: handleTouchCancel,
+    onPointerDown: (e: React.PointerEvent) => startPointerDrag(e, false),
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+    onPointerCancel: handlePointerCancel,
   };
 
   const contentProps = {
@@ -224,6 +335,10 @@ export function useDragToDismiss({
     onTouchMove: handleTouchMove,
     onTouchEnd: handleTouchEnd,
     onTouchCancel: handleTouchCancel,
+    onPointerDown: (e: React.PointerEvent) => startPointerDrag(e, true),
+    onPointerMove: handlePointerMove,
+    onPointerUp: handlePointerUp,
+    onPointerCancel: handlePointerCancel,
   };
 
   const sheetStyle: React.CSSProperties = disabled
@@ -232,6 +347,8 @@ export function useDragToDismiss({
         transform: dragY > 0 ? `translateY(${dragY}px)` : undefined,
         transition: isDragging
           ? 'none'
+          : isDismissing
+          ? `transform ${exitDuration}ms cubic-bezier(0.32, 1, 0.23, 1), opacity ${exitDuration}ms ease`
           : dragY > 0
           ? 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)'
           : undefined,
@@ -253,5 +370,6 @@ export function useDragToDismiss({
     contentProps,
     sheetStyle,
     resetDrag,
+    triggerDismiss,
   };
 }

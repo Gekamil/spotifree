@@ -649,40 +649,62 @@ function loadCoverPhoto(url: string, timeoutMs = 2800): Promise<HTMLImageElement
 export function makeEraCoverSvg(
   decadeOrStyle: string,
   color: string,
-  customTitle?: string,
+  _customTitle?: string,
   images: string[] = [],
-  subtitle = 'Actualizado esta semana · Spotifree'
+  _subtitle = 'Actualizado esta semana · Spotifree'
 ): string {
-  const displayTitle = customTitle || `Mix de los ${decadeOrStyle}`;
-  const isStyle = decadeOrStyle.length > 5;
   const validImages = (images || []).filter(Boolean);
-  let imageLayers = '';
-  if (validImages.length > 0) {
-    imageLayers = `<image href="${validImages[0]}" x="0" y="0" width="600" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.52"/>`;
-  }
+  const cleanBadge = decadeOrStyle.replace(/^(Mix\s+|Años\s+)/i, '').trim();
+  const mainTitle = decadeOrStyle.startsWith('Años ') ? decadeOrStyle : cleanBadge;
+  const isLong = mainTitle.length > 7;
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
     <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
         <stop offset="0%" stop-color="${color}"/>
-        <stop offset="55%" stop-color="#161616"/>
-        <stop offset="100%" stop-color="#0c0c0c"/>
+        <stop offset="55%" stop-color="#141414"/>
+        <stop offset="100%" stop-color="#0a0a0a"/>
       </linearGradient>
-      <linearGradient id="tint" x1="0%" y1="0%" x2="100%" y2="100%">
+      <radialGradient id="radialGlow" cx="25%" cy="25%" r="75%">
         <stop offset="0%" stop-color="${color}" stop-opacity="0.45"/>
-        <stop offset="55%" stop-color="#121212" stop-opacity="0.40"/>
-        <stop offset="100%" stop-color="#0c0c0c" stop-opacity="0.85"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </radialGradient>
+      <linearGradient id="bottomFade" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#0a0a0a" stop-opacity="0"/>
+        <stop offset="50%" stop-color="#0a0a0a" stop-opacity="0.5"/>
+        <stop offset="100%" stop-color="#0a0a0a" stop-opacity="0.95"/>
       </linearGradient>
+      <clipPath id="artistCircle">
+        <circle cx="390" cy="225" r="160"/>
+      </clipPath>
     </defs>
-    <rect width="600" height="600" fill="url(#g)"/>
-    ${imageLayers}
-    ${imageLayers ? '<rect width="600" height="600" fill="url(#tint)"/>' : ''}
-    <circle cx="500" cy="100" r="200" fill="${color}" opacity="0.35"/>
-    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.50"/>
-    <rect x="0" y="410" width="600" height="190" fill="rgba(0,0,0,0.65)"/>
-    <rect x="0" y="410" width="600" height="2.5" fill="${color}" opacity="0.5"/>
-    <text x="44" y="320" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="${isStyle ? 76 : 108}" fill="#ffffff" letter-spacing="-2">${decadeOrStyle}</text>
-    <text x="44" y="480" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="34" fill="#ffffff">${displayTitle}</text>
-    <text x="44" y="532" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="20" fill="rgba(255,255,255,0.75)">${subtitle}</text>
+    <rect width="600" height="600" fill="url(#bg)"/>
+    <rect width="600" height="600" fill="url(#radialGlow)"/>
+    <circle cx="560" cy="90" r="230" fill="${color}" opacity="0.22"/>
+    ${validImages.length > 0 ? `
+      <!-- Hero artist photo with high clarity and contrast -->
+      <circle cx="390" cy="225" r="164" fill="none" stroke="${color}" stroke-width="4" opacity="0.75"/>
+      <circle cx="390" cy="225" r="160" fill="#181818"/>
+      <image href="${validImages[0]}" x="230" y="65" width="320" height="320" preserveAspectRatio="xMidYMid slice" clip-path="url(#artistCircle)"/>
+    ` : `
+      <!-- Stylized Vinyl / Sound Arc graphic when no image is available -->
+      <circle cx="390" cy="225" r="150" fill="none" stroke="${color}" stroke-width="2.5" opacity="0.35"/>
+      <circle cx="390" cy="225" r="105" fill="none" stroke="${color}" stroke-width="2" opacity="0.25"/>
+      <circle cx="390" cy="225" r="55" fill="none" stroke="${color}" stroke-width="3" opacity="0.45"/>
+    `}
+    <rect x="0" y="280" width="600" height="320" fill="url(#bottomFade)"/>
+    <!-- Top-left Spotify Mix header -->
+    <g transform="translate(42, 44)">
+      <rect x="0" y="4" width="3.5" height="12" rx="1.75" fill="#ffffff" opacity="0.85"/>
+      <rect x="6" y="0" width="3.5" height="18" rx="1.75" fill="#ffffff"/>
+      <rect x="12" y="3" width="3.5" height="14" rx="1.75" fill="#ffffff" opacity="0.85"/>
+      <text x="24" y="14" font-family="Circular, SpotifyMixUI, system-ui, sans-serif" font-weight="700" font-size="15" fill="rgba(255,255,255,0.85)" letter-spacing="2.5">SPOTIFREE MIX</text>
+    </g>
+    <!-- Bottom-left Spotify Bold Title -->
+    <g transform="translate(42, 490)">
+      <text x="0" y="0" font-family="Circular, SpotifyMixUITitle, system-ui, sans-serif" font-weight="900" font-size="${isLong ? 62 : 76}" fill="#ffffff" letter-spacing="-2">${mainTitle}</text>
+      <text x="0" y="58" font-family="Circular, SpotifyMixUITitle, system-ui, sans-serif" font-weight="900" font-size="${isLong ? 62 : 76}" fill="#ffffff" letter-spacing="-2">Mix</text>
+    </g>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
@@ -706,79 +728,125 @@ export async function makeCuratedThemedCover(
     const ctx = c.getContext('2d');
     if (!ctx) return makeEraCoverSvg(badgeText, color, title, images, subtitle);
 
-    // 1. Atmospheric base background gradient
+    // 1. Vibrant diagonal gradient
     const bg = ctx.createLinearGradient(0, 0, S, S);
     bg.addColorStop(0, color);
-    bg.addColorStop(0.55, '#161616');
-    bg.addColorStop(1, '#0c0c0c');
+    bg.addColorStop(0.55, '#141414');
+    bg.addColorStop(1, '#0a0a0a');
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, S, S);
 
-    // 2. Single hero artist/song photo seamlessly blended into the background
+    // 2. Radial glow
+    const flare = ctx.createRadialGradient(150, 150, 10, 150, 150, 450);
+    flare.addColorStop(0, hexToRgba(color, 0.45));
+    flare.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = flare;
+    ctx.fillRect(0, 0, S, S);
+
+    // Top-right background arc
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(560, 90, 230, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(color, 0.22);
+    ctx.fill();
+    ctx.restore();
+
+    // 3. Artist Hero Portrait in circular cutout with high clarity & border glow
     const validUrls = images.filter(Boolean);
     const loadedImgs = (
       await Promise.all(validUrls.slice(0, 2).map((u) => loadCoverPhoto(u, 2500)))
     ).filter(Boolean) as HTMLImageElement[];
 
-    if (loadedImgs.length > 0) {
-      ctx.save();
-      // Photos with clear visibility so songs/artists are recognizable
-      ctx.globalAlpha = 0.58;
+    const cx = 390;
+    const cy = 225;
+    const r = 160;
 
-      // Full canvas center-crop for a seamless hero portrait without jarring cut lines
+    if (loadedImgs.length > 0) {
       const im = loadedImgs[0];
       const s = Math.min(im.naturalWidth, im.naturalHeight);
-      ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, S, S);
+
+      // Shadow behind circle
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.65)';
+      ctx.shadowBlur = 24;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fillStyle = '#181818';
+      ctx.fill();
       ctx.restore();
 
-      // Atmospheric duotone color tint over the photo (smoothly melts into background)
-      const tint = ctx.createLinearGradient(0, 0, S, S);
-      tint.addColorStop(0, hexToRgba(color, 0.45));
-      tint.addColorStop(0.55, 'rgba(18, 18, 18, 0.40)');
-      tint.addColorStop(1, 'rgba(12, 12, 12, 0.85)');
-      ctx.fillStyle = tint;
-      ctx.fillRect(0, 0, S, S);
+      // Draw clipped photo
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, cx - r, cy - r, r * 2, r * 2);
+      ctx.restore();
+
+      // Border ring
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.restore();
+    } else {
+      // Vinyl/wave rings
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 150, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.35);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 105, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.25);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 55, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(color, 0.45);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+      ctx.restore();
     }
 
-    // 3. Glowing circular flares (preserving the visual style the user loved)
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(500, 100, 200, 0, Math.PI * 2);
-    ctx.fillStyle = hexToRgba(color, 0.35);
-    ctx.fill();
+    // 4. Subtle bottom gradient fade for crisp typography legibility
+    const bottomFade = ctx.createLinearGradient(0, 280, 0, S);
+    bottomFade.addColorStop(0, 'rgba(10, 10, 10, 0)');
+    bottomFade.addColorStop(0.5, 'rgba(10, 10, 10, 0.5)');
+    bottomFade.addColorStop(1, 'rgba(10, 10, 10, 0.95)');
+    ctx.fillStyle = bottomFade;
+    ctx.fillRect(0, 280, S, 320);
 
-    ctx.beginPath();
-    ctx.arc(90, 510, 240, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.50)';
-    ctx.fill();
+    // 5. Top-left Spotify Mix header (3 sound bars + SPOTIFREE MIX)
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    // 3 sound bars
+    ctx.fillRect(42, 48, 3.5, 12);
+    ctx.fillRect(48, 44, 3.5, 18);
+    ctx.fillRect(54, 47, 3.5, 14);
+
+    ctx.font = '700 15px "SpotifyMixUI", "Circular", system-ui, sans-serif';
+    ctx.fillText('SPOTIFREE MIX', 66, 58);
     ctx.restore();
 
-    // 4. Bottom dark contrast banner for crisp legibility
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
-    ctx.fillRect(0, 410, S, 190);
+    // 6. Bottom-left Bold Spotify Typography
+    const cleanBadge = badgeText.replace(/^(Mix\s+|Años\s+)/i, '').trim();
+    const mainTitle = badgeText.startsWith('Años ') ? badgeText : cleanBadge;
 
-    // Accent line above the banner
-    ctx.fillStyle = hexToRgba(color, 0.5);
-    ctx.fillRect(0, 410, S, 2.5);
-
-    // 5. Typography
     ctx.save();
     ctx.fillStyle = '#ffffff';
     ctx.shadowColor = 'rgba(0, 0, 0, 0.7)';
     ctx.shadowBlur = 12;
 
-    const isStyle = badgeText.length > 5;
-    ctx.font = `900 ${isStyle ? '76px' : '108px'} "SpotifyMixUITitle", "Circular", system-ui, sans-serif`;
-    ctx.fillText(badgeText, 44, 320);
-
-    ctx.shadowBlur = 6;
-    ctx.font = '800 34px "SpotifyMixUI", "Circular", system-ui, sans-serif';
-    ctx.fillText(title, 44, 480);
-
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
-    ctx.font = '500 20px "SpotifyMixUI", "Circular", system-ui, sans-serif';
-    ctx.fillText(subtitle, 44, 532);
+    const fontSize = mainTitle.length > 7 ? 62 : 76;
+    ctx.font = `900 ${fontSize}px "SpotifyMixUITitle", "Circular", system-ui, sans-serif`;
+    ctx.fillText(mainTitle, 42, 490);
+    ctx.fillText('Mix', 42, 490 + fontSize * 0.88);
     ctx.restore();
 
     return c.toDataURL('image/jpeg', 0.85);
@@ -1321,23 +1389,7 @@ export const GENRE_PLAYLIST_DEFINITIONS = ERA_PLAYLIST_DEFINITIONS.filter((d: an
 
 function makeMoodCoverSvg(title: string, color: string, subtitle = 'Spotifree Mix'): string {
   const cleanTitle = title.replace(/^Mix\s+/i, '');
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
-    <defs>
-      <linearGradient id="mg" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${color}"/>
-        <stop offset="65%" stop-color="#161616"/>
-        <stop offset="100%" stop-color="#0a0a0a"/>
-      </linearGradient>
-    </defs>
-    <rect width="600" height="600" fill="url(#mg)"/>
-    <circle cx="500" cy="110" r="210" fill="${color}" opacity="0.38"/>
-    <circle cx="90" cy="510" r="240" fill="#000000" opacity="0.6"/>
-    <rect x="0" y="430" width="600" height="170" fill="rgba(0,0,0,0.65)"/>
-    <text x="48" y="270" font-family="Circular, SpotifyMixUITitle, sans-serif" font-weight="900" font-size="64" fill="#ffffff" letter-spacing="-1">${cleanTitle}</text>
-    <text x="48" y="490" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="800" font-size="34" fill="#ffffff">${title}</text>
-    <text x="48" y="538" font-family="Circular, SpotifyMixUI, sans-serif" font-weight="500" font-size="22" fill="rgba(255,255,255,0.72)">${subtitle} · Actualizado esta semana</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+  return makeEraCoverSvg(cleanTitle, color, title, [], subtitle);
 }
 
 function toCuratedCategoryTrack(item: { name: string; artist: string; album: string; duration_ms: number }, prefix: string, idx: number): Track {

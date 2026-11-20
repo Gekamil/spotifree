@@ -69,10 +69,11 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(serverSource.includes("pathname === '/api/image-proxy'"), 'server.mjs must provide /api/image-proxy');
     });
 
-    it('makeCuratedThemedCover loads photos via image-proxy and renders with visible alpha', () => {
+    it('makeCuratedThemedCover renders authentic Spotify Mix design with circular hero portrait and branding', () => {
       assert.ok(spotifreeMixesSource.includes('toProxiedImageUrl'), 'Must define toProxiedImageUrl');
-      assert.ok(spotifreeMixesSource.includes('ctx.globalAlpha = 0.58'), 'Photos must be visibly blended with alpha 0.58');
-      assert.ok(spotifreeMixesSource.includes('rgba(18, 18, 18, 0.40)'), 'Tint gradient must let photos shine through');
+      assert.ok(spotifreeMixesSource.includes('SPOTIFREE MIX'), 'Must render SPOTIFREE MIX header with equalizer sound bars');
+      assert.ok(spotifreeMixesSource.includes('artistCircle') || spotifreeMixesSource.includes('ctx.arc(cx, cy, r'), 'Must render circular hero artist portrait');
+      assert.ok(spotifreeMixesSource.includes('ctx.createLinearGradient(0, 280, 0, S)'), 'Must use smooth bottom gradient fade without harsh rectangular seam');
     });
 
     it('makeEraCoverSvg embeds SVG image layers for direct browser rendering', () => {
@@ -145,6 +146,17 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(nowPlayingSource.includes('Modo aleatorio desde:'), 'Must render Modo aleatorio desde section');
       assert.ok(nowPlayingSource.includes('Aleatorio'), 'Must render Aleatorio bottom pill');
       assert.ok(nowPlayingSource.includes('Temporizador'), 'Must render Temporizador bottom pill');
+    });
+
+    it('useDragToDismiss supports universal pointer events and animated exit transitions', () => {
+      const dragHookSource = fs.readFileSync(path.resolve('src/hooks/useDragToDismiss.ts'), 'utf-8');
+      assert.ok(dragHookSource.includes('onPointerDown'), 'Must handle pointer down for mouse and touch');
+      assert.ok(dragHookSource.includes('onPointerMove'), 'Must handle pointer move');
+      assert.ok(dragHookSource.includes('onPointerUp'), 'Must handle pointer up');
+      assert.ok(dragHookSource.includes('setPointerCapture'), 'Must use setPointerCapture for drag reliability');
+      assert.ok(dragHookSource.includes('triggerDismiss'), 'Must expose triggerDismiss for animated programmatic closing');
+      assert.ok(nowPlayingSource.includes('dismissMenu'), 'Mobile player must use dismissMenu');
+      assert.ok(nowPlayingSource.includes('dismissQueue'), 'Mobile player must use dismissQueue');
     });
   });
 });
