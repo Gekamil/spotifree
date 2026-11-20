@@ -199,11 +199,12 @@ interface PlayerState {
   playedInShuffle: string[];
   likedTrackIds: string[];
   currentContextId: string | null;
+  currentContextName: string | null;
   preselectedNextTrackId: string | null;
 
   // Actions
-  playTrack: (track: Track, newQueue?: Track[], contextId?: string) => void;
-  setContextId: (id: string | null) => void;
+  playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string) => void;
+  setContextId: (id: string | null, name?: string | null) => void;
   togglePlay: () => void;
   nextTrack: () => void;
   getNextTrack: () => Track | null;
@@ -271,9 +272,13 @@ const store = create<PlayerState>((set, get) => ({
   playedInShuffle: [],
   likedTrackIds: getInitialLikedTrackIds(),
   currentContextId: null,
+  currentContextName: null,
   preselectedNextTrackId: null,
 
-  setContextId: (id: string | null) => set({ currentContextId: id }),
+  setContextId: (id: string | null, name?: string | null) => set({
+    currentContextId: id,
+    ...(name !== undefined ? { currentContextName: name } : {}),
+  }),
 
   dislikeCurrentTrack: () => {
     const { currentTrack, repeatMode } = get();
@@ -315,7 +320,7 @@ const store = create<PlayerState>((set, get) => ({
     set(get().isShuffle ? { queue: current } : { queue: current, originalQueue: current });
   },
 
-  playTrack: (track: Track, newQueue?: Track[], contextId?: string) => {
+  playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string) => {
     if (typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.release?.name === 'node')) {
       if (!useSpotifyDataStore.getState().isAuthenticated) {
         useUIStore.getState().openLoginModal();
@@ -369,6 +374,7 @@ const store = create<PlayerState>((set, get) => ({
           queue: activeQueue,
           originalQueue: rawOriginal,
           currentContextId: contextId !== undefined ? contextId : state.currentContextId,
+          currentContextName: contextName !== undefined ? contextName : state.currentContextName,
         });
       }
       return;
@@ -408,7 +414,8 @@ const store = create<PlayerState>((set, get) => ({
 
     set({
       currentTrack: hydratedTrack,
-      currentContextId: contextId !== undefined ? contextId : (hydratedTrack.album?.id || state.currentContextId),
+      currentContextId: contextId !== undefined ? contextId : (state.currentContextId || hydratedTrack.album?.id),
+      currentContextName: contextName !== undefined ? contextName : (state.currentContextName || hydratedTrack.album?.name || null),
       isPlaying: true,
       progressMs: 0,
       durationMs: hydratedTrack.duration_ms,
@@ -885,7 +892,8 @@ const store = create<PlayerState>((set, get) => ({
 
     set({
       currentTrack: track,
-      currentContextId: track.album?.id || state.currentContextId,
+      currentContextId: state.currentContextId || track.album?.id,
+      currentContextName: state.currentContextName || track.album?.name || null,
       isPlaying: true,
       progressMs: Math.max(0, initialProgressMs),
       durationMs: track.duration_ms,

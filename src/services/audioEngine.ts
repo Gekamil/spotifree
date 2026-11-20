@@ -3080,9 +3080,9 @@ class AudioEngine {
 
   /**
    * Sets variable karaoke vocal attenuation level (0 to 100).
-   * 0% = full instrumental (vocals attenuated/removed)
-   * 100% = original full vocals
-   * Adjusts vocal frequencies and deck volume blending smoothly in real-time without resetting or stalling.
+   * 0% = maximum vocal attenuation (clean instrumental)
+   * 100% = original full vocals with singer's full volume
+   * Adjusts vocal frequencies continuously in real-time without buffering, pausing or sudden discrete track hops.
    */
   public async setKaraokeLevel(level: number, track?: Track): Promise<void> {
     const targetTrack = track || usePlayerStore.getState().currentTrack;
@@ -3094,12 +3094,18 @@ class AudioEngine {
       ...this.karaokeState,
       trackId: clean,
       vocalLevel: clamped,
-      active: clamped < 95,
+      active: clamped < 100,
     };
     this.emitKaraokeChange();
 
-    // 1. Real-time Web Audio Vocal Notch Filtering:
-    // Attenuates vocal formant frequencies (910Hz - 3600Hz) progressively as level drops
+    // 1. If currently playing via YouTube iframe and user lowers vocal volume,
+    // ensure DSP mode so Web Audio notch filters operate in real-time
+    if (clamped < 100 && this.activeEngine === 'youtube' && this.currentVideoId) {
+      this.ensureDSPProcessingMode();
+    }
+
+    // 2. Real-time Continuous Web Audio Vocal Notch Filtering:
+    // Attenuates vocal formant frequencies (230Hz, 910Hz, 3600Hz) progressively as level drops
     try {
       this.initAudioContext();
       if (this.audioContext && this.filterNodes && this.filterNodes.length >= 4) {
@@ -3108,24 +3114,30 @@ class AudioEngine {
         }
         const now = this.audioContext.currentTime;
         const attenRatio = (100 - clamped) / 100;
-        // 910Hz vocal band (index 2) down to -28dB, 3600Hz presence band (index 3) down to -16dB
-        const vocalMidCut = -28 * attenRatio;
-        const vocalPresCut = -16 * attenRatio;
+        // 910Hz vocal core band down to -32dB, 3600Hz presence band down to -22dB, 230Hz low band down to -12dB
+        const vocalMidCut = -32 * attenRatio;
+        const vocalPresCut = -22 * attenRatio;
+        const vocalLowCut = -12 * attenRatio;
 
+        const lowNode = this.filterNodes[1];
+        if (lowNode) {
+          lowNode.gain.cancelScheduledValues(now);
+          lowNode.gain.setTargetAtTime(vocalLowCut, now, 0.02);
+        }
         const midNode = this.filterNodes[2];
         if (midNode) {
           midNode.gain.cancelScheduledValues(now);
-          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.03);
+          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.02);
         }
         const presNode = this.filterNodes[3];
         if (presNode) {
           presNode.gain.cancelScheduledValues(now);
-          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.03);
+          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.02);
         }
       }
     } catch {}
 
-    // 2. Dual-Deck Audio Blending (when secondary instrumental deck or HTML5 sources are running)
+    // 3. Dual-Deck Audio Blending (when secondary instrumental deck or HTML5 sources are running)
     try {
       const effVol = this.getEffectiveVolume();
       const vocalRatio = clamped / 100;
@@ -3136,71 +3148,6 @@ class AudioEngine {
         this.secondaryAudio.volume = effVol * instRatio;
       }
     } catch {}
-
-    // 3. Debounced Source Hot-Swap:
-    // When dragged down to <= 15%, swap to studio instrumental if available.
-    // When dragged back up to >= 85%, restore original song with full singer's voice.
-    if (this.karaokeSwapDebounceTimer) {
-      clearTimeout(this.karaokeSwapDebounceTimer);
-      this.karaokeSwapDebounceTimer = null;
-    }
-
-    if (clamped <= 15 && !this.karaokeState.originalSourceId && this.karaokeState.instrumental?.sourceId && !this.karaokeState.switching) {
-      this.karaokeSwapDebounceTimer = setTimeout(async () => {
-        const cur = usePlayerStore.getState().currentTrack;
-        if (!cur || AudioEngine.cleanId(cur.id) !== clean) return;
-        if ((this.karaokeState.vocalLevel ?? 100) > 15 || this.karaokeState.switching) return;
-        const inst = this.karaokeState.instrumental;
-        if (!inst?.sourceId) return;
-
-        const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
-        const wasPlaying = usePlayerStore.getState().isPlaying;
-        const origId = this.currentVideoId;
-
-        this.karaokeState = { ...this.karaokeState, switching: true };
-        this.emitKaraokeChange();
-
-        const ok = await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, targetTrack);
-        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
-          this.karaokeState = {
-            ...this.karaokeState,
-            active: true,
-            switching: false,
-            originalSourceId: origId,
-          };
-        } else {
-          this.karaokeState = { ...this.karaokeState, switching: false };
-        }
-        this.emitKaraokeChange();
-      }, 300);
-    } else if (clamped >= 85 && this.karaokeState.originalSourceId && !this.karaokeState.switching) {
-      this.karaokeSwapDebounceTimer = setTimeout(async () => {
-        const cur = usePlayerStore.getState().currentTrack;
-        if (!cur || AudioEngine.cleanId(cur.id) !== clean) return;
-        if ((this.karaokeState.vocalLevel ?? 100) < 85 || this.karaokeState.switching) return;
-        const restoreId = this.karaokeState.originalSourceId;
-        if (!restoreId) return;
-
-        const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
-        const wasPlaying = usePlayerStore.getState().isPlaying;
-
-        this.karaokeState = { ...this.karaokeState, switching: true };
-        this.emitKaraokeChange();
-
-        const ok = await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, targetTrack);
-        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
-          this.karaokeState = {
-            ...this.karaokeState,
-            active: false,
-            switching: false,
-            originalSourceId: null,
-          };
-        } else {
-          this.karaokeState = { ...this.karaokeState, switching: false };
-        }
-        this.emitKaraokeChange();
-      }, 200);
-    }
   }
 
   /**

@@ -829,17 +829,9 @@ export const MobileLayout: React.FC = () => {
                       />
                     </div>
 
-                    {/* Center Visualizer: Animated Orb reacting dynamically with multiple speech waves */}
-                    <div
-                      className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10"
-                      style={{
-                        WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 78%, rgba(0, 0, 0, 0.25) 100%)',
-                        maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 78%, rgba(0, 0, 0, 0.25) 100%)',
-                      }}
-                    >
-                      <div
-                        className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700"
-                      >
+                    {/* Center Visualizer: Animated Orb reacting dynamically with multiple speech waves (static non-rotating, smooth fluid flow) */}
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-2 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10">
+                      <div className="w-full h-full flex items-center justify-center opacity-95 transition-all duration-700">
                         <SpotifyDJVisualizer
                           size={150}
                           state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}

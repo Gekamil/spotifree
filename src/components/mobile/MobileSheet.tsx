@@ -130,7 +130,7 @@ export const SheetHeader: React.FC<{
 }> = ({ image, title, subtitle, round }) => (
   <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
     <div
-      className={`w-13 h-13 overflow-hidden bg-[#181818] shrink-0 shadow ${
+      className={`w-12 h-12 min-w-[48px] max-w-[48px] min-h-[48px] max-h-[48px] aspect-square overflow-hidden bg-[#181818] shrink-0 shadow ${
         round ? 'rounded-full' : 'rounded-[4px]'
       }`}
     >

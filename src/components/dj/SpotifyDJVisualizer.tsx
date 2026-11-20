@@ -222,14 +222,14 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         ? Math.max(0.42, voiceLevelRef.current || 0.42)
         : voiceLevelRef.current;
 
-      // Speed of rotation & wave travel: faster when speaking or playing, gentle when idle
+      // Speed of rotation & wave travel: gentle and serene wave flow (much slower & more elegant)
       const speed = mini
-        ? (isSpeaking ? 0.068 : isPlaying ? 0.038 : 0.024)
+        ? (isSpeaking ? 0.024 : isPlaying ? 0.015 : 0.009)
         : isSpeaking
-        ? 0.056
+        ? 0.016
         : isPlaying
-        ? 0.028
-        : 0.019;
+        ? 0.010
+        : 0.006;
       time += speed;
 
       // Exponential moving average damping for voice reactivity (faster attack when speaking)
@@ -401,7 +401,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       <canvas
         ref={canvasRef}
         style={{ width: size, height: size }}
-        className="pointer-events-none drop-shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+        className="pointer-events-none"
       />
     </div>
   );

@@ -40,7 +40,7 @@ export function useKaraokeMode(track: Track | null | undefined, enabled: boolean
   }, [track]);
 
   return {
-    available: Boolean(state.instrumental?.sourceId),
+    available: true, // Always available so the vocal slider can control vocal attenuation on any song with lyrics
     active: state.active,
     switching: state.switching,
     instrumental: state.instrumental,

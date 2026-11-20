@@ -489,10 +489,6 @@ function avgColor(img: HTMLImageElement): string {
     return '#1e3264';
   }
 }
-function drawCover(img: HTMLImageElement, ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  const s = Math.min(img.naturalWidth, img.naturalHeight);
-  ctx.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, x, y, w, h);
-}
 function wrapTitle(ctx: CanvasRenderingContext2D, text: string, maxW: number): string[] {
   const words = text.split(' ');
   const lines: string[] = [];
@@ -509,50 +505,61 @@ function wrapTitle(ctx: CanvasRenderingContext2D, text: string, maxW: number): s
 }
 
 type CoverStyle = 'artist' | 'collage' | 'single';
-async function makeCover(title: string, style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
+async function makeCover(title: string, _style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
   try {
     const S = 320;
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const ctx = c.getContext('2d');
     if (!ctx) return null;
-    const loaded = (await Promise.all(images.filter(Boolean).slice(0, style === 'collage' ? 4 : 1).map(loadImg))).filter(Boolean) as HTMLImageElement[];
-    let band = accent || (loaded[0] ? avgColor(loaded[0]) : '#1e3264');
-    if (!loaded.length) {
-      // No usable photo: a colour gradient with the title (never an empty cover)
-      const hue = hash(title) % 360;
-      const g = ctx.createLinearGradient(0, 0, S, S);
-      g.addColorStop(0, accent || `hsl(${hue}, 62%, 42%)`);
-      g.addColorStop(1, `hsl(${(hue + 40) % 360}, 58%, 18%)`);
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, S, S);
-      style = 'single';
-    } else if (style === 'collage' && loaded.length >= 4) {
-      loaded.forEach((im, i) => drawCover(im, ctx, (i % 2) * (S / 2), Math.floor(i / 2) * (S / 2), S / 2, S / 2));
-      band = accent || avgColor(loaded[0]);
-    } else {
-      drawCover(loaded[0], ctx, 0, 0, S, S);
+
+    let baseColor = accent;
+    if (!baseColor && images.length > 0 && images[0]) {
+      try {
+        const loaded = await loadImg(images[0]);
+        if (loaded) baseColor = avgColor(loaded);
+      } catch {}
     }
-    ctx.font = '900 30px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+
+    // Clean, authentic Spotify Mix gradient cover: NO murky semi-transparent photos underneath!
+    const hue = hash(title) % 360;
+    if (!baseColor) {
+      baseColor = `hsl(${hue}, 68%, 38%)`;
+    }
+    const g = ctx.createLinearGradient(0, 0, S, S);
+    g.addColorStop(0, baseColor);
+    g.addColorStop(0.65, '#161616');
+    g.addColorStop(1, '#0c0c0c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, S, S);
+
+    // Spotify Mix subtle geometric light accent
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(S * 0.85, S * 0.18, S * 0.45, 0, Math.PI * 2);
+    ctx.fillStyle = hexToRgba(baseColor.startsWith('#') ? baseColor : '#1ed760', 0.22);
+    ctx.fill();
+    ctx.restore();
+
+    // Top-left subtle branding header
+    ctx.save();
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+    ctx.fillRect(22, 22, 2.5, 9);
+    ctx.fillRect(26.5, 19, 2.5, 13);
+    ctx.fillRect(31, 21, 2.5, 10);
+    ctx.font = '700 10px "SpotifyMixUI", system-ui, sans-serif';
+    ctx.fillText('SPOTIFREE MIX', 40, 29);
+    ctx.restore();
+
+    // Bold Spotify typography at bottom
+    ctx.font = '900 28px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
     const lines = wrapTitle(ctx, title, S - 44);
-    if (style === 'artist') {
-      // Spotify "Daily Mix" look: colour band at the bottom with the title
-      const bh = 34 + lines.length * 32;
-      ctx.fillStyle = band;
-      ctx.fillRect(0, S - bh, S, bh);
-    } else {
-      const g = ctx.createLinearGradient(0, S * 0.35, 0, S);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,0.78)');
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, S, S);
-    }
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,0.35)';
-    ctx.shadowBlur = style === 'artist' ? 0 : 8;
-    lines.forEach((l, i) => ctx.fillText(l, 22, S - 22 - (lines.length - 1 - i) * 32));
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 10;
+    lines.forEach((l, i) => ctx.fillText(l, 22, S - 26 - (lines.length - 1 - i) * 32));
     ctx.shadowBlur = 0;
-    return c.toDataURL('image/jpeg', 0.8);
+    return c.toDataURL('image/jpeg', 0.85);
   } catch {
     return null; // a cross-origin image without CORS: the plain image is used instead
   }

@@ -933,7 +933,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
           : displayTracks;
       }
-      playTrack(track, sequentialQueue, playlist.id);
+      playTrack(track, sequentialQueue, playlist.id, playlist.name);
     }
   };
 
@@ -965,7 +965,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       sequentialQueue = displayTracks;
     }
 
-    playTrack(startTrack, sequentialQueue, playlist.id);
+    playTrack(startTrack, sequentialQueue, playlist.id, playlist.name);
     if (shuffleMode === 'smart') {
       usePlayerStore.getState().populateSmartShuffleRecommendations(sequentialQueue);
     }

@@ -49,8 +49,8 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
 
   return (
     <header
-      style={{ paddingTop: 'max(8px, var(--sat, 8px))' }}
-      className="sticky top-0 z-30 px-3 sm:px-4 pb-2.5 flex items-center gap-3 select-none font-['SpotifyMixUI'] w-full max-w-full overflow-hidden"
+      style={{ paddingTop: 'max(6px, var(--sat, 6px))' }}
+      className="sticky top-0 z-30 px-3 sm:px-4 pb-1 flex items-center gap-2.5 select-none font-['SpotifyMixUI'] w-full max-w-full overflow-hidden"
     >
       {/* 1. Left: Profile Avatar (Tapping opens the Spotify Left Drawer) */}
       <button

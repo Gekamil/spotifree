@@ -75,9 +75,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     playTrack,
     queue,
     currentContextId,
+    currentContextName,
     addToQueue,
   } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId, addToQueue: s.addToQueue }))
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId, currentContextName: s.currentContextName, addToQueue: s.addToQueue }))
   );
 
   const { activeOutputLabel, activeOutputKind } = useAudioOutputStore(
@@ -457,12 +458,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const contextName = React.useMemo(() => {
     if (isDJActive) return currentSetTitle || 'DJ de Spotify';
     if (currentContextId === 'collection:tracks' || currentContextId === 'liked-songs') return 'Canciones que te gustan';
+    if (currentContextName) return currentContextName;
     const playlists = useSpotifyDataStore.getState().playlists;
     const pl = playlists.find((p) => p.id === currentContextId);
     if (pl?.name) return pl.name;
     if (currentTrack?.album?.name) return currentTrack.album.name;
     return 'Lista de reproducción';
-  }, [currentContextId, isDJActive, currentSetTitle, currentTrack?.album?.name]);
+  }, [currentContextId, currentContextName, isDJActive, currentSetTitle, currentTrack?.album?.name]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
@@ -523,13 +525,25 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           </svg>
         </button>
 
-        <div className="flex flex-col items-center max-w-[210px]">
+        <button
+          onClick={() => {
+            if (isDJActive) {
+              onClose();
+              onSelectPlaylistById?.('spotify-dj', 'DJ de Spotify');
+            } else if (currentContextId) {
+              onClose();
+              onSelectPlaylistById?.(currentContextId, contextName);
+            }
+          }}
+          className="flex flex-col items-center max-w-[210px] active:scale-95 transition-transform cursor-pointer group"
+          title={`Ir a ${contextName}`}
+        >
           {isDJActive ? (
             <>
               <span className="text-[10px] uppercase font-black text-white/90 tracking-widest font-['SpotifyMixUITitle']">
                 DJ
               </span>
-              <span className="text-xs font-bold text-white truncate w-full text-center mt-0.5">
+              <span className="text-xs font-bold text-white truncate w-full text-center mt-0.5 group-hover:underline">
                 {currentSetTitle || 'Lo que has estado escuchando'}
               </span>
             </>
@@ -538,12 +552,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <span className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
                 REPRODUCIENDO DE LA LISTA
               </span>
-              <span className="text-xs font-bold text-white truncate w-full text-center">
-                {currentTrack.album?.name || 'Spotify'}
+              <span className="text-xs font-bold text-white truncate w-full text-center group-hover:underline">
+                {contextName}
               </span>
             </>
           )}
-        </div>
+        </button>
 
         <button
           onClick={() => setIsMenuOpen(true)}
@@ -1181,7 +1195,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             {/* Header info matching Screenshot 1 */}
             <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
-              <div className="w-13 h-13 rounded-[4px] overflow-hidden bg-[#181818] shrink-0 shadow">
+              <div className="w-12 h-12 min-w-[48px] max-w-[48px] min-h-[48px] max-h-[48px] aspect-square rounded-[4px] overflow-hidden bg-[#181818] shrink-0 shadow">
                 {displayCover ? (
                   <img src={displayCover} alt={currentTrack.name} className="w-full h-full object-cover" />
                 ) : (
