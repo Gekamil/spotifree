@@ -65,6 +65,15 @@ export function parseTrackArtists(
 }
 
 /**
+ * Parses and returns a clean list of artist name strings.
+ */
+export function parseArtistNames(
+  artists?: Array<{ id?: string; name?: string }> | string | null
+): string[] {
+  return parseTrackArtists(artists).map((a) => a.name);
+}
+
+/**
  * Canonical artist name normalization for strict matching:
  * Lowercases, strips diacritics/accents, replaces punctuation with space, collapses whitespace.
  */

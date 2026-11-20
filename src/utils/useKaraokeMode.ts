@@ -34,11 +34,18 @@ export function useKaraokeMode(track: Track | null | undefined, enabled: boolean
     await audioEngine.toggleKaraokeMode(track);
   }, [track]);
 
+  const setLevel = useCallback(async (level: number) => {
+    if (!track) return;
+    await audioEngine.setKaraokeLevel(level, track);
+  }, [track]);
+
   return {
     available: Boolean(state.instrumental?.sourceId),
     active: state.active,
     switching: state.switching,
     instrumental: state.instrumental,
+    vocalLevel: state.vocalLevel ?? (state.active ? 0 : 100),
+    setLevel,
     toggle,
   };
 }

@@ -1034,6 +1034,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
           durationMs={durationMs}
           isPlaying={isPlaying}
           onTogglePlay={togglePlay}
+          onPrevious={previousTrack}
+          onNext={nextTrack}
           onSeek={(ms) => {
             setProgress(ms);
             audioEngine.seek(ms / 1000);
@@ -1588,7 +1590,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                             />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-sm text-white truncate">{t.name}</p>
+                            <div className="flex items-center gap-1.5">
+                              <p className="font-semibold text-sm text-white truncate">{t.name}</p>
+                              {t.isSmartRecommendation && (
+                                <span className="shrink-0 px-1 py-0.5 text-[9px] font-medium bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/30 rounded">
+                                  ✨ Recomendado
+                                </span>
+                              )}
+                            </div>
                             <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
                               {parseTrackArtists(t.artists).map((a) => a.name).join(', ') || 'Artista'}
                             </p>

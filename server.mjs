@@ -274,6 +274,19 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
+  // 3c. Audio Candidates Endpoint (/api/audio/candidates)
+  if (pathname === '/api/audio/candidates') {
+    const { default: audioHandler } = await import('./api/audio.js');
+    req.query = Object.fromEntries(reqUrl.searchParams.entries());
+    req.query.action = 'candidates';
+    res.status = (code) => { res.statusCode = code; return res; };
+    res.json = (data) => {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(data));
+    };
+    return audioHandler(req, res);
+  }
+
   // 4. Audio Play Metadata (/api/audio/play)
   if (pathname === '/api/audio/play' && req.method === 'POST') {
     let body = '';
@@ -1359,7 +1372,18 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 8. Playlist scrape (/api/spotify/playlist/:id)
+  // 8. Playlist scrape (/api/playlist and /api/spotify/playlist/:id)
+  if (pathname === '/api/playlist') {
+    const { default: playlistHandler } = await import('./api/playlist.js');
+    req.query = Object.fromEntries(reqUrl.searchParams.entries());
+    res.status = (code) => { res.statusCode = code; return res; };
+    res.json = (data) => {
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify(data));
+    };
+    return playlistHandler(req, res);
+  }
+
   if (pathname.startsWith('/api/spotify/playlist/')) {
     const rawId = pathname.replace('/api/spotify/playlist/', '').split('/')[0];
     res.setHeader('Content-Type', 'application/json');

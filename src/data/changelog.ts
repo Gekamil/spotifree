@@ -11,14 +11,27 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.5.1';
+export const APP_VERSION = '0.5.2';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '0.5.2',
+    date: '20 de noviembre, 2026',
+    title: 'Spotifree 0.5.2: Motor de recomendaciones armónicas, control vertical de karaoke estilo Spotify, controles móviles sin recortes y detector acústico instantáneo',
+    isLatest: true,
+    highlights: [
+      'Motor de recomendaciones ampliado a 14 géneros: taxonomía ampliada con más de 350 artistas contemporáneos y canciones insignia (#indie, #corridos, #rnb, #trap, #reggaeton, #rock, etc.). En modo aleatorio inteligente, las canciones recomendadas son armónicamente compatibles y de artistas complementarios, con distintivo «✨ Recomendado» en cola.',
+      'Control de volumen vocal de karaoke estilo Spotify: barra vertical lateral deslizante al pulsar el icono de karaoke con lectura numérica de porcentaje (0% a 100%), permitiendo atenuar la voz del cantante con diseño nativo y fluido.',
+      'Controles en pantalla completa de letra adaptados al límite del móvil: ajuste seguro con viewport dinámico (100dvh) y área segura (safe-area-inset-bottom), incorporando controles completos de reproducción (anterior, pausar/reanudar, siguiente) perfectamente accesibles sin cortes.',
+      'Detector de audio y letra sin falsos saltos: tolerancia refinada en duraciones e intros de videoclips oficiales y pistas Topic de YouTube Music, evitando descartar la canción correcta.',
+      'Cambio instantáneo y silenciamiento previo: eliminación de la espera de 1.5s y silenciamiento automático a volumen cero al detectar desajustes para que el usuario nunca escuche fragmentos de canciones erróneas.',
+    ],
+  },
   {
     version: '0.5.1',
     date: '19 de noviembre, 2026',
     title: 'Spotifree 0.5.1: Búsqueda estricta de artistas, modo aleatorio musical inteligente y recuperación total de Android Auto',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Búsqueda estricta de artistas: eliminación total de colisiones y filtraciones por subcadenas. Al añadir o buscar un artista (ej. «Vibra Eterna»), no se mezclan canciones de otros artistas con nombres similares (ej. «Eterna»).',
       'Modo aleatorio inteligente por estilo y género musical: el modo aleatorio inteligente añade temas del mismo estilo musical, género y coherencia rítmica en vez de buscar únicamente por el nombre del artista actual, descubriendo temas complementarios.',

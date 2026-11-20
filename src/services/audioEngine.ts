@@ -121,6 +121,7 @@ export interface KaraokeState {
   switching: boolean;
   originalSourceId: string | null;
   instrumental: InstrumentalSourceInfo | null;
+  vocalLevel?: number; // 0 to 100
 }
 
 // Source the user picked by hand for a song (trackId -> videoId), always used for that song
@@ -181,33 +182,56 @@ function normWords(s: string): string[] {
   return (s || '')
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/\(.*?\)|\[.*?\]/g, ' ')
     .replace(/[^a-z0-9\s]/g, ' ')
     .split(/\s+/)
-    .filter((w) => w.length > 2 && !['feat', 'the', 'con', 'and', 'los', 'las', 'del', 'remastered', 'version', 'remaster'].includes(w));
+    .filter((w) => w.length >= 2 && !['feat', 'ft', 'the', 'con', 'and', 'los', 'las', 'del', 'remastered', 'version', 'remaster', 'audio', 'video', 'oficial', 'official'].includes(w));
 }
 
 /**
  * Is a YouTube video (title, channel, length) really this song?
- * Different song: neither title words nor artist words appear. Different version: the video is
- * much longer (clip with intro/outro, live) or shorter (cut) than the Spotify song.
+ * Robust verification: matches song title and artist, recognizes official channels/Topic tracks,
+ * and allows realistic duration tolerances (cinematic video intros/outros) while rejecting
+ * genuine mismatches (different songs, 10-minute compilations, 30s clips).
  */
 export function judgeSource(track: Track, ytTitle: string, ytAuthor: string, ytDurSec: number): { ok: boolean; reason: string } {
-  const hay = new Set(normWords(`${ytTitle} ${ytAuthor}`));
-  const hayStr = normWords(`${ytTitle} ${ytAuthor}`).join(' ');
+  const combinedYt = `${ytTitle} ${ytAuthor}`;
+  const hay = new Set(normWords(combinedYt));
+  const hayStr = normWords(combinedYt).join(' ');
   const tWords = normWords(track.name || '');
   const aWords = (track.artists || []).flatMap((a) => normWords(a.name || ''));
+
   const titleHit = tWords.length === 0 || tWords.some((w) => hay.has(w) || hayStr.includes(w));
-  const artistHit = aWords.length === 0 || aWords.some((w) => hay.has(w) || hayStr.includes(w));
+  const isTopicChannel = (ytAuthor || '').toLowerCase().includes('topic');
+  const isVevo = (ytAuthor || '').toLowerCase().includes('vevo');
+  const isOfficial = isTopicChannel || isVevo || combinedYt.toLowerCase().includes('official') || combinedYt.toLowerCase().includes('oficial');
+  const artistHit = aWords.length === 0 || aWords.some((w) => hay.has(w) || hayStr.includes(w)) || isTopicChannel;
+
+  // Complete mismatch: neither title nor artist matched
   if (!titleHit && !artistHit) return { ok: false, reason: 'otra canción' };
-  if (!titleHit && tWords.length >= 2) return { ok: false, reason: 'título distinto' };
+
+  // Title completely absent with at least 2 distinct words, and not an official topic track
+  if (!titleHit && tWords.length >= 2 && !isTopicChannel) {
+    return { ok: false, reason: 'título distinto' };
+  }
+
+  // Duration check
   const spDur = (track.duration_ms || 0) / 1000;
   if (spDur > 30 && ytDurSec > 30) {
     const diff = ytDurSec - spDur;
-    if (diff > 25) return { ok: false, reason: `vídeo ${Math.round(diff)} s más largo (intro o videoclip)` };
-    if (diff < -20) return { ok: false, reason: `vídeo ${Math.round(-diff)} s más corto` };
+    // When both title and artist strongly match (or official channel), allow up to ±65s (for video clips with story/intro/outro)
+    const maxExcess = (titleHit && artistHit) || isOfficial ? 65 : 40;
+    const maxDeficit = isOfficial ? -40 : -25;
+
+    if (diff > maxExcess) {
+      return { ok: false, reason: `vídeo ${Math.round(diff)} s más largo (intro o videoclip)` };
+    }
+    if (diff < maxDeficit) {
+      return { ok: false, reason: `vídeo ${Math.round(-diff)} s más corto` };
+    }
   }
+
   return { ok: true, reason: '' };
 }
 
@@ -1959,6 +1983,7 @@ class AudioEngine {
       this.startCarrier();
       this.checkAndSkipAd();
       usePlayerStore.setState({ isPlaying: true });
+      this.verifyPlayingSource(0, this.ytPlayer?.getDuration?.() || 0);
       this.startProgressTicker();
       if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
         try { navigator.mediaSession.playbackState = 'playing'; } catch {}
@@ -2609,9 +2634,13 @@ class AudioEngine {
         switching: false,
         originalSourceId: null,
         instrumental: cached,
+        vocalLevel: 100,
       };
     }
-    return this.karaokeState;
+    return {
+      ...this.karaokeState,
+      vocalLevel: this.karaokeState.vocalLevel ?? (this.karaokeState.active ? 0 : 100),
+    };
   }
 
   private resetKaraokeForTrack(trackId?: string | null) {
@@ -2623,6 +2652,7 @@ class AudioEngine {
       switching: false,
       originalSourceId: null,
       instrumental: cached,
+      vocalLevel: 100,
     };
     this.emitKaraokeChange();
   }
@@ -2802,6 +2832,7 @@ class AudioEngine {
             switching: false,
             originalSourceId: origId,
             instrumental: inst,
+            vocalLevel: 0,
           };
           this.emitKaraokeChange();
           return true;
@@ -2826,6 +2857,7 @@ class AudioEngine {
             switching: false,
             originalSourceId: null,
             instrumental: inst,
+            vocalLevel: 100,
           };
           this.emitKaraokeChange();
         }
@@ -2844,13 +2876,38 @@ class AudioEngine {
   }
 
   /**
+   * Sets variable karaoke vocal attenuation level (0 to 100).
+   * 0% = full instrumental (vocals removed)
+   * 100% = original full vocals
+   */
+  public async setKaraokeLevel(level: number, track?: Track): Promise<void> {
+    const targetTrack = track || usePlayerStore.getState().currentTrack;
+    if (!targetTrack) return;
+    const clean = AudioEngine.cleanId(targetTrack.id);
+    const clamped = Math.max(0, Math.min(100, Math.round(level)));
+
+    if (clamped <= 40 && !this.karaokeState.active) {
+      await this.toggleKaraokeMode(targetTrack);
+    } else if (clamped >= 70 && this.karaokeState.active) {
+      await this.toggleKaraokeMode(targetTrack);
+    }
+
+    this.karaokeState = {
+      ...this.karaokeState,
+      trackId: clean,
+      vocalLevel: clamped,
+    };
+    this.emitKaraokeChange();
+  }
+
+  /**
    * Once per song: does the video really play this song? Compares the YouTube title/channel
    * with the song and artist, and its length with Spotify's. A different song, or a version far
    * longer/shorter (video clip with intro, live, cut) is replaced by the next best upload.
    */
-  private verifyPlayingSource(curSec: number, durSec: number) {
+  private verifyPlayingSource(_curSec: number, durSec: number) {
     if (this.switchingSource || this.isCrossfading || this.isTransitioning || this.isAuditioning) return;
-    if (curSec < 1.5 || !durSec || !this.currentVideoId) return;
+    if (!this.currentVideoId) return;
     const track = usePlayerStore.getState().currentTrack;
     if (!track || !this.currentTrackId || AudioEngine.cleanId(track.id) !== AudioEngine.cleanId(this.currentTrackId)) return;
     if (this.karaokeState.active && this.karaokeState.trackId === AudioEngine.cleanId(track.id)) return;
@@ -2867,14 +2924,26 @@ class AudioEngine {
     let data: any = null;
     try { data = this.ytPlayer?.getVideoData?.(); } catch {}
     if (!data || !data.title) return; // not known yet, try on the next tick
-    this.verifiedSources.add(key);
 
-    const verdict = judgeSource(track, String(data.title || ''), String(data.author || ''), durSec);
-    if (verdict.ok) return;
+    const effectiveDur = durSec > 0 ? durSec : (typeof this.ytPlayer?.getDuration === 'function' ? this.ytPlayer.getDuration() : 0);
+    const verdict = judgeSource(track, String(data.title || ''), String(data.author || ''), effectiveDur);
+    if (verdict.ok) {
+      this.verifiedSources.add(key);
+      return;
+    }
+
+    // Mismatch detected! Immediately silence playback to shield user ears from wrong audio
+    try {
+      if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+        this.ytPlayer.setVolume(0);
+      }
+    } catch {}
+
+    this.verifiedSources.add(key);
     const n = this.autoSwitches.get(track.id) || 0;
     if (n >= 2) return;
     this.autoSwitches.set(track.id, n + 1);
-    console.warn(`[AudioEngine] Source mismatch for "${track.name}": ${verdict.reason} ("${data.title}" by ${data.author}, ${Math.round(durSec)}s)`);
+    console.warn(`[AudioEngine] Source mismatch for "${track.name}": ${verdict.reason} ("${data.title}" by ${data.author}, ${Math.round(effectiveDur)}s)`);
     void this.switchSource(null, { reason: verdict.reason }).then((ok) => {
       if (ok) {
         showGlobalToast(
@@ -2927,7 +2996,24 @@ class AudioEngine {
         const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.videoId) return data.videoId as string;
+          if (data && data.videoId) {
+            // Pre-validate candidate before cueing/playing to eliminate delay and bad audio blips
+            if (trackTitle && data.title) {
+              const testTrack: Track = {
+                id: trackId || 'temp',
+                name: trackTitle,
+                artists: trackArtist ? [{ id: '', name: trackArtist }] : [],
+                duration_ms: (trackDurationSec || 0) * 1000,
+                album: { id: '', name: '', images: [] },
+              };
+              const verdict = judgeSource(testTrack, String(data.title || ''), String(data.artist || ''), data.duration || trackDurationSec || 0);
+              if (!verdict.ok) {
+                console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${trackTitle}": ${verdict.reason}`);
+                return null;
+              }
+            }
+            return data.videoId as string;
+          }
         }
       } catch {}
       return null;
@@ -2948,7 +3034,24 @@ class AudioEngine {
         const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.videoId) return data.videoId as string;
+          if (data && data.videoId) {
+            // Pre-validate candidate before cueing/playing to eliminate delay and bad audio blips
+            if (trackTitle && data.title) {
+              const testTrack: Track = {
+                id: trackId || 'temp',
+                name: trackTitle,
+                artists: trackArtist ? [{ id: '', name: trackArtist }] : [],
+                duration_ms: (trackDurationSec || 0) * 1000,
+                album: { id: '', name: '', images: [] },
+              };
+              const verdict = judgeSource(testTrack, String(data.title || ''), String(data.artist || ''), data.duration || trackDurationSec || 0);
+              if (!verdict.ok) {
+                console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${trackTitle}": ${verdict.reason}`);
+                return null;
+              }
+            }
+            return data.videoId as string;
+          }
         }
       } catch {}
       return null;

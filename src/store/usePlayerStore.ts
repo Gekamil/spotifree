@@ -652,8 +652,8 @@ const store = create<PlayerState>((set, get) => ({
       existingIds.add(track.id);
       const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
 
-      // 2. Fetch tracks of that exact musical genre/style
-      const candidates = await getCuratedSetForHashtag(targetTag, 15, existingIds);
+      // 2. Fetch tracks of that exact musical genre/style, harmonically aligned with the seed track
+      const candidates = await getCuratedSetForHashtag(targetTag, 20, existingIds, track);
 
       // 3. Recommend by musical style/genre, prioritizing complementary artists (not looping the same artist name)
       const currentArtist = track.artists?.[0]?.name || '';
@@ -717,9 +717,10 @@ const store = create<PlayerState>((set, get) => ({
 
       const recommendedCandidates: Track[] = [];
 
+      const seedTrack = tracksToAnalyze[0];
       for (const tag of dominantTags) {
         try {
-          const items = await getCuratedSetForHashtag(tag, 10, existingIds);
+          const items = await getCuratedSetForHashtag(tag, 12, existingIds, seedTrack);
           for (const item of items) {
             if (!item?.id || existingIds.has(item.id)) continue;
             const cleanTitle = (item.name || '').toLowerCase().trim();
