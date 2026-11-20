@@ -16,10 +16,12 @@ export interface ImportResult {
 export type ImportProgress = (done: number, total: number) => void;
 
 interface ExternalSong {
+  id?: string;
   title: string;
   artist: string;
   durationSec?: number;
   videoId?: string;
+  trackObj?: Track;
 }
 
 const FALLBACK_COVER = 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
@@ -106,9 +108,17 @@ async function matchAll(songs: ExternalSong[], cover: string, onProgress?: Impor
   const worker = async () => {
     while (next < songs.length) {
       const i = next++;
-      const found = await findInCatalog(songs[i]);
-      if (found) matched++;
-      out[i] = found || looseTrack(songs[i], i, cover);
+      const song = songs[i];
+      let track: Track | null = null;
+      if (song.trackObj) {
+        track = song.trackObj;
+        matched++;
+      } else {
+        track = await findInCatalog(song);
+        if (track) matched++;
+        else track = looseTrack(song, i, cover);
+      }
+      out[i] = track;
       done++;
       onProgress?.(done, songs.length);
     }
@@ -134,7 +144,14 @@ function finish(pl: Playlist, userId: string, userName: string): void {
   });
 }
 
-const SOURCE_NAME: Record<string, string> = { ytmusic: 'YouTube Music', youtube: 'YouTube', apple: 'Apple Music', deezer: 'Deezer' };
+const SOURCE_NAME: Record<string, string> = {
+  ytmusic: 'YouTube Music',
+  youtube: 'YouTube',
+  apple: 'Apple Music',
+  deezer: 'Deezer',
+  soundcloud: 'SoundCloud',
+  spotify: 'Spotify',
+};
 
 export async function importExternalPlaylist(
   urlOrText: string,
@@ -150,13 +167,60 @@ export async function importExternalPlaylist(
   const userName = user?.display_name || 'Tú';
 
   try {
-    // 1. Spotify playlist URL: open.spotify.com/playlist/ID
-    const spotifyMatch = input.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?playlist\/([a-zA-Z0-9]+)/i);
+    // 1. Spotify playlist / album URL (including spotify.link, /intl-es/, and spotify: URIs)
+    const spotifyMatch =
+      input.match(/(?:open\.spotify\.com\/(?:intl-[a-z]+\/)?|spotify:)(playlist|album)[/:]([a-zA-Z0-9]+)/i) ||
+      input.match(/^([a-zA-Z0-9]{22})$/);
+
     if (spotifyMatch) {
-      const playlistId = spotifyMatch[1];
-      const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistId)}`);
+      const playlistId = spotifyMatch[2] || spotifyMatch[1];
+      const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
+      const token = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
+      const headers: Record<string, string> = {};
+      if (userCookie) headers['x-spotify-cookie'] = userCookie;
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+
+      onProgress?.(0, 100);
+      const res = await fetch(`/api/playlist?id=${encodeURIComponent(playlistId)}&refresh=1`, { headers });
       if (res.ok) {
         const data = await res.json();
+        let allTracks: Track[] = (data.tracks?.items || []).map((t: Track) => ({
+          ...t,
+          added_by: userName,
+          added_at: 'Hoy',
+        }));
+        const total = data.tracks?.total || allTracks.length;
+        onProgress?.(allTracks.length, total);
+
+        // If the server only returned the first page (e.g. 100 of 300 tracks), paginate remaining pages
+        let currentOffset = allTracks.length;
+        let consecutiveEmpty = 0;
+        while (allTracks.length < total && consecutiveEmpty < 2) {
+          try {
+            const pageRes = await fetch(
+              `/api/playlist?id=${encodeURIComponent(playlistId)}&offset=${currentOffset}&limit=100`,
+              { headers }
+            );
+            if (!pageRes.ok) break;
+            const pageData = await pageRes.json();
+            const newItems: Track[] = (pageData.tracks?.items || []).map((t: Track) => ({
+              ...t,
+              added_by: userName,
+              added_at: 'Hoy',
+            }));
+            if (!newItems.length) {
+              consecutiveEmpty++;
+              currentOffset += 100;
+              continue;
+            }
+            allTracks.push(...newItems);
+            currentOffset += newItems.length;
+            onProgress?.(allTracks.length, total);
+          } catch {
+            break;
+          }
+        }
+
         const pl: Playlist = {
           id: `imported-sp-${playlistId}`,
           name: data.name || 'Playlist de Spotify Importada',
@@ -164,19 +228,23 @@ export async function importExternalPlaylist(
           images: data.images?.length > 0 ? data.images : [{ url: FALLBACK_COVER }],
           owner: { display_name: userName, id: userId },
           tracks: {
-            total: data.tracks?.items?.length || 0,
-            items: (data.tracks?.items || []).map((t: Track) => ({ ...t, added_by: userName, added_at: 'Hoy' })),
+            total: allTracks.length,
+            items: allTracks,
           },
         };
         finish(pl, userId, userName);
-        return { success: true, playlist: pl, matched: pl.tracks.total, total: pl.tracks.total };
+        return { success: true, playlist: pl, matched: allTracks.length, total: Math.max(total, allTracks.length) };
       }
       return { success: false, error: 'No se pudo leer esa playlist de Spotify. ¿Es pública?' };
     }
 
-    // 2. YouTube Music, YouTube, Apple Music and Deezer: read the real songs, then find each one
-    if (/youtube\.com|youtu\.be|music\.apple\.com|itunes\.apple\.com|deezer\.com|deezer\.page\.link|dzr\.page\.link|amazon\.|amzn\.to/i.test(input)) {
-      const res = await fetch(`/api/import-playlist?url=${encodeURIComponent(input)}`);
+    // 2. YouTube Music, YouTube, Apple Music, Deezer, and SoundCloud
+    if (
+      /youtube\.com|youtu\.be|music\.apple\.com|itunes\.apple\.com|deezer\.com|deezer\.page\.link|dzr\.page\.link|soundcloud\.com|on\.soundcloud\.com|spotify\.link|amazon\.|amzn\.to/i.test(
+        input
+      )
+    ) {
+      const res = await fetch(`/api/playlist?action=import&url=${encodeURIComponent(input)}`);
       const data = await res.json().catch(() => null);
       if (!res.ok || !data?.success) {
         return {
@@ -185,10 +253,20 @@ export async function importExternalPlaylist(
             data?.reason === 'amazon'
               ? 'Amazon Music no deja leer sus playlists desde fuera de su app. Copia los nombres de las canciones y pégalos aquí, una por línea («Canción - Artista»).'
               : data?.reason === 'unsupported'
-                ? 'Ese enlace no es de una playlist o un álbum. Copia el enlace de la playlist (en YouTube, el que lleva "list=").'
-                : 'No se pudo leer la playlist. Comprueba que es pública.',
+                ? 'Ese enlace no es de una playlist o un álbum compatible.'
+                : 'No se pudo leer la playlist. Comprueba que sea pública.',
         };
       }
+
+      // If a spotify.link was redirected and resolved as a spotify source
+      if (data.source === 'spotify' && data.spotify?.id) {
+        return importExternalPlaylist(
+          `https://open.spotify.com/playlist/${data.spotify.id}`,
+          user,
+          onProgress
+        );
+      }
+
       const songs: ExternalSong[] = (data.tracks || []).filter((t: ExternalSong) => t?.title);
       if (!songs.length) return { success: false, error: 'La playlist está vacía o es privada.' };
       const cover = data.image || FALLBACK_COVER;
@@ -206,10 +284,10 @@ export async function importExternalPlaylist(
       return { success: true, playlist: pl, matched, total: songs.length };
     }
 
-    if (/soundcloud\.com|tidal\.com/i.test(input)) {
+    if (/tidal\.com/i.test(input)) {
       return {
         success: false,
-        error: 'De momento se puede importar desde Spotify, YouTube, YouTube Music, Apple Music y Deezer. También puedes pegar las canciones, una por línea.',
+        error: 'De momento se puede importar desde Spotify, SoundCloud, YouTube, YouTube Music, Apple Music y Deezer. También puedes pegar las canciones, una por línea.',
       };
     }
 
@@ -233,7 +311,7 @@ export async function importExternalPlaylist(
       return { success: true, playlist: pl, matched, total: songs.length };
     }
 
-    return { success: false, error: 'Formato no reconocido. Pega un enlace de Spotify, YouTube, YouTube Music o Apple Music, o una lista de canciones.' };
+    return { success: false, error: 'Formato no reconocido. Pega un enlace de Spotify, SoundCloud, YouTube, YouTube Music o Apple Music, o una lista de canciones.' };
   } catch (err: any) {
     return { success: false, error: err.message || 'Error al importar la playlist.' };
   }

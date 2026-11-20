@@ -1,9 +1,11 @@
 /**
  * "Importar playlist": reads the songs (title, artist, duration) of a public playlist from
- * YouTube Music, YouTube or Apple Music. The app then finds each song in the catalog and creates
+ * YouTube Music, YouTube, Apple Music, Deezer or SoundCloud. The app then finds each song in the catalog and creates
  * a Spotifree playlist. Spotify links are handled by the app itself.
  * Used by api/playlist.js (?action=import&url=...) and the dev server.
  */
+
+import { resolveSoundCloudUrl } from './musicFallback.js';
 
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36';
 const MAX_TRACKS = 10000;
@@ -39,12 +41,20 @@ export function detectSource(raw) {
   try {
     u = new URL(String(raw || '').trim());
   } catch {
+    const trimmed = String(raw || '').trim();
+    const uriMatch = trimmed.match(/^spotify:(playlist|album):([A-Za-z0-9]+)$/i);
+    if (uriMatch) {
+      return { source: 'spotify', kind: uriMatch[1].toLowerCase(), id: uriMatch[2] };
+    }
     return null;
   }
   const host = u.hostname.replace(/^www\.|^m\./, '');
-  if (host === 'open.spotify.com' || host === 'spotify.link') {
+  if (host === 'open.spotify.com') {
     const m = /\/(playlist|album)\/([A-Za-z0-9]+)/.exec(u.pathname);
     return m ? { source: 'spotify', kind: m[1], id: m[2] } : null;
+  }
+  if (host === 'spotify.link') {
+    return { source: 'spotify-short', url: u.toString() };
   }
   if (host === 'music.youtube.com' || host === 'youtube.com' || host === 'youtu.be') {
     const list = u.searchParams.get('list');
@@ -66,6 +76,13 @@ export function detectSource(raw) {
   if (host === 'link.deezer.com' || host === 'deezer.page.link' || host === 'dzr.page.link') {
     return { source: 'deezer-short', url: u.toString() };
   }
+  // SoundCloud: sets/playlists and user tracks
+  if (host === 'soundcloud.com') {
+    return { source: 'soundcloud', url: u.toString() };
+  }
+  if (host === 'on.soundcloud.com') {
+    return { source: 'soundcloud-short', url: u.toString() };
+  }
   // Amazon Music doesn't publish its playlists in a readable form
   if (/(^|\.)music\.amazon\./.test(host) || host.startsWith('amazon.') || host === 'amzn.to') {
     return { source: 'amazon' };
@@ -84,7 +101,26 @@ async function readDeezer({ kind, id }) {
     for (const t of list || []) {
       if (tracks.length >= MAX_TRACKS) break;
       if (!t?.title) continue;
-      tracks.push({ title: t.title, artist: t.artist?.name || data.artist?.name || '', durationSec: Number(t.duration) || 0 });
+      const artistName = t.artist?.name || data.artist?.name || 'Artista';
+      const coverUrl = t.album?.cover_xl || t.album?.cover_big || data.cover_xl || data.picture_xl || '';
+      tracks.push({
+        id: `dz-${t.id}`,
+        title: t.title,
+        artist: artistName,
+        durationSec: Number(t.duration) || 0,
+        trackObj: {
+          id: `dz-${t.id}`,
+          name: t.title,
+          artists: [{ id: `art-${t.artist?.id || 'dz'}`, name: artistName }],
+          album: {
+            id: `alb-${t.album?.id || id}`,
+            name: t.album?.title || data.title,
+            images: coverUrl ? [{ url: coverUrl }] : [],
+          },
+          duration_ms: (Number(t.duration) || 210) * 1000,
+          preview_url: t.preview || null,
+        },
+      });
     }
   };
   add(data.tracks?.data);
@@ -189,18 +225,65 @@ async function readAppleMusic({ url }) {
   return { name: name || 'Playlist importada', image: img ? img[1] : '', tracks };
 }
 
-/** { source, name, image, tracks: [{ title, artist, durationSec, videoId? }] } */
+/** { source, name, image, tracks: [{ title, artist, durationSec, videoId?, trackObj? }] } */
 export async function readExternalPlaylist(rawUrl) {
   let src = detectSource(rawUrl);
   if (!src) throw new Error('unsupported');
   if (src.source === 'amazon') throw new Error('amazon');
-  // Deezer short link: follow it to the real playlist / album address
-  if (src.source === 'deezer-short') {
+
+  // Follow short links (Spotify, SoundCloud, Deezer) to destination address
+  if (src.source === 'spotify-short' || src.source === 'soundcloud-short' || src.source === 'deezer-short') {
     const r = await fetch(src.url, { redirect: 'follow', headers: { 'User-Agent': UA } });
     src = detectSource(r.url);
-    if (!src || src.source !== 'deezer') throw new Error('unsupported');
+    if (!src) throw new Error('unsupported');
   }
-  if (src.source === 'spotify') return { source: 'spotify', spotify: { kind: src.kind, id: src.id }, name: '', image: '', tracks: [] };
+
+  if (src.source === 'spotify') {
+    return { source: 'spotify', spotify: { kind: src.kind, id: src.id }, name: '', image: '', tracks: [] };
+  }
+
+  if (src.source === 'soundcloud') {
+    const sc = await resolveSoundCloudUrl(src.url);
+    if (!sc) {
+      throw new Error('No se pudo leer la playlist de SoundCloud. Comprueba que sea pública.');
+    }
+    if (sc.kind === 'track' && sc.track) {
+      return {
+        source: 'soundcloud',
+        name: sc.track.name || 'Pista de SoundCloud',
+        image: sc.track.album?.images?.[0]?.url || '',
+        tracks: [{
+          id: sc.track.id,
+          title: sc.track.name,
+          artist: sc.track.artists?.[0]?.name || 'SoundCloud',
+          durationSec: Math.round((sc.track.duration_ms || 210000) / 1000),
+          album: sc.track.album?.name,
+          coverUrl: sc.track.album?.images?.[0]?.url,
+          trackObj: sc.track,
+        }],
+      };
+    }
+    if (sc.kind === 'playlist' && sc.playlist) {
+      const pl = sc.playlist;
+      const tracks = (pl.tracks?.items || []).map((t, idx) => ({
+        id: t.id || `sc-${idx}`,
+        title: t.name,
+        artist: t.artists?.[0]?.name || (pl.owner?.display_name || 'SoundCloud'),
+        durationSec: Math.round((t.duration_ms || 210000) / 1000),
+        album: t.album?.name || pl.name,
+        coverUrl: t.album?.images?.[0]?.url || pl.images?.[0]?.url || '',
+        trackObj: t,
+      }));
+      return {
+        source: 'soundcloud',
+        name: pl.name || 'Playlist de SoundCloud',
+        image: pl.images?.[0]?.url || '',
+        tracks,
+      };
+    }
+    throw new Error('No se pudo encontrar canciones en el enlace de SoundCloud.');
+  }
+
   const res =
     src.source === 'apple' ? await readAppleMusic(src) : src.source === 'deezer' ? await readDeezer(src) : await readYouTubeMusic(src);
   return { source: src.source, ...res };

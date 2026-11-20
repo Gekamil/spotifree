@@ -9,7 +9,7 @@ export function openImportPlaylistDialog() {
   window.dispatchEvent(new CustomEvent(IMPORT_PLAYLIST_EVENT));
 }
 
-const SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Deezer', 'Spotify'];
+const SOURCES = ['Spotify', 'SoundCloud', 'YouTube Music', 'YouTube', 'Apple Music', 'Deezer'];
 
 /** Desktop "Importar playlist", styled like Spotify's "Editar información" dialog */
 export default function ImportPlaylistDialog() {
@@ -122,7 +122,7 @@ export default function ImportPlaylistDialog() {
                 void submit();
               }
             }}
-            placeholder="https://music.youtube.com/playlist?list=…"
+            placeholder="https://open.spotify.com/playlist/... o https://soundcloud.com/.../sets/..."
             className="block w-full resize-none rounded-[4px] border border-transparent bg-[#3e3e3e] px-3 py-2.5 pr-24 text-[14px] text-white outline-none placeholder:text-[#8a8a8a] focus:border-[#535353] focus:bg-[#333] transition-colors"
           />
           <button

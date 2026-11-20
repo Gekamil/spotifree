@@ -92,11 +92,12 @@ function parseEmbedHtml(html, cleanId) {
  * Resolves a real Spotify Playlist / Album / Liked Songs directly from Spotify's
  * internal Pathfinder GraphQL and Web API with zero mock/fake tracks.
  */
-export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = '', refresh = false } = {}) {
-  const cleanId = (playlistId || '')
-    .replace(/^spotify:playlist:/, '')
-    .replace(/^spotify:album:/, '')
-    .replace(/^spotify:collection:/, '')
+export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = '', refresh = false, offset = 0, limit = 100 } = {}) {
+  let cleanId = (playlistId || '')
+    .replace(/^https?:\/\/(open\.spotify\.com|spotify\.link)\/(?:intl-[a-z]+\/)?(playlist|album)\//i, '')
+    .replace(/^spotify:playlist:/i, '')
+    .replace(/^spotify:album:/i, '')
+    .replace(/^spotify:collection:/i, '')
     .split('?')[0]
     .trim();
 
@@ -105,17 +106,19 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   }
 
   // Check in-memory instant cache (valid for 3 minutes unless refresh is requested)
-  if (refresh) {
-    MEMORY_PLAYLIST_CACHE.delete(cleanId);
-    if (cleanId === 'collection-tracks' || cleanId === 'liked-songs') {
-      MEMORY_PLAYLIST_CACHE.delete('collection-tracks');
-      MEMORY_PLAYLIST_CACHE.delete('liked-songs');
-    }
-  } else if (MEMORY_PLAYLIST_CACHE.has(cleanId)) {
-    const cached = MEMORY_PLAYLIST_CACHE.get(cleanId);
-    const age = Date.now() - (cached?._cachedAt || 0);
-    if (age < 180_000 && cached?.tracks?.items?.length > 0) {
-      return cached;
+  if (offset === 0) {
+    if (refresh) {
+      MEMORY_PLAYLIST_CACHE.delete(cleanId);
+      if (cleanId === 'collection-tracks' || cleanId === 'liked-songs') {
+        MEMORY_PLAYLIST_CACHE.delete('collection-tracks');
+        MEMORY_PLAYLIST_CACHE.delete('liked-songs');
+      }
+    } else if (MEMORY_PLAYLIST_CACHE.has(cleanId)) {
+      const cached = MEMORY_PLAYLIST_CACHE.get(cleanId);
+      const age = Date.now() - (cached?._cachedAt || 0);
+      if (age < 180_000 && cached?.tracks?.items?.length > 0) {
+        return cached;
+      }
     }
   }
 
@@ -619,8 +622,8 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             operationName: 'fetchPlaylist',
             variables: {
               uri: `spotify:playlist:${cleanId}`,
-              offset: 0,
-              limit: 100,
+              offset,
+              limit,
               enableWatchFeedEntrypoint: false,
             },
             extensions: {
@@ -641,49 +644,57 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
             const rawItems = [...(pl.content?.items || [])];
             const totalCount = pl.content?.totalCount || rawItems.length;
 
-            if (totalCount > rawItems.length) {
+            // Only paginate all subsequent pages if offset === 0 (full playlist resolution)
+            if (offset === 0 && totalCount > rawItems.length) {
               const maxFetch = Math.min(totalCount, 10000);
               const offsets = [];
               for (let off = rawItems.length; off < maxFetch; off += 100) {
                 offsets.push(off);
               }
-              const fetchPage = async (offset) => {
-                try {
-                  const pRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
-                    method: 'POST',
-                    headers: pathfinderHeaders,
-                    body: JSON.stringify({
-                      operationName: 'fetchPlaylist',
-                      variables: {
-                        uri: `spotify:playlist:${cleanId}`,
-                        offset,
-                        limit: 100,
-                        enableWatchFeedEntrypoint: false,
-                      },
-                      extensions: {
-                        persistedQuery: {
-                          version: 1,
-                          sha256Hash: hash,
+              const fetchPage = async (pageOffset) => {
+                for (let attempt = 0; attempt < 2; attempt++) {
+                  try {
+                    const pRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
+                      method: 'POST',
+                      headers: pathfinderHeaders,
+                      body: JSON.stringify({
+                        operationName: 'fetchPlaylist',
+                        variables: {
+                          uri: `spotify:playlist:${cleanId}`,
+                          offset: pageOffset,
+                          limit: 100,
+                          enableWatchFeedEntrypoint: false,
                         },
-                      },
-                    }),
-                    signal: AbortSignal.timeout ? AbortSignal.timeout(5000) : undefined,
-                  });
-                  if (pRes.ok) {
-                    const pData = await pRes.json();
-                    return pData.data?.playlistV2?.content?.items || [];
-                  }
-                } catch {}
+                        extensions: {
+                          persistedQuery: {
+                            version: 1,
+                            sha256Hash: hash,
+                          },
+                        },
+                      }),
+                      signal: AbortSignal.timeout ? AbortSignal.timeout(8500) : undefined,
+                    });
+                    if (pRes.ok) {
+                      const pData = await pRes.json();
+                      const pageItems = pData.data?.playlistV2?.content?.items;
+                      if (Array.isArray(pageItems) && pageItems.length > 0) {
+                        return pageItems;
+                      }
+                    }
+                  } catch {}
+                  if (attempt === 0) await new Promise((r) => setTimeout(r, 150));
+                }
                 return [];
               };
 
-              // Fetch concurrently in groups of 4
-              for (let i = 0; i < offsets.length; i += 4) {
-                const batch = offsets.slice(i, i + 4);
+              // Fetch concurrently in groups of 2 with polite 50ms pause
+              for (let i = 0; i < offsets.length; i += 2) {
+                const batch = offsets.slice(i, i + 2);
                 const results = await Promise.all(batch.map(fetchPage));
                 for (const chunk of results) {
                   if (chunk && chunk.length) rawItems.push(...chunk);
                 }
+                if (i + 2 < offsets.length) await new Promise((r) => setTimeout(r, 50));
               }
             }
 
@@ -1520,11 +1531,22 @@ export default async function handler(req, res) {
       }
       return res.status(404).json({ error: `No se encontraron remixes o inéditas de ${artistName}` });
     }
-    if (id.startsWith('sc-pl-url:')) {
-      const rawUrl = decodeURIComponent(id.slice('sc-pl-url:'.length));
+    if (id.startsWith('sc-pl-url:') || /^https?:\/\/(www\.|m\.|on\.)?soundcloud\.com\//i.test(id)) {
+      const rawUrl = id.startsWith('sc-pl-url:') ? decodeURIComponent(id.slice('sc-pl-url:'.length)) : id;
       const scResolved = await resolveSoundCloudUrl(rawUrl);
       if (scResolved?.kind === 'playlist' && scResolved.playlist) {
         return res.status(200).json(scResolved.playlist);
+      }
+      if (scResolved?.kind === 'track' && scResolved.track) {
+        return res.status(200).json({
+          id: scResolved.track.id,
+          name: scResolved.track.name,
+          description: 'Pista de SoundCloud',
+          type: 'playlist',
+          images: scResolved.track.album?.images || [],
+          owner: { display_name: scResolved.track.artists?.[0]?.name || 'SoundCloud', id: 'soundcloud' },
+          tracks: { total: 1, items: [scResolved.track] },
+        });
       }
       return res.status(404).json({ error: 'No se pudo resolver la playlist de SoundCloud.' });
     }
@@ -1542,8 +1564,10 @@ export default async function handler(req, res) {
     const authHeader = req.headers['authorization'] || '';
     const token = authHeader.replace(/^Bearer\s+/i, '');
     const refresh = url.searchParams.get('refresh') === '1' || req.headers['cache-control']?.includes('no-cache');
+    const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
+    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '100', 10) || 100));
 
-    const result = await resolveSpotifyPlaylist(id, { cookie, token, refresh });
+    const result = await resolveSpotifyPlaylist(id, { cookie, token, refresh, offset, limit });
     return res.status(200).json(result);
   } catch (err) {
     console.error('[api/playlist] Error:', err.message);

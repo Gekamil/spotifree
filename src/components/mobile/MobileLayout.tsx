@@ -802,34 +802,34 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 )}
 
-                {/* YOUR OWN PERSONAL DJ CARD (Sleek Spotify widget proportions matching improvements) */}
-                <div className="px-4 mb-6">
-                  <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2.5">
+                {/* YOUR OWN PERSONAL DJ CARD (Sleek, compact Spotify widget proportions) */}
+                <div className="px-4 mb-4.5">
+                  <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2">
                     Tu DJ personal
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl p-5 overflow-hidden cursor-pointer shadow-2xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[164px]"
+                    className="relative w-full rounded-2xl p-3.5 px-4 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[120px]"
                     style={{
                       backgroundColor: djThemeColor || '#0c3b88',
                       backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0c3b88'} 0%, #060f22 100%)`,
-                      boxShadow: `0 12px 36px ${djThemeColor || '#0c3b88'}55`,
+                      boxShadow: `0 8px 28px ${djThemeColor || '#0c3b88'}44`,
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
                     {/* Subtle Ambient Radial Glow behind the Orb */}
                     <div
-                      className="absolute left-1/2 top-12 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
+                      className="absolute left-1/2 top-8 -translate-x-1/2 -translate-y-1/2 w-36 h-36 rounded-full pointer-events-none transition-all duration-700 opacity-60"
                       style={{
                         background: 'radial-gradient(circle, rgba(0, 242, 254, 0.35) 0%, rgba(30, 215, 96, 0.12) 45%, rgba(0,0,0,0) 70%)',
-                        filter: 'blur(20px)',
+                        filter: 'blur(18px)',
                       }}
                     />
 
                     {/* Center Visualizer: Clean Neon Liquid Halo */}
-                    <div className="relative w-full flex items-center justify-center my-0.5 z-10 pointer-events-none">
+                    <div className="relative w-full flex items-center justify-center -my-1 z-10 pointer-events-none">
                       <SpotifyDJVisualizer
-                        size={140}
+                        size={94}
                         state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                         voiceLevel={voiceLevel}
                         themeColor={djThemeColor}
@@ -837,9 +837,9 @@ export const MobileLayout: React.FC = () => {
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
-                    <div className="flex items-end justify-between relative z-20 mt-auto pt-2 w-full">
-                      <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
-                        <RotatingDJBannerText className="text-base font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+                    <div className="flex items-end justify-between relative z-20 mt-auto pt-1 w-full">
+                      <div className="flex-1 min-w-0 pr-2.5 max-w-[calc(100%-48px)]">
+                        <RotatingDJBannerText className="text-[14px] font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                       </div>
 
                       <button
@@ -847,10 +847,10 @@ export const MobileLayout: React.FC = () => {
                           e.stopPropagation();
                           handleSelectPlaylistById('spotify-dj');
                         }}
-                        className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
+                        className="w-8.5 h-8.5 min-w-[34px] min-h-[34px] rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
                         title="Abrir DJ"
                       >
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                           <polyline points="12 5 19 12 12 19"></polyline>
                         </svg>

@@ -14,7 +14,7 @@ interface MobileCreateSheetProps {
   defaultPlaylistNumber?: number;
 }
 
-const IMPORT_SOURCES = ['YouTube Music', 'YouTube', 'Apple Music', 'Deezer', 'Spotify'];
+const IMPORT_SOURCES = ['Spotify', 'SoundCloud', 'YouTube Music', 'YouTube', 'Apple Music', 'Deezer'];
 
 /**
  * "Crear" (mobile, like Spotify's): Playlist, Importar playlist and Escuchar juntos. Naming a
@@ -176,7 +176,7 @@ export const MobileCreateSheet: React.FC<MobileCreateSheetProps> = ({
                   onChange={(e) => setImportUrl(e.target.value)}
                   disabled={importLoading}
                   className="block w-full resize-none bg-transparent px-3.5 pt-3 pb-1 text-[15px] text-white outline-none placeholder:text-white/40"
-                  placeholder="https://music.youtube.com/playlist?list=…"
+                  placeholder="https://open.spotify.com/playlist/... o https://soundcloud.com/.../sets/..."
                 />
                 <div className="flex justify-end px-2 pb-2">
                   <button
