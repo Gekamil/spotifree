@@ -75,8 +75,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     playTrack,
     queue,
     currentContextId,
+    addToQueue,
   } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId }))
+    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, togglePlay: s.togglePlay, nextTrack: s.nextTrack, previousTrack: s.previousTrack, progressMs: s.progressMs, durationMs: s.durationMs, setProgress: s.setProgress, shuffleMode: s.shuffleMode, toggleShuffle: s.toggleShuffle, repeatMode: s.repeatMode, toggleRepeat: s.toggleRepeat, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, playTrack: s.playTrack, queue: s.queue, currentContextId: s.currentContextId, addToQueue: s.addToQueue }))
   );
 
   const { activeOutputLabel, activeOutputKind } = useAudioOutputStore(
@@ -478,6 +479,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const isLiked = likedTrackIds.includes(currentTrack.id);
   const coverUrl = currentTrack.album?.images?.[0]?.url;
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
+
+  const contextName = React.useMemo(() => {
+    if (isDJActive) return currentSetTitle || 'DJ de Spotify';
+    if (currentContextId === 'collection:tracks' || currentContextId === 'liked-songs') return 'Canciones que te gustan';
+    const playlists = useSpotifyDataStore.getState().playlists;
+    const pl = playlists.find((p) => p.id === currentContextId);
+    if (pl?.name) return pl.name;
+    if (currentTrack?.album?.name) return currentTrack.album.name;
+    return 'Lista de reproducción';
+  }, [currentContextId, isDJActive, currentSetTitle, currentTrack?.album?.name]);
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);
@@ -1171,7 +1182,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             style={{
               opacity: menuDragY > 0 ? Math.max(0, 1 - menuDragY / 400) : undefined,
             }}
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm animate-fade-in"
+            className="fixed inset-0 bg-black/65 backdrop-blur-sm animate-fade-in"
           />
 
           {/* Bottom Sheet with Drag-to-Dismiss */}
@@ -1179,20 +1190,21 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             ref={menuScrollRef}
             {...menuContentProps}
             style={menuSheetStyle}
-            className="relative z-10 bg-[#242424] rounded-t-[32px] px-6 pb-6 pt-2 space-y-4 animate-slide-up-modal max-h-[85vh] overflow-y-auto border-t border-white/10 shadow-2xl"
+            className="relative z-10 bg-[#242424] rounded-t-[22px] px-5 pb-5 pt-2 animate-slide-up-modal max-h-[75vh] overflow-y-auto border-t border-white/10 shadow-2xl select-none"
           >
-            {/* Top Drag Handle (48px touch target area) */}
+            {/* Top Drag Handle (44px touch target area) */}
             <div
               {...menuHandleProps}
-              className="w-full min-h-[44px] h-11 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none -mt-1 -mb-1"
+              className="w-full min-h-[36px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
               aria-label="Arrastrar para cerrar"
               role="presentation"
             >
-              <div className="w-10 h-1 bg-white/30 rounded-full" />
+              <div className="w-9 h-1 bg-white/30 rounded-full" />
             </div>
-            {/* Header info */}
-            <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
-              <div className="w-14 h-14 rounded-lg overflow-hidden bg-[#181818] shrink-0 shadow">
+
+            {/* Header info matching Screenshot 1 */}
+            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+              <div className="w-12 h-12 rounded-[4px] overflow-hidden bg-[#181818] shrink-0 shadow">
                 {displayCover ? (
                   <img src={displayCover} alt={currentTrack.name} className="w-full h-full object-cover" />
                 ) : (
@@ -1213,58 +1225,159 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               </div>
             </div>
 
-            {/* Actions list */}
-            <div className="space-y-1">
-              {/* Option 1: Añadir a playlist (Canciones que te gustan, your playlists or a new one) */}
+            {/* Actions list matching Screenshot 1 (clean icons without circular backgrounds) */}
+            <div className="space-y-0.5 pt-1">
+              {/* 1: Compartir */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (navigator.share) {
+                    navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
+                  } else {
+                    navigator.clipboard.writeText(window.location.href).catch(() => {});
+                    showGlobalToast('Enlace copiado al portapapeles');
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <circle cx="18" cy="5" r="3" />
+                  <circle cx="6" cy="12" r="3" />
+                  <circle cx="18" cy="19" r="3" />
+                  <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                  <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+                </svg>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">Compartir</p>
+                </div>
+              </button>
+
+              {/* 2: Añadir a Canciones que te gustan (Iconic purple gradient square with white heart) */}
+              <button
+                onClick={() => {
+                  toggleLike(currentTrack.id, currentTrack);
+                  showGlobalToast(!isLiked ? 'Añadida a Canciones que te gustan' : 'Eliminada de Canciones que te gustan');
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <div className="w-6 h-6 rounded-[4px] bg-gradient-to-br from-[#450af5] to-[#8e8ee5] flex items-center justify-center shrink-0 shadow-sm">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
+                  </svg>
+                </div>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">
+                    {isLiked ? 'En Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
+                  </p>
+                </div>
+              </button>
+
+              {/* 3: Añadir a lista */}
               <button
                 onClick={() => {
                   const t = currentTrack;
                   setIsMenuOpen(false);
                   setTimeout(() => useUIStore.getState().openAddToPlaylistModal(t), 150);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  {isLiked ? (
-                    <CheckTrackNativeIcon size={24} className="text-[#1ed760]" />
-                  ) : (
-                    <AddTrackNativeIcon size={24} className="text-white" />
-                  )}
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="16" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Añadir a playlist</p>
-                  {isLiked && <p className="text-xs text-[#b3b3b3] truncate">Guardada en Canciones que te gustan</p>}
+                  <p className="font-medium text-sm text-white">Añadir a lista</p>
                 </div>
               </button>
 
-              {/* No me gusta (solo si está activado el modo) */}
-              {labsEnabled && tasteRatingEnabled && (
-                <button
-                  onClick={() => {
-                    const t = currentTrack;
-                    setIsMenuOpen(false);
-                    if (isNotInterested(t)) {
-                      undoNotInterested(t);
-                      showGlobalToast('Podremos volver a ponértela');
-                    } else {
-                      dislikeCurrentTrack();
-                    }
-                  }}
-                  className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                    <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
-                    </svg>
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <p className="font-bold text-sm text-white">{isNotInterested(currentTrack) ? 'Ya no te disgusta' : 'No me gusta esta canción'}</p>
-                    <p className="text-xs text-[#b3b3b3] truncate">{isNotInterested(currentTrack) ? 'Volverá a sonar en listas y recomendaciones' : 'Saltar y no volver a poner'}</p>
-                  </div>
-                </button>
-              )}
+              {/* 4: Ocultar en esta lista */}
+              <button
+                onClick={() => {
+                  const t = currentTrack;
+                  setIsMenuOpen(false);
+                  if (isNotInterested(t)) {
+                    undoNotInterested(t);
+                    showGlobalToast('Podremos volver a ponértela');
+                  } else {
+                    dislikeCurrentTrack();
+                    showGlobalToast('Oculta en esta lista');
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">Ocultar en esta lista</p>
+                </div>
+              </button>
 
-              {/* Option 3: Ir al artista */}
+              {/* 5: Añadir a la cola */}
+              <button
+                onClick={() => {
+                  addToQueue(currentTrack);
+                  showGlobalToast('Añadida a la cola');
+                  setIsMenuOpen(false);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <line x1="3" y1="6" x2="15" y2="6" />
+                  <line x1="3" y1="12" x2="15" y2="12" />
+                  <line x1="3" y1="18" x2="11" y2="18" />
+                  <line x1="18" y1="15" x2="18" y2="21" />
+                  <line x1="15" y1="18" x2="21" y2="18" />
+                </svg>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">Añadir a la cola</p>
+                </div>
+              </button>
+
+              {/* 6: Ir a la cola */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  setTimeout(() => setIsQueueOpen(true), 120);
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <line x1="3" y1="6" x2="21" y2="6" />
+                  <line x1="3" y1="12" x2="21" y2="12" />
+                  <line x1="3" y1="18" x2="21" y2="18" />
+                </svg>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">Ir a la cola</p>
+                </div>
+              </button>
+
+              {/* 7: Ir al álbum */}
+              <button
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  if (currentTrack.album?.id && onSelectPlaylistById) {
+                    onClose();
+                    onSelectPlaylistById(currentTrack.album.id, currentTrack.album.name);
+                  } else {
+                    showGlobalToast(`Álbum: ${currentTrack.album?.name || currentTrack.name}`);
+                  }
+                }}
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <circle cx="12" cy="12" r="10" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                <div className="text-left flex-1 min-w-0">
+                  <p className="font-medium text-sm text-white">Ir al álbum</p>
+                </div>
+              </button>
+
+              {/* 8: Ir al artista */}
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
@@ -1277,112 +1390,57 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     );
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-                  </svg>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Ir al artista</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">{artistName}</p>
+                  <p className="font-medium text-sm text-white">Ir al artista</p>
                 </div>
               </button>
 
-              {/* Option: stories card */}
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  if (currentTrack) openStoryCard(currentTrack);
-                }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
-              >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="6" y="2" width="12" height="20" rx="3" />
-                    <path d="M9.5 15h5M9.5 18h3" />
-                    <rect x="9" y="5.5" width="6" height="6" rx="1" />
-                  </svg>
-                </div>
-                <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Compartir en stories</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">Imagen con la portada y la letra</p>
-                </div>
-              </button>
-
-              {/* Labs: Velocidad de reproducción */}
-              {labsEnabled && speedControlEnabled && (
-                <button
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    openSpeedControlSheet();
-                  }}
-                  className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
-                >
-                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                  </div>
-                  <div className="text-left flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-bold text-sm text-white">Velocidad de reproducción</p>
-                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
-                        {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
-                      </span>
-                    </div>
-                    <p className="text-xs text-[#b3b3b3] truncate">Modificar ritmo, slowed o nightcore</p>
-                  </div>
-                </button>
-              )}
-
-
-              {/* Option: sleep timer */}
+              {/* 9: Temporizador de apagado */}
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
                   openSleepTimerSheet();
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className={`w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12.34 2.02A10 10 0 1 0 21.98 11.7a.75.75 0 0 0-1.2-.65 6.5 6.5 0 0 1-9.06-9.06.75.75 0 0 0-.66-1.2zM9.2 4.1a8 8 0 0 0 10.7 10.7A8.5 8.5 0 1 1 9.2 4.1z" />
-                  </svg>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={sleepActive ? 'text-[#1ed760] shrink-0' : 'text-white shrink-0'}>
+                  <circle cx="12" cy="13" r="8" />
+                  <path d="M12 9v4l2.5 2" />
+                  <path d="M10 2h4" />
+                </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className={`font-bold text-sm ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>Temporizador de apagado</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">
-                    {sleepActive ? 'Activado: toca para cambiarlo' : 'Para la música pasado un rato'}
+                  <p className={`font-medium text-sm ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>
+                    Temporizador de apagado
                   </p>
+                  {sleepActive && <p className="text-xs text-[#1ed760]">Activado</p>}
                 </div>
               </button>
 
-              {/* Option: audio source */}
+              {/* 10: Cambiar fuente de audio */}
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
                   openAudioSourceSheet(currentTrack);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
-                  </svg>
-                </div>
+                <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
+                  <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
+                </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Cambiar fuente de audio</p>
-                  <p className="text-xs text-[#b3b3b3] truncate">Si no suena la canción correcta</p>
+                  <p className="font-medium text-sm text-white">Cambiar fuente de audio</p>
                 </div>
               </button>
 
-              {/* Option: Descargar canción (offline) */}
+              {/* 11: Descargar */}
               <button
                 onClick={async () => {
-                  // One option: kept in the app for airplane mode + saved as a file on the phone
                   setIsMenuOpen(false);
                   if (isTrackDownloadedState) {
                     await removeTrackDownload(currentTrack);
@@ -1394,150 +1452,187 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     if (ok) setIsTrackDownloadedState(true);
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className={`w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
-                  {isTrackDownloadedState ? (
-                    <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor">
-                      <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m11.748-1.97a.75.75 0 0 0-1.06-1.06l-4.47 4.47-1.405-1.406a.75.75 0 1 0-1.061 1.06l2.466 2.467 5.53-5.53z" />
-                    </svg>
-                  ) : (
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="7 10 12 15 17 10" />
-                      <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                  )}
-                </div>
+                {isTrackDownloadedState ? (
+                  <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
+                    <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m11.748-1.97a.75.75 0 0 0-1.06-1.06l-4.47 4.47-1.405-1.406a.75.75 0 1 0-1.061 1.06l2.466 2.467 5.53-5.53z" />
+                  </svg>
+                ) : (
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="8 12 12 16 16 12" />
+                    <line x1="12" y1="8" x2="12" y2="16" />
+                  </svg>
+                )}
                 <div className="text-left flex-1 min-w-0">
-                  <p className={`font-bold text-sm ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
-                    {isTrackDownloadedState ? 'Eliminar descarga' : isDownloadingTrackState ? 'Descargando…' : 'Descargar'}
-                  </p>
-                  <p className="text-xs text-[#b3b3b3] truncate">
-                    {isTrackDownloadedState ? 'Suena sin conexión y está en tu dispositivo' : 'Sin conexión y guardada en tu dispositivo'}
+                  <p className={`font-medium text-sm ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
+                    {isTrackDownloadedState ? 'Descargada' : isDownloadingTrackState ? 'Descargando…' : 'Descargar'}
                   </p>
                 </div>
               </button>
 
-              {/* Option 4: Compartir */}
+              {/* Labs: Velocidad de reproducción (si está habilitado) */}
+              {labsEnabled && speedControlEnabled && (
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    openSpeedControlSheet();
+                  }}
+                  className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                >
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-sm text-white">Velocidad de reproducción</p>
+                      <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
+                        {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              )}
+
+              {/* Stories Card */}
               <button
                 onClick={() => {
                   setIsMenuOpen(false);
-                  if (navigator.share) {
-                    navigator.share({ title: currentTrack.name, text: `Escuchando ${currentTrack.name} en Spotifree`, url: window.location.href }).catch(() => {});
-                  } else {
-                    navigator.clipboard.writeText(window.location.href).catch(() => {});
-                  }
+                  if (currentTrack) openStoryCard(currentTrack);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-2 rounded-xl text-white hover:bg-white/10 active:scale-[0.98] transition-all cursor-pointer"
+                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0">
-                  <ShareNativeIcon size={20} className="text-white" />
-                </div>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <rect x="6" y="2" width="12" height="20" rx="3" />
+                  <path d="M9.5 15h5M9.5 18h3" />
+                  <rect x="9" y="5.5" width="6" height="6" rx="1" />
+                </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-bold text-sm text-white">Compartir</p>
+                  <p className="font-medium text-sm text-white">Compartir en stories</p>
                 </div>
               </button>
             </div>
-
-            {/* Close button */}
-            <button
-              onClick={() => setIsMenuOpen(false)}
-              className="w-full py-3.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-white font-bold text-sm transition-all cursor-pointer"
-            >
-              Cerrar
-            </button>
           </div>
         </div>
       )}
 
-      {/* Mobile Queue Sheet (1:1 Spotify Mobile Parity with Swipe-to-Dismiss) */}
+      {/* Mobile Queue Bottom Sheet (1:1 Spotify Mobile Parity with Swipe-to-Dismiss) */}
       {isQueueOpen && (
-        <div
-          className="fixed inset-0 z-[120] bg-[#121212] flex flex-col font-['SpotifyMixUI'] animate-slide-up-modal select-none touch-pan-y"
-          style={{
-            paddingTop: 'var(--sat)',
-            transform: `translateY(${queueDragY}px)`,
-            transition: isQueueDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
-          }}
-        >
-          {/* Top Pull Handle for Smooth Swipe Down */}
+        <div className="fixed inset-0 z-[120] flex flex-col justify-end pointer-events-auto">
+          {/* Backdrop */}
           <div
-            onTouchStart={handleQueueTouchStart}
-            onTouchMove={handleQueueTouchMove}
-            onTouchEnd={handleQueueTouchEnd}
-            className="w-full pt-3 pb-1 flex items-center justify-center cursor-grab active:cursor-grabbing bg-[#121212]"
-          >
-            <div className="w-10 h-1 rounded-full bg-white/30" />
-          </div>
+            onClick={() => setIsQueueOpen(false)}
+            style={{
+              opacity: queueDragY > 0 ? Math.max(0, 1 - queueDragY / 400) : undefined,
+            }}
+            className="fixed inset-0 bg-black/65 backdrop-blur-[2px] animate-fade-in"
+          />
 
-          {/* Header */}
+          {/* Drawer Sheet */}
           <div
-            onTouchStart={handleQueueTouchStart}
-            onTouchMove={handleQueueTouchMove}
-            onTouchEnd={handleQueueTouchEnd}
-            className="sticky top-0 z-20 flex items-center justify-between px-4 py-2.5 bg-[#121212]/95 backdrop-blur-md border-b border-white/5"
+            className="relative z-10 bg-[#1e1e1e] rounded-t-[24px] max-h-[82vh] h-[78vh] flex flex-col shadow-2xl border-t border-white/10 animate-slide-up-modal select-none font-['SpotifyMixUI']"
+            style={{
+              transform: `translateY(${queueDragY}px)`,
+              transition: isQueueDragging ? 'none' : 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)',
+            }}
           >
-            <button
-              onClick={() => setIsQueueOpen(false)}
-              className="p-2 text-white/80 hover:text-white active:scale-90 transition-transform -ml-1 cursor-pointer"
-              title="Volver al reproductor"
+            {/* Top Drag Handle */}
+            <div
+              onTouchStart={handleQueueTouchStart}
+              onTouchMove={handleQueueTouchMove}
+              onTouchEnd={handleQueueTouchEnd}
+              className="w-full min-h-[34px] py-2 shrink-0 flex items-center justify-center cursor-grab active:cursor-grabbing touch-none select-none"
+              aria-label="Arrastrar para cerrar"
+              role="presentation"
             >
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-              </svg>
-            </button>
-            <h3 className="font-bold text-white text-base font-['SpotifyMixUITitle']">
-              Cola de reproducción
-            </h3>
-            <div className="w-8" />
-          </div>
+              <div className="w-10 h-1 bg-white/30 rounded-full" />
+            </div>
 
-          {/* Queue Body */}
-          <div
-            ref={queueScrollRef}
-            onTouchStart={handleQueueBodyTouchStart}
-            onTouchMove={handleQueueTouchMove}
-            onTouchEnd={handleQueueTouchEnd}
-            className="flex-1 overflow-y-auto px-4 py-4 space-y-6"
-          >
-            {/* Now Playing Section */}
+            {/* Header: Cola + Reproduciendo <source> (1:1 with Screenshot 2) */}
+            <div
+              onTouchStart={handleQueueTouchStart}
+              onTouchMove={handleQueueTouchMove}
+              onTouchEnd={handleQueueTouchEnd}
+              className="px-5 pt-1 pb-2 shrink-0"
+            >
+              <h3 className="font-bold text-white text-2xl font-['SpotifyMixUITitle']">
+                Cola
+              </h3>
+              <p className="text-xs text-[#b3b3b3] mt-0.5 truncate">
+                Reproduciendo <span className="font-medium text-white/90">{contextName}</span>
+              </p>
+            </div>
+
+            {/* Now Playing Section (1:1 with Screenshot 2) */}
             {currentTrack && (
-              <div>
-                <h4 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider mb-3 px-1">
-                  Reproduciendo ahora
-                </h4>
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-white/10 border border-white/5">
-                  <div className="w-12 h-12 rounded-md overflow-hidden bg-[#282828] shrink-0 relative shadow">
+              <div className="px-5 py-2 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-[4px] overflow-hidden bg-[#282828] shrink-0 relative shadow">
                     <img
                       src={displayCover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                       alt={currentTrack.name}
                       className="w-full h-full object-cover"
                     />
-                    {isPlaying && (
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#1ed760] animate-pulse" />
-                      </div>
-                    )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="font-bold text-sm text-[#1ed760] truncate">{currentTrack.name}</p>
-                    <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ') || 'Artista'}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                      {isPlaying && (
+                        <span className="flex items-end gap-0.5 h-3 shrink-0">
+                          <span className="w-0.5 h-3 bg-[#1ed760] animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-0.5 h-2 bg-[#1ed760] animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-0.5 h-3 bg-[#1ed760] animate-bounce" style={{ animationDelay: '300ms' }} />
+                        </span>
+                      )}
+                      <p className="font-semibold text-sm text-[#1ed760] truncate font-['SpotifyMixUITitle']">
+                        {currentTrack.name}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      {(currentTrack as any).explicit && (
+                        <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-[2px] bg-[#b3b3b3] text-black text-[9px] font-bold shrink-0">
+                          E
+                        </span>
+                      )}
+                      <p className="text-xs text-[#b3b3b3] truncate">
+                        {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ') || 'Artista'}
+                      </p>
+                    </div>
                   </div>
-                  <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">
-                    {formatDuration(currentTrack.duration_ms)}
-                  </div>
+                  {/* Circular White Play/Pause Button */}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      togglePlay();
+                    }}
+                    className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shrink-0 shadow-lg hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+                    aria-label={isPlaying ? 'Pausar' : 'Reproducir'}
+                  >
+                    {isPlaying ? (
+                      <PauseNativeIcon size={20} className="text-black" />
+                    ) : (
+                      <PlayNativeIcon size={20} className="text-black ml-0.5" />
+                    )}
+                  </button>
                 </div>
               </div>
             )}
 
-            {/* Upcoming Queue Section */}
-            <div>
-              <h4 className="text-xs font-bold text-[#b3b3b3] uppercase tracking-wider mb-3 px-1">
-                A continuación
-              </h4>
+            {/* Section Header: Modo aleatorio desde: / A continuación desde: */}
+            <div className="px-5 pt-3 pb-1.5 shrink-0 flex items-center gap-2 text-xs font-semibold text-[#b3b3b3]">
+              <ShuffleNativeIcon size={14} className={shuffleMode ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+              <span>{shuffleMode ? 'Modo aleatorio desde:' : 'A continuación desde:'}</span>
+            </div>
+
+            {/* Upcoming Queue Section (scrollable) */}
+            <div
+              ref={queueScrollRef}
+              onTouchStart={handleQueueBodyTouchStart}
+              onTouchMove={handleQueueTouchMove}
+              onTouchEnd={handleQueueTouchEnd}
+              className="flex-1 overflow-y-auto px-5 pb-3 space-y-1.5"
+            >
               {(() => {
                 const curIdx = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
                 const upcoming = curIdx >= 0 ? queue.slice(curIdx + 1) : queue;
@@ -1561,7 +1656,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                       const dragging = reorder?.idx === idx;
                       return (
                         <div
-                          // stable key: the row moves instead of being rebuilt, so the finger keeps it
                           key={t.id}
                           onTouchStart={(e) => onRowTouchStart(e, idx)}
                           onTouchMove={(e) => onRowTouchMove(e, baseOffset, upcoming.length)}
@@ -1578,11 +1672,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                               ? { transform: `translateY(${reorder!.offset}px)`, transition: 'none', position: 'relative', zIndex: 10 }
                               : undefined
                           }
-                          className={`flex items-center gap-3 p-2.5 rounded-xl transition-colors cursor-pointer ${
+                          className={`flex items-center gap-3 p-1.5 rounded-xl transition-colors cursor-pointer ${
                             dragging ? 'bg-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.5)]' : 'hover:bg-white/10 active:bg-white/15'
                           }`}
                         >
-                          <div className="w-11 h-11 rounded-md overflow-hidden bg-[#282828] shrink-0 shadow">
+                          <div className="w-12 h-12 rounded-[4px] overflow-hidden bg-[#282828] shrink-0 shadow">
                             <img
                               src={cover || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
                               alt={t.name}
@@ -1591,19 +1685,32 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <p className="font-semibold text-sm text-white truncate">{t.name}</p>
+                              <p className="font-semibold text-sm text-white truncate font-['SpotifyMixUITitle']">{t.name}</p>
                               {t.isSmartRecommendation && (
                                 <span className="shrink-0 px-1 py-0.5 text-[9px] font-medium bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/30 rounded">
-                                  ✨ Recomendado
+                                  ✨
                                 </span>
                               )}
                             </div>
-                            <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                              {parseTrackArtists(t.artists).map((a) => a.name).join(', ') || 'Artista'}
-                            </p>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              {(t as any).explicit && (
+                                <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-[2px] bg-[#b3b3b3] text-black text-[9px] font-bold shrink-0">
+                                  E
+                                </span>
+                              )}
+                              <p className="text-xs text-[#b3b3b3] truncate">
+                                {parseTrackArtists(t.artists).map((a) => a.name).join(', ') || 'Artista'}
+                              </p>
+                            </div>
                           </div>
-                          <div className="text-xs text-[#a7a7a7] tabular-nums font-medium">
-                            {formatDuration(t.duration_ms)}
+                          {/* 3 horizontal drag reorder lines (1:1 with Screenshot 2) */}
+                          <div
+                            className="w-8 h-8 flex flex-col justify-center items-center gap-1 text-white/30 hover:text-white/70 cursor-grab active:cursor-grabbing shrink-0"
+                            aria-label="Reordenar"
+                          >
+                            <span className="w-5 h-[2px] bg-current rounded-full" />
+                            <span className="w-5 h-[2px] bg-current rounded-full" />
+                            <span className="w-5 h-[2px] bg-current rounded-full" />
                           </div>
                         </div>
                       );
@@ -1611,6 +1718,32 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   </div>
                 );
               })()}
+            </div>
+
+            {/* Sticky Bottom Action Bar with [Aleatorio] and [Temporizador] (1:1 with Screenshot 2) */}
+            <div className="p-3 bg-[#1e1e1e] border-t border-white/5 flex items-center gap-3 shrink-0">
+              <button
+                onClick={() => toggleShuffle()}
+                className={`flex-1 py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  shuffleMode ? 'bg-[#282828] text-[#1ed760]' : 'bg-[#282828] text-white hover:bg-[#323232]'
+                }`}
+              >
+                <ShuffleNativeIcon size={18} className={shuffleMode ? 'text-[#1ed760]' : 'text-white'} />
+                <span className="text-sm font-semibold">Aleatorio</span>
+              </button>
+              <button
+                onClick={() => openSleepTimerSheet()}
+                className={`flex-1 py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  sleepActive ? 'bg-[#282828] text-[#1ed760]' : 'bg-[#282828] text-white hover:bg-[#323232]'
+                }`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={sleepActive ? 'text-[#1ed760]' : 'text-white'}>
+                  <circle cx="12" cy="13" r="8" />
+                  <path d="M12 9v4l2.5 2" />
+                  <path d="M10 2h4" />
+                </svg>
+                <span className="text-sm font-semibold">Temporizador</span>
+              </button>
             </div>
           </div>
         </div>

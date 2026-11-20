@@ -360,7 +360,13 @@ export const MobileLayout: React.FC = () => {
   const { currentTrack, isPlaying, currentContextId, likedTrackIds } = usePlayerStore(
     useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, currentContextId: s.currentContextId, likedTrackIds: s.likedTrackIds }))
   );
-  const djThemeColor = useAIDJStore((s) => s.djThemeColor);
+  const { djThemeColor, visualizerState, voiceLevel } = useAIDJStore(
+    useShallow((s) => ({
+      djThemeColor: s.djThemeColor,
+      visualizerState: s.visualizerState,
+      voiceLevel: s.voiceLevel,
+    }))
+  );
 
   const isCardPlaying = (cardId: string, cardName: string) => {
     if (!isPlaying || !cardId) return false;
@@ -440,14 +446,6 @@ export const MobileLayout: React.FC = () => {
     setSelectedPlaylist(newPlaylist);
     setMobileTab('playlist');
   };
-
-  // Dynamic greeting based on current hour
-  const greeting = useMemo(() => {
-    const hour = new Date().getHours();
-    if (hour >= 6 && hour < 13) return '¡Buenos días!';
-    if (hour >= 13 && hour < 21) return '¡Buenas tardes!';
-    return '¡Buenas noches!';
-  }, []);
 
   // Quick Access Shortcuts matching user's active session
   const shortcuts = useMemo(() => {
@@ -752,20 +750,9 @@ export const MobileLayout: React.FC = () => {
                 <SpotifyHomeSkeleton isMobile={true} />
               ) : (
                 <>
-                  {/* Greeting Header matching Spotify Mobile */}
-                  <h1
-                    className="text-2xl font-black text-white font-['SpotifyMixUITitle'] px-4 pt-1 pb-3 transition-all duration-200"
-                    style={{
-                      opacity: Math.max(0.2, 1 - scrollOffset / 180),
-                      transform: `translate3d(0, ${scrollOffset * 0.08}px, 0)`,
-                    }}
-                  >
-                    {greeting}
-                  </h1>
-
-                {/* Quick Access 2-Column Grid matching Spotify Mobile */}
+                {/* Quick Access 2-Column Grid glued cleanly to top bar matching Spotify Mobile */}
                 {shortcuts && shortcuts.length > 0 && (
-                  <div className="px-4 mb-5">
+                  <div className="px-4 pt-1 mb-5">
                     <div className="grid grid-cols-2 gap-1.5">
                       {shortcuts.map((card) => {
                         const isPlayingThis = isCardPlaying(card.id, card.name);
@@ -826,8 +813,8 @@ export const MobileLayout: React.FC = () => {
                     <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
                       <InteractiveMusicWaves
                         isPlaying={isPlaying}
-                        isSpeaking={false}
-                        voiceLevel={0.25}
+                        isSpeaking={visualizerState === 'speaking' || visualizerState === 'listening'}
+                        voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
                         themeColor={djThemeColor || '#1ed760'}
                         className="w-full h-full object-cover"
                       />
@@ -849,7 +836,12 @@ export const MobileLayout: React.FC = () => {
                           maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
                         }}
                       >
-                        <SpotifyDJVisualizer size={210} state={isPlaying ? 'playing' : 'idle'} voiceLevel={isPlaying ? 0.25 : 0.12} themeColor={djThemeColor} />
+                        <SpotifyDJVisualizer
+                          size={210}
+                          state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
+                          voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
+                          themeColor={djThemeColor}
+                        />
                       </div>
                     </div>
 
@@ -1253,7 +1245,7 @@ export const MobileLayout: React.FC = () => {
 
               if (isGrid) {
                 return (
-                  <div className="grid grid-cols-2 gap-3 pt-1 pb-6">
+                  <div className="grid grid-cols-2 gap-2.5 pt-1 pb-6">
                     {/* Liked songs card */}
                     {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
                       <div
@@ -1413,7 +1405,7 @@ export const MobileLayout: React.FC = () => {
 
               // List / Compact rendering
               return (
-                <div className={`pt-1 ${isCompact ? 'space-y-0.5' : 'space-y-1'}`}>
+                <div className="pt-1 space-y-0.5">
                   {/* Liked songs item */}
                   {(libraryFilter === 'all' || libraryFilter === 'playlists' || (libraryFilter === 'downloaded' && isPlaylistDownloaded('liked-songs'))) && (
                     <div
@@ -1425,14 +1417,14 @@ export const MobileLayout: React.FC = () => {
                         )
                       }
                       className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
-                        isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
+                        isCompact ? 'py-0.5 px-1' : 'py-1 px-1'
                       }`}
                     >
                       <img
                         src="https://misc.scdn.co/liked-songs/liked-songs-640.jpg"
                         alt="Canciones que te gustan"
                         onError={handleImageError}
-                        className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} rounded-[4px] object-cover shadow-sm shrink-0`}
+                        className={`${isCompact ? 'w-11 h-11' : 'w-14 h-14'} rounded-[4px] object-cover shadow-sm shrink-0`}
                       />
                       <div className="flex flex-col min-w-0">
                         <span className="font-semibold text-white text-[15px] leading-tight truncate">
@@ -1450,14 +1442,14 @@ export const MobileLayout: React.FC = () => {
                     <div
                       onClick={() => setMobileTab('dj')}
                       className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
-                        isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
+                        isCompact ? 'py-0.5 px-1' : 'py-1 px-1'
                       }`}
                     >
                       <img
                         src={SPOTIFY_DJ_COVER_IMAGE}
                         alt="DJ"
                         onError={handleImageError}
-                        className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} rounded-[4px] object-cover shadow-sm shrink-0`}
+                        className={`${isCompact ? 'w-11 h-11' : 'w-14 h-14'} rounded-[4px] object-cover shadow-sm shrink-0`}
                       />
                       <div className="flex flex-col min-w-0">
                         <span className="font-semibold text-white text-[15px] leading-tight truncate flex items-center gap-1.5">
@@ -1502,7 +1494,7 @@ export const MobileLayout: React.FC = () => {
                           handleSelectPlaylistById(pl.id, pl.name, pl.images?.[0]?.url);
                         }}
                         className={`flex items-center justify-between rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors relative group select-none ${
-                          isCompact ? 'py-1 px-1' : 'py-1.5 px-1'
+                          isCompact ? 'py-0.5 px-1' : 'py-1 px-1'
                         } ${isLongPressed ? 'bg-white/15 z-30' : ''}`}
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
@@ -1510,7 +1502,7 @@ export const MobileLayout: React.FC = () => {
                             src={getPlaylistCover(pl)}
                             alt={pl.name}
                             onError={onPlaylistCoverError(pl)}
-                            className={`${isCompact ? 'w-10 h-10' : 'w-12 h-12'} object-cover bg-[#242424] shadow-sm shrink-0 ${
+                            className={`${isCompact ? 'w-11 h-11' : 'w-14 h-14'} object-cover bg-[#242424] shadow-sm shrink-0 ${
                               isArt ? 'rounded-full' : 'rounded-[4px]'
                             }`}
                           />

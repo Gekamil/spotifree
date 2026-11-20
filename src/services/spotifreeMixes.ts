@@ -657,13 +657,8 @@ export function makeEraCoverSvg(
   const isStyle = decadeOrStyle.length > 5;
   const validImages = (images || []).filter(Boolean);
   let imageLayers = '';
-  if (validImages.length === 1) {
-    imageLayers = `<image href="${validImages[0]}" x="0" y="0" width="600" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>`;
-  } else if (validImages.length >= 2) {
-    imageLayers = `
-      <image href="${validImages[0]}" x="0" y="0" width="300" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>
-      <image href="${validImages[1]}" x="300" y="0" width="300" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.48"/>
-    `;
+  if (validImages.length > 0) {
+    imageLayers = `<image href="${validImages[0]}" x="0" y="0" width="600" height="600" preserveAspectRatio="xMidYMid slice" opacity="0.52"/>`;
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
     <defs>
@@ -719,10 +714,10 @@ export async function makeCuratedThemedCover(
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, S, S);
 
-    // 2. Song & artist photos blended into background with authentic duotone wash
+    // 2. Single hero artist/song photo seamlessly blended into the background
     const validUrls = images.filter(Boolean);
     const loadedImgs = (
-      await Promise.all(validUrls.slice(0, 4).map((u) => loadCoverPhoto(u, 2500)))
+      await Promise.all(validUrls.slice(0, 2).map((u) => loadCoverPhoto(u, 2500)))
     ).filter(Boolean) as HTMLImageElement[];
 
     if (loadedImgs.length > 0) {
@@ -730,31 +725,13 @@ export async function makeCuratedThemedCover(
       // Photos with clear visibility so songs/artists are recognizable
       ctx.globalAlpha = 0.58;
 
-      if (loadedImgs.length === 1) {
-        // 1 photo: Full canvas center-crop
-        const im = loadedImgs[0];
-        const s = Math.min(im.naturalWidth, im.naturalHeight);
-        ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, S, S);
-      } else if (loadedImgs.length === 2) {
-        // 2 photos: Split left / right
-        const half = S / 2;
-        loadedImgs.forEach((im, i) => {
-          const s = Math.min(im.naturalWidth, im.naturalHeight);
-          ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, i * half, 0, half, S);
-        });
-      } else {
-        // 3 or 4 photos: 2x2 collage
-        const half = S / 2;
-        loadedImgs.slice(0, 4).forEach((im, i) => {
-          const s = Math.min(im.naturalWidth, im.naturalHeight);
-          const x = (i % 2) * half;
-          const y = Math.floor(i / 2) * half;
-          ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, x, y, half, half);
-        });
-      }
+      // Full canvas center-crop for a seamless hero portrait without jarring cut lines
+      const im = loadedImgs[0];
+      const s = Math.min(im.naturalWidth, im.naturalHeight);
+      ctx.drawImage(im, (im.naturalWidth - s) / 2, (im.naturalHeight - s) / 2, s, s, 0, 0, S, S);
       ctx.restore();
 
-      // Atmospheric duotone color tint over the photos (soft enough to let photos show through beautifully)
+      // Atmospheric duotone color tint over the photo (smoothly melts into background)
       const tint = ctx.createLinearGradient(0, 0, S, S);
       tint.addColorStop(0, hexToRgba(color, 0.45));
       tint.addColorStop(0.55, 'rgba(18, 18, 18, 0.40)');

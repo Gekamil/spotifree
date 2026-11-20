@@ -7,6 +7,8 @@ const audioEngineSource = fs.readFileSync(path.resolve('src/services/audioEngine
 const mobileLayoutSource = fs.readFileSync(path.resolve('src/components/mobile/MobileLayout.tsx'), 'utf-8');
 const spotifreeMixesSource = fs.readFileSync(path.resolve('src/services/spotifreeMixes.ts'), 'utf-8');
 const serverSource = fs.readFileSync(path.resolve('server.mjs'), 'utf-8');
+const nowPlayingSource = fs.readFileSync(path.resolve('src/components/mobile/MobileNowPlayingModal.tsx'), 'utf-8');
+const djVisualizerSource = fs.readFileSync(path.resolve('src/components/dj/SpotifyDJVisualizer.tsx'), 'utf-8');
 
 describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & Era/Genre Mixes Photos', () => {
   describe('1. Instant Karaoke Hot-Swap (0ms silence / no dropout)', () => {
@@ -38,15 +40,27 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(mobileLayoutSource.includes('Álbumes'), 'Must include Álbumes chip');
     });
 
-    it('Uses authentic Spotify 48x48px (w-12 h-12) artwork in list view', () => {
-      assert.ok(mobileLayoutSource.includes("isCompact ? 'w-10 h-10' : 'w-12 h-12'"), 'Artwork must be 48px w-12 h-12 in standard list mode');
-      assert.ok(mobileLayoutSource.includes("isCompact ? 'py-1 px-1' : 'py-1.5 px-1'"), 'Row padding must be compact py-1.5 px-1');
+    it('Restores normal artwork size (w-14 h-14 / w-11 h-11) while keeping tight spacing (py-1 px-1 / space-y-0.5)', () => {
+      assert.ok(mobileLayoutSource.includes("isCompact ? 'w-11 h-11' : 'w-14 h-14'"), 'Artwork must be standard w-14 h-14 in list mode');
+      assert.ok(mobileLayoutSource.includes("isCompact ? 'py-0.5 px-1' : 'py-1 px-1'"), 'Row padding must be tight py-1 px-1');
+      assert.ok(mobileLayoutSource.includes('space-y-0.5'), 'Row spacing must be tightened to space-y-0.5');
       assert.ok(mobileLayoutSource.includes('font-semibold text-white text-[15px] leading-tight truncate'), 'Title typography must match Spotify dense text');
     });
 
     it('Grid view cards use edge-to-edge p-0 artwork without bloated margins', () => {
       assert.ok(mobileLayoutSource.includes('className="p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all group select-none"'), 'Grid cards must use p-0');
       assert.ok(mobileLayoutSource.includes('pt-1.5 pb-1 px-0.5 min-w-0'), 'Grid label container must be tight pt-1.5 pb-1');
+    });
+
+    it('Removes standalone Buenas tardes greeting and sticks shortcuts grid directly to top bar', () => {
+      assert.ok(!mobileLayoutSource.includes('¡Buenas tardes!'), 'Must remove greeting text from Home');
+      assert.ok(mobileLayoutSource.includes('px-4 pt-1 mb-5'), 'Shortcuts grid must sit right below header bar');
+    });
+
+    it('Home DJ Card subscribes to live DJ speech visualizerState and voiceLevel', () => {
+      assert.ok(mobileLayoutSource.includes("visualizerState: s.visualizerState"), 'Must subscribe to visualizerState');
+      assert.ok(mobileLayoutSource.includes("voiceLevel: s.voiceLevel"), 'Must subscribe to voiceLevel');
+      assert.ok(mobileLayoutSource.includes("visualizerState === 'speaking'"), 'Must react when DJ is speaking');
     });
   });
 
@@ -105,6 +119,32 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(rewrites.some(r => r.source === '/api/image-proxy' && r.destination.includes('/api/metadata')), 'rewrites must route /api/image-proxy to metadata');
       assert.ok(rewrites.some(r => r.source === '/api/token' && r.destination.includes('/api/login')), 'rewrites must route /api/token to login');
       assert.ok(rewrites.some(r => r.source === '/api/user-profile' && r.destination.includes('/api/auth')), 'rewrites must route /api/user-profile to auth');
+    });
+  });
+
+  describe('5. Spotify Parity: AI DJ Active Speaking Orb & Bottom Sheets for Queue & Menu', () => {
+    it('DJ Visualizer implements active undulating speech wave dynamics (bulgeBase and pulseScale)', () => {
+      assert.ok(djVisualizerSource.includes('bulgeBase = (2.4 + currentVoice * 3.6)'), 'Must amplify speech wave displacement when speaking');
+      assert.ok(djVisualizerSource.includes('pulseScale = 1 + Math.sin(time * 2.6) * 0.035 + Math.sin(time * 5.2) * 0.018 + currentVoice * 0.055'), 'Must pulse orb radius dynamically with voice volume and harmonics');
+    });
+
+    it('Track 3-Dots Menu is a bottom sheet with clean Spotify SVG icons and purple gradient heart', () => {
+      assert.ok(nowPlayingSource.includes('max-h-[75vh] overflow-y-auto border-t border-white/10 shadow-2xl select-none'), 'Menu must be a bottom sheet drawer');
+      assert.ok(nowPlayingSource.includes('from-[#450af5] to-[#8e8ee5]'), 'Canciones que te gustan must have iconic Spotify purple gradient heart');
+      assert.ok(nowPlayingSource.includes('Ir a la cola'), 'Menu must have Ir a la cola action');
+      assert.ok(nowPlayingSource.includes('Añadir a la cola'), 'Menu must have Añadir a la cola action');
+      assert.ok(!nowPlayingSource.includes('w-10 h-10 rounded-full bg-white/10 flex items-center justify-center text-white shrink-0'), 'Must remove gray circular icon wrappers');
+    });
+
+    it('Queue is a bottom sheet drawer (~78vh) with now playing row, upcoming queue, and sticky action bar', () => {
+      assert.ok(nowPlayingSource.includes('max-h-[82vh] h-[78vh] flex flex-col shadow-2xl border-t border-white/10'), 'Queue must be a bottom sheet drawer');
+      assert.ok(nowPlayingSource.includes('Cola'), 'Must render Cola title');
+      assert.ok(nowPlayingSource.includes('Reproduciendo <span className="font-medium text-white/90">{contextName}</span>'), 'Must render active playback context');
+      assert.ok(nowPlayingSource.includes('text-[#1ed760] truncate font-[\'SpotifyMixUITitle\']'), 'Currently playing track title must be green');
+      assert.ok(nowPlayingSource.includes('w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shrink-0 shadow-lg'), 'Now playing must have circular white play/pause button');
+      assert.ok(nowPlayingSource.includes('Modo aleatorio desde:'), 'Must render Modo aleatorio desde section');
+      assert.ok(nowPlayingSource.includes('Aleatorio'), 'Must render Aleatorio bottom pill');
+      assert.ok(nowPlayingSource.includes('Temporizador'), 'Must render Temporizador bottom pill');
     });
   });
 });
