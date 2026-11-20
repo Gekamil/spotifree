@@ -2,9 +2,11 @@ import React from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
 
+export type HomeFilterTab = 'todo' | 'musica' | 'podcasts' | 'audiobooks';
+
 interface MobileHeaderProps {
-  activeTab: 'todo' | 'musica';
-  onTabChange: (tab: 'todo' | 'musica') => void;
+  activeTab: HomeFilterTab;
+  onTabChange: (tab: HomeFilterTab) => void;
   onOpenProfile?: () => void;
   onOpenDrawer?: () => void;
   onOpenSettings?: () => void;
@@ -40,9 +42,11 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const avatarUrl = customAvatar || user?.images?.[0]?.url;
   const initial = (user?.display_name || 'J').charAt(0).toUpperCase();
 
-  const pills: Array<{ id: 'todo' | 'musica'; label: string }> = [
+  const pills: Array<{ id: HomeFilterTab; label: string }> = [
     { id: 'todo', label: 'Todos' },
     { id: 'musica', label: 'Música' },
+    { id: 'podcasts', label: 'Pódcasts' },
+    { id: 'audiobooks', label: 'Audiolibros' },
   ];
 
   return (

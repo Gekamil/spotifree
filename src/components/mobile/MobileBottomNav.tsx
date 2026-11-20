@@ -1,11 +1,11 @@
 import React from 'react';
-import { SearchActiveNativeIcon } from '../icons/SpotifyNativeIcons';
+import { SearchActiveNativeIcon, SpotifyLogoNativeIcon } from '../icons/SpotifyNativeIcons';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
 
 interface MobileBottomNavProps {
-  activeTab: 'home' | 'search' | 'library' | 'create';
-  onTabChange: (tab: 'home' | 'search' | 'library') => void;
+  activeTab: 'home' | 'search' | 'library' | 'create' | 'premium';
+  onTabChange: (tab: 'home' | 'search' | 'library' | 'premium') => void;
   onOpenCreate?: () => void;
   isCreateOpen?: boolean;
 }
@@ -128,7 +128,27 @@ export const MobileBottomNav: React.FC<MobileBottomNavProps> = ({
           </span>
         </button>
 
-        {/* 4. Crear with smooth + to × rotation and label hiding */}
+        {/* 4. Premium (Matching Spotify 5-Tab layout from Screenshot 1) */}
+        <button
+          onClick={() => onTabChange('premium')}
+          className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-1 transition-colors cursor-pointer group active:scale-95 ${
+            activeTab === 'premium' ? 'text-white' : 'text-[#b3b3b3] hover:text-white'
+          }`}
+          title="Premium"
+        >
+          <div key={`premium-${activeTab === 'premium'}`} className={`w-6 h-6 flex items-center justify-center ${activeTab === 'premium' ? 'spf-tab-pop' : ''}`}>
+            <SpotifyLogoNativeIcon size={22} className={activeTab === 'premium' ? 'text-white' : 'text-[#b3b3b3]'} />
+          </div>
+          <span
+            className={`text-[10px] tracking-tight ${
+              activeTab === 'premium' ? 'font-bold text-white' : 'font-medium text-[#b3b3b3]'
+            }`}
+          >
+            Premium
+          </span>
+        </button>
+
+        {/* 5. Crear with smooth + to × rotation and label hiding */}
         <button
           onClick={() => {
             if (!isAuthenticated) {

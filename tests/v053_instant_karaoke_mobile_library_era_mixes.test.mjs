@@ -159,4 +159,38 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(nowPlayingSource.includes('dismissQueue'), 'Mobile player must use dismissQueue');
     });
   });
+
+  describe('6. Spotify Real Mobile Parity: 5-Tab Bar, 4-Filter Header, 56px Shortcuts & 152px Shelves', () => {
+    it('MobileBottomNav implements authentic 5-tab layout with Premium icon', () => {
+      const navSource = fs.readFileSync(path.resolve('src/components/mobile/MobileBottomNav.tsx'), 'utf-8');
+      assert.ok(navSource.includes('SpotifyLogoNativeIcon'), 'Must render Spotify logo icon for Premium tab');
+      assert.ok(navSource.includes('Premium'), 'Must include Premium tab');
+      assert.ok(navSource.includes('Tu biblioteca'), 'Must include Tu biblioteca tab');
+      assert.ok(navSource.includes('Buscar'), 'Must include Buscar tab');
+      assert.ok(navSource.includes('Inicio'), 'Must include Inicio tab');
+      assert.ok(navSource.includes('Crear'), 'Must include Crear tab');
+    });
+
+    it('MobileHeader includes all 4 Spotify pills (Todos, Música, Pódcasts, Audiolibros)', () => {
+      const headerSource = fs.readFileSync(path.resolve('src/components/mobile/MobileHeader.tsx'), 'utf-8');
+      assert.ok(headerSource.includes('Pódcasts'), 'Must include Pódcasts pill');
+      assert.ok(headerSource.includes('Audiolibros'), 'Must include Audiolibros pill');
+      assert.ok(headerSource.includes('Todos'), 'Must include Todos pill');
+      assert.ok(headerSource.includes('Música'), 'Must include Música pill');
+    });
+
+    it('Shortcuts grid uses 56px height (h-14) with flush 56px square artwork (w-14 h-14)', () => {
+      const currentLayout = fs.readFileSync(path.resolve('src/components/mobile/MobileLayout.tsx'), 'utf-8');
+      assert.ok(currentLayout.includes('h-14 bg-[#282828]'), 'Shortcuts card must be 56px tall');
+      assert.ok(currentLayout.includes('w-14 h-14 shrink-0 rounded-l-[4px]'), 'Shortcuts image must be 56px flush square');
+      assert.ok(currentLayout.includes('grid grid-cols-2 gap-2'), 'Shortcuts grid must use gap-2');
+    });
+
+    it('Shelves use 152px width cards and subtle dark ambient background', () => {
+      const currentLayout = fs.readFileSync(path.resolve('src/components/mobile/MobileLayout.tsx'), 'utf-8');
+      assert.ok(currentLayout.includes('w-[152px] shrink-0 space-y-1.5'), 'Shelf cards must be 152px wide');
+      assert.ok(currentLayout.includes('w-[152px] h-[152px] rounded-[8px]'), 'Shelf card artwork must be 152x152px');
+      assert.ok(currentLayout.includes('lastVibrantColor}24'), 'Must use subtle dark background tint instead of heavy purple wash');
+    });
+  });
 });

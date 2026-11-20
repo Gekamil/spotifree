@@ -12,7 +12,7 @@ import { dedupeHomeShelves, useSpotifreeMixes, withSpotifreeShelves } from '../.
 import { resolveArtistName } from '../../services/artistService';
 import { MobileMiniPlayer } from './MobileMiniPlayer';
 import { MobileNowPlayingModal } from './MobileNowPlayingModal';
-import { MobileHeader } from './MobileHeader';
+import { MobileHeader, type HomeFilterTab } from './MobileHeader';
 import { MobileProfileDrawer } from './MobileProfileDrawer';
 import { confirmDialog } from '../common/ConfirmDialog';
 import { useSharedSessionStore } from '../../services/sharedSessionService';
@@ -80,7 +80,7 @@ export const MobileLayout: React.FC = () => {
       unsubDownloads();
     };
   }, []);
-  const [homeFilter, setHomeFilter] = useState<'todo' | 'musica'>('todo');
+  const [homeFilter, setHomeFilter] = useState<HomeFilterTab>('todo');
   const [libraryFilter, setLibraryFilter] = useState<'all' | 'playlists' | 'artists' | 'downloaded'>('all');
   const [isLibrarySearching, setIsLibrarySearching] = useState(false);
   const [librarySearchQuery, setLibrarySearchQuery] = useState('');
@@ -368,6 +368,7 @@ export const MobileLayout: React.FC = () => {
     }))
   );
 
+
   const isCardPlaying = (cardId: string, cardName: string) => {
     if (!isPlaying || !cardId) return false;
     const cleanCardId = String(cardId).trim();
@@ -447,11 +448,11 @@ export const MobileLayout: React.FC = () => {
     setMobileTab('playlist');
   };
 
-  // Quick Access Shortcuts matching user's active session
+  // Quick Access Shortcuts matching user's active session (always up to 8 cards for 2x4 grid)
   const shortcuts = useMemo(() => {
     if (!isAuthenticated) return [];
     if (quickAccessCards && quickAccessCards.length > 0) {
-      return quickAccessCards
+      const filtered = quickAccessCards
         .filter((c) => {
           if (!c || !c.id || !c.name) return false;
           const name = c.name.trim().toLowerCase();
@@ -460,11 +461,22 @@ export const MobileLayout: React.FC = () => {
           return true;
         })
         .slice(0, 8);
+      if (filtered.length >= 4) return filtered;
     }
-    return [];
-  }, [quickAccessCards, isAuthenticated]);
+    // Fallback to user's playlists to ensure 2x4 grid is always populated
+    const deletedIds = getDeletedPlaylistIds();
+    return playlists
+      .filter((p) => !deletedIds.has(p.id) && !p.id.includes('collection:tracks') && p.type !== 'folder')
+      .slice(0, 8)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        image: getPlaylistCover(p),
+        color: '#282828',
+      }));
+  }, [quickAccessCards, playlists, isAuthenticated]);
 
-  // Comprehensive shelves: user's playlists from current session + recommended feeds
+  // Comprehensive shelves: Editorial / New Releases / Mixes first, matching Spotify Real Home
   const shelves = useMemo(() => {
     if (!isAuthenticated) return [];
     const shortcutIds = new Set(shortcuts.map((s: any) => s.id));
@@ -479,29 +491,7 @@ export const MobileLayout: React.FC = () => {
 
     const deletedIds = getDeletedPlaylistIds();
 
-    // 1. User's Playlists from current session ("nuestra sesión")
-    const userLists = playlists.filter(
-      (p) =>
-        !deletedIds.has(p.id) &&
-        !p.id.includes('collection:tracks') &&
-        p.type !== 'folder' &&
-        // An empty "Canciones que te gustan" is not worth a card on Home
-        (p.id !== 'liked-songs' || (p.tracks?.items?.length || 0) > 0)
-    );
-    if (userLists.length > 0) {
-      list.push({
-        id: 'shelf-tus-playlists',
-        title: 'Tus playlists',
-        cards: userLists.map((p) => ({
-          id: p.id,
-          title: p.name,
-          subtitle: stripHtml(p.description) || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
-          image: getPlaylistCover(p),
-        })),
-      });
-    }
-
-    // 2. Base dynamic shelves (Emisoras recomendadas, Tus mixes más escuchados, etc.) + Spotifree's own
+    // 1. Base dynamic shelves (New Releases, Spotifree Mixes, Hecho para ti) come FIRST (matching Screenshot 1)
     const base = withSpotifreeShelves(
       dynamicShelves && dynamicShelves.length > 0 ? dynamicShelves : buildDynamicShelves(user, playlists, featuredMessage),
       sfMixes,
@@ -509,9 +499,19 @@ export const MobileLayout: React.FC = () => {
       sfArtists
     );
 
-    base
-      // "Tus listas creadas" repeats what "Tus playlists" already shows on mobile
-      .filter((s) => !(s.id === 'shelf-user-created' && userLists.length > 0))
+    // On Fridays, title top new releases shelf "¡Hoy es viernes de novedades!" (1:1 with Screenshot 1)
+    const isFriday = new Date().getDay() === 5;
+    const enrichedBase = base.map((s, idx) => {
+      if (idx === 0 && isFriday) {
+        return {
+          ...s,
+          title: '¡Hoy es viernes de novedades!',
+        };
+      }
+      return s;
+    });
+
+    enrichedBase
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .forEach((s) => {
         const filteredCards = s.cards.filter((c) => !deletedIds.has(c.id));
@@ -530,11 +530,38 @@ export const MobileLayout: React.FC = () => {
         }
       });
 
+    // 2. User's Playlists shelf ("Tus playlists") further down
+    const userLists = playlists.filter(
+      (p) =>
+        !deletedIds.has(p.id) &&
+        !p.id.includes('collection:tracks') &&
+        p.type !== 'folder' &&
+        (p.id !== 'liked-songs' || (p.tracks?.items?.length || 0) > 0)
+    );
+    if (userLists.length > 0) {
+      list.push({
+        id: 'shelf-tus-playlists',
+        title: 'Tus playlists',
+        cards: userLists.map((p) => ({
+          id: p.id,
+          title: p.name,
+          subtitle: stripHtml(p.description) || `De ${p.owner?.display_name || user?.display_name || 'ti'}`,
+          image: getPlaylistCover(p),
+        })),
+      });
+    }
+
     if (homeFilter === 'musica') {
       return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias') && !s.title.toLowerCase().includes('podcast')) as any) as typeof list);
     }
+    if (homeFilter === 'podcasts') {
+      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => s.title.toLowerCase().includes('podcast') || s.title.toLowerCase().includes('show') || s.title.toLowerCase().includes('noticias')) as any) as typeof list);
+    }
+    if (homeFilter === 'audiobooks') {
+      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => s.title.toLowerCase().includes('audiolibro') || s.title.toLowerCase().includes('libro') || s.title.toLowerCase().includes('historia')) as any) as typeof list);
+    }
 
-    // No playlist twice on Home ("Tus playlists" + every section + the shortcuts at the top)
+    // No playlist twice on Home
     return withoutShortcuts(dedupeHomeShelves(list as any) as typeof list);
   }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, sfArtists, shortcuts, autoCoverVersion]);
 
@@ -698,22 +725,22 @@ export const MobileLayout: React.FC = () => {
 
         {/* TAB 1: HOME */}
         {mobileTab === 'home' && !seeAllShelf && (
-          <div className="min-h-full transition-colors duration-500 spf-page-enter relative">
-            {/* Ambient Parallax Gradient Background */}
+          <div className="min-h-full transition-colors duration-500 spf-page-enter relative bg-[#121212]">
+            {/* Ambient Parallax Gradient Background (Subtle dark tint matching Spotify Real Photo 1) */}
             <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-[380px] transition-colors duration-700 z-0 will-change-transform"
+              className="pointer-events-none absolute inset-x-0 top-0 h-[300px] transition-colors duration-700 z-0 will-change-transform"
               style={{
-                background: `linear-gradient(180deg, ${lastVibrantColor}bf 0%, rgba(18, 18, 18, 0.94) 280px, #121212 100%)`,
-                transform: `translate3d(0, ${-Math.min(scrollOffset * 0.45, 140)}px, 0)`,
+                background: `linear-gradient(180deg, ${lastVibrantColor}24 0%, rgba(18, 18, 18, 0.96) 200px, #121212 100%)`,
+                transform: `translate3d(0, ${-Math.min(scrollOffset * 0.45, 120)}px, 0)`,
               }}
             />
 
-            <div className="relative z-10">
+            <div className="relative z-10 pb-8">
               <div
                 className={`sticky top-0 z-30 transition-all duration-300 ${
                   scrollOffset > 15
-                    ? 'bg-[#121212]/90 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.55)]'
-                    : 'bg-transparent'
+                    ? 'bg-[#121212]/95 backdrop-blur-xl shadow-[0_4px_24px_rgba(0,0,0,0.55)]'
+                    : 'bg-[#121212]/30 backdrop-blur-sm'
                 }`}
               >
                 <MobileHeader
@@ -750,29 +777,29 @@ export const MobileLayout: React.FC = () => {
                 <SpotifyHomeSkeleton isMobile={true} />
               ) : (
                 <>
-                {/* Quick Access 2-Column Grid glued cleanly to top bar matching Spotify Mobile */}
+                {/* Quick Access 2-Column Grid (h-14, 56px flush artwork, 1:1 with Screenshot 1) */}
                 {shortcuts && shortcuts.length > 0 && (
                   <div className="px-4 pt-1 mb-5">
-                    <div className="grid grid-cols-2 gap-1.5">
+                    <div className="grid grid-cols-2 gap-2">
                       {shortcuts.map((card) => {
                         const isPlayingThis = isCardPlaying(card.id, card.name);
                         return (
                           <div
                             key={card.id}
                             onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
-                            className="h-12 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2"
+                            className="h-14 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2.5"
                           >
                             <div className="flex items-center min-w-0 flex-1 mr-1">
-                              <div className="w-12 h-12 shrink-0 rounded-l-[4px] overflow-hidden">
+                              <div className="w-14 h-14 shrink-0 rounded-l-[4px] overflow-hidden bg-[#242424]">
                                 <SpotifyImage
                                   src={card.image}
                                   alt={card.name}
                                   fallbackType="music"
-                                  className="w-12 h-12 object-cover"
+                                  className="w-14 h-14 object-cover"
                                 />
                               </div>
                               <span
-                                className={`font-bold text-[12px] leading-[15px] line-clamp-2 px-2 ${
+                                className={`font-bold text-[13px] leading-[16px] line-clamp-2 px-2.5 ${
                                   isPlayingThis ? 'text-[#1ed760]' : 'text-white'
                                 }`}
                               >
@@ -794,14 +821,14 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 )}
 
-                {/* YOUR OWN PERSONAL DJ CARD (Photo 3) */}
+                {/* YOUR OWN PERSONAL DJ CARD (Sleek Spotify widget proportions matching improvements) */}
                 <div className="px-4 mb-6">
                   <h2 className="text-xl font-black text-white font-['SpotifyMixUITitle'] mb-2.5">
                     Tu DJ personal
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl p-5 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[210px]"
+                    className="relative w-full rounded-2xl p-4 overflow-hidden cursor-pointer shadow-lg active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px]"
                     style={{
                       backgroundColor: djThemeColor || '#0a52cc',
                       backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0a52cc'} 0%, rgba(5, 11, 24, 0.94) 100%)`,
@@ -809,7 +836,7 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
-                    {/* Audio Waves covering the ENTIRE widget background with clear, visible lines */}
+                    {/* Audio Waves covering widget background */}
                     <div className="absolute inset-0 pointer-events-none opacity-80 overflow-hidden z-0">
                       <InteractiveMusicWaves
                         isPlaying={isPlaying}
@@ -820,9 +847,9 @@ export const MobileLayout: React.FC = () => {
                       />
                     </div>
 
-                    {/* Center Visualizer: Large Orb centered in the middle, fading smoothly to transparent in the lower half (Photo 7) */}
+                    {/* Center Visualizer: Animated Orb reacting dynamically when DJ is speaking */}
                     <div
-                      className="absolute left-1/2 -translate-x-1/2 top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] z-10"
+                      className="absolute left-1/2 -translate-x-1/2 -top-1 pointer-events-none flex items-center justify-center w-[160px] h-[160px] z-10"
                       style={{
                         WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
                         maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 75%, rgba(0, 0, 0, 0) 100%)',
@@ -830,14 +857,13 @@ export const MobileLayout: React.FC = () => {
                     >
                       <div
                         className="w-full h-full flex items-center justify-center animate-spin-slow opacity-95 transition-all duration-700"
-                        // Round fade: no translucent square from the canvas corners while it spins
                         style={{
                           WebkitMaskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
                           maskImage: 'radial-gradient(circle at center, #000 58%, transparent 70%)',
                         }}
                       >
                         <SpotifyDJVisualizer
-                          size={210}
+                          size={150}
                           state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                           voiceLevel={visualizerState === 'speaking' ? Math.max(0.4, voiceLevel || 0.65) : isPlaying ? 0.25 : 0.12}
                           themeColor={djThemeColor}
@@ -846,9 +872,9 @@ export const MobileLayout: React.FC = () => {
                     </div>
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
-                    <div className="flex items-end justify-between relative z-20 mt-auto pt-4 w-full">
+                    <div className="flex items-end justify-between relative z-20 mt-auto pt-2 w-full">
                       <div className="flex-1 min-w-0 pr-3 max-w-[calc(100%-56px)]">
-                        <RotatingDJBannerText className="text-lg font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[50px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+                        <RotatingDJBannerText className="text-base font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                       </div>
 
                       <button
@@ -856,10 +882,10 @@ export const MobileLayout: React.FC = () => {
                           e.stopPropagation();
                           handleSelectPlaylistById('spotify-dj');
                         }}
-                        className="w-11 h-11 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
+                        className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-xl active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
                         title="Abrir DJ"
                       >
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                           <polyline points="12 5 19 12 12 19"></polyline>
                         </svg>
@@ -868,30 +894,11 @@ export const MobileLayout: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Shelves: Horizontal Carousels or Full-width Release Spotlight for single items (DJ card excluded as requested) */}
-                <div className="space-y-6 px-4">
+                {/* Shelves: Direct seamless flow beneath shortcuts (1:1 with Screenshot 1) */}
+                <div className="space-y-7 px-4">
                   {shelves
-                    .map((shelf) => ({
-                      ...shelf,
-                      cards: shelf.cards.filter((c: any) => {
-                        const id = c.id || '';
-                        const title = (c.title || '').toLowerCase().trim();
-                        return (
-                          id !== 'spotify-dj' &&
-                          id !== 'dj' &&
-                          id !== 'ai-dj' &&
-                          title !== 'dj' &&
-                          !title.includes('spotify dj') &&
-                          title !== 'tu dj' &&
-                          !title.includes('personal dj')
-                        );
-                      }),
-                    }))
                     .filter((shelf) => shelf.cards.length > 0)
                     .map((shelf) => {
-                    const isSingleCard = shelf.cards.length === 1;
-                    const single = shelf.cards[0];
-
                     return (
                       <div key={shelf.id} className="space-y-2.5">
                         <div className="flex items-end justify-between gap-3">
@@ -901,11 +908,11 @@ export const MobileLayout: React.FC = () => {
                                 {shelf.prefix}
                               </span>
                             )}
-                            <h3 className="text-xl font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
+                            <h3 className="text-[22px] font-black text-white font-['SpotifyMixUITitle'] tracking-tight">
                               {shelf.title}
                             </h3>
                           </div>
-                          {shelf.cards.length > 6 && (
+                          {shelf.cards.length > 8 && (
                             <button
                               onClick={() => {
                                 setSeeAllShelf({ title: shelf.title, prefix: shelf.prefix, cards: shelf.cards });
@@ -920,73 +927,37 @@ export const MobileLayout: React.FC = () => {
                           )}
                         </div>
 
-                        {isSingleCard ? (
-                          /* Real Spotify Full-width Release Spotlight (avoids blank right gaps) */
-                          <div
-                            onClick={() => handleSelectPlaylistById(single.id, single.title, single.image)}
-                            className="w-full rounded-xl bg-gradient-to-r from-white/[0.08] via-white/[0.04] to-transparent p-3.5 flex items-center justify-between border border-white/5 active:scale-[0.98] transition-transform cursor-pointer shadow-md"
-                          >
-                            <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-3">
-                              <div className="w-20 h-20 rounded-lg overflow-hidden bg-[#242424] shadow-lg shrink-0 relative">
+                        {/* Multi-Card Horizontal Carousel with exact 152px Spotify cards */}
+                        <div className="flex gap-3.5 overflow-x-auto pb-1 scrollbar-none -mx-4 px-4">
+                          {shelf.cards.slice(0, 20).map((card) => (
+                            <div
+                              key={card.id}
+                              onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
+                              className="w-[152px] shrink-0 space-y-1.5 cursor-pointer active:scale-95 transition-transform"
+                            >
+                              <div className="w-[152px] h-[152px] rounded-[8px] overflow-hidden bg-[#242424] shadow-md relative">
                                 <SpotifyImage
-                                  src={single.image}
-                                  alt={single.title}
+                                  src={card.image}
+                                  alt={card.title}
                                   fallbackType="music"
-                                  className="w-full h-full object-cover"
+                                  className={`w-full h-full object-cover ${
+                                    card.image?.includes('/img/radio/') || card.id?.startsWith('rad-')
+                                      ? 'scale-[1.10] origin-bottom'
+                                      : ''
+                                  }`}
                                 />
                               </div>
-                              <div className="flex flex-col min-w-0">
-                                <span className="text-[10px] font-bold text-[#1ed760] uppercase tracking-wider mb-0.5">
-                                  {playlists.some((p) => p.id === single.id) ? 'Playlist' : 'Destacado'}
-                                </span>
-                                <h4 className="font-bold text-white text-sm line-clamp-1">
-                                  {single.title}
+                              <div className="space-y-0.5">
+                                <h4 className="font-semibold text-white text-[13px] line-clamp-1 leading-tight font-['SpotifyMixUI']">
+                                  {card.title}
                                 </h4>
-                                <p className="text-xs text-[#b3b3b3] line-clamp-2 mt-0.5 leading-snug">
-                                  {stripHtml(single.subtitle)}
+                                <p className="text-[11.5px] text-[#b3b3b3] line-clamp-2 leading-snug">
+                                  {stripHtml(card.subtitle)}
                                 </p>
                               </div>
                             </div>
-
-                            <div className="w-10 h-10 rounded-full bg-[#1ed760] text-black flex items-center justify-center shrink-0 shadow-lg hover:scale-105 transition-transform">
-                              <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M8 5.14v13.72a1 1 0 0 0 1.54.84l11-6.86a1 1 0 0 0 0-1.68l-11-6.86A1 1 0 0 0 8 5.14z" />
-                              </svg>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Multi-Card Horizontal Carousel */
-                          <div className="flex gap-3.5 overflow-x-auto pb-2 scrollbar-none -mx-4 px-4">
-                            {shelf.cards.slice(0, 20).map((card) => (
-                              <div
-                                key={card.id}
-                                onClick={() => handleSelectPlaylistById(card.id, card.title, card.image)}
-                                className="w-36 shrink-0 space-y-2 cursor-pointer active:scale-95 transition-transform"
-                              >
-                                <div className="w-36 h-36 rounded-md overflow-hidden bg-[#242424] shadow-md relative">
-                                  <SpotifyImage
-                                    src={card.image}
-                                    alt={card.title}
-                                    fallbackType="music"
-                                    className={`w-full h-full object-cover ${
-                                      card.image?.includes('/img/radio/') || card.id?.startsWith('rad-')
-                                        ? 'scale-[1.10] origin-bottom'
-                                        : ''
-                                    }`}
-                                  />
-                                </div>
-                                <div className="space-y-0.5">
-                                  <h4 className="font-bold text-white text-xs line-clamp-1">
-                                    {card.title}
-                                  </h4>
-                                  <p className="text-[11px] text-[#b3b3b3] line-clamp-2 leading-tight">
-                                    {stripHtml(card.subtitle)}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
+                          ))}
+                        </div>
                       </div>
                     );
                   })}
@@ -1680,7 +1651,7 @@ export const MobileLayout: React.FC = () => {
         />
       )}
 
-      {/* Exact Spotify Mobile 4-Tab Bottom Navigation Bar (hidden during full DJ mode) */}
+      {/* Exact Spotify Mobile 5-Tab Bottom Navigation Bar (hidden during full DJ mode) */}
       {mobileTab !== 'dj' && (
         <MobileBottomNav
           activeTab={
@@ -1688,11 +1659,17 @@ export const MobileLayout: React.FC = () => {
               ? 'search'
               : mobileTab === 'library' || mobileTab === 'local'
               ? 'library'
+              : mobileTab === 'profile' || mobileTab === 'stats'
+              ? 'premium'
               : 'home'
           }
           onTabChange={(tab) => {
             setSelectedPlaylist(null);
-            setMobileTab(tab);
+            if (tab === 'premium') {
+              setIsProfileDrawerOpen(true);
+            } else {
+              setMobileTab(tab);
+            }
           }}
           onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
           isCreateOpen={isCreateOpen}
