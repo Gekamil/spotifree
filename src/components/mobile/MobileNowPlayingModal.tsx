@@ -1180,8 +1180,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
             </div>
 
             {/* Header info matching Screenshot 1 */}
-            <div className="flex items-center gap-3 pb-3 border-b border-white/10">
-              <div className="w-12 h-12 rounded-[4px] overflow-hidden bg-[#181818] shrink-0 shadow">
+            <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
+              <div className="w-13 h-13 rounded-[4px] overflow-hidden bg-[#181818] shrink-0 shadow">
                 {displayCover ? (
                   <img src={displayCover} alt={currentTrack.name} className="w-full h-full object-cover" />
                 ) : (
@@ -1193,16 +1193,16 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="font-bold text-white text-base truncate font-['SpotifyMixUITitle']">
+                <p className="font-bold text-white text-[17px] truncate font-['SpotifyMixUITitle'] leading-tight">
                   {currentTrack.name}
                 </p>
-                <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                <p className="text-[13px] text-[#b3b3b3] truncate mt-0.5 font-medium">
                   {artistName}
                 </p>
               </div>
             </div>
 
-            {/* Actions list matching Screenshot 1 (clean icons without circular backgrounds) */}
+            {/* Actions list matching Screenshot 1 (clean 24px icons and 16px text) */}
             <div className="space-y-0.5 pt-1">
               {/* 1: Compartir */}
               <button
@@ -1215,9 +1215,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     showGlobalToast('Enlace copiado al portapapeles');
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <circle cx="18" cy="5" r="3" />
                   <circle cx="6" cy="12" r="3" />
                   <circle cx="18" cy="19" r="3" />
@@ -1225,7 +1225,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Compartir</p>
+                  <p className="font-medium text-[16px] text-white">Compartir</p>
                 </div>
               </button>
 
@@ -1236,15 +1236,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   showGlobalToast(!isLiked ? 'Añadida a Canciones que te gustan' : 'Eliminada de Canciones que te gustan');
                   dismissMenu();
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <div className="w-6 h-6 rounded-[4px] bg-gradient-to-br from-[#450af5] to-[#8e8ee5] flex items-center justify-center shrink-0 shadow-sm">
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="white">
+                <div className="w-7 h-7 rounded-[5px] bg-gradient-to-br from-[#450af5] to-[#8e8ee5] flex items-center justify-center shrink-0 shadow-sm">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="white">
                     <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z" />
                   </svg>
                 </div>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">
+                  <p className="font-medium text-[16px] text-white">
                     {isLiked ? 'En Canciones que te gustan' : 'Añadir a Canciones que te gustan'}
                   </p>
                 </div>
@@ -1257,15 +1257,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   dismissMenu();
                   setTimeout(() => useUIStore.getState().openAddToPlaylistModal(t), 150);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <circle cx="12" cy="12" r="10" />
                   <line x1="12" y1="8" x2="12" y2="16" />
                   <line x1="8" y1="12" x2="16" y2="12" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Añadir a lista</p>
+                  <p className="font-medium text-[16px] text-white">Añadir a lista</p>
                 </div>
               </button>
 
@@ -1282,14 +1282,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     showGlobalToast('Oculta en esta lista');
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <line x1="18" y1="6" x2="6" y2="18" />
                   <line x1="6" y1="6" x2="18" y2="18" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Ocultar en esta lista</p>
+                  <p className="font-medium text-[16px] text-white">Ocultar en esta lista</p>
                 </div>
               </button>
 
@@ -1300,9 +1300,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   showGlobalToast('Añadida a la cola');
                   dismissMenu();
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <line x1="3" y1="6" x2="15" y2="6" />
                   <line x1="3" y1="12" x2="15" y2="12" />
                   <line x1="3" y1="18" x2="11" y2="18" />
@@ -1310,7 +1310,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   <line x1="15" y1="18" x2="21" y2="18" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Añadir a la cola</p>
+                  <p className="font-medium text-[16px] text-white">Añadir a la cola</p>
                 </div>
               </button>
 
@@ -1320,15 +1320,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   dismissMenu();
                   setTimeout(() => setIsQueueOpen(true), 150);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <line x1="3" y1="6" x2="21" y2="6" />
                   <line x1="3" y1="12" x2="21" y2="12" />
                   <line x1="3" y1="18" x2="21" y2="18" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Ir a la cola</p>
+                  <p className="font-medium text-[16px] text-white">Ir a la cola</p>
                 </div>
               </button>
 
@@ -1343,14 +1343,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     showGlobalToast(`Álbum: ${currentTrack.album?.name || currentTrack.name}`);
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <circle cx="12" cy="12" r="10" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Ir al álbum</p>
+                  <p className="font-medium text-[16px] text-white">Ir al álbum</p>
                 </div>
               </button>
 
@@ -1367,14 +1367,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     );
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Ir al artista</p>
+                  <p className="font-medium text-[16px] text-white">Ir al artista</p>
                 </div>
               </button>
 
@@ -1384,15 +1384,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   dismissMenu();
                   openSleepTimerSheet();
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={sleepActive ? 'text-[#1ed760] shrink-0' : 'text-white shrink-0'}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={sleepActive ? 'text-[#1ed760] shrink-0' : 'text-white shrink-0'}>
                   <circle cx="12" cy="13" r="8" />
                   <path d="M12 9v4l2.5 2" />
                   <path d="M10 2h4" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className={`font-medium text-sm ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>
+                  <p className={`font-medium text-[16px] ${sleepActive ? 'text-[#1ed760]' : 'text-white'}`}>
                     Temporizador de apagado
                   </p>
                   {sleepActive && <p className="text-xs text-[#1ed760]">Activado</p>}
@@ -1405,13 +1405,13 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   dismissMenu();
                   openAudioSourceSheet(currentTrack);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor" className="text-white shrink-0">
                   <path d="M3.5 2.5a.75.75 0 0 1 .75.75v9.5a.75.75 0 0 1-1.5 0v-9.5a.75.75 0 0 1 .75-.75m3 2a.75.75 0 0 1 .75.75v5.5a.75.75 0 0 1-1.5 0v-5.5a.75.75 0 0 1 .75-.75m3-3a.75.75 0 0 1 .75.75v11.5a.75.75 0 0 1-1.5 0V2.25a.75.75 0 0 1 .75-.75m3 4a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5a.75.75 0 0 1 .75-.75" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Cambiar fuente de audio</p>
+                  <p className="font-medium text-[16px] text-white">Cambiar fuente de audio</p>
                 </div>
               </button>
 
@@ -1429,21 +1429,21 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     if (ok) setIsTrackDownloadedState(true);
                   }
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
                 {isTrackDownloadedState ? (
-                  <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
+                  <svg width="24" height="24" viewBox="0 0 16 16" fill="currentColor" className="text-[#1ed760] shrink-0">
                     <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8m11.748-1.97a.75.75 0 0 0-1.06-1.06l-4.47 4.47-1.405-1.406a.75.75 0 1 0-1.061 1.06l2.466 2.467 5.53-5.53z" />
                   </svg>
                 ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="8 12 12 16 16 12" />
                     <line x1="12" y1="8" x2="12" y2="16" />
                   </svg>
                 )}
                 <div className="text-left flex-1 min-w-0">
-                  <p className={`font-medium text-sm ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
+                  <p className={`font-medium text-[16px] ${isTrackDownloadedState ? 'text-[#1ed760]' : 'text-white'}`}>
                     {isTrackDownloadedState ? 'Descargada' : isDownloadingTrackState ? 'Descargando…' : 'Descargar'}
                   </p>
                 </div>
@@ -1456,15 +1456,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     dismissMenu();
                     openSpeedControlSheet();
                   }}
-                  className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                  className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
                 >
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                     <circle cx="12" cy="12" r="10" />
                     <polyline points="12 6 12 12 16 14" />
                   </svg>
                   <div className="text-left flex-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm text-white">Velocidad de reproducción</p>
+                      <p className="font-medium text-[16px] text-white">Velocidad de reproducción</p>
                       <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-white/10 text-[#b3b3b3]">
                         {playbackSpeed === 1 ? '1x' : `${playbackSpeed.toFixed(2)}x`}
                       </span>
@@ -1479,15 +1479,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                   dismissMenu();
                   if (currentTrack) openStoryCard(currentTrack);
                 }}
-                className="w-full flex items-center gap-4 py-3 px-1 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"
               >
-                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white shrink-0">
                   <rect x="6" y="2" width="12" height="20" rx="3" />
                   <path d="M9.5 15h5M9.5 18h3" />
                   <rect x="9" y="5.5" width="6" height="6" rx="1" />
                 </svg>
                 <div className="text-left flex-1 min-w-0">
-                  <p className="font-medium text-sm text-white">Compartir en stories</p>
+                  <p className="font-medium text-[16px] text-white">Compartir en stories</p>
                 </div>
               </button>
             </div>

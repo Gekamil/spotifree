@@ -125,9 +125,6 @@ export function LyricsFullscreen(p: Props) {
 
   const handleToggleKaraoke = () => {
     setShowKaraokeSlider((prev) => !prev);
-    if (!karaoke.active && !showKaraokeSlider) {
-      karaoke.toggle();
-    }
   };
 
   return createPortal(

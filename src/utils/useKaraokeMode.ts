@@ -44,7 +44,7 @@ export function useKaraokeMode(track: Track | null | undefined, enabled: boolean
     active: state.active,
     switching: state.switching,
     instrumental: state.instrumental,
-    vocalLevel: state.vocalLevel ?? (state.active ? 0 : 100),
+    vocalLevel: state.vocalLevel ?? 100,
     setLevel,
     toggle,
   };

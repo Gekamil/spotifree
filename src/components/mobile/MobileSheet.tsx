@@ -130,8 +130,8 @@ export const SheetHeader: React.FC<{
 }> = ({ image, title, subtitle, round }) => (
   <div className="flex items-center gap-3.5 pb-3 border-b border-white/10">
     <div
-      className={`w-14 h-14 overflow-hidden bg-[#181818] shrink-0 shadow ${
-        round ? 'rounded-full' : 'rounded-lg'
+      className={`w-13 h-13 overflow-hidden bg-[#181818] shrink-0 shadow ${
+        round ? 'rounded-full' : 'rounded-[4px]'
       }`}
     >
       {image ? (
@@ -145,14 +145,14 @@ export const SheetHeader: React.FC<{
       )}
     </div>
     <div className="min-w-0 flex-1">
-      <p className="font-bold text-white text-base truncate font-['SpotifyMixUITitle']">{title}</p>
-      {subtitle && <p className="text-xs text-[#b3b3b3] truncate mt-0.5">{subtitle}</p>}
+      <p className="font-bold text-white text-[17px] truncate font-['SpotifyMixUITitle']">{title}</p>
+      {subtitle && <p className="text-[13px] text-[#b3b3b3] truncate mt-0.5 font-medium">{subtitle}</p>}
     </div>
   </div>
 );
 
 export const SheetList: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <div className="space-y-1">{children}</div>
+  <div className="space-y-0.5">{children}</div>
 );
 
 export interface SheetItemProps {
@@ -174,22 +174,22 @@ export const SheetItem: React.FC<SheetItemProps> = ({
 }) => (
   <button
     onClick={onClick}
-    className={`w-full flex items-center gap-4 py-3 px-2 rounded-xl active:scale-[0.98] transition-all cursor-pointer ${
-      danger ? 'text-[#f3727f] hover:bg-[#f3727f]/10' : 'text-white hover:bg-white/10'
+    className={`w-full flex items-center gap-4 py-3.5 px-2.5 rounded-xl active:scale-[0.98] transition-all cursor-pointer ${
+      danger ? 'text-[#f3727f] hover:bg-[#f3727f]/10' : 'text-white hover:bg-white/5 active:bg-white/10'
     }`}
   >
     <div
-      className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-        danger ? 'bg-[#f3727f]/15 text-[#f3727f]' : active ? 'bg-white/10 text-[#1ed760]' : 'bg-white/10 text-white'
+      className={`w-6 h-6 flex items-center justify-center shrink-0 ${
+        danger ? 'text-[#f3727f]' : active ? 'text-[#1ed760]' : 'text-white'
       }`}
     >
       {icon}
     </div>
     <div className="text-left flex-1 min-w-0">
-      <p className={`font-bold text-sm ${danger ? 'text-[#f3727f]' : active ? 'text-[#1ed760]' : 'text-white'}`}>
+      <p className={`font-medium text-[16px] leading-tight ${danger ? 'text-[#f3727f]' : active ? 'text-[#1ed760]' : 'text-white'}`}>
         {label}
       </p>
-      {sublabel && <p className="text-xs text-[#b3b3b3] truncate">{sublabel}</p>}
+      {sublabel && <p className="text-[12px] text-[#b3b3b3] truncate mt-0.5">{sublabel}</p>}
     </div>
   </button>
 );

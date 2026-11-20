@@ -301,6 +301,7 @@ class AudioEngine {
     instrumental: null,
   };
   private karaokeListeners = new Set<() => void>();
+  private karaokeSwapDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
   public get isTransitionActive(): boolean {
     return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
@@ -2639,11 +2640,15 @@ class AudioEngine {
     }
     return {
       ...this.karaokeState,
-      vocalLevel: this.karaokeState.vocalLevel ?? (this.karaokeState.active ? 0 : 100),
+      vocalLevel: this.karaokeState.vocalLevel ?? 100,
     };
   }
 
   private resetKaraokeForTrack(trackId?: string | null) {
+    if (this.karaokeSwapDebounceTimer) {
+      clearTimeout(this.karaokeSwapDebounceTimer);
+      this.karaokeSwapDebounceTimer = null;
+    }
     const clean = AudioEngine.cleanId(trackId);
     const cached = clean ? this.instrumentalCache.get(clean) ?? null : null;
     this.karaokeState = {
@@ -3131,6 +3136,71 @@ class AudioEngine {
         this.secondaryAudio.volume = effVol * instRatio;
       }
     } catch {}
+
+    // 3. Debounced Source Hot-Swap:
+    // When dragged down to <= 15%, swap to studio instrumental if available.
+    // When dragged back up to >= 85%, restore original song with full singer's voice.
+    if (this.karaokeSwapDebounceTimer) {
+      clearTimeout(this.karaokeSwapDebounceTimer);
+      this.karaokeSwapDebounceTimer = null;
+    }
+
+    if (clamped <= 15 && !this.karaokeState.originalSourceId && this.karaokeState.instrumental?.sourceId && !this.karaokeState.switching) {
+      this.karaokeSwapDebounceTimer = setTimeout(async () => {
+        const cur = usePlayerStore.getState().currentTrack;
+        if (!cur || AudioEngine.cleanId(cur.id) !== clean) return;
+        if ((this.karaokeState.vocalLevel ?? 100) > 15 || this.karaokeState.switching) return;
+        const inst = this.karaokeState.instrumental;
+        if (!inst?.sourceId) return;
+
+        const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
+        const wasPlaying = usePlayerStore.getState().isPlaying;
+        const origId = this.currentVideoId;
+
+        this.karaokeState = { ...this.karaokeState, switching: true };
+        this.emitKaraokeChange();
+
+        const ok = await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, targetTrack);
+        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
+          this.karaokeState = {
+            ...this.karaokeState,
+            active: true,
+            switching: false,
+            originalSourceId: origId,
+          };
+        } else {
+          this.karaokeState = { ...this.karaokeState, switching: false };
+        }
+        this.emitKaraokeChange();
+      }, 300);
+    } else if (clamped >= 85 && this.karaokeState.originalSourceId && !this.karaokeState.switching) {
+      this.karaokeSwapDebounceTimer = setTimeout(async () => {
+        const cur = usePlayerStore.getState().currentTrack;
+        if (!cur || AudioEngine.cleanId(cur.id) !== clean) return;
+        if ((this.karaokeState.vocalLevel ?? 100) < 85 || this.karaokeState.switching) return;
+        const restoreId = this.karaokeState.originalSourceId;
+        if (!restoreId) return;
+
+        const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
+        const wasPlaying = usePlayerStore.getState().isPlaying;
+
+        this.karaokeState = { ...this.karaokeState, switching: true };
+        this.emitKaraokeChange();
+
+        const ok = await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, targetTrack);
+        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
+          this.karaokeState = {
+            ...this.karaokeState,
+            active: false,
+            switching: false,
+            originalSourceId: null,
+          };
+        } else {
+          this.karaokeState = { ...this.karaokeState, switching: false };
+        }
+        this.emitKaraokeChange();
+      }, 200);
+    }
   }
 
   /**

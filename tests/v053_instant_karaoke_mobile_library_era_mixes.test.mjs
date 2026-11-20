@@ -40,8 +40,8 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(mobileLayoutSource.includes('Álbumes'), 'Must include Álbumes chip');
     });
 
-    it('Restores normal artwork size (w-14 h-14 / w-11 h-11) while keeping tight spacing (py-1 px-1 / space-y-0.5)', () => {
-      assert.ok(mobileLayoutSource.includes("isCompact ? 'w-11 h-11' : 'w-14 h-14'"), 'Artwork must be standard w-14 h-14 in list mode');
+    it('Restores comfortable artwork size (w-16 h-16 / w-12 h-12) while keeping tight spacing (py-1 px-1 / space-y-0.5)', () => {
+      assert.ok(mobileLayoutSource.includes("isCompact ? 'w-12 h-12' : 'w-16 h-16'"), 'Artwork must be standard w-16 h-16 in list mode');
       assert.ok(mobileLayoutSource.includes("isCompact ? 'py-0.5 px-1' : 'py-1 px-1'"), 'Row padding must be tight py-1 px-1');
       assert.ok(mobileLayoutSource.includes('space-y-0.5'), 'Row spacing must be tightened to space-y-0.5');
       assert.ok(mobileLayoutSource.includes('font-semibold text-white text-[15px] leading-tight truncate'), 'Title typography must match Spotify dense text');
