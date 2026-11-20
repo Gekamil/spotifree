@@ -542,12 +542,6 @@ export const MobileLayout: React.FC = () => {
     if (homeFilter === 'musica') {
       return withoutShortcuts(dedupeHomeShelves(list.filter((s) => !s.title.toLowerCase().includes('noticias') && !s.title.toLowerCase().includes('podcast')) as any) as typeof list);
     }
-    if (homeFilter === 'podcasts') {
-      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => s.title.toLowerCase().includes('podcast') || s.title.toLowerCase().includes('show') || s.title.toLowerCase().includes('noticias')) as any) as typeof list);
-    }
-    if (homeFilter === 'audiobooks') {
-      return withoutShortcuts(dedupeHomeShelves(list.filter((s) => s.title.toLowerCase().includes('audiolibro') || s.title.toLowerCase().includes('libro') || s.title.toLowerCase().includes('historia')) as any) as typeof list);
-    }
 
     // No playlist twice on Home
     return withoutShortcuts(dedupeHomeShelves(list as any) as typeof list);

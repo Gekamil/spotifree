@@ -28,6 +28,7 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
+import { shuffleTracks } from '../../utils/shuffleOrder';
 import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';

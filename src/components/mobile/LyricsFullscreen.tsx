@@ -7,7 +7,6 @@ import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Track } from '../../types/spotify';
 import { useKaraokeMode } from '../../utils/useKaraokeMode';
-import { KaraokeMicButton } from '../common/KaraokeMicButton';
 import { getSynchronizedLyricProgress } from '../../utils/lyricsService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 

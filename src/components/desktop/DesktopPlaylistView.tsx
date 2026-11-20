@@ -22,6 +22,7 @@ import { isFollowingArtist, toggleFollowArtist } from '../../utils/artistFollow'
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { formatDuration, stripHtml } from '../../utils/formatters';
+import { shuffleTracks } from '../../utils/shuffleOrder';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
