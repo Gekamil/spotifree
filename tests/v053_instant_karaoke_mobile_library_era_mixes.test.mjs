@@ -160,37 +160,36 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
     });
   });
 
-  describe('6. Spotify Real Mobile Parity: 5-Tab Bar, 4-Filter Header, 56px Shortcuts & 152px Shelves', () => {
-    it('MobileBottomNav implements authentic 5-tab layout with Premium icon', () => {
+  describe('6. Spotifree Mobile Refinements: Clean 4-Tab Bar, 2-Filter Header, Compact 48px Shortcuts, & Right-Side Karaoke Controls', () => {
+    it('MobileBottomNav implements clean 4-tab layout without Premium', () => {
       const navSource = fs.readFileSync(path.resolve('src/components/mobile/MobileBottomNav.tsx'), 'utf-8');
-      assert.ok(navSource.includes('SpotifyLogoNativeIcon'), 'Must render Spotify logo icon for Premium tab');
-      assert.ok(navSource.includes('Premium'), 'Must include Premium tab');
+      assert.ok(!navSource.includes('title="Premium"'), 'Must NOT include Premium tab');
       assert.ok(navSource.includes('Tu biblioteca'), 'Must include Tu biblioteca tab');
       assert.ok(navSource.includes('Buscar'), 'Must include Buscar tab');
       assert.ok(navSource.includes('Inicio'), 'Must include Inicio tab');
       assert.ok(navSource.includes('Crear'), 'Must include Crear tab');
     });
 
-    it('MobileHeader includes all 4 Spotify pills (Todos, Música, Pódcasts, Audiolibros)', () => {
+    it('MobileHeader includes relevant music pills (Todos, Música) without audiobooks/podcasts', () => {
       const headerSource = fs.readFileSync(path.resolve('src/components/mobile/MobileHeader.tsx'), 'utf-8');
-      assert.ok(headerSource.includes('Pódcasts'), 'Must include Pódcasts pill');
-      assert.ok(headerSource.includes('Audiolibros'), 'Must include Audiolibros pill');
+      assert.ok(!headerSource.includes('Audiolibros'), 'Must NOT include Audiolibros pill');
+      assert.ok(!headerSource.includes('Pódcasts'), 'Must NOT include Pódcasts pill');
       assert.ok(headerSource.includes('Todos'), 'Must include Todos pill');
       assert.ok(headerSource.includes('Música'), 'Must include Música pill');
     });
 
-    it('Shortcuts grid uses 56px height (h-14) with flush 56px square artwork (w-14 h-14)', () => {
+    it('Shortcuts grid uses compact 48px height (h-12) with flush artwork (w-12 h-12)', () => {
       const currentLayout = fs.readFileSync(path.resolve('src/components/mobile/MobileLayout.tsx'), 'utf-8');
-      assert.ok(currentLayout.includes('h-14 bg-[#282828]'), 'Shortcuts card must be 56px tall');
-      assert.ok(currentLayout.includes('w-14 h-14 shrink-0 rounded-l-[4px]'), 'Shortcuts image must be 56px flush square');
+      assert.ok(currentLayout.includes('h-12 bg-[#282828]'), 'Shortcuts card must be sleek 48px tall');
+      assert.ok(currentLayout.includes('w-12 h-12 shrink-0 rounded-l-md'), 'Shortcuts image must be 48px square');
       assert.ok(currentLayout.includes('grid grid-cols-2 gap-2'), 'Shortcuts grid must use gap-2');
     });
 
-    it('Shelves use 152px width cards and subtle dark ambient background', () => {
-      const currentLayout = fs.readFileSync(path.resolve('src/components/mobile/MobileLayout.tsx'), 'utf-8');
-      assert.ok(currentLayout.includes('w-[152px] shrink-0 space-y-1.5'), 'Shelf cards must be 152px wide');
-      assert.ok(currentLayout.includes('w-[152px] h-[152px] rounded-[8px]'), 'Shelf card artwork must be 152x152px');
-      assert.ok(currentLayout.includes('lastVibrantColor}24'), 'Must use subtle dark background tint instead of heavy purple wash');
+    it('LyricsFullscreen features right-side floating karaoke microphone button and vertical slider', () => {
+      const lyricsSource = fs.readFileSync(path.resolve('src/components/mobile/LyricsFullscreen.tsx'), 'utf-8');
+      assert.ok(lyricsSource.includes('fixed right-3.5 bottom-36'), 'Must position karaoke controls on the right side');
+      assert.ok(lyricsSource.includes('aria-label="Ajustar volumen de voz / karaoke"'), 'Must have right-side mic button');
+      assert.ok(lyricsSource.includes('karaoke.vocalLevel'), 'Must support variable vocal attenuation');
     });
   });
 });

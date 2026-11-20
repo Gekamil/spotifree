@@ -3075,8 +3075,9 @@ class AudioEngine {
 
   /**
    * Sets variable karaoke vocal attenuation level (0 to 100).
-   * 0% = full instrumental (vocals removed)
+   * 0% = full instrumental (vocals attenuated/removed)
    * 100% = original full vocals
+   * Adjusts vocal frequencies and deck volume blending smoothly in real-time without resetting or stalling.
    */
   public async setKaraokeLevel(level: number, track?: Track): Promise<void> {
     const targetTrack = track || usePlayerStore.getState().currentTrack;
@@ -3084,18 +3085,52 @@ class AudioEngine {
     const clean = AudioEngine.cleanId(targetTrack.id);
     const clamped = Math.max(0, Math.min(100, Math.round(level)));
 
-    if (clamped <= 40 && !this.karaokeState.active) {
-      await this.toggleKaraokeMode(targetTrack);
-    } else if (clamped >= 70 && this.karaokeState.active) {
-      await this.toggleKaraokeMode(targetTrack);
-    }
-
     this.karaokeState = {
       ...this.karaokeState,
       trackId: clean,
       vocalLevel: clamped,
+      active: clamped < 95,
     };
     this.emitKaraokeChange();
+
+    // 1. Real-time Web Audio Vocal Notch Filtering:
+    // Attenuates vocal formant frequencies (910Hz - 3600Hz) progressively as level drops
+    try {
+      this.initAudioContext();
+      if (this.audioContext && this.filterNodes && this.filterNodes.length >= 4) {
+        if (this.audioContext.state === 'suspended') {
+          this.audioContext.resume().catch(() => {});
+        }
+        const now = this.audioContext.currentTime;
+        const attenRatio = (100 - clamped) / 100;
+        // 910Hz vocal band (index 2) down to -28dB, 3600Hz presence band (index 3) down to -16dB
+        const vocalMidCut = -28 * attenRatio;
+        const vocalPresCut = -16 * attenRatio;
+
+        const midNode = this.filterNodes[2];
+        if (midNode) {
+          midNode.gain.cancelScheduledValues(now);
+          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.03);
+        }
+        const presNode = this.filterNodes[3];
+        if (presNode) {
+          presNode.gain.cancelScheduledValues(now);
+          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.03);
+        }
+      }
+    } catch {}
+
+    // 2. Dual-Deck Audio Blending (when secondary instrumental deck or HTML5 sources are running)
+    try {
+      const effVol = this.getEffectiveVolume();
+      const vocalRatio = clamped / 100;
+      const instRatio = (100 - clamped) / 100;
+
+      if (this.secondaryAudio && !this.secondaryAudio.paused) {
+        this.audio.volume = effVol * vocalRatio;
+        this.secondaryAudio.volume = effVol * instRatio;
+      }
+    } catch {}
   }
 
   /**

@@ -499,19 +499,7 @@ export const MobileLayout: React.FC = () => {
       sfArtists
     );
 
-    // On Fridays, title top new releases shelf "¡Hoy es viernes de novedades!" (1:1 with Screenshot 1)
-    const isFriday = new Date().getDay() === 5;
-    const enrichedBase = base.map((s, idx) => {
-      if (idx === 0 && isFriday) {
-        return {
-          ...s,
-          title: '¡Hoy es viernes de novedades!',
-        };
-      }
-      return s;
-    });
-
-    enrichedBase
+    base
       .filter((s) => !s.title.toLowerCase().includes('pódcast') && !s.title.toLowerCase().includes('audiolibro'))
       .forEach((s) => {
         const filteredCards = s.cards.filter((c) => !deletedIds.has(c.id));
@@ -777,7 +765,7 @@ export const MobileLayout: React.FC = () => {
                 <SpotifyHomeSkeleton isMobile={true} />
               ) : (
                 <>
-                {/* Quick Access 2-Column Grid (h-14, 56px flush artwork, 1:1 with Screenshot 1) */}
+                {/* Quick Access 2-Column Grid (Sleek, compact Spotify mobile proportions) */}
                 {shortcuts && shortcuts.length > 0 && (
                   <div className="px-4 pt-1 mb-5">
                     <div className="grid grid-cols-2 gap-2">
@@ -787,19 +775,19 @@ export const MobileLayout: React.FC = () => {
                           <div
                             key={card.id}
                             onClick={() => handleSelectPlaylistById(card.id, card.name, card.image)}
-                            className="h-14 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-[4px] overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2.5"
+                            className="h-12 bg-[#282828] hover:bg-[#323232] active:bg-[#383838] rounded-md overflow-hidden flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.98] transition-all pr-2"
                           >
                             <div className="flex items-center min-w-0 flex-1 mr-1">
-                              <div className="w-14 h-14 shrink-0 rounded-l-[4px] overflow-hidden bg-[#242424]">
+                              <div className="w-12 h-12 shrink-0 rounded-l-md overflow-hidden bg-[#242424]">
                                 <SpotifyImage
                                   src={card.image}
                                   alt={card.name}
                                   fallbackType="music"
-                                  className="w-14 h-14 object-cover"
+                                  className="w-12 h-12 object-cover"
                                 />
                               </div>
                               <span
-                                className={`font-bold text-[13px] leading-[16px] line-clamp-2 px-2.5 ${
+                                className={`font-bold text-xs leading-tight line-clamp-2 px-2 ${
                                   isPlayingThis ? 'text-[#1ed760]' : 'text-white'
                                 }`}
                               >
@@ -808,10 +796,10 @@ export const MobileLayout: React.FC = () => {
                             </div>
 
                             {isPlayingThis && (
-                              <div className="flex items-end gap-[2px] h-3.5 px-0.5 shrink-0" title="Reproduciendo">
-                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
-                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
-                                <span className="w-[2.5px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
+                              <div className="flex items-end gap-[2px] h-3 px-0.5 shrink-0" title="Reproduciendo">
+                                <span className="w-[2px] bg-[#1ed760] rounded-full animate-spotify-eq-1" />
+                                <span className="w-[2px] bg-[#1ed760] rounded-full animate-spotify-eq-2" />
+                                <span className="w-[2px] bg-[#1ed760] rounded-full animate-spotify-eq-3" />
                               </div>
                             )}
                           </div>
@@ -1651,7 +1639,7 @@ export const MobileLayout: React.FC = () => {
         />
       )}
 
-      {/* Exact Spotify Mobile 5-Tab Bottom Navigation Bar (hidden during full DJ mode) */}
+      {/* Spotify Mobile 4-Tab Bottom Navigation Bar (hidden during full DJ mode) */}
       {mobileTab !== 'dj' && (
         <MobileBottomNav
           activeTab={
@@ -1659,17 +1647,11 @@ export const MobileLayout: React.FC = () => {
               ? 'search'
               : mobileTab === 'library' || mobileTab === 'local'
               ? 'library'
-              : mobileTab === 'profile' || mobileTab === 'stats'
-              ? 'premium'
               : 'home'
           }
           onTabChange={(tab) => {
             setSelectedPlaylist(null);
-            if (tab === 'premium') {
-              setIsProfileDrawerOpen(true);
-            } else {
-              setMobileTab(tab);
-            }
+            setMobileTab(tab);
           }}
           onOpenCreate={() => setIsCreateOpen((prev) => !prev)}
           isCreateOpen={isCreateOpen}

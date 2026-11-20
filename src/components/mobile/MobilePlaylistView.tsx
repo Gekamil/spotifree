@@ -922,26 +922,51 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
       togglePlay();
     } else {
       const clickedIndex = findTrackIndexInQueue(displayTracks, track);
-      const sequentialQueue = clickedIndex >= 0
-        ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
-        : displayTracks;
+      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+      let sequentialQueue: Track[];
+      if (isShuffleActive && displayTracks.length > 1) {
+        const remaining = displayTracks.filter((t) => t.id !== track.id && !matchTrackId(t.id, track.id));
+        sequentialQueue = [track, ...shuffleTracks(remaining)];
+      } else {
+        sequentialQueue = clickedIndex >= 0
+          ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
+          : displayTracks;
+      }
       playTrack(track, sequentialQueue, playlist.id);
     }
   };
 
   const handlePlayAll = () => {
     if (displayTracks.length === 0) return;
-    if (isPlaying && displayTracks.some((t) => t.id === currentTrack?.id)) {
+    const currentMatchesPlaylist = Boolean(
+      currentTrack && displayTracks.some((t) => t.id === currentTrack.id || matchTrackId(t.id, currentTrack.id))
+    );
+
+    // 1. If this playlist is currently active (playing or paused), simply toggle play/pause!
+    // This resumes smoothly without restarting to 0, skipping, or causing silence.
+    if (currentMatchesPlaylist) {
       togglePlay();
+      return;
+    }
+
+    // 2. Starting fresh playback on this playlist
+    const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+    let startTrack: Track;
+    let sequentialQueue: Track[];
+
+    if (isShuffleActive && displayTracks.length > 1) {
+      const rndIdx = Math.floor(Math.random() * displayTracks.length);
+      startTrack = displayTracks[rndIdx];
+      const remaining = displayTracks.filter((t) => t.id !== startTrack.id && !matchTrackId(t.id, startTrack.id));
+      sequentialQueue = [startTrack, ...shuffleTracks(remaining)];
     } else {
-      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
-      const startTrack = isShuffleActive && displayTracks.length > 1
-        ? displayTracks[Math.floor(Math.random() * displayTracks.length)]
-        : displayTracks[0];
-      playTrack(startTrack, displayTracks, playlist.id);
-      if (shuffleMode === 'smart') {
-        usePlayerStore.getState().populateSmartShuffleRecommendations(displayTracks);
-      }
+      startTrack = displayTracks[0];
+      sequentialQueue = displayTracks;
+    }
+
+    playTrack(startTrack, sequentialQueue, playlist.id);
+    if (shuffleMode === 'smart') {
+      usePlayerStore.getState().populateSmartShuffleRecommendations(sequentialQueue);
     }
   };
 
@@ -1334,31 +1359,45 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (next) {
       // Mutual Exclusivity: Turning DJ ON automatically disables Shuffle
       const pState = usePlayerStore.getState();
+      const currentTrk = pState.currentTrack;
+
+      // 1. Save original order before harmonic sorting (deduplicated)
+      if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
+        originalTracksRef.current = deduplicateTracks([...tracks]);
+      }
+      // 2. New DJ session: build harmonious set order
+      const seed = startNewDJSession();
+      const { order, strategy } = buildDJSetOrder(tracks, seed);
+      console.info(`[DJ] Nueva sesión: orden "${SET_STRATEGY_LABELS[strategy]}" (${getSessionFlavour(seed)})`);
+
+      // If a song is actively playing from this playlist, keep it at the top so it doesn't reset or jump!
+      let finalOrder = order;
+      if (currentTrk && tracks.some((t) => t.id === currentTrk.id || matchTrackId(t.id, currentTrk.id))) {
+        const withoutCurrent = order.filter((t) => t.id !== currentTrk.id && !matchTrackId(t.id, currentTrk.id));
+        const playingTrackObj = tracks.find((t) => t.id === currentTrk.id || matchTrackId(t.id, currentTrk.id)) || currentTrk;
+        finalOrder = [playingTrackObj, ...withoutCurrent];
+      }
+
+      setTracks(deduplicateTracks(finalOrder));
+
       if (pState.isShuffle || pState.shuffleMode !== 'off') {
-        const source = pState.originalQueue.length > 0 ? pState.originalQueue : pState.queue;
-        const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
         usePlayerStore.setState({
           shuffleMode: 'off',
           isShuffle: false,
           shuffleVersion: pState.shuffleVersion + 1,
           playedInShuffle: [],
           preselectedNextTrackId: null,
-          queue: cleanQueue,
+          queue: deduplicateTracks(finalOrder),
+        });
+      } else if (pState.isPlaying) {
+        // Keep upcoming tracks in DJ set order without interrupting current playback
+        usePlayerStore.setState({
+          queue: deduplicateTracks(finalOrder),
         });
       }
 
-      // 1. Save original order before harmonic sorting (deduplicated)
-      if (!originalTracksRef.current || originalTracksRef.current.length === 0) {
-        originalTracksRef.current = deduplicateTracks([...tracks]);
-      }
-      // 2. New DJ session: a different set order and different transitions every time.
-      //    The order follows real BPM / key / energy (when measured) with a random strategy.
-      const seed = startNewDJSession();
-      const { order, strategy } = buildDJSetOrder(tracks, seed);
-      console.info(`[DJ] Nueva sesión: orden "${SET_STRATEGY_LABELS[strategy]}" (${getSessionFlavour(seed)})`);
-      setTracks(deduplicateTracks(order));
       // Real BPM for every song (Deezer) + full audio analysis of the first ones, in background
-      void prepareDJAnalyses(order, 3);
+      void prepareDJAnalyses(finalOrder, 3);
     } else {
       // 3. Restore exact original order when leaving DJ mode
       if (originalTracksRef.current && originalTracksRef.current.length > 0) {

@@ -161,14 +161,6 @@ export function LyricsFullscreen(p: Props) {
             {karaoke.active && ` · Modo karaoke (${karaoke.vocalLevel}%)`}
           </p>
         </div>
-        {karaoke.available && (
-          <KaraokeMicButton
-            compact
-            active={karaoke.active || showKaraokeSlider}
-            switching={karaoke.switching}
-            onToggle={handleToggleKaraoke}
-          />
-        )}
       </div>
 
       {/* Lyrics */}
@@ -229,41 +221,66 @@ export function LyricsFullscreen(p: Props) {
         )}
       </div>
 
-      {/* Spotify-style Vertical Karaoke Vocal Slider on right */}
-      {karaoke.available && (showKaraokeSlider || karaoke.active) && (
+      {/* Right-Side Floating Karaoke Microphone Button & Vertical Vocal Slider */}
+      {karaoke.available && (
         <div
-          className="fixed right-3 bottom-36 z-30 flex flex-col items-center select-none touch-none animate-in fade-in slide-in-from-right-4 duration-200"
+          className="fixed right-3.5 bottom-36 z-30 flex flex-col items-center select-none touch-none"
           style={{ marginBottom: 'max(env(safe-area-inset-bottom, 0px), 12px)' }}
         >
-          {/* Numeric Level Badge */}
-          <div className="mb-2 px-2 py-0.5 rounded-full bg-black/70 backdrop-blur-md text-[11px] font-bold text-white tabular-nums border border-white/10 shadow-lg">
-            {karaoke.vocalLevel}%
-          </div>
-          {/* Vertical Pill Track */}
-          <div
-            ref={sliderRef}
-            onPointerDown={handleSliderPointerDown}
-            onPointerMove={handleSliderPointerMove}
-            onPointerUp={handleSliderPointerUp}
-            onPointerCancel={handleSliderPointerUp}
-            className="w-10 h-44 bg-black/40 backdrop-blur-md rounded-full border border-white/20 p-1 flex flex-col justify-end relative overflow-hidden shadow-2xl cursor-pointer"
-            aria-label="Volumen de voz / karaoke"
-          >
-            {/* Fill Bar */}
-            <div
-              className="w-full bg-gradient-to-t from-[#1ed760] to-[#1db954] rounded-full transition-all duration-75 relative flex items-start justify-center"
-              style={{ height: `${karaoke.vocalLevel}%` }}
-            >
-              {/* Thumb pill */}
-              <div className="w-5 h-1.5 bg-white/90 rounded-full mt-1 shadow" />
+          {/* Expanded Vertical Slider (Appears smoothly above the mic button when toggled) */}
+          {showKaraokeSlider && (
+            <div className="flex flex-col items-center mb-3 animate-in fade-in slide-in-from-bottom-3 duration-150">
+              {/* Numeric Level Badge */}
+              <div className="mb-2 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md text-[11px] font-bold text-white tabular-nums border border-white/15 shadow-xl">
+                {karaoke.vocalLevel}%
+              </div>
+              {/* Vertical Pill Track */}
+              <div
+                ref={sliderRef}
+                onPointerDown={handleSliderPointerDown}
+                onPointerMove={handleSliderPointerMove}
+                onPointerUp={handleSliderPointerUp}
+                onPointerCancel={handleSliderPointerUp}
+                className="w-10 h-40 bg-black/50 backdrop-blur-md rounded-full border border-white/20 p-1 flex flex-col justify-end relative overflow-hidden shadow-2xl cursor-pointer"
+                aria-label="Volumen de voz / karaoke"
+              >
+                {/* Fill Bar */}
+                <div
+                  className="w-full bg-gradient-to-t from-[#1ed760] to-[#1db954] rounded-full transition-all duration-75 relative flex items-start justify-center"
+                  style={{ height: `${karaoke.vocalLevel}%` }}
+                >
+                  {/* Thumb pill */}
+                  <div className="w-5 h-1.5 bg-white/90 rounded-full mt-1 shadow" />
+                </div>
+                {/* Bottom Icon */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none opacity-80 text-white">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z" />
+                  </svg>
+                </div>
+              </div>
             </div>
-            {/* Bottom Icon */}
-            <div className="absolute bottom-2 left-1/2 -translate-x-1/2 pointer-events-none opacity-80 text-white">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+          )}
+
+          {/* Right-Side Microphone Toggle Button */}
+          <button
+            onClick={handleToggleKaraoke}
+            className={`w-11 h-11 rounded-full flex items-center justify-center shadow-2xl transition-all duration-200 active:scale-90 cursor-pointer ${
+              karaoke.active || showKaraokeSlider
+                ? 'bg-[#1ed760] text-black shadow-[0_0_20px_rgba(30,215,96,0.6)] scale-105'
+                : 'bg-black/60 text-white border border-white/20 hover:bg-black/80'
+            }`}
+            title="Ajustar volumen de voz / karaoke"
+            aria-label="Ajustar volumen de voz / karaoke"
+          >
+            {karaoke.switching ? (
+              <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5-3c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-2.08c3.39-.49 6-3.39 6-6.92h-2z" />
               </svg>
-            </div>
-          </div>
+            )}
+          </button>
         </div>
       )}
 

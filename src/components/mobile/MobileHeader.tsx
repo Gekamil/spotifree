@@ -2,7 +2,7 @@ import React from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { handleImageError } from '../../utils/imageFallback';
 
-export type HomeFilterTab = 'todo' | 'musica' | 'podcasts' | 'audiobooks';
+export type HomeFilterTab = 'todo' | 'musica';
 
 interface MobileHeaderProps {
   activeTab: HomeFilterTab;
@@ -45,8 +45,6 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
   const pills: Array<{ id: HomeFilterTab; label: string }> = [
     { id: 'todo', label: 'Todos' },
     { id: 'musica', label: 'Música' },
-    { id: 'podcasts', label: 'Pódcasts' },
-    { id: 'audiobooks', label: 'Audiolibros' },
   ];
 
   return (
@@ -77,7 +75,7 @@ export const MobileHeader: React.FC<MobileHeaderProps> = ({
         )}
       </button>
 
-      {/* 2. Center/Right: Spotify Filter Pills (Todos, Música, Pódcasts, Audiolibros - horizontally scrollable, zero right icons) */}
+      {/* 2. Center/Right: Spotify Filter Pills (Todos, Música - horizontally scrollable, zero right icons) */}
       <div className="flex items-center gap-2 min-w-0 overflow-x-auto scrollbar-none py-0.5 pr-2">
         {pills.map((p) => {
           const isActive = activeTab === p.id;

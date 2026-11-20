@@ -1396,17 +1396,28 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       showGlobalToast('La lista no tiene canciones disponibles');
       return;
     }
-    if (isCurrentPlaylistPlaying) {
+    const currentMatchesPlaylist = Boolean(
+      currentTrack && tracksWithPlaylistId.some((t) => t.id === currentTrack.id || matchTrackId(t.id, currentTrack.id))
+    );
+    if (currentMatchesPlaylist) {
       togglePlay();
+      return;
+    }
+    const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+    let startTrack: Track;
+    let sequentialQueue: Track[];
+    if (isShuffleActive && tracksWithPlaylistId.length > 1) {
+      const rndIdx = Math.floor(Math.random() * tracksWithPlaylistId.length);
+      startTrack = tracksWithPlaylistId[rndIdx];
+      const remaining = tracksWithPlaylistId.filter((t) => t.id !== startTrack.id && !matchTrackId(t.id, startTrack.id));
+      sequentialQueue = [startTrack, ...shuffleTracks(remaining)];
     } else {
-      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
-      const startTrack = isShuffleActive && tracksWithPlaylistId.length > 1
-        ? tracksWithPlaylistId[Math.floor(Math.random() * tracksWithPlaylistId.length)]
-        : tracksWithPlaylistId[0];
-      playTrack(startTrack, tracksWithPlaylistId, playlist.id);
-      if (shuffleMode === 'smart') {
-        usePlayerStore.getState().populateSmartShuffleRecommendations(tracksWithPlaylistId);
-      }
+      startTrack = tracksWithPlaylistId[0];
+      sequentialQueue = tracksWithPlaylistId;
+    }
+    playTrack(startTrack, sequentialQueue, playlist.id);
+    if (shuffleMode === 'smart') {
+      usePlayerStore.getState().populateSmartShuffleRecommendations(sequentialQueue);
     }
   };
 
