@@ -53,7 +53,6 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
   describe('3. Era vs Generic Playlists Separation & Visible Background Cover Photos', () => {
     it('server.mjs includes /api/image-proxy endpoint with CORS headers', () => {
       assert.ok(serverSource.includes("pathname === '/api/image-proxy'"), 'server.mjs must provide /api/image-proxy');
-      assert.ok(fs.existsSync(path.resolve('api/image-proxy.js')), 'api/image-proxy.js must exist for serverless');
     });
 
     it('makeCuratedThemedCover loads photos via image-proxy and renders with visible alpha', () => {
@@ -73,6 +72,39 @@ describe('Spotifree v0.5.3: Instant Seamless Karaoke, Mobile Library Layout, & E
       assert.ok(spotifreeMixesSource.includes("prefix: 'GRANDES GÉNEROS'"), 'Must have GRANDES GÉNEROS prefix');
       assert.ok(spotifreeMixesSource.includes("id: 'sf-genre-indie'"), 'Must define Indie genre');
       assert.ok(spotifreeMixesSource.includes("id: 'sf-genre-hiphop'"), 'Must define Hip-Hop genre');
+    });
+  });
+
+  describe('4. Vercel Serverless Function Limit Compliance (<= 12 functions)', () => {
+    it('api directory contains at most 12 Serverless Function files (Hobby plan limit)', () => {
+      const apiFiles = fs.readdirSync(path.resolve('api'))
+        .filter(f => f.endsWith('.js') && !f.startsWith('_'));
+      assert.ok(apiFiles.length <= 12, `Must not exceed 12 functions, found ${apiFiles.length} (${apiFiles.join(', ')})`);
+      assert.ok(apiFiles.length <= 10, `Optimized to <= 10 functions for safety buffer, found ${apiFiles.length}`);
+    });
+
+    it('api/metadata.js consolidates canvas and image-proxy', () => {
+      const metaSource = fs.readFileSync(path.resolve('api/metadata.js'), 'utf-8');
+      assert.ok(metaSource.includes("handleImageProxy"), 'metadata.js must handle image-proxy');
+      assert.ok(metaSource.includes("handleCanvas"), 'metadata.js must handle canvas');
+    });
+
+    it('api/login.js consolidates session extraction and token exchange', () => {
+      const loginSource = fs.readFileSync(path.resolve('api/login.js'), 'utf-8');
+      assert.ok(loginSource.includes("handleToken"), 'login.js must handle token exchange');
+    });
+
+    it('api/auth.js consolidates user profile customization', () => {
+      const authSource = fs.readFileSync(path.resolve('api/auth.js'), 'utf-8');
+      assert.ok(authSource.includes("handleUserProfile"), 'auth.js must handle user profiles');
+    });
+
+    it('vercel.json routes all consolidated endpoints correctly', () => {
+      const vercelConfig = JSON.parse(fs.readFileSync(path.resolve('vercel.json'), 'utf-8'));
+      const rewrites = vercelConfig.rewrites || [];
+      assert.ok(rewrites.some(r => r.source === '/api/image-proxy' && r.destination.includes('/api/metadata')), 'rewrites must route /api/image-proxy to metadata');
+      assert.ok(rewrites.some(r => r.source === '/api/token' && r.destination.includes('/api/login')), 'rewrites must route /api/token to login');
+      assert.ok(rewrites.some(r => r.source === '/api/user-profile' && r.destination.includes('/api/auth')), 'rewrites must route /api/user-profile to auth');
     });
   });
 });

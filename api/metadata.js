@@ -544,6 +544,40 @@ async function handleDiscover(req, res) {
   }
 }
 
+async function handleImageProxy(req, res, url) {
+  const targetUrl = req.query?.url || url?.searchParams?.get('url');
+  if (!targetUrl) {
+    if (res.status) res.status(400); else res.statusCode = 400;
+    return res.end(JSON.stringify({ error: 'Missing url parameter' }));
+  }
+
+  try {
+    const upstream = await fetch(targetUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+      },
+    });
+
+    if (!upstream.ok) {
+      if (res.status) res.status(upstream.status); else res.statusCode = upstream.status;
+      return res.end();
+    }
+
+    const contentType = upstream.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+    const arrayBuffer = await upstream.arrayBuffer();
+    return res.end(Buffer.from(arrayBuffer));
+  } catch (err) {
+    if (res.status) res.status(502); else res.statusCode = 502;
+    return res.end(JSON.stringify({ error: 'Failed to proxy image', details: String(err) }));
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -552,11 +586,19 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') return res.status(204).end();
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const action = req.query?.action || (url.pathname.includes('/canvas') ? 'canvas' : url.pathname.includes('/artist-image') ? 'artist-image' : 'audio-features');
+  const action = req.query?.action || (
+    url.pathname.includes('/canvas') ? 'canvas' :
+    url.pathname.includes('/artist-image') ? 'artist-image' :
+    url.pathname.includes('/motion-cover') ? 'motion-cover' :
+    url.pathname.includes('/discover') ? 'discover' :
+    url.pathname.includes('/image-proxy') ? 'image-proxy' :
+    'audio-features'
+  );
 
   if (action === 'canvas') return handleCanvas(req, res, url);
   if (action === 'artist-image') return handleArtistImage(req, res);
   if (action === 'motion-cover') return handleMotionCover(req, res);
   if (action === 'discover') return handleDiscover(req, res);
+  if (action === 'image-proxy') return handleImageProxy(req, res, url);
   return handleAudioFeatures(req, res);
 }

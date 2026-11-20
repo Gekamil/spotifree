@@ -980,6 +980,24 @@ function dynamicSpotifyPlugin(): Plugin {
         }
       });
 
+      // 2f-quint. Image proxy for Canvas and playlist collage covers (/api/image-proxy)
+      server.middlewares.use('/api/image-proxy', async (req, res) => {
+        try {
+          const url = new URL(req.url || '', 'http://localhost');
+          (req as any).query = { ...Object.fromEntries(url.searchParams.entries()), action: 'image-proxy' };
+          const r: any = res;
+          if (typeof r.status !== 'function') {
+            r.status = (code: number) => { res.statusCode = code; return r; };
+            r.json = (obj: unknown) => { res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); return r; };
+            r.send = (body: unknown) => { res.end(typeof body === 'string' ? body : JSON.stringify(body)); return r; };
+          }
+          await metadataHandler(req, res);
+        } catch (e: any) {
+          res.statusCode = 502;
+          res.end(JSON.stringify({ error: 'Image proxy error', details: e?.message }));
+        }
+      });
+
       // 2g. Spotifree Cloud Account Auth (/api/auth)
       const handleAuth = async (req: any, res: any) => {
         try {

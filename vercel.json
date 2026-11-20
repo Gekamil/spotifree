@@ -27,7 +27,11 @@
     },
     {
       "source": "/api/token",
-      "destination": "/api/token"
+      "destination": "/api/login?action=token"
+    },
+    {
+      "source": "/api/spotify/token",
+      "destination": "/api/login?action=token"
     },
     {
       "source": "/api/login",
@@ -36,10 +40,6 @@
     {
       "source": "/api/spotify/login",
       "destination": "/api/login"
-    },
-    {
-      "source": "/api/spotify/token",
-      "destination": "/api/token"
     },
     {
       "source": "/api/spotify/extract-session",
@@ -74,6 +74,10 @@
       "destination": "/api/metadata?action=discover"
     },
     {
+      "source": "/api/image-proxy",
+      "destination": "/api/metadata?action=image-proxy"
+    },
+    {
       "source": "/api/audio/stream",
       "destination": "/api/audio?action=stream"
     },
@@ -99,7 +103,7 @@
     },
     {
       "source": "/api/user-profile",
-      "destination": "/api/user-profile"
+      "destination": "/api/auth?action=profile"
     },
     {
       "source": "/api/auth",
