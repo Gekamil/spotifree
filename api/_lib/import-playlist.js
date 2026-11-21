@@ -265,19 +265,30 @@ export async function readExternalPlaylist(rawUrl) {
     }
     if (sc.kind === 'playlist' && sc.playlist) {
       const pl = sc.playlist;
-      const tracks = (pl.tracks?.items || []).map((t, idx) => ({
-        id: t.id || `sc-${idx}`,
-        title: t.name,
-        artist: t.artists?.[0]?.name || (pl.owner?.display_name || 'SoundCloud'),
-        durationSec: Math.round((t.duration_ms || 210000) / 1000),
-        album: t.album?.name || pl.name,
-        coverUrl: t.album?.images?.[0]?.url || pl.images?.[0]?.url || '',
-        trackObj: t,
-      }));
+      const plCover = pl.images?.[0]?.url || '';
+      const tracks = (pl.tracks?.items || []).map((t, idx) => {
+        const coverUrl = t.album?.images?.[0]?.url || plCover;
+        const populatedTrackObj = {
+          ...t,
+          album: {
+            ...t.album,
+            images: t.album?.images?.length ? t.album.images : (coverUrl ? [{ url: coverUrl }] : []),
+          },
+        };
+        return {
+          id: t.id || `sc-${idx}`,
+          title: t.name,
+          artist: t.artists?.[0]?.name || (pl.owner?.display_name || 'SoundCloud'),
+          durationSec: Math.round((t.duration_ms || 210000) / 1000),
+          album: t.album?.name || pl.name,
+          coverUrl,
+          trackObj: populatedTrackObj,
+        };
+      });
       return {
         source: 'soundcloud',
         name: pl.name || 'Playlist de SoundCloud',
-        image: pl.images?.[0]?.url || '',
+        image: plCover,
         tracks,
       };
     }

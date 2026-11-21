@@ -948,11 +948,11 @@ async function resolveBestAudioStreamSource({
 }) {
   if (/^mono:\d{10,25}$/.test(explicitId)) {
     const mono = await extractViaMonochrome({ explicitId });
-    return mono ? { audioInfo: mono, videoId: mono.id } : { audioInfo: null, videoId: explicitId };
+    if (mono) return { audioInfo: mono, videoId: mono.id };
   }
   if (/^sc[:\-]\d+$/.test(explicitId)) {
     const sc = await extractViaSoundCloud({ q, title: rawTitle, artist: rawArtist, expectedDurationSec, explicitId });
-    return sc ? { audioInfo: sc, videoId: sc.id } : { audioInfo: null, videoId: explicitId };
+    if (sc) return { audioInfo: sc, videoId: sc.id };
   }
 
   let videoId = /^[\w-]{11}$/.test(explicitId) ? explicitId : null;

@@ -832,7 +832,7 @@ export async function resolveSoundCloudUrl(rawUrl = '') {
     if (!resolved) return null;
 
     if (resolved.kind === 'track' && resolved.id) {
-      if (resolved.policy === 'SNIP' || !selectSoundCloudTranscoding(resolved)) return null;
+      if (!resolved.title && !resolved.name) return null;
       return { kind: 'track', track: scItemToSpotifreeTrack(resolved) };
     }
 
@@ -841,19 +841,24 @@ export async function resolveSoundCloudUrl(rawUrl = '') {
       const missingIds = allRaw.filter((t) => t?.id && !t.title).map((t) => t.id);
       if (missingIds.length > 0) {
         const hydratedMap = new Map();
+        const batches = [];
         for (let i = 0; i < missingIds.length; i += 50) {
-          const batch = missingIds.slice(i, i + 50);
-          try {
-            const batchTracks = await fetchSoundCloudJson(
-              (cid) => `https://api-v2.soundcloud.com/tracks?ids=${batch.join(',')}&client_id=${cid}`
-            );
-            if (Array.isArray(batchTracks)) {
-              for (const tr of batchTracks) {
-                if (tr?.id) hydratedMap.set(tr.id, tr);
-              }
-            }
-          } catch {}
+          batches.push(missingIds.slice(i, i + 50));
         }
+        await Promise.all(
+          batches.map(async (batch) => {
+            try {
+              const batchTracks = await fetchSoundCloudJson(
+                (cid) => `https://api-v2.soundcloud.com/tracks?ids=${batch.map(encodeURIComponent).join('%2C')}&client_id=${cid}`
+              );
+              if (Array.isArray(batchTracks)) {
+                for (const tr of batchTracks) {
+                  if (tr?.id) hydratedMap.set(tr.id, tr);
+                }
+              }
+            } catch {}
+          })
+        );
         for (let i = 0; i < allRaw.length; i++) {
           if (allRaw[i]?.id && !allRaw[i].title && hydratedMap.has(allRaw[i].id)) {
             allRaw[i] = hydratedMap.get(allRaw[i].id);
@@ -862,7 +867,7 @@ export async function resolveSoundCloudUrl(rawUrl = '') {
       }
 
       const tracks = allRaw
-        .filter((t) => t?.id && t.policy !== 'SNIP' && selectSoundCloudTranscoding(t))
+        .filter((t) => t?.id && (t.title || t.name))
         .map((t) => scItemToSpotifreeTrack(t));
       const cover = normalizeSoundCloudArtwork(resolved.artwork_url || resolved.user?.avatar_url || tracks[0]?.album?.images?.[0]?.url || '');
       return {

@@ -124,9 +124,15 @@ async function matchAll(songs: ExternalSong[], cover: string, onProgress?: Impor
     }
   };
   await Promise.all([worker(), worker(), worker(), worker(), worker(), worker()]);
-  // The same song twice (it happens in YouTube playlists): keep the first
+  // Preserve all songs from the original playlist while ensuring unique IDs for React keys and player state
   const seen = new Set<string>();
-  const tracks = (out.filter(Boolean) as Track[]).filter((t) => (seen.has(t.id) ? false : (seen.add(t.id), true)));
+  const tracks = (out.filter(Boolean) as Track[]).map((t, idx) => {
+    if (seen.has(t.id)) {
+      return { ...t, id: `${t.id}-dup-${idx}` };
+    }
+    seen.add(t.id);
+    return t;
+  });
   return { tracks, matched };
 }
 
