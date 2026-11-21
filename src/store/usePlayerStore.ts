@@ -471,8 +471,12 @@ const store = create<PlayerState>((set, get) => ({
       preselectedNextTrackId: nextPreselectedId,
     });
 
-    if (newQueue && state.shuffleMode === 'smart') {
-      get().populateSmartShuffleRecommendations(activeQueue);
+    if (state.shuffleMode === 'smart') {
+      const curIdx = activeQueue.findIndex((t) => t.id === hydratedTrack.id);
+      const upcomingCount = curIdx >= 0 ? activeQueue.length - (curIdx + 1) : activeQueue.length - 1;
+      if (newQueue || upcomingCount < 10) {
+        get().populateSmartShuffleRecommendations(activeQueue);
+      }
     }
 
     // Resolve exact album covers for current track + upcoming queue so sidebars & players always show crisp artwork
@@ -630,7 +634,12 @@ const store = create<PlayerState>((set, get) => ({
     // that was fading in, if any.
     get().playTrack(nextTrackCandidate);
     if (get().shuffleMode === 'smart') {
-      get().triggerSmartShuffleRecommendation(nextTrackCandidate);
+      const q = get().queue;
+      const curIdx = q.findIndex((t) => t.id === nextTrackCandidate.id);
+      const upcomingCount = curIdx >= 0 ? q.length - (curIdx + 1) : 0;
+      if (upcomingCount < 10) {
+        get().populateSmartShuffleRecommendations();
+      }
     }
   },
 
@@ -765,18 +774,35 @@ const store = create<PlayerState>((set, get) => ({
   populateSmartShuffleRecommendations: async (baseTracks?: Track[]) => {
     try {
       const currentQ = get().queue;
-      const tracksToAnalyze = baseTracks || currentQ.filter((t: any) => !t.isSmartRecommendation);
-      if (tracksToAnalyze.length === 0) return;
+      const cleanTracks = (baseTracks || currentQ).filter((t: any) => !t.isSmartRecommendation);
+      if (cleanTracks.length === 0) return;
+
+      const currentTrack = get().currentTrack || cleanTracks[0];
+      const otherPlaylistTracks = cleanTracks.filter((t) => t.id !== currentTrack?.id);
+
+      // 1. Thoroughly randomize/shuffle the playlist's own tracks (Fisher-Yates)
+      const shuffledPlaylistTracks = shuffleTracks(otherPlaylistTracks);
+
+      // Target: always at least 10 upcoming tracks in Smart Shuffle
+      const MIN_UPCOMING = 10;
+      const neededRecs = Math.max(10, MIN_UPCOMING - shuffledPlaylistTracks.length + 3);
 
       const existingIds = new Set(get().queue.map((t) => t.id));
+      if (currentTrack) existingIds.add(currentTrack.id);
       const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
+      if (currentTrack?.name) existingTitles.add(currentTrack.name.toLowerCase().trim());
       const recommendedCandidates: Track[] = [];
 
-      // Sample up to 2 representative seed tracks from the current playlist
-      const seeds = [tracksToAnalyze[0]];
-      if (tracksToAnalyze.length > 5) {
-        seeds.push(tracksToAnalyze[Math.floor(tracksToAnalyze.length / 2)]);
+      // Sample representative seeds: current track + middle track + end track
+      const seeds: Track[] = [currentTrack || cleanTracks[0]];
+      if (shuffledPlaylistTracks.length > 0) {
+        seeds.push(shuffledPlaylistTracks[0]);
       }
+      if (shuffledPlaylistTracks.length > 4) {
+        seeds.push(shuffledPlaylistTracks[Math.floor(shuffledPlaylistTracks.length / 2)]);
+      }
+
+      const fetchLimit = Math.min(25, Math.max(15, neededRecs + 4));
 
       for (const seedTrack of seeds) {
         if (!seedTrack) continue;
@@ -786,7 +812,7 @@ const store = create<PlayerState>((set, get) => ({
           const title = seedTrack.name || '';
           const artist = seedTrack.artists?.[0]?.name || '';
           const res = await fetch(
-            `/api/audio/recommendations?videoId=${encodeURIComponent(rawVideoId)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&limit=12`
+            `/api/audio/recommendations?videoId=${encodeURIComponent(rawVideoId)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&limit=${fetchLimit}`
           );
           if (res.ok) {
             const data = await res.json();
@@ -801,21 +827,22 @@ const store = create<PlayerState>((set, get) => ({
                 recommendedCandidates.push({
                   ...item,
                   isSmartRecommendation: true,
-                });
-                if (recommendedCandidates.length >= 8) break;
+                  queueId: `smart-rec-${item.id}-${Math.random().toString(36).slice(2, 7)}`,
+                } as any);
+                if (recommendedCandidates.length >= neededRecs + 5) break;
               }
             }
           }
         } catch (err) {
           console.warn('[SmartShuffle] YTM bulk recommendations error:', err);
         }
-        if (recommendedCandidates.length >= 8) break;
+        if (recommendedCandidates.length >= neededRecs + 5) break;
       }
 
-      // Fallback: If YTM returned fewer than 2 items, fetch related tracks for playlist artists via discover
-      if (recommendedCandidates.length < 2) {
+      // Fallback: If YTM returned fewer candidates than needed, fetch related artist tracks
+      if (recommendedCandidates.length < neededRecs) {
         try {
-          const playlistArtists = Array.from(new Set(tracksToAnalyze.map((t) => t.artists?.[0]?.name).filter(Boolean))).slice(0, 3);
+          const playlistArtists = Array.from(new Set(cleanTracks.map((t) => t.artists?.[0]?.name).filter(Boolean))).slice(0, 4);
           for (const artName of playlistArtists) {
             if (!artName) continue;
             const discRes = await fetch(`/api/discover?artist=${encodeURIComponent(artName)}`);
@@ -832,35 +859,67 @@ const store = create<PlayerState>((set, get) => ({
                 recommendedCandidates.push({
                   ...item,
                   isSmartRecommendation: true,
-                });
-                if (recommendedCandidates.length >= 6) break;
+                  queueId: `smart-rec-${item.id}-${Math.random().toString(36).slice(2, 7)}`,
+                } as any);
+                if (recommendedCandidates.length >= neededRecs + 5) break;
               }
             }
-            if (recommendedCandidates.length >= 6) break;
+            if (recommendedCandidates.length >= neededRecs + 5) break;
           }
         } catch {}
       }
 
-      if (recommendedCandidates.length > 0) {
-        const cleanQueue = get().queue.filter((t: any) => !t.isSmartRecommendation);
-        const interspersed: Track[] = [];
-        let recIdx = 0;
+      // 2. Interleave recommendations evenly across the entire queue
+      const upcoming: Track[] = [];
+      let pIdx = 0;
+      let rIdx = 0;
 
-        for (let i = 0; i < cleanQueue.length; i++) {
-          interspersed.push(cleanQueue[i]);
-          // Insert a recommended track of matching musical style every 3 tracks (and not on track 0)
-          if ((i + 1) % 3 === 0 && recIdx < recommendedCandidates.length) {
-            interspersed.push(recommendedCandidates[recIdx]);
-            recIdx++;
+      if (shuffledPlaylistTracks.length <= 4) {
+        // Few playlist tracks (e.g. 1, 2, or 3 songs): interleave recommendations immediately
+        while (pIdx < shuffledPlaylistTracks.length || rIdx < recommendedCandidates.length) {
+          if (rIdx < recommendedCandidates.length && (upcoming.length % 2 === 0 || pIdx >= shuffledPlaylistTracks.length)) {
+            upcoming.push(recommendedCandidates[rIdx++]);
+          } else if (pIdx < shuffledPlaylistTracks.length) {
+            upcoming.push(shuffledPlaylistTracks[pIdx++]);
+          } else if (rIdx < recommendedCandidates.length) {
+            upcoming.push(recommendedCandidates[rIdx++]);
           }
         }
-        while (recIdx < Math.min(recommendedCandidates.length, 3)) {
-          interspersed.push(recommendedCandidates[recIdx]);
-          recIdx++;
+      } else {
+        // Standard playlist with many tracks: 2 playlist tracks, then 1 recommendation
+        while (pIdx < shuffledPlaylistTracks.length || rIdx < recommendedCandidates.length) {
+          if (pIdx < shuffledPlaylistTracks.length) {
+            upcoming.push(shuffledPlaylistTracks[pIdx++]);
+          }
+          if (pIdx < shuffledPlaylistTracks.length) {
+            upcoming.push(shuffledPlaylistTracks[pIdx++]);
+          }
+          if (rIdx < recommendedCandidates.length) {
+            upcoming.push(recommendedCandidates[rIdx++]);
+          }
+          if (pIdx >= shuffledPlaylistTracks.length && upcoming.length < MIN_UPCOMING && rIdx < recommendedCandidates.length) {
+            upcoming.push(recommendedCandidates[rIdx++]);
+          }
         }
-
-        set({ queue: interspersed });
       }
+
+      // Guarantee at least MIN_UPCOMING upcoming tracks
+      while (upcoming.length < MIN_UPCOMING && rIdx < recommendedCandidates.length) {
+        upcoming.push(recommendedCandidates[rIdx++]);
+      }
+
+      // Attach stable queueId to playlist tracks if not present
+      const finalUpcoming = upcoming.map((t, idx) => ({
+        ...t,
+        queueId: (t as any).queueId || `q-${t.id}-${idx}`,
+      }));
+
+      const finalQueue = currentTrack ? [
+        { ...currentTrack, queueId: (currentTrack as any).queueId || `q-cur-${currentTrack.id}` },
+        ...finalUpcoming,
+      ] : finalUpcoming;
+
+      set({ queue: finalQueue });
     } catch (e) {
       console.warn('[SmartShuffle] Error populating recommendations:', e);
     }

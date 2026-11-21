@@ -101,7 +101,7 @@ const CarouselCard: React.FC<{
   return (
     <div
       onClick={onClick}
-      className="w-[180px] shrink-0 bg-[#181818] hover:bg-[#282828] p-3 rounded-md transition-all duration-300 cursor-pointer flex flex-col relative group select-none shadow-sm hover:shadow-xl"
+      className="w-[180px] shrink-0 bg-[#181818] hover:bg-[#282828] p-3 rounded-md transition-all duration-300 cursor-pointer flex flex-col relative group select-none shadow-sm hover:shadow-xl card-contain"
     >
       {/* Artwork Container with skeleton loader */}
       <div className={`relative aspect-square w-full ${isArtist ? 'rounded-full' : 'rounded-[4px]'} overflow-hidden mb-3 shadow-md bg-[#242424]`}>
@@ -139,6 +139,8 @@ const CarouselCard: React.FC<{
               alt={card.title}
               crossOrigin="anonymous"
               referrerPolicy="no-referrer"
+              loading="lazy"
+              decoding="async"
               onLoad={handleImageLoad}
               onError={() => {
                 // An artist whose photo link stopped working: their real photo, looked up once

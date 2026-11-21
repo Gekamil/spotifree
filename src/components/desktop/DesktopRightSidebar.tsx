@@ -115,11 +115,206 @@ const SharedSessionSidebarView: React.FC<{ onClose: () => void }> = ({ onClose }
   </div>
 );
 
+interface DesktopQueueSidebarViewProps {
+  currentTrack: any;
+  queue: any[];
+  currentPlaylist?: any;
+  coverOfTrack: (t: any) => string;
+  hdCover: string;
+  playTrack: (track: any, queue?: any[]) => void;
+  onClose: () => void;
+}
+
+const DesktopQueueSidebarView: React.FC<DesktopQueueSidebarViewProps> = React.memo(({
+  currentTrack,
+  queue,
+  currentPlaylist,
+  coverOfTrack,
+  hdCover,
+  playTrack,
+  onClose,
+}) => {
+  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
+  const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
+  const queueScrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTopRef = useRef<number>(0);
+
+  const currentTrackIndex = currentTrack ? queue.findIndex((t: any) => t.id === currentTrack.id) : -1;
+  const upcomingQueue = currentTrackIndex >= 0 ? queue.slice(currentTrackIndex + 1) : queue;
+
+  // Preserve scroll position across any store updates or reorders
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    lastScrollTopRef.current = e.currentTarget.scrollTop;
+  };
+
+  useEffect(() => {
+    if (queueScrollRef.current && Math.abs(queueScrollRef.current.scrollTop - lastScrollTopRef.current) > 2) {
+      queueScrollRef.current.scrollTop = lastScrollTopRef.current;
+    }
+  });
+
+  return (
+    <div className="flex flex-col h-full overflow-hidden">
+      {/* Header */}
+      <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#121212] shrink-0">
+        <h3 className="font-bold text-base text-white font-['SpotifyMixUI']">
+          Cola de reproducción
+        </h3>
+        <button
+          onClick={onClose}
+          className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+          title="Cerrar Cola"
+        >
+          <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
+            <path d="M5.03 10.53a.75.75 0 1 1-1.06-1.06L5.44 8 3.97 6.53a.75.75 0 0 1 1.06-1.06l2 2a.75.75 0 0 1 0 1.06z" />
+            <path d="M1 0a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm.5 1.5h8v13h-8zm13 13H11v-13h3.5z" />
+          </svg>
+        </button>
+      </div>
+
+      <div
+        ref={queueScrollRef}
+        onScroll={handleScroll}
+        style={{ overflowAnchor: 'auto' }}
+        className="flex-1 overflow-y-auto p-4 space-y-6 font-['SpotifyMixUI']"
+      >
+        {/* Section: Sonando */}
+        <div>
+          <h4 className="font-bold text-base text-white mb-3">Sonando</h4>
+          {currentTrack ? (
+            <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.08] group cursor-pointer shadow transition-all duration-200 hover:bg-white/[0.12]">
+              <img
+                src={hdCover}
+                alt={currentTrack.name}
+                referrerPolicy="no-referrer"
+                onError={handleImageError}
+                className="w-12 h-12 rounded object-cover shadow shrink-0 bg-[#282828]"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-[#1ed760] truncate text-sm">
+                  {currentTrack.name}
+                </p>
+                <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                  {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ')}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-[#b3b3b3] italic p-2">
+              No hay ninguna canción reproduciéndose
+            </p>
+          )}
+        </div>
+
+        {/* Section: A continuación en la cola */}
+        <div>
+          <h4 className="font-bold text-base text-white mb-3">
+            {currentPlaylist?.name ? `A continuación en: ${currentPlaylist.name}` : 'A continuación en la cola'}
+          </h4>
+          {upcomingQueue.length > 0 ? (
+            <div className="space-y-1">
+              {upcomingQueue.map((item: any, idx: number) => {
+                const isDragging = draggedQueueIndex === idx;
+                const isOver = dragOverQueueIndex === idx;
+                const itemKey = item.queueId || `q-${item.id}-${idx}`;
+                return (
+                  <div
+                    key={itemKey}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', String(idx));
+                      e.dataTransfer.effectAllowed = 'move';
+                      setDraggedQueueIndex(idx);
+                    }}
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'move';
+                      if (dragOverQueueIndex !== idx) {
+                        setDragOverQueueIndex(idx);
+                      }
+                    }}
+                    onDragLeave={() => {
+                      if (dragOverQueueIndex === idx) setDragOverQueueIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedQueueIndex(null);
+                      setDragOverQueueIndex(null);
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const fromIdx =
+                        draggedQueueIndex !== null
+                          ? draggedQueueIndex
+                          : parseInt(e.dataTransfer.getData('text/plain'), 10);
+                      setDraggedQueueIndex(null);
+                      setDragOverQueueIndex(null);
+                      if (!isNaN(fromIdx) && fromIdx !== idx) {
+                        const baseOffset = currentTrackIndex >= 0 ? currentTrackIndex + 1 : 0;
+                        usePlayerStore.getState().reorderQueue(baseOffset + fromIdx, baseOffset + idx);
+                      }
+                    }}
+                    onClick={() => playTrack(item, queue)}
+                    className={`flex items-center gap-3 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 group relative select-none ${
+                      isDragging
+                        ? 'opacity-30 scale-95 bg-white/5'
+                        : isOver
+                        ? 'bg-[#1ed760]/20 border-t-2 border-[#1ed760]'
+                        : 'hover:bg-white/10'
+                    }`}
+                    title="Arrastra para reordenar la cola · Clic para reproducir"
+                  >
+                    <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
+                      <img
+                        src={coverOfTrack(item)}
+                        alt={item.name}
+                        referrerPolicy="no-referrer"
+                        onError={handleImageError}
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover pointer-events-none"
+                      />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
+                        <PlayNativeIcon size={16} className="text-white ml-0.5" />
+                      </div>
+                    </div>
+                    <div className="min-w-0 flex-1 pointer-events-none">
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-bold text-white group-hover:text-[#1ed760] truncate text-sm">
+                          {item.name}
+                        </p>
+                      </div>
+                      <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
+                        {parseTrackArtists(item.artists).map((a) => a.name).join(', ')}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-[#b3b3b3] space-y-1">
+              <p className="text-sm font-semibold text-white">
+                No hay más canciones en la cola
+              </p>
+              <p className="text-xs opacity-75">
+                Selecciona una lista para seguir escuchando.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+DesktopQueueSidebarView.displayName = 'DesktopQueueSidebarView';
+
 export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSelectPlaylistById }) => {
   const { activeRightSidebar, closeRightSidebar } = useUIStore();
-  const { currentTrack, queue, playTrack, toggleLike, likedTrackIds, progressMs } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, queue: s.queue, playTrack: s.playTrack, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds, progressMs: s.progressMs }))
+  const { currentTrack, queue, playTrack, toggleLike, likedTrackIds } = usePlayerStore(
+    useShallow((s) => ({ currentTrack: s.currentTrack, queue: s.queue, playTrack: s.playTrack, toggleLike: s.toggleLike, likedTrackIds: s.likedTrackIds }))
   );
+  // Only subscribe to live audio ticker when viewing lyrics/now-playing to keep queue view rock-solid
+  const progressMs = usePlayerStore((s) => (activeRightSidebar === 'lyrics' || activeRightSidebar === 'now-playing' ? s.progressMs : 0));
   const playlists = useSpotifyDataStore((s) => s.playlists);
   // "Seguir" puts the artist in Tu biblioteca (same as the artist page's button)
   const followArtistId = currentTrack?.artists?.[0]?.id;
@@ -132,8 +327,6 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
   const [canvasUrl, setCanvasUrl] = useState<string | null>(null);
   const [videoId, setVideoId] = useState<string | null>(null);
   const [officialVideoId, setOfficialVideoId] = useState<string | null>(null);
-  const [draggedQueueIndex, setDraggedQueueIndex] = useState<number | null>(null);
-  const [dragOverQueueIndex, setDragOverQueueIndex] = useState<number | null>(null);
 
   // Real synchronized lyrics state
   const [syncedLyrics, setSyncedLyrics] = useState<SyncedLine[]>([]);
@@ -274,6 +467,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
   // Resolve videoId & canvas
   useEffect(() => {
+    if (activeRightSidebar !== 'now-playing') return;
     let cancelled = false;
     let vidPollInterval: any;
     if (currentTrack) {
@@ -331,6 +525,7 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
 
   // Fetch real synced lyrics from /api/lyrics whenever current track changes
   useEffect(() => {
+    if (activeRightSidebar !== 'lyrics' && activeRightSidebar !== 'now-playing') return;
     if (!currentTrack) {
       setSyncedLyrics([]);
       setPlainLyrics([]);
@@ -861,150 +1056,17 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
         </div>
       )}
 
-      {/* 2. QUEUE MODE (with smooth slide & fade animations) */}
+      {/* 2. QUEUE MODE (with stable scroll retention & isolated re-renders) */}
       {activeRightSidebar === 'queue' && (
-        <div className="flex flex-col h-full overflow-hidden animate-in fade-in duration-300">
-          {/* Header */}
-          <div className="p-4 flex items-center justify-between border-b border-white/5 bg-[#121212] shrink-0">
-            <h3 className="font-bold text-base text-white font-['SpotifyMixUI']">
-              Cola de reproducción
-            </h3>
-            <button
-              onClick={closeRightSidebar}
-              className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-              title="Cerrar Cola"
-            >
-              <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor">
-                <path d="M5.03 10.53a.75.75 0 1 1-1.06-1.06L5.44 8 3.97 6.53a.75.75 0 0 1 1.06-1.06l2 2a.75.75 0 0 1 0 1.06z" />
-                <path d="M1 0a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V1a1 1 0 0 0-1-1zm.5 1.5h8v13h-8zm13 13H11v-13h3.5z" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-6 font-['SpotifyMixUI']">
-            {/* Section: Sonando */}
-            <div>
-              <h4 className="font-bold text-base text-white mb-3">Sonando</h4>
-              {currentTrack ? (
-                <div className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.08] group cursor-pointer shadow transition-all duration-200 hover:bg-white/[0.12]">
-                  <img
-                    src={hdCover}
-                    alt={currentTrack.name}
-                    referrerPolicy="no-referrer"
-                    onError={handleImageError}
-                    className="w-12 h-12 rounded object-cover shadow shrink-0 bg-[#282828]"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-[#1ed760] truncate text-sm">
-                      {currentTrack.name}
-                    </p>
-                    <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                      {parseTrackArtists(currentTrack.artists).map((a) => a.name).join(', ')}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-sm text-[#b3b3b3] italic p-2">
-                  No hay ninguna canción reproduciéndose
-                </p>
-              )}
-            </div>
-
-            {/* Section: A continuación en la cola */}
-            <div>
-              <h4 className="font-bold text-base text-white mb-3">
-                {currentPlaylist?.name ? `A continuación en: ${currentPlaylist.name}` : 'A continuación en la cola'}
-              </h4>
-              {upcomingQueue.length > 0 ? (
-                <div className="space-y-1">
-                  {upcomingQueue.map((item, idx) => {
-                    const isDragging = draggedQueueIndex === idx;
-                    const isOver = dragOverQueueIndex === idx;
-                    return (
-                      <div
-                        key={`${item.id}-${idx}`}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.setData('text/plain', String(idx));
-                          e.dataTransfer.effectAllowed = 'move';
-                          setDraggedQueueIndex(idx);
-                        }}
-                        onDragOver={(e) => {
-                          e.preventDefault();
-                          e.dataTransfer.dropEffect = 'move';
-                          if (dragOverQueueIndex !== idx) {
-                            setDragOverQueueIndex(idx);
-                          }
-                        }}
-                        onDragLeave={() => {
-                          if (dragOverQueueIndex === idx) setDragOverQueueIndex(null);
-                        }}
-                        onDragEnd={() => {
-                          setDraggedQueueIndex(null);
-                          setDragOverQueueIndex(null);
-                        }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          const fromIdx =
-                            draggedQueueIndex !== null
-                              ? draggedQueueIndex
-                              : parseInt(e.dataTransfer.getData('text/plain'), 10);
-                          setDraggedQueueIndex(null);
-                          setDragOverQueueIndex(null);
-                          if (!isNaN(fromIdx) && fromIdx !== idx) {
-                            const baseOffset = currentTrackIndex >= 0 ? currentTrackIndex + 1 : 0;
-                            usePlayerStore.getState().reorderQueue(baseOffset + fromIdx, baseOffset + idx);
-                          }
-                        }}
-                        onClick={() => playTrack(item, queue)}
-                        className={`flex items-center gap-3 p-2 rounded-lg cursor-grab active:cursor-grabbing transition-all duration-150 group relative select-none ${
-                          isDragging
-                            ? 'opacity-30 scale-95 bg-white/5'
-                            : isOver
-                            ? 'bg-[#1ed760]/20 border-t-2 border-[#1ed760]'
-                            : 'hover:bg-white/10'
-                        }`}
-                        title="Arrastra para reordenar la cola · Clic para reproducir"
-                      >
-                        <div className="relative w-12 h-12 rounded overflow-hidden shrink-0 shadow bg-[#282828]">
-                          <img
-                            src={coverOfTrack(item)}
-                            alt={item.name}
-                            referrerPolicy="no-referrer"
-                            onError={handleImageError}
-                            className="w-full h-full object-cover pointer-events-none"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity pointer-events-none">
-                            <PlayNativeIcon size={16} className="text-white ml-0.5" />
-                          </div>
-                        </div>
-                        <div className="min-w-0 flex-1 pointer-events-none">
-                          <div className="flex items-center gap-1.5">
-                            <p className="font-bold text-white group-hover:text-[#1ed760] truncate text-sm">
-                              {item.name}
-                            </p>
-                          </div>
-                          <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
-                            {parseTrackArtists(item.artists).map((a) => a.name).join(', ')}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="py-8 text-center text-[#b3b3b3] space-y-1">
-                  <p className="text-sm font-semibold text-white">
-                    No hay más canciones en la cola
-                  </p>
-                  <p className="text-xs opacity-75">
-                    Selecciona una lista para seguir escuchando.
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
+        <DesktopQueueSidebarView
+          currentTrack={currentTrack}
+          queue={queue}
+          currentPlaylist={currentPlaylist}
+          coverOfTrack={coverOfTrack}
+          hdCover={hdCover}
+          playTrack={playTrack}
+          onClose={closeRightSidebar}
+        />
       )}
 
       {/* 3. FULL LYRICS MODE (Real-time synchronized with auto-scroll) */}

@@ -456,7 +456,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               <div
                 key={card.id}
                 onClick={() => onSelectPlaylistById(card.id)}
-                className="p-3 rounded-lg hover:bg-[#1f1f1f] active:bg-[#181818] transition-colors cursor-pointer group flex flex-col relative"
+                className="p-3 rounded-lg hover:bg-[#1f1f1f] active:bg-[#181818] transition-colors cursor-pointer group flex flex-col relative card-contain"
               >
                 <div className={`relative aspect-square w-full overflow-hidden mb-2.5 bg-[#242424] shadow-[0_8px_24px_rgba(0,0,0,0.5)] ${round ? 'rounded-full' : 'rounded-md'}`}>
                   <SpotifyImage
@@ -738,7 +738,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               }}
             />
           ) : (
-            <section key={block.key} className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <section key={block.key} className="grid grid-cols-1 xl:grid-cols-2 gap-4 shelf-contain">
               {block.items.map(({ label, card }) => (
                 <SpotlightCard
                   key={`${label}-${card.id}`}

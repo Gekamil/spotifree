@@ -260,6 +260,27 @@
   animation: spotifySlideUpModal 0.32s cubic-bezier(0.18, 0.89, 0.32, 1) forwards;
 }
 
+/* Spotify Desktop Fidelity: Smooth Scrolling & Virtual Containment */
+.shelf-contain {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 300px;
+}
+
+.card-contain {
+  content-visibility: auto;
+  contain-intrinsic-size: 180px 240px;
+}
+
+.track-row-contain {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 56px;
+}
+
+.desktop-smooth-scroll {
+  scroll-behavior: smooth;
+  overscroll-behavior-y: contain;
+}
+
 @keyframes spinSlow {
   from {
     transform: rotate(0deg);
