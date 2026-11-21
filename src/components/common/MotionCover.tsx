@@ -83,22 +83,36 @@ export const MotionCover: React.FC<Props> = ({
     };
   }, [track?.id, allowed]);
 
-  // Play it in the background so it's ready for instant crossfade when toggled
+  // Play it in the background only when active/visible, and pause when screen/app is in background
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !motion || !visible || !allowed) return;
+    if (typeof document !== 'undefined' && document.hidden) return;
+
     let hls: any = null;
     let cancelled = false;
     const start = () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       video.muted = true;
       video.play().catch(() => {});
     };
+
+    const handleVis = () => {
+      if (document.hidden) {
+        try { video.pause(); } catch {}
+      } else if (isMotionActive && !cancelled) {
+        try { video.play().catch(() => {}); } catch {}
+      }
+    };
+    document.addEventListener('visibilitychange', handleVis);
+
     // Spotify Canvas (.mp4): the browser plays it directly, no hls.js needed
     if (motion.kind === 'mp4') {
       video.src = motion.video;
       start();
       return () => {
         cancelled = true;
+        document.removeEventListener('visibilitychange', handleVis);
         try {
           video.pause();
         } catch {}
@@ -130,6 +144,7 @@ export const MotionCover: React.FC<Props> = ({
     });
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', handleVis);
       try {
         video.pause();
       } catch {}
@@ -137,7 +152,7 @@ export const MotionCover: React.FC<Props> = ({
       else video.removeAttribute('src');
       setReady(false);
     };
-  }, [motion, visible, allowed]);
+  }, [motion, visible, allowed, isMotionActive]);
 
   const toggleMotion = () => {
     if (!motion || !allowed || !interactive) return;

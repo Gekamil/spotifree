@@ -560,7 +560,7 @@ export const MobileLayout: React.FC = () => {
       }
       setMobileTab('dj');
       const dj = useAIDJStore.getState();
-      if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
         void dj.startDJSession(false, { speakFirst: true });
       } else if (dj.djTracks.length > 0 && !dj.isThinking) {
         const p = usePlayerStore.getState();
@@ -652,7 +652,7 @@ export const MobileLayout: React.FC = () => {
       const dx = Math.abs(e.changedTouches[0].clientX - djCardTouchRef.current.x);
       const dy = Math.abs(e.changedTouches[0].clientY - djCardTouchRef.current.y);
       const dt = Date.now() - djCardTouchRef.current.time;
-      if (dx < 16 && dy < 16 && dt < 600) {
+      if (dx < 28 && dy < 28 && dt < 800) {
         handleOpenDJPlaylist();
       }
     }
@@ -876,7 +876,7 @@ export const MobileLayout: React.FC = () => {
                         handleOpenDJPlaylist();
                       }
                     }}
-                    className="relative w-full rounded-2xl p-4 px-4.5 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px] select-none"
+                    className="relative w-full rounded-2xl py-2.5 px-3.5 sm:px-4 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[120px] select-none"
                     style={{
                       touchAction: 'manipulation',
                       backgroundColor: djThemeColor || '#0c3b88',
@@ -887,30 +887,30 @@ export const MobileLayout: React.FC = () => {
                   >
                     {/* Ambient Undulating Background Waves */}
                     <InteractiveMusicWaves
-                      isPlaying={isPlaying}
-                      isSpeaking={visualizerState === 'speaking'}
-                      voiceLevel={voiceLevel}
+                      isPlaying={true}
+                      isSpeaking={visualizerState === 'speaking' || true}
+                      voiceLevel={visualizerState === 'speaking' ? voiceLevel : 0.45}
                       themeColor={djThemeColor || '#00f2fe'}
-                      className="absolute inset-0 w-full h-full pointer-events-none opacity-40 mix-blend-screen"
+                      className="absolute inset-0 w-full h-full pointer-events-none opacity-45 mix-blend-screen"
                     />
 
                     {/* Subtle Ambient Radial Glow behind the Orb */}
                     <div
-                      className="absolute left-1/2 top-10 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
+                      className="absolute left-1/2 top-9 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
                       style={{
                         background: 'radial-gradient(circle, rgba(0, 242, 254, 0.35) 0%, rgba(30, 215, 96, 0.12) 45%, rgba(0,0,0,0) 70%)',
                         filter: 'blur(22px)',
                       }}
                     />
 
-                    {/* Center Visualizer: Grand Neon Liquid Halo (enlarged for chic, prominent presence) */}
-                    <div className="relative w-full flex items-center justify-center my-0.5 z-10 pointer-events-none">
+                    {/* Center Visualizer: Grand Neon Liquid Halo (enlarged prominent ring, speaking animation always active in preview) */}
+                    <div className="relative w-full flex items-center justify-center my-0 z-10 pointer-events-none">
                       <SpotifyDJVisualizer
-                        size={124}
-                        state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
-                        voiceLevel={voiceLevel}
+                        size={142}
+                        state="speaking"
+                        voiceLevel={visualizerState === 'speaking' ? voiceLevel : 0.45}
                         themeColor={djThemeColor}
-                        forceWaves={visualizerState === 'speaking'}
+                        forceWaves={true}
                       />
                     </div>
 

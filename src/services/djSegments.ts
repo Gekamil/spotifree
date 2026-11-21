@@ -204,7 +204,7 @@ const SEGMENT_TITLES: Record<DJSegmentKind, string> = {
 async function searchArtistTracks(artist: string, limit = 8): Promise<Track[]> {
   try {
     const searchPromise = searchSpotify(`artist:"${artist}"`);
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 600));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 400));
     const res = await Promise.race([searchPromise, timeoutPromise]);
     const items: Track[] = (res as any)?.tracks?.items || [];
     return filterMusicTracksOnly(items).filter((t) => (t.artists || []).some((a) => (a.name || '').toLowerCase() === artist.toLowerCase())).slice(0, limit);
@@ -257,16 +257,16 @@ export async function buildSegmentedDJSet(opts: { blockSize?: number; exclude?: 
   if (focusArtist) {
     const own = library.filter((e) => (e.track.artists || []).some((a) => a.name === focusArtist));
     let focusTracks = take(shuffle(own), Math.ceil(blockSize / 2));
-    if (focusTracks.length < blockSize) {
+    if (focusTracks.length < blockSize && library.length < 8) {
       const more = await searchArtistTracks(focusArtist);
       focusTracks = focusTracks.concat(takeTracks(shuffle(more), blockSize - focusTracks.length));
     }
     if (focusTracks.length >= 2) blocks.push({ kind: 'artist-focus', tracks: focusTracks, reason: `es uno de sus artistas más escuchados`, focusArtist });
   }
 
-  // 4. Discoveries: songs of their other artists that are NOT in the library
+  // 4. Discoveries: songs of their other artists that are NOT in the library (skip if library is already rich)
   const discoveryArtists = shuffle(artists.filter((a) => a !== focusArtist)).slice(0, 3);
-  if (discoveryArtists.length > 0) {
+  if (discoveryArtists.length > 0 && library.length < 12) {
     const libSigs = new Set(library.map((e) => sigOf(e.track)));
     const found = (await Promise.all(discoveryArtists.map((a) => searchArtistTracks(a, 10)))).flat().filter((t) => !libSigs.has(sigOf(t)) && !exclude.has(t.id));
     const discTracks = takeTracks(shuffle(found), blockSize);

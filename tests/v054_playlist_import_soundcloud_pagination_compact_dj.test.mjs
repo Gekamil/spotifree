@@ -9,7 +9,7 @@ test('Spotifree v0.5.4: 300+ Track Pagination, SoundCloud Playlist Import & Comp
 
     // Asserts DJ card layout matches compact or enlarged chic design
     assert.match(mobileLayout, /min-h-\[(120|148)px\]/, 'DJ card min-height should be well-proportioned');
-    assert.match(mobileLayout, /size=\{(94|124)\}/, 'DJ visualizer in card should use refined visualizer size');
+    assert.match(mobileLayout, /size=\{(94|124|142)\}/, 'DJ visualizer in card should use refined visualizer size');
     assert.match(mobileLayout, /mb-4\.5/, 'DJ card margin bottom should be tight to eliminate dead space');
     assert.match(mobileLayout, /w-8\.5 h-8\.5/, 'DJ play button should be proportionately sized');
   });

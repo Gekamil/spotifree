@@ -203,22 +203,37 @@ let introVoiceHeard = false;
 async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   set({ visualizerState: 'speaking', currentMessage: text, displayedTranscript: '' });
   audioEngine.setDuckedVolume(0.18);
+  let voiceTimer: any = null;
   try {
+    // If voice has not started outputting sound within 2.5s, restore music volume so user never waits in low volume
+    voiceTimer = setTimeout(() => {
+      if (!introVoiceHeard) {
+        audioEngine.restoreDuckedVolume(800);
+      }
+    }, 2500);
+
     const speakPromise = aiDJVoiceService.speak(text, {
       onWord: (_w, partial) => set({ displayedTranscript: partial }),
       onVoiceLevel: (level) => {
-        if (level > 0.06) introVoiceHeard = true;
+        if (level > 0.06) {
+          introVoiceHeard = true;
+          if (voiceTimer) {
+            clearTimeout(voiceTimer);
+            voiceTimer = null;
+          }
+        }
         set({ voiceLevel: level });
       },
       onEnd: () => {
-        audioEngine.restoreDuckedVolume(1200);
+        if (voiceTimer) clearTimeout(voiceTimer);
+        audioEngine.restoreDuckedVolume(1000);
         set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
       },
     });
 
     const timeoutPromise = new Promise<void>((resolve) => {
       const words = (text || '').split(/\s+/).length;
-      const ms = Math.min(8000, Math.max(3000, words * 280 + 1800));
+      const ms = Math.min(6500, Math.max(2500, words * 240 + 1500));
       setTimeout(resolve, ms);
     });
 
@@ -226,7 +241,8 @@ async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   } catch (err) {
     console.warn('[AIDJ] djSpeak error:', err);
   } finally {
-    audioEngine.restoreDuckedVolume(1200);
+    if (voiceTimer) clearTimeout(voiceTimer);
+    audioEngine.restoreDuckedVolume(1000);
     set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
   }
 }

@@ -57,8 +57,8 @@ test('Spotifree v0.6.0: 360° Liquid Ring in Thick with Medium Speaking Outer Wa
 
     assert.match(
       layoutCode,
-      /forceWaves=\{visualizerState === 'speaking'\}/,
-      'Mobile card must activate outer wave specifically when the DJ is speaking'
+      /forceWaves=\{(true|visualizerState === 'speaking')\}/,
+      'Mobile card must activate outer wave specifically when the DJ is speaking or in always-speaking preview'
     );
   });
 

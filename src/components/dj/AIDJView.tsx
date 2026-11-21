@@ -335,7 +335,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   useEffect(() => {
     aiDJVoiceService.unlockAudioForMobile();
     const dj = useAIDJStore.getState();
-    if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+    if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
       void dj.startDJSession(false, { speakFirst: true });
     } else if (dj.djTracks.length > 0 && !dj.isThinking) {
       const p = usePlayerStore.getState();

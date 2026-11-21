@@ -93,6 +93,7 @@ class AIDJVoiceService {
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
   private ttsCache: Map<string, string> = new Map();
   private config: AIDJConfig = DEFAULT_CONFIG;
+  private isAudioUnlocked = false;
   private selectedVoiceId: DJVoiceId = 'dalia';
   private testPhraseIndex: number = 0;
 
@@ -131,6 +132,8 @@ class AIDJVoiceService {
    */
   public unlockAudioForMobile() {
     if (typeof window === 'undefined') return;
+    if (this.isAudioUnlocked) return;
+    this.isAudioUnlocked = true;
     try {
       if (!this.unlockedAudio) {
         const audio = new Audio();
@@ -216,7 +219,7 @@ class AIDJVoiceService {
 
   /** Audio (blob URL) + word timings; works with the JSON answer and with plain audio */
   private async fetchSpeech(text: string, lang: string, voice: DJVoiceId, signal?: AbortSignal): Promise<{ url: string; words: WordTiming[] } | null> {
-    const fetchSignal = signal || (AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined);
+    const fetchSignal = signal || (AbortSignal.timeout ? AbortSignal.timeout(2800) : undefined);
     const res = await fetch(`/api/tts?${this.ttsParams(text, lang, voice).toString()}`, { signal: fetchSignal });
     if (!res.ok) throw new Error(`TTS API returned ${res.status}`);
     if ((res.headers.get('content-type') || '').includes('json')) {

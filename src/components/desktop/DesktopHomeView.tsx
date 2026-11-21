@@ -685,10 +685,11 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   }}
                 >
                   <SpotifyDJVisualizer
-                    size={220}
-                    state={isPlaying ? 'playing' : 'idle'}
-                    voiceLevel={isPlaying ? 0.25 : 0.12}
+                    size={230}
+                    state="speaking"
+                    voiceLevel={0.45}
                     themeColor={djThemeColor}
+                    forceWaves={true}
                   />
                 </div>
               </div>

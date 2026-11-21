@@ -142,6 +142,40 @@ function getMediaSessionArtwork(imageUrl?: string) {
   ];
 }
 
+export function sanitizeTrack(track: any): Track {
+  if (!track || typeof track !== 'object') {
+    return {
+      id: `fallback-${Date.now()}`,
+      name: 'Canción',
+      artists: [{ id: 'art-unknown', name: 'Desconocido' }],
+      album: { id: 'alb-unknown', name: 'Desconocido', images: [] },
+      duration_ms: 180000,
+    } as Track;
+  }
+  const artists = Array.isArray(track.artists) && track.artists.length > 0
+    ? track.artists.map((a: any) => ({
+        id: a?.id || 'art-unknown',
+        name: a?.name || 'Desconocido',
+      }))
+    : [{ id: 'art-unknown', name: track.artist || track.artists?.[0]?.name || 'Desconocido' }];
+
+  const albumImages = Array.isArray(track.album?.images) ? track.album.images : [];
+  const album = {
+    id: track.album?.id || `alb-${track.id || Date.now()}`,
+    name: track.album?.name || track.name || 'Desconocido',
+    images: albumImages,
+  };
+
+  return {
+    ...track,
+    id: String(track.id || `track-${Date.now()}`),
+    name: String(track.name || 'Canción'),
+    artists,
+    album,
+    duration_ms: Number(track.duration_ms) || 180000,
+  } as Track;
+}
+
 function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !track) return;
   try {
@@ -334,24 +368,25 @@ const store = create<PlayerState>((set, get) => ({
       }
     }
     const state = get();
+    const safeTrack = sanitizeTrack(track);
     const hydrateCoverSync = (t: Track): Track => {
-      if (!t) return t;
-      const curUrl = t.album?.images?.[0]?.url;
-      if (curUrl && !isPlaylistOrGenericCover(curUrl)) return t;
-      const resolved = resolveTrackCover(t);
-      if (!resolved) return t;
+      const s = sanitizeTrack(t);
+      const curUrl = s.album?.images?.[0]?.url;
+      if (curUrl && !isPlaylistOrGenericCover(curUrl)) return s;
+      const resolved = resolveTrackCover(s);
+      if (!resolved) return s;
       return {
-        ...t,
+        ...s,
         album: {
-          ...t.album,
-          id: t.album?.id || `alb-${t.id}`,
-          name: t.album?.name || t.name,
+          ...s.album,
+          id: s.album?.id || `alb-${s.id}`,
+          name: s.album?.name || s.name,
           images: [{ url: resolved }],
         },
       };
     };
 
-    const hydratedTrack = hydrateCoverSync(track);
+    const hydratedTrack = hydrateCoverSync(safeTrack);
     const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanNew = (hydratedTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
@@ -1226,23 +1261,31 @@ export function registerMediaSessionHandlers() {
     });
 
     navigator.mediaSession.setActionHandler('previoustrack', () => {
-      usePlayerStore.getState().previousTrack();
-      const engine = getEngine();
-      if (engine) {
-        engine.unlockAudio?.();
-        if (typeof engine.resume === 'function') engine.resume();
+      try {
+        usePlayerStore.getState().previousTrack();
+        const engine = getEngine();
+        if (engine) {
+          engine.unlockAudio?.();
+          if (typeof engine.resume === 'function') engine.resume();
+        }
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      } catch (err) {
+        console.warn('[MediaSession] previoustrack error:', err);
       }
-      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     });
 
     navigator.mediaSession.setActionHandler('nexttrack', () => {
-      usePlayerStore.getState().nextTrack();
-      const engine = getEngine();
-      if (engine) {
-        engine.unlockAudio?.();
-        if (typeof engine.resume === 'function') engine.resume();
+      try {
+        usePlayerStore.getState().nextTrack();
+        const engine = getEngine();
+        if (engine) {
+          engine.unlockAudio?.();
+          if (typeof engine.resume === 'function') engine.resume();
+        }
+        try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+      } catch (err) {
+        console.warn('[MediaSession] nexttrack error:', err);
       }
-      try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     });
 
     navigator.mediaSession.setActionHandler('seekto', (details) => {
