@@ -47,13 +47,13 @@ export function calculateOrbLayerDisplacement(
   size: number,
   mini: boolean = false
 ): number {
-  // Base sinusoidal liquid waves across the entire circumference
-  const wave1 = Math.sin(theta * 2 - (mini ? time * 1.3 : time * 0.9)) * 0.65;
-  const wave2 = Math.cos(theta * 3 + (mini ? time * 1.0 : time * 0.7)) * 0.35;
+  // Pure standing breathing waves: NO traveling rotational phase (theta * k - time is removed so it never spins)
+  const wave1 = Math.sin(theta * 2) * Math.cos(mini ? time * 0.7 : time * 0.35) * 0.55;
+  const wave2 = Math.cos(theta * 3) * Math.sin(mini ? time * 0.5 : time * 0.28) * 0.30;
   const baseOffset = (wave1 + wave2) * bulgeBase;
 
   if (splitAmount <= 0.001) {
-    // Single ring when idle or playing: all layers collapse cleanly
+    // All layers collapse cleanly
     return baseOffset;
   }
 
@@ -62,25 +62,26 @@ export function calculateOrbLayerDisplacement(
   const scaleFactor = mini ? size / 38 : size / 260;
 
   if (layerIndex === 0) {
-    // Layer 0 (Core ring): Sinks inward ("se hunde") in the upper-right speaking quadrant
-    const inwardDip = (mini ? 3.0 : 16.0) * scaleFactor * (0.4 + voiceLevel * 0.7);
+    // Layer 0 (Core ring): Sinks inward in the upper-right speaking quadrant
+    const inwardDip = (mini ? 2.5 : 14.0) * scaleFactor * (0.4 + voiceLevel * 0.6);
     return baseOffset - splitAmount * W * inwardDip;
   }
 
   if (layerIndex === 1) {
-    // Layer 1 (Mid ring): displaced ~20-26px toward upper-right with speech harmonics
-    const midBaseDisplacement = (mini ? 2.6 : 20.0) * scaleFactor;
-    const midSpeechHarmonic = (0.35 + voiceLevel * 0.75) * (mini ? 1.5 : 8.5) * scaleFactor * Math.sin(theta * 3 - time * 4.0);
+    // Layer 1 (Mid ring): displaced ~18-22px toward upper-right with standing breathing harmonics
+    const midBaseDisplacement = (mini ? 2.6 : 18.0) * scaleFactor;
+    const midSpeechHarmonic =
+      (0.25 + voiceLevel * 0.65) * (mini ? 1.2 : 5.5) * scaleFactor * Math.sin(theta * 3) * Math.cos(time * 0.75);
     const midLayerOffset = splitAmount * W * (midBaseDisplacement + midSpeechHarmonic);
     return baseOffset + midLayerOffset;
   }
 
   if (layerIndex === 2) {
-    // Layer 2 (Outer ring): displaced ~38-48px toward upper-right with high-frequency speech wave flutter
-    const outerBaseDisplacement = (mini ? 4.8 : 40.0) * scaleFactor;
+    // Layer 2 (Outer ring): displaced ~32-38px toward upper-right with elegant speech wave delamination
+    const outerBaseDisplacement = (mini ? 4.5 : 34.0) * scaleFactor;
     const outerSpeechFlutter =
-      (0.4 + voiceLevel * 0.7) * (mini ? 2.2 : 11.5) * scaleFactor * Math.cos(theta * 4 + time * 5.0) +
-      (mini ? 1.0 : 5.0) * scaleFactor * Math.sin(theta * 2 + time * 3.2);
+      (0.3 + voiceLevel * 0.6) * (mini ? 1.5 : 7.0) * scaleFactor * Math.cos(theta * 4) * Math.sin(time * 0.85) +
+      (mini ? 0.8 : 3.0) * scaleFactor * Math.sin(theta * 2) * Math.cos(time * 0.55);
     const outerLayerOffset = splitAmount * W * (outerBaseDisplacement + outerSpeechFlutter);
     return baseOffset + outerLayerOffset;
   }
@@ -156,9 +157,9 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    // Refined Spotify DJ Halo radius and stroke (~5.8px on size 140 for crisp presence)
-    const baseRadius = size * (mini ? 0.32 : 0.35);
-    const strokeWidth = Math.max(4.0, size * (mini ? 0.095 : 0.041));
+    // Elegant Spotify DJ Halo radius and stroke (leaves ample margin so shadows never clip at canvas edge)
+    const baseRadius = size * (mini ? 0.30 : 0.285);
+    const strokeWidth = Math.max(4.6, size * (mini ? 0.095 : 0.046));
     const numPoints = mini ? 70 : 160;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 
@@ -222,14 +223,14 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         ? Math.max(0.42, voiceLevelRef.current || 0.42)
         : voiceLevelRef.current;
 
-      // Speed of rotation & wave travel: gentle and serene wave flow (much slower & more elegant)
+      // Serene, slow, fluid breathing speed (no fast spinning or jerky movement)
       const speed = mini
-        ? (isSpeaking ? 0.024 : isPlaying ? 0.015 : 0.009)
+        ? (isSpeaking ? 0.012 : isPlaying ? 0.008 : 0.005)
         : isSpeaking
-        ? 0.016
+        ? 0.009
         : isPlaying
-        ? 0.010
-        : 0.006;
+        ? 0.006
+        : 0.004;
       time += speed;
 
       // Exponential moving average damping for voice reactivity (faster attack when speaking)
@@ -237,11 +238,13 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * voiceAttack;
       const currentVoice = smoothedVoiceRef.current;
 
-      // Smooth interpolation for 3-layer talking orb delamination
-      const targetSplit = isSpeaking ? 1.0 : 0.0;
-      const splitRate = targetSplit > splitAmountRef.current ? 0.10 : 0.06;
+      // Multi-wave talking orb delamination: ALWAYS show the concentric waves (Photo 1) even when idle,
+      // expanding dynamically when speaking
+      const baseSplit = 0.88;
+      const targetSplit = isSpeaking ? 1.0 : baseSplit;
+      const splitRate = targetSplit > splitAmountRef.current ? 0.08 : 0.05;
       splitAmountRef.current += (targetSplit - splitAmountRef.current) * splitRate;
-      const split = splitAmountRef.current;
+      const split = Math.max(baseSplit, splitAmountRef.current);
 
       // Frame-by-frame color interpolation for smooth transitions
       const targetRgb = parseHexToRgb(themeColorRef.current || '#1ed760');
@@ -400,7 +403,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
     >
       <canvas
         ref={canvasRef}
-        style={{ width: size, height: size }}
+        style={{ width: size, height: size, outline: 'none', border: 'none', background: 'transparent' }}
         className="pointer-events-none"
       />
     </div>

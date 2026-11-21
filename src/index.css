@@ -271,6 +271,20 @@
 }
 
 /* Spotify-like navigation: tabs fade in quickly, opened pages slide in from the right */
+@keyframes spfTabFade {
+  0% {
+    opacity: 0.88;
+    transform: scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+.spf-tab-fade {
+  animation: spfTabFade 0.16s cubic-bezier(0.25, 1, 0.5, 1) both;
+  will-change: opacity, transform;
+}
 @keyframes spfPageEnter {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: none; }
@@ -373,6 +387,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .spf-tab-fade,
   .spf-page-enter,
   .spf-page-push,
   .spf-tab-pop,

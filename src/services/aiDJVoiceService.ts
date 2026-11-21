@@ -657,10 +657,8 @@ class AIDJVoiceService {
     // High-fidelity Neural Studio TTS with crisp intonation and zero awkward pauses
     const success = await this.speakViaNeuralTTS(clean, options);
     if (!success && this.isSpeaking) {
-      // The voice service failed: the device's own voice rather than silence (when it has one)
-      const hasDeviceVoice =
-        typeof window !== 'undefined' && 'speechSynthesis' in window && window.speechSynthesis.getVoices().length > 0;
-      if (hasDeviceVoice) {
+      // The voice service failed: fallback immediately to device speechSynthesis rather than silence
+      if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
         await this.speakViaSpeechSynthesis(clean, options);
         return;
       }

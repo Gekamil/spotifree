@@ -3,6 +3,7 @@ import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
 import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -325,15 +326,18 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     }
   }, [currentTrack, setDJThemeColor]);
 
-  // Initialize DJ session if not active or empty
+  // Initialize DJ session if not active or empty, and unlock audio immediately
   useEffect(() => {
+    aiDJVoiceService.unlockAudioForMobile();
     if (!isDJModeActive || djTracks.length === 0) {
-      startDJSession(false);
+      void startDJSession(true, { speakFirst: true });
+    } else {
+      const p = usePlayerStore.getState();
+      if (!p.isPlaying) {
+        void startDJSession(true, { speakFirst: true });
+      }
     }
   }, [isDJModeActive, djTracks.length, startDJSession]);
-
-  // Leaving before the DJ starts talking calls the greeting off
-  useEffect(() => () => useAIDJStore.getState().cancelDJIntroIfNotStarted(), []);
 
   const toggleMic = () => {
     if (isMicListening) {
@@ -473,6 +477,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}
+              forceWaves={true}
             />
           </div>
 

@@ -504,28 +504,342 @@ function wrapTitle(ctx: CanvasRenderingContext2D, text: string, maxW: number): s
   return lines.slice(0, 2);
 }
 
-type CoverStyle = 'artist' | 'collage' | 'single';
-async function makeCover(title: string, _style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
+function drawImageAspectCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  const imgW = img.naturalWidth || img.width || 1;
+  const imgH = img.naturalHeight || img.height || 1;
+  const imgRatio = imgW / imgH;
+  const targetRatio = dw / dh;
+  let sx = 0, sy = 0, sw = imgW, sh = imgH;
+  if (imgRatio > targetRatio) {
+    sw = sh * targetRatio;
+    sx = (imgW - sw) / 2;
+  } else {
+    sh = sw / targetRatio;
+    sy = (imgH - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+}
+
+export function makeBannerCoverSvg(title: string, color: string, images: string[] = []): string {
+  const S = 600;
+  const bannerH = 170;
+  const photoH = S - bannerH;
+  const imgUrl = images[0] || '';
+  const cleanColor = color || '#1e3264';
+  const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <defs>
+      <linearGradient id="photoFallback" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${cleanColor}"/>
+        <stop offset="100%" stop-color="#141414"/>
+      </linearGradient>
+      <linearGradient id="photoShadow" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0.65)"/>
+      </linearGradient>
+    </defs>
+    <rect width="${S}" height="${photoH}" fill="url(#photoFallback)"/>
+    ${imgUrl ? `<image href="${imgUrl}" x="0" y="0" width="${S}" height="${photoH}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    <rect x="0" y="${photoH - 36}" width="${S}" height="36" fill="url(#photoShadow)"/>
+    <rect x="0" y="${photoH}" width="${S}" height="${bannerH}" fill="${cleanColor}"/>
+    <rect x="0" y="${photoH}" width="${S}" height="2" fill="rgba(0,0,0,0.35)"/>
+    <rect x="36" y="${photoH + 26}" width="4.5" height="15" fill="#ffffff" opacity="0.9"/>
+    <rect x="44.5" y="${photoH + 20}" width="4.5" height="23" fill="#ffffff" opacity="0.9"/>
+    <rect x="53" y="${photoH + 23}" width="4.5" height="18" fill="#ffffff" opacity="0.9"/>
+    <text x="68" y="${photoH + 37}" fill="#ffffff" opacity="0.9" font-family="'SpotifyMixUI', 'Circular', sans-serif" font-weight="700" font-size="16" letter-spacing="0.5">SPOTIFREE MIX</text>
+    <text x="36" y="${photoH + 92}" fill="#ffffff" font-family="'SpotifyMixUITitle', 'Circular', sans-serif" font-weight="900" font-size="44" letter-spacing="-0.5">${cleanTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function makeCollageCoverSvg(title: string, color: string, images: string[] = []): string {
+  const S = 600;
+  const half = S / 2;
+  const cleanColor = color || '#1e3264';
+  const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const [img0, img1, img2, img3] = images;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <defs>
+      <linearGradient id="gridBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${cleanColor}"/>
+        <stop offset="100%" stop-color="#0a0a0a"/>
+      </linearGradient>
+      <linearGradient id="overlay" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
+        <stop offset="65%" stop-color="rgba(0,0,0,0.65)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0.95)"/>
+      </linearGradient>
+    </defs>
+    <rect width="${S}" height="${S}" fill="url(#gridBg)"/>
+    ${img0 ? `<image href="${img0}" x="0" y="0" width="${half}" height="${half}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    ${img1 ? `<image href="${img1}" x="${half}" y="0" width="${half}" height="${half}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    ${img2 ? `<image href="${img2}" x="0" y="${half}" width="${half}" height="${half}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    ${img3 ? `<image href="${img3}" x="${half}" y="${half}" width="${half}" height="${half}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    <line x1="${half}" y1="0" x2="${half}" y2="${S}" stroke="#0a0a0a" stroke-width="3"/>
+    <line x1="0" y1="${half}" x2="${S}" y2="${half}" stroke="#0a0a0a" stroke-width="3"/>
+    <rect x="0" y="${S * 0.45}" width="${S}" height="${S * 0.55}" fill="url(#overlay)"/>
+    <rect x="36" y="42" width="4.5" height="15" fill="#ffffff" opacity="0.9"/>
+    <rect x="44.5" y="36" width="4.5" height="23" fill="#ffffff" opacity="0.9"/>
+    <rect x="53" y="39" width="4.5" height="18" fill="#ffffff" opacity="0.9"/>
+    <text x="68" y="53" fill="#ffffff" opacity="0.9" font-family="'SpotifyMixUI', 'Circular', sans-serif" font-weight="700" font-size="16" letter-spacing="0.5">SPOTIFREE MIX</text>
+    <text x="36" y="${S - 46}" fill="#ffffff" font-family="'SpotifyMixUITitle', 'Circular', sans-serif" font-weight="900" font-size="44" letter-spacing="-0.5">${cleanTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function makeGeometricCoverSvg(title: string, color: string): string {
+  const S = 600;
+  const cleanColor = color || '#1ed760';
+  const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <defs>
+      <linearGradient id="geomBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="${cleanColor}"/>
+        <stop offset="60%" stop-color="#141414"/>
+        <stop offset="100%" stop-color="#0a0a0a"/>
+      </linearGradient>
+    </defs>
+    <rect width="${S}" height="${S}" fill="url(#geomBg)"/>
+    <circle cx="${S * 0.75}" cy="${S * 0.28}" r="${S * 0.38}" fill="none" stroke="${cleanColor}" stroke-width="3" opacity="0.25"/>
+    <circle cx="${S * 0.75}" cy="${S * 0.28}" r="${S * 0.26}" fill="none" stroke="${cleanColor}" stroke-width="2.5" opacity="0.18"/>
+    <rect x="36" y="42" width="4.5" height="15" fill="#ffffff" opacity="0.9"/>
+    <rect x="44.5" y="36" width="4.5" height="23" fill="#ffffff" opacity="0.9"/>
+    <rect x="53" y="39" width="4.5" height="18" fill="#ffffff" opacity="0.9"/>
+    <text x="68" y="53" fill="#ffffff" opacity="0.9" font-family="'SpotifyMixUI', 'Circular', sans-serif" font-weight="700" font-size="16" letter-spacing="0.5">SPOTIFREE MIX</text>
+    <text x="36" y="${S - 46}" fill="#ffffff" font-family="'SpotifyMixUITitle', 'Circular', sans-serif" font-weight="900" font-size="44" letter-spacing="-0.5">${cleanTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export type CoverStyle = 'banner' | 'badge' | 'collage' | 'geometric' | 'artist' | 'single';
+
+async function makeCover(title: string, style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
+  const normStyle: 'banner' | 'badge' | 'collage' | 'geometric' =
+    style === 'artist' ? 'badge' : style === 'single' ? 'banner' : style;
+
+  const hue = hash(title) % 360;
+  const defaultColor = `hsl(${hue}, 68%, 38%)`;
+  let baseColor = accent || defaultColor;
+
+  if (typeof document === 'undefined') {
+    if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
+    if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
+    if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
+    return makeGeometricCoverSvg(title, baseColor);
+  }
+
   try {
-    const S = 320;
+    const S = 480;
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const ctx = c.getContext('2d');
-    if (!ctx) return null;
+    if (!ctx) {
+      if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
+      if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
+      if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
+      return makeGeometricCoverSvg(title, baseColor);
+    }
 
-    let baseColor = accent;
-    if (!baseColor && images.length > 0 && images[0]) {
+    if (!accent && images.length > 0 && images[0]) {
       try {
         const loaded = await loadImg(images[0]);
         if (loaded) baseColor = avgColor(loaded);
       } catch {}
     }
 
-    // Clean, authentic Spotify Mix gradient cover: NO murky semi-transparent photos underneath!
-    const hue = hash(title) % 360;
-    if (!baseColor) {
-      baseColor = `hsl(${hue}, 68%, 38%)`;
+    // 1. STYLE: BANNER (Rectángulo inferior con nombre y foto de una canción de la playlist)
+    if (normStyle === 'banner') {
+      const bannerH = Math.round(S * 0.28);
+      const photoH = S - bannerH;
+      let imgLoaded: HTMLImageElement | null = null;
+      if (images.length > 0 && images[0]) {
+        try { imgLoaded = await loadImg(images[0]); } catch {}
+      }
+
+      if (imgLoaded) {
+        drawImageAspectCover(ctx, imgLoaded, 0, 0, S, photoH);
+        const shadow = ctx.createLinearGradient(0, photoH - 30, 0, photoH);
+        shadow.addColorStop(0, 'rgba(0,0,0,0)');
+        shadow.addColorStop(1, 'rgba(0,0,0,0.65)');
+        ctx.fillStyle = shadow;
+        ctx.fillRect(0, photoH - 30, S, 30);
+      } else {
+        const g = ctx.createLinearGradient(0, 0, S, photoH);
+        g.addColorStop(0, baseColor);
+        g.addColorStop(1, '#121212');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, S, photoH);
+        ctx.beginPath();
+        ctx.arc(S * 0.5, photoH * 0.5, photoH * 0.35, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Banner background
+      ctx.fillStyle = baseColor;
+      ctx.fillRect(0, photoH, S, bannerH);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fillRect(0, photoH, S, 2);
+
+      // Top branding: 3 sound bars + SPOTIFREE MIX
+      const by = photoH + 24;
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(28, by + 3, 3.5, 11);
+      ctx.fillRect(34.5, by, 3.5, 17);
+      ctx.fillRect(41, by + 2, 3.5, 13);
+      ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
+      ctx.fillText('SPOTIFREE MIX', 52, by + 13);
+      ctx.restore();
+
+      // Title
+      ctx.save();
+      ctx.font = '900 32px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.6)';
+      ctx.shadowBlur = 8;
+      const lines = wrapTitle(ctx, title, S - 56);
+      lines.forEach((l, i) => ctx.fillText(l, 28, by + 56 + i * 36));
+      ctx.restore();
+
+      return c.toDataURL('image/jpeg', 0.88);
     }
+
+    // 2. STYLE: BADGE (Diseño con foto circular como Rock Mix / Pop Mix de la Imagen 3)
+    if (normStyle === 'badge') {
+      const g = ctx.createLinearGradient(0, 0, S, S);
+      g.addColorStop(0, baseColor);
+      g.addColorStop(0.55, '#141414');
+      g.addColorStop(1, '#0a0a0a');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+
+      const cx = S * 0.5;
+      const cy = S * 0.41;
+      const r = S * 0.24;
+
+      // Vinyl groove rings
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.45, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(baseColor, 0.32);
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.85, 0, Math.PI * 2);
+      ctx.strokeStyle = hexToRgba(baseColor, 0.16);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.restore();
+
+      // Circular image cutout
+      let imgLoaded: HTMLImageElement | null = null;
+      if (images.length > 0 && images[0]) {
+        try { imgLoaded = await loadImg(images[0]); } catch {}
+      }
+
+      if (imgLoaded) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        drawImageAspectCover(ctx, imgLoaded, cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
+
+        ctx.beginPath();
+        ctx.arc(cx, cy, r + 1, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      // Top branding
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(28, 36, 3.5, 11);
+      ctx.fillRect(34.5, 33, 3.5, 17);
+      ctx.fillRect(41, 35, 3.5, 13);
+      ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
+      ctx.fillText('SPOTIFREE MIX', 52, 46);
+      ctx.restore();
+
+      // Bold title at bottom
+      ctx.save();
+      ctx.font = '900 34px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.65)';
+      ctx.shadowBlur = 10;
+      const lines = wrapTitle(ctx, title, S - 56);
+      lines.forEach((l, i) => ctx.fillText(l, 28, S - 34 - (lines.length - 1 - i) * 38));
+      ctx.restore();
+
+      return c.toDataURL('image/jpeg', 0.88);
+    }
+
+    // 3. STYLE: COLLAGE (4 fotos de canciones de la playlist en grid 2x2)
+    if (normStyle === 'collage') {
+      const half = S / 2;
+      const loadedImgs = await Promise.all(images.slice(0, 4).map((u) => loadImg(u).catch(() => null)));
+
+      const positions = [
+        { dx: 0, dy: 0 },
+        { dx: half, dy: 0 },
+        { dx: 0, dy: half },
+        { dx: half, dy: half },
+      ];
+
+      positions.forEach((p, idx) => {
+        const limg = loadedImgs[idx];
+        if (limg) {
+          drawImageAspectCover(ctx, limg, p.dx, p.dy, half, half);
+        } else {
+          ctx.fillStyle = idx === 0 ? baseColor : idx === 1 ? '#181818' : idx === 2 ? '#222222' : '#141414';
+          ctx.fillRect(p.dx, p.dy, half, half);
+        }
+      });
+
+      // Grid dividers
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(half - 1.5, 0, 3, S);
+      ctx.fillRect(0, half - 1.5, S, 3);
+
+      // Gradient overlay at bottom for text readability
+      const overlay = ctx.createLinearGradient(0, S * 0.45, 0, S);
+      overlay.addColorStop(0, 'rgba(0,0,0,0)');
+      overlay.addColorStop(0.65, 'rgba(0,0,0,0.7)');
+      overlay.addColorStop(1, 'rgba(0,0,0,0.96)');
+      ctx.fillStyle = overlay;
+      ctx.fillRect(0, S * 0.45, S, S * 0.55);
+
+      // Top branding
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fillRect(28, 36, 3.5, 11);
+      ctx.fillRect(34.5, 33, 3.5, 17);
+      ctx.fillRect(41, 35, 3.5, 13);
+      ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
+      ctx.fillText('SPOTIFREE MIX', 52, 46);
+      ctx.restore();
+
+      // Title
+      ctx.save();
+      ctx.font = '900 32px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.shadowColor = 'rgba(0,0,0,0.7)';
+      ctx.shadowBlur = 10;
+      const lines = wrapTitle(ctx, title, S - 56);
+      lines.forEach((l, i) => ctx.fillText(l, 28, S - 32 - (lines.length - 1 - i) * 36));
+      ctx.restore();
+
+      return c.toDataURL('image/jpeg', 0.88);
+    }
+
+    // 4. STYLE: GEOMETRIC (Diseño gráfico con gradientes y ondas)
     const g = ctx.createLinearGradient(0, 0, S, S);
     g.addColorStop(0, baseColor);
     g.addColorStop(0.65, '#161616');
@@ -533,7 +847,6 @@ async function makeCover(title: string, _style: CoverStyle, images: string[], ac
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, S, S);
 
-    // Spotify Mix subtle geometric light accent
     ctx.save();
     ctx.beginPath();
     ctx.arc(S * 0.85, S * 0.18, S * 0.45, 0, Math.PI * 2);
@@ -541,27 +854,29 @@ async function makeCover(title: string, _style: CoverStyle, images: string[], ac
     ctx.fill();
     ctx.restore();
 
-    // Top-left subtle branding header
     ctx.save();
     ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-    ctx.fillRect(22, 22, 2.5, 9);
-    ctx.fillRect(26.5, 19, 2.5, 13);
-    ctx.fillRect(31, 21, 2.5, 10);
-    ctx.font = '700 10px "SpotifyMixUI", system-ui, sans-serif';
-    ctx.fillText('SPOTIFREE MIX', 40, 29);
+    ctx.fillRect(28, 36, 3.5, 11);
+    ctx.fillRect(34.5, 33, 3.5, 17);
+    ctx.fillRect(41, 35, 3.5, 13);
+    ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
+    ctx.fillText('SPOTIFREE MIX', 52, 46);
     ctx.restore();
 
-    // Bold Spotify typography at bottom
-    ctx.font = '900 28px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
-    const lines = wrapTitle(ctx, title, S - 44);
+    ctx.font = '900 34px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+    const lines = wrapTitle(ctx, title, S - 56);
     ctx.fillStyle = '#ffffff';
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
     ctx.shadowBlur = 10;
-    lines.forEach((l, i) => ctx.fillText(l, 22, S - 26 - (lines.length - 1 - i) * 32));
+    lines.forEach((l, i) => ctx.fillText(l, 28, S - 36 - (lines.length - 1 - i) * 38));
     ctx.shadowBlur = 0;
-    return c.toDataURL('image/jpeg', 0.85);
+
+    return c.toDataURL('image/jpeg', 0.88);
   } catch {
-    return null; // a cross-origin image without CORS: the plain image is used instead
+    if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
+    if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
+    if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
+    return makeGeometricCoverSvg(title, baseColor);
   }
 }
 
@@ -1839,8 +2154,11 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     else if (groups.length < 6) groups.push([a.name]);
   }
   const out: SpotifreeMix[] = [];
-  const styles: CoverStyle[] = ['artist', 'collage', 'single'];
-  const pickStyle = (salt: string): CoverStyle => styles[hash(`${salt}:${day}`) % styles.length];
+  // Authentic Spotify Mix visual variety:
+  // 1. Banner (real song photo + bottom rectangular bar)
+  // 2. Badge (circular song/artist photo with vinyl rings)
+  // 3. Collage (4 song photos in 2x2 grid)
+  const dailyStyles: CoverStyle[] = ['banner', 'badge', 'collage'];
 
   for (let i = 0; i < groups.length; i++) {
     const grp = groups[i];
@@ -1853,8 +2171,10 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (items.length < 5) continue;
     const relNames = [...new Set(near.map((t) => firstArtist(t)))].slice(0, 2);
     const desc = `${[...grp, ...relNames].slice(0, 3).join(', ')} y más`;
-    const style = pickStyle(`daily${i}`);
-    const imgs = style === 'artist' ? [pictureOf(shuffle(grp, r)[0])] : shuffle(items.map(coverOf).filter(Boolean), r);
+    const style: CoverStyle = dailyStyles[i % dailyStyles.length];
+    const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
+    const artistPic = pictureOf(shuffle(grp, r)[0]);
+    const imgs = style === 'badge' && artistPic ? [artistPic, ...songCovers] : songCovers;
     // Numbered after Spotify's own daily mixes (if the user has 1-6, ours are 7, 8…)
     dailyNumber += 1;
     const title = `Mix diario ${dailyNumber}`;
@@ -1898,7 +2218,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (items.length >= 8) {
       const imgs = items.map(coverOf).filter(Boolean);
       const name = nameFor('En repeat', 'Lo que más escuchas');
-      const cover = (await makeCover(name, pickStyle('repeat'), pickStyle('repeat') === 'artist' ? [pictureOf(firstArtist(items[0]))] : imgs, '#1f5f4a')) || imgs[0] || '';
+      const cover = (await makeCover(name, 'banner', imgs, '#1f5f4a')) || imgs[0] || '';
       out.push(mix('sf-on-repeat', 'repeat', name, 'Las canciones que más te gustan ahora mismo.', items, cover, userName));
     }
   }
@@ -1933,9 +2253,11 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const title = `Mix de ${d.artist?.name || a.name}`;
     // Spotify already gives this user a "Mix de X": that one stays, ours would only repeat it
     if (taken.has(norm(title))) continue;
-    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 3 === 0 ? 'collage' : 'artist';
-    const imgs = style === 'artist' ? [pictureOf(a.name)] : shuffle(items.map(coverOf).filter(Boolean), r);
-    const cover = (await makeCover(title, style, imgs)) || imgs[0] || '';
+    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 2 === 0 ? 'banner' : 'badge';
+    const artistPic = pictureOf(a.name);
+    const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
+    const imgs = [artistPic, ...songCovers].filter(Boolean);
+    const cover = (await makeCover(title, style, imgs)) || imgs[0] || artistPic || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${d.artist?.name || a.name} y artistas parecidos`, items, cover, userName));
   }
 

@@ -29,6 +29,7 @@ import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
 import { useAIDJStore } from '../../services/aiDJService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import type { Playlist } from '../../types/spotify';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import {
@@ -547,19 +548,35 @@ export const MobileLayout: React.FC = () => {
   }, [playlists, dynamicShelves, user, featuredMessage, homeFilter, sfMixes, sfArtists, shortcuts, autoCoverVersion]);
 
   const handleSelectPlaylistById = (id: string, customName?: string, customImage?: string) => {
-    if (!isAuthenticated) {
-      openLoginModal();
-      return;
-    }
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
     if (isAIDJPlaylist({ id: cleanId, name: customName })) {
+      aiDJVoiceService.unlockAudioForMobile();
       setMobileTab('dj');
+      const dj = useAIDJStore.getState();
+      if (!dj.isDJModeActive || dj.djTracks.length === 0) {
+        void dj.startDJSession(true, { speakFirst: true });
+      }
       return;
     }
     if (cleanId === LOCAL_FILES_PLAYLIST_ID) {
       setMobileTab('local');
       return;
     }
+
+    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === id);
+    if (sfMix) {
+      const color = resolveVibrantColor(cleanId, customName || cleanId);
+      setLastVibrantColor(color);
+      setSelectedPlaylist(sfMix);
+      setMobileTab('playlist');
+      return;
+    }
+
+    if (!isAuthenticated) {
+      openLoginModal();
+      return;
+    }
+
     const color = resolveVibrantColor(cleanId, customName || cleanId);
     setLastVibrantColor(color);
 
@@ -572,13 +589,6 @@ export const MobileLayout: React.FC = () => {
     const cached = useSpotifyDataStore.getState().playlistDetailsCache[cleanId];
     if (cached) {
       setSelectedPlaylist(cached);
-      setMobileTab('playlist');
-      return;
-    }
-
-    const sfMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === cleanId || m.id === id);
-    if (sfMix) {
-      setSelectedPlaylist(sfMix);
       setMobileTab('playlist');
       return;
     }
@@ -705,8 +715,7 @@ export const MobileLayout: React.FC = () => {
         )}
 
         {/* TAB 1: HOME */}
-        {mobileTab === 'home' && !seeAllShelf && (
-          <div className="min-h-full transition-colors duration-500 spf-page-enter relative bg-[#121212]">
+        <div className={mobileTab === 'home' && !seeAllShelf ? 'min-h-full transition-colors duration-500 spf-tab-fade relative bg-[#121212]' : 'hidden'}>
             {/* Ambient Parallax Gradient Background (Subtle dark tint matching Spotify Real Photo 1) */}
             <div
               className="pointer-events-none absolute inset-x-0 top-0 h-[300px] transition-colors duration-700 z-0 will-change-transform"
@@ -833,6 +842,7 @@ export const MobileLayout: React.FC = () => {
                         state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                         voiceLevel={voiceLevel}
                         themeColor={djThemeColor}
+                        forceWaves={true}
                       />
                     </div>
 
@@ -931,18 +941,14 @@ export const MobileLayout: React.FC = () => {
             )}
             </div>
           </div>
-        )}
 
         {/* TAB 2: SEARCH */}
-        {mobileTab === 'search' && (
-          <div className="px-4 pt-2 pb-28 spf-page-enter">
-            <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
-          </div>
-        )}
+        <div className={mobileTab === 'search' ? 'px-4 pt-2 pb-28 spf-tab-fade' : 'hidden'}>
+          <MobileSearchView onSelectPlaylistById={handleSelectPlaylistById} />
+        </div>
 
         {/* TAB 3: LIBRARY */}
-        {mobileTab === 'library' && (
-          <div className="px-4 pt-2.5 pb-28 space-y-2.5 spf-page-enter">
+        <div className={mobileTab === 'library' ? 'px-4 pt-2.5 pb-28 space-y-2.5 spf-tab-fade' : 'hidden'}>
             {/* Header */}
             <div className="flex items-center justify-between pt-1 gap-2 flex-nowrap">
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
@@ -1515,8 +1521,7 @@ export const MobileLayout: React.FC = () => {
                 </div>
               );
             })()}
-          </div>
-        )}
+        </div>
 
         {/* TAB 4: PLAYLIST VIEW */}
         {mobileTab === 'playlist' && selectedPlaylist && (
