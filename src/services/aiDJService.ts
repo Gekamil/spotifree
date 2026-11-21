@@ -844,7 +844,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       currentMessage: '',
       displayedTranscript: '',
     });
-    prefetchQuickVibeVoices(cleanName);
+    // Defer prefetching quick vibe voices to leave 100% network bandwidth and audio channels for the initial track & greeting
+    setTimeout(() => {
+      prefetchQuickVibeVoices(cleanName);
+    }, 4000);
 
     // 1. Build the set in blocks from the user's real listening (fresh order every time)
     let tracks: Track[] = [];

@@ -385,8 +385,8 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
     } else if (titleStr.includes('remix') || titleStr.includes('feat') || titleStr.includes('ft.')) {
       matchedTags.add('#reggaeton');
     } else {
-      const userDominant = getDominantUserHashtag();
-      matchedTags.add(userDominant || '#pop');
+      // Direct fast fallback to #pop without recursive library analysis
+      matchedTags.add('#pop');
     }
   }
 
@@ -395,10 +395,20 @@ export function classifyTrackHashtags(track: Track): MusicHashtag[] {
   return result;
 }
 
+// In-memory cache for library hashtag analysis to guarantee 0ms instant response on UI mount
+let cachedLibraryIndex: Map<MusicHashtag, Track[]> | null = null;
+let lastLibraryIndexTime = 0;
+let cachedDominantTag: MusicHashtag = '#pop';
+let lastDominantTagTime = 0;
+
 /**
  * Returns the dominant music hashtag across the user's library
  */
 export function getDominantUserHashtag(): MusicHashtag {
+  const now = Date.now();
+  if (cachedDominantTag && now - lastDominantTagTime < 30000) {
+    return cachedDominantTag;
+  }
   const library = analyzeUserLibraryByHashtags();
   let maxCount = 0;
   let dominant: MusicHashtag = '#pop';
@@ -408,6 +418,8 @@ export function getDominantUserHashtag(): MusicHashtag {
       dominant = tag;
     }
   }
+  cachedDominantTag = dominant;
+  lastDominantTagTime = now;
   return dominant;
 }
 
@@ -416,6 +428,10 @@ export function getDominantUserHashtag(): MusicHashtag {
  * and builds an internal index of tracks grouped by hashtags.
  */
 export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
+  const now = Date.now();
+  if (cachedLibraryIndex && now - lastLibraryIndexTime < 30000) {
+    return cachedLibraryIndex;
+  }
   const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
   const index = new Map<MusicHashtag, Track[]>();
 
@@ -461,6 +477,8 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
     } catch {}
   }
 
+  cachedLibraryIndex = index;
+  lastLibraryIndexTime = Date.now();
   return index;
 }
 

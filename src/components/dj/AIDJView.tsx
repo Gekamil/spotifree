@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
@@ -74,12 +74,16 @@ const DEFAULT_QUICK_CHIPS = [
 ];
 
 export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, onOpenPlayer }) => {
-  const vibeChips = useMemo(() => {
-    try {
-      return getUserDynamicVibeChips();
-    } catch {
-      return DEFAULT_QUICK_CHIPS;
-    }
+  // Mount instantaneously with default chips, then load personalized chips asynchronously
+  const [vibeChips, setVibeChips] = useState<string[]>(DEFAULT_QUICK_CHIPS);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const dynamic = getUserDynamicVibeChips();
+        if (dynamic && dynamic.length > 0) setVibeChips(dynamic);
+      } catch {}
+    }, 80);
+    return () => clearTimeout(t);
   }, []);
   const {
     visualizerState,
@@ -172,9 +176,12 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     setQueueDragY(0);
   };
 
-  // Pre-cache all quick vibe voices for instant playback
+  // Defer pre-caching quick vibe voices to leave 100% bandwidth for track playback and greeting voice
   useEffect(() => {
-    prefetchQuickVibeVoices();
+    const timer = setTimeout(() => {
+      prefetchQuickVibeVoices();
+    }, 3500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Smooth bottom sheet glide transition for the queue

@@ -232,6 +232,21 @@ async function handleCanvas(req, res, url) {
   return res.status(200).json({ canvasUrl: null });
 }
 
+function isInvalidDzPic(u) {
+  if (!u || typeof u !== 'string') return true;
+  const l = u.toLowerCase();
+  return (
+    l.includes('//500x500') ||
+    l.includes('//1000x1000') ||
+    l.includes('//250x250') ||
+    l.includes('//56x56') ||
+    l.includes('/artist//') ||
+    l.includes('/cover//') ||
+    l.includes('d41d8cd98f00b204e9800998ecf8427e') ||
+    (l.includes('api.deezer.com') && l.includes('/image'))
+  );
+}
+
 async function handleArtistImage(req, res) {
   const { name = '', artist = '' } = req.query || {};
   const targetArtist = cleanArtist(name || artist);
@@ -245,7 +260,8 @@ async function handleArtistImage(req, res) {
     if (dRes.ok) {
       const data = await dRes.json();
       const first = data.data?.[0];
-      const picture = first?.picture_big || first?.picture_medium || first?.picture_small;
+      const rawPicture = first?.picture_big || first?.picture_medium || first?.picture_small;
+      const picture = !isInvalidDzPic(rawPicture) ? rawPicture : null;
       if (picture) {
         res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=86400');
         return res.status(200).json({ picture, name: first.name || targetArtist });
@@ -517,16 +533,20 @@ async function handleDiscover(req, res) {
       .filter((a, i, list) => list.findIndex((b) => dzNorm(b.title) === dzNorm(a.title)) === i)
       .slice(0, 4);
     const freshTracks = await Promise.all(fresh.map((a) => dz(`/album/${a.id}/tracks?limit=6`).catch(() => ({ data: [] }))));
+    const artistPic = artist.picture_xl || artist.picture_big || null;
     const out = {
-      artist: { id: artist.id, name: artist.name, picture: artist.picture_xl || artist.picture_big || null, fans: artist.nb_fan || 0 },
+      artist: { id: artist.id, name: artist.name, picture: !isInvalidDzPic(artistPic) ? artistPic : null, fans: artist.nb_fan || 0 },
       top: (top.data || []).map((t) => dzTrack(t, artist.name)).filter(Boolean),
-      related: rel.map((r, i) => ({
-        id: r.id ? String(r.id) : undefined,
-        name: r.name,
-        picture: r.picture_xl || r.picture_big || null,
-        fans: r.nb_fan || 0,
-        top: (relTops[i].data || []).map((t) => dzTrack(t, r.name)).filter(Boolean),
-      })),
+      related: rel.map((r, i) => {
+        const rPic = r.picture_xl || r.picture_big || null;
+        return {
+          id: r.id ? String(r.id) : undefined,
+          name: r.name,
+          picture: !isInvalidDzPic(rPic) ? rPic : null,
+          fans: r.nb_fan || 0,
+          top: (relTops[i].data || []).map((t) => dzTrack(t, r.name)).filter(Boolean),
+        };
+      }),
       recent: fresh.map((a, i) => ({
         title: a.title,
         date: a.release_date,

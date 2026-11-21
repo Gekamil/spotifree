@@ -203,8 +203,10 @@ const SEGMENT_TITLES: Record<DJSegmentKind, string> = {
 
 async function searchArtistTracks(artist: string, limit = 8): Promise<Track[]> {
   try {
-    const res = await searchSpotify(`artist:"${artist}"`);
-    const items: Track[] = res?.tracks?.items || [];
+    const searchPromise = searchSpotify(`artist:"${artist}"`);
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 600));
+    const res = await Promise.race([searchPromise, timeoutPromise]);
+    const items: Track[] = (res as any)?.tracks?.items || [];
     return filterMusicTracksOnly(items).filter((t) => (t.artists || []).some((a) => (a.name || '').toLowerCase() === artist.toLowerCase())).slice(0, limit);
   } catch {
     return [];

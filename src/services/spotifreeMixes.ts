@@ -35,7 +35,7 @@ export const ARTIST_PORTRAITS: Record<string, string> = {
   'sofia ellar': 'https://cdn-images.dzcdn.net/images/artist/4ffeb758d1affa379d20210fabad2ac5/500x500-000000-80-0-0.jpg',
   'rayden': 'https://cdn-images.dzcdn.net/images/artist/42a89bd063f83da2d205897a0567928f/500x500-000000-80-0-0.jpg',
   'paulo londra': 'https://cdn-images.dzcdn.net/images/artist/26fbc79599d2ed0f3629fa74df3e489a/500x500-000000-80-0-0.jpg',
-  'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg',
+  'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg',
   'quevedo': 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg',
   'feid': 'https://cdn-images.dzcdn.net/images/artist/e629c93e03b3c225d8d52a42bae71537/500x500-000000-80-0-0.jpg',
   'rauw alejandro': 'https://cdn-images.dzcdn.net/images/artist/6f0f2b885570d8d43b598c29bbe7433f/500x500-000000-80-0-0.jpg',
@@ -112,7 +112,7 @@ export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
   trend_spain: 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg', // Quevedo (Verified 200 OK)
   trend_global: 'https://cdn-images.dzcdn.net/images/artist/581693b4724a7fcfa754455101e13a44/500x500-000000-80-0-0.jpg', // The Weeknd (Verified 200 OK)
   trend_virales: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80', // Viral TikTok Club Neon
-  trend_urbano: 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg', // Bad Bunny (Verified 200 OK)
+  trend_urbano: 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg', // Bad Bunny (Verified 200 OK)
   trend_pop: 'https://cdn-images.dzcdn.net/images/artist/877872aaf75694f11d53c318700ab2b5/500x500-000000-80-0-0.jpg', // Dua Lipa (Verified 200 OK)
   trend_electronica: 'https://cdn-images.dzcdn.net/images/artist/2d527fa03e106ed82a28f161694278d3/500x500-000000-80-0-0.jpg', // David Guetta (Verified 200 OK)
   trend_latino: 'https://cdn-images.dzcdn.net/images/artist/5b0aab23f8d2856951a92f3a9faf70e3/500x500-000000-80-0-0.jpg', // Karol G (Verified 200 OK)
@@ -134,7 +134,7 @@ export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
   // Genres
   rock: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80', // Electric Guitar Rock
   pop: 'https://cdn-images.dzcdn.net/images/artist/877872aaf75694f11d53c318700ab2b5/500x500-000000-80-0-0.jpg', // Dua Lipa (Verified 200 OK)
-  urbano: 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg', // Bad Bunny (Verified 200 OK)
+  urbano: 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg', // Bad Bunny (Verified 200 OK)
   electronica: 'https://cdn-images.dzcdn.net/images/artist/2d527fa03e106ed82a28f161694278d3/500x500-000000-80-0-0.jpg', // David Guetta (Verified 200 OK)
   edm: 'https://cdn-images.dzcdn.net/images/artist/2d527fa03e106ed82a28f161694278d3/500x500-000000-80-0-0.jpg',
   indie: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80', // Indie Acoustic
@@ -158,8 +158,14 @@ export function isPlaceholderOrAvatar(url?: string): boolean {
     lower.includes('dzcdn.net/images/cover//') ||
     lower.includes('images/artist//') ||
     lower.includes('images/cover//') ||
+    lower.includes('/artist//') ||
+    lower.includes('/cover//') ||
     lower.includes('//500x500') ||
     lower.includes('//1000x1000') ||
+    lower.includes('//250x250') ||
+    lower.includes('//56x56') ||
+    lower.includes('//120x120') ||
+    (lower.includes('api.deezer.com') && lower.includes('/image')) ||
     lower.includes('avatar') ||
     lower.includes('default_user')
   );

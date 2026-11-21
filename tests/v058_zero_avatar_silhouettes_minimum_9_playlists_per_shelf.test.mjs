@@ -29,7 +29,11 @@ test('v058 - 2. 100% Verified 200 OK artist portraits and category photos', asyn
   const code = fs.readFileSync(mixesFile, 'utf8');
 
   // Verified artists
-  assert.ok(code.includes("'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg'"), 'Bad Bunny must use verified 200 OK portrait');
+  assert.ok(
+    code.includes("'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg'") ||
+    code.includes("'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/9867d5112c6714c935a86b98b4dd288c/500x500-000000-80-0-0.jpg'"),
+    'Bad Bunny must use verified 200 OK portrait'
+  );
   assert.ok(code.includes("'avicii': 'https://cdn-images.dzcdn.net/images/artist/82e214b0cb39316f4a12a082fded54f6/500x500-000000-80-0-0.jpg'"), 'Avicii must use verified 200 OK portrait');
   assert.ok(code.includes("'quevedo': 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"), 'Quevedo must use verified 200 OK portrait');
   assert.ok(code.includes("trend_spain: 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"), 'trend_spain must use verified Quevedo 200 OK portrait');

@@ -630,6 +630,41 @@ export const MobileLayout: React.FC = () => {
     setMobileTab('playlist');
   };
 
+  const handleOpenDJPlaylist = () => {
+    aiDJVoiceService.unlockAudioForMobile();
+    lastDJCardTapRef.current = Date.now();
+    handleSelectPlaylistById('spotify-dj');
+  };
+
+  const handleDJTouchStart = (e: React.TouchEvent) => {
+    aiDJVoiceService.unlockAudioForMobile();
+    if (e.touches && e.touches[0]) {
+      djCardTouchRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        time: Date.now(),
+      };
+    }
+  };
+
+  const handleDJTouchEnd = (e: React.TouchEvent) => {
+    if (djCardTouchRef.current && e.changedTouches && e.changedTouches[0]) {
+      const dx = Math.abs(e.changedTouches[0].clientX - djCardTouchRef.current.x);
+      const dy = Math.abs(e.changedTouches[0].clientY - djCardTouchRef.current.y);
+      const dt = Date.now() - djCardTouchRef.current.time;
+      if (dx < 16 && dy < 16 && dt < 600) {
+        handleOpenDJPlaylist();
+      }
+    }
+    djCardTouchRef.current = null;
+  };
+
+  const handleDJClick = () => {
+    if (Date.now() - lastDJCardTapRef.current > 400) {
+      handleOpenDJPlaylist();
+    }
+  };
+
   const handleAddLibraryItems = (items: LibraryCandidateItem[]) => {
     const currentPlaylists = useSpotifyDataStore.getState().playlists;
     let savedList: string[] = [];
@@ -833,37 +868,12 @@ export const MobileLayout: React.FC = () => {
                   <div
                     role="button"
                     tabIndex={0}
-                    onTouchStart={(e) => {
-                      aiDJVoiceService.unlockAudioForMobile();
-                      if (e.touches && e.touches[0]) {
-                        djCardTouchRef.current = {
-                          x: e.touches[0].clientX,
-                          y: e.touches[0].clientY,
-                          time: Date.now(),
-                        };
-                      }
-                    }}
-                    onTouchEnd={(e) => {
-                      if (djCardTouchRef.current && e.changedTouches && e.changedTouches[0]) {
-                        const dx = Math.abs(e.changedTouches[0].clientX - djCardTouchRef.current.x);
-                        const dy = Math.abs(e.changedTouches[0].clientY - djCardTouchRef.current.y);
-                        const dt = Date.now() - djCardTouchRef.current.time;
-                        if (dx < 16 && dy < 16 && dt < 600) {
-                          lastDJCardTapRef.current = Date.now();
-                          handleSelectPlaylistById('spotify-dj');
-                        }
-                      }
-                      djCardTouchRef.current = null;
-                    }}
-                    onClick={() => {
-                      if (Date.now() - lastDJCardTapRef.current > 400) {
-                        lastDJCardTapRef.current = Date.now();
-                        handleSelectPlaylistById('spotify-dj');
-                      }
-                    }}
+                    onTouchStart={handleDJTouchStart}
+                    onTouchEnd={handleDJTouchEnd}
+                    onClick={handleDJClick}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        handleSelectPlaylistById('spotify-dj');
+                        handleOpenDJPlaylist();
                       }
                     }}
                     className="relative w-full rounded-2xl p-4 px-4.5 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px] select-none"
@@ -1274,7 +1284,15 @@ export const MobileLayout: React.FC = () => {
                     {/* Spotify Official DJ Playlist Card */}
                     {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
                       <div
-                        onClick={() => setMobileTab('dj')}
+                        role="button"
+                        tabIndex={0}
+                        onTouchStart={handleDJTouchStart}
+                        onTouchEnd={handleDJTouchEnd}
+                        onClick={handleDJClick}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') handleOpenDJPlaylist();
+                        }}
+                        style={{ touchAction: 'manipulation' }}
                         className="p-0 cursor-pointer flex flex-col active:scale-[0.98] transition-all group select-none"
                       >
                         <img
@@ -1436,7 +1454,15 @@ export const MobileLayout: React.FC = () => {
                   {/* Spotify Official DJ Playlist Card */}
                   {(libraryFilter === 'all' || libraryFilter === 'playlists') && (
                     <div
-                      onClick={() => setMobileTab('dj')}
+                      role="button"
+                      tabIndex={0}
+                      onTouchStart={handleDJTouchStart}
+                      onTouchEnd={handleDJTouchEnd}
+                      onClick={handleDJClick}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') handleOpenDJPlaylist();
+                      }}
+                      style={{ touchAction: 'manipulation' }}
                       className={`flex items-center gap-3 rounded-md hover:bg-white/5 active:bg-white/10 cursor-pointer transition-colors ${
                         isCompact ? 'py-0.5 px-1' : 'py-1 px-1'
                       }`}
