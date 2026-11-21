@@ -36,6 +36,8 @@ export function getUpperRightWeight(theta: number, sigma: number = 0.85): number
 
 /**
  * Procedural displacement for talking orb layers (0 = Core, 1 = Mid, 2 = Outer).
+ * Option 1 Liquid Plasma Wave: smooth harmonic traveling waves around the entire circle,
+ * combined with localized upper-right talking delamination when active/speaking.
  */
 export function calculateOrbLayerDisplacement(
   layerIndex: number,
@@ -47,9 +49,11 @@ export function calculateOrbLayerDisplacement(
   size: number,
   mini: boolean = false
 ): number {
-  // Pure standing breathing waves: NO traveling rotational phase (theta * k - time is removed so it never spins)
-  const wave1 = Math.sin(theta * 2) * Math.cos(mini ? time * 0.7 : time * 0.35) * 0.55;
-  const wave2 = Math.cos(theta * 3) * Math.sin(mini ? time * 0.5 : time * 0.28) * 0.30;
+  // Option 1 Liquid Plasma: two counter-propagating harmonic waves around the entire circle
+  const t1 = mini ? time * 0.9 : time * 0.8;
+  const t2 = mini ? time * 0.6 : time * 0.6;
+  const wave1 = Math.sin(theta * 2 - t1) * 0.65;
+  const wave2 = Math.cos(theta * 3 + t2) * 0.35;
   const baseOffset = (wave1 + wave2) * bulgeBase;
 
   if (splitAmount <= 0.001) {
@@ -157,9 +161,9 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    // Elegant Spotify DJ Halo radius and stroke (leaves ample margin so shadows never clip at canvas edge)
+    // Option 1 Elegant Spotify DJ Halo radius and stroke (thicker luscious neon line)
     const baseRadius = size * (mini ? 0.30 : 0.285);
-    const strokeWidth = Math.max(4.6, size * (mini ? 0.095 : 0.046));
+    const strokeWidth = Math.max(5.2, size * (mini ? 0.11 : 0.052));
     const numPoints = mini ? 70 : 160;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
 
@@ -223,14 +227,14 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         ? Math.max(0.42, voiceLevelRef.current || 0.42)
         : voiceLevelRef.current;
 
-      // Serene, slow, fluid breathing speed (no fast spinning or jerky movement)
+      // Option 1 Serene liquid plasma speed (graceful fluid undulation, never fast spinning)
       const speed = mini
-        ? (isSpeaking ? 0.012 : isPlaying ? 0.008 : 0.005)
+        ? (isSpeaking ? 0.018 : isPlaying ? 0.014 : 0.010)
         : isSpeaking
-        ? 0.009
+        ? 0.022
         : isPlaying
-        ? 0.006
-        : 0.004;
+        ? 0.014
+        : 0.012;
       time += speed;
 
       // Exponential moving average damping for voice reactivity (faster attack when speaking)

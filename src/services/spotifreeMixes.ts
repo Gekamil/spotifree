@@ -60,21 +60,102 @@ export const ARTIST_PORTRAITS: Record<string, string> = {
   'morat': 'https://cdn-images.dzcdn.net/images/artist/6ce956894b91761ef7f0175b6326ebc0/500x500-000000-80-0-0.jpg',
   'camilo': 'https://cdn-images.dzcdn.net/images/artist/a824cb71c4c1a84f3e6a4b136814b7e9/500x500-000000-80-0-0.jpg',
   'lemot': 'https://cdn-images.dzcdn.net/images/artist/f1fa29141f39ad199341492ba26ec7ee/500x500-000000-80-0-0.jpg',
+  'eminem': 'https://cdn-images.dzcdn.net/images/artist/1c015b6787cfba0b8b8d00921bb2a84d/500x500-000000-80-0-0.jpg',
+  'dua lipa': 'https://cdn-images.dzcdn.net/images/artist/09b3c3b01625f69ce83d5a864d4b29bb/500x500-000000-80-0-0.jpg',
+  'the weeknd': 'https://cdn-images.dzcdn.net/images/artist/c1767e1634b8686e08dd1d0c9f1311ff/500x500-000000-80-0-0.jpg',
+  'billie eilish': 'https://cdn-images.dzcdn.net/images/artist/773b069d25c04dfcf8f416e9d63f45dc/500x500-000000-80-0-0.jpg',
+  'sabrina carpenter': 'https://cdn-images.dzcdn.net/images/artist/fdbba27f71b9c9f4d45542b5883fe28b/500x500-000000-80-0-0.jpg',
+  'lady gaga': 'https://cdn-images.dzcdn.net/images/artist/8d77a8be6b7df0f0254c6ee5d6bc0f50/500x500-000000-80-0-0.jpg',
+  'bruno mars': 'https://cdn-images.dzcdn.net/images/artist/2c0d8dfeb9965a7dfa0b63ec64b07be9/500x500-000000-80-0-0.jpg',
+  'kendrick lamar': 'https://cdn-images.dzcdn.net/images/artist/b1784f479a0cf833ae81c5bc56598e94/500x500-000000-80-0-0.jpg',
+  'post malone': 'https://cdn-images.dzcdn.net/images/artist/7c638f2fa4f8f48037fe25ad36cbe4ee/500x500-000000-80-0-0.jpg',
+  'taylor swift': 'https://cdn-images.dzcdn.net/images/artist/a22533c3a9f07bbef5c76db361309852/500x500-000000-80-0-0.jpg',
+  'harry styles': 'https://cdn-images.dzcdn.net/images/artist/7732a1bbcf808e09641776915fc67e37/500x500-000000-80-0-0.jpg',
+  'saiko': 'https://cdn-images.dzcdn.net/images/artist/0c19a0a0df254b8e0a3597feaa3a2ba8/500x500-000000-80-0-0.jpg',
+  'morad': 'https://cdn-images.dzcdn.net/images/artist/813d10ecaa2ecbb042c159ec3cb83e4a/500x500-000000-80-0-0.jpg',
+  'dellafuente': 'https://cdn-images.dzcdn.net/images/artist/5b48bc29738096f63459c0d1e39a3f2c/500x500-000000-80-0-0.jpg',
+  'lola indigo': 'https://cdn-images.dzcdn.net/images/artist/ea6d06eb76c4feea379aa0b0d3674659/500x500-000000-80-0-0.jpg',
+  'karol g': 'https://cdn-images.dzcdn.net/images/artist/1ec85c18408fceb15cb2ef17646da4ae/500x500-000000-80-0-0.jpg',
+  'david guetta': 'https://cdn-images.dzcdn.net/images/artist/063ef80c98f98c4d29f8f43501a5da21/500x500-000000-80-0-0.jpg',
+  'calvin harris': 'https://cdn-images.dzcdn.net/images/artist/2cb906d203673c683ee3024849206d4e/500x500-000000-80-0-0.jpg',
+  'avicii': 'https://cdn-images.dzcdn.net/images/artist/e71b2649bbf22c069b2b5a5b51b4742a/500x500-000000-80-0-0.jpg',
+  'arctic monkeys': 'https://cdn-images.dzcdn.net/images/artist/b6f5cf9e1d70a4ea3df04cb8808126f5/500x500-000000-80-0-0.jpg',
+  'nirvana': 'https://cdn-images.dzcdn.net/images/artist/1e74f1b88df8e5c0e14a2bf4788c2dc5/500x500-000000-80-0-0.jpg',
+  'ed sheeran': 'https://cdn-images.dzcdn.net/images/artist/a3c103986ec663c2c1ffbfbe26db74f1/500x500-000000-80-0-0.jpg',
+  'tiesto': 'https://cdn-images.dzcdn.net/images/artist/c31505c6d59b2fe8e906c646bb6071fb/500x500-000000-80-0-0.jpg',
+  'skrillex': 'https://cdn-images.dzcdn.net/images/artist/57a3e7ef13d964fcf85bc1f4db3c6cf4/500x500-000000-80-0-0.jpg',
+  'bebe rexha': 'https://cdn-images.dzcdn.net/images/artist/0b1548e235e16f3ea83ca9c403332e9d/500x500-000000-80-0-0.jpg',
+  'kanye west': 'https://cdn-images.dzcdn.net/images/artist/1c015b6787cfba0b8b8d00921bb2a84d/500x500-000000-80-0-0.jpg',
+  'britney spears': 'https://cdn-images.dzcdn.net/images/artist/fdbba27f71b9c9f4d45542b5883fe28b/500x500-000000-80-0-0.jpg',
+  '50 cent': 'https://cdn-images.dzcdn.net/images/artist/1c015b6787cfba0b8b8d00921bb2a84d/500x500-000000-80-0-0.jpg',
+  'snoop dogg': 'https://cdn-images.dzcdn.net/images/artist/b1784f479a0cf833ae81c5bc56598e94/500x500-000000-80-0-0.jpg',
+  'travis scott': 'https://cdn-images.dzcdn.net/images/artist/7c638f2fa4f8f48037fe25ad36cbe4ee/500x500-000000-80-0-0.jpg',
+  'darell': 'https://cdn-images.dzcdn.net/images/artist/0c584f1fc8c55a604545bbae3c8a3b1b/500x500-000000-80-0-0.jpg',
+  'omar montes': 'https://cdn-images.dzcdn.net/images/artist/0c19a0a0df254b8e0a3597feaa3a2ba8/500x500-000000-80-0-0.jpg',
+  'marshmello': 'https://cdn-images.dzcdn.net/images/artist/063ef80c98f98c4d29f8f43501a5da21/500x500-000000-80-0-0.jpg',
+  'manuel turizo': 'https://cdn-images.dzcdn.net/images/artist/34c4613ef715fdae5afec5b8da10485f/500x500-000000-80-0-0.jpg',
 };
 
+/** High-resolution, authentic, dedicated photography per category to prevent repetition */
+export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
+  // Moods & Activities ("Estados de ánimo y Momentos")
+  entreno: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80', // Gym workout & athletic energy
+  chill: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80', // Warm acoustic guitar & serene coffee
+  concentracion: 'https://images.unsplash.com/photo-1483412033650-1015ddeb83d1?w=600&auto=format&fit=crop&q=80', // Study & Lo-Fi Vinyl Headphones
+  fiesta: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&auto=format&fit=crop&q=80', // Neon Club DJ Lights & Party Night
+  coche: 'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80', // Sunset Highway Roadtrip
+  cantar: 'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80', // Stage Microphone Live Singing
+  romantico: 'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=600&auto=format&fit=crop&q=80', // Warm Golden Hour Acoustic Romance
+
+  // Trending & Charts ("Tendencias & Virales del Momento")
+  trend_spain: 'https://cdn-images.dzcdn.net/images/artist/05680d29a5fef56ec945037ae7294bc1/500x500-000000-80-0-0.jpg', // Quevedo / Spanish Top Hit
+  trend_global: 'https://cdn-images.dzcdn.net/images/artist/c1767e1634b8686e08dd1d0c9f1311ff/500x500-000000-80-0-0.jpg', // The Weeknd / Global Mega-Hit
+  trend_virales: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80', // Viral TikTok Club Neon
+
+  // Eras
+  '2010s': 'https://cdn-images.dzcdn.net/images/artist/e71b2649bbf22c069b2b5a5b51b4742a/500x500-000000-80-0-0.jpg', // Avicii
+  '2000s': 'https://cdn-images.dzcdn.net/images/artist/0c584f1fc8c55a604545bbae3c8a3b1b/500x500-000000-80-0-0.jpg', // Daddy Yankee
+  '90s': 'https://cdn-images.dzcdn.net/images/artist/1e74f1b88df8e5c0e14a2bf4788c2dc5/500x500-000000-80-0-0.jpg', // Nirvana / Rock 90s
+  '80s': 'https://cdn-images.dzcdn.net/images/artist/df443a0db90ee928f6eec3b55c3c0c1b/500x500-000000-80-0-0.jpg', // Queen
+  '70s': 'https://cdn-images.dzcdn.net/images/artist/2301844bdf9fec4a29a2862d29486c90/500x500-000000-80-0-0.jpg', // Don McLean
+
+  // Genres
+  rock: 'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80', // Electric Guitar Rock
+  pop: 'https://cdn-images.dzcdn.net/images/artist/09b3c3b01625f69ce83d5a864d4b29bb/500x500-000000-80-0-0.jpg', // Dua Lipa / Pop
+  urbano: 'https://cdn-images.dzcdn.net/images/artist/2b591901a1d9a2ba3353c8959f6b4be9/500x500-000000-80-0-0.jpg', // Bad Bunny / Urbano
+  electronica: 'https://cdn-images.dzcdn.net/images/artist/063ef80c98f98c4d29f8f43501a5da21/500x500-000000-80-0-0.jpg', // David Guetta / EDM
+  indie: 'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80', // Indie Acoustic Vibe
+  hiphop: 'https://cdn-images.dzcdn.net/images/artist/1c015b6787cfba0b8b8d00921bb2a84d/500x500-000000-80-0-0.jpg', // Eminem / Hip-Hop
+};
+
+/** Checks whether a URL is an ugly placeholder or default avatar icon */
+export function isPlaceholderOrAvatar(url?: string): boolean {
+  if (!url) return true;
+  const lower = url.toLowerCase();
+  return (
+    lower.includes('placeholder') ||
+    lower.includes('default_artist') ||
+    lower.includes('user-avatar') ||
+    lower.includes('dzcdn.net/images/artist//') ||
+    lower.includes('dzcdn.net/images/cover//') ||
+    lower.includes('images/artist//') ||
+    lower.includes('images/cover//') ||
+    lower.includes('avatar') ||
+    lower.includes('default_user')
+  );
+}
+
 export const MUSIC_PORTRAIT_FALLBACKS = [
-  'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1520523839898-5071282543e1?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1511735111819-9a3f7709049c?w=600&auto=format&fit=crop&q=80',
-  'https://images.unsplash.com/photo-1526478806334-5fd488fcaabc?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80', // Acoustic guitar warm
+  'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80', // Fitness & energy
+  'https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?w=600&auto=format&fit=crop&q=80', // Electric rock guitar
+  'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&auto=format&fit=crop&q=80', // Party crowd lights
+  'https://images.unsplash.com/photo-1483412033650-1015ddeb83d1?w=600&auto=format&fit=crop&q=80', // Headphones vinyl
+  'https://images.unsplash.com/photo-1469854523086-cc02fe5d8800?w=600&auto=format&fit=crop&q=80', // Sunset highway
+  'https://images.unsplash.com/photo-1518199266791-5375a83190b7?w=600&auto=format&fit=crop&q=80', // Golden romance
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80', // Electronic DJ
+  'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80', // Indie road
+  'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80', // Stage live vocals
 ];
 
 export function resolveArtistPhoto(name: string): string {
@@ -166,11 +247,11 @@ const firstArtist = (t: any): string => String(t?.artists?.[0]?.name || '').spli
 const coverOf = (t: any): string => {
   if (!t) return '';
   const fromHelper = getTrackCoverUrl(t);
-  if (fromHelper && !isPlaylistOrGenericCover(fromHelper)) return fromHelper;
+  if (fromHelper && !isPlaylistOrGenericCover(fromHelper) && !isPlaceholderOrAvatar(fromHelper)) return fromHelper;
   const fromCache = t?.id ? TRACK_COVER_CACHE.get(t.id) : undefined;
-  if (fromCache && !isPlaylistOrGenericCover(fromCache)) return fromCache;
+  if (fromCache && !isPlaylistOrGenericCover(fromCache) && !isPlaceholderOrAvatar(fromCache)) return fromCache;
   const albumImg = t?.album?.images?.[0]?.url;
-  if (albumImg && !isPlaylistOrGenericCover(albumImg)) return albumImg;
+  if (albumImg && !isPlaylistOrGenericCover(albumImg) && !isPlaceholderOrAvatar(albumImg)) return albumImg;
   const artName = firstArtist(t);
   if (artName) return resolveArtistPhoto(artName);
   return '';
@@ -1164,13 +1245,12 @@ export function makeEraCoverSvg(
       <circle cx="390" cy="225" r="55" fill="none" stroke="${color}" stroke-width="3" opacity="0.45"/>
     `}
     <rect x="0" y="280" width="600" height="320" fill="url(#bottomFade)"/>
-    <!-- Top-left Spotify Mix header -->
-    <g transform="translate(42, 44)">
-      <rect x="0" y="4" width="3.5" height="12" rx="1.75" fill="#ffffff" opacity="0.85"/>
-      <rect x="6" y="0" width="3.5" height="18" rx="1.75" fill="#ffffff"/>
-      <rect x="12" y="3" width="3.5" height="14" rx="1.75" fill="#ffffff" opacity="0.85"/>
-      <text x="24" y="14" font-family="Circular, SpotifyMixUI, system-ui, sans-serif" font-weight="700" font-size="15" fill="rgba(255,255,255,0.85)" letter-spacing="2.5">SPOTIFREE MIX</text>
-    </g>
+    <!-- Top-left subtle circular logo badge -->
+    <circle cx="52" cy="52" r="18" fill="rgba(255,255,255,0.92)"/>
+    <rect x="44" y="46" width="2.5" height="12" rx="1.2" fill="#121212"/>
+    <rect x="50.5" y="43" width="2.5" height="18" rx="1.2" fill="#121212"/>
+    <rect x="57" y="45" width="2.5" height="14" rx="1.2" fill="#121212"/>
+    <text x="80" y="58" font-family="Circular, SpotifyMixUI, system-ui, sans-serif" font-weight="700" font-size="14" fill="rgba(255,255,255,0.9)" letter-spacing="2">SPOTIFREE MIX</text>
     <!-- Bottom-left Spotify Bold Title -->
     <g transform="translate(42, 490)">
       <text x="0" y="0" font-family="Circular, SpotifyMixUITitle, system-ui, sans-serif" font-weight="900" font-size="${isLong ? 62 : 76}" fill="#ffffff" letter-spacing="-2">${mainTitle}</text>
@@ -1185,19 +1265,30 @@ export async function makeCuratedThemedCover(
   title: string,
   color: string,
   images: string[] = [],
-  subtitle = 'Actualizado esta semana · Spotifree'
+  subtitle = 'Actualizado esta semana · Spotifree',
+  style: CoverStyle = 'banner'
 ): Promise<string> {
+  const validImages = (images || []).filter((u) => u && !isPlaceholderOrAvatar(u));
+  if (style === 'banner') {
+    const res = await makeCover(title, 'banner', validImages, color);
+    if (res) return res;
+  }
+  if (style === 'collage' && validImages.length >= 2) {
+    const res = await makeCover(title, 'collage', validImages, color);
+    if (res) return res;
+  }
+
   const S = 600;
   // If in node or without DOM canvas (e.g. unit tests), gracefully return high-res SVG
   if (typeof document === 'undefined') {
-    return makeEraCoverSvg(badgeText, color, title, images, subtitle);
+    return makeEraCoverSvg(badgeText, color, title, validImages, subtitle);
   }
 
   try {
     const c = document.createElement('canvas');
     c.width = c.height = S;
     const ctx = c.getContext('2d');
-    if (!ctx) return makeEraCoverSvg(badgeText, color, title, images, subtitle);
+    if (!ctx) return makeEraCoverSvg(badgeText, color, title, validImages, subtitle);
 
     // 1. Vibrant diagonal gradient
     const bg = ctx.createLinearGradient(0, 0, S, S);
@@ -1216,16 +1307,16 @@ export async function makeCuratedThemedCover(
 
     // Top-right background arc
     ctx.save();
+    ctx.globalAlpha = 0.58;
     ctx.beginPath();
     ctx.arc(560, 90, 230, 0, Math.PI * 2);
-    ctx.fillStyle = hexToRgba(color, 0.22);
+    ctx.fillStyle = hexToRgba(color, 0.35);
     ctx.fill();
     ctx.restore();
 
     // 3. Artist Hero Portrait in circular cutout with high clarity & border glow
-    const validUrls = images.filter(Boolean);
     const loadedImgs = (
-      await Promise.all(validUrls.slice(0, 2).map((u) => loadCoverPhoto(u, 2500)))
+      await Promise.all(validImages.slice(0, 2).map((u) => loadCoverPhoto(u, 2500)))
     ).filter(Boolean) as HTMLImageElement[];
 
     const cx = 390;
@@ -1858,9 +1949,18 @@ export const ERA_PLAYLIST_DEFINITIONS = [
 
 export const GENRE_PLAYLIST_DEFINITIONS = ERA_PLAYLIST_DEFINITIONS.filter((d: any) => d.category === 'genre');
 
-function makeMoodCoverSvg(title: string, color: string, subtitle = 'Spotifree Mix'): string {
+function makeMoodCoverSvg(
+  title: string,
+  color: string,
+  subtitle = 'Spotifree Mix',
+  style: CoverStyle = 'banner',
+  images: string[] = []
+): string {
+  const valid = (images || []).filter((u) => u && !isPlaceholderOrAvatar(u));
+  if (style === 'banner') return makeBannerCoverSvg(title, color, valid);
+  if (style === 'collage' && valid.length >= 2) return makeCollageCoverSvg(title, color, valid);
   const cleanTitle = title.replace(/^Mix\s+/i, '');
-  return makeEraCoverSvg(cleanTitle, color, title, [], subtitle);
+  return makeEraCoverSvg(cleanTitle, color, title, valid, subtitle);
 }
 
 function toCuratedCategoryTrack(item: { name: string; artist: string; album: string; duration_ms: number }, prefix: string, idx: number): Track {
@@ -2294,12 +2394,12 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (!normName) return resolveArtistPhoto(name);
     if (ARTIST_PORTRAITS[normName]) return ARTIST_PORTRAITS[normName];
     const discPic = disc.get(normName)?.artist?.picture;
-    if (discPic && !isPlaylistOrGenericCover(discPic)) return discPic;
+    if (discPic && !isPlaylistOrGenericCover(discPic) && !isPlaceholderOrAvatar(discPic)) return discPic;
     const profPic = profile.artists.find((a) => norm(a.name) === normName)?.img;
-    if (profPic && !isPlaylistOrGenericCover(profPic)) return profPic;
+    if (profPic && !isPlaylistOrGenericCover(profPic) && !isPlaceholderOrAvatar(profPic)) return profPic;
     const dataStoreArtists: any[] = (useSpotifyDataStore.getState() as any).artists || [];
     const dsPic = dataStoreArtists.find((a: any) => norm(a.name) === normName)?.images?.[0]?.url;
-    if (dsPic && !isPlaylistOrGenericCover(dsPic)) return dsPic;
+    if (dsPic && !isPlaylistOrGenericCover(dsPic) && !isPlaceholderOrAvatar(dsPic)) return dsPic;
     return resolveArtistPhoto(name);
   };
   const ownByArtist = (name: string) => profile.tracks.filter((t) => norm(firstArtist(t.track)) === norm(name)).map((t) => t.track);
@@ -2396,8 +2496,8 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     }
   }
 
-  // Mix de <artista> for the favourite artists
-  for (const a of ranked.slice(0, 6)) {
+  // Mix de <artista> for the favourite artists: expanded to up to 12 top artists
+  for (const a of ranked.slice(0, 12)) {
     const d = disc.get(norm(a.name));
     if (!d) continue;
     const r = rng(hash(`${uid()}:${every(2)}:artist:${a.name}`)); // changes every 2 days
@@ -2414,7 +2514,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 4 === 0 ? 'badge' : 'banner';
     const artistPic = pictureOf(a.name);
     const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
-    const imgs = [artistPic, ...songCovers].filter(Boolean);
+    const imgs = [artistPic, ...songCovers].filter((u) => u && !isPlaceholderOrAvatar(u));
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || artistPic || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${d.artist?.name || a.name} y artistas parecidos`, items, cover, userName));
   }
@@ -2433,7 +2533,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
         if (items.length < 4) return null;
         const title = `${displayName}: Remixes, Leaks y Slowed`;
         if (taken.has(norm(title))) return null;
-        const imgs = items.map(coverOf).filter(Boolean);
+        const imgs = items.map(coverOf).filter((u) => u && !isPlaceholderOrAvatar(u));
         const cover = (await makeCover(title, 'collage', imgs.length >= 4 ? imgs : [pictureOf(a.name), ...imgs], '#ff5500')) || imgs[0] || pictureOf(a.name) || '';
         return mix(
           `sf-sc-${norm(a.name).replace(/\s+/g, '-')}`,
@@ -2458,30 +2558,43 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const isGenre = (def as any).category === 'genre';
     const kind: SpotifreeMix['sfKind'] = isGenre ? 'genre' : 'era';
     const items = def.tracks.map((t, idx) => toEraTrack(t, def.decade, idx));
+    const eraKey = (def.decade || '').toLowerCase();
+    const curatedPhoto = CURATED_CATEGORY_PHOTOS[eraKey] || CURATED_CATEGORY_PHOTOS[(def as any).key] || '';
+    const defStyle: CoverStyle = (def as any).coverStyle || (
+      eraKey.includes('2000') || eraKey.includes('2010') || eraKey.includes('pop') || eraKey.includes('urbano') || eraKey.includes('indie')
+        ? 'banner'
+        : eraKey.includes('90') || eraKey.includes('electronica')
+        ? 'collage'
+        : 'badge'
+    );
 
     const songPhotos = def.pool
       .slice(0, 8)
       .map((t) => {
         const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
-        if (fromCache) return fromCache;
+        if (fromCache && !isPlaceholderOrAvatar(fromCache)) return fromCache;
         const fromProfile = profile.tracks.find(
           (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
         )?.track?.album?.images?.[0]?.url;
-        if (fromProfile) return fromProfile;
+        if (fromProfile && !isPlaceholderOrAvatar(fromProfile)) return fromProfile;
         const artPic = pictureOf(t.artist);
-        if (artPic) return artPic;
+        if (artPic && !isPlaceholderOrAvatar(artPic)) return artPic;
         return '';
       })
       .filter(Boolean);
 
-    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
+    const finalImages = [curatedPhoto, ...songPhotos, ...((def as any).sampleImages || [])]
+      .filter((u) => u && !isPlaceholderOrAvatar(u))
+      .slice(0, 4);
+
     const cover = (await makeCuratedThemedCover(
       def.decade,
       def.name,
       def.color,
       finalImages,
-      isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree'
-    )) || makeEraCoverSvg(def.decade, def.color, def.name, finalImages, isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree');
+      isGenre ? 'Grandes Éxitos · Spotifree' : 'Lo mejor de la época · Spotifree',
+      defStyle
+    )) || makeMoodCoverSvg(def.name, def.color, isGenre ? 'Grandes Éxitos' : 'Lo mejor de la época', defStyle, finalImages);
 
     out.push(mix(def.id, kind, def.name, def.description, items, cover, userName));
   }
@@ -2490,21 +2603,36 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
   for (const def of MOOD_PLAYLIST_DEFINITIONS) {
     const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
     const cleanBadge = def.name.replace(/^Mix\s+/i, '').split('&')[0].trim();
+    const curatedPhoto = CURATED_CATEGORY_PHOTOS[def.key] || CURATED_CATEGORY_PHOTOS[cleanBadge.toLowerCase()] || '';
+    const moodStyle: CoverStyle = (def as any).coverStyle || (
+      def.key === 'entreno' || def.key === 'chill' || def.key === 'coche' || def.key === 'romantico'
+        ? 'banner'
+        : def.key === 'fiesta'
+        ? 'collage'
+        : 'badge'
+    );
+
     const songPhotos = def.pool
       .slice(0, 8)
       .map((t) => {
         const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
-        if (fromCache) return fromCache;
+        if (fromCache && !isPlaceholderOrAvatar(fromCache)) return fromCache;
         const fromProfile = profile.tracks.find(
           (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
         )?.track?.album?.images?.[0]?.url;
-        if (fromProfile) return fromProfile;
-        return pictureOf(t.artist) || '';
+        if (fromProfile && !isPlaceholderOrAvatar(fromProfile)) return fromProfile;
+        const artPic = pictureOf(t.artist);
+        if (artPic && !isPlaceholderOrAvatar(artPic)) return artPic;
+        return '';
       })
       .filter(Boolean);
-    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
-    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Mix por ambiente · Spotifree')) ||
-      makeMoodCoverSvg(def.name, def.color, 'Mix por ambiente');
+
+    const finalImages = [curatedPhoto, ...songPhotos, ...((def as any).sampleImages || [])]
+      .filter((u) => u && !isPlaceholderOrAvatar(u))
+      .slice(0, 4);
+
+    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Mix por ambiente · Spotifree', moodStyle)) ||
+      makeMoodCoverSvg(def.name, def.color, 'Mix por ambiente', moodStyle, finalImages);
     out.push(mix(def.id, 'mood', def.name, def.description, items, cover, userName));
   }
 
@@ -2512,21 +2640,34 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
   for (const def of TRENDING_PLAYLIST_DEFINITIONS) {
     const items = def.tracks.map((t, idx) => toCuratedCategoryTrack(t, def.key, idx));
     const cleanBadge = def.name.replace(/^Top\s+/i, '').replace(/^Mix\s+/i, '').split(':')[0].trim();
+    const curatedPhoto = CURATED_CATEGORY_PHOTOS[def.key] || CURATED_CATEGORY_PHOTOS[cleanBadge.toLowerCase()] || '';
+    const trendStyle: CoverStyle = (def as any).coverStyle || (
+      def.key === 'trend_spain' || def.key === 'trend_global'
+        ? 'banner'
+        : 'collage'
+    );
+
     const songPhotos = def.pool
       .slice(0, 8)
       .map((t) => {
         const fromCache = TRACK_COVER_CACHE.get(t.name) || TRACK_COVER_CACHE.get(trackKey(t.name, t.artist));
-        if (fromCache) return fromCache;
+        if (fromCache && !isPlaceholderOrAvatar(fromCache)) return fromCache;
         const fromProfile = profile.tracks.find(
           (pt) => norm(pt.track.name) === norm(t.name) || norm(firstArtist(pt.track)) === norm(t.artist)
         )?.track?.album?.images?.[0]?.url;
-        if (fromProfile) return fromProfile;
-        return pictureOf(t.artist) || '';
+        if (fromProfile && !isPlaceholderOrAvatar(fromProfile)) return fromProfile;
+        const artPic = pictureOf(t.artist);
+        if (artPic && !isPlaceholderOrAvatar(artPic)) return artPic;
+        return '';
       })
       .filter(Boolean);
-    const finalImages = [...songPhotos, ...((def as any).sampleImages || [])].slice(0, 4);
-    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Tendencias · Spotifree')) ||
-      makeMoodCoverSvg(def.name, def.color, 'Tendencias');
+
+    const finalImages = [curatedPhoto, ...songPhotos, ...((def as any).sampleImages || [])]
+      .filter((u) => u && !isPlaceholderOrAvatar(u))
+      .slice(0, 4);
+
+    const cover = (await makeCuratedThemedCover(cleanBadge, def.name, def.color, finalImages, 'Tendencias · Spotifree', trendStyle)) ||
+      makeMoodCoverSvg(def.name, def.color, 'Tendencias', trendStyle, finalImages);
     out.push(mix(def.id, 'trending', def.name, def.description, items, cover, userName));
   }
 
@@ -2582,8 +2723,8 @@ function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtist
   }));
 }
 
-// v6: mixes with Daddy Yankee Top Mixes banner style, guaranteed high-res portraits and cache bump
-const storeKey = () => `mixes_v6:${uid()}`;
+// mixes_v6 upgraded to mixes_v7: mixes with Daddy Yankee Top Mixes banner style, guaranteed unique curated photos, rich user playlists, and cache bump
+const storeKey = () => `mixes_v7:${uid()}`;
 let building: Promise<void> | null = null;
 
 /** Rebuilds the account's playlists (once a day, or when asked) */
@@ -2766,6 +2907,34 @@ export function withSpotifreeShelves(
   const madeForIdx = base.findIndex((s) => s.type === 'made_for' || /hecho para|made for/i.test(`${s.prefix || ''} ${s.title}`));
   let shelves = base.slice();
   const ours: DynamicShelf[] = [];
+
+  // 1. "Tus mixes principales" (Spotify's Top Mixes shelf: user's favorite decades, moods, genres & top artists in Daddy Yankee banner style)
+  const topMixPicks: any[] = [];
+  const topDecade = eraMixes.find((m) => m.title.includes('2000') || m.title.includes('2010')) || eraMixes[0];
+  if (topDecade) topMixPicks.push(topDecade);
+  const topMood = moodMixes.find((m) => m.title.includes('Chill') || m.title.includes('Entreno') || m.title.includes('Entrenamiento')) || moodMixes[0];
+  if (topMood) topMixPicks.push(topMood);
+  const topArtist1 = artists[0];
+  if (topArtist1) topMixPicks.push(topArtist1);
+  const topGenre = genreMixes.find((m) => m.title.includes('Urbano') || m.title.includes('Pop')) || genreMixes[0];
+  if (topGenre) topMixPicks.push(topGenre);
+  const topArtist2 = artists[1];
+  if (topArtist2) topMixPicks.push(topArtist2);
+  const secondMood = moodMixes.find((m) => m.id !== topMood?.id) || moodMixes[1];
+  if (secondMood) topMixPicks.push(secondMood);
+
+  if (topMixPicks.length >= 3) {
+    ours.push({
+      id: 'sf-top-mixes',
+      title: 'Tus mixes principales',
+      prefix: 'TUS FAVORITOS',
+      subtitle: 'Tus géneros, épocas y artistas combinados para ti',
+      type: 'mixes',
+      cards: topMixPicks,
+      hasSeeAll: true,
+    });
+  }
+
   if (made.length) {
     if (madeForIdx >= 0) {
       const s = shelves[madeForIdx];
@@ -2775,24 +2944,33 @@ export function withSpotifreeShelves(
     }
   }
 
-  // Playlists por género ("playlist genericas o algo asi")
+  if (artists.length) {
+    ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
+  }
+
+  if (moodMixes.length) {
+    ours.push({
+      id: 'sf-mood-mixes',
+      title: 'Estados de ánimo y Momentos',
+      prefix: 'PARA CADA MOMENTO',
+      subtitle: 'Playlists diseñadas según tu energía y actividad',
+      type: 'mixes',
+      cards: moodMixes,
+      hasSeeAll: true,
+    });
+  }
+
+  // Playlists por género
   if (genreMixes.length) {
     ours.push({
       id: 'sf-genre-mixes',
-      title: 'Playlists por género',
-      prefix: 'GÉNEROS Y ESTILOS',
+      title: 'Playlists por género', // title: 'Playlists genéricas'
+      prefix: 'GÉNEROS Y ESTILOS', // prefix: 'GRANDES GÉNEROS'
       subtitle: 'Grandes éxitos de Rock, Pop, Urbano, Electrónica y más',
       type: 'mixes',
       cards: genreMixes,
       hasSeeAll: true,
     });
-  }
-
-  if (artists.length) {
-    ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
-  }
-  if (soundcloudMixes.length) {
-    ours.push({ id: 'sf-sc-vaults', title: 'Remixes, Slowed e Inéditas · SoundCloud', subtitle: 'Basado en los artistas que más escuchas', type: 'mixes', cards: soundcloudMixes, hasSeeAll: true });
   }
 
   // Dynamic Era shelf rotation ("Viaje en el tiempo" / Nostalgia de las décadas)
@@ -2836,31 +3014,6 @@ export function withSpotifreeShelves(
     }
   }
 
-  // Generic genre playlists ("Playlists genéricas" / "Grandes Géneros")
-  if (genreMixes.length) {
-    ours.push({
-      id: 'sf-genre-mixes',
-      title: 'Playlists genéricas',
-      prefix: 'GRANDES GÉNEROS',
-      subtitle: 'Lo mejor del Rock, Pop, Urbano, Electrónica e Indie adaptado a ti',
-      type: 'mixes',
-      cards: genreMixes,
-      hasSeeAll: true,
-    });
-  }
-
-  if (moodMixes.length) {
-    ours.push({
-      id: 'sf-mood-mixes',
-      title: 'Estados de ánimo y Momentos',
-      prefix: 'PARA CADA MOMENTO',
-      subtitle: 'Playlists diseñadas según tu energía y actividad',
-      type: 'mixes',
-      cards: moodMixes,
-      hasSeeAll: true,
-    });
-  }
-
   if (trendingMixes.length) {
     ours.push({
       id: 'sf-trending-mixes',
@@ -2871,6 +3024,10 @@ export function withSpotifreeShelves(
       cards: trendingMixes,
       hasSeeAll: true,
     });
+  }
+
+  if (soundcloudMixes.length) {
+    ours.push({ id: 'sf-sc-vaults', title: 'Remixes, Slowed e Inéditas · SoundCloud', subtitle: 'Basado en los artistas que más escuchas', type: 'mixes', cards: soundcloudMixes, hasSeeAll: true });
   }
 
   shelves = [...shelves.slice(0, 1), ...ours, ...shelves.slice(1)];
