@@ -88,8 +88,6 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     djTracks,
     currentSetTitle,
     setDJThemeColor,
-    isDJModeActive,
-    startDJSession,
     startVoiceListening,
     stopVoiceListening,
     handleUserPrompt,
@@ -329,15 +327,22 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   // Initialize DJ session if not active or empty, and unlock audio immediately
   useEffect(() => {
     aiDJVoiceService.unlockAudioForMobile();
-    if (!isDJModeActive || djTracks.length === 0) {
-      void startDJSession(true, { speakFirst: true });
-    } else {
+    const dj = useAIDJStore.getState();
+    if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+      void dj.startDJSession(false, { speakFirst: true });
+    } else if (dj.djTracks.length > 0 && !dj.isThinking) {
       const p = usePlayerStore.getState();
       if (!p.isPlaying) {
-        void startDJSession(true, { speakFirst: true });
+        const trackToPlay = dj.djTracks[0];
+        if (trackToPlay) {
+          p.playTrack(trackToPlay, dj.djTracks, 'dj-session');
+        }
       }
     }
-  }, [isDJModeActive, djTracks.length, startDJSession]);
+    return () => {
+      useAIDJStore.getState().cancelDJIntroIfNotStarted();
+    };
+  }, []);
 
   const toggleMic = () => {
     if (isMicListening) {
@@ -446,7 +451,10 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       {/* Top Header matching Photo 2 (Clean header without lines) */}
       <header className="flex items-center justify-between px-2 py-1.5 z-20 shrink-0">
         <button
-          onClick={onBack}
+          onClick={() => {
+            useAIDJStore.getState().cancelDJIntroIfNotStarted();
+            onBack();
+          }}
           className="w-10 h-10 rounded-full bg-black/25 hover:bg-black/45 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-95"
           title="Minimizar"
         >
@@ -471,7 +479,19 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
       <main className="flex-1 flex flex-col items-center justify-between px-4 text-center max-w-xl mx-auto w-full z-10 py-2 min-h-0">
         <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
-          <div className="flex items-center justify-center pointer-events-none select-none">
+          <div
+            onClick={() => {
+              if (isSpeaking) {
+                aiDJVoiceService.stopSpeaking();
+              } else if (isPlaying) {
+                void nextSegment();
+              } else {
+                togglePlay();
+              }
+            }}
+            className="flex items-center justify-center cursor-pointer select-none active:scale-95 transition-transform"
+            title={isSpeaking ? 'Silenciar voz' : isPlaying ? 'Cambiar de rollo' : 'Reproducir'}
+          >
             <SpotifyDJVisualizer
               size={isMobile ? 220 : 240}
               state={visualizerState}

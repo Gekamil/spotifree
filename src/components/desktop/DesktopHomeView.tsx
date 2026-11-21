@@ -15,6 +15,7 @@ import { getArtistPicture } from '../../utils/artistImage';
 import { stripHtml, toHDImage } from '../../utils/formatters';
 import { RotatingDJBannerText } from '../../utils/djMessages';
 import { useAIDJStore } from '../../services/aiDJService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { SpotifyImage } from '../common/SpotifyImage';
 import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
 import { isAIDJPlaylist } from '../../utils/djIdentifiers';
@@ -631,9 +632,21 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               Tu DJ personal
             </h2>
             <div
-              onClick={() => onSelectPlaylistById('spotify-dj')}
-              className="relative w-full rounded-2xl p-5 md:p-6 overflow-hidden cursor-pointer shadow-xl hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[145px] md:min-h-[155px]"
+              role="button"
+              tabIndex={0}
+              onClick={() => {
+                aiDJVoiceService.unlockAudioForMobile();
+                onSelectPlaylistById('spotify-dj');
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  aiDJVoiceService.unlockAudioForMobile();
+                  onSelectPlaylistById('spotify-dj');
+                }
+              }}
+              className="relative w-full rounded-2xl p-5 md:p-6 overflow-hidden cursor-pointer shadow-xl hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[145px] md:min-h-[155px] select-none"
               style={{
+                touchAction: 'manipulation',
                 backgroundColor: djThemeColor || '#0a52cc',
                 backgroundImage: `linear-gradient(135deg, ${djThemeColor || '#0a52cc'} 0%, #062b70 100%)`,
                 boxShadow: `0 12px 36px ${djThemeColor || '#0a52cc'}44`,
@@ -686,19 +699,15 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[48px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                 </div>
 
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectPlaylistById('spotify-dj');
-                  }}
-                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl group-hover:scale-105 active:scale-95 transition-all shrink-0 ml-3 cursor-pointer z-20"
-                  title="Abrir DJ"
+                <div
+                  className="w-12 h-12 rounded-full bg-white text-black flex items-center justify-center shadow-2xl group-hover:scale-105 active:scale-95 transition-all shrink-0 ml-3 pointer-events-none z-20"
+                  aria-hidden="true"
                 >
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <line x1="5" y1="12" x2="19" y2="12"></line>
                     <polyline points="12 5 19 12 12 19"></polyline>
                   </svg>
-                </button>
+                </div>
               </div>
             </div>
           </section>

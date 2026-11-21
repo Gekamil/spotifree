@@ -16,6 +16,8 @@ import { DesktopProfileView } from './DesktopProfileView';
 import { LocalFilesView } from '../common/LocalFilesView';
 import { LOCAL_FILES_PLAYLIST_ID } from '../../utils/localFiles';
 import { AIDJView } from '../dj/AIDJView';
+import { useAIDJStore } from '../../services/aiDJService';
+import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import type { Playlist } from '../../types/spotify';
 import { useUIStore } from '../../store/useUIStore';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
@@ -66,7 +68,15 @@ export const DesktopLayout: React.FC = () => {
       .split('?')[0];
 
     if (isAIDJPlaylist({ id: cleanId, name: customName })) {
+      aiDJVoiceService.unlockAudioForMobile();
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = 0;
+      }
       setActiveMainTab('dj');
+      const dj = useAIDJStore.getState();
+      if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+        void dj.startDJSession(false, { speakFirst: true });
+      }
       return;
     }
     if (cleanId === LOCAL_FILES_PLAYLIST_ID) {

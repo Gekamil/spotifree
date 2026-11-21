@@ -203,17 +203,32 @@ let introVoiceHeard = false;
 async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   set({ visualizerState: 'speaking', currentMessage: text, displayedTranscript: '' });
   audioEngine.setDuckedVolume(0.18);
-  await aiDJVoiceService.speak(text, {
-    onWord: (_w, partial) => set({ displayedTranscript: partial }),
-    onVoiceLevel: (level) => {
-      if (level > 0.06) introVoiceHeard = true;
-      set({ voiceLevel: level });
-    },
-    onEnd: () => {
-      audioEngine.restoreDuckedVolume(1200);
-      set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
-    },
-  });
+  try {
+    const speakPromise = aiDJVoiceService.speak(text, {
+      onWord: (_w, partial) => set({ displayedTranscript: partial }),
+      onVoiceLevel: (level) => {
+        if (level > 0.06) introVoiceHeard = true;
+        set({ voiceLevel: level });
+      },
+      onEnd: () => {
+        audioEngine.restoreDuckedVolume(1200);
+        set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
+      },
+    });
+
+    const timeoutPromise = new Promise<void>((resolve) => {
+      const words = (text || '').split(/\s+/).length;
+      const ms = Math.min(8000, Math.max(3000, words * 280 + 1800));
+      setTimeout(resolve, ms);
+    });
+
+    await Promise.race([speakPromise, timeoutPromise]);
+  } catch (err) {
+    console.warn('[AIDJ] djSpeak error:', err);
+  } finally {
+    audioEngine.restoreDuckedVolume(1200);
+    set({ visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle', voiceLevel: 0 });
+  }
 }
 
 const announcedSegments = new Set<string>();
@@ -784,8 +799,19 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
    */
   startDJSession: async (forceReset = false, options?: { speakFirst?: boolean }) => {
     const currentState = get();
+    // Guard against simultaneous initializations
+    if (currentState.isThinking) {
+      return;
+    }
     if (!forceReset && currentState.isDJModeActive && currentState.djTracks.length > 0) {
-      // Session already active! Keep current track and playlist intact!
+      // Session already active! Ensure music is playing if paused
+      const p = usePlayerStore.getState();
+      if (!p.isPlaying) {
+        const trackToPlay = currentState.djTracks[0];
+        if (trackToPlay) {
+          p.playTrack(trackToPlay, currentState.djTracks, 'dj-session');
+        }
+      }
       return;
     }
 
@@ -830,18 +856,55 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     } catch (e) {
       console.warn('[AIDJ] Segmented set failed, using library remix:', e);
     }
-    if (run !== introRun) return; // the user left before the DJ started
+    if (run !== introRun) return; // user left or restarted
+
     if (tracks.length < 3) {
-      tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
+      try {
+        tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
+      } catch (e) {
+        console.warn('[AIDJ] Remix fallback failed:', e);
+      }
       if (run !== introRun) return;
-      segments = tracks.length
-        ? [{ id: `seg-${Date.now()}`, kind: 'liked', title: 'Tu mezcla', reason: 'canciones de su biblioteca', startIndex: 0, length: tracks.length, intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true) }]
-        : [];
+    }
+
+    // Comprehensive fallback: If tracks are still empty, gather from all available playlists and cache
+    if (tracks.length === 0) {
+      try {
+        const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
+        for (const pl of playlists) {
+          if (pl.tracks?.items?.length) {
+            tracks.push(...filterMusicTracksOnly(pl.tracks.items));
+            if (tracks.length >= 10) break;
+          }
+        }
+        if (tracks.length === 0) {
+          Object.values(playlistDetailsCache).forEach((pl: any) => {
+            if (pl?.tracks?.items?.length) {
+              tracks.push(...(filterMusicTracksOnly(pl.tracks.items as Track[]) as Track[]));
+            }
+          });
+        }
+      } catch {}
+    }
+
+    if (segments.length === 0 && tracks.length > 0) {
+      segments = [
+        {
+          id: `seg-${Date.now()}`,
+          kind: 'liked',
+          title: 'Tu mezcla',
+          reason: 'canciones de su biblioteca',
+          startIndex: 0,
+          length: tracks.length,
+          intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true),
+        },
+      ];
     }
     // If filtering removed songs, keep block boundaries inside the list
     segments = segments.filter((s) => s.startIndex < tracks.length);
 
-    const introText = cleanTextForNaturalTTS(segments[0]?.intro || buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true));
+    const firstTrack = tracks[0];
+    const introText = cleanTextForNaturalTTS(segments[0]?.intro || buildSegmentIntro({ kind: 'liked' }, firstTrack, cleanName, true));
     announcedSegments.clear();
     if (segments[0]) announcedSegments.add(segments[0].id);
 
@@ -870,22 +933,33 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     });
 
     get().stopVoiceListening();
-    const shouldSpeakFirst = options?.speakFirst ?? true;
+    const shouldSpeak = options?.speakFirst ?? true;
 
-    if (shouldSpeakFirst) {
-      // Speak intro greeting first, then start music playback seamlessly
-      await djSpeak(introText, set);
-      if (run === introRun) {
-        introPending = false;
-        if (tracks.length > 0) {
-          usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+    // Start music playback immediately with ducked volume so user NEVER experiences dead silence!
+    if (tracks.length > 0) {
+      if (shouldSpeak) {
+        audioEngine.setDuckedVolume(0.18);
+      }
+      usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+    }
+
+    // Speak intro greeting seamlessly over the ducked track intro
+    if (shouldSpeak) {
+      try {
+        await djSpeak(introText, set);
+      } catch (err) {
+        console.warn('[AIDJ] Greeting error:', err);
+      } finally {
+        if (run === introRun) {
+          introPending = false;
+          audioEngine.restoreDuckedVolume(1200);
+          set({
+            visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle',
+            voiceLevel: 0,
+          });
         }
       }
     } else {
-      if (tracks.length > 0) {
-        usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
-      }
-      await djSpeak(introText, set);
       if (run === introRun) introPending = false;
     }
   },

@@ -108,6 +108,9 @@ export const MobileLayout: React.FC = () => {
   const [editTargetDesc, setEditTargetDesc] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const longPressTimeoutRef = useRef<any>(null);
+  const djCardTouchRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const lastDJCardTapRef = useRef<number>(0);
+  const mobileScrollRef = useRef<HTMLDivElement>(null);
 
   // Android Hardware Back & Gesture Navigation Handler
   useEffect(() => {
@@ -552,10 +555,19 @@ export const MobileLayout: React.FC = () => {
     const cleanId = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
     if (isAIDJPlaylist({ id: cleanId, name: customName })) {
       aiDJVoiceService.unlockAudioForMobile();
+      if (mobileScrollRef.current) {
+        mobileScrollRef.current.scrollTop = 0;
+      }
       setMobileTab('dj');
       const dj = useAIDJStore.getState();
-      if (!dj.isDJModeActive || dj.djTracks.length === 0) {
-        void dj.startDJSession(true, { speakFirst: true });
+      if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+        void dj.startDJSession(false, { speakFirst: true });
+      } else if (dj.djTracks.length > 0 && !dj.isThinking) {
+        const p = usePlayerStore.getState();
+        if (!p.isPlaying) {
+          const t = dj.djTracks[0];
+          if (t) p.playTrack(t, dj.djTracks, 'dj-session');
+        }
       }
       return;
     }
@@ -662,9 +674,10 @@ export const MobileLayout: React.FC = () => {
     >
       {/* Scrollable Center Content */}
       <div
+        ref={mobileScrollRef}
         data-mobile-scroll
         onScroll={(e) => setScrollOffset(e.currentTarget.scrollTop)}
-        className="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth overscroll-contain"
+        className={`flex-1 overflow-x-hidden ${mobileTab === 'dj' ? 'overflow-hidden h-full flex flex-col' : 'overflow-y-auto scroll-smooth overscroll-contain'}`}
         style={{
           WebkitOverflowScrolling: 'touch',
           paddingBottom: mobileTab === 'dj' ? '0px' : 'calc(144px + var(--sab, 0px))',
@@ -818,9 +831,44 @@ export const MobileLayout: React.FC = () => {
                     Tu DJ personal
                   </h2>
                   <div
-                    onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl p-4 px-4.5 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px]"
+                    role="button"
+                    tabIndex={0}
+                    onTouchStart={(e) => {
+                      aiDJVoiceService.unlockAudioForMobile();
+                      if (e.touches && e.touches[0]) {
+                        djCardTouchRef.current = {
+                          x: e.touches[0].clientX,
+                          y: e.touches[0].clientY,
+                          time: Date.now(),
+                        };
+                      }
+                    }}
+                    onTouchEnd={(e) => {
+                      if (djCardTouchRef.current && e.changedTouches && e.changedTouches[0]) {
+                        const dx = Math.abs(e.changedTouches[0].clientX - djCardTouchRef.current.x);
+                        const dy = Math.abs(e.changedTouches[0].clientY - djCardTouchRef.current.y);
+                        const dt = Date.now() - djCardTouchRef.current.time;
+                        if (dx < 16 && dy < 16 && dt < 600) {
+                          lastDJCardTapRef.current = Date.now();
+                          handleSelectPlaylistById('spotify-dj');
+                        }
+                      }
+                      djCardTouchRef.current = null;
+                    }}
+                    onClick={() => {
+                      if (Date.now() - lastDJCardTapRef.current > 400) {
+                        lastDJCardTapRef.current = Date.now();
+                        handleSelectPlaylistById('spotify-dj');
+                      }
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        handleSelectPlaylistById('spotify-dj');
+                      }
+                    }}
+                    className="relative w-full rounded-2xl p-4 px-4.5 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px] select-none"
                     style={{
+                      touchAction: 'manipulation',
                       backgroundColor: djThemeColor || '#0c3b88',
                       backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0c3b88'} 0%, #060f22 100%)`,
                       boxShadow: `0 8px 28px ${djThemeColor || '#0c3b88'}44`,
@@ -862,19 +910,15 @@ export const MobileLayout: React.FC = () => {
                         <RotatingDJBannerText className="text-[14px] font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
                       </div>
 
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectPlaylistById('spotify-dj');
-                        }}
-                        className="w-8.5 h-8.5 min-w-[34px] min-h-[34px] rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0 cursor-pointer ml-2 z-20"
-                        title="Abrir DJ"
+                      <div
+                        className="w-8.5 h-8.5 min-w-[34px] min-h-[34px] rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0 ml-2 z-20 pointer-events-none"
+                        aria-hidden="true"
                       >
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                           <polyline points="12 5 19 12 12 19"></polyline>
                         </svg>
-                      </button>
+                      </div>
                     </div>
                   </div>
                 </div>

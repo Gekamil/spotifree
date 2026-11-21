@@ -87,6 +87,7 @@ class AIDJVoiceService {
   private isSpeaking: boolean = false;
   private currentUtterance: SpeechSynthesisUtterance | null = null;
   private currentAudio: HTMLAudioElement | null = null;
+  private unlockedAudio: HTMLAudioElement | null = null;
   private abortController: AbortController | null = null;
   private voiceLevelInterval: any = null;
   private cachedSpanishVoice: SpeechSynthesisVoice | null = null;
@@ -131,13 +132,37 @@ class AIDJVoiceService {
   public unlockAudioForMobile() {
     if (typeof window === 'undefined') return;
     try {
-      const dummy = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA');
-      dummy.volume = 0.01;
-      const playPromise = dummy.play();
+      if (!this.unlockedAudio) {
+        const audio = new Audio();
+        audio.preload = 'auto';
+        audio.setAttribute('playsinline', 'true');
+        audio.setAttribute('webkit-playsinline', 'true');
+        (audio as any).preservesPitch = true;
+        audio.style.display = 'none';
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.appendChild(audio);
+        }
+        this.unlockedAudio = audio;
+      }
+      this.unlockedAudio.src = 'data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA';
+      this.unlockedAudio.volume = 0.01;
+      const playPromise = this.unlockedAudio.play();
       if (playPromise && typeof playPromise.then === 'function') {
         playPromise.then(() => {
-          dummy.pause();
+          this.unlockedAudio?.pause();
         }).catch(() => {});
+      }
+
+      // Resume Web Audio AudioContext if suspended
+      const AC = (window as any).AudioContext || (window as any).webkitAudioContext;
+      if (AC) {
+        if (!this.analyserCtx) this.analyserCtx = new AC();
+        if (this.analyserCtx && this.analyserCtx.state === 'suspended') {
+          void this.analyserCtx.resume().catch(() => {});
+        }
+      }
+      if (audioEngine && typeof audioEngine.unlockAudio === 'function') {
+        audioEngine.unlockAudio();
       }
     } catch {}
   }
@@ -191,7 +216,8 @@ class AIDJVoiceService {
 
   /** Audio (blob URL) + word timings; works with the JSON answer and with plain audio */
   private async fetchSpeech(text: string, lang: string, voice: DJVoiceId, signal?: AbortSignal): Promise<{ url: string; words: WordTiming[] } | null> {
-    const res = await fetch(`/api/tts?${this.ttsParams(text, lang, voice).toString()}`, { signal });
+    const fetchSignal = signal || (AbortSignal.timeout ? AbortSignal.timeout(6000) : undefined);
+    const res = await fetch(`/api/tts?${this.ttsParams(text, lang, voice).toString()}`, { signal: fetchSignal });
     if (!res.ok) throw new Error(`TTS API returned ${res.status}`);
     if ((res.headers.get('content-type') || '').includes('json')) {
       const data = await res.json();
@@ -431,35 +457,48 @@ class AIDJVoiceService {
         this.currentAudio = null;
       }
 
-      // Always create a clean, untainted native audio element for pristine studio fidelity
-      const audio = new Audio();
+      // Reuse the unlocked audio element to bypass mobile autoplay policies reliably
+      let audio = this.unlockedAudio;
+      if (!audio) {
+        audio = new Audio();
+        audio.preload = 'auto';
+        audio.setAttribute('playsinline', 'true');
+        audio.setAttribute('webkit-playsinline', 'true');
+        (audio as any).preservesPitch = true;
+        audio.style.display = 'none';
+        if (typeof document !== 'undefined' && document.body) {
+          document.body.appendChild(audio);
+        }
+        this.unlockedAudio = audio;
+      }
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {}
       audio.src = audioUrl;
-      audio.preload = 'auto';
       audio.playbackRate = 1.0;
       audio.volume = 1.0; // Full 100% volume matching music playback
-      audio.setAttribute('playsinline', 'true');
-      audio.setAttribute('webkit-playsinline', 'true');
-      (audio as any).preservesPitch = true;
-      audio.style.display = 'none';
-      if (typeof document !== 'undefined' && document.body) {
-        document.body.appendChild(audio);
-      }
       this.currentAudio = audio;
 
       return new Promise<boolean>((resolve) => {
         let isDone = false;
+        let safetyTimeout: any = null;
         const words = text.split(/\s+/).filter(Boolean);
 
         const cleanup = () => {
           if (isDone) return;
           isDone = true;
+          if (safetyTimeout) {
+            clearTimeout(safetyTimeout);
+            safetyTimeout = null;
+          }
           if (this.voiceLevelInterval) {
             clearInterval(this.voiceLevelInterval);
             this.voiceLevelInterval = null;
           }
-          if (audio.parentNode) {
-            try { audio.parentNode.removeChild(audio); } catch {}
-          }
+          try {
+            audio.pause();
+          } catch {}
           options.onVoiceLevel?.(0);
           options.onWord?.('', text);
           this.restoreAudio();
@@ -468,6 +507,12 @@ class AIDJVoiceService {
           options.onEnd?.();
           resolve(true);
         };
+
+        // Safety fallback timer: guarantee cleanup after at most 9s or word duration + 2s
+        const maxExpectedMs = Math.min(9000, Math.max(3000, words.length * 280 + 2000));
+        safetyTimeout = setTimeout(() => {
+          cleanup();
+        }, maxExpectedMs);
 
         // The sphere follows the real loudness of the voice when the audio can be analysed
         const analyser = this.attachAnalyser(audio);

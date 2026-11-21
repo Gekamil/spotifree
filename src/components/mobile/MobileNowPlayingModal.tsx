@@ -1673,7 +1673,7 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                               <p className="font-semibold text-sm text-white truncate font-['SpotifyMixUITitle']">{t.name}</p>
                               {t.isSmartRecommendation && (
                                 <span className="shrink-0 px-1 py-0.5 text-[9px] font-medium bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/30 rounded">
-                                  ✨
+                                  ✨ Recomendado
                                 </span>
                               )}
                             </div>
