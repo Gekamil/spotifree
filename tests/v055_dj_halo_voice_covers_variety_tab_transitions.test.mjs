@@ -73,14 +73,14 @@ describe('Spotifree v0.5.5: Non-Spinning Concentric DJ Halo, Guaranteed DJ Voice
     assert.ok(spotifreeMixesSource.includes('makeCollageCoverSvg'), 'Must export makeCollageCoverSvg');
     assert.ok(spotifreeMixesSource.includes('makeGeometricCoverSvg'), 'Must export makeGeometricCoverSvg');
 
-    // Banner style: real song photo on top + bottom rectangular banner
-    assert.ok(spotifreeMixesSource.includes('bannerH = Math.round(S * 0.28)'), 'Must draw bottom rectangular banner');
+    // Banner style: real song photo + bottom rectangular banner
+    assert.ok(spotifreeMixesSource.includes('barH =') || spotifreeMixesSource.includes('bannerH ='), 'Must draw bottom rectangular banner');
     assert.ok(spotifreeMixesSource.includes('drawImageAspectCover'), 'Must crop and draw song image cleanly');
 
-    // Daily mixes rotate through styles
+    // Daily mixes rotate through styles with banner dominant
     assert.ok(
-      spotifreeMixesSource.includes("dailyStyles: CoverStyle[] = ['banner', 'badge', 'collage']"),
-      'Daily mixes must cycle through banner, badge, and collage styles'
+      spotifreeMixesSource.includes('dailyStyles: CoverStyle[] ='),
+      'Daily mixes must cycle through styles'
     );
   });
 

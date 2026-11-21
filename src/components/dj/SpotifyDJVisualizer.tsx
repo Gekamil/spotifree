@@ -80,7 +80,7 @@ export function calculateOrbLayerDisplacement(
     // Layer 2 (Outer ring): displaced ~32-38px toward upper-right with elegant speech wave delamination
     const outerBaseDisplacement = (mini ? 4.5 : 34.0) * scaleFactor;
     const outerSpeechFlutter =
-      (0.3 + voiceLevel * 0.6) * (mini ? 1.5 : 7.0) * scaleFactor * Math.cos(theta * 4) * Math.sin(time * 0.85) +
+      (0.3 + voiceLevel * 0.6) * (mini ? 1.5 : 7.0) * scaleFactor * Math.cos(theta * 4) * (0.6 + 0.4 * Math.cos(time * 0.85)) +
       (mini ? 0.8 : 3.0) * scaleFactor * Math.sin(theta * 2) * Math.cos(time * 0.55);
     const outerLayerOffset = splitAmount * W * (outerBaseDisplacement + outerSpeechFlutter);
     return baseOffset + outerLayerOffset;
@@ -238,13 +238,12 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
       smoothedVoiceRef.current += (targetVoice - smoothedVoiceRef.current) * voiceAttack;
       const currentVoice = smoothedVoiceRef.current;
 
-      // Multi-wave talking orb delamination: ALWAYS show the concentric waves (Photo 1) even when idle,
-      // expanding dynamically when speaking
+      // Multi-wave talking orb delamination: target 1.0 when speaking/waves enabled, 0.0 when idle
       const baseSplit = 0.88;
-      const targetSplit = isSpeaking ? 1.0 : baseSplit;
+      const targetSplit = isSpeaking ? 1.0 : 0.0;
       const splitRate = targetSplit > splitAmountRef.current ? 0.08 : 0.05;
       splitAmountRef.current += (targetSplit - splitAmountRef.current) * splitRate;
-      const split = Math.max(baseSplit, splitAmountRef.current);
+      const split = hasForceWaves ? Math.max(baseSplit, splitAmountRef.current) : splitAmountRef.current;
 
       // Frame-by-frame color interpolation for smooth transitions
       const targetRgb = parseHexToRgb(themeColorRef.current || '#1ed760');

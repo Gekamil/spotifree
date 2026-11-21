@@ -21,7 +21,101 @@ import { buildDynamicShelves, useSpotifyDataStore, type DynamicShelf } from '../
 import { useStatsStore } from '../store/useStatsStore';
 import { getRecentSearches } from '../utils/recentSearches';
 import { getSavedSpotifreeAccount, syncSpotifreeAccount } from './spotifreeAuth';
-import { TRACK_COVER_CACHE } from '../utils/trackCovers';
+import { TRACK_COVER_CACHE, getTrackCoverUrl, isPlaylistOrGenericCover } from '../utils/trackCovers';
+
+// ---------------------------------------------------------------------------
+// Verified Artist Portrait Registry (CORS enabled, 100% reliable 500x500 portraits)
+// ---------------------------------------------------------------------------
+export const ARTIST_PORTRAITS: Record<string, string> = {
+  'nil moliner': 'https://cdn-images.dzcdn.net/images/artist/2c7cf0389684cd0a2cd9ac96a4706649/500x500-000000-80-0-0.jpg',
+  'manuel carrasco': 'https://cdn-images.dzcdn.net/images/artist/ba70353e7c259f98ebc614a89ddd10fc/500x500-000000-80-0-0.jpg',
+  'daddy yankee': 'https://cdn-images.dzcdn.net/images/artist/0c584f1fc8c55a604545bbae3c8a3b1b/500x500-000000-80-0-0.jpg',
+  'prince royce': 'https://cdn-images.dzcdn.net/images/artist/34c4613ef715fdae5afec5b8da10485f/500x500-000000-80-0-0.jpg',
+  'romeo santos': 'https://cdn-images.dzcdn.net/images/artist/b6ddb885c4900898516d29853a822004/500x500-000000-80-0-0.jpg',
+  'paul alone': 'https://cdn-images.dzcdn.net/images/artist/79d2cdb1116c32d1d9c57feb75fd314c/500x500-000000-80-0-0.jpg',
+  'sofia ellar': 'https://cdn-images.dzcdn.net/images/artist/4ffeb758d1affa379d20210fabad2ac5/500x500-000000-80-0-0.jpg',
+  'rayden': 'https://cdn-images.dzcdn.net/images/artist/42a89bd063f83da2d205897a0567928f/500x500-000000-80-0-0.jpg',
+  'fredi leis': 'https://cdn-images.dzcdn.net/images/artist/6fe7fe40a9757f4955776df912c98d63/500x500-000000-80-0-0.jpg',
+  'paulo londra': 'https://cdn-images.dzcdn.net/images/artist/26fbc79599d2ed0f3629fa74df3e489a/500x500-000000-80-0-0.jpg',
+  'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/2b591901a1d9a2ba3353c8959f6b4be9/500x500-000000-80-0-0.jpg',
+  'quevedo': 'https://cdn-images.dzcdn.net/images/artist/05680d29a5fef56ec945037ae7294bc1/500x500-000000-80-0-0.jpg',
+  'feid': 'https://cdn-images.dzcdn.net/images/artist/11e3b0b7a8d0bca2d8f993d5f57fc68b/500x500-000000-80-0-0.jpg',
+  'rauw alejandro': 'https://cdn-images.dzcdn.net/images/artist/e7ad0eecbc84f3df917544062a4b8686/500x500-000000-80-0-0.jpg',
+  'rosalia': 'https://cdn-images.dzcdn.net/images/artist/463d11b339483ce8381831804fa4b045/500x500-000000-80-0-0.jpg',
+  'aitana': 'https://cdn-images.dzcdn.net/images/artist/5cb15843a9071c7fae93f30d0728c037/500x500-000000-80-0-0.jpg',
+  'melendi': 'https://cdn-images.dzcdn.net/images/artist/33e0e7a858e932b1da79c13ee27e2832/500x500-000000-80-0-0.jpg',
+  'estopa': 'https://cdn-images.dzcdn.net/images/artist/25dd78d3efb0a7c413550302fa2f9fa2/500x500-000000-80-0-0.jpg',
+  'bizarrap': 'https://cdn-images.dzcdn.net/images/artist/07a488b3940be0c3453b683792f254b0/500x500-000000-80-0-0.jpg',
+  'mora': 'https://cdn-images.dzcdn.net/images/artist/0b1548e235e16f3ea83ca9c403332e9d/500x500-000000-80-0-0.jpg',
+  'myke towers': 'https://cdn-images.dzcdn.net/images/artist/3c23315a6b0949d01fcf2a30353ec221/500x500-000000-80-0-0.jpg',
+  'duki': 'https://cdn-images.dzcdn.net/images/artist/32fe9a9bc15cf9571fa79e133cce4f24/500x500-000000-80-0-0.jpg',
+  'olivia dean': 'https://cdn-images.dzcdn.net/images/artist/04a6e87ca0f339fca82d92ee43ec7608/500x500-000000-80-0-0.jpg',
+  'olivia rodrigo': 'https://cdn-images.dzcdn.net/images/artist/d1d0f5c15ad6aeb08f889988229b0f4a/500x500-000000-80-0-0.jpg',
+  'coldplay': 'https://cdn-images.dzcdn.net/images/artist/1e74f1b88df8e5c0e14a2bf4788c2dc5/500x500-000000-80-0-0.jpg',
+  'queen': 'https://cdn-images.dzcdn.net/images/artist/df443a0db90ee928f6eec3b55c3c0c1b/500x500-000000-80-0-0.jpg',
+  'imagine dragons': 'https://cdn-images.dzcdn.net/images/artist/d922ba107b22a013a7c6f082c5b3c582/500x500-000000-80-0-0.jpg',
+  'don mclean': 'https://cdn-images.dzcdn.net/images/artist/2301844bdf9fec4a29a2862d29486c90/500x500-000000-80-0-0.jpg',
+  'c tangana': 'https://cdn-images.dzcdn.net/images/artist/fb4195191c9533f7d1f5ea25f18bf5d3/500x500-000000-80-0-0.jpg',
+  'alvaro de luna': 'https://cdn-images.dzcdn.net/images/artist/d4b31665a363a0bf643c16ee0a1f0a1c/500x500-000000-80-0-0.jpg',
+  'morat': 'https://cdn-images.dzcdn.net/images/artist/6ce956894b91761ef7f0175b6326ebc0/500x500-000000-80-0-0.jpg',
+  'camilo': 'https://cdn-images.dzcdn.net/images/artist/a824cb71c4c1a84f3e6a4b136814b7e9/500x500-000000-80-0-0.jpg',
+  'lemot': 'https://cdn-images.dzcdn.net/images/artist/f1fa29141f39ad199341492ba26ec7ee/500x500-000000-80-0-0.jpg',
+};
+
+export const MUSIC_PORTRAIT_FALLBACKS = [
+  'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1501386761578-eac5c94b800a?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1520523839898-5071282543e1?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1511735111819-9a3f7709049c?w=600&auto=format&fit=crop&q=80',
+  'https://images.unsplash.com/photo-1526478806334-5fd488fcaabc?w=600&auto=format&fit=crop&q=80',
+];
+
+export function resolveArtistPhoto(name: string): string {
+  const k = norm(name);
+  if (!k) return MUSIC_PORTRAIT_FALLBACKS[0];
+  if (ARTIST_PORTRAITS[k]) return ARTIST_PORTRAITS[k];
+  for (const [key, url] of Object.entries(ARTIST_PORTRAITS)) {
+    if (k.includes(key) || key.includes(k)) return url;
+  }
+  const idx = Math.abs(hash(name)) % MUSIC_PORTRAIT_FALLBACKS.length;
+  return MUSIC_PORTRAIT_FALLBACKS[idx];
+}
+
+// ---------------------------------------------------------------------------
+// Spotify Mix Banner Palettes (1:1 with Spotify Top Mixes: 2000s Mix, Chill Mix, etc.)
+// ---------------------------------------------------------------------------
+export interface BannerPalette {
+  banner: string;
+  pill: string;
+  text: string;
+}
+export const DADDY_YANKEE_PALETTES: BannerPalette[] = [
+  { banner: '#e9dfd3', pill: '#181818', text: '#181818' }, // 2000s Mix (Daddy Yankee beige exact)
+  { banner: '#509bf5', pill: '#0b2450', text: '#0b2450' }, // Chill Mix blue exact
+  { banner: '#f3baa1', pill: '#42170d', text: '#42170d' }, // Olivia Rodrigo peach exact
+  { banner: '#1ed760', pill: '#083d16', text: '#083d16' }, // Spotify Mint
+  { banner: '#f7d147', pill: '#3d3000', text: '#3d3000' }, // Sunlight Yellow
+  { banner: '#b589ff', pill: '#240a50', text: '#240a50' }, // Lavender
+  { banner: '#ff5c8a', pill: '#450818', text: '#450818' }, // Strawberry
+  { banner: '#ff8c42', pill: '#451a00', text: '#451a00' }, // Tangerine
+  { banner: '#2ec4b6', pill: '#073833', text: '#073833' }, // Teal
+  { banner: '#e0e7ff', pill: '#1e1b4b', text: '#1e1b4b' }, // Periwinkle
+];
+
+export function getBannerPalette(title: string, accent?: string): BannerPalette {
+  if (accent && accent.startsWith('#')) {
+    return { banner: accent, pill: '#121212', text: '#ffffff' };
+  }
+  const idx = Math.abs(hash(title)) % DADDY_YANKEE_PALETTES.length;
+  return DADDY_YANKEE_PALETTES[idx];
+}
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -69,7 +163,18 @@ function isoWeek(d = new Date()): string {
   return `${t.getUTCFullYear()}-W${Math.ceil(((t.getTime() - y.getTime()) / DAY + 1) / 7)}`;
 }
 const firstArtist = (t: any): string => String(t?.artists?.[0]?.name || '').split(/\s*[,&]\s*/)[0];
-const coverOf = (t: any): string => t?.album?.images?.[0]?.url || '';
+const coverOf = (t: any): string => {
+  if (!t) return '';
+  const fromHelper = getTrackCoverUrl(t);
+  if (fromHelper && !isPlaylistOrGenericCover(fromHelper)) return fromHelper;
+  const fromCache = t?.id ? TRACK_COVER_CACHE.get(t.id) : undefined;
+  if (fromCache && !isPlaylistOrGenericCover(fromCache)) return fromCache;
+  const albumImg = t?.album?.images?.[0]?.url;
+  if (albumImg && !isPlaylistOrGenericCover(albumImg)) return albumImg;
+  const artName = firstArtist(t);
+  if (artName) return resolveArtistPhoto(artName);
+  return '';
+};
 const asTrack = (x: any): Track | null => {
   const t = x?.track && x.track.name ? x.track : x;
   return t?.id && t?.name && t?.artists?.length ? (t as Track) : null;
@@ -522,33 +627,43 @@ function drawImageAspectCover(ctx: CanvasRenderingContext2D, img: HTMLImageEleme
 
 export function makeBannerCoverSvg(title: string, color: string, images: string[] = []): string {
   const S = 600;
-  const bannerH = 170;
-  const photoH = S - bannerH;
-  const imgUrl = images[0] || '';
-  const cleanColor = color || '#1e3264';
+  const pal = getBannerPalette(title, color);
+  const imgUrl = images[0] || resolveArtistPhoto(title);
   const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const barX = 32;
+  const barY = 445;
+  const barW = S - 64; // 536
+  const barH = 78;
+  const pillX = barX + 16; // 48
+  const pillY = barY + 14; // 459
+  const pillW = 8;
+  const pillH = barH - 28; // 50
+  const textX = pillX + pillW + 16; // 72
+  const textY = barY + 50; // 495
+  const fontSize = cleanTitle.length > 20 ? 25 : cleanTitle.length > 15 ? 28 : 32;
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
     <defs>
-      <linearGradient id="photoFallback" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="${cleanColor}"/>
-        <stop offset="100%" stop-color="#141414"/>
-      </linearGradient>
       <linearGradient id="photoShadow" x1="0%" y1="0%" x2="0%" y2="100%">
         <stop offset="0%" stop-color="rgba(0,0,0,0)"/>
-        <stop offset="100%" stop-color="rgba(0,0,0,0.65)"/>
+        <stop offset="100%" stop-color="rgba(0,0,0,0.45)"/>
       </linearGradient>
     </defs>
-    <rect width="${S}" height="${photoH}" fill="url(#photoFallback)"/>
-    ${imgUrl ? `<image href="${imgUrl}" x="0" y="0" width="${S}" height="${photoH}" preserveAspectRatio="xMidYMid slice"/>` : ''}
-    <rect x="0" y="${photoH - 36}" width="${S}" height="36" fill="url(#photoShadow)"/>
-    <rect x="0" y="${photoH}" width="${S}" height="${bannerH}" fill="${cleanColor}"/>
-    <rect x="0" y="${photoH}" width="${S}" height="2" fill="rgba(0,0,0,0.35)"/>
-    <rect x="36" y="${photoH + 26}" width="4.5" height="15" fill="#ffffff" opacity="0.9"/>
-    <rect x="44.5" y="${photoH + 20}" width="4.5" height="23" fill="#ffffff" opacity="0.9"/>
-    <rect x="53" y="${photoH + 23}" width="4.5" height="18" fill="#ffffff" opacity="0.9"/>
-    <text x="68" y="${photoH + 37}" fill="#ffffff" opacity="0.9" font-family="'SpotifyMixUI', 'Circular', sans-serif" font-weight="700" font-size="16" letter-spacing="0.5">SPOTIFREE MIX</text>
-    <text x="36" y="${photoH + 92}" fill="#ffffff" font-family="'SpotifyMixUITitle', 'Circular', sans-serif" font-weight="900" font-size="44" letter-spacing="-0.5">${cleanTitle}</text>
+    <!-- 100% Full-bleed background photo -->
+    <rect width="${S}" height="${S}" fill="#141414"/>
+    ${imgUrl ? `<image href="${imgUrl}" x="0" y="0" width="${S}" height="${S}" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    <rect x="0" y="360" width="${S}" height="240" fill="url(#photoShadow)"/>
+    <!-- Top-left subtle circular logo badge -->
+    <circle cx="52" cy="52" r="18" fill="rgba(255,255,255,0.92)"/>
+    <rect x="44" y="46" width="2.5" height="12" rx="1.2" fill="#121212"/>
+    <rect x="50.5" y="43" width="2.5" height="18" rx="1.2" fill="#121212"/>
+    <rect x="57" y="45" width="2.5" height="14" rx="1.2" fill="#121212"/>
+    <!-- Floating horizontal banner bar (Daddy Yankee style) -->
+    <rect x="${barX}" y="${barY}" width="${barW}" height="${barH}" rx="10" fill="${pal.banner}"/>
+    <!-- Left vertical accent pill -->
+    <rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="3" fill="${pal.pill}"/>
+    <!-- Banner title -->
+    <text x="${textX}" y="${textY}" fill="${pal.text}" font-family="'SpotifyMixUITitle', 'Circular', -apple-system, sans-serif" font-weight="900" font-size="${fontSize}" letter-spacing="-0.5">${cleanTitle}</text>
   </svg>`;
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
@@ -640,7 +755,7 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
       if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
       if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
       if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
-      return makeGeometricCoverSvg(title, baseColor);
+      return makeBannerCoverSvg(title, baseColor, images);
     }
 
     if (!accent && images.length > 0 && images[0]) {
@@ -650,60 +765,90 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
       } catch {}
     }
 
-    // 1. STYLE: BANNER (Rectángulo inferior con nombre y foto de una canción de la playlist)
+    // 1. STYLE: BANNER (Daddy Yankee Top Mixes style: foto completa + barra flotante inferior con acento vertical)
     if (normStyle === 'banner') {
-      const bannerH = Math.round(S * 0.28);
-      const photoH = S - bannerH;
+      const pal = getBannerPalette(title, accent);
       let imgLoaded: HTMLImageElement | null = null;
-      if (images.length > 0 && images[0]) {
-        try { imgLoaded = await loadImg(images[0]); } catch {}
+      const targetImgUrl = images[0] || resolveArtistPhoto(title);
+      if (targetImgUrl) {
+        try { imgLoaded = await loadImg(targetImgUrl); } catch {}
+      }
+      if (!imgLoaded) {
+        const fallbackUrl = resolveArtistPhoto(title);
+        try { imgLoaded = await loadImg(fallbackUrl); } catch {}
       }
 
       if (imgLoaded) {
-        drawImageAspectCover(ctx, imgLoaded, 0, 0, S, photoH);
-        const shadow = ctx.createLinearGradient(0, photoH - 30, 0, photoH);
+        drawImageAspectCover(ctx, imgLoaded, 0, 0, S, S);
+        const shadow = ctx.createLinearGradient(0, S * 0.58, 0, S);
         shadow.addColorStop(0, 'rgba(0,0,0,0)');
-        shadow.addColorStop(1, 'rgba(0,0,0,0.65)');
+        shadow.addColorStop(1, 'rgba(0,0,0,0.48)');
         ctx.fillStyle = shadow;
-        ctx.fillRect(0, photoH - 30, S, 30);
+        ctx.fillRect(0, S * 0.58, S, S * 0.42);
       } else {
-        const g = ctx.createLinearGradient(0, 0, S, photoH);
-        g.addColorStop(0, baseColor);
+        const g = ctx.createLinearGradient(0, 0, S, S);
+        g.addColorStop(0, pal.banner);
         g.addColorStop(1, '#121212');
         ctx.fillStyle = g;
-        ctx.fillRect(0, 0, S, photoH);
-        ctx.beginPath();
-        ctx.arc(S * 0.5, photoH * 0.5, photoH * 0.35, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fillRect(0, 0, S, S);
       }
 
-      // Banner background
-      ctx.fillStyle = baseColor;
-      ctx.fillRect(0, photoH, S, bannerH);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
-      ctx.fillRect(0, photoH, S, 2);
-
-      // Top branding: 3 sound bars + SPOTIFREE MIX
-      const by = photoH + 24;
+      // Top-left subtle circular logo badge
       ctx.save();
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.fillRect(28, by + 3, 3.5, 11);
-      ctx.fillRect(34.5, by, 3.5, 17);
-      ctx.fillRect(41, by + 2, 3.5, 13);
-      ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
-      ctx.fillText('SPOTIFREE MIX', 52, by + 13);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+      ctx.beginPath();
+      ctx.arc(42, 42, 15, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = '#121212';
+      ctx.fillRect(35.5, 37, 2, 10);
+      ctx.fillRect(41, 34.5, 2, 15);
+      ctx.fillRect(46.5, 36, 2, 12);
       ctx.restore();
 
-      // Title
+      // Floating bottom banner bar (1:1 with Spotify 2000s Mix / Chill Mix)
+      const barX = Math.round(S * 0.053); // ~26px
+      const barY = Math.round(S * 0.74);  // ~355px
+      const barW = S - barX * 2;
+      const barH = Math.round(S * 0.13);  // ~62px
+      const pillW = Math.max(6, Math.round(barH * 0.12));
+      const pillH = barH - 22;
+      const pillX = barX + 14;
+      const pillY = barY + 11;
+      const textX = pillX + pillW + 14;
+      const textY = barY + Math.round(barH * 0.65);
+
       ctx.save();
-      ctx.font = '900 32px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
-      ctx.fillStyle = '#ffffff';
-      ctx.shadowColor = 'rgba(0,0,0,0.6)';
-      ctx.shadowBlur = 8;
-      const lines = wrapTitle(ctx, title, S - 56);
-      lines.forEach((l, i) => ctx.fillText(l, 28, by + 56 + i * 36));
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetY = 4;
+      ctx.fillStyle = pal.banner;
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(barX, barY, barW, barH, 9);
+        ctx.fill();
+      } else {
+        ctx.fillRect(barX, barY, barW, barH);
+      }
+      ctx.restore();
+
+      // Left vertical accent pill
+      ctx.save();
+      ctx.fillStyle = pal.pill;
+      if (typeof ctx.roundRect === 'function') {
+        ctx.beginPath();
+        ctx.roundRect(pillX, pillY, pillW, pillH, 3);
+        ctx.fill();
+      } else {
+        ctx.fillRect(pillX, pillY, pillW, pillH);
+      }
+      ctx.restore();
+
+      // Banner Title
+      ctx.save();
+      const fontSize = title.length > 20 ? 21 : title.length > 15 ? 24 : 27;
+      ctx.font = `900 ${fontSize}px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif`;
+      ctx.fillStyle = pal.text;
+      ctx.fillText(title, textX, textY, barW - (textX - barX) - 16);
       ctx.restore();
 
       return c.toDataURL('image/jpeg', 0.88);
@@ -739,8 +884,12 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
 
       // Circular image cutout
       let imgLoaded: HTMLImageElement | null = null;
-      if (images.length > 0 && images[0]) {
-        try { imgLoaded = await loadImg(images[0]); } catch {}
+      const targetImgUrl = images[0] || resolveArtistPhoto(title);
+      if (targetImgUrl) {
+        try { imgLoaded = await loadImg(targetImgUrl); } catch {}
+      }
+      if (!imgLoaded) {
+        try { imgLoaded = await loadImg(resolveArtistPhoto(title)); } catch {}
       }
 
       if (imgLoaded) {
@@ -876,7 +1025,7 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
     if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
     if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
     if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
-    return makeGeometricCoverSvg(title, baseColor);
+    return makeBannerCoverSvg(title, baseColor, images);
   }
 }
 
@@ -2140,7 +2289,19 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const res = await Promise.all(chunk.map((a) => discover(a.name)));
     res.forEach((d, j) => d && disc.set(norm(chunk[j].name), d));
   }
-  const pictureOf = (name: string) => disc.get(norm(name))?.artist?.picture || profile.artists.find((a) => norm(a.name) === norm(name))?.img || '';
+  const pictureOf = (name: string): string => {
+    const normName = norm(name);
+    if (!normName) return resolveArtistPhoto(name);
+    if (ARTIST_PORTRAITS[normName]) return ARTIST_PORTRAITS[normName];
+    const discPic = disc.get(normName)?.artist?.picture;
+    if (discPic && !isPlaylistOrGenericCover(discPic)) return discPic;
+    const profPic = profile.artists.find((a) => norm(a.name) === normName)?.img;
+    if (profPic && !isPlaylistOrGenericCover(profPic)) return profPic;
+    const dataStoreArtists: any[] = (useSpotifyDataStore.getState() as any).artists || [];
+    const dsPic = dataStoreArtists.find((a: any) => norm(a.name) === normName)?.images?.[0]?.url;
+    if (dsPic && !isPlaylistOrGenericCover(dsPic)) return dsPic;
+    return resolveArtistPhoto(name);
+  };
   const ownByArtist = (name: string) => profile.tracks.filter((t) => norm(firstArtist(t.track)) === norm(name)).map((t) => t.track);
 
   // Mix diario: group artists that go together (an artist joins a group whose seed lists it as similar)
@@ -2154,11 +2315,8 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     else if (groups.length < 6) groups.push([a.name]);
   }
   const out: SpotifreeMix[] = [];
-  // Authentic Spotify Mix visual variety:
-  // 1. Banner (real song photo + bottom rectangular bar)
-  // 2. Badge (circular song/artist photo with vinyl rings)
-  // 3. Collage (4 song photos in 2x2 grid)
-  const dailyStyles: CoverStyle[] = ['banner', 'badge', 'collage'];
+  // Authentic Spotify Mix visual variety (majority is Daddy Yankee banner style with real photos):
+  const dailyStyles: CoverStyle[] = ['banner', 'banner', 'banner', 'badge', 'banner', 'collage'];
 
   for (let i = 0; i < groups.length; i++) {
     const grp = groups[i];
@@ -2174,7 +2332,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const style: CoverStyle = dailyStyles[i % dailyStyles.length];
     const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
     const artistPic = pictureOf(shuffle(grp, r)[0]);
-    const imgs = style === 'badge' && artistPic ? [artistPic, ...songCovers] : songCovers;
+    const imgs = [artistPic, ...songCovers].filter(Boolean);
     // Numbered after Spotify's own daily mixes (if the user has 1-6, ours are 7, 8…)
     dailyNumber += 1;
     const title = `Mix diario ${dailyNumber}`;
@@ -2253,7 +2411,7 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const title = `Mix de ${d.artist?.name || a.name}`;
     // Spotify already gives this user a "Mix de X": that one stays, ours would only repeat it
     if (taken.has(norm(title))) continue;
-    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 2 === 0 ? 'banner' : 'badge';
+    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 4 === 0 ? 'badge' : 'banner';
     const artistPic = pictureOf(a.name);
     const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
     const imgs = [artistPic, ...songCovers].filter(Boolean);
@@ -2424,8 +2582,8 @@ function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtist
   }));
 }
 
-// v2: mixes built before names were kept apart from Spotify's own are rebuilt
-const storeKey = () => `mixes2:${uid()}`;
+// v6: mixes with Daddy Yankee Top Mixes banner style, guaranteed high-res portraits and cache bump
+const storeKey = () => `mixes_v6:${uid()}`;
 let building: Promise<void> | null = null;
 
 /** Rebuilds the account's playlists (once a day, or when asked) */

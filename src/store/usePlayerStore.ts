@@ -203,7 +203,7 @@ interface PlayerState {
   preselectedNextTrackId: string | null;
 
   // Actions
-  playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string) => void;
+  playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string, isNavigatingHistory?: boolean) => void;
   setContextId: (id: string | null, name?: string | null) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -320,7 +320,13 @@ const store = create<PlayerState>((set, get) => ({
     set(get().isShuffle ? { queue: current } : { queue: current, originalQueue: current });
   },
 
-  playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string) => {
+  playTrack: (
+    track: Track,
+    newQueue?: Track[],
+    contextId?: string,
+    contextName?: string,
+    isNavigatingHistory: boolean = false
+  ) => {
     if (typeof window !== 'undefined' && !(typeof process !== 'undefined' && process.release?.name === 'node')) {
       if (!useSpotifyDataStore.getState().isAuthenticated) {
         useUIStore.getState().openLoginModal();
@@ -380,7 +386,11 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    const updatedHistory = state.currentTrack ? [state.currentTrack, ...state.history] : state.history;
+    const updatedHistory = isNavigatingHistory
+      ? state.history
+      : state.currentTrack
+      ? [state.currentTrack, ...state.history]
+      : state.history;
     try {
       useStatsStore.getState().recordTrackPlayed(hydratedTrack);
       recordHistoryItem({
@@ -797,6 +807,15 @@ const store = create<PlayerState>((set, get) => ({
 
     // End of queue:
     if (repeatMode === 'all') {
+      if (get().isShuffle && queue.length > 2) {
+        // Reshuffle the playlist for the next loop so the user gets a fresh random sequence
+        const base = get().originalQueue.length > 0 ? get().originalQueue : queue;
+        const reshuffled = shuffleTracks(base, lastPlayedAt);
+        set({ queue: reshuffled, playedInShuffle: [] });
+        const firstValid = reshuffled.find((t) => !isExcluded(t));
+        if (firstValid) return firstValid;
+        return reshuffled[0] || null;
+      }
       const firstValid = queue.find((t) => !isExcluded(t));
       if (firstValid) return firstValid;
       return queue[0] || null;
@@ -933,15 +952,16 @@ const store = create<PlayerState>((set, get) => ({
     // In shuffle mode: Going backward navigates through the actual history of songs that already played
     if (isShuffle) {
       if (history.length > 0) {
-        const prevTrackFromHistory = history.find((t) => t.id !== currentTrack?.id);
-        if (prevTrackFromHistory) {
+        const historyIdx = history.findIndex((t) => t.id !== currentTrack?.id);
+        if (historyIdx >= 0) {
+          const prevTrackFromHistory = history[historyIdx];
+          const remainingHistory = history.slice(historyIdx + 1);
           const remainingShuffle = currentTrack ? playedInShuffle.filter((id) => id !== currentTrack.id) : playedInShuffle;
-          const remainingHistory = history.filter((t) => t.id !== prevTrackFromHistory.id);
           set({
             playedInShuffle: remainingShuffle,
             history: remainingHistory,
           });
-          get().playTrack(prevTrackFromHistory);
+          get().playTrack(prevTrackFromHistory, undefined, undefined, undefined, true);
           return;
         }
       }
@@ -1054,6 +1074,7 @@ const store = create<PlayerState>((set, get) => ({
         playedInShuffle: [],
         preselectedNextTrackId: null,
         queue: cleanQueue,
+        originalQueue: cleanQueue,
       });
       return;
     }
@@ -1072,6 +1093,7 @@ const store = create<PlayerState>((set, get) => ({
         playedInShuffle: curr ? [curr.id] : [],
         preselectedNextTrackId: others[0]?.id || null,
         queue: shuffledQueue,
+        originalQueue: state.originalQueue.length > 0 ? state.originalQueue : baseTracks,
       });
       return;
     }
@@ -1089,6 +1111,7 @@ const store = create<PlayerState>((set, get) => ({
         playedInShuffle: curr ? [curr.id] : [],
         preselectedNextTrackId: others[0]?.id || null,
         queue: shuffledQueue,
+        originalQueue: state.originalQueue.length > 0 ? state.originalQueue : baseTracks,
       });
       get().populateSmartShuffleRecommendations(shuffledQueue);
       return;

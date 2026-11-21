@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import type { Playlist, Track } from '../../types/spotify';
 import { openAudioSourceSheet } from '../../utils/audioSourceSheet';
-import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store/usePlayerStore';
+import { usePlayerStore, matchTrackId } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useUIStore } from '../../store/useUIStore';
@@ -28,7 +28,6 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration, stripHtml, toHDImage } from '../../utils/formatters';
-import { shuffleTracks } from '../../utils/shuffleOrder';
 import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
@@ -922,18 +921,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     if (currentTrack?.id === track.id || matchTrackId(currentTrack?.id, track.id)) {
       togglePlay();
     } else {
-      const clickedIndex = findTrackIndexInQueue(displayTracks, track);
-      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
-      let sequentialQueue: Track[];
-      if (isShuffleActive && displayTracks.length > 1) {
-        const remaining = displayTracks.filter((t) => t.id !== track.id && !matchTrackId(t.id, track.id));
-        sequentialQueue = [track, ...shuffleTracks(remaining)];
-      } else {
-        sequentialQueue = clickedIndex >= 0
-          ? [...displayTracks.slice(clickedIndex), ...displayTracks.slice(0, clickedIndex)]
-          : displayTracks;
-      }
-      playTrack(track, sequentialQueue, playlist.id, playlist.name);
+      // Pass clean un-shuffled playlist tracks as context so originalQueue is preserved for toggling shuffle off
+      playTrack(track, displayTracks, playlist.id, playlist.name);
     }
   };
 
@@ -952,22 +941,13 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
     // 2. Starting fresh playback on this playlist
     const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
-    let startTrack: Track;
-    let sequentialQueue: Track[];
+    const startTrack = isShuffleActive && displayTracks.length > 1
+      ? displayTracks[Math.floor(Math.random() * displayTracks.length)]
+      : displayTracks[0];
 
-    if (isShuffleActive && displayTracks.length > 1) {
-      const rndIdx = Math.floor(Math.random() * displayTracks.length);
-      startTrack = displayTracks[rndIdx];
-      const remaining = displayTracks.filter((t) => t.id !== startTrack.id && !matchTrackId(t.id, startTrack.id));
-      sequentialQueue = [startTrack, ...shuffleTracks(remaining)];
-    } else {
-      startTrack = displayTracks[0];
-      sequentialQueue = displayTracks;
-    }
-
-    playTrack(startTrack, sequentialQueue, playlist.id, playlist.name);
+    playTrack(startTrack, displayTracks, playlist.id, playlist.name);
     if (shuffleMode === 'smart') {
-      usePlayerStore.getState().populateSmartShuffleRecommendations(sequentialQueue);
+      usePlayerStore.getState().populateSmartShuffleRecommendations(displayTracks);
     }
   };
 

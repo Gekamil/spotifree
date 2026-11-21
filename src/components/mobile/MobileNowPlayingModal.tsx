@@ -1608,8 +1608,8 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
             {/* Section Header: Modo aleatorio desde: / A continuación desde: */}
             <div className="px-5 pt-3 pb-1.5 shrink-0 flex items-center gap-2 text-xs font-semibold text-[#b3b3b3]">
-              <ShuffleNativeIcon size={14} className={shuffleMode ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
-              <span>{shuffleMode ? 'Modo aleatorio desde:' : 'A continuación desde:'}</span>
+              <ShuffleNativeIcon size={14} className={shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3]'} />
+              <span>{shuffleMode !== 'off' ? 'Modo aleatorio desde:' : 'A continuación desde:'}</span>
             </div>
 
             {/* Upcoming Queue Section (scrollable) */}
@@ -1710,10 +1710,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <button
                 onClick={() => toggleShuffle()}
                 className={`flex-1 py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  shuffleMode ? 'bg-[#282828] text-[#1ed760]' : 'bg-[#282828] text-white hover:bg-[#323232]'
+                  shuffleMode !== 'off' ? 'bg-[#282828] text-[#1ed760]' : 'bg-[#282828] text-white hover:bg-[#323232]'
                 }`}
               >
-                <ShuffleNativeIcon size={18} className={shuffleMode ? 'text-[#1ed760]' : 'text-white'} />
+                <ShuffleNativeIcon size={18} className={shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-white'} />
                 <span className="text-sm font-semibold">Aleatorio</span>
               </button>
               <button

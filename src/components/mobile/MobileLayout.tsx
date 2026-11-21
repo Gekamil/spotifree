@@ -28,6 +28,7 @@ import { MessagesNotificationsModal } from '../modals/MessagesNotificationsModal
 import { LoginModal } from '../desktop/LoginModal';
 import { AIDJView } from '../dj/AIDJView';
 import { SpotifyDJVisualizer } from '../dj/SpotifyDJVisualizer';
+import { InteractiveMusicWaves } from '../dj/InteractiveMusicWaves';
 import { useAIDJStore } from '../../services/aiDJService';
 import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import type { Playlist } from '../../types/spotify';
@@ -818,7 +819,7 @@ export const MobileLayout: React.FC = () => {
                   </h2>
                   <div
                     onClick={() => handleSelectPlaylistById('spotify-dj')}
-                    className="relative w-full rounded-2xl p-3.5 px-4 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[120px]"
+                    className="relative w-full rounded-2xl p-4 px-4.5 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[148px]"
                     style={{
                       backgroundColor: djThemeColor || '#0c3b88',
                       backgroundImage: `linear-gradient(145deg, ${djThemeColor || '#0c3b88'} 0%, #060f22 100%)`,
@@ -826,19 +827,28 @@ export const MobileLayout: React.FC = () => {
                       transition: 'background-color 0.8s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.8s ease',
                     }}
                   >
+                    {/* Ambient Undulating Background Waves */}
+                    <InteractiveMusicWaves
+                      isPlaying={isPlaying}
+                      isSpeaking={visualizerState === 'speaking'}
+                      voiceLevel={voiceLevel}
+                      themeColor={djThemeColor || '#00f2fe'}
+                      className="absolute inset-0 w-full h-full pointer-events-none opacity-40 mix-blend-screen"
+                    />
+
                     {/* Subtle Ambient Radial Glow behind the Orb */}
                     <div
-                      className="absolute left-1/2 top-8 -translate-x-1/2 -translate-y-1/2 w-36 h-36 rounded-full pointer-events-none transition-all duration-700 opacity-60"
+                      className="absolute left-1/2 top-10 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
                       style={{
                         background: 'radial-gradient(circle, rgba(0, 242, 254, 0.35) 0%, rgba(30, 215, 96, 0.12) 45%, rgba(0,0,0,0) 70%)',
-                        filter: 'blur(18px)',
+                        filter: 'blur(22px)',
                       }}
                     />
 
-                    {/* Center Visualizer: Clean Neon Liquid Halo */}
-                    <div className="relative w-full flex items-center justify-center -my-1 z-10 pointer-events-none">
+                    {/* Center Visualizer: Grand Neon Liquid Halo (enlarged for chic, prominent presence) */}
+                    <div className="relative w-full flex items-center justify-center my-0.5 z-10 pointer-events-none">
                       <SpotifyDJVisualizer
-                        size={94}
+                        size={124}
                         state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                         voiceLevel={voiceLevel}
                         themeColor={djThemeColor}
