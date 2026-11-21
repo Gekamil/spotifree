@@ -192,6 +192,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     private final ExecutorService io = Executors.newFixedThreadPool(2);
     private final Handler main = new Handler(Looper.getMainLooper());
     private String loadedArtUrl = null;
+    private String lastAppliedQueueSig = "";
     private Bitmap art = null;
     private int artRetries = 0;
     private boolean foreground = false;
@@ -602,8 +603,21 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         PlaybackStateCompat.Builder sb = new PlaybackStateCompat.Builder()
             .setActions(actions)
             .setState(playing ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED,
-                positionMs, playing ? 1f : 0f, SystemClock.elapsedRealtime())
-            .setActiveQueueItemId(-1);
+                positionMs, playing ? 1f : 0f, SystemClock.elapsedRealtime());
+
+        // Keep active queue item stable so Android Auto does not reset queue scroll on state updates
+        long activeQueueId = MediaSessionCompat.QueueItem.UNKNOWN_ID;
+        JSONArray curQ = queue;
+        if (curQ != null && trackId != null && !trackId.isEmpty()) {
+            for (int i = 0; i < curQ.length() && i < 40; i++) {
+                JSONObject item = curQ.optJSONObject(i);
+                if (item != null && trackId.equals(item.optString("id"))) {
+                    activeQueueId = i;
+                    break;
+                }
+            }
+        }
+        sb.setActiveQueueItemId(activeQueueId);
         // Spotify-style buttons on the car's "now playing" screen. Each state has its own action
         // id: Android Auto keeps the icon of an id it already knows, so with a single id the
         // shuffle / repeat / like buttons did not show the phone's state.
@@ -649,8 +663,23 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     /** Upcoming songs as the session queue (the car's queue button) */
     void refreshQueue() {
         if (session == null) return;
-        List<MediaSessionCompat.QueueItem> items = new ArrayList<>();
         JSONArray q = queue;
+
+        // Build structural signature of the queue to prevent resetting scroll on non-structural updates
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; q != null && i < q.length() && i < 40; i++) {
+            JSONObject t = q.optJSONObject(i);
+            if (t == null) continue;
+            sb.append(t.optString("id", String.valueOf(i))).append("|")
+              .append(t.optString("title")).append(";");
+        }
+        String currentSig = sb.toString();
+        if (currentSig.equals(lastAppliedQueueSig)) {
+            return; // Queue structure unchanged: skip notifyChildrenChanged to prevent Android Auto scroll reset
+        }
+        lastAppliedQueueSig = currentSig;
+
+        List<MediaSessionCompat.QueueItem> items = new ArrayList<>();
         for (int i = 0; q != null && i < q.length() && i < 40; i++) {
             JSONObject t = q.optJSONObject(i);
             if (t == null) continue;

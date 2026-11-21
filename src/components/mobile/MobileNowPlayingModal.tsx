@@ -87,11 +87,11 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
   const queueScrollRef = useRef<HTMLDivElement>(null);
+  const queueScrollTopRef = useRef<number>(0);
   const {
     dragY: queueDragY,
     isDismissing: isQueueDismissing,
     handleProps: queueHandleProps,
-    contentProps: queueContentProps,
     sheetStyle: queueSheetStyle,
     resetDrag: resetQueueDrag,
     triggerDismiss: dismissQueue,
@@ -123,6 +123,17 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     el.addEventListener('touchmove', block, { passive: false });
     return () => el.removeEventListener('touchmove', block);
   }, [isQueueOpen]);
+
+  // Preserve scroll position across re-renders/recommendation arrivals in mobile queue
+  useEffect(() => {
+    if (!isQueueOpen) {
+      queueScrollTopRef.current = 0;
+      return;
+    }
+    if (queueScrollRef.current && queueScrollTopRef.current > 0) {
+      queueScrollRef.current.scrollTop = queueScrollTopRef.current;
+    }
+  }, [isQueueOpen, queue]);
 
   const onRowTouchStart = (e: React.TouchEvent, idx: number) => {
     holdStartY.current = e.touches[0].clientY;
@@ -1612,11 +1623,14 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <span>{shuffleMode !== 'off' ? 'Modo aleatorio desde:' : 'A continuación desde:'}</span>
             </div>
 
-            {/* Upcoming Queue Section (scrollable) */}
+            {/* Upcoming Queue Section (scrollable - isolated from swipe-to-dismiss to prevent touch scroll reset) */}
             <div
               ref={queueScrollRef}
-              {...queueContentProps}
-              className="flex-1 overflow-y-auto px-5 pb-3 space-y-1.5"
+              onScroll={(e) => {
+                queueScrollTopRef.current = e.currentTarget.scrollTop;
+              }}
+              style={{ overflowAnchor: 'auto' }}
+              className="flex-1 overflow-y-auto px-5 pb-3 space-y-1.5 overscroll-contain"
             >
               {(() => {
                 const curIdx = currentTrack ? queue.findIndex((t) => t.id === currentTrack.id) : -1;
@@ -1639,9 +1653,10 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                     {upcoming.map((t, idx) => {
                       const cover = getTrackCoverUrl(t) || t.album?.images?.[0]?.url || (t as any).image;
                       const dragging = reorder?.idx === idx;
+                      const itemKey = (t as any).queueId || `q-${t.id || 'track'}-${idx}`;
                       return (
                         <div
-                          key={t.id}
+                          key={itemKey}
                           onTouchStart={(e) => onRowTouchStart(e, idx)}
                           onTouchMove={(e) => onRowTouchMove(e, baseOffset, upcoming.length)}
                           onTouchEnd={onRowTouchEnd}
