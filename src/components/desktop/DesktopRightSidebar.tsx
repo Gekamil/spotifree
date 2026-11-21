@@ -983,11 +983,6 @@ export const DesktopRightSidebar: React.FC<DesktopRightSidebarProps> = ({ onSele
                             <p className="font-bold text-white group-hover:text-[#1ed760] truncate text-sm">
                               {item.name}
                             </p>
-                            {item.isSmartRecommendation && (
-                              <span className="shrink-0 px-1 py-0.5 text-[10px] font-medium bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/30 rounded">
-                                ✨ Recomendado
-                              </span>
-                            )}
                           </div>
                           <p className="text-xs text-[#b3b3b3] truncate mt-0.5">
                             {parseTrackArtists(item.artists).map((a) => a.name).join(', ')}

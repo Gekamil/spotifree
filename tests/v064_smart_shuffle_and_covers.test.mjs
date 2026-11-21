@@ -47,6 +47,7 @@ test('v064 - 2. Smart Shuffle YouTube Music Radio endpoint in api/audio.js', asy
   assert.ok(code.includes('music.youtube.com/youtubei/v1/next'), 'Must call YouTube Music InnerTube next API');
   assert.ok(code.includes('WEB_REMIX'), 'Must use WEB_REMIX client context');
   assert.ok(code.includes('action === \'recommendations\''), 'Must wire up action recommendations');
+  assert.ok(code.includes('isYtId'), 'Must validate true 11-char YouTube ID');
 });
 
 test('v064 - 3. Smart Shuffle store integration in usePlayerStore.ts', async () => {
@@ -58,4 +59,13 @@ test('v064 - 3. Smart Shuffle store integration in usePlayerStore.ts', async () 
   assert.ok(code.includes('isSmartRecommendation: true'), 'Injected tracks must have isSmartRecommendation flag');
   assert.ok(code.includes('triggerSmartShuffleRecommendation'), 'triggerSmartShuffleRecommendation must exist');
   assert.ok(code.includes('populateSmartShuffleRecommendations'), 'populateSmartShuffleRecommendations must exist');
+  assert.ok(!code.includes('getCuratedSetForHashtag'), 'Must NOT pull tracks from user library playlists');
+});
+
+test('v064 - 4. No tacky badge or sparkle icon in UI: seamless natural queue display', async () => {
+  const mobileNowPlaying = fs.readFileSync(path.join(root, 'src', 'components', 'mobile', 'MobileNowPlayingModal.tsx'), 'utf8');
+  const desktopSidebar = fs.readFileSync(path.join(root, 'src', 'components', 'desktop', 'DesktopRightSidebar.tsx'), 'utf8');
+
+  assert.ok(!mobileNowPlaying.includes('✨ Recomendado'), 'MobileNowPlayingModal must not display tacky sparkle recommended badge');
+  assert.ok(!desktopSidebar.includes('✨ Recomendado'), 'DesktopRightSidebar must not display tacky sparkle recommended badge');
 });

@@ -1671,11 +1671,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
                               <p className="font-semibold text-sm text-white truncate font-['SpotifyMixUITitle']">{t.name}</p>
-                              {t.isSmartRecommendation && (
-                                <span className="shrink-0 px-1 py-0.5 text-[9px] font-medium bg-[#1ed760]/20 text-[#1ed760] border border-[#1ed760]/30 rounded">
-                                  ✨ Recomendado
-                                </span>
-                              )}
                             </div>
                             <div className="flex items-center gap-1.5 mt-0.5">
                               {(t as any).explicit && (

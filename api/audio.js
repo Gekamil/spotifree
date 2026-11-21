@@ -1059,15 +1059,16 @@ async function handleRecommendations(req, res) {
   const rawQ = (req.query?.q || `${rawTitle} ${rawArtist}`).trim();
   const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || 12, 1), 30);
 
-  let videoId = rawVideoId;
+  const isYtId = (id) => typeof id === 'string' && /^[a-zA-Z0-9_-]{11}$/.test(id);
+  let videoId = isYtId(rawVideoId) ? rawVideoId : '';
   if (!videoId && rawQ) {
     try {
       const resolved = await resolveViaYouTubeMusic(rawQ, rawTitle, rawArtist, new Set(), 0);
-      if (resolved?.videoId) videoId = resolved.videoId;
+      if (resolved?.videoId && isYtId(resolved.videoId)) videoId = resolved.videoId;
     } catch {
       try {
         const resolvedWeb = await resolveViaYouTubeSearch(rawQ, rawTitle, rawArtist, new Set(), 0);
-        if (resolvedWeb?.videoId) videoId = resolvedWeb.videoId;
+        if (resolvedWeb?.videoId && isYtId(resolvedWeb.videoId)) videoId = resolvedWeb.videoId;
       } catch {}
     }
   }
@@ -1166,6 +1167,30 @@ async function handleRecommendations(req, res) {
       });
 
       if (tracks.length >= limit) break;
+    }
+
+    if (tracks.length === 0 && (rawArtist || rawTitle)) {
+      try {
+        const queryTerm = `${rawArtist || rawTitle} mix`;
+        const cands = await collectCandidates(queryTerm, '', rawArtist, new Set([videoId]), 0);
+        for (const c of cands.slice(0, limit)) {
+          if (!c.videoId || c.videoId === videoId) continue;
+          tracks.push({
+            id: `yt-${c.videoId}`,
+            name: c.title,
+            artists: [{ id: `art-${normSlug(c.artist)}`, name: c.artist }],
+            album: {
+              id: `alb-${normSlug(c.title)}`,
+              name: c.title,
+              images: [{ url: `https://i.ytimg.com/vi/${c.videoId}/hqdefault.jpg`, height: 300, width: 300 }],
+            },
+            duration_ms: (c.durationSec || 210) * 1000,
+            uri: `spotify:track:yt_${c.videoId}`,
+            isSmartRecommendation: true,
+            type: 'track',
+          });
+        }
+      } catch {}
     }
 
     const result = { tracks, source: 'youtube-music-radio', seedVideoId: videoId };
