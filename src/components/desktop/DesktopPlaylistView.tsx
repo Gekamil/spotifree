@@ -272,7 +272,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     : customSaved);
 
   const removedTrackIds = getRemovedTrackIdsForPlaylist(playlist.id);
-  const baseTracks = rawBaseTracks.filter((t) => {
+  const baseTracks = rawBaseTracks.filter((t: any) => {
     const cleanT = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     return !removedTrackIds.has(t.id) && !removedTrackIds.has(cleanT);
   });
