@@ -673,6 +673,7 @@ function dynamicSpotifyPlugin(): Plugin {
       };
       server.middlewares.use('/api/audio/resolve', runAudioHandler('resolve'));
       server.middlewares.use('/api/audio/candidates', runAudioHandler('candidates'));
+      server.middlewares.use('/api/audio/recommendations', runAudioHandler('recommendations'));
 
       // 2b. Direct Native Audio Stream (/api/audio/stream) - 0% ADS, NO 59s STALL, DESKTOP & MOBILE
       server.middlewares.use('/api/audio/stream', async (req, res) => {

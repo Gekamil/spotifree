@@ -240,10 +240,16 @@ function isInvalidDzPic(u) {
     l.includes('//1000x1000') ||
     l.includes('//250x250') ||
     l.includes('//56x56') ||
+    l.includes('//120x120') ||
     l.includes('/artist//') ||
     l.includes('/cover//') ||
     l.includes('d41d8cd98f00b204e9800998ecf8427e') ||
-    (l.includes('api.deezer.com') && l.includes('/image'))
+    (l.includes('api.deezer.com') && l.includes('/image')) ||
+    l.includes('placeholder') ||
+    l.includes('default_artist') ||
+    l.includes('user-avatar') ||
+    l.includes('avatar') ||
+    l.includes('default_user')
   );
 }
 

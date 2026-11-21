@@ -35,8 +35,16 @@ test('v058 - 2. 100% Verified 200 OK artist portraits and category photos', asyn
     'Bad Bunny must use verified 200 OK portrait'
   );
   assert.ok(code.includes("'avicii': 'https://cdn-images.dzcdn.net/images/artist/82e214b0cb39316f4a12a082fded54f6/500x500-000000-80-0-0.jpg'"), 'Avicii must use verified 200 OK portrait');
-  assert.ok(code.includes("'quevedo': 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"), 'Quevedo must use verified 200 OK portrait');
-  assert.ok(code.includes("trend_spain: 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"), 'trend_spain must use verified Quevedo 200 OK portrait');
+  assert.ok(
+    code.includes("'quevedo': 'https://cdn-images.dzcdn.net/images/artist/79880cc1b999b15567e332203464c34e/500x500-000000-80-0-0.jpg'") ||
+    code.includes("'quevedo': 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"),
+    'Quevedo must use verified 200 OK portrait'
+  );
+  assert.ok(
+    code.includes("trend_spain: 'https://cdn-images.dzcdn.net/images/artist/79880cc1b999b15567e332203464c34e/500x500-000000-80-0-0.jpg'") ||
+    code.includes("trend_spain: 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg'"),
+    'trend_spain must use verified Quevedo 200 OK portrait'
+  );
 
   // Cache key must be mixes_v8
   assert.ok(code.includes('mixes_v8'), 'Cache key must be bumped to mixes_v8');

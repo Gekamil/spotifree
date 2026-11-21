@@ -1050,6 +1050,139 @@ function sendBufferedAudioResponse({ req, res, buf, totalLen, startOffset, audio
   return res.send(buf);
 }
 
+const RECOMMENDATIONS_CACHE = new Map();
+
+async function handleRecommendations(req, res) {
+  const rawVideoId = String(req.query?.videoId || req.query?.id || '').replace(/^yt-/i, '').trim();
+  const rawTitle = (req.query?.title || '').trim();
+  const rawArtist = (req.query?.artist || '').trim();
+  const rawQ = (req.query?.q || `${rawTitle} ${rawArtist}`).trim();
+  const limit = Math.min(Math.max(parseInt(req.query?.limit, 10) || 12, 1), 30);
+
+  let videoId = rawVideoId;
+  if (!videoId && rawQ) {
+    try {
+      const resolved = await resolveViaYouTubeMusic(rawQ, rawTitle, rawArtist, new Set(), 0);
+      if (resolved?.videoId) videoId = resolved.videoId;
+    } catch {
+      try {
+        const resolvedWeb = await resolveViaYouTubeSearch(rawQ, rawTitle, rawArtist, new Set(), 0);
+        if (resolvedWeb?.videoId) videoId = resolvedWeb.videoId;
+      } catch {}
+    }
+  }
+
+  if (!videoId) {
+    return res.status(400).json({ success: false, error: 'Missing videoId or search query', tracks: [] });
+  }
+
+  const cacheKey = `rec:${videoId}`;
+  if (RECOMMENDATIONS_CACHE.has(cacheKey)) {
+    const cached = RECOMMENDATIONS_CACHE.get(cacheKey);
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    return res.status(200).json({ success: true, ...cached, cached: true });
+  }
+
+  try {
+    const postData = JSON.stringify({
+      context: {
+        client: {
+          clientName: 'WEB_REMIX',
+          clientVersion: '1.20231206.01.00',
+          hl: 'es',
+          gl: 'ES',
+        },
+      },
+      enablePersistentPlaylistPanel: true,
+      isAudioOnly: true,
+      playlistId: `RDAMVM${videoId}`,
+      videoId: videoId,
+    });
+
+    const ytmRes = await fetchWithTimeout(
+      'https://music.youtube.com/youtubei/v1/next',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData),
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'X-YouTube-Client-Name': '67',
+          'X-YouTube-Client-Version': '1.20231206.01.00',
+          'Origin': 'https://music.youtube.com',
+        },
+        body: postData,
+      },
+      6000
+    );
+
+    if (!ytmRes.ok) {
+      throw new Error(`YTM v1/next returned status ${ytmRes.status}`);
+    }
+
+    const json = await ytmRes.json();
+    const queueRenderer = json.contents?.singleColumnMusicWatchNextResultsRenderer?.tabbedRenderer?.watchNextTabbedResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.musicQueueRenderer;
+    const items = queueRenderer?.content?.playlistPanelRenderer?.contents || [];
+
+    const normSlug = (s = '') =>
+      String(s)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'item';
+
+    const tracks = [];
+    for (const it of items) {
+      const v = it.playlistPanelVideoRenderer;
+      if (!v || !v.videoId || v.videoId === videoId) continue;
+      const tTitle = v.title?.runs?.[0]?.text;
+      if (!tTitle) continue;
+
+      const bylineRuns = v.longBylineText?.runs || v.shortBylineText?.runs || [];
+      const bulletIdx = bylineRuns.findIndex((r) => r.text && r.text.includes('•'));
+      const artistRuns = bulletIdx > 0 ? bylineRuns.slice(0, bulletIdx) : bylineRuns.slice(0, 1);
+      const artistName = artistRuns.map((r) => r.text).join('').trim() || 'Artista';
+
+      const durText = v.lengthText?.runs?.[0]?.text || '3:30';
+      const parts = durText.split(':').map((p) => parseInt(p, 10) || 0);
+      const durSec = parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + (parts[1] || 0);
+
+      const thumb = v.thumbnail?.thumbnails?.slice(-1)[0]?.url || `https://i.ytimg.com/vi/${v.videoId}/hqdefault.jpg`;
+
+      tracks.push({
+        id: `yt-${v.videoId}`,
+        name: tTitle,
+        artists: [{ id: `art-${normSlug(artistName)}`, name: artistName }],
+        album: {
+          id: `alb-${normSlug(tTitle)}`,
+          name: tTitle,
+          images: [{ url: thumb, height: 300, width: 300 }],
+        },
+        duration_ms: durSec * 1000,
+        uri: `spotify:track:yt_${v.videoId}`,
+        isSmartRecommendation: true,
+        type: 'track',
+      });
+
+      if (tracks.length >= limit) break;
+    }
+
+    const result = { tracks, source: 'youtube-music-radio', seedVideoId: videoId };
+    RECOMMENDATIONS_CACHE.set(cacheKey, result);
+    if (RECOMMENDATIONS_CACHE.size > 200) {
+      const oldest = RECOMMENDATIONS_CACHE.keys().next().value;
+      RECOMMENDATIONS_CACHE.delete(oldest);
+    }
+
+    res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=7200');
+    return res.status(200).json({ success: true, ...result });
+  } catch (err) {
+    console.warn('[api/audio] recommendations failed:', err?.message || err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to fetch recommendations', tracks: [] });
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -1064,7 +1197,13 @@ export default async function handler(req, res) {
   }
 
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
-  const action = req.query?.action || (url.pathname.includes('/stream') ? 'stream' : url.pathname.includes('/download') ? 'download' : 'resolve');
+  const action = req.query?.action || (
+    url.pathname.includes('/stream') ? 'stream' :
+    url.pathname.includes('/download') ? 'download' :
+    url.pathname.includes('/recommendations') ? 'recommendations' :
+    url.pathname.includes('/candidates') ? 'candidates' :
+    'resolve'
+  );
 
   // 1. STREAM OR DOWNLOAD ACTION
   if (action === 'stream' || action === 'download') {
@@ -1313,6 +1452,11 @@ export default async function handler(req, res) {
     } catch (err) {
       return res.status(500).json({ error: err.message, candidates: [] });
     }
+  }
+
+  // 1d. RECOMMENDATIONS ACTION: YouTube Music Radio (RDAMVM) real recommendations for Smart Shuffle
+  if (action === 'recommendations') {
+    return handleRecommendations(req, res);
   }
 
   // 2. RESOLVE ACTION (Default)

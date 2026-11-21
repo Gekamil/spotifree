@@ -691,35 +691,59 @@ const store = create<PlayerState>((set, get) => ({
 
   triggerSmartShuffleRecommendation: async (track: Track) => {
     try {
-      const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
-        '../services/musicTaggingService'
-      );
-      const { trackMatchesArtist } = await import('../utils/trackArtists');
-
-      // 1. Identify track's musical style/genre
-      const tags = classifyTrackHashtags(track);
-      const targetTag = tags[0] || getDominantUserHashtag() || '#pop';
-
       const existingIds = new Set(get().queue.map((t) => t.id));
       existingIds.add(track.id);
       const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
 
-      // 2. Fetch tracks of that exact musical genre/style, harmonically aligned with the seed track
-      const candidates = await getCuratedSetForHashtag(targetTag, 20, existingIds, track);
+      let bestCandidate: Track | undefined;
 
-      // 3. Recommend by musical style/genre, prioritizing complementary artists (not looping the same artist name)
-      const currentArtist = track.artists?.[0]?.name || '';
-      let bestCandidate = candidates.find((c) => {
-        if (!c?.id || existingIds.has(c.id)) return false;
-        const cTitle = (c.name || '').toLowerCase().trim();
-        if (existingTitles.has(cTitle)) return false;
-        // Prioritize different artist in the same musical style
-        return !trackMatchesArtist(c, currentArtist);
-      });
+      // 1. Primary: YouTube Music Radio Algorithm (RDAMVM real radio recommendation for this track)
+      try {
+        const rawVideoId = (track.id || '').replace(/^yt-/i, '');
+        const title = track.name || '';
+        const artist = track.artists?.[0]?.name || '';
+        const res = await fetch(
+          `/api/audio/recommendations?videoId=${encodeURIComponent(rawVideoId)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&limit=10`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.tracks) && data.tracks.length > 0) {
+            bestCandidate = (data.tracks as Track[]).find((c) => {
+              if (!c?.id || existingIds.has(c.id)) return false;
+              const cTitle = (c.name || '').toLowerCase().trim();
+              if (existingTitles.has(cTitle)) return false;
+              return true;
+            });
+          }
+        }
+      } catch (ytmErr) {
+        console.warn('[SmartShuffle] YTM recommendations endpoint error, using curated fallback:', ytmErr);
+      }
 
-      // Fallback: if all candidates were by same artist, accept another candidate
+      // 2. Fallback: Curated musical genre & tagging service
       if (!bestCandidate) {
-        bestCandidate = candidates.find((c) => c?.id && !existingIds.has(c.id));
+        const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
+          '../services/musicTaggingService'
+        );
+        const { trackMatchesArtist } = await import('../utils/trackArtists');
+
+        // Identify track's musical style/genre
+        const tags = classifyTrackHashtags(track);
+        const targetTag = tags[0] || getDominantUserHashtag() || '#pop';
+
+        // Fetch tracks of that exact musical genre/style
+        const candidates = await getCuratedSetForHashtag(targetTag, 20, existingIds, track);
+        const currentArtist = track.artists?.[0]?.name || '';
+        bestCandidate = candidates.find((c) => {
+          if (!c?.id || existingIds.has(c.id)) return false;
+          const cTitle = (c.name || '').toLowerCase().trim();
+          if (existingTitles.has(cTitle)) return false;
+          return !trackMatchesArtist(c, currentArtist);
+        });
+
+        if (!bestCandidate) {
+          bestCandidate = candidates.find((c) => c?.id && !existingIds.has(c.id));
+        }
       }
 
       if (bestCandidate) {
@@ -741,53 +765,85 @@ const store = create<PlayerState>((set, get) => ({
 
   populateSmartShuffleRecommendations: async (baseTracks?: Track[]) => {
     try {
-      const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
-        '../services/musicTaggingService'
-      );
-
       const currentQ = get().queue;
       const tracksToAnalyze = baseTracks || currentQ.filter((t: any) => !t.isSmartRecommendation);
       if (tracksToAnalyze.length === 0) return;
 
-      // 1. Analyze dominant musical genres/styles across the queue
-      const tagCounts = new Map<string, number>();
-      for (const t of tracksToAnalyze.slice(0, 15)) {
-        const tags = classifyTrackHashtags(t);
-        for (const tag of tags) {
-          tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
-        }
-      }
-
-      const sortedTags = Array.from(tagCounts.entries())
-        .sort((a, b) => b[1] - a[1])
-        .map(([tag]) => tag as any);
-
-      const dominantTags = sortedTags.length > 0 ? sortedTags.slice(0, 2) : [getDominantUserHashtag() || '#pop'];
-
       const existingIds = new Set(get().queue.map((t) => t.id));
       const existingTitles = new Set(get().queue.map((t) => (t.name || '').toLowerCase().trim()));
-
       const recommendedCandidates: Track[] = [];
 
       const seedTrack = tracksToAnalyze[0];
-      for (const tag of dominantTags) {
-        try {
-          const items = await getCuratedSetForHashtag(tag, 12, existingIds, seedTrack);
-          for (const item of items) {
-            if (!item?.id || existingIds.has(item.id)) continue;
-            const cleanTitle = (item.name || '').toLowerCase().trim();
-            if (existingTitles.has(cleanTitle)) continue;
 
-            existingIds.add(item.id);
-            existingTitles.add(cleanTitle);
-            recommendedCandidates.push({
-              ...item,
-              isSmartRecommendation: true,
-            });
-            if (recommendedCandidates.length >= 6) break;
+      // 1. Primary: YouTube Music Radio Algorithm recommendations
+      try {
+        const rawVideoId = (seedTrack.id || '').replace(/^yt-/i, '');
+        const title = seedTrack.name || '';
+        const artist = seedTrack.artists?.[0]?.name || '';
+        const res = await fetch(
+          `/api/audio/recommendations?videoId=${encodeURIComponent(rawVideoId)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&limit=15`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success && Array.isArray(data.tracks)) {
+            for (const item of data.tracks as Track[]) {
+              if (!item?.id || existingIds.has(item.id)) continue;
+              const cleanTitle = (item.name || '').toLowerCase().trim();
+              if (existingTitles.has(cleanTitle)) continue;
+
+              existingIds.add(item.id);
+              existingTitles.add(cleanTitle);
+              recommendedCandidates.push({
+                ...item,
+                isSmartRecommendation: true,
+              });
+              if (recommendedCandidates.length >= 8) break;
+            }
           }
-        } catch {}
-        if (recommendedCandidates.length >= 6) break;
+        }
+      } catch (err) {
+        console.warn('[SmartShuffle] YTM bulk recommendations error, using tagging fallback:', err);
+      }
+
+      // 2. Fallback: Curated musical tagging service if YTM returned fewer than 3 items
+      if (recommendedCandidates.length < 3) {
+        const { classifyTrackHashtags, getCuratedSetForHashtag, getDominantUserHashtag } = await import(
+          '../services/musicTaggingService'
+        );
+
+        const tagCounts = new Map<string, number>();
+        for (const t of tracksToAnalyze.slice(0, 15)) {
+          const tags = classifyTrackHashtags(t);
+          for (const tag of tags) {
+            tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+          }
+        }
+
+        const sortedTags = Array.from(tagCounts.entries())
+          .sort((a, b) => b[1] - a[1])
+          .map(([tag]) => tag as any);
+
+        const dominantTags = sortedTags.length > 0 ? sortedTags.slice(0, 2) : [getDominantUserHashtag() || '#pop'];
+
+        for (const tag of dominantTags) {
+          try {
+            const items = await getCuratedSetForHashtag(tag, 12, existingIds, seedTrack);
+            for (const item of items) {
+              if (!item?.id || existingIds.has(item.id)) continue;
+              const cleanTitle = (item.name || '').toLowerCase().trim();
+              if (existingTitles.has(cleanTitle)) continue;
+
+              existingIds.add(item.id);
+              existingTitles.add(cleanTitle);
+              recommendedCandidates.push({
+                ...item,
+                isSmartRecommendation: true,
+              });
+              if (recommendedCandidates.length >= 8) break;
+            }
+          } catch {}
+          if (recommendedCandidates.length >= 8) break;
+        }
       }
 
       if (recommendedCandidates.length > 0) {

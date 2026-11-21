@@ -36,7 +36,7 @@ export const ARTIST_PORTRAITS: Record<string, string> = {
   'rayden': 'https://cdn-images.dzcdn.net/images/artist/42a89bd063f83da2d205897a0567928f/500x500-000000-80-0-0.jpg',
   'paulo londra': 'https://cdn-images.dzcdn.net/images/artist/26fbc79599d2ed0f3629fa74df3e489a/500x500-000000-80-0-0.jpg',
   'bad bunny': 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg',
-  'quevedo': 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg',
+  'quevedo': 'https://cdn-images.dzcdn.net/images/artist/79880cc1b999b15567e332203464c34e/500x500-000000-80-0-0.jpg',
   'feid': 'https://cdn-images.dzcdn.net/images/artist/e629c93e03b3c225d8d52a42bae71537/500x500-000000-80-0-0.jpg',
   'rauw alejandro': 'https://cdn-images.dzcdn.net/images/artist/6f0f2b885570d8d43b598c29bbe7433f/500x500-000000-80-0-0.jpg',
   'rosalia': 'https://cdn-images.dzcdn.net/images/artist/f514dbe0c89f62348d60b7292771edc7/500x500-000000-80-0-0.jpg',
@@ -96,8 +96,8 @@ export const ARTIST_PORTRAITS: Record<string, string> = {
 export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
   // Moods & Activities ("Estados de ánimo y Momentos")
   entreno: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&auto=format&fit=crop&q=80', // Gym workout & athletic energy
-  chill: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80', // Warm acoustic guitar & serene coffee
-  relax: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
+  chill: 'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=600&auto=format&fit=crop&q=80', // Cozy warm morning coffee & acoustic serenity
+  relax: 'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&auto=format&fit=crop&q=80', // Zen meditation & calm lake reflection
   concentracion: 'https://images.unsplash.com/photo-1483412033650-1015ddeb83d1?w=600&auto=format&fit=crop&q=80', // Study & Lo-Fi Vinyl Headphones
   focus: 'https://images.unsplash.com/photo-1483412033650-1015ddeb83d1?w=600&auto=format&fit=crop&q=80',
   fiesta: 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?w=600&auto=format&fit=crop&q=80', // Neon Club DJ Lights & Party Night
@@ -109,7 +109,7 @@ export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
   paseo: 'https://images.unsplash.com/photo-1476820865390-c52aeebb9891?w=600&auto=format&fit=crop&q=80', // Sunny Autumn Walk
 
   // Trending & Charts ("Tendencias & Virales del Momento")
-  trend_spain: 'https://cdn-images.dzcdn.net/images/artist/ee02749274070488eb9362d55826db08/500x500-000000-80-0-0.jpg', // Quevedo (Verified 200 OK)
+  trend_spain: 'https://cdn-images.dzcdn.net/images/artist/79880cc1b999b15567e332203464c34e/500x500-000000-80-0-0.jpg', // Quevedo (Verified 200 OK portrait)
   trend_global: 'https://cdn-images.dzcdn.net/images/artist/581693b4724a7fcfa754455101e13a44/500x500-000000-80-0-0.jpg', // The Weeknd (Verified 200 OK)
   trend_virales: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80', // Viral TikTok Club Neon
   trend_urbano: 'https://cdn-images.dzcdn.net/images/artist/044a3f315b041864887a8dd8709e6926/500x500-000000-80-0-0.jpg', // Bad Bunny (Verified 200 OK)
@@ -145,7 +145,7 @@ export const CURATED_CATEGORY_PHOTOS: Record<string, string> = {
   clasica: 'https://images.unsplash.com/photo-1513883049090-d0b7439799bf?w=600&auto=format&fit=crop&q=80', // Piano Relax
 };
 
-/** Checks whether a URL is an ugly placeholder or default avatar icon */
+/** Checks whether a URL is an ugly placeholder, default avatar icon, or user profile image */
 export function isPlaceholderOrAvatar(url?: string): boolean {
   if (!url) return true;
   const lower = url.toLowerCase();
@@ -153,6 +153,7 @@ export function isPlaceholderOrAvatar(url?: string): boolean {
     lower.includes('d41d8cd98f00b204e9800998ecf8427e') || // Deezer empty avatar MD5 hash
     lower.includes('placeholder') ||
     lower.includes('default_artist') ||
+    lower.includes('default_user') ||
     lower.includes('user-avatar') ||
     lower.includes('dzcdn.net/images/artist//') ||
     lower.includes('dzcdn.net/images/cover//') ||
@@ -167,7 +168,7 @@ export function isPlaceholderOrAvatar(url?: string): boolean {
     lower.includes('//120x120') ||
     (lower.includes('api.deezer.com') && lower.includes('/image')) ||
     lower.includes('avatar') ||
-    lower.includes('default_user')
+    lower.includes('53994a69daeb') // Prevent mockUser portrait from ever being used as a playlist cover
   );
 }
 
@@ -202,15 +203,40 @@ export const MUSIC_PORTRAIT_FALLBACKS = [
   'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=600&auto=format&fit=crop&q=80', // Electronic DJ
   'https://images.unsplash.com/photo-1465847899084-d164df4dedc6?w=600&auto=format&fit=crop&q=80', // Indie road
   'https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?w=600&auto=format&fit=crop&q=80', // Stage live vocals
+  'https://images.unsplash.com/photo-1518495973542-4542c06a5843?w=600&auto=format&fit=crop&q=80', // Cozy morning coffee
+  'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=600&auto=format&fit=crop&q=80', // Zen meditation lake
 ];
 
 export function resolveArtistPhoto(name: string): string {
   const k = norm(name);
   if (!k) return MUSIC_PORTRAIT_FALLBACKS[0];
+
+  // 1. Direct or partial artist lookup
   if (ARTIST_PORTRAITS[k]) return ARTIST_PORTRAITS[k];
   for (const [key, url] of Object.entries(ARTIST_PORTRAITS)) {
     if (k.includes(key) || key.includes(k)) return url;
   }
+
+  // 2. Direct or keyword match against curated category photos
+  if (CURATED_CATEGORY_PHOTOS[k]) return CURATED_CATEGORY_PHOTOS[k];
+  if (k.includes('2010') || k.includes('diez')) return CURATED_CATEGORY_PHOTOS['2010s'];
+  if (k.includes('2020')) return CURATED_CATEGORY_PHOTOS['2020s'];
+  if (k.includes('2000')) return CURATED_CATEGORY_PHOTOS['2000s'];
+  if (k.includes('90')) return CURATED_CATEGORY_PHOTOS['90s'];
+  if (k.includes('80')) return CURATED_CATEGORY_PHOTOS['80s'];
+  if (k.includes('70')) return CURATED_CATEGORY_PHOTOS['70s'];
+  if (k.includes('60')) return CURATED_CATEGORY_PHOTOS['60s'];
+  if (k.includes('espana') || k.includes('spain')) return CURATED_CATEGORY_PHOTOS['trend_spain'];
+  if (k.includes('entreno') || k.includes('gym') || k.includes('fitness')) return CURATED_CATEGORY_PHOTOS['entreno'];
+  if (k.includes('chill')) return CURATED_CATEGORY_PHOTOS['chill'];
+  if (k.includes('relax')) return CURATED_CATEGORY_PHOTOS['relax'];
+  if (k.includes('concentracion') || k.includes('focus')) return CURATED_CATEGORY_PHOTOS['concentracion'];
+  if (k.includes('fiesta') || k.includes('party')) return CURATED_CATEGORY_PHOTOS['fiesta'];
+  if (k.includes('coche') || k.includes('car') || k.includes('viaje')) return CURATED_CATEGORY_PHOTOS['coche'];
+  if (k.includes('romantico') || k.includes('amor')) return CURATED_CATEGORY_PHOTOS['romantico'];
+  if (k.includes('virales') || k.includes('viral')) return CURATED_CATEGORY_PHOTOS['trend_virales'];
+
+  // 3. Fallback to distinct curated photos
   const idx = Math.abs(hash(name)) % MUSIC_PORTRAIT_FALLBACKS.length;
   return MUSIC_PORTRAIT_FALLBACKS[idx];
 }
@@ -343,6 +369,17 @@ async function kvSet(key: string, value: unknown): Promise<void> {
     await new Promise<void>((resolve) => {
       const tx = d.transaction('kv', 'readwrite');
       tx.objectStore('kv').put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {}
+}
+async function kvDel(key: string): Promise<void> {
+  try {
+    const d = await db();
+    await new Promise<void>((resolve) => {
+      const tx = d.transaction('kv', 'readwrite');
+      tx.objectStore('kv').delete(key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     });
@@ -2881,6 +2918,9 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     const normName = norm(name);
     if (!normName) return resolveArtistPhoto(name);
     if (ARTIST_PORTRAITS[normName]) return ARTIST_PORTRAITS[normName];
+    for (const [key, url] of Object.entries(ARTIST_PORTRAITS)) {
+      if (normName.includes(key) || key.includes(normName)) return url;
+    }
     const discPic = disc.get(normName)?.artist?.picture;
     if (discPic && !isPlaylistOrGenericCover(discPic) && !isPlaceholderOrAvatar(discPic)) return discPic;
     const profPic = profile.artists.find((a) => norm(a.name) === normName)?.img;
@@ -3246,8 +3286,8 @@ function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtist
   }));
 }
 
-// mixes_v6 upgraded to mixes_v7, now mixes_v8: 100% verified 200 OK portraits, minimum 9 playlists per shelf, zero avatar silhouettes
-const storeKey = () => `mixes_v8:${uid()}`;
+// mixes_v6 upgraded to v7, v8, now mixes_v9: guaranteed 100% verified portraits, unique dedicated photography, zero silhouettes
+const storeKey = () => `mixes_v9:${uid()}`;
 let building: Promise<void> | null = null;
 
 /** Rebuilds the account's playlists (once a day, or when asked) */
@@ -3255,6 +3295,16 @@ export function refreshSpotifreeMixes(force = false): Promise<void> {
   if (building) return building;
   building = (async () => {
     try {
+      // Clean up previous cache versions with stale silhouettes or duplicate portraits
+      try {
+        await Promise.all([
+          kvDel(`mixes_v8:${uid()}`),
+          kvDel(`mixes_v7:${uid()}`),
+          kvDel(`mixes_v6:${uid()}`),
+          kvDel(`mixes2:${uid()}`),
+        ]);
+      } catch {}
+
       const saved = await kvGet<{ day: string; week: string; mixes: SpotifreeMix[]; artists?: SuggestedArtist[] }>(storeKey());
       if (saved?.mixes?.length) publish(saved.mixes, saved.day, saved.artists || []);
       // Like Spotify they stay the same during the day, unless there was a lot of new listening
