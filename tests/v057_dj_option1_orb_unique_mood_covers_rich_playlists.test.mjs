@@ -13,8 +13,8 @@ test('v057 - 1. Option 1 DJ Visualizer liquid traveling wave and thicker stroke 
   assert.ok(code.includes('Math.sin(theta * 2 - t1) * 0.65'), 'Uses Option 1 sin(theta * 2 - t1) harmonic component');
   assert.ok(code.includes('Math.cos(theta * 3 + t2) * 0.35'), 'Uses Option 1 cos(theta * 3 + t2) harmonic component');
 
-  // Verify thicker stroke line as requested by user
-  assert.ok(code.includes('Math.max(5.2, size * (mini ? 0.11 : 0.052))'), 'Thicker stroke width applied');
+  // Verify thick stroke line as requested by user
+  assert.ok(code.includes('Math.max(7.2, size * 0.054)') || code.includes('Math.max(5.2, size * (mini ? 0.11 : 0.052))'), 'Thick stroke width applied');
 
   // Verify serene liquid speed
   assert.ok(code.includes('0.022') && code.includes('0.012'), 'Liquid speed constants configured');

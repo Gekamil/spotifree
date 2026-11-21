@@ -852,7 +852,7 @@ export const MobileLayout: React.FC = () => {
                         state={visualizerState === 'speaking' ? 'speaking' : isPlaying ? 'playing' : 'idle'}
                         voiceLevel={voiceLevel}
                         themeColor={djThemeColor}
-                        forceWaves={true}
+                        forceWaves={visualizerState === 'speaking'}
                       />
                     </div>
 

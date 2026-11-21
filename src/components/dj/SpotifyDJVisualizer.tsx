@@ -161,62 +161,12 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
     const centerX = size / 2;
     const centerY = size / 2;
-    // Option 1 Elegant Spotify DJ Halo radius and stroke (thicker luscious neon line)
-    const baseRadius = size * (mini ? 0.30 : 0.285);
-    const strokeWidth = Math.max(5.2, size * (mini ? 0.11 : 0.052));
-    const numPoints = mini ? 70 : 160;
+    // Option 1 Elegant 360 Liquid Halo (Thick main ring with medium speaking wave)
+    const baseRadius = size * (mini ? 0.32 : 0.325);
+    const strokeWidth = mini ? Math.max(3.8, size * 0.12) : Math.max(7.2, size * 0.054);
+    const outerStrokeWidth = mini ? Math.max(1.8, size * 0.05) : Math.max(2.4, size * 0.018);
+    const numPoints = mini ? 70 : 140;
     const currentRgb: [number, number, number] = parseHexToRgb(themeColorRef.current || '#1ed760');
-
-    const drawRing = (
-      layerIndex: number,
-      pulseScale: number,
-      bulgeBase: number,
-      split: number,
-      currentVoice: number,
-      strokeStyle: string | CanvasGradient,
-      lineWidth: number,
-      alpha: number,
-      shadowColor: string,
-      shadowBlur: number
-    ) => {
-      if (alpha <= 0.001) return;
-      ctx.save();
-      ctx.globalAlpha = Math.min(1, Math.max(0, alpha));
-      ctx.beginPath();
-
-      for (let i = 0; i <= numPoints; i++) {
-        const theta = (i / numPoints) * Math.PI * 2;
-        const offset = calculateOrbLayerDisplacement(
-          layerIndex,
-          theta,
-          time,
-          currentVoice,
-          split,
-          bulgeBase,
-          size,
-          mini
-        );
-        const r = (baseRadius + offset) * pulseScale;
-        const px = centerX + Math.cos(theta) * r;
-        const py = centerY + Math.sin(theta) * r;
-
-        if (i === 0) {
-          ctx.moveTo(px, py);
-        } else {
-          ctx.lineTo(px, py);
-        }
-      }
-
-      ctx.closePath();
-      ctx.strokeStyle = strokeStyle;
-      ctx.lineWidth = lineWidth;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.shadowColor = shadowColor;
-      ctx.shadowBlur = shadowBlur;
-      ctx.stroke();
-      ctx.restore();
-    };
 
     const draw = () => {
       const currentState = stateRef.current;
@@ -227,7 +177,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         ? Math.max(0.42, voiceLevelRef.current || 0.42)
         : voiceLevelRef.current;
 
-      // Option 1 Serene liquid plasma speed (graceful fluid undulation, never fast spinning)
+      // Option 1 Serene liquid plasma speed (graceful fluid undulation across 360 degrees)
       const speed = mini
         ? (isSpeaking ? 0.018 : isPlaying ? 0.014 : 0.010)
         : isSpeaking
@@ -258,7 +208,7 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
 
       ctx.clearRect(0, 0, size, size);
 
-      // Dynamic Pulsing & Organic Plasma Breathing
+      // Dynamic Pulsing & Organic Plasma Breathing across entire circumference
       let pulseScale: number;
       let bulgeBase: number;
 
@@ -266,25 +216,39 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         pulseScale = 1 + Math.sin(time * 1.8) * 0.035 + (isSpeaking ? Math.sin(time * 3.5) * 0.04 : 0);
         bulgeBase = (isSpeaking ? 0.65 : 0.35) * (size / 38);
       } else if (isSpeaking) {
-        // Dynamic undulating speech pulse: rapid vocal breathing + amplitude reactivity
-        pulseScale = 1 + Math.sin(time * 2.6) * 0.035 + Math.sin(time * 5.2) * 0.018 + currentVoice * 0.055;
-        bulgeBase = (2.4 + currentVoice * 3.6) * (size / 260);
+        pulseScale = 1 + Math.sin(time * 2.2) * 0.038 + currentVoice * 0.045;
+        bulgeBase = (2.2 + currentVoice * 1.4) * (size / 140);
       } else if (isPlaying) {
         pulseScale = 1 + Math.sin(time * 1.8) * 0.025 + Math.sin(time * 3.6) * 0.01;
-        bulgeBase = 1.4 * (size / 260);
+        bulgeBase = 1.4 * (size / 140);
       } else {
-        pulseScale = 1 + Math.sin(time * 1.4) * 0.024;
-        bulgeBase = 1.9 * (size / 260);
+        pulseScale = 1 + Math.sin(time * 1.4) * 0.022;
+        bulgeBase = 1.5 * (size / 140);
       }
 
       // =========================================================================
-      // LAYER 0: CORE RING (Stable circular foundation with Spotify DJ gradient)
+      // MAIN 360° LIQUID NEON RING (Grueso ~7.2-7.5px)
       // =========================================================================
+      ctx.save();
+      ctx.beginPath();
+      for (let i = 0; i <= numPoints; i++) {
+        const theta = (i / numPoints) * Math.PI * 2;
+        const w1 = Math.sin(theta * 2 - time * 0.8) * 0.65;
+        const w2 = Math.cos(theta * 3 + time * 0.6) * 0.35;
+        const offset = (w1 + w2) * bulgeBase;
+        const r = (baseRadius + offset) * pulseScale;
+        const px = centerX + Math.cos(theta) * r;
+        const py = centerY + Math.sin(theta) * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+
       const grad0 = ctx.createLinearGradient(
-        centerX - baseRadius * 0.8,
-        centerY + baseRadius * 0.8,
-        centerX + baseRadius * 0.8,
-        centerY - baseRadius * 0.8
+        centerX - baseRadius,
+        centerY - baseRadius,
+        centerX + baseRadius,
+        centerY + baseRadius
       );
       if (currentState === 'listening') {
         grad0.addColorStop(0, '#00f2fe');
@@ -292,90 +256,53 @@ export const SpotifyDJVisualizer: React.FC<SpotifyDJVisualizerProps> = ({
         grad0.addColorStop(1, '#00f2fe');
       } else {
         grad0.addColorStop(0, '#0c52cc');
-        grad0.addColorStop(0.3, '#00f2fe');
-        grad0.addColorStop(0.65, '#1ed760');
+        grad0.addColorStop(0.35, '#00f2fe');
+        grad0.addColorStop(0.7, smoothColor);
         grad0.addColorStop(1, '#5ffcd4');
       }
 
       const glowOpacity = isSpeaking ? 0.85 : isPlaying ? 0.65 : 0.45;
       const shadowColor0 = `rgba(${Math.round(currentRgb[0])}, ${Math.round(currentRgb[1])}, ${Math.round(currentRgb[2])}, ${glowOpacity})`;
-      const shadowBlur0 = mini ? 6 : isSpeaking ? 24 : 18;
+      const shadowBlur0 = mini ? 6 : isSpeaking ? 24 : 16;
 
-      drawRing(
-        0,
-        pulseScale,
-        bulgeBase,
-        split,
-        currentVoice,
-        grad0,
-        strokeWidth,
-        1.0,
-        shadowColor0,
-        shadowBlur0
-      );
+      ctx.strokeStyle = grad0;
+      ctx.lineWidth = strokeWidth;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.shadowColor = shadowColor0;
+      ctx.shadowBlur = shadowBlur0;
+      ctx.stroke();
+      ctx.restore();
 
       // =========================================================================
-      // LAYER 1 & 2: DYNAMIC TALKING ORB DELAMINATION (Upper-right quadrant)
-      // Dividing into 3 resonant lobes/arcs when the DJ speaks
+      // SPEAKING OUTER HARMONIC WAVE (Tamaño medio ~2.4-2.5px across 360°)
+      // Blooms and undulates smoothly around the entire circle when speaking
       // =========================================================================
       if (split > 0.005) {
-        // LAYER 1: MID RING (cyan-teal gradient, high opacity, harmonic resonance)
-        const grad1 = ctx.createLinearGradient(
-          centerX,
-          centerY - baseRadius * 1.25,
-          centerX + baseRadius * 1.25,
-          centerY
-        );
-        grad1.addColorStop(0, '#00f2fe');
-        grad1.addColorStop(0.5, '#1ed760');
-        grad1.addColorStop(1, '#5ffcd4');
+        ctx.save();
+        ctx.beginPath();
+        const outerOffset = (mini ? 2.8 : size * 0.055) * pulseScale;
+        for (let i = 0; i <= numPoints; i++) {
+          const theta = (i / numPoints) * Math.PI * 2;
+          const wOuter = Math.sin(theta * 4 - time * 1.6) * (mini ? 0.6 : 1.3) + Math.cos(theta * 2 + time * 0.9) * (mini ? 0.3 : 0.6);
+          const rOuter = (baseRadius + outerOffset + wOuter * (mini ? 0.7 : 1.0)) * pulseScale;
+          const px = centerX + Math.cos(theta) * rOuter;
+          const py = centerY + Math.sin(theta) * rOuter;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
 
-        const alpha1 = split * (0.85 + currentVoice * 0.15);
-        const lineWidth1 = strokeWidth * (mini ? 0.85 : 0.80);
-        const shadowColor1 = `rgba(0, 242, 254, ${alpha1 * 0.9})`;
-        const shadowBlur1 = mini ? 5 : 20;
-
-        drawRing(
-          1,
-          pulseScale,
-          bulgeBase,
-          split,
-          currentVoice,
-          grad1,
-          lineWidth1,
-          alpha1,
-          shadowColor1,
-          shadowBlur1
-        );
-
-        // LAYER 2: OUTER RING (electric mint-neon bloom, high-frequency speech wave flutter)
-        const grad2 = ctx.createLinearGradient(
-          centerX,
-          centerY - baseRadius * 1.45,
-          centerX + baseRadius * 1.45,
-          centerY
-        );
-        grad2.addColorStop(0, '#5ffcd4');
-        grad2.addColorStop(0.5, '#00f2fe');
-        grad2.addColorStop(1, '#1ed760');
-
-        const alpha2 = split * (0.75 + currentVoice * 0.25);
-        const lineWidth2 = strokeWidth * (mini ? 0.75 : 0.70);
-        const shadowColor2 = `rgba(95, 252, 212, ${alpha2 * 0.95})`;
-        const shadowBlur2 = mini ? 6 : 26;
-
-        drawRing(
-          2,
-          pulseScale,
-          bulgeBase,
-          split,
-          currentVoice,
-          grad2,
-          lineWidth2,
-          alpha2,
-          shadowColor2,
-          shadowBlur2
-        );
+        const outerAlpha = Math.min(1, Math.max(0, split * (0.8 + currentVoice * 0.2)));
+        ctx.globalAlpha = outerAlpha;
+        ctx.strokeStyle = 'rgba(95, 252, 212, 0.55)';
+        ctx.lineWidth = outerStrokeWidth;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = '#5ffcd4';
+        ctx.shadowBlur = mini ? 5 : 14;
+        ctx.stroke();
+        ctx.restore();
       }
     };
 

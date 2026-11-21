@@ -477,7 +477,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}
-              forceWaves={true}
+              forceWaves={visualizerState === 'speaking' || visualizerState === 'listening'}
             />
           </div>
 
