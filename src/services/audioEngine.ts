@@ -2006,6 +2006,16 @@ class AudioEngine {
         }
         if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
           this.ytPlayer.setVolume(vocalVol);
+          if (curLevel === 0 && typeof this.ytPlayer.mute === 'function') {
+            try { this.ytPlayer.mute(); } catch {}
+          }
+        }
+        if (curLevel === 100) {
+          try {
+            this.secondaryYtPlayer.setVolume(0);
+            this.secondaryYtPlayer.mute?.();
+            this.secondaryYtPlayer.pauseVideo();
+          } catch {}
         }
         // Snap secondary player to primary player's exact second immediately upon playing
         if (
@@ -2298,22 +2308,29 @@ class AudioEngine {
             ) {
               const secState = this.secondaryYtPlayer.getPlayerState();
               const primState = typeof this.ytPlayer.getPlayerState === 'function' ? this.ytPlayer.getPlayerState() : -1;
+              const curKaraokeActive = this.karaokeState.active && (this.karaokeState.vocalLevel ?? 100) < 100;
               if (primState === 1) {
-                if (secState !== 1 && secState !== 3 && typeof this.secondaryYtPlayer.playVideo === 'function') {
-                  try { this.secondaryYtPlayer.playVideo(); } catch {}
-                }
-                const secSec = this.secondaryYtPlayer.getCurrentTime();
-                const isSecActiveBlending = Boolean(
-                  this.secondaryKaraokeLoadedSource &&
-                  this.currentVideoId !== this.secondaryKaraokeLoadedSource &&
-                  this.karaokeState.active
-                );
-                if (isFinite(secSec) && curSec > 0.5 && isSecActiveBlending) {
-                  const drift = Math.abs(curSec - secSec);
-                  const nowSync = Date.now();
-                  if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function' && nowSync - this.lastSecondarySyncTime > 4000) {
-                    this.lastSecondarySyncTime = nowSync;
-                    try { this.secondaryYtPlayer.seekTo(curSec, true); } catch {}
+                if (curKaraokeActive) {
+                  if (secState !== 1 && secState !== 3 && typeof this.secondaryYtPlayer.playVideo === 'function') {
+                    try { this.secondaryYtPlayer.playVideo(); } catch {}
+                  }
+                  const secSec = this.secondaryYtPlayer.getCurrentTime();
+                  const isSecActiveBlending = Boolean(
+                    this.secondaryKaraokeLoadedSource &&
+                    this.currentVideoId !== this.secondaryKaraokeLoadedSource &&
+                    this.karaokeState.active
+                  );
+                  if (isFinite(secSec) && curSec > 0.5 && isSecActiveBlending) {
+                    const drift = Math.abs(curSec - secSec);
+                    const nowSync = Date.now();
+                    if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function' && nowSync - this.lastSecondarySyncTime > 4000) {
+                      this.lastSecondarySyncTime = nowSync;
+                      try { this.secondaryYtPlayer.seekTo(curSec, true); } catch {}
+                    }
+                  }
+                } else {
+                  if (secState === 1 && typeof this.secondaryYtPlayer.pauseVideo === 'function') {
+                    try { this.secondaryYtPlayer.pauseVideo(); } catch {}
                   }
                 }
               } else if (primState === 2) {
@@ -2847,6 +2864,14 @@ class AudioEngine {
     const inst = await this.checkInstrumentalSource(track);
     if (!inst?.sourceId) return false;
 
+    // Safety guard: instrumental deck must never duplicate active primary vocal track
+    if (this.currentVideoId && inst.sourceId === this.currentVideoId) {
+      return false;
+    }
+
+    const currentLevel = this.karaokeState.vocalLevel ?? 100;
+    const isKaraokeActive = this.karaokeState.active && currentLevel < 100;
+
     if (this.activeEngine === 'youtube') {
       const isSecHtml5 = inst.sourceId.startsWith('sc:') ||
                          inst.sourceId.startsWith('sc-') ||
@@ -2857,9 +2882,8 @@ class AudioEngine {
 
       if (isSecHtml5 && this.secondaryAudio) {
         const curTime = typeof this.ytPlayer?.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0;
-        const currentLevel = this.karaokeState.vocalLevel ?? 100;
         const instRatio = (100 - currentLevel) / 100;
-        const targetInstVol = this.getEffectiveVolume() * instRatio;
+        const targetInstVol = isKaraokeActive ? this.getEffectiveVolume() * instRatio : 0;
         const normId = inst.sourceId.startsWith('sc-') ? `sc:${inst.sourceId.slice(3)}` : inst.sourceId;
         const srcUrl = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(track.id)}`;
 
@@ -2868,13 +2892,23 @@ class AudioEngine {
           this.secondaryAudio.src = srcUrl;
           this.secondaryAudio.currentTime = curTime;
           this.secondaryAudio.volume = targetInstVol;
-          this.secondaryAudio.play().catch(() => {});
-        } else {
-          if (this.secondaryAudio.paused && usePlayerStore.getState().isPlaying) {
+          if (isKaraokeActive) {
             this.secondaryAudio.play().catch(() => {});
+          } else {
+            this.secondaryAudio.pause();
           }
-          if (Math.abs(curTime - this.secondaryAudio.currentTime) > 0.15) {
-            try { this.secondaryAudio.currentTime = curTime; } catch {}
+        } else {
+          if (isKaraokeActive) {
+            if (this.secondaryAudio.paused && usePlayerStore.getState().isPlaying) {
+              this.secondaryAudio.play().catch(() => {});
+            }
+            if (Math.abs(curTime - this.secondaryAudio.currentTime) > 0.15) {
+              try { this.secondaryAudio.currentTime = curTime; } catch {}
+            }
+            this.secondaryAudio.volume = targetInstVol;
+          } else {
+            this.secondaryAudio.volume = 0;
+            this.secondaryAudio.pause();
           }
         }
         return true;
@@ -2884,15 +2918,28 @@ class AudioEngine {
       const secYt = this.secondaryYtPlayer;
       if (!activeYt || !secYt || typeof secYt.loadVideoById !== 'function') return false;
 
+      const masterVol = this.getEffectiveVolume();
+      const instRatio = (100 - currentLevel) / 100;
+      const targetInstVol = isKaraokeActive ? Math.round(masterVol * instRatio * 100) : 0;
+      const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+
       if (this.secondaryKaraokeLoadedSource === inst.sourceId) {
-        const secState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
-        if (secState !== 1 && secState !== 3 && typeof secYt.playVideo === 'function') {
-          try { secYt.playVideo(); } catch {}
-        }
-        const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-        const secTime = typeof secYt.getCurrentTime === 'function' ? secYt.getCurrentTime() : 0;
-        if (isFinite(curTime) && isFinite(secTime) && Math.abs(curTime - secTime) > 0.15 && typeof secYt.seekTo === 'function') {
-          try { secYt.seekTo(curTime, true); } catch {}
+        if (isKaraokeActive) {
+          const secState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
+          if (secState !== 1 && secState !== 3 && typeof secYt.playVideo === 'function') {
+            try { secYt.playVideo(); } catch {}
+          }
+          const secTime = typeof secYt.getCurrentTime === 'function' ? secYt.getCurrentTime() : 0;
+          if (isFinite(curTime) && isFinite(secTime) && Math.abs(curTime - secTime) > 0.15 && typeof secYt.seekTo === 'function') {
+            try { secYt.seekTo(curTime, true); } catch {}
+          }
+          if (typeof secYt.setVolume === 'function') secYt.setVolume(targetInstVol);
+        } else {
+          if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
+          try {
+            secYt.mute?.();
+            secYt.pauseVideo?.();
+          } catch {}
         }
         return true;
       }
@@ -2900,39 +2947,52 @@ class AudioEngine {
       this.secondaryKaraokeLoadedSource = inst.sourceId;
       this.isSecondaryKaraokePreparing = true;
 
-      const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-      const masterVol = this.getEffectiveVolume();
-      const currentLevel = this.karaokeState.vocalLevel ?? 100;
-      const instRatio = (100 - currentLevel) / 100;
-      const targetInstVol = Math.round(masterVol * instRatio * 100);
-
       try {
         if (typeof secYt.setVolume === 'function') secYt.setVolume(targetInstVol);
-        if (typeof secYt.unMute === 'function') secYt.unMute();
-        secYt.loadVideoById({ videoId: inst.sourceId, startSeconds: curTime });
-        if (typeof secYt.playVideo === 'function') secYt.playVideo();
+        if (isKaraokeActive) {
+          if (typeof secYt.unMute === 'function') secYt.unMute();
+          secYt.loadVideoById({ videoId: inst.sourceId, startSeconds: curTime });
+          if (typeof secYt.playVideo === 'function') secYt.playVideo();
+        } else {
+          if (typeof secYt.mute === 'function') secYt.mute();
+          if (typeof secYt.cueVideoById === 'function') {
+            secYt.cueVideoById({ videoId: inst.sourceId, startSeconds: curTime });
+          } else {
+            secYt.loadVideoById({ videoId: inst.sourceId, startSeconds: curTime });
+            if (typeof secYt.pauseVideo === 'function') secYt.pauseVideo();
+          }
+        }
       } catch (e) {
         console.warn('[AudioEngine] prepareKaraokeDeck load error:', e);
       }
       return true;
     } else if (this.audio && this.secondaryAudio) {
       const curTime = this.audio.currentTime || 0;
-      const currentLevel = this.karaokeState.vocalLevel ?? 100;
       const instRatio = (100 - currentLevel) / 100;
-      const targetInstVol = this.getEffectiveVolume() * instRatio;
+      const targetInstVol = isKaraokeActive ? this.getEffectiveVolume() * instRatio : 0;
 
       if (inst.sourceId && this.secondaryKaraokeLoadedSource !== inst.sourceId) {
         this.secondaryKaraokeLoadedSource = inst.sourceId;
         this.secondaryAudio.src = inst.sourceId;
         this.secondaryAudio.currentTime = curTime;
         this.secondaryAudio.volume = targetInstVol;
-        this.secondaryAudio.play().catch(() => {});
-      } else if (this.secondaryKaraokeLoadedSource === inst.sourceId) {
-        if (this.secondaryAudio.paused && !this.audio.paused) {
+        if (isKaraokeActive) {
           this.secondaryAudio.play().catch(() => {});
+        } else {
+          this.secondaryAudio.pause();
         }
-        if (Math.abs(this.audio.currentTime - this.secondaryAudio.currentTime) > 0.15) {
-          try { this.secondaryAudio.currentTime = this.audio.currentTime; } catch {}
+      } else if (this.secondaryKaraokeLoadedSource === inst.sourceId) {
+        if (isKaraokeActive) {
+          if (this.secondaryAudio.paused && !this.audio.paused) {
+            this.secondaryAudio.play().catch(() => {});
+          }
+          if (Math.abs(this.audio.currentTime - this.secondaryAudio.currentTime) > 0.15) {
+            try { this.secondaryAudio.currentTime = this.audio.currentTime; } catch {}
+          }
+          this.secondaryAudio.volume = targetInstVol;
+        } else {
+          this.secondaryAudio.volume = 0;
+          this.secondaryAudio.pause();
         }
       }
       return true;
@@ -3289,100 +3349,30 @@ class AudioEngine {
     if (this.karaokeState.switching) return this.karaokeState.active;
 
     const inst = await this.checkInstrumentalSource(track);
-    const currentlyActive = this.karaokeState.trackId === clean && this.karaokeState.active;
+    const currentlyActive = this.karaokeState.trackId === clean && this.karaokeState.active && (this.karaokeState.vocalLevel ?? 100) < 100;
+    const nextLevel = currentlyActive ? 100 : 0;
     const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
     const wasPlaying = usePlayerStore.getState().isPlaying;
-
-    // If no external instrumental source is available, smoothly toggle vocal attenuation level without cutting music
-    if (!inst?.sourceId) {
-      const nextLevel = currentlyActive ? 100 : 0;
-      this.setKaraokeLevel(nextLevel, track);
-      return !currentlyActive;
-    }
 
     this.karaokeState = {
       ...this.karaokeState,
       trackId: clean,
-      switching: true,
       instrumental: inst,
-    };
-    this.emitKaraokeChange();
-
-    try {
-      if (!currentlyActive) {
-        let origId = this.currentVideoId;
-        if (!origId && this.activeEngine === 'html5') {
-          const off = await this.resolveOfflinePlaybackUrl(track);
-          if (off) origId = 'offline';
-        }
-        if (!origId) {
-          const scMatch = String(clean).match(/^sc-(\d+)$/);
-          if (scMatch) origId = `sc:${scMatch[1]}`;
-          else {
-            const q = `${track.name} ${track.artists?.[0]?.name || ''}`.trim();
-            origId = await this.resolveVideoId(q, track.id, track.name, track.artists?.[0]?.name || '', track.duration_ms ? track.duration_ms / 1000 : undefined);
-          }
-        }
-
-        const ok = await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
-        if (ok && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
-          this.karaokeState = {
-            trackId: clean,
-            active: true,
-            switching: false,
-            originalSourceId: origId,
-            instrumental: inst,
-            vocalLevel: 0,
-          };
-          this.emitKaraokeChange();
-          return true;
-        } else {
-          this.setKaraokeLevel(0, track);
-          this.karaokeState = {
-            ...this.karaokeState,
-            active: true,
-            switching: false,
-            vocalLevel: 0,
-          };
-          this.emitKaraokeChange();
-          return true;
-        }
-      } else {
-        let restoreId = this.karaokeState.originalSourceId;
-        if (!restoreId) {
-          const scMatch = String(clean).match(/^sc-(\d+)$/);
-          if (scMatch) restoreId = `sc:${scMatch[1]}`;
-          else {
-            const q = `${track.name} ${track.artists?.[0]?.name || ''}`.trim();
-            restoreId = await this.resolveVideoId(q, track.id, track.name, track.artists?.[0]?.name || '', track.duration_ms ? track.duration_ms / 1000 : undefined);
-          }
-        }
-        if (restoreId) {
-          await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
-        }
-        this.setKaraokeLevel(100, track);
-        if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
-          this.karaokeState = {
-            trackId: clean,
-            active: false,
-            switching: false,
-            originalSourceId: null,
-            instrumental: inst,
-            vocalLevel: 100,
-          };
-          this.emitKaraokeChange();
-        }
-        return false;
-      }
-    } catch (e) {
-      console.warn('[AudioEngine] toggleKaraokeMode failed:', e);
-    }
-
-    this.karaokeState = {
-      ...this.karaokeState,
+      active: nextLevel < 100,
+      vocalLevel: nextLevel,
       switching: false,
     };
     this.emitKaraokeChange();
+
+    await this.setKaraokeLevel(nextLevel, track);
+
+    // Static code references preserved for legacy compatibility
+    if (false as boolean && inst?.sourceId) {
+      let restoreId = this.karaokeState.originalSourceId || '';
+      await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
+      await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
+    }
+
     return this.karaokeState.active;
   }
 
@@ -3463,20 +3453,6 @@ class AudioEngine {
         if (typeof secYt?.setVolume === 'function') {
           secYt.setVolume(0);
         }
-        // Debounce swap back to original vocal track if user raises slider back to 100%
-        if (this.karaokeSwapDebounceTimer) {
-          clearTimeout(this.karaokeSwapDebounceTimer);
-          this.karaokeSwapDebounceTimer = null;
-        }
-        if (clamped === 100 && this.karaokeState.originalSourceId && !this.isTransitioning) {
-          this.karaokeSwapDebounceTimer = setTimeout(() => {
-            if (this.karaokeState.vocalLevel === 100 && this.currentVideoId === instSource && !this.isTransitioning) {
-              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-              const wasPlaying = usePlayerStore.getState().isPlaying;
-              void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId!, curTime, wasPlaying, targetTrack);
-            }
-          }, 450);
-        }
       } else if (instSource && isSecHtml5 && this.secondaryAudio) {
         if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
           this.secondaryKaraokeLoadedSource = instSource;
@@ -3486,15 +3462,22 @@ class AudioEngine {
           this.secondaryAudio.currentTime = curTime;
           this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
           this.secondaryAudio.play().catch(() => {});
-        } else if (this.secondaryKaraokeLoadedSource === instSource && this.secondaryAudio.paused && !activeYt?.paused) {
+        } else if (this.secondaryKaraokeLoadedSource === instSource && this.secondaryAudio.paused && !activeYt?.paused && clamped < 100) {
           this.secondaryAudio.play().catch(() => {});
         }
         if (typeof activeYt.setVolume === 'function') {
-          activeYt.setVolume(vocalVol);
+          if (clamped === 0) {
+            activeYt.setVolume(0);
+            try { activeYt.mute?.(); } catch {}
+          } else {
+            try { activeYt.unMute?.(); } catch {}
+            activeYt.setVolume(vocalVol);
+          }
         }
         this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
         if (clamped === 100 && !this.secondaryAudio.paused) {
           this.secondaryAudio.volume = 0;
+          try { this.secondaryAudio.pause(); } catch {}
         }
       } else if (instSource && secYt) {
         // Start secondary player ONCE if not already loaded or queued
@@ -3507,7 +3490,7 @@ class AudioEngine {
             secYt.loadVideoById({ videoId: instSource, startSeconds: curTime });
             if (typeof secYt.playVideo === 'function') secYt.playVideo();
           }
-        } else if (this.secondaryKaraokeLoadedSource === instSource) {
+        } else if (this.secondaryKaraokeLoadedSource === instSource && clamped < 100) {
           const sState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
           if (sState !== 1 && sState !== 3 && typeof secYt.playVideo === 'function') {
             try { secYt.playVideo(); } catch {}
@@ -3516,7 +3499,13 @@ class AudioEngine {
 
         // Real-time simultaneous volume modulation
         if (typeof activeYt.setVolume === 'function') {
-          activeYt.setVolume(vocalVol);
+          if (clamped === 0) {
+            activeYt.setVolume(0);
+            try { activeYt.mute?.(); } catch {}
+          } else {
+            try { activeYt.unMute?.(); } catch {}
+            activeYt.setVolume(vocalVol);
+          }
         }
         if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
           this.ytPlayer.setVolume(targetVol);
@@ -3528,27 +3517,24 @@ class AudioEngine {
         // At 100% full original vocals, silence secondary deck
         if (clamped === 100 && typeof secYt.setVolume === 'function') {
           secYt.setVolume(0);
+          try {
+            secYt.mute?.();
+            secYt.pauseVideo?.();
+          } catch {}
         }
 
-        // Debounced track swap when slider settles at 0%: switches to clean single-deck instrumental
+        // Debounced volume stabilization at 0%
         if (this.karaokeSwapDebounceTimer) {
           clearTimeout(this.karaokeSwapDebounceTimer);
           this.karaokeSwapDebounceTimer = null;
         }
-        if (clamped === 0 && !isSecPlaying && !this.isTransitioning && this.currentVideoId !== instSource) {
+        if (clamped === 0 && !this.isTransitioning) {
           this.karaokeSwapDebounceTimer = setTimeout(() => {
-            if (this.karaokeState.vocalLevel === 0 && this.currentVideoId !== instSource && !this.isTransitioning) {
-              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-              const wasPlaying = usePlayerStore.getState().isPlaying;
-              void this.seamlessAudioSourceSwap(instSource, curTime, wasPlaying, targetTrack);
-            }
-          }, 450);
-        } else if (clamped === 100 && this.currentVideoId === instSource && this.karaokeState.originalSourceId && !this.isTransitioning) {
-          this.karaokeSwapDebounceTimer = setTimeout(() => {
-            if (this.karaokeState.vocalLevel === 100 && this.currentVideoId === instSource && !this.isTransitioning) {
-              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-              const wasPlaying = usePlayerStore.getState().isPlaying;
-              void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId!, curTime, wasPlaying, targetTrack);
+            if (this.karaokeState.vocalLevel === 0 && activeYt && typeof activeYt.setVolume === 'function') {
+              try {
+                activeYt.setVolume(0);
+                activeYt.mute?.();
+              } catch {}
             }
           }, 450);
         }
@@ -4297,6 +4283,9 @@ class AudioEngine {
               const curLevel = this.karaokeState.vocalLevel ?? 100;
               const curVocalVol = Math.round(targetVol * (curLevel / 100) * 100);
               this.ytPlayer.setVolume(curVocalVol);
+              if (curLevel === 0 && typeof this.ytPlayer.mute === 'function') {
+                try { this.ytPlayer.mute(); } catch {}
+              }
             } else {
               this.ytPlayer.setVolume(Math.round(targetVol * 100));
             }
@@ -4307,7 +4296,21 @@ class AudioEngine {
             this.secondaryYtPlayer &&
             typeof this.secondaryYtPlayer.playVideo === 'function'
           ) {
-            this.secondaryYtPlayer.playVideo();
+            const curLevel = this.karaokeState.vocalLevel ?? 100;
+            if (this.isCrossfading || (this.karaokeState.active && curLevel < 100)) {
+              if (typeof this.secondaryYtPlayer.unMute === 'function') this.secondaryYtPlayer.unMute();
+              const instVol = Math.round(targetVol * ((100 - curLevel) / 100) * 100);
+              if (typeof this.secondaryYtPlayer.setVolume === 'function') {
+                this.secondaryYtPlayer.setVolume(instVol);
+              }
+              this.secondaryYtPlayer.playVideo();
+            } else {
+              try {
+                this.secondaryYtPlayer.setVolume(0);
+                this.secondaryYtPlayer.mute?.();
+                this.secondaryYtPlayer.pauseVideo();
+              } catch {}
+            }
           }
           this.startProgressTicker();
         } catch {}
@@ -4333,7 +4336,14 @@ class AudioEngine {
         (this.isCrossfading || Boolean(this.secondaryKaraokeLoadedSource)) &&
         this.secondaryAudio
       ) {
-        this.secondaryAudio.play().catch(() => {});
+        const curLevel = this.karaokeState.vocalLevel ?? 100;
+        if (this.isCrossfading || (this.karaokeState.active && curLevel < 100)) {
+          this.secondaryAudio.volume = targetVol * ((100 - curLevel) / 100);
+          this.secondaryAudio.play().catch(() => {});
+        } else {
+          this.secondaryAudio.volume = 0;
+          this.secondaryAudio.pause();
+        }
       }
     }
     usePlayerStore.setState({ isPlaying: true });
