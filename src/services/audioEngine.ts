@@ -304,6 +304,21 @@ class AudioEngine {
   private karaokeSwapDebounceTimer: ReturnType<typeof setTimeout> | null = null;
   private secondaryKaraokeLoadedSource: string | null = null;
   public isSecondaryKaraokePreparing = false;
+  private lastSecondarySyncTime = 0;
+
+  // Dedicated Web Audio Real-Time Karaoke Center-Channel DSP with Bass Crossover
+  private karaokeBassFilter: BiquadFilterNode | null = null;
+  private karaokeHighFilter: BiquadFilterNode | null = null;
+  private karaokeSplitter: ChannelSplitterNode | null = null;
+  private karaokeCenterSum: GainNode | null = null;
+  private karaokeCenterGain: GainNode | null = null;
+  private karaokeSideDiff: GainNode | null = null;
+  private karaokeSideInvertR: GainNode | null = null;
+  private karaokeSideNeg: GainNode | null = null;
+  private karaokeMerger: ChannelMergerNode | null = null;
+  private karaokeDspOutput: GainNode | null = null;
+  private karaokeDryGain: GainNode | null = null;
+  private karaokeWetGain: GainNode | null = null;
 
   public get isTransitionActive(): boolean {
     return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
@@ -2288,9 +2303,16 @@ class AudioEngine {
                   try { this.secondaryYtPlayer.playVideo(); } catch {}
                 }
                 const secSec = this.secondaryYtPlayer.getCurrentTime();
-                if (isFinite(secSec) && curSec > 0.5) {
+                const isSecActiveBlending = Boolean(
+                  this.secondaryKaraokeLoadedSource &&
+                  this.currentVideoId !== this.secondaryKaraokeLoadedSource &&
+                  this.karaokeState.active
+                );
+                if (isFinite(secSec) && curSec > 0.5 && isSecActiveBlending) {
                   const drift = Math.abs(curSec - secSec);
-                  if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function') {
+                  const nowSync = Date.now();
+                  if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function' && nowSync - this.lastSecondarySyncTime > 4000) {
+                    this.lastSecondarySyncTime = nowSync;
                     try { this.secondaryYtPlayer.seekTo(curSec, true); } catch {}
                   }
                 }
@@ -2436,17 +2458,81 @@ class AudioEngine {
         this.audioContext.resume().catch(() => {});
       }
 
-      // 1. Initialize Master Output Bus: masterGain -> graphic EQ filters -> compressorNode -> destination
+      // 1. Initialize Master Output Bus: masterGain -> karaoke DSP -> graphic EQ filters -> compressorNode -> destination
       if (!this.masterGain) {
         this.masterGain = this.audioContext.createGain();
         this.masterGain.gain.value = 1.0;
+
+        // 1b. Real-Time Center-Channel Vocal Remover with Bass Crossover (Web Audio DSP)
+        this.karaokeDspOutput = this.audioContext.createGain();
+        this.karaokeDspOutput.gain.value = 1.0;
+
+        this.karaokeDryGain = this.audioContext.createGain();
+        this.karaokeDryGain.gain.value = 1.0;
+        this.masterGain.connect(this.karaokeDryGain);
+        this.karaokeDryGain.connect(this.karaokeDspOutput);
+
+        this.karaokeWetGain = this.audioContext.createGain();
+        this.karaokeWetGain.gain.value = 0.0;
+        this.masterGain.connect(this.karaokeWetGain);
+
+        // Bass preservation crossover: passes frequencies below 200Hz untouched (Kick & Bass)
+        this.karaokeBassFilter = this.audioContext.createBiquadFilter();
+        this.karaokeBassFilter.type = 'lowpass';
+        this.karaokeBassFilter.frequency.value = 200;
+        this.karaokeBassFilter.Q.value = 0.707;
+        this.karaokeWetGain.connect(this.karaokeBassFilter);
+        this.karaokeBassFilter.connect(this.karaokeDspOutput);
+
+        // Vocal cancellation path for mids/highs (>200Hz)
+        this.karaokeHighFilter = this.audioContext.createBiquadFilter();
+        this.karaokeHighFilter.type = 'highpass';
+        this.karaokeHighFilter.frequency.value = 200;
+        this.karaokeHighFilter.Q.value = 0.707;
+        this.karaokeWetGain.connect(this.karaokeHighFilter);
+
+        this.karaokeSplitter = this.audioContext.createChannelSplitter(2);
+        this.karaokeHighFilter.connect(this.karaokeSplitter);
+
+        // Center channel sum: (L + R) * 0.5
+        this.karaokeCenterSum = this.audioContext.createGain();
+        this.karaokeCenterSum.gain.value = 0.5;
+        this.karaokeSplitter.connect(this.karaokeCenterSum, 0); // L
+        this.karaokeSplitter.connect(this.karaokeCenterSum, 1); // R
+
+        this.karaokeCenterGain = this.audioContext.createGain();
+        this.karaokeCenterGain.gain.value = 1.0;
+        this.karaokeCenterSum.connect(this.karaokeCenterGain);
+
+        // Side channel difference: (L - R) * 0.5
+        this.karaokeSideDiff = this.audioContext.createGain();
+        this.karaokeSideDiff.gain.value = 0.5;
+        this.karaokeSideInvertR = this.audioContext.createGain();
+        this.karaokeSideInvertR.gain.value = -0.5;
+        this.karaokeSplitter.connect(this.karaokeSideDiff, 0); // +0.5 * L
+        this.karaokeSplitter.connect(this.karaokeSideInvertR, 1); // -0.5 * R
+        this.karaokeSideInvertR.connect(this.karaokeSideDiff);
+
+        this.karaokeSideNeg = this.audioContext.createGain();
+        this.karaokeSideNeg.gain.value = -1.0;
+        this.karaokeSideDiff.connect(this.karaokeSideNeg);
+
+        this.karaokeMerger = this.audioContext.createChannelMerger(2);
+        // Left Ear = Center * V + Side
+        this.karaokeCenterGain.connect(this.karaokeMerger, 0, 0);
+        this.karaokeSideDiff.connect(this.karaokeMerger, 0, 0);
+        // Right Ear = Center * V - Side
+        this.karaokeCenterGain.connect(this.karaokeMerger, 0, 1);
+        this.karaokeSideNeg.connect(this.karaokeMerger, 0, 1);
+
+        this.karaokeMerger.connect(this.karaokeDspOutput);
 
         let savedBands: number[] = [0, 0, 0, 0, 0, 0];
         try {
           if (typeof window !== 'undefined') savedBands = effectiveEqGains();
         } catch {}
 
-        let lastNode: AudioNode = this.masterGain;
+        let lastNode: AudioNode = this.karaokeDspOutput;
         this.filterNodes = this.eqFrequencies.map((freq, idx) => {
           const filter = this.audioContext!.createBiquadFilter();
           if (idx === 0) {
@@ -3362,9 +3448,36 @@ class AudioEngine {
       inst?.provider === 'monochrome'
     ) : false;
 
-    // 1. YouTube Dual-Deck Synchronized Crossfade
+    const isPlayingInstrumental = Boolean(instSource && this.currentVideoId === instSource);
+
+    // 1. YouTube Single/Dual Deck Safe Modulation
     if (this.activeEngine === 'youtube' && activeYt) {
-      if (instSource && isSecHtml5 && this.secondaryAudio) {
+      if (isPlayingInstrumental) {
+        // Deck is already playing clean instrumental audio: keep active deck at 100% full music!
+        if (typeof activeYt.setVolume === 'function') {
+          activeYt.setVolume(Math.round(masterVol * 100));
+        }
+        if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+          this.ytPlayer.setVolume(Math.round(masterVol * 100));
+        }
+        if (typeof secYt?.setVolume === 'function') {
+          secYt.setVolume(0);
+        }
+        // Debounce swap back to original vocal track if user raises slider back to 100%
+        if (this.karaokeSwapDebounceTimer) {
+          clearTimeout(this.karaokeSwapDebounceTimer);
+          this.karaokeSwapDebounceTimer = null;
+        }
+        if (clamped === 100 && this.karaokeState.originalSourceId && !this.isTransitioning) {
+          this.karaokeSwapDebounceTimer = setTimeout(() => {
+            if (this.karaokeState.vocalLevel === 100 && this.currentVideoId === instSource && !this.isTransitioning) {
+              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+              const wasPlaying = usePlayerStore.getState().isPlaying;
+              void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId!, curTime, wasPlaying, targetTrack);
+            }
+          }, 450);
+        }
+      } else if (instSource && isSecHtml5 && this.secondaryAudio) {
         if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
           this.secondaryKaraokeLoadedSource = instSource;
           const curTime = this.getCurrentTime() || 0;
@@ -3417,15 +3530,27 @@ class AudioEngine {
           secYt.setVolume(0);
         }
 
-        // Complete vocal silencing fallback: if vocal level is 0 and secondary deck is not playing, swap seamlessly
+        // Debounced track swap when slider settles at 0%: switches to clean single-deck instrumental
+        if (this.karaokeSwapDebounceTimer) {
+          clearTimeout(this.karaokeSwapDebounceTimer);
+          this.karaokeSwapDebounceTimer = null;
+        }
         if (clamped === 0 && !isSecPlaying && !this.isTransitioning && this.currentVideoId !== instSource) {
-          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-          const wasPlaying = usePlayerStore.getState().isPlaying;
-          void this.seamlessAudioSourceSwap(instSource, curTime, wasPlaying, targetTrack);
+          this.karaokeSwapDebounceTimer = setTimeout(() => {
+            if (this.karaokeState.vocalLevel === 0 && this.currentVideoId !== instSource && !this.isTransitioning) {
+              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+              const wasPlaying = usePlayerStore.getState().isPlaying;
+              void this.seamlessAudioSourceSwap(instSource, curTime, wasPlaying, targetTrack);
+            }
+          }, 450);
         } else if (clamped === 100 && this.currentVideoId === instSource && this.karaokeState.originalSourceId && !this.isTransitioning) {
-          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-          const wasPlaying = usePlayerStore.getState().isPlaying;
-          void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId, curTime, wasPlaying, targetTrack);
+          this.karaokeSwapDebounceTimer = setTimeout(() => {
+            if (this.karaokeState.vocalLevel === 100 && this.currentVideoId === instSource && !this.isTransitioning) {
+              const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+              const wasPlaying = usePlayerStore.getState().isPlaying;
+              void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId!, curTime, wasPlaying, targetTrack);
+            }
+          }, 450);
         }
       } else {
         // Single player mode / No secondary instrumental: attenuate volume smoothly down to continuous floor (35%)
@@ -3461,14 +3586,27 @@ class AudioEngine {
       }
     }
 
-    // 3. Web Audio Real-Time Notch Filter
+    // 3. Web Audio Real-Time Center-Channel Cancellation with Bass Crossover DSP
     try {
       this.initAudioContext();
-      if (this.audioContext && this.filterNodes && this.filterNodes.length >= 4) {
+      if (this.audioContext) {
         if (this.audioContext.state === 'suspended') {
           this.audioContext.resume().catch(() => {});
         }
         const now = this.audioContext.currentTime;
+        const v = Math.max(0, Math.min(1, clamped / 100));
+        if (this.karaokeDryGain) {
+          this.karaokeDryGain.gain.setValueAtTime(clamped === 100 ? 1.0 : 0.0, now);
+        }
+        if (this.karaokeWetGain) {
+          this.karaokeWetGain.gain.setValueAtTime(clamped === 100 ? 0.0 : 1.0, now);
+        }
+        if (this.karaokeCenterGain) {
+          this.karaokeCenterGain.gain.cancelScheduledValues(now);
+          this.karaokeCenterGain.gain.setTargetAtTime(v, now, 0.02);
+        }
+
+        // Notch shaping on filters for legacy compatibility
         const attenRatio = (100 - clamped) / 100;
         const vocalMidCut = -36 * attenRatio;
         const vocalPresCut = -24 * attenRatio;
@@ -3503,7 +3641,14 @@ class AudioEngine {
     if (!this.currentVideoId) return;
     const track = usePlayerStore.getState().currentTrack;
     if (!track || !this.currentTrackId || AudioEngine.cleanId(track.id) !== AudioEngine.cleanId(this.currentTrackId)) return;
-    if (this.karaokeState.active && this.karaokeState.trackId === AudioEngine.cleanId(track.id)) return;
+    if (
+      (this.karaokeState.active && this.karaokeState.trackId === AudioEngine.cleanId(track.id)) ||
+      (this.karaokeState.instrumental?.sourceId && this.currentVideoId === this.karaokeState.instrumental.sourceId) ||
+      (this.secondaryKaraokeLoadedSource && this.currentVideoId === this.secondaryKaraokeLoadedSource) ||
+      (this.karaokeState.vocalLevel !== undefined && this.karaokeState.vocalLevel < 100)
+    ) {
+      return;
+    }
     const key = `${track.id}|${this.currentVideoId}`;
     if (this.verifiedSources.has(key)) return;
     if (getSourceOverride(track.id) === this.currentVideoId) {

@@ -157,9 +157,15 @@ export function LyricsFullscreen(p: Props) {
         void audioEngine.prepareKaraokeDeck(p.track);
       }
       void karaoke.setLevel(0);
+      if (!karaoke.active) {
+        void karaoke.toggle();
+      }
     } else {
       setShowKaraokeSlider(false);
       void karaoke.setLevel(100);
+      if (karaoke.active) {
+        void karaoke.toggle();
+      }
     }
   };
 
