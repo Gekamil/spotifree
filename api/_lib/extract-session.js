@@ -186,22 +186,40 @@ export async function getAccessTokenFromCookie(spDcCookie) {
 let cachedSpotifySearchToken = null;
 let cachedSpotifySearchTokenExpiry = 0;
 
-export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '') {
-  const cleanQ = (query || '').trim();
-  if (!cleanQ) return [];
+export const FRANCHISE_SEARCH_ALIASES = [
+  { match: /\b(los\s+)?juegos\s+del\s+hambre\b/i, alias: 'The Hunger Games' },
+  { match: /\b(el\s+)?se[ñn]or\s+de\s+los\s+anillos\b/i, alias: 'The Lord of the Rings' },
+  { match: /\b(la\s+)?guerra\s+de\s+las\s+galaxias\b/i, alias: 'Star Wars' },
+  { match: /\b(el\s+)?juego\s+de\s+tronos\b/i, alias: 'Game of Thrones' },
+  { match: /\bcancion\s+de\s+hielo\s+y\s+fuego\b/i, alias: 'A Song of Ice and Fire' },
+  { match: /\bpiratas\s+del\s+caribe\b/i, alias: 'Pirates of the Caribbean' },
+  { match: /\bguardianes\s+de\s+la\s+galaxia\b/i, alias: 'Guardians of the Galaxy' },
+  { match: /\b(los\s+)?vengadores\b/i, alias: 'Avengers' },
+  { match: /\b(el\s+)?hombre\s+ara[ñn]a\b/i, alias: 'Spider-Man' },
+  { match: /\b(el\s+)?rey\s+leon\b/i, alias: 'The Lion King' },
+  { match: /\b(la\s+)?bella\s+y\s+la\s+bestia\b/i, alias: 'Beauty and the Beast' },
+  { match: /\b(el\s+)?padrino\b/i, alias: 'The Godfather' },
+  { match: /\bpesadilla\s+antes\s+de\s+navidad\b/i, alias: 'The Nightmare Before Christmas' },
+  { match: /\bel\s+viaje\s+de\s+chihiro\b/i, alias: 'Spirited Away' },
+  { match: /\b(las\s+)?cronicas\s+de\s+narnia\b/i, alias: 'The Chronicles of Narnia' },
+  { match: /\b(a\s+todo\s+gas|rapidos?\s+y\s+furiosos?)\b/i, alias: 'Fast & Furious' },
+  { match: /\bmision\s+imposible\b/i, alias: 'Mission: Impossible' },
+  { match: /\bamanecer\s+en\s+la\s+cosecha\b/i, alias: 'Sunrise on the Reaping' },
+  { match: /\bbalada\s+de\s+pajaros\s+cantores\b/i, alias: 'The Ballad of Songbirds and Snakes' },
+  { match: /\bcincuenta\s+sombras\s+de\s+grey\b/i, alias: 'Fifty Shades of Grey' },
+  { match: /\bel\s+gran\s+showman\b/i, alias: 'The Greatest Showman' },
+  { match: /\bel\s+fantasma\s+de\s+la\s+opera\b/i, alias: 'The Phantom of the Opera' },
+  { match: /\binterestelar\b/i, alias: 'Interstellar' },
+  { match: /\bel\s+origen\b/i, alias: 'Inception' },
+  { match: /\banatomia\s+de\s+grey\b/i, alias: "Grey's Anatomy" },
+  { match: /\bla\s+casa\s+de\s+papel\b/i, alias: 'Money Heist' },
+  { match: /\bel\s+ultimo\s+de\s+nosotros\b/i, alias: 'The Last of Us' },
+  { match: /\b(la\s+)?leyenda\s+de\s+zelda\b/i, alias: 'The Legend of Zelda' },
+];
 
-  let token = null;
-  if (!cookie && cachedSpotifySearchToken && Date.now() < cachedSpotifySearchTokenExpiry - 60000) {
-    token = cachedSpotifySearchToken;
-  } else {
-    token = await getAccessTokenFromCookie(cookie);
-    if (token && !cookie) {
-      cachedSpotifySearchToken = token;
-      cachedSpotifySearchTokenExpiry = Date.now() + 3500000;
-    }
-  }
-
-  if (!token) return [];
+async function fetchPathfinderPlaylists(queryStr, limit, token) {
+  const cleanQ = (queryStr || '').trim();
+  if (!cleanQ || !token) return [];
 
   const variables = { query: cleanQ, limit: Math.min(30, Math.max(5, limit)), offset: 0 };
   const extensions = {
@@ -231,9 +249,13 @@ export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '
       const items = json.data?.searchV2?.playlists?.items || [];
       return items.map((it) => {
         const p = it.data || it;
-        const rawCover = p.images?.items?.[0]?.sources?.[0]?.url || '';
+        const rawCover =
+          p.images?.items?.[0]?.sources?.[0]?.url ||
+          p.images?.sources?.[0]?.url ||
+          p.images?.[0]?.url ||
+          '';
         const cover = toHDImage(rawCover);
-        const ownerName = p.ownerV2?.data?.name || 'Spotify';
+        const ownerName = p.ownerV2?.data?.name || p.owner?.name || p.owner?.display_name || 'Spotify';
         return {
           id: p.id || p.uri?.split(':').pop(),
           name: p.name,
@@ -241,10 +263,10 @@ export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '
           images: cover ? [{ url: cover }] : [],
           owner: {
             display_name: ownerName,
-            id: p.ownerV2?.data?.uri?.split(':').pop() || 'spotify',
+            id: p.ownerV2?.data?.uri?.split(':').pop() || p.ownerV2?.data?.username || p.owner?.id || 'spotify',
           },
           tracks: {
-            total: 0,
+            total: p.content?.totalCount || p.tracks?.total || 0,
             items: [],
           },
         };
@@ -254,6 +276,138 @@ export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '
     console.warn('[searchSpotifyPublicPlaylists error]:', err.message);
   }
   return [];
+}
+
+export async function searchSpotifyPublicPlaylists(query, limit = 20, cookie = '') {
+  const cleanQ = (query || '').trim();
+  if (!cleanQ) return [];
+
+  let token = null;
+  if (!cookie && cachedSpotifySearchToken && Date.now() < cachedSpotifySearchTokenExpiry - 60000) {
+    token = cachedSpotifySearchToken;
+  } else {
+    token = await getAccessTokenFromCookie(cookie);
+    if (token && !cookie) {
+      cachedSpotifySearchToken = token;
+      cachedSpotifySearchTokenExpiry = Date.now() + 3500000;
+    }
+  }
+
+  if (!token) return [];
+
+  const queriesToRun = [cleanQ];
+  const normQ = cleanQ.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const matchedAlias = FRANCHISE_SEARCH_ALIASES.find((fa) => fa.match.test(normQ));
+  if (matchedAlias && !cleanQ.toLowerCase().includes(matchedAlias.alias.toLowerCase())) {
+    queriesToRun.push(matchedAlias.alias);
+  }
+
+  const resultsLists = await Promise.all(
+    queriesToRun.map((q) => fetchPathfinderPlaylists(q, limit, token))
+  );
+
+  const seen = new Set();
+  const merged = [];
+  for (const list of resultsLists) {
+    for (const item of list) {
+      if (item && item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        merged.push(item);
+      }
+    }
+  }
+  return rankPlaylists(cleanQ, merged);
+}
+
+export function scorePlaylistRelevance(query, p) {
+  const norm = (s) =>
+    String(s || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9ñ]+/g, ' ')
+      .trim();
+
+  const q = norm(query);
+  if (!q) return 0;
+  const title = norm(p.name);
+  const desc = norm(p.description || '');
+  const owner = norm(p.owner?.display_name || p.owner?.id || '');
+  const id = String(p.id || '');
+  const isSpotifyOfficial = owner === 'spotify' || id.startsWith('37i9dQ');
+
+  let score = 0;
+  if (isSpotifyOfficial) {
+    score += 260;
+  }
+  if (/\b(official\s+playlist|soundtrack\s+oficial|banda\s+sonora\s+oficial|official\s+soundtrack|original\s+soundtrack)\b/i.test(p.name)) {
+    score += 140;
+  } else if (/\b(soundtrack|banda\s+sonora|ost|bso|score)\b/i.test(p.name)) {
+    score += 60;
+  }
+
+  if (/^(this\s+is|mix\s+de|radio\s+de)\b/i.test(title)) {
+    score += 50;
+  }
+
+  if (title === q) {
+    score += 200;
+  } else if (title.startsWith(q)) {
+    score += 100;
+  } else if (title.includes(q)) {
+    score += 70;
+  }
+
+  for (const f of FRANCHISE_SEARCH_ALIASES) {
+    if (f.match.test(q)) {
+      const aliasNorm = norm(f.alias);
+      if (title.includes(aliasNorm) || desc.includes(aliasNorm)) {
+        score += 220;
+      }
+    }
+  }
+
+  const stopWords = new Set(['de', 'la', 'los', 'las', 'el', 'en', 'y', 'the', 'of', 'and', 'in', 'on', 'a', 'para', 'con']);
+  const tokens = q.split(' ').filter((t) => t.length > 1 && !stopWords.has(t));
+  const titleWords = new Set(title.split(' '));
+  for (const tok of tokens) {
+    if (titleWords.has(tok)) {
+      score += 25;
+    } else if (title.includes(tok)) {
+      score += 12;
+    } else if (desc.includes(tok)) {
+      score += 6;
+    } else {
+      score -= 15;
+    }
+  }
+
+  const isAudioIntent = /\b(audio|audiolibro|audiobook|capitulo|leer|lectura|reading|book|libro)\b/i.test(q);
+  const combinedText = `${title} ${desc}`;
+  const isAudioContent = /\b(audiolibro|audiobook|lee\s+conmigo|reading\s+the|pov\b|pov:|capitulo|capitulos)\b/i.test(combinedText);
+  if (!isAudioIntent) {
+    if (isAudioContent) {
+      score -= 320;
+    }
+  } else {
+    if (isAudioContent) {
+      score += 350;
+    }
+  }
+
+  if (p.images?.[0]?.url) {
+    score += 15;
+  }
+
+  return score;
+}
+
+export function rankPlaylists(query, playlists) {
+  if (!Array.isArray(playlists) || playlists.length === 0) return [];
+  return playlists
+    .map((p, i) => ({ p, i, s: scorePlaylistRelevance(query, p) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i)
+    .map((x) => x.p);
 }
 
 export async function getWebPlayerAuth(spDcCookie = '') {

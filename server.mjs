@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { resolveAudio, resolveYouTubeVideoId, streamAudioFromUrl, streamAudioDirect, searchYouTubeTracks, findBestInstrumentalNode } from './scripts/audioService.mjs';
 import { extractSpotifySession } from './scripts/spotifySessionExtractor.mjs';
-import { searchSpotifyPublicPlaylists } from './api/_lib/extract-session.js';
+import { searchSpotifyPublicPlaylists, rankPlaylists } from './api/_lib/extract-session.js';
 import { resolveSpotifyPlaylist } from './api/playlist.js';
 import {
   searchSoundCloudCatalog,
@@ -853,7 +853,9 @@ const server = http.createServer(async (req, res) => {
         // Enrich public playlists if not present in Web API response
         if (!spotifyData.playlists?.items?.length) {
           const spotifyPlaylists = await searchSpotifyPublicPlaylists(cleanQ, 20).catch(() => []);
-          spotifyData.playlists = { items: spotifyPlaylists };
+          spotifyData.playlists = { items: rankPlaylists(cleanQ, spotifyPlaylists) };
+        } else {
+          spotifyData.playlists.items = rankPlaylists(cleanQ, spotifyData.playlists.items || []);
         }
 
         // Ensure image URLs are HD 640x640
@@ -1435,8 +1437,10 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      const totalTracks = typeof dzTracks.total === 'number' ? dzTracks.total : (combined.length + offset);
-      const hasMoreTracks = typeof dzTracks.total === 'number' ? (offset + combined.length < dzTracks.total) : (combined.length >= limit);
+      const totalTracks = typeof deezerTracksRes?.total === 'number' ? deezerTracksRes.total : (combined.length + offset);
+      const hasMoreTracks = typeof deezerTracksRes?.total === 'number' ? (offset + combined.length < deezerTracksRes.total) : (combined.length >= limit);
+
+      const rankedPlaylists = rankPlaylists(cleanQ, playlists);
 
       res.statusCode = 200;
       return res.end(JSON.stringify({
@@ -1450,7 +1454,7 @@ const server = http.createServer(async (req, res) => {
         soundcloudTracks: { items: orderedRemixItems },
         artists: { items: artists },
         albums: { items: albums },
-        playlists: { items: playlists },
+        playlists: { items: rankedPlaylists },
         total: totalTracks,
         offset,
         limit,

@@ -14,7 +14,7 @@ import {
   type RecentSearchItem,
 } from '../../utils/recentSearches';
 import { parseTrackArtists } from '../../utils/trackArtists';
-import { CloseNativeIcon, SearchNativeIcon } from '../icons/SpotifyNativeIcons';
+import { CloseNativeIcon, SearchNativeIcon, PlaylistNoteNativeIcon } from '../icons/SpotifyNativeIcons';
 import { BROWSE_CATEGORIES } from '../../data/browseCategories';
 import { useDailyCategoryHub } from '../../services/dailyCategoryHub';
 
@@ -633,7 +633,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
           {(filter === 'todo' || filter === 'playlists') && results.playlists.length > 0 && (
             <div className="space-y-2 pt-2">
               <h3 className="text-sm font-bold text-white mb-2">Playlists</h3>
-              {(filter === 'todo' ? results.playlists.slice(0, 4) : results.playlists).map((pl) => (
+              {(filter === 'todo' ? results.playlists.slice(0, 6) : results.playlists).map((pl) => (
                 <div
                   key={pl.id}
                   onClick={() => {
@@ -727,7 +727,7 @@ export const MobileSearchView: React.FC<MobileSearchViewProps> = ({ onSelectPlay
                           <img src={item.image} alt={item.title} className="w-full h-full object-cover" onError={handleImageError} />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center text-[#727272]">
-                            {item.type === 'query' ? <SearchNativeIcon size={24} className="text-[#a7a7a7]" /> : '♪'}
+                            {item.type === 'query' ? <SearchNativeIcon size={24} className="text-[#a7a7a7]" /> : <PlaylistNoteNativeIcon size={22} className="text-[#a7a7a7]" />}
                           </div>
                         )}
                       </div>

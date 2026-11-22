@@ -2,7 +2,7 @@ import type { Playlist, Track, UserProfile } from '../types/spotify';
 import { getValidAccessToken } from './spotifyAuth';
 import { filterMusicTracksOnly } from '../utils/trackFilter';
 import { withoutNotInterested } from '../utils/notInterested';
-import { rankSearchTracks } from '../utils/searchRanking';
+import { rankSearchTracks, rankSearchPlaylists } from '../utils/searchRanking';
 
 export async function fetchPlaylistDetails(id: string, options?: { refresh?: boolean }): Promise<Playlist | null> {
   try {
@@ -502,7 +502,7 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
           soundcloudTracks: { items: [] },
           artists: { items: localArtists },
           albums: { items: [] },
-          playlists: { items: userMatchedPlaylists },
+          playlists: { items: rankSearchPlaylists(cleanQ, userMatchedPlaylists) },
         });
       }
     } catch {}
@@ -910,12 +910,13 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   const totalTracks = backendData?.tracks?.total ?? (tracks.length + offset);
   const hasMoreTracks = backendData?.tracks?.hasMore ?? (tracks.length >= limit);
 
-  const mergedPlaylists: any[] = [...userMatchedPlaylists];
+  const rawMergedPlaylists: any[] = [...userMatchedPlaylists];
   for (const pl of playlists) {
-    if (!mergedPlaylists.some((p) => p.id === pl.id)) {
-      mergedPlaylists.push(pl);
+    if (!rawMergedPlaylists.some((p) => p.id === pl.id)) {
+      rawMergedPlaylists.push(pl);
     }
   }
+  const mergedPlaylists = rankSearchPlaylists(cleanQ, rawMergedPlaylists);
 
   const finalPayload = {
     tracks: {

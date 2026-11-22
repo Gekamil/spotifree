@@ -639,7 +639,12 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
           const pfData = await pfRes.json();
           const pl = pfData.data?.playlistV2;
           if (pl && pl.name) {
-            const rawCover = pl.images?.items?.[0]?.sources?.[0]?.url || '';
+            const rawCover =
+              pl.images?.items?.[0]?.sources?.[0]?.url ||
+              pl.images?.sources?.[0]?.url ||
+              pl.images?.[0]?.url ||
+              pl.images?.items?.[0]?.url ||
+              '';
             const coverUrl = toHDImage(rawCover);
             const rawItems = [...(pl.content?.items || [])];
             const totalCount = pl.content?.totalCount || rawItems.length;

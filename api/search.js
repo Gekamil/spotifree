@@ -1,4 +1,4 @@
-import { toHDImage, searchSpotifyPublicPlaylists } from './_lib/extract-session.js';
+import { toHDImage, searchSpotifyPublicPlaylists, rankPlaylists } from './_lib/extract-session.js';
 import {
   searchSoundCloudCatalog,
   resolveSoundCloudUrl,
@@ -585,7 +585,7 @@ export default async function handler(req, res) {
         limit,
         hasMore: typeof deezerAlbumsRes.total === 'number' ? (offset + albums.length < deezerAlbumsRes.total) : albums.length >= 8,
       },
-      playlists: { items: playlists },
+      playlists: { items: rankPlaylists(cleanQ, playlists) },
       total: totalTracks,
       offset,
       limit,
