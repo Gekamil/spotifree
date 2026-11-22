@@ -3014,7 +3014,7 @@ class AudioEngine {
     // If no external instrumental source is available, smoothly toggle vocal attenuation level without cutting music
     if (!inst?.sourceId) {
       const nextLevel = currentlyActive ? 100 : 0;
-      await this.setKaraokeLevel(nextLevel, track);
+      this.setKaraokeLevel(nextLevel, track);
       return !currentlyActive;
     }
 
@@ -3055,8 +3055,7 @@ class AudioEngine {
           this.emitKaraokeChange();
           return true;
         } else {
-          // If hot-swap did not execute, smoothly attenuate vocals without stopping music
-          await this.setKaraokeLevel(0, track);
+          this.setKaraokeLevel(0, track);
           this.karaokeState = {
             ...this.karaokeState,
             active: true,
@@ -3079,7 +3078,7 @@ class AudioEngine {
         if (restoreId) {
           await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
         }
-        await this.setKaraokeLevel(100, track);
+        this.setKaraokeLevel(100, track);
         if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
           this.karaokeState = {
             trackId: clean,
@@ -3109,9 +3108,9 @@ class AudioEngine {
    * Sets variable karaoke vocal attenuation level (0 to 100).
    * 0% = maximum vocal attenuation (clean instrumental)
    * 100% = original full vocals with singer's full volume
-   * Adjusts vocal frequencies continuously in real-time without buffering, pausing or sudden discrete track hops.
+   * Blends dual tracks seamlessly in real-time without buffering, pausing or sudden discrete track hops.
    */
-  public async setKaraokeLevel(level: number, track?: Track): Promise<void> {
+  public setKaraokeLevel(level: number, track?: Track): void {
     const targetTrack = track || usePlayerStore.getState().currentTrack;
     if (!targetTrack) return;
     const clean = AudioEngine.cleanId(targetTrack.id);
@@ -3122,26 +3121,81 @@ class AudioEngine {
       trackId: clean,
       vocalLevel: clamped,
       active: clamped < 100,
+      switching: false,
     };
     this.emitKaraokeChange();
 
-    // 1. YouTube playback: NEVER kill or reload audio during karaoke adjustments!
-    // Smoothly scale player volume down ("baje poco a poco") to a continuous musical floor (35%)
-    // so music is NEVER interrupted or cut to silence
-    if (this.activeEngine === 'youtube' && this.ytPlayer) {
-      try {
-        const masterVol = this.getEffectiveVolume();
-        const vocalRatio = clamped / 100;
-        // Continuous attenuation curve: 100% -> masterVol, 0% -> 35% of masterVol
-        const targetVol = Math.round(masterVol * (0.35 + 0.65 * vocalRatio) * 100);
-        if (typeof this.ytPlayer.setVolume === 'function') {
-          this.ytPlayer.setVolume(targetVol);
+    const masterVol = this.getEffectiveVolume();
+    const vocalRatio = clamped / 100;
+    const instRatio = (100 - clamped) / 100;
+
+    const vocalVol = Math.round(masterVol * vocalRatio * 100);
+    const instVol = Math.round(masterVol * instRatio * 100);
+
+    const activeYt = this.ytPlayer;
+    const secYt = this.secondaryYtPlayer;
+    const instSource = this.karaokeState.instrumental?.sourceId;
+
+    // 1. YouTube Dual-Deck Synchronized Crossfade
+    if (this.activeEngine === 'youtube' && activeYt) {
+      if (instSource && secYt) {
+        // Dual audio playback: blend between vocal deck and instrumental deck
+        if (typeof activeYt.setVolume === 'function') {
+          activeYt.setVolume(vocalVol);
         }
-      } catch {}
+
+        if (clamped < 100) {
+          // If secondary player is not running, start it synchronized to active player's currentTime
+          const secState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
+          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+          if (secState !== 1 && secState !== 3) {
+            if (typeof secYt.loadVideoById === 'function') {
+              secYt.loadVideoById({ videoId: instSource, startSeconds: curTime });
+              if (typeof secYt.unMute === 'function') secYt.unMute();
+              if (typeof secYt.playVideo === 'function') secYt.playVideo();
+            }
+          } else {
+            // Keep in tight sync if drift > 0.35s
+            const secTime = typeof secYt.getCurrentTime === 'function' ? secYt.getCurrentTime() : curTime;
+            if (Math.abs(curTime - secTime) > 0.35 && typeof secYt.seekTo === 'function') {
+              try { secYt.seekTo(curTime, true); } catch {}
+            }
+          }
+          if (typeof secYt.setVolume === 'function') {
+            secYt.setVolume(instVol);
+          }
+        } else {
+          // At 100% (full original vocals), silence secondary deck
+          if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
+          if (typeof secYt.pauseVideo === 'function') {
+            try { secYt.pauseVideo(); } catch {}
+          }
+        }
+      } else {
+        // Single player mode: attenuate volume smoothly down to a continuous floor (35%)
+        if (typeof activeYt.setVolume === 'function') {
+          const minFloor = 0.35;
+          const targetVol = Math.round(masterVol * (minFloor + (1 - minFloor) * vocalRatio) * 100);
+          activeYt.setVolume(targetVol);
+        }
+      }
     }
 
-    // 2. Real-time Continuous Web Audio Vocal Notch Filtering:
-    // Attenuates vocal formant frequencies (230Hz, 910Hz, 3600Hz) progressively as level drops
+    // 2. HTML5 Dual-Deck / Audio Elements
+    if (this.audio) {
+      if (this.secondaryAudio && this.karaokeState.instrumental) {
+        this.audio.volume = masterVol * vocalRatio;
+        this.secondaryAudio.volume = masterVol * instRatio;
+        if (clamped < 100 && this.secondaryAudio.paused) {
+          this.secondaryAudio.currentTime = this.audio.currentTime;
+          this.secondaryAudio.play().catch(() => {});
+        } else if (clamped === 100 && !this.secondaryAudio.paused) {
+          this.secondaryAudio.pause();
+        }
+      }
+    }
+
+    // 3. Web Audio Real-Time Notch Filter
     try {
       this.initAudioContext();
       if (this.audioContext && this.filterNodes && this.filterNodes.length >= 4) {
@@ -3150,38 +3204,25 @@ class AudioEngine {
         }
         const now = this.audioContext.currentTime;
         const attenRatio = (100 - clamped) / 100;
-        // 910Hz vocal core band down to -32dB, 3600Hz presence band down to -22dB, 230Hz low band down to -12dB
-        const vocalMidCut = -32 * attenRatio;
-        const vocalPresCut = -22 * attenRatio;
-        const vocalLowCut = -12 * attenRatio;
+        const vocalMidCut = -36 * attenRatio;
+        const vocalPresCut = -24 * attenRatio;
+        const vocalLowCut = -14 * attenRatio;
 
         const lowNode = this.filterNodes[1];
         if (lowNode) {
           lowNode.gain.cancelScheduledValues(now);
-          lowNode.gain.setTargetAtTime(vocalLowCut, now, 0.05);
+          lowNode.gain.setTargetAtTime(vocalLowCut, now, 0.02);
         }
         const midNode = this.filterNodes[2];
         if (midNode) {
           midNode.gain.cancelScheduledValues(now);
-          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.05);
+          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.02);
         }
         const presNode = this.filterNodes[3];
         if (presNode) {
           presNode.gain.cancelScheduledValues(now);
-          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.05);
+          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.02);
         }
-      }
-    } catch {}
-
-    // 3. Dual-Deck Audio Blending (when secondary instrumental deck or HTML5 sources are running)
-    try {
-      const effVol = this.getEffectiveVolume();
-      const vocalRatio = clamped / 100;
-      const instRatio = (100 - clamped) / 100;
-
-      if (this.secondaryAudio && !this.secondaryAudio.paused) {
-        this.audio.volume = effVol * vocalRatio;
-        this.secondaryAudio.volume = effVol * instRatio;
       }
     } catch {}
   }
@@ -3420,8 +3461,8 @@ class AudioEngine {
         // Already resolving and loading this exact track in active sequence, avoid restarting to 0!
         return;
       }
-      if (startSeconds === 0 && usePlayerStore.getState().isPlaying) {
-        // Already actively playing this song, keep playing smoothly!
+      if (startSeconds === 0) {
+        // Already loaded this exact track, resume playback smoothly without duplicate playback!
         this.resume();
         return;
       }
@@ -3788,6 +3829,12 @@ class AudioEngine {
     }
     if (this.audios[1]) {
       try { this.audios[1].pause(); } catch {}
+    }
+    if (typeof window !== 'undefined') {
+      try {
+        (window as any).__aiDJVoiceService?.stopSpeaking();
+        this.restoreDuckedVolume(0);
+      } catch {}
     }
     usePlayerStore.setState({ isPlaying: false });
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {

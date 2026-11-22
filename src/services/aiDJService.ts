@@ -820,10 +820,14 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
   startDJSession: async (forceReset = false, options?: { speakFirst?: boolean }) => {
     const currentState = get();
     if (!forceReset && currentState.isDJModeActive && currentState.djTracks.length > 0) {
-      // Session already active! Ensure music is playing if paused
+      // Session already active! Resume playback seamlessly without restarting track 0
       const p = usePlayerStore.getState();
-      if (!p.isPlaying && currentState.djTracks[0]) {
-        p.playTrack(currentState.djTracks[0], currentState.djTracks, 'dj-session');
+      if (!p.isPlaying) {
+        if (p.currentTrack) {
+          p.togglePlay();
+        } else if (currentState.djTracks[0]) {
+          p.playTrack(currentState.djTracks[0], currentState.djTracks, 'dj-session');
+        }
       }
       set({ isThinking: false });
       return;

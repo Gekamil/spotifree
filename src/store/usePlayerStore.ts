@@ -567,6 +567,12 @@ const store = create<PlayerState>((set, get) => ({
         engine.resume();
       } else {
         engine.pause();
+        if (typeof window !== 'undefined') {
+          try {
+            (window as any).__aiDJVoiceService?.stopSpeaking();
+            engine.restoreDuckedVolume?.(0);
+          } catch {}
+        }
       }
     }
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {

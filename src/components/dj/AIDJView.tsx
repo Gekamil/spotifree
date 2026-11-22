@@ -487,33 +487,30 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           {/* Status caption / Live badge */}
           <div className="mt-4 w-full max-w-md flex flex-col items-center justify-center px-2" aria-live="polite">
             {isThinking ? (
-              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md shadow-lg animate-in fade-in">
+              <div className="flex items-center gap-2">
                 <span className="flex gap-1" aria-hidden="true">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce [animation-delay:-0.3s]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce [animation-delay:-0.15s]" />
                   <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce" />
                 </span>
-                <span className="text-xs font-bold text-white tracking-wide font-['SpotifyMixUI']">
+                <span className="text-sm font-bold text-white/80 font-['SpotifyMixUI']">
                   Pensando tu sesión...
                 </span>
               </div>
             ) : isSpeaking ? (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1ed760]/15 border border-[#1ed760]/30 backdrop-blur-md animate-in fade-in">
+              <div className="flex items-center gap-2">
                 <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
-                <span className="text-xs font-bold text-white tracking-wide font-['SpotifyMixUI']">
+                <span className="text-sm font-bold text-[#1ed760] font-['SpotifyMixUI']">
                   El DJ está hablando
                 </span>
               </div>
             ) : activeSegment ? (
               <div className="flex flex-col items-center animate-in fade-in duration-300">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#1ed760] font-['SpotifyMixUITitle']">
-                  EN DIRECTO
-                </span>
-                <span className="text-base sm:text-lg font-black text-white font-['SpotifyMixUITitle'] leading-tight text-center max-w-sm truncate mt-0.5">
+                <h2 className="text-xl sm:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-tight text-center max-w-sm truncate">
                   {activeSegment.title}
-                </span>
+                </h2>
                 {upcomingSegment && (
-                  <span className="text-xs text-white/50 mt-1 truncate max-w-xs">
+                  <span className="text-xs sm:text-sm text-[#b3b3b3] mt-1 truncate max-w-xs font-['SpotifyMixUI']">
                     Luego: {upcomingSegment.title}
                   </span>
                 )}
@@ -541,7 +538,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 />
               </div>
               <div className="flex flex-col justify-center min-w-0 text-left">
-                <span className="font-black text-white text-base sm:text-lg leading-snug truncate font-['SpotifyMixUITitle'] group-hover:underline tracking-tight">
+                <span className="font-black text-white text-base sm:text-lg leading-snug truncate font-['SpotifyMixUITitle'] tracking-tight">
                   {currentTrack?.name || (isThinking ? 'Preparando música...' : 'DJ Spotifree')}
                 </span>
                 <span className="text-[13px] sm:text-sm text-[#b3b3b3] group-hover:text-white transition-colors truncate leading-normal mt-0.5 font-['SpotifyMixUI'] font-medium">
@@ -597,7 +594,12 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
 
               <button
                 type="button"
-                onClick={togglePlay}
+                onClick={() => {
+                  if (isSpeaking) {
+                    aiDJVoiceService.stopSpeaking();
+                  }
+                  togglePlay();
+                }}
                 className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-white hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-xl transition-transform cursor-pointer"
                 title={isPlaying ? 'Pausar' : 'Reproducir'}
               >
@@ -677,9 +679,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </div>
 
             {/* Vibes List */}
-            <div className="overflow-y-auto mt-3 space-y-2 pr-1 max-h-[52vh] sm:max-h-[420px] scrollbar-thin">
+            <div className="overflow-y-auto mt-2 space-y-1 pr-1 max-h-[52vh] sm:max-h-[420px] scrollbar-thin">
               {DJ_VIBE_PRESETS.map((vibe) => {
-                const isSurprise = vibe.id === 'sorprendeme';
                 const subtext =
                   vibe.id === 'sorprendeme'
                     ? 'Déjate llevar con una mezcla variada y fresca'
@@ -709,26 +710,13 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                       setShowVibeDrawer(false);
                       void useAIDJStore.getState().handleUserPrompt(vibe.query || vibe.label);
                     }}
-                    className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] group ${
-                      isSurprise
-                        ? 'bg-[#1ed760]/15 border border-[#1ed760]/40 hover:bg-[#1ed760]/25'
-                        : 'bg-white/5 hover:bg-white/10 border border-white/5'
-                    }`}
+                    className="w-full flex items-center justify-between py-3 px-3.5 rounded-xl hover:bg-white/10 active:bg-white/15 transition-colors cursor-pointer text-left active:scale-[0.99] group"
                   >
                     <div className="min-w-0 pr-2">
-                      <div className="flex items-center gap-2">
-                        <span className={`block font-bold text-sm sm:text-base font-['SpotifyMixUITitle'] truncate ${
-                          isSurprise ? 'text-[#1ed760]' : 'text-white'
-                        }`}>
-                          {vibe.label}
-                        </span>
-                        {isSurprise && (
-                          <span className="px-2 py-0.5 rounded-full bg-[#1ed760] text-black text-[10px] font-black uppercase tracking-wider font-['SpotifyMixUITitle']">
-                            Mix
-                          </span>
-                        )}
-                      </div>
-                      <span className="block text-[11px] sm:text-xs text-[#b3b3b3] mt-0.5 truncate font-['SpotifyMixUI']">
+                      <span className="block font-bold text-sm sm:text-base text-white font-['SpotifyMixUI'] truncate">
+                        {vibe.label}
+                      </span>
+                      <span className="block text-xs text-[#a7a7a7] mt-0.5 truncate font-['SpotifyMixUI']">
                         {subtext}
                       </span>
                     </div>

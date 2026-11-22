@@ -96,9 +96,9 @@ if (process.argv[1] && process.argv[1].endsWith('discordBridge.mjs')) {
 
   const server = createDiscordBridgeServer(PORT, discordRpc);
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`\n🎵 [Spotifree] Puente Discord Rich Presence iniciado en http://127.0.0.1:${PORT}`);
-    console.log(`🎮 [Discord IPC] Buscando cliente de Discord local en Windows...`);
-    console.log(`🎧 [Estado] Cada canción que suene en Spotifree se mostrará automáticamente en Discord.\n`);
+    console.log(`\n[Spotifree] Puente Discord Rich Presence iniciado en http://127.0.0.1:${PORT}`);
+    console.log(`[Discord IPC] Buscando cliente de Discord local en Windows...`);
+    console.log(`[Estado] Cada canción que suene en Spotifree se mostrará automáticamente en Discord.\n`);
   });
 
   process.on('SIGINT', () => {

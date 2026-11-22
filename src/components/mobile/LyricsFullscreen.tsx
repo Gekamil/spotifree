@@ -49,8 +49,9 @@ export function LyricsFullscreen(p: Props) {
   const karaoke = useKaraokeMode(p.track, p.open);
 
   const [showKaraokeSlider, setShowKaraokeSlider] = useState(false);
+  const [isDraggingSlider, setIsDraggingSlider] = useState(false);
+  const [dragLevel, setDragLevel] = useState<number | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
-  const isDraggingSlider = useRef(false);
   const sliderRafId = useRef<number | null>(null);
 
   const previousTrack = usePlayerStore((s) => s.previousTrack);
@@ -106,6 +107,7 @@ export function LyricsFullscreen(p: Props) {
     const relY = clientY - rect.top;
     const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
     const newLevel = Math.round(ratio * 100);
+    setDragLevel(newLevel);
     if (sliderRafId.current) cancelAnimationFrame(sliderRafId.current);
     sliderRafId.current = requestAnimationFrame(() => {
       karaoke.setLevel(newLevel);
@@ -113,18 +115,19 @@ export function LyricsFullscreen(p: Props) {
   };
 
   const handleSliderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    isDraggingSlider.current = true;
+    setIsDraggingSlider(true);
     try { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); } catch {}
     updateSliderFromClientY(e.clientY);
   };
 
   const handleSliderPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDraggingSlider.current) return;
+    if (!isDraggingSlider) return;
     updateSliderFromClientY(e.clientY);
   };
 
   const handleSliderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    isDraggingSlider.current = false;
+    setIsDraggingSlider(false);
+    setDragLevel(null);
     try { (e.target as HTMLElement).releasePointerCapture?.(e.pointerId); } catch {}
   };
 
@@ -211,7 +214,11 @@ export function LyricsFullscreen(p: Props) {
                         {wi < line.words.length - 1 ? ' ' : ''}
                       </span>
                     ))
-                  : line.text || '♪'}
+                  : line.text || (
+                      <svg viewBox="0 0 16 16" width="22" height="22" fill="currentColor" className="inline-block opacity-60" aria-hidden="true">
+                        <path d="M12 1v8.55A3.498 3.498 0 0 0 9.5 8C7.57 8 6 9.57 6 11.5S7.57 15 9.5 15 13 13.43 13 11.5V3h2V1h-3z" />
+                      </svg>
+                    )}
               </p>
             );
           })
@@ -233,7 +240,7 @@ export function LyricsFullscreen(p: Props) {
             <div className="flex flex-col items-center mb-3 animate-in fade-in slide-in-from-bottom-3 duration-150">
               {/* Numeric Level Badge */}
               <div className="mb-2 px-2.5 py-0.5 rounded-full bg-black/80 backdrop-blur-md text-[11px] font-bold text-white tabular-nums border border-white/15 shadow-xl">
-                {karaoke.vocalLevel}%
+                {dragLevel !== null ? dragLevel : (karaoke.vocalLevel ?? 100)}%
               </div>
               {/* Vertical Pill Track */}
               <div
@@ -247,8 +254,11 @@ export function LyricsFullscreen(p: Props) {
               >
                 {/* Fill Bar */}
                 <div
-                  className="w-full bg-gradient-to-t from-[#1ed760] to-[#1db954] rounded-full transition-all duration-75 relative flex items-start justify-center"
-                  style={{ height: `${karaoke.vocalLevel}%` }}
+                  className="w-full bg-gradient-to-t from-[#1ed760] to-[#1db954] rounded-full relative flex items-start justify-center"
+                  style={{
+                    height: `${dragLevel !== null ? dragLevel : (karaoke.vocalLevel ?? 100)}%`,
+                    transition: isDraggingSlider ? 'none' : 'height 0.12s cubic-bezier(0.2, 0, 0, 1)',
+                  }}
                 >
                   {/* Thumb pill */}
                   <div className="w-5 h-1.5 bg-white/90 rounded-full mt-1 shadow" />
