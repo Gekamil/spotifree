@@ -193,7 +193,7 @@ export function scoreInstrumentalCandidate(
   if (candDurationSec > 0 && candDurationSec < 45 && !(expectedDurationSec > 0 && expectedDurationSec < 45)) {
     return { matched: false, score: -999 };
   }
-  if (expectedDurationSec > 35 && candDurationSec > 0 && Math.abs(candDurationSec - expectedDurationSec) > 18) {
+  if (expectedDurationSec > 35 && candDurationSec > 0 && Math.abs(candDurationSec - expectedDurationSec) > 35) {
     return { matched: false, score: -999 };
   }
 
@@ -220,7 +220,8 @@ export function scoreInstrumentalCandidate(
     if (diff <= 3) score += 35;
     else if (diff <= 8) score += 20;
     else if (diff <= 14) score += 5;
-    else score -= 15;
+    else if (diff <= 26) score -= 10;
+    else score -= 20;
   }
 
   return { matched: score >= 55, score };

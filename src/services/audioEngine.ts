@@ -2762,6 +2762,38 @@ class AudioEngine {
     if (!inst?.sourceId) return false;
 
     if (this.activeEngine === 'youtube') {
+      const isSecHtml5 = inst.sourceId.startsWith('sc:') ||
+                         inst.sourceId.startsWith('sc-') ||
+                         inst.sourceId.startsWith('mono:') ||
+                         inst.sourceId.startsWith('dsp:') ||
+                         inst.provider === 'soundcloud' ||
+                         inst.provider === 'monochrome';
+
+      if (isSecHtml5 && this.secondaryAudio) {
+        const curTime = typeof this.ytPlayer?.getCurrentTime === 'function' ? this.ytPlayer.getCurrentTime() : 0;
+        const currentLevel = this.karaokeState.vocalLevel ?? 100;
+        const instRatio = (100 - currentLevel) / 100;
+        const targetInstVol = this.getEffectiveVolume() * instRatio;
+        const normId = inst.sourceId.startsWith('sc-') ? `sc:${inst.sourceId.slice(3)}` : inst.sourceId;
+        const srcUrl = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(track.id)}`;
+
+        if (this.secondaryKaraokeLoadedSource !== inst.sourceId) {
+          this.secondaryKaraokeLoadedSource = inst.sourceId;
+          this.secondaryAudio.src = srcUrl;
+          this.secondaryAudio.currentTime = curTime;
+          this.secondaryAudio.volume = targetInstVol;
+          this.secondaryAudio.play().catch(() => {});
+        } else {
+          if (this.secondaryAudio.paused && usePlayerStore.getState().isPlaying) {
+            this.secondaryAudio.play().catch(() => {});
+          }
+          if (Math.abs(curTime - this.secondaryAudio.currentTime) > 0.15) {
+            try { this.secondaryAudio.currentTime = curTime; } catch {}
+          }
+        }
+        return true;
+      }
+
       const activeYt = this.ytPlayer;
       const secYt = this.secondaryYtPlayer;
       if (!activeYt || !secYt || typeof secYt.loadVideoById !== 'function') return false;
@@ -3295,7 +3327,18 @@ class AudioEngine {
 
     const activeYt = this.ytPlayer;
     const secYt = this.secondaryYtPlayer;
-    const instSource = this.karaokeState.instrumental?.sourceId;
+    let inst = this.karaokeState.instrumental || this.instrumentalCache.get(clean) || null;
+    const instSource = inst?.sourceId;
+
+    if (!inst && targetTrack && clamped < 100) {
+      void this.checkInstrumentalSource(targetTrack).then((foundInst) => {
+        if (foundInst?.sourceId && AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
+          void this.prepareKaraokeDeck(targetTrack).then(() => {
+            void this.setKaraokeLevel(this.karaokeState.vocalLevel ?? 0, targetTrack);
+          });
+        }
+      });
+    }
 
     // Check secondary player status
     const secState = secYt && typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
@@ -3305,13 +3348,42 @@ class AudioEngine {
     // If secondary deck is confirmed playing OR vocal level is comfortable (>=40%), scale directly to vocalRatio.
     // If secondary deck is still buffering/loading, maintain safe floor (0.35 + 0.65*vocalRatio) so music NEVER goes silent!
     const effectiveVocalRatio = (isSecPlaying || clamped >= 40) ? vocalRatio : (0.35 + 0.65 * vocalRatio);
-    const vocalVol = Math.round(masterVol * effectiveVocalRatio * 100);
-    const instVol = Math.round(masterVol * instRatio * 100);
+    const finalVocalRatio = clamped === 0 ? 0 : effectiveVocalRatio;
+    const vocalVol = Math.round(masterVol * finalVocalRatio * 100);
+    const instVol = Math.round(masterVol * (clamped === 0 ? 1 : instRatio) * 100);
     const targetVol = vocalVol;
+
+    const isSecHtml5 = instSource ? (
+      instSource.startsWith('sc:') ||
+      instSource.startsWith('sc-') ||
+      instSource.startsWith('mono:') ||
+      instSource.startsWith('dsp:') ||
+      inst?.provider === 'soundcloud' ||
+      inst?.provider === 'monochrome'
+    ) : false;
 
     // 1. YouTube Dual-Deck Synchronized Crossfade
     if (this.activeEngine === 'youtube' && activeYt) {
-      if (instSource && secYt) {
+      if (instSource && isSecHtml5 && this.secondaryAudio) {
+        if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
+          this.secondaryKaraokeLoadedSource = instSource;
+          const curTime = this.getCurrentTime() || 0;
+          const normId = instSource.startsWith('sc-') ? `sc:${instSource.slice(3)}` : instSource;
+          this.secondaryAudio.src = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(targetTrack.id)}`;
+          this.secondaryAudio.currentTime = curTime;
+          this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
+          this.secondaryAudio.play().catch(() => {});
+        } else if (this.secondaryKaraokeLoadedSource === instSource && this.secondaryAudio.paused && !activeYt?.paused) {
+          this.secondaryAudio.play().catch(() => {});
+        }
+        if (typeof activeYt.setVolume === 'function') {
+          activeYt.setVolume(vocalVol);
+        }
+        this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
+        if (clamped === 100 && !this.secondaryAudio.paused) {
+          this.secondaryAudio.volume = 0;
+        }
+      } else if (instSource && secYt) {
         // Start secondary player ONCE if not already loaded or queued
         if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
           this.secondaryKaraokeLoadedSource = instSource;
@@ -3344,6 +3416,17 @@ class AudioEngine {
         if (clamped === 100 && typeof secYt.setVolume === 'function') {
           secYt.setVolume(0);
         }
+
+        // Complete vocal silencing fallback: if vocal level is 0 and secondary deck is not playing, swap seamlessly
+        if (clamped === 0 && !isSecPlaying && !this.isTransitioning && this.currentVideoId !== instSource) {
+          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+          const wasPlaying = usePlayerStore.getState().isPlaying;
+          void this.seamlessAudioSourceSwap(instSource, curTime, wasPlaying, targetTrack);
+        } else if (clamped === 100 && this.currentVideoId === instSource && this.karaokeState.originalSourceId && !this.isTransitioning) {
+          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+          const wasPlaying = usePlayerStore.getState().isPlaying;
+          void this.seamlessAudioSourceSwap(this.karaokeState.originalSourceId, curTime, wasPlaying, targetTrack);
+        }
       } else {
         // Single player mode / No secondary instrumental: attenuate volume smoothly down to continuous floor (35%)
         if (typeof activeYt.setVolume === 'function') {
@@ -3357,22 +3440,24 @@ class AudioEngine {
 
     // 2. HTML5 Dual-Deck / Audio Elements
     if (this.audio) {
-      if (this.secondaryAudio && this.karaokeState.instrumental) {
-        if (instSource && this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
+      if (this.secondaryAudio && instSource) {
+        if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
           this.secondaryKaraokeLoadedSource = instSource;
-          this.secondaryAudio.src = instSource;
+          const normId = instSource.startsWith('sc-') ? `sc:${instSource.slice(3)}` : instSource;
+          this.secondaryAudio.src = `${API_BASE}/api/audio/stream?videoId=${encodeURIComponent(normId)}&trackId=${encodeURIComponent(targetTrack.id)}`;
           this.secondaryAudio.currentTime = this.audio.currentTime;
+          this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
           this.secondaryAudio.play().catch(() => {});
         } else if (this.secondaryKaraokeLoadedSource === instSource && this.secondaryAudio.paused && !this.audio.paused) {
           this.secondaryAudio.play().catch(() => {});
         }
-        this.audio.volume = masterVol * effectiveVocalRatio;
-        this.secondaryAudio.volume = masterVol * instRatio;
+        this.audio.volume = masterVol * finalVocalRatio;
+        this.secondaryAudio.volume = masterVol * (clamped === 0 ? 1 : instRatio);
         if (clamped === 100 && !this.secondaryAudio.paused) {
           this.secondaryAudio.volume = 0;
         }
       } else {
-        this.audio.volume = masterVol * effectiveVocalRatio;
+        this.audio.volume = masterVol * (clamped === 0 ? 1 : finalVocalRatio);
       }
     }
 

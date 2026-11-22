@@ -151,13 +151,16 @@ export function LyricsFullscreen(p: Props) {
   };
 
   const handleToggleKaraoke = () => {
-    setShowKaraokeSlider((prev) => {
-      const next = !prev;
-      if (next && p.track) {
+    if (!showKaraokeSlider || (karaoke.vocalLevel ?? 100) === 100 || !karaoke.active) {
+      setShowKaraokeSlider(true);
+      if (p.track) {
         void audioEngine.prepareKaraokeDeck(p.track);
       }
-      return next;
-    });
+      void karaoke.setLevel(0);
+    } else {
+      setShowKaraokeSlider(false);
+      void karaoke.setLevel(100);
+    }
   };
 
   return createPortal(
