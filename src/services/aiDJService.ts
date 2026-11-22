@@ -852,7 +852,8 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({
       isDJModeActive: true,
-      visualizerState: 'idle',
+      visualizerState: 'speaking',
+      voiceLevel: 0.35,
       songsPlayedInSet: 0,
       currentHashtag: dominantTag,
       isThinking: true,

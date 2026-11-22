@@ -10,6 +10,8 @@ import { useShallow } from 'zustand/react/shallow';
 import {
   PlayNativeIcon,
   PauseNativeIcon,
+  PrevNativeIcon,
+  NextNativeIcon,
   QueueNativeIcon,
   CloseNativeIcon,
   AddTrackNativeIcon,
@@ -51,15 +53,47 @@ const getBestTrackArtwork = (track: Track | null | undefined): string => {
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 };
 
-/** The mini player's 2 px progress line: the only part of the DJ screen that follows the song's progress */
-const DJMiniProgress: React.FC<{ fallbackDurationMs?: number }> = ({ fallbackDurationMs }) => {
+/** Interactive Spotify progress scrubber with elapsed/duration time and seek */
+const DJPlaybackScrubber: React.FC<{ fallbackDurationMs?: number }> = ({ fallbackDurationMs }) => {
   const progressMs = usePlayerStore((s) => s.progressMs);
   const durationMs = usePlayerStore((s) => s.durationMs);
+  const setProgress = usePlayerStore((s) => s.setProgress);
   const duration = durationMs || fallbackDurationMs || 180000;
-  const pct = duration > 0 ? (Math.min(progressMs, duration) / duration) * 100 : 0;
+  const pct = duration > 0 ? Math.min(100, Math.max(0, (progressMs / duration) * 100)) : 0;
+
+  const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const clientX = 'touches' in e && e.touches[0] ? e.touches[0].clientX : (e as React.MouseEvent).clientX;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    const targetMs = ratio * duration;
+    setProgress(targetMs);
+    try {
+      (window as any).__audioEngine?.seek(targetMs / 1000);
+    } catch {}
+  };
+
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/20 rounded-b-[10px] overflow-hidden pointer-events-none">
-      <div className="h-full bg-white origin-left will-change-transform" style={{ transform: `scaleX(${pct / 100})` }} />
+    <div className="space-y-1 w-full px-0.5" onClick={(e) => e.stopPropagation()}>
+      <div
+        onClick={handleSeek}
+        className="group relative w-full h-2.5 flex items-center cursor-pointer touch-none"
+      >
+        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-white group-hover:bg-[#1ed760] transition-colors rounded-full"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+        <div
+          className="absolute w-2.5 h-2.5 bg-white rounded-full shadow -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          style={{ left: `${pct}%` }}
+        />
+      </div>
+      <div className="flex items-center justify-between text-[10.5px] font-mono tabular-nums text-white/50 px-0.5">
+        <span>{formatDuration(progressMs)}</span>
+        <span>{formatDuration(duration)}</span>
+      </div>
     </div>
   );
 };
@@ -111,7 +145,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const upcomingSegment = activeSegIdx >= 0 ? segments[activeSegIdx + 1] || null : null;
 
   // (No progressMs here: it changes 10 times a second and would redraw the whole DJ screen;
-  // the mini player's bar reads it on its own, see DJMiniProgress)
+  // the integrated player card reads it on its own, see DJPlaybackScrubber)
   const {
     currentTrack,
     isPlaying,
@@ -120,8 +154,20 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     likedTrackIds,
     toggleLike,
     queue,
+    nextTrack,
+    previousTrack,
   } = usePlayerStore(
-    useShallow((s) => ({ currentTrack: s.currentTrack, isPlaying: s.isPlaying, playTrack: s.playTrack, togglePlay: s.togglePlay, likedTrackIds: s.likedTrackIds, toggleLike: s.toggleLike, queue: s.queue }))
+    useShallow((s) => ({
+      currentTrack: s.currentTrack,
+      isPlaying: s.isPlaying,
+      playTrack: s.playTrack,
+      togglePlay: s.togglePlay,
+      likedTrackIds: s.likedTrackIds,
+      toggleLike: s.toggleLike,
+      queue: s.queue,
+      nextTrack: s.nextTrack,
+      previousTrack: s.previousTrack,
+    }))
   );
 
   const [showQueueDrawer, setShowQueueDrawer] = useState(false);
@@ -484,8 +530,8 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
       </header>
 
       {/* Center: The Hollow Smooth Organic Green-Cyan DJ Ring Centered (Photo 2) */}
-      <main className="flex-1 flex flex-col items-center justify-between px-4 text-center max-w-xl mx-auto w-full z-10 py-2 min-h-0">
-        <div className="flex-1 flex flex-col items-center justify-center w-full my-auto">
+      <main className="flex-1 flex flex-col items-center justify-between px-3 sm:px-4 text-center max-w-xl mx-auto w-full z-10 py-1 sm:py-2 min-h-0">
+        <div className="flex-1 flex flex-col items-center justify-center w-full my-auto min-h-0">
           <div
             onClick={() => {
               if (isSpeaking) {
@@ -500,7 +546,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             title={isSpeaking ? 'Silenciar voz' : isPlaying ? 'Cambiar de rollo' : 'Reproducir'}
           >
             <SpotifyDJVisualizer
-              size={isMobile ? 220 : 240}
+              size={isMobile ? 180 : 210}
               state={visualizerState}
               voiceLevel={voiceLevel}
               themeColor={ambientColor}
@@ -509,7 +555,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </div>
 
           {isMicListening && (
-            <div className="mt-3 flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#00f2fe]/15 border border-[#00f2fe]/40 backdrop-blur-md animate-pulse">
+            <div className="mt-2.5 flex items-center gap-2 px-3.5 py-1 rounded-full bg-[#00f2fe]/15 border border-[#00f2fe]/40 backdrop-blur-md animate-pulse">
               <span className="w-2 h-2 rounded-full bg-[#00f2fe]" />
               <span className="text-xs font-bold text-[#00f2fe] font-['SpotifyMixUI']">
                 Te escucho...
@@ -517,40 +563,38 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             </div>
           )}
 
-          {/* Live captions of what the DJ says, or the block that is on now */}
-          <div className="mt-4 w-full max-w-md min-h-[64px] flex flex-col items-center justify-start px-2" aria-live="polite">
+          {/* Status caption / Live badge */}
+          <div className="mt-3 w-full max-w-md flex flex-col items-center justify-center px-2" aria-live="polite">
             {isThinking ? (
-              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md">
+              <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 border border-white/15 backdrop-blur-md shadow-lg animate-in fade-in">
                 <span className="flex gap-1" aria-hidden="true">
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.3s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce [animation-delay:-0.15s]" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-bounce" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce [animation-delay:-0.3s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce [animation-delay:-0.15s]" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#1ed760] animate-bounce" />
                 </span>
-                <span className="text-xs font-bold text-white/90">Preparando tu sesión</span>
+                <span className="text-xs font-bold text-white tracking-wide font-['SpotifyMixUI']">
+                  Pensando tu sesión...
+                </span>
               </div>
             ) : isSpeaking ? (
-              // No subtitles: while the DJ talks, only the voice and the visualizer
-              null
+              <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#1ed760]/15 border border-[#1ed760]/30 backdrop-blur-md animate-in fade-in">
+                <span className="w-2 h-2 rounded-full bg-[#1ed760] animate-pulse" />
+                <span className="text-xs font-bold text-white tracking-wide font-['SpotifyMixUI']">
+                  El DJ está hablando
+                </span>
+              </div>
             ) : activeSegment && !isMicListening ? (
-              <div className="flex flex-col items-center gap-2 animate-in fade-in duration-500">
-                <span className="text-[11px] font-bold uppercase tracking-widest text-white/60">Ahora</span>
-                <span className="text-base font-black text-white font-['SpotifyMixUITitle'] leading-tight text-center">
+              <div className="flex flex-col items-center animate-in fade-in duration-300">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#1ed760] font-['SpotifyMixUITitle']">
+                  EN DIRECTO
+                </span>
+                <span className="text-sm sm:text-base font-black text-white font-['SpotifyMixUITitle'] leading-tight text-center max-w-sm truncate mt-0.5">
                   {activeSegment.title}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => void nextSegment()}
-                  className="mt-1 flex items-center gap-2 pl-2.5 pr-3.5 py-1.5 rounded-full bg-white text-black text-xs font-bold hover:scale-105 active:scale-95 transition-transform cursor-pointer shadow-lg"
-                  title={upcomingSegment ? `Siguiente: ${upcomingSegment.title}` : 'El DJ prepara algo diferente'}
-                >
-                  <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
-                    <path d="M8 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13zM0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8z" />
-                    <path d="M8 4.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z" />
-                  </svg>
-                  Cambiar de rollo
-                </button>
                 {upcomingSegment && (
-                  <span className="text-[11px] text-white/55">Luego: {upcomingSegment.title}</span>
+                  <span className="text-[10.5px] text-white/50 mt-0.5 truncate max-w-xs">
+                    Luego: {upcomingSegment.title}
+                  </span>
                 )}
               </div>
             ) : null}
@@ -561,7 +605,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             RECOMMENDED SIMILAR TITLES CAROUSEL / CARD ("Títulos similares")
             ========================================================================= */}
         {similarTracks && similarTracks.length > 0 && showSimilarPanel && (
-          <div className="w-full max-w-md sm:max-w-xl my-2 p-3 sm:p-3.5 rounded-2xl bg-white/[0.08] hover:bg-white/[0.11] border border-white/20 backdrop-blur-2xl shadow-[0_12px_36px_rgba(0,0,0,0.45)] text-left transition-all animate-in fade-in slide-in-from-bottom-2 duration-300">
+          <div className="w-full max-w-md sm:max-w-xl my-2 p-3 sm:p-3.5 rounded-2xl bg-white/[0.08] hover:bg-white/[0.11] border border-white/20 backdrop-blur-2xl shadow-[0_12px_36px_rgba(0,0,0,0.45)] text-left transition-all animate-in fade-in slide-in-from-bottom-2 duration-300 shrink-0">
             <div className="flex items-center justify-between pb-2 mb-2 border-b border-white/10">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="w-2.5 h-2.5 rounded-full bg-[#1ed760] shadow-[0_0_8px_#1ed760] animate-pulse shrink-0" />
@@ -637,40 +681,136 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
           </div>
         )}
 
-        {/* Quick Vibe Chips - Dynamically curated from user library */}
-        <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center py-1 px-1 max-w-full z-10 mt-auto">
-          {vibeChips.map((chip) => (
-            <button
-              key={chip}
-              type="button"
-              onClick={() => handleSendPrompt(chip)}
-              className="px-3 py-1 rounded-full bg-white/[0.08] hover:bg-white/[0.18] active:scale-95 text-[11px] sm:text-[12px] font-bold text-white/90 border border-white/15 backdrop-blur-md shadow-sm transition-all cursor-pointer whitespace-nowrap shrink-0"
+        {/* =========================================================================
+            SPOTIFY LIVE SESSIONS INTEGRATED PLAYER CARD
+            ========================================================================= */}
+        <div className="w-full max-w-md sm:max-w-lg mx-auto bg-[#181818]/90 sm:bg-[#181818]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 sm:p-3.5 shadow-[0_16px_40px_rgba(0,0,0,0.65)] shrink-0 z-20 space-y-2.5 transition-all">
+          {/* Top Row: Track Artwork + Name/Artist + Like Button */}
+          <div className="flex items-center justify-between gap-3">
+            <div
+              onClick={handleOpenPlayer}
+              className="flex items-center min-w-0 flex-1 cursor-pointer group"
             >
-              {chip}
+              <div className="w-12 h-12 rounded-[8px] overflow-hidden bg-[#242424] shrink-0 shadow-md mr-3 relative">
+                <img
+                  src={activeArtwork}
+                  alt={currentTrack?.name || 'DJ'}
+                  onError={handleImageError}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                />
+              </div>
+              <div className="flex flex-col justify-center min-w-0 text-left">
+                <span className="font-bold text-white text-[13.5px] sm:text-[14px] leading-tight truncate font-['SpotifyMixUITitle'] group-hover:underline">
+                  {currentTrack?.name || (isThinking ? 'Preparando música...' : 'DJ Spotifree')}
+                </span>
+                <span className="text-[11.5px] sm:text-xs text-[#b3b3b3] truncate leading-tight mt-0.5 font-['SpotifyMixUI']">
+                  {currentTrack?.artists?.map((a) => a.name).join(', ') || 'Spotifree DJ'}
+                </span>
+              </div>
+            </div>
+
+            {currentTrack && (
+              <button
+                type="button"
+                onClick={() => toggleLike(currentTrack.id, currentTrack)}
+                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer shrink-0"
+                title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
+              >
+                {isCurrentLiked ? (
+                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+                ) : (
+                  <AddTrackNativeIcon size={20} className="text-white/80" />
+                )}
+              </button>
+            )}
+          </div>
+
+          {/* Middle Row: Spotify Scrubber Progress Bar */}
+          <DJPlaybackScrubber fallbackDurationMs={currentTrack?.duration_ms} />
+
+          {/* Bottom Row: Native Spotify Transport Controls */}
+          <div className="flex items-center justify-between pt-0.5">
+            {/* Left: Cambiar rollo button */}
+            <button
+              type="button"
+              onClick={() => void nextSegment()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-[11px] sm:text-xs font-bold text-white transition-all cursor-pointer border border-white/10 shrink-0"
+              title={upcomingSegment ? `Siguiente: ${upcomingSegment.title}` : 'Cambiar de rollo'}
+            >
+              <span className="text-[#1ed760] text-xs">✦</span>
+              <span>Cambiar rollo</span>
             </button>
-          ))}
+
+            {/* Center: Prev + Play/Pause + Next */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={previousTrack}
+                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-all cursor-pointer"
+                title="Anterior"
+              >
+                <PrevNativeIcon size={20} />
+              </button>
+
+              <button
+                type="button"
+                onClick={togglePlay}
+                className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-white hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-lg transition-transform cursor-pointer"
+                title={isPlaying ? 'Pausar' : 'Reproducir'}
+              >
+                {isPlaying ? (
+                  <PauseNativeIcon size={20} className="text-black" />
+                ) : (
+                  <PlayNativeIcon size={20} className="text-black ml-0.5" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={nextTrack}
+                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-all cursor-pointer"
+                title="Siguiente"
+              >
+                <NextNativeIcon size={20} />
+              </button>
+            </div>
+
+            {/* Right: Queue Drawer Button */}
+            <button
+              type="button"
+              onClick={() => setShowQueueDrawer(true)}
+              className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0 ${
+                showQueueDrawer ? 'text-[#1ed760] bg-white/15' : 'text-white/70 hover:text-white hover:bg-white/10'
+              }`}
+              title="Ver cola del DJ"
+            >
+              <QueueNativeIcon size={18} />
+            </button>
+          </div>
         </div>
 
-        {/* Interactive DJ Prompt Input & Voice Controls */}
-        <div className="w-full max-w-md sm:max-w-xl flex items-center gap-2 px-1 z-10 mt-1">
+        {/* =========================================================================
+            SPOTIFY SEARCH & VOICE PROMPT CAPSULE
+            ========================================================================= */}
+        <div className="w-full max-w-md sm:max-w-lg mx-auto flex items-center gap-2 mt-2 px-0.5 z-10 shrink-0">
           <button
             type="button"
             onClick={toggleMic}
             className={`w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer shadow-md ${
               isMicListening
                 ? 'bg-[#00f2fe] text-black shadow-[0_0_16px_rgba(0,242,254,0.9)] animate-pulse scale-105'
-                : 'bg-white/15 hover:bg-white/25 text-white active:scale-95 border border-white/20'
+                : 'bg-white/10 hover:bg-white/20 text-white active:scale-95 border border-white/15'
             }`}
             title={isMicListening ? 'Detener micrófono' : 'Hablar al DJ con tu voz'}
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
               <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
               <line x1="12" y1="19" x2="12" y2="23" />
             </svg>
           </button>
 
-          <div className="flex-1 flex items-center bg-white/10 hover:bg-white/15 focus-within:bg-white/20 border border-white/20 focus-within:border-white/50 rounded-full px-3 py-1.5 transition-all shadow-inner backdrop-blur-xl">
+          <div className="flex-1 flex items-center bg-white/10 hover:bg-white/15 focus-within:bg-white/20 border border-white/15 focus-within:border-white/40 rounded-full px-3 py-1.5 transition-all shadow-inner backdrop-blur-xl">
             <input
               type="text"
               value={promptInput}
@@ -712,79 +852,20 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         </div>
 
         {/* =========================================================================
-            CLASSIC SPOTIFY MINI-PLAYER ("El minireproductor de toda la vida estilo cristal")
+            QUICK VIBE CHIPS (SINGLE SCROLLABLE ROW)
             ========================================================================= */}
-        {currentTrack && (
-          <div
-            onClick={handleOpenPlayer}
-            className="w-full max-w-md sm:max-w-xl mt-3 h-14 rounded-[12px] flex items-center justify-between px-3 overflow-hidden cursor-pointer select-none transition-all duration-300 active:scale-[0.99] font-['SpotifyMixUI'] shadow-[0_16px_40px_rgba(0,0,0,0.7)] border border-white/25 backdrop-blur-3xl sticky bottom-1 shrink-0 z-20 bg-white/[0.12] hover:bg-white/[0.16]"
-            style={{
-              backgroundColor: `${ambientColor || '#181818'}70`,
-            }}
-            title="Toca para abrir reproductor completo con letra y detalles"
-          >
-            {/* 2px Bottom Progress Bar */}
-            <DJMiniProgress fallbackDurationMs={currentTrack?.duration_ms} />
-
-            {/* Left: Artwork + Track details */}
-            <div className="flex items-center min-w-0 flex-1 mr-2">
-              <div className="w-10 h-10 rounded-[6px] shrink-0 overflow-hidden bg-[#181818] shadow-md">
-                <img
-                  src={activeArtwork}
-                  alt={currentTrack.name}
-                  onError={handleImageError}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="flex flex-col justify-center min-w-0 ml-3 flex-1 pr-1 text-left">
-                <span className="font-bold text-white text-[13px] leading-tight truncate block font-['SpotifyMixUITitle']">
-                  {currentTrack.name}
-                </span>
-                <span className="text-[11px] text-white/70 truncate leading-tight mt-0.5">
-                  {currentTrack.artists?.map((a) => a.name).join(', ') || 'Artista'}
-                </span>
-              </div>
-            </div>
-
-            {/* Right: Actions (Like + Play/Pause + Cola) */}
-            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
-              <button
-                onClick={() => toggleLike(currentTrack.id, currentTrack)}
-                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer"
-                title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
-              >
-                {isCurrentLiked ? (
-                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
-                ) : (
-                  <AddTrackNativeIcon size={20} className="text-white/80" />
-                )}
-              </button>
-
-              <button
-                onClick={togglePlay}
-                className="w-9 h-9 rounded-full flex items-center justify-center bg-white/10 hover:bg-white/20 text-white active:scale-90 transition-all cursor-pointer"
-                title={isPlaying ? 'Pausar' : 'Reproducir'}
-              >
-                {isPlaying ? (
-                  <PauseNativeIcon size={20} className="text-white" />
-                ) : (
-                  <PlayNativeIcon size={20} className="text-white ml-0.5" />
-                )}
-              </button>
-
-              <button
-                onClick={() => setShowQueueDrawer(true)}
-                className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 ${
-                  showQueueDrawer ? 'text-[#1ed760] bg-white/10' : 'text-white/70 hover:text-white hover:bg-white/10'
-                }`}
-                title="Ver cola del DJ"
-              >
-                <QueueNativeIcon size={18} />
-              </button>
-            </div>
-          </div>
-        )}
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none w-full max-w-md sm:max-w-lg mx-auto py-1 px-0.5 z-10 shrink-0">
+          {vibeChips.map((chip) => (
+            <button
+              key={chip}
+              type="button"
+              onClick={() => handleSendPrompt(chip)}
+              className="px-3 py-1 rounded-full bg-white/5 hover:bg-white/15 active:scale-95 text-[11px] font-semibold text-white/80 border border-white/10 backdrop-blur-md transition-all cursor-pointer whitespace-nowrap shrink-0"
+            >
+              {chip}
+            </button>
+          ))}
+        </div>
       </main>
 
       {/* Queue Drawer */}

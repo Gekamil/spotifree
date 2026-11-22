@@ -304,7 +304,13 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
     if (e && e.stopPropagation) e.stopPropagation();
 
     if (isAIDJPlaylist({ id: card.id, name: card.name })) {
+      aiDJVoiceService.unlockAudioForMobile();
       useUIStore.getState().setActiveMainTab('dj');
+      const dj = useAIDJStore.getState();
+      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
+        useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
+        void dj.startDJSession(false, { speakFirst: true });
+      }
       return;
     }
 

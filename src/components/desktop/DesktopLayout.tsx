@@ -46,7 +46,16 @@ export const DesktopLayout: React.FC = () => {
       return;
     }
     if (isAIDJPlaylist(playlist)) {
+      aiDJVoiceService.unlockAudioForMobile();
+      if (mainScrollRef.current) {
+        mainScrollRef.current.scrollTop = 0;
+      }
       setActiveMainTab('dj');
+      const dj = useAIDJStore.getState();
+      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
+        useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
+        void dj.startDJSession(false, { speakFirst: true });
+      }
       return;
     }
     setSelectedPlaylist(playlist);
@@ -74,7 +83,8 @@ export const DesktopLayout: React.FC = () => {
       }
       setActiveMainTab('dj');
       const dj = useAIDJStore.getState();
-      if (!dj.isDJModeActive && !dj.isThinking && dj.djTracks.length === 0) {
+      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
+        useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
         void dj.startDJSession(false, { speakFirst: true });
       }
       return;

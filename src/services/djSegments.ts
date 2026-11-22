@@ -264,9 +264,9 @@ export async function buildSegmentedDJSet(opts: { blockSize?: number; exclude?: 
     if (focusTracks.length >= 2) blocks.push({ kind: 'artist-focus', tracks: focusTracks, reason: `es uno de sus artistas más escuchados`, focusArtist });
   }
 
-  // 4. Discoveries: songs of their other artists that are NOT in the library (skip if library is already rich)
+  // 4. Discoveries: songs of their other artists that are NOT in the library (skip if library is already rich or set has blocks)
   const discoveryArtists = shuffle(artists.filter((a) => a !== focusArtist)).slice(0, 3);
-  if (discoveryArtists.length > 0 && library.length < 12) {
+  if (discoveryArtists.length > 0 && library.length < 12 && blocks.length < 2) {
     const libSigs = new Set(library.map((e) => sigOf(e.track)));
     const found = (await Promise.all(discoveryArtists.map((a) => searchArtistTracks(a, 10)))).flat().filter((t) => !libSigs.has(sigOf(t)) && !exclude.has(t.id));
     const discTracks = takeTracks(shuffle(found), blockSize);
