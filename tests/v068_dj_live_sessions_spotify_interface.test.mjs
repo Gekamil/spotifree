@@ -56,10 +56,11 @@ describe('Spotifree v0.6.8: Spotify Live Sessions DJ Interface & Instant Thinkin
     );
   });
 
-  it('5. Search & voice capsule and single-row vibe chips are properly styled', () => {
-    assert.ok(aidjViewFile.includes('toggleMic'), 'Should have microphone toggle');
-    assert.ok(aidjViewFile.includes('promptInput'), 'Should have prompt input field');
-    assert.ok(aidjViewFile.includes('setShowChatDrawer(true)'), 'Should have chat drawer trigger');
-    assert.ok(aidjViewFile.includes('scrollbar-none'), 'Vibe chips should have hidden scrollbar');
+  it('5. Clean Spotify Live Sessions UI: search bar, voice prompt and chat inputs removed from main view', () => {
+    assert.ok(!aidjViewFile.includes('promptInput'), 'Should NOT have text prompt input in AIDJView');
+    assert.ok(!aidjViewFile.includes('toggleMic'), 'Should NOT have voice dictation toggle in AIDJView');
+    assert.ok(!aidjViewFile.includes('isChatRendered'), 'Should NOT render chat drawer in AIDJView');
+    assert.ok(aidjViewFile.includes('DJPlaybackScrubber'), 'Should keep integrated player scrubber');
+    assert.ok(aidjViewFile.includes('Cambiar rollo'), 'Should keep native Cambiar rollo button');
   });
 });
