@@ -51,6 +51,7 @@ export function LyricsFullscreen(p: Props) {
   const [showKaraokeSlider, setShowKaraokeSlider] = useState(false);
   const sliderRef = useRef<HTMLDivElement>(null);
   const isDraggingSlider = useRef(false);
+  const sliderRafId = useRef<number | null>(null);
 
   const previousTrack = usePlayerStore((s) => s.previousTrack);
   const nextTrack = usePlayerStore((s) => s.nextTrack);
@@ -76,6 +77,7 @@ export function LyricsFullscreen(p: Props) {
 
   useEffect(() => () => {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
+    if (sliderRafId.current) cancelAnimationFrame(sliderRafId.current);
   }, []);
 
   // Escape closes (desktop / keyboards)
@@ -104,7 +106,10 @@ export function LyricsFullscreen(p: Props) {
     const relY = clientY - rect.top;
     const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
     const newLevel = Math.round(ratio * 100);
-    karaoke.setLevel(newLevel);
+    if (sliderRafId.current) cancelAnimationFrame(sliderRafId.current);
+    sliderRafId.current = requestAnimationFrame(() => {
+      karaoke.setLevel(newLevel);
+    });
   };
 
   const handleSliderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {

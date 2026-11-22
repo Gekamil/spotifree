@@ -381,15 +381,15 @@ class AIDJVoiceService {
   }
 
   /**
-   * Duck music audio when DJ begins speaking
+   * Duck music audio smoothly when DJ begins speaking ("baje poco a poco" - continuous rich background music)
    */
   private duckAudio() {
     try {
-      // Lower background music volume smoothly to 12% so the new song plays quietly under the DJ's voice
+      // Lower background music volume smoothly to 32% over 750ms so music never cuts or goes silent
       if (audioEngine && typeof audioEngine.setDuckedVolume === 'function') {
-        audioEngine.setDuckedVolume(0.12);
+        audioEngine.setDuckedVolume(0.32, 750);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.setDuckedVolume(0.12);
+        (window as any).__audioEngine.setDuckedVolume(0.32, 750);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Duck audio warning:', e);
@@ -406,9 +406,9 @@ class AIDJVoiceService {
         audioEngine.startCarrier();
       }
       if (audioEngine && typeof audioEngine.restoreDuckedVolume === 'function') {
-        audioEngine.restoreDuckedVolume(1200);
+        audioEngine.restoreDuckedVolume(1000);
       } else if (typeof window !== 'undefined' && (window as any).__audioEngine) {
-        (window as any).__audioEngine.restoreDuckedVolume(1200);
+        (window as any).__audioEngine.restoreDuckedVolume(1000);
       }
     } catch (e) {
       console.warn('[AIDJVoice] Restore audio warning:', e);

@@ -46,7 +46,7 @@ describe('DJ Interface Unification & Dynamic 3-Layer Talking Orb (Requirement R4
   } = visualizerModule;
 
   // =========================================================================
-  // 1. DJ CHAT INTERFACE UNIFICATION IN AIDJView.tsx (Spotify Official Screenshot media_1794324985536_6d3e7cf8.jpg)
+  // 1. DJ CHAT INTERFACE UNIFICATION IN AIDJView.tsx (Spotify Live Sessions)
   // =========================================================================
   describe('1. DJ Chat Interface Unification & Single Input Invariant', () => {
     it('enforces clean header without top-right circle button for authentic Spotify DJ interface', () => {
@@ -61,58 +61,47 @@ describe('DJ Interface Unification & Dynamic 3-Layer Talking Orb (Requirement R4
       );
     });
 
-    it('displays vibe chips for quick DJ interactions directly without intrusive bottom input bar', () => {
-      // Renders dynamic vibe chips
-      assert.ok(
-        aidjSource.includes('{vibeChips.map((chip) => ('),
-        'Must render dynamic vibe chips'
-      );
+    it('displays Spotify Live Sessions interface without intrusive bottom text input bar', () => {
       // Clean interface without bottom prompt input bar
       assert.ok(
         !aidjSource.includes('placeholder="Escribe una canción o petición al DJ..."'),
         'Must not contain bottom text input bar'
       );
-    });
-
-    it('clicking vibe chips directly dispatches handleUserPrompt', () => {
-      // Check handleSendPrompt resets promptInput and triggers handleUserPrompt
       assert.ok(
-        aidjSource.includes('handleUserPrompt(q);') && aidjSource.includes("setPromptInput('');"),
-        'handleSendPrompt must dispatch prompt and clear input'
+        aidjSource.includes('Cambiar rollo'),
+        'Must contain Cambiar rollo button'
       );
     });
 
-    it('voice toggle button available for full voice input parity', () => {
+    it('Cambiar rollo drawer dispatches handleUserPrompt with selected vibe', () => {
       assert.ok(
-        aidjSource.includes('onClick={toggleMic}'),
-        'Must include toggleMic button'
-      );
-      assert.ok(
-        aidjSource.includes('isMicListening'),
-        'Must reflect isMicListening state'
+        aidjSource.includes('handleUserPrompt(vibe.query || vibe.label)'),
+        'Vibe button must dispatch prompt to handleUserPrompt'
       );
     });
 
-    it('chat drawer matches Spotify floating card layout in bottom-right (media_1794324985536_6d3e7cf8.jpg)', () => {
-      // Check desktop floating card classes from user screenshot
+    it('live sessions player controls wired for Spotify native experience', () => {
       assert.ok(
-        aidjSource.includes('sm:fixed sm:bottom-20 sm:right-6 sm:w-[420px]') ||
-        aidjSource.includes('sm:bottom-20 sm:right-6 sm:w-[420px]'),
-        'Chat drawer must be positioned as a floating card in bottom-right matching Spotify official screenshot'
+        aidjSource.includes('previousTrack') && aidjSource.includes('nextTrack'),
+        'Must include track navigation controls'
       );
-
-      // Verify rounded card and backdrop blur
       assert.ok(
-        aidjSource.includes('sm:rounded-[24px]') && aidjSource.includes('sm:backdrop-blur-2xl'),
-        'Chat card must have rounded corners (sm:rounded-[24px]) and backdrop blur'
+        aidjSource.includes('DJPlaybackScrubber'),
+        'Must include DJPlaybackScrubber'
       );
     });
 
-    it('chat drawer includes green circular DJ badge matching official Spotify', () => {
+    it('vibe selector drawer matches Spotify bottom sheet card layout', () => {
       assert.ok(
-        aidjSource.includes('w-8 h-8 rounded-full bg-[#1ed760]') ||
-        aidjSource.includes('bg-[#1ed760] text-black font-black text-xs rounded-full'),
-        'Must display circular green DJ badge next to "Chat con tu DJ"'
+        aidjSource.includes('showVibeDrawer') && aidjSource.includes('DJ_VIBE_PRESETS'),
+        'Must render style selector drawer using DJ_VIBE_PRESETS'
+      );
+    });
+
+    it('queue drawer includes clean Spotify bottom sheet layout', () => {
+      assert.ok(
+        aidjSource.includes('showQueueDrawer'),
+        'Must support queue drawer bottom sheet'
       );
     });
   });

@@ -2762,7 +2762,8 @@ class AudioEngine {
       const targetSecYt = this.secondaryYtPlayer;
 
       if (!targetSecYt || typeof targetSecYt.loadVideoById !== 'function' || !currentActiveYt) {
-        return this.loadAudioSourceAtPosition(sourceId, startSeconds, wasPlaying, track);
+        console.warn('[AudioEngine] Secondary YouTube player unavailable for seamless swap, keeping current audio continuous');
+        return false;
       }
 
       this.isTransitioning = true;
@@ -2803,17 +2804,17 @@ class AudioEngine {
             try { targetSecYt.seekTo(curTime, true); } catch {}
           }
 
-          // 3. Fast 80ms crossfade between the two decks (0-ms silence!)
-          const steps = 4;
+          // 3. Smooth 800ms equal-power sinusoidal crossfade (0-ms silence, music never cuts!)
+          const steps = 16;
           for (let i = 1; i <= steps; i++) {
             const frac = i / steps;
-            const inVol = Math.round(masterVol * frac * 100);
-            const outVol = Math.round(masterVol * (1 - frac) * 100);
+            const inVol = Math.round(masterVol * Math.sin(frac * Math.PI * 0.5) * 100);
+            const outVol = Math.round(masterVol * Math.cos(frac * Math.PI * 0.5) * 100);
             try {
               if (typeof targetSecYt.setVolume === 'function') targetSecYt.setVolume(inVol);
               if (typeof currentActiveYt.setVolume === 'function') currentActiveYt.setVolume(outVol);
             } catch {}
-            await new Promise((r) => setTimeout(r, 20));
+            await new Promise((r) => setTimeout(r, 50));
           }
 
           // 4. Swap active YouTube deck index
@@ -2828,8 +2829,13 @@ class AudioEngine {
           this.startCarrier();
           return true;
         }
+
+        // If target player failed to buffer in time, NEVER kill current track!
+        try { targetSecYt.pauseVideo(); } catch {}
+        return false;
       } catch (e) {
         console.warn('[AudioEngine] Seamless YouTube hot-swap failed, fallback:', e);
+        return false;
       } finally {
         this.isTransitioning = false;
       }
@@ -2908,8 +2914,12 @@ class AudioEngine {
       }
     }
 
-    // Default fallback
-    return this.loadAudioSourceAtPosition(sourceId, startSeconds, wasPlaying, track);
+    // Default fallback: if audio was playing, NEVER pause or cut currently playing track
+    if (wasPlaying) {
+      console.warn('[AudioEngine] Seamless swap fallback: preserving continuous playback of current track');
+      return false;
+    }
+    return this.loadAudioSourceAtPosition(sourceId, startSeconds, false, track);
   }
 
   private async loadAudioSourceAtPosition(sourceId: string, startSeconds: number, wasPlaying: boolean, track: Track): Promise<boolean> {
@@ -2997,11 +3007,16 @@ class AudioEngine {
     if (this.karaokeState.switching) return this.karaokeState.active;
 
     const inst = await this.checkInstrumentalSource(track);
-    if (!inst?.sourceId) return false;
-
     const currentlyActive = this.karaokeState.trackId === clean && this.karaokeState.active;
     const posSec = Math.max(0, this.getCurrentTime() || (usePlayerStore.getState().progressMs || 0) / 1000);
     const wasPlaying = usePlayerStore.getState().isPlaying;
+
+    // If no external instrumental source is available, smoothly toggle vocal attenuation level without cutting music
+    if (!inst?.sourceId) {
+      const nextLevel = currentlyActive ? 100 : 0;
+      await this.setKaraokeLevel(nextLevel, track);
+      return !currentlyActive;
+    }
 
     this.karaokeState = {
       ...this.karaokeState,
@@ -3039,6 +3054,17 @@ class AudioEngine {
           };
           this.emitKaraokeChange();
           return true;
+        } else {
+          // If hot-swap did not execute, smoothly attenuate vocals without stopping music
+          await this.setKaraokeLevel(0, track);
+          this.karaokeState = {
+            ...this.karaokeState,
+            active: true,
+            switching: false,
+            vocalLevel: 0,
+          };
+          this.emitKaraokeChange();
+          return true;
         }
       } else {
         let restoreId = this.karaokeState.originalSourceId;
@@ -3053,6 +3079,7 @@ class AudioEngine {
         if (restoreId) {
           await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
         }
+        await this.setKaraokeLevel(100, track);
         if (AudioEngine.cleanId(usePlayerStore.getState().currentTrack?.id) === clean) {
           this.karaokeState = {
             trackId: clean,
@@ -3098,10 +3125,19 @@ class AudioEngine {
     };
     this.emitKaraokeChange();
 
-    // 1. If currently playing via YouTube iframe and user lowers vocal volume,
-    // ensure DSP mode so Web Audio notch filters operate in real-time
-    if (clamped < 100 && this.activeEngine === 'youtube' && this.currentVideoId) {
-      this.ensureDSPProcessingMode();
+    // 1. YouTube playback: NEVER kill or reload audio during karaoke adjustments!
+    // Smoothly scale player volume down ("baje poco a poco") to a continuous musical floor (35%)
+    // so music is NEVER interrupted or cut to silence
+    if (this.activeEngine === 'youtube' && this.ytPlayer) {
+      try {
+        const masterVol = this.getEffectiveVolume();
+        const vocalRatio = clamped / 100;
+        // Continuous attenuation curve: 100% -> masterVol, 0% -> 35% of masterVol
+        const targetVol = Math.round(masterVol * (0.35 + 0.65 * vocalRatio) * 100);
+        if (typeof this.ytPlayer.setVolume === 'function') {
+          this.ytPlayer.setVolume(targetVol);
+        }
+      } catch {}
     }
 
     // 2. Real-time Continuous Web Audio Vocal Notch Filtering:
@@ -3122,17 +3158,17 @@ class AudioEngine {
         const lowNode = this.filterNodes[1];
         if (lowNode) {
           lowNode.gain.cancelScheduledValues(now);
-          lowNode.gain.setTargetAtTime(vocalLowCut, now, 0.02);
+          lowNode.gain.setTargetAtTime(vocalLowCut, now, 0.05);
         }
         const midNode = this.filterNodes[2];
         if (midNode) {
           midNode.gain.cancelScheduledValues(now);
-          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.02);
+          midNode.gain.setTargetAtTime(vocalMidCut, now, 0.05);
         }
         const presNode = this.filterNodes[3];
         if (presNode) {
           presNode.gain.cancelScheduledValues(now);
-          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.02);
+          presNode.gain.setTargetAtTime(vocalPresCut, now, 0.05);
         }
       }
     } catch {}
@@ -3910,25 +3946,74 @@ class AudioEngine {
   public isAudioDucked: boolean = false;
   private previousDuckedVolume: number | null = null;
   private currentFadingVolume: number | null = null;
-  private duckFraction: number = 0.08;
+  private duckFraction: number = 0.32;
   private duckFadeInterval: any = null;
 
-  public setDuckedVolume(fraction: number = 0.10) {
+  public setDuckedVolume(fraction: number = 0.32, fadeDurationMs: number = 750) {
     if (this.duckFadeInterval !== null) {
       clearInterval(this.duckFadeInterval);
       this.duckFadeInterval = null;
     }
-    this.currentFadingVolume = null;
-    this.isAudioDucked = true;
-    this.duckFraction = fraction;
+
     if (this.previousDuckedVolume === null) {
       const v = usePlayerStore.getState().volume;
       this.previousDuckedVolume = v && v > 0.05 ? v : 1.0;
     }
-    this.applyCurrentVolume();
+
+    this.isAudioDucked = true;
+    // Guaranteed musical floor (>= 0.28) so music never cuts or goes silent
+    this.duckFraction = Math.max(0.28, Math.min(1.0, fraction));
+
+    const base = this.previousDuckedVolume ?? 1.0;
+    const targetVol = Math.max(0.28, base * this.duckFraction);
+    const startVol = this.currentFadingVolume ?? this.getEffectiveVolume();
+
+    if (fadeDurationMs <= 50 || Math.abs(startVol - targetVol) < 0.02) {
+      this.currentFadingVolume = targetVol;
+      this.applyCurrentVolume();
+      return;
+    }
+
+    const steps = 20;
+    const stepTime = Math.max(25, Math.round(fadeDurationMs / steps));
+    let currentStep = 0;
+
+    this.duckFadeInterval = setInterval(() => {
+      currentStep++;
+      const progress = Math.min(1, currentStep / steps);
+      // Smooth cosine easing: glides gently down ("baje poco a poco")
+      const factor = 0.5 * (1 - Math.cos(progress * Math.PI));
+      const curVol = startVol + (targetVol - startVol) * factor;
+      this.currentFadingVolume = curVol;
+
+      const ytVol = Math.round(Math.max(0, Math.min(1, curVol)) * 100);
+      if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+        try { this.ytPlayer.setVolume(ytVol); } catch {}
+      }
+      if (Array.isArray(this.ytPlayers)) {
+        this.ytPlayers.forEach((p) => {
+          if (p && typeof p.setVolume === 'function') {
+            try { p.setVolume(ytVol); } catch {}
+          }
+        });
+      }
+      this.audio.volume = Math.max(0, Math.min(1, curVol));
+      if (this.secondaryAudio) {
+        this.secondaryAudio.volume = Math.max(0, Math.min(1, curVol));
+      }
+      if (this.masterGain && this.audioContext) {
+        try { this.masterGain.gain.setValueAtTime(curVol, this.audioContext.currentTime); } catch {}
+      }
+
+      if (currentStep >= steps) {
+        clearInterval(this.duckFadeInterval);
+        this.duckFadeInterval = null;
+        this.currentFadingVolume = targetVol;
+      }
+    }, stepTime);
   }
 
-  public restoreDuckedVolume(fadeDurationMs: number = 1500) {
+  public restoreDuckedVolume(fadeDurationMs: number = 1000) {
     if (this.duckFadeInterval !== null) {
       clearInterval(this.duckFadeInterval);
       this.duckFadeInterval = null;
@@ -3945,8 +4030,8 @@ class AudioEngine {
       return;
     }
 
-    const steps = 24;
-    const stepTime = Math.max(30, Math.round(fadeDurationMs / steps));
+    const steps = 20;
+    const stepTime = Math.max(25, Math.round(fadeDurationMs / steps));
     let currentStep = 0;
 
     this.duckFadeInterval = setInterval(() => {
@@ -3997,7 +4082,7 @@ class AudioEngine {
     }
     if (this.isAudioDucked) {
       const base = this.previousDuckedVolume ?? usePlayerStore.getState().volume;
-      return Math.max(0.02, base * this.duckFraction);
+      return Math.max(0.28, base * this.duckFraction);
     }
     return usePlayerStore.getState().volume;
   }

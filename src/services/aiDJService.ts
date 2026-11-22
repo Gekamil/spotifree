@@ -86,13 +86,13 @@ export interface AIDJState {
 
 // Preset vibes for clean Spotify chips (pure Spotify aesthetic)
 export const DJ_VIBE_PRESETS = [
-  { id: 'sorprendeme', label: 'Sorpréndeme', query: 'sorprendeme variedad novedades exitos' },
+  { id: 'sorprendeme', label: 'Sorpréndeme', query: 'sorprendeme variedad aleatorio novedades exitos' },
   { id: 'urbano', label: 'Urbano latino', query: 'reggaeton trap urbano latino para bailar' },
-  { id: 'pop', label: 'Pop actual', query: 'pop exitos pop en espanol' },
-  { id: 'descubrimiento', label: 'Descubrimiento', query: 'descubrimiento novedades recomendaciones' },
+  { id: 'pop', label: 'Pop actual', query: 'pop actual exitos radio chart' },
+  { id: 'descubrimiento', label: 'Descubrimiento', query: 'descubrimiento novedades recomendaciones indie' },
   { id: 'entreno', label: 'Para entrenar', query: 'gym motivacion entrenamiento a tope' },
-  { id: 'chill', label: 'Chill out', query: 'novo amor cigarettes after sex indie folk acustico calma' },
-  { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos de siempre' },
+  { id: 'chill', label: 'Chill out', query: 'chill calma suave relax acustico' },
+  { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos 80 90 2000' },
   { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
   { id: 'rock', label: 'Rock & Indie', query: 'rock indie clasicos guitarras' },
   { id: 'electro', label: 'Electrónica', query: 'electronic edm house techno club dance' },
@@ -206,7 +206,7 @@ let introVoiceHeard = false;
 
 async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   set({ visualizerState: 'speaking', currentMessage: text, displayedTranscript: '' });
-  audioEngine.setDuckedVolume(0.18);
+  audioEngine.setDuckedVolume(0.32, 750);
   let voiceTimer: any = null;
   try {
     // If voice has not started outputting sound within 1.2s, restore music volume so user never waits in low volume
@@ -963,7 +963,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       // Start music playback immediately with ducked volume so user NEVER experiences dead silence!
       if (tracks.length > 0) {
         if (shouldSpeak) {
-          audioEngine.setDuckedVolume(0.18);
+          audioEngine.setDuckedVolume(0.32, 750);
         }
         usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
       }
@@ -1475,7 +1475,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
 
-    const previousIds = new Set(get().djTracks.map((t) => t.id));
+    const historyIds = (usePlayerStore.getState().history || []).map((t) => t.id);
+    const sessionIds = get().djTracks.map((t) => t.id);
+    const previousIds = new Set([...historyIds, ...sessionIds]);
     const [hashtagSet, groqResult] = await Promise.all([
       getCuratedSetForHashtag(targetTag, 15, previousIds),
       callGroqDJ({
@@ -1483,7 +1485,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         prompt: promptText,
         userName: cleanName,
         userProfile,
-      }, 10000),
+      }, 2500),
     ]);
 
     let finalSpeech = analysis.speech;
@@ -1601,11 +1603,11 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       chatHistory: [...state.chatHistory, djMsg],
     }));
 
-    // 4. Start playing the next song right now ducked under the DJ's voice
+    // 4. Start playing the next song right now smoothly ducked under the DJ's voice ("baje poco a poco")
     const track1 = finalSet[0];
     if (track1) {
       usePlayerStore.getState().playTrack(track1, finalSet, 'dj-session');
-      audioEngine.setDuckedVolume(0.12);
+      audioEngine.setDuckedVolume(0.32, 750);
     }
 
     // 5. Speak the personalized charismatic DJ intro cleanly
@@ -1771,10 +1773,10 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
 
     set({ currentMessage: transitionText, displayedTranscript: '' });
 
-    // Switch to next track right now ducked under the DJ's voice!
+    // Switch to next track right now smoothly ducked under the DJ's voice!
     if (nextTrack) {
       usePlayerStore.getState().playTrack(nextTrack, undefined, 'dj-session');
-      audioEngine.setDuckedVolume(0.12);
+      audioEngine.setDuckedVolume(0.32, 750);
     }
 
     get().stopVoiceListening();

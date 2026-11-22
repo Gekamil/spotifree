@@ -489,30 +489,34 @@ export function resolveHashtagFromPrompt(prompt: string): MusicHashtag {
   const p = prompt.toLowerCase();
 
   // If user says "sorpréndeme" / "sorpresa" / "aleatorio", pick a diverse genre that changes the vibe genuinely
-  if (/sorpr[eé]ndeme|sorpresa|aleatorio|random|otra\s+cosa/i.test(p)) {
-    const surpriseTags: MusicHashtag[] = ['#reggaeton', '#chill', '#trap', '#electro', '#indie', '#clasicos', '#rock', '#entreno', '#corridos'];
+  if (/sorpr[eé]ndeme|sorpresa|aleatorio|random|otra\s+cosa|cambiar?\s+(de\s+)?rollo/i.test(p)) {
+    const surpriseTags: MusicHashtag[] = [
+      '#pop', '#reggaeton', '#electro', '#rock', '#indie', '#chill',
+      '#trap', '#clasicos', '#entreno', '#corridos', '#bachata', '#lofi'
+    ];
     return surpriseTags[Math.floor(Math.random() * surpriseTags.length)];
   }
 
   if (/descubrimiento|novedades|recomendaciones/i.test(p)) {
-    const discoveryTags: MusicHashtag[] = ['#indie', '#trap', '#reggaeton', '#electro', '#chill'];
+    const discoveryTags: MusicHashtag[] = ['#indie', '#trap', '#electro', '#pop', '#chill', '#rock'];
     return discoveryTags[Math.floor(Math.random() * discoveryTags.length)];
   }
 
-  if (/pop|exitos|top/i.test(p)) return '#reggaeton';
-  if (/reggaeton|perreo|bailar|fiesta|dembow|bellakeo|latino/i.test(p)) return '#reggaeton';
+  if (/\bpop\b|pop\s+actual/i.test(p)) return '#pop';
+  if (/rock|guitarra|metal|punk|heavy|estopa|melendi|fito/i.test(p)) return '#rock';
+  if (/indie|alternativ|vetusta|lori|morat/i.test(p)) return '#indie';
+  if (/electro|techno|house|edm|dance|rave|electr[oó]nica/i.test(p)) return '#electro';
   if (/chill|relax|tranquil|calma|suave|acustico|desconectar/i.test(p)) return '#chill';
+  if (/clasic|cl[aá]sicos|recuerdo|antigu|80|90|2000/i.test(p)) return '#clasicos';
+  if (/estudiar|concentra|lofi|piano|trabajar|enfoque/i.test(p)) return '#lofi';
+  if (/gym|entreno|entrenar|pesas|fuerza|cardio/i.test(p)) return '#entreno';
+  if (/reggaeton|perreo|bailar|fiesta|dembow|bellakeo|urbano|latino/i.test(p)) return '#reggaeton';
   if (/trap|drill|phonk|barras|duro/i.test(p)) return '#trap';
   if (/bachata|romeo|aventura|royce/i.test(p)) return '#bachata';
   if (/corrido|mexic|belic|bélico|tumbado|peso pluma|junior h/i.test(p)) return '#corridos';
-  if (/indie|alternativ|vetusta|lori|morat/i.test(p)) return '#indie';
-  if (/rock|guitarra|metal|punk|heavy|estopa|melendi|fito/i.test(p)) return '#rock';
-  if (/electro|techno|house|edm|dance|rave/i.test(p)) return '#electro';
   if (/r&b|rnb|soul|the weeknd/i.test(p)) return '#rnb';
-  if (/estudiar|concentra|lofi|piano|trabajar/i.test(p)) return '#lofi';
-  if (/gym|entreno|pesas|fuerza|cardio/i.test(p)) return '#entreno';
   if (/flamenco|tangana|delaossa|maka/i.test(p)) return '#flamenco';
-  if (/clasic|recuerdo|antigu|80|90|2000/i.test(p)) return '#clasicos';
+  if (/exitos|éxitos|top/i.test(p)) return '#pop';
 
   // Check known artists
   for (const [tag, def] of Object.entries(HASHTAG_DEFINITIONS) as [MusicHashtag, HashtagDefinition][]) {

@@ -678,15 +678,36 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             <div className="overflow-y-auto mt-3 space-y-2 pr-1 max-h-[52vh] sm:max-h-[420px] scrollbar-thin">
               {DJ_VIBE_PRESETS.map((vibe) => {
                 const isSurprise = vibe.id === 'sorprendeme';
+                const subtext =
+                  vibe.id === 'sorprendeme'
+                    ? 'Déjate llevar con una mezcla variada y fresca'
+                    : vibe.id === 'urbano'
+                    ? 'Reggaeton, perreo y trap latino'
+                    : vibe.id === 'pop'
+                    ? 'Éxitos de radio y pop global'
+                    : vibe.id === 'descubrimiento'
+                    ? 'Joyas que no conocías y te van a encantar'
+                    : vibe.id === 'entreno'
+                    ? 'Energía alta, BPM elevado y motivación'
+                    : vibe.id === 'chill'
+                    ? 'Calma, acústico y ritmos suaves para desconectar'
+                    : vibe.id === 'clasicos'
+                    ? 'Temazos inolvidables de siempre'
+                    : vibe.id === 'enfoque'
+                    ? 'Lo-Fi y beats instrumentales para concentrarse'
+                    : vibe.id === 'rock'
+                    ? 'Guitarras, rock alternativo e himnos'
+                    : 'House, dance, club y electrónica';
+
                 return (
                   <button
                     key={vibe.id}
                     type="button"
                     onClick={() => {
                       setShowVibeDrawer(false);
-                      void useAIDJStore.getState().handleUserPrompt(vibe.label);
+                      void useAIDJStore.getState().handleUserPrompt(vibe.query || vibe.label);
                     }}
-                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] ${
+                    className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] ${
                       isSurprise
                         ? 'bg-[#1ed760]/15 border border-[#1ed760]/40 hover:bg-[#1ed760]/25'
                         : 'bg-white/5 hover:bg-white/10 border border-white/5'
@@ -698,11 +719,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                       }`}>
                         {vibe.label}
                       </span>
+                      <span className="block text-[11px] sm:text-xs text-[#b3b3b3] mt-0.5 truncate font-['SpotifyMixUI']">
+                        {subtext}
+                      </span>
                     </div>
-                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
-                      isSurprise ? 'bg-[#1ed760] text-black' : 'bg-white/10 text-white'
+                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 ${
+                      isSurprise ? 'bg-[#1ed760] text-black shadow-[0_0_12px_rgba(30,215,96,0.4)]' : 'bg-white/10 text-white'
                     }`}>
-                      <ShuffleNativeIcon size={13} className={isSurprise ? 'text-black' : 'text-white'} />
+                      <ShuffleNativeIcon size={14} className={isSurprise ? 'text-black' : 'text-white'} />
                     </div>
                   </button>
                 );
