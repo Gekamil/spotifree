@@ -183,7 +183,7 @@ export function updateDocumentTitle(track?: Track | null, isPlaying: boolean = t
       const artist = track.artists?.map((a) => a.name).filter(Boolean).join(', ');
       document.title = artist ? `${track.name} • ${artist}` : `${track.name} • Spotifree`;
     } else {
-      document.title = 'Spotifree - Reproductor web: música para todos';
+      document.title = 'Spotifree';
     }
   } catch {}
 }

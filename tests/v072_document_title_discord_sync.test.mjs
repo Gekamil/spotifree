@@ -23,7 +23,7 @@ test('v072: Document title logic handles track with artist and fallback cleanly'
       const artist = track.artists?.map((a) => a.name).filter(Boolean).join(', ');
       doc.title = artist ? `${track.name} • ${artist}` : `${track.name} • Spotifree`;
     } else {
-      doc.title = 'Spotifree - Reproductor web: música para todos';
+      doc.title = 'Spotifree';
     }
   }
 
@@ -46,9 +46,9 @@ test('v072: Document title logic handles track with artist and fallback cleanly'
     name: 'Monaco',
     artists: [{ name: 'Bad Bunny' }]
   }, false);
-  assert.equal(mockDocument.title, 'Spotifree - Reproductor web: música para todos');
+  assert.equal(mockDocument.title, 'Spotifree');
 
   // 4. When stopped or no track
   testUpdateDocumentTitle(mockDocument, null, false);
-  assert.equal(mockDocument.title, 'Spotifree - Reproductor web: música para todos');
+  assert.equal(mockDocument.title, 'Spotifree');
 });
