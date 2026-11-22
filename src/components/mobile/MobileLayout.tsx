@@ -918,7 +918,7 @@ export const MobileLayout: React.FC = () => {
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-20 mt-auto pt-1 w-full">
                       <div className="flex-1 min-w-0 pr-2.5 max-w-[calc(100%-46px)]">
-                        <RotatingDJBannerText className="text-[16px] sm:text-[18px] font-black text-white font-['SpotifyMixUITitle'] leading-tight flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)]" />
+                        <RotatingDJBannerText className="text-[18px] sm:text-[20px] font-black text-white font-['SpotifyMixUITitle'] leading-tight flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.75)]" />
                       </div>
 
                       <div

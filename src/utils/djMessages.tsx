@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLanguageStore } from './i18n';
 
 export const DJ_BANNER_MESSAGES_ES = [
@@ -31,84 +31,40 @@ interface RotatingDJBannerTextProps {
 }
 
 /**
- * Animated component that simulates live speech / karaoke typing:
- * All words start in a soft translucent tone (text-white/35) and progressively
- * light up into bright solid white word-by-word as if the AI were actively speaking.
+ * Authentic Spotify Rotating DJ Banner Text:
+ * Displays bold, solid, punchy headlines with a smooth cross-fade transition between phrases.
  */
 export const RotatingDJBannerText: React.FC<RotatingDJBannerTextProps> = ({
   className = '',
+  intervalMs = 6500,
 }) => {
   const { language } = useLanguageStore();
   const messages = language === 'en' ? DJ_BANNER_MESSAGES_EN : DJ_BANNER_MESSAGES_ES;
 
   const [currentIndex, setCurrentIndex] = useState(() => Math.floor(Math.random() * messages.length));
-  const [revealedWordIndex, setRevealedWordIndex] = useState(0);
-  const [isFadingOut, setIsFadingOut] = useState(false);
-
-  const currentMessage = messages[currentIndex % messages.length] || messages[0];
-  const words = useMemo(() => currentMessage.split(' '), [currentMessage]);
+  const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
-    let wordTimer: any = null;
-    let holdTimer: any = null;
-    let fadeTimer: any = null;
+    const timer = setInterval(() => {
+      setIsFading(true);
+      setTimeout(() => {
+        setCurrentIndex((prev) => (prev + 1) % messages.length);
+        setIsFading(false);
+      }, 350);
+    }, intervalMs);
 
-    // Reset speech progression for current phrase
-    setRevealedWordIndex(0);
-    setIsFadingOut(false);
+    return () => clearInterval(timer);
+  }, [messages.length, intervalMs]);
 
-    // Relaxed, calm progressive speaking pace (340ms per word)
-    let currentWord = 0;
-    wordTimer = setInterval(() => {
-      currentWord++;
-      setRevealedWordIndex(currentWord);
-
-      if (currentWord >= words.length) {
-        clearInterval(wordTimer);
-
-        // Hold fully illuminated sentence for 6.5 seconds so user reads comfortably without rushing
-        holdTimer = setTimeout(() => {
-          setIsFadingOut(true);
-
-          // Transition to next phrase after soft fade
-          fadeTimer = setTimeout(() => {
-            setCurrentIndex((prev) => (prev + 1) % messages.length);
-          }, 650);
-        }, 6500);
-      }
-    }, 340);
-
-    return () => {
-      if (wordTimer) clearInterval(wordTimer);
-      if (holdTimer) clearTimeout(holdTimer);
-      if (fadeTimer) clearTimeout(fadeTimer);
-    };
-  }, [currentIndex, words, messages.length]);
+  const currentMessage = messages[currentIndex % messages.length] || messages[0];
 
   return (
     <p
-      className={`${className} flex flex-wrap items-center break-words whitespace-normal font-['SpotifyMixUITitle',sans-serif] tracking-tight transition-opacity duration-300 ease-out ${
-        isFadingOut ? 'opacity-0' : 'opacity-100'
+      className={`${className} font-['SpotifyMixUITitle',sans-serif] text-white font-black leading-tight transition-opacity duration-350 ease-in-out ${
+        isFading ? 'opacity-0' : 'opacity-100'
       }`}
     >
-      {words.map((word, idx) => {
-        const isSpoken = idx < revealedWordIndex;
-        const isHighlight = /^(dj|música|ritmo|tu|temazos)$/i.test(word.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ]/g, ''));
-        return (
-          <span
-            key={`${word}-${idx}`}
-            className={`inline-block mr-1.5 transition-colors duration-150 ${
-              isSpoken
-                ? isHighlight
-                  ? 'text-[#93c5fd] font-black'
-                  : 'text-white font-black'
-                : 'text-white/40 font-bold'
-            }`}
-          >
-            {word}
-          </span>
-        );
-      })}
+      {currentMessage}
     </p>
   );
 };

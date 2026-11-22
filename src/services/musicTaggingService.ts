@@ -1228,9 +1228,9 @@ export async function getCuratedSetForHashtag(
     return true;
   };
 
-  // 1. Take a fresh randomized sample of user tracks from matching playlists (up to 60% of set)
+  // 1. Take a fresh randomized sample of user tracks from matching playlists (up to 40% of set)
   const userShuffled = [...userTracks].sort(() => Math.random() - 0.5);
-  const userQuota = Math.min(Math.floor(count * 0.6), userShuffled.length);
+  const userQuota = Math.min(Math.floor(count * 0.4), userShuffled.length);
   for (let i = 0; i < userQuota; i++) {
     addTrack(userShuffled[i]);
   }
@@ -1243,7 +1243,18 @@ export async function getCuratedSetForHashtag(
     addTrack(t);
   }
 
-  // 3. Add similar songs by peer artists of this genre from the catalog
+  // 3. Add fresh verified chart tracks from official localized charts for real discovery variety
+  if (result.length < count) {
+    try {
+      const chartTracks = await fetchRoleChartTracks(targetTag);
+      for (const t of chartTracks.sort(() => Math.random() - 0.5)) {
+        if (result.length >= count) break;
+        addTrack(t);
+      }
+    } catch {}
+  }
+
+  // 4. Add similar songs by peer artists of this genre from the catalog
   if (result.length < count) {
     const genreDef = HASHTAG_DEFINITIONS[targetTag];
     if (genreDef?.artists?.length) {

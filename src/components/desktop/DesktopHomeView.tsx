@@ -703,7 +703,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
               {/* Bottom Row: Text on left, White circular Arrow Button on right */}
               <div className="flex items-end justify-between relative z-20 mt-auto w-full">
                 <div className="flex-1 min-w-0 pr-4 max-w-[calc(100%-190px)]">
-                  <RotatingDJBannerText className="text-xl md:text-2xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[48px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+                  <RotatingDJBannerText className="text-2xl md:text-3xl font-black text-white font-['SpotifyMixUITitle'] leading-snug min-h-[52px] flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_12px_rgba(0,0,0,0.65)]" />
                 </div>
 
                 <div
