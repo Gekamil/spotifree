@@ -644,7 +644,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
                   onSelectPlaylistById('spotify-dj');
                 }
               }}
-              className="relative w-full rounded-2xl p-5 md:p-6 overflow-hidden cursor-pointer shadow-xl hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[145px] md:min-h-[155px] select-none"
+              className="relative w-full rounded-2xl p-4 md:p-5 overflow-hidden cursor-pointer shadow-xl hover:shadow-2xl transition-all duration-300 group active:scale-[0.99] flex flex-col justify-between min-h-[128px] md:min-h-[136px] select-none"
               style={{
                 touchAction: 'manipulation',
                 backgroundColor: djThemeColor || '#0a52cc',
@@ -669,7 +669,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
 
               {/* DJ Visualizer: Centered in the card, with smooth bottom half transparency fade */}
               <div
-                className="absolute left-1/2 -translate-x-1/2 -top-4 pointer-events-none flex items-center justify-center w-[220px] h-[220px] md:w-[250px] md:h-[250px] z-10"
+                className="absolute left-1/2 -translate-x-1/2 -top-6 pointer-events-none flex items-center justify-center w-[220px] h-[220px] md:w-[250px] md:h-[250px] z-10"
                 style={{
                   WebkitMaskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',
                   maskImage: 'linear-gradient(to bottom, rgba(0, 0, 0, 1) 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 0) 80%, rgba(0, 0, 0, 0) 100%)',

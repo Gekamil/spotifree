@@ -876,7 +876,7 @@ export const MobileLayout: React.FC = () => {
                         handleOpenDJPlaylist();
                       }
                     }}
-                    className="relative w-full rounded-2xl py-2.5 px-3.5 sm:px-4 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-between min-h-[120px] select-none"
+                    className="relative w-full rounded-2xl py-2 px-3.5 sm:px-4 overflow-hidden cursor-pointer shadow-xl active:scale-[0.98] transition-all flex flex-col justify-end min-h-[118px] h-[118px] select-none"
                     style={{
                       touchAction: 'manipulation',
                       backgroundColor: djThemeColor || '#0c3b88',
@@ -896,7 +896,7 @@ export const MobileLayout: React.FC = () => {
 
                     {/* Subtle Ambient Radial Glow behind the Orb */}
                     <div
-                      className="absolute left-1/2 top-9 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
+                      className="absolute left-1/2 top-7 -translate-x-1/2 -translate-y-1/2 w-48 h-48 rounded-full pointer-events-none transition-all duration-700 opacity-60"
                       style={{
                         background: 'radial-gradient(circle, rgba(0, 242, 254, 0.35) 0%, rgba(30, 215, 96, 0.12) 45%, rgba(0,0,0,0) 70%)',
                         filter: 'blur(22px)',
@@ -904,7 +904,7 @@ export const MobileLayout: React.FC = () => {
                     />
 
                     {/* Center Visualizer: Grand Neon Liquid Halo (enlarged prominent ring, speaking animation always active in preview) */}
-                    <div className="relative w-full flex items-center justify-center my-0 z-10 pointer-events-none">
+                    <div className="absolute left-1/2 -translate-x-1/2 -top-1 pointer-events-none flex items-center justify-center z-10">
                       <SpotifyDJVisualizer
                         size={142}
                         state="speaking"
@@ -916,15 +916,15 @@ export const MobileLayout: React.FC = () => {
 
                     {/* Bottom Row: Text on left, White circular arrow on right */}
                     <div className="flex items-end justify-between relative z-20 mt-auto pt-1 w-full">
-                      <div className="flex-1 min-w-0 pr-2.5 max-w-[calc(100%-48px)]">
-                        <RotatingDJBannerText className="text-[14px] font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.55)]" />
+                      <div className="flex-1 min-w-0 pr-2.5 max-w-[calc(100%-46px)]">
+                        <RotatingDJBannerText className="text-[13.5px] font-black text-white font-['SpotifyMixUITitle'] leading-snug flex items-end break-words whitespace-normal tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.65)]" />
                       </div>
 
                       <div
-                        className="w-8.5 h-8.5 min-w-[34px] min-h-[34px] rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0 ml-2 z-20 pointer-events-none"
+                        className="w-8 h-8 min-w-[32px] min-h-[32px] rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-all shrink-0 ml-2 z-20 pointer-events-none"
                         aria-hidden="true"
                       >
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <line x1="5" y1="12" x2="19" y2="12"></line>
                           <polyline points="12 5 19 12 12 19"></polyline>
                         </svg>
