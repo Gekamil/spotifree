@@ -706,6 +706,8 @@ class AudioEngine {
     }
 
     this.isCrossfading = true;
+    this.secondaryKaraokeLoadedSource = null;
+    this.karaokeState = { ...this.karaokeState, active: false };
     const ownerTrackId = this.currentTrackId;
     const ownerSeq = this.playSequenceId;
     // If the preloaded song is no longer the real "next" (shuffle toggled, queue edited, smart shuffle
@@ -1976,13 +1978,31 @@ class AudioEngine {
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (playerIndex !== this.activeYtIndex) {
       // Secondary player state change during crossfade or karaoke dual-deck
-      if (code === 1 && this.karaokeState.active && this.activeEngine === 'youtube') {
+      if (code === 1 && this.secondaryKaraokeLoadedSource && this.activeEngine === 'youtube') {
         this.isSecondaryKaraokePreparing = false;
         const curLevel = this.karaokeState.vocalLevel ?? 100;
         const masterVol = this.getEffectiveVolume();
-        const vocalVol = Math.round(masterVol * (curLevel / 100) * 100);
+        const instRatio = (100 - curLevel) / 100;
+        const vocalRatio = curLevel / 100;
+        const vocalVol = Math.round(masterVol * vocalRatio * 100);
+        const instVol = Math.round(masterVol * instRatio * 100);
+        if (this.secondaryYtPlayer && typeof this.secondaryYtPlayer.setVolume === 'function') {
+          this.secondaryYtPlayer.setVolume(instVol);
+        }
         if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
           this.ytPlayer.setVolume(vocalVol);
+        }
+        // Snap secondary player to primary player's exact second immediately upon playing
+        if (
+          this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function' &&
+          this.secondaryYtPlayer && typeof this.secondaryYtPlayer.getCurrentTime === 'function' &&
+          typeof this.secondaryYtPlayer.seekTo === 'function'
+        ) {
+          const primTime = this.ytPlayer.getCurrentTime();
+          const secTime = this.secondaryYtPlayer.getCurrentTime();
+          if (isFinite(primTime) && isFinite(secTime) && Math.abs(primTime - secTime) > 0.15) {
+            try { this.secondaryYtPlayer.seekTo(primTime, true); } catch {}
+          }
         }
       }
       return;
@@ -2252,6 +2272,34 @@ class AudioEngine {
           if (isFinite(curSec) && curSec >= 0) {
             usePlayerStore.getState().setProgress(curSec * 1000);
             this.checkStuckPlaybackWatchdog(curSec);
+
+            // Dual-Deck Karaoke continuous millisecond time-lock & drift correction
+            if (
+              this.secondaryKaraokeLoadedSource &&
+              !this.isCrossfading &&
+              this.secondaryYtPlayer &&
+              typeof this.secondaryYtPlayer.getCurrentTime === 'function' &&
+              typeof this.secondaryYtPlayer.getPlayerState === 'function'
+            ) {
+              const secState = this.secondaryYtPlayer.getPlayerState();
+              const primState = typeof this.ytPlayer.getPlayerState === 'function' ? this.ytPlayer.getPlayerState() : -1;
+              if (primState === 1) {
+                if (secState !== 1 && secState !== 3 && typeof this.secondaryYtPlayer.playVideo === 'function') {
+                  try { this.secondaryYtPlayer.playVideo(); } catch {}
+                }
+                const secSec = this.secondaryYtPlayer.getCurrentTime();
+                if (isFinite(secSec) && curSec > 0.5) {
+                  const drift = Math.abs(curSec - secSec);
+                  if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function') {
+                    try { this.secondaryYtPlayer.seekTo(curSec, true); } catch {}
+                  }
+                }
+              } else if (primState === 2) {
+                if (secState === 1 && typeof this.secondaryYtPlayer.pauseVideo === 'function') {
+                  try { this.secondaryYtPlayer.pauseVideo(); } catch {}
+                }
+              }
+            }
           }
           if (isFinite(durSec) && durSec > 0) {
             usePlayerStore.getState().setDuration(durSec * 1000);
@@ -2266,6 +2314,21 @@ class AudioEngine {
         const curSec = this.audio.currentTime;
         if (isFinite(curSec) && curSec >= 0) {
           usePlayerStore.getState().setProgress(curSec * 1000);
+        }
+        if (this.secondaryKaraokeLoadedSource && !this.isCrossfading && this.secondaryAudio) {
+          if (!this.audio.paused) {
+            if (this.secondaryAudio.paused) {
+              this.secondaryAudio.play().catch(() => {});
+            }
+            const drift = Math.abs(this.audio.currentTime - this.secondaryAudio.currentTime);
+            if (drift > 0.15) {
+              try { this.secondaryAudio.currentTime = this.audio.currentTime; } catch {}
+            }
+          } else {
+            if (!this.secondaryAudio.paused) {
+              try { this.secondaryAudio.pause(); } catch {}
+            }
+          }
         }
       }
     }, 100);
@@ -2708,6 +2771,11 @@ class AudioEngine {
         if (secState !== 1 && secState !== 3 && typeof secYt.playVideo === 'function') {
           try { secYt.playVideo(); } catch {}
         }
+        const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+        const secTime = typeof secYt.getCurrentTime === 'function' ? secYt.getCurrentTime() : 0;
+        if (isFinite(curTime) && isFinite(secTime) && Math.abs(curTime - secTime) > 0.15 && typeof secYt.seekTo === 'function') {
+          try { secYt.seekTo(curTime, true); } catch {}
+        }
         return true;
       }
 
@@ -2730,14 +2798,24 @@ class AudioEngine {
       }
       return true;
     } else if (this.audio && this.secondaryAudio) {
+      const curTime = this.audio.currentTime || 0;
+      const currentLevel = this.karaokeState.vocalLevel ?? 100;
+      const instRatio = (100 - currentLevel) / 100;
+      const targetInstVol = this.getEffectiveVolume() * instRatio;
+
       if (inst.sourceId && this.secondaryKaraokeLoadedSource !== inst.sourceId) {
         this.secondaryKaraokeLoadedSource = inst.sourceId;
         this.secondaryAudio.src = inst.sourceId;
-        this.secondaryAudio.currentTime = this.audio.currentTime;
-        const currentLevel = this.karaokeState.vocalLevel ?? 100;
-        const instRatio = (100 - currentLevel) / 100;
-        this.secondaryAudio.volume = this.getEffectiveVolume() * instRatio;
+        this.secondaryAudio.currentTime = curTime;
+        this.secondaryAudio.volume = targetInstVol;
         this.secondaryAudio.play().catch(() => {});
+      } else if (this.secondaryKaraokeLoadedSource === inst.sourceId) {
+        if (this.secondaryAudio.paused && !this.audio.paused) {
+          this.secondaryAudio.play().catch(() => {});
+        }
+        if (Math.abs(this.audio.currentTime - this.secondaryAudio.currentTime) > 0.15) {
+          try { this.secondaryAudio.currentTime = this.audio.currentTime; } catch {}
+        }
       }
       return true;
     }
@@ -2784,7 +2862,7 @@ class AudioEngine {
           this.karaokeState = { ...this.karaokeState, instrumental: cand };
           this.emitKaraokeChange();
 
-          // Warm pre-cue instrumental on secondary YouTube player for instantaneous activation
+          // Pre-cue instrumental on secondary player and prepare karaoke deck synchronously
           if (
             cand?.sourceId &&
             cand.provider === 'youtube' &&
@@ -2794,7 +2872,11 @@ class AudioEngine {
             typeof this.secondaryYtPlayer.cueVideoById === 'function'
           ) {
             try {
-              this.secondaryYtPlayer.cueVideoById({ videoId: cand.sourceId, startSeconds: 0 });
+              if (usePlayerStore.getState().isPlaying) {
+                void this.prepareKaraokeDeck(track);
+              } else {
+                this.secondaryYtPlayer.cueVideoById({ videoId: cand.sourceId, startSeconds: 0 });
+              }
             } catch {}
           }
         }
@@ -3240,6 +3322,11 @@ class AudioEngine {
             secYt.loadVideoById({ videoId: instSource, startSeconds: curTime });
             if (typeof secYt.playVideo === 'function') secYt.playVideo();
           }
+        } else if (this.secondaryKaraokeLoadedSource === instSource) {
+          const sState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
+          if (sState !== 1 && sState !== 3 && typeof secYt.playVideo === 'function') {
+            try { secYt.playVideo(); } catch {}
+          }
         }
 
         // Real-time simultaneous volume modulation
@@ -3275,6 +3362,8 @@ class AudioEngine {
           this.secondaryKaraokeLoadedSource = instSource;
           this.secondaryAudio.src = instSource;
           this.secondaryAudio.currentTime = this.audio.currentTime;
+          this.secondaryAudio.play().catch(() => {});
+        } else if (this.secondaryKaraokeLoadedSource === instSource && this.secondaryAudio.paused && !this.audio.paused) {
           this.secondaryAudio.play().catch(() => {});
         }
         this.audio.volume = masterVol * effectiveVocalRatio;
@@ -3685,6 +3774,10 @@ class AudioEngine {
         setTimeout(() => {
           this.isTransitioning = false;
         }, 2500);
+        setTimeout(() => {
+          const track = usePlayerStore.getState().currentTrack;
+          if (track?.id) void this.prepareKaraokeDeck(track);
+        }, 600);
         return;
       }
 
@@ -3758,6 +3851,12 @@ class AudioEngine {
           setTimeout(() => {
             this.preloadUpcomingTracks();
           }, 800);
+
+          // Pre-warm karaoke instrumental deck in background from second zero
+          setTimeout(() => {
+            const track = usePlayerStore.getState().currentTrack;
+            if (track?.id) void this.prepareKaraokeDeck(track);
+          }, 600);
           return;
         }
       } else {
@@ -3773,6 +3872,10 @@ class AudioEngine {
         setTimeout(() => {
           this.isTransitioning = false;
         }, 3000);
+        setTimeout(() => {
+          const track = usePlayerStore.getState().currentTrack;
+          if (track?.id) void this.prepareKaraokeDeck(track);
+        }, 600);
         return;
       }
     } catch (err: any) {
@@ -3970,7 +4073,7 @@ class AudioEngine {
           }
           this.ytPlayer.playVideo();
           if (
-            (this.isCrossfading || (this.karaokeState.active && this.secondaryKaraokeLoadedSource)) &&
+            (this.isCrossfading || Boolean(this.secondaryKaraokeLoadedSource)) &&
             this.secondaryYtPlayer &&
             typeof this.secondaryYtPlayer.playVideo === 'function'
           ) {
@@ -3997,7 +4100,7 @@ class AudioEngine {
       }
       this.audio.play().catch(() => {});
       if (
-        (this.isCrossfading || (this.karaokeState.active && this.secondaryKaraokeLoadedSource)) &&
+        (this.isCrossfading || Boolean(this.secondaryKaraokeLoadedSource)) &&
         this.secondaryAudio
       ) {
         this.secondaryAudio.play().catch(() => {});
@@ -4037,10 +4140,21 @@ class AudioEngine {
       this.setVolume(isMuted ? 0 : volume);
     }
 
-    if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
-      try {
-        this.ytPlayer.seekTo(seconds, true);
-      } catch {}
+    if (this.activeEngine === 'youtube') {
+      if (this.ytPlayer && typeof this.ytPlayer.seekTo === 'function') {
+        try {
+          this.ytPlayer.seekTo(seconds, true);
+        } catch {}
+      }
+      if (
+        this.secondaryKaraokeLoadedSource &&
+        this.secondaryYtPlayer &&
+        typeof this.secondaryYtPlayer.seekTo === 'function'
+      ) {
+        try {
+          this.secondaryYtPlayer.seekTo(seconds, true);
+        } catch {}
+      }
     } else if (this.audio) {
       try {
         const el = this.audio;
@@ -4069,7 +4183,7 @@ class AudioEngine {
           el.currentTime = target;
         }
 
-        if (this.isCrossfading && this.secondaryAudio) {
+        if (this.secondaryAudio && (this.isCrossfading || Boolean(this.secondaryKaraokeLoadedSource))) {
           try {
             this.secondaryAudio.currentTime = target;
           } catch {}

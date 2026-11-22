@@ -114,7 +114,13 @@ export function LyricsFullscreen(p: Props) {
     const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
     const newLevel = Math.round(ratio * 100);
     setDragLevel(newLevel);
-    void karaoke.setLevel(newLevel);
+    if (sliderRafId.current) {
+      cancelAnimationFrame(sliderRafId.current);
+    }
+    sliderRafId.current = requestAnimationFrame(() => {
+      void karaoke.setLevel(newLevel);
+      sliderRafId.current = null;
+    });
   };
 
   const handleSliderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -133,6 +139,13 @@ export function LyricsFullscreen(p: Props) {
 
   const handleSliderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     setIsDraggingSlider(false);
+    if (sliderRafId.current) {
+      cancelAnimationFrame(sliderRafId.current);
+      sliderRafId.current = null;
+    }
+    if (dragLevel !== null) {
+      void karaoke.setLevel(dragLevel);
+    }
     setDragLevel(null);
     try { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); } catch {}
   };
