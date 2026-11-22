@@ -2309,18 +2309,18 @@ class AudioEngine {
               const secState = this.secondaryYtPlayer.getPlayerState();
               const primState = typeof this.ytPlayer.getPlayerState === 'function' ? this.ytPlayer.getPlayerState() : -1;
               const curKaraokeActive = this.karaokeState.active && (this.karaokeState.vocalLevel ?? 100) < 100;
+              const isSecActiveBlending = Boolean(
+                this.secondaryKaraokeLoadedSource &&
+                this.currentVideoId !== this.secondaryKaraokeLoadedSource &&
+                this.karaokeState.active
+              );
               if (primState === 1) {
-                if (curKaraokeActive) {
+                if (curKaraokeActive && isSecActiveBlending) {
                   if (secState !== 1 && secState !== 3 && typeof this.secondaryYtPlayer.playVideo === 'function') {
                     try { this.secondaryYtPlayer.playVideo(); } catch {}
                   }
                   const secSec = this.secondaryYtPlayer.getCurrentTime();
-                  const isSecActiveBlending = Boolean(
-                    this.secondaryKaraokeLoadedSource &&
-                    this.currentVideoId !== this.secondaryKaraokeLoadedSource &&
-                    this.karaokeState.active
-                  );
-                  if (isFinite(secSec) && curSec > 0.5 && isSecActiveBlending) {
+                  if (isFinite(secSec) && curSec > 0.5) {
                     const drift = Math.abs(curSec - secSec);
                     const nowSync = Date.now();
                     if (drift > 0.15 && typeof this.secondaryYtPlayer.seekTo === 'function' && nowSync - this.lastSecondarySyncTime > 4000) {
@@ -2330,7 +2330,11 @@ class AudioEngine {
                   }
                 } else {
                   if (secState === 1 && typeof this.secondaryYtPlayer.pauseVideo === 'function') {
-                    try { this.secondaryYtPlayer.pauseVideo(); } catch {}
+                    try {
+                      this.secondaryYtPlayer.setVolume?.(0);
+                      this.secondaryYtPlayer.mute?.();
+                      this.secondaryYtPlayer.pauseVideo();
+                    } catch {}
                   }
                 }
               } else if (primState === 2) {
@@ -3165,7 +3169,22 @@ class AudioEngine {
           this.lastTrackStartTime = Date.now();
 
           // 5. Pause old player
-          try { currentActiveYt.pauseVideo(); } catch {}
+          try {
+            currentActiveYt.setVolume(0);
+            currentActiveYt.mute?.();
+            currentActiveYt.pauseVideo();
+          } catch {}
+
+          if (this.secondaryYtPlayer && typeof this.secondaryYtPlayer.pauseVideo === 'function') {
+            try {
+              this.secondaryYtPlayer.setVolume(0);
+              this.secondaryYtPlayer.mute?.();
+              this.secondaryYtPlayer.pauseVideo();
+            } catch {}
+          }
+
+          this.secondaryKaraokeLoadedSource = null;
+          this.isSecondaryKaraokePreparing = false;
 
           this.startProgressTicker();
           this.startCarrier();
@@ -3212,7 +3231,15 @@ class AudioEngine {
           if (curYt?.setVolume) curYt.setVolume(Math.round(masterVol * (1 - frac) * 100));
           await new Promise((r) => setTimeout(r, 25));
         }
-        if (curYt?.pauseVideo) curYt.pauseVideo();
+        if (curYt?.pauseVideo) {
+          try {
+            curYt.setVolume?.(0);
+            curYt.mute?.();
+            curYt.pauseVideo();
+          } catch {}
+        }
+        this.secondaryKaraokeLoadedSource = null;
+        this.isSecondaryKaraokePreparing = false;
         this.activeAudioIndex = this.activeAudioIndex === 0 ? 1 : 0;
         this.activeEngine = 'html5';
         this.currentVideoId = sourceId === 'offline' ? null : sourceId;
@@ -3246,7 +3273,14 @@ class AudioEngine {
               if (this.audio) this.audio.volume = masterVol * (1 - frac);
               await new Promise((r) => setTimeout(r, 25));
             }
-            try { this.audio?.pause(); } catch {}
+            try {
+              if (this.audio) {
+                this.audio.volume = 0;
+                this.audio.pause();
+              }
+            } catch {}
+            this.secondaryKaraokeLoadedSource = null;
+            this.isSecondaryKaraokePreparing = false;
             this.activeEngine = 'youtube';
             this.currentVideoId = sourceId;
             this.startProgressTicker();
@@ -3360,18 +3394,39 @@ class AudioEngine {
       instrumental: inst,
       active: nextLevel < 100,
       vocalLevel: nextLevel,
-      switching: false,
+      switching: true,
     };
     this.emitKaraokeChange();
 
-    await this.setKaraokeLevel(nextLevel, track);
-
-    // Static code references preserved for legacy compatibility
-    if (false as boolean && inst?.sourceId) {
-      let restoreId = this.karaokeState.originalSourceId || '';
-      await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
-      await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
+    try {
+      if (!currentlyActive) {
+        // Turning on Karaoke ("Sin voz"): swap cleanly to verified instrumental track
+        const origId = this.karaokeState.originalSourceId || this.currentVideoId;
+        this.karaokeState.originalSourceId = origId;
+        if (inst?.sourceId && this.currentVideoId !== inst.sourceId) {
+          await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
+        }
+      } else {
+        // Turning off Karaoke ("Con voz"): restore original vocal track
+        const artist = track.artists?.[0]?.name || '';
+        const query = `${track.name} ${artist}`.trim();
+        const restoreId =
+          this.karaokeState.originalSourceId ||
+          getSourceOverride(track.id) ||
+          getAutoSource(track.id) ||
+          (await this.resolveVideoId(query, track.id, track.name, artist)) ||
+          '';
+        this.karaokeState.originalSourceId = null;
+        if (restoreId && this.currentVideoId !== restoreId) {
+          await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
+        }
+      }
+    } finally {
+      this.karaokeState.switching = false;
+      this.emitKaraokeChange();
     }
+
+    await this.setKaraokeLevel(nextLevel, track);
 
     return this.karaokeState.active;
   }
@@ -3452,7 +3507,13 @@ class AudioEngine {
         }
         if (typeof secYt?.setVolume === 'function') {
           secYt.setVolume(0);
+          try {
+            secYt.mute?.();
+            secYt.pauseVideo?.();
+          } catch {}
         }
+        this.secondaryKaraokeLoadedSource = null;
+        this.isSecondaryKaraokePreparing = false;
       } else if (instSource && isSecHtml5 && this.secondaryAudio) {
         if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
           this.secondaryKaraokeLoadedSource = instSource;
@@ -3521,6 +3582,8 @@ class AudioEngine {
             secYt.mute?.();
             secYt.pauseVideo?.();
           } catch {}
+          this.secondaryKaraokeLoadedSource = null;
+          this.isSecondaryKaraokePreparing = false;
         }
 
         // Debounced volume stabilization at 0%
