@@ -16,7 +16,6 @@ import {
   CloseNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
-  ShuffleNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -579,7 +578,9 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               className="flex items-center gap-2 px-3.5 py-1.5 sm:px-4 sm:py-2 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-xs sm:text-[13px] font-bold text-white transition-all cursor-pointer border border-white/10 shrink-0 group"
               title="Cambiar rollo y elegir estilo"
             >
-              <ShuffleNativeIcon size={14} className="text-[#b3b3b3] group-hover:text-white transition-colors" />
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" className="text-[#b3b3b3] group-hover:text-white transition-colors">
+                <path d="M10 2v3H1V2h9zm-3 5v3H1V7h6zm7 5v3H1v-3h13zm2-8.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm-5 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm3 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0z" />
+              </svg>
               <span>Cambiar rollo</span>
             </button>
 
@@ -708,26 +709,33 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                       setShowVibeDrawer(false);
                       void useAIDJStore.getState().handleUserPrompt(vibe.query || vibe.label);
                     }}
-                    className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] ${
+                    className={`w-full flex items-center justify-between p-3 sm:p-3.5 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] group ${
                       isSurprise
                         ? 'bg-[#1ed760]/15 border border-[#1ed760]/40 hover:bg-[#1ed760]/25'
                         : 'bg-white/5 hover:bg-white/10 border border-white/5'
                     }`}
                   >
                     <div className="min-w-0 pr-2">
-                      <span className={`block font-bold text-sm sm:text-base font-['SpotifyMixUITitle'] truncate ${
-                        isSurprise ? 'text-[#1ed760]' : 'text-white'
-                      }`}>
-                        {vibe.label}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`block font-bold text-sm sm:text-base font-['SpotifyMixUITitle'] truncate ${
+                          isSurprise ? 'text-[#1ed760]' : 'text-white'
+                        }`}>
+                          {vibe.label}
+                        </span>
+                        {isSurprise && (
+                          <span className="px-2 py-0.5 rounded-full bg-[#1ed760] text-black text-[10px] font-black uppercase tracking-wider font-['SpotifyMixUITitle']">
+                            Mix
+                          </span>
+                        )}
+                      </div>
                       <span className="block text-[11px] sm:text-xs text-[#b3b3b3] mt-0.5 truncate font-['SpotifyMixUI']">
                         {subtext}
                       </span>
                     </div>
-                    <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 ${
-                      isSurprise ? 'bg-[#1ed760] text-black shadow-[0_0_12px_rgba(30,215,96,0.4)]' : 'bg-white/10 text-white'
-                    }`}>
-                      <ShuffleNativeIcon size={14} className={isSurprise ? 'text-black' : 'text-white'} />
+                    <div className="flex items-center text-white/40 group-hover:text-white shrink-0 ml-2 transition-colors">
+                      <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                        <path d="M5.47 13.03a.75.75 0 0 1 0-1.06L9.94 8 5.47 3.53a.75.75 0 0 1 1.06-1.06l5 5a.75.75 0 0 1 0 1.06l-5 5a.75.75 0 0 1-1.06 0z" />
+                      </svg>
                     </div>
                   </button>
                 );
