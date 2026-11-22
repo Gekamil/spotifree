@@ -176,7 +176,20 @@ export function sanitizeTrack(track: any): Track {
   } as Track;
 }
 
+export function updateDocumentTitle(track?: Track | null, isPlaying: boolean = true) {
+  if (typeof document === 'undefined') return;
+  try {
+    if (track && track.name && isPlaying) {
+      const artist = track.artists?.map((a) => a.name).filter(Boolean).join(', ');
+      document.title = artist ? `${track.name} • ${artist}` : `${track.name} • Spotifree`;
+    } else {
+      document.title = 'Spotifree - Reproductor web: música para todos';
+    }
+  } catch {}
+}
+
 function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
+  updateDocumentTitle(track, true);
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !track) return;
   try {
     registerMediaSessionHandlers();
@@ -546,6 +559,7 @@ const store = create<PlayerState>((set, get) => ({
     }
     const nextState = !get().isPlaying;
     set({ isPlaying: nextState });
+    updateDocumentTitle(get().currentTrack, nextState);
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
     if (engine) {
       if (nextState) {
@@ -1352,6 +1366,7 @@ export function registerMediaSessionHandlers() {
 
     navigator.mediaSession.setActionHandler('play', () => {
       usePlayerStore.setState({ isPlaying: true });
+      updateDocumentTitle(usePlayerStore.getState().currentTrack, true);
       const engine = getEngine();
       if (engine && typeof engine.resume === 'function') {
         engine.resume();
@@ -1361,6 +1376,7 @@ export function registerMediaSessionHandlers() {
 
     navigator.mediaSession.setActionHandler('pause', () => {
       usePlayerStore.setState({ isPlaying: false });
+      updateDocumentTitle(usePlayerStore.getState().currentTrack, false);
       const engine = getEngine();
       if (engine && typeof engine.pause === 'function') {
         engine.pause();
@@ -1440,6 +1456,7 @@ export function registerMediaSessionHandlers() {
 
     navigator.mediaSession.setActionHandler('stop', () => {
       usePlayerStore.setState({ isPlaying: false });
+      updateDocumentTitle(null, false);
       const engine = getEngine();
       if (engine && typeof engine.pause === 'function') engine.pause();
       try { navigator.mediaSession.playbackState = 'paused'; } catch {}
