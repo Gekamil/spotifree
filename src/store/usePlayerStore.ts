@@ -60,7 +60,7 @@ export function findTrackIndexInQueue(queue: Track[], currentTrack: Track | null
   return -1;
 }
 
-function resolveTrackCover(track: any): string {
+export function resolveTrackCover(track: any): string {
   if (!track) return '';
 
   const rawId = track.id || '';

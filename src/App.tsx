@@ -29,6 +29,7 @@ import { initAuthListener } from './services/spotifreeAuth';
 import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
 import { initSpotifreeMixes } from './services/spotifreeMixes';
 import { initListenFriends } from './services/listenFriends';
+import { initDiscordPresenceSync } from './services/discordPresenceService';
 import { initDeepLinks, handleDeepLink } from './utils/deepLinkHandler';
 
 if (typeof window !== 'undefined') {
@@ -47,6 +48,9 @@ function App() {
 
     // Remembers the friends who listen together with this device (Settings › Escuchar juntos)
     initListenFriends();
+
+    // Automatic Discord Rich Presence sync for desktop
+    initDiscordPresenceSync();
 
     // Audio output selection & Bluetooth / APK device listener
     initAudioOutputListeners();

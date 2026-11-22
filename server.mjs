@@ -13,6 +13,7 @@ import {
   buildArtistSoundCloudVault,
   findTrackByLyrics,
 } from './api/_lib/musicFallback.js';
+import { discordRpc } from './scripts/discordRpc.mjs';
 
 const PORT = parseInt(process.env.PORT, 10) || 10000;
 let currentPlayingTrackId = null;
@@ -21,6 +22,7 @@ function setCorsHeaders(res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, HEAD, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Authorization');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
   res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Content-Length, Accept-Ranges, Content-Disposition, X-Video-Id, X-Total-Length, X-Audio-Source');
 }
 
@@ -169,6 +171,62 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('Content-Type', 'application/json');
     res.statusCode = 200;
     return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.3', cookiesLoaded: !!process.env.YOUTUBE_COOKIES }));
+  }
+
+  // 1.1 Discord RPC Bridge Endpoints
+  if (pathname === '/api/discord/status' && req.method === 'GET') {
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({
+      status: 'ok',
+      service: 'Spotifree Discord RPC Bridge',
+      ...discordRpc.getStatus(),
+    }));
+  }
+
+  if (pathname === '/api/discord/presence' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        discordRpc.updatePresence(data);
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        return res.end(JSON.stringify({ success: true, updated: true }));
+      } catch (err) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
+  }
+
+  if (pathname === '/api/discord/clear' && req.method === 'POST') {
+    discordRpc.clearPresence();
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({ success: true, cleared: true }));
+  }
+
+  if (pathname === '/api/discord/config' && req.method === 'POST') {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      try {
+        const data = JSON.parse(body || '{}');
+        if (data.clientId) {
+          discordRpc.setClientId(data.clientId);
+        }
+        res.setHeader('Content-Type', 'application/json');
+        res.statusCode = 200;
+        return res.end(JSON.stringify({ success: true, ...discordRpc.getStatus() }));
+      } catch (err) {
+        res.statusCode = 400;
+        return res.end(JSON.stringify({ success: false, error: err.message }));
+      }
+    });
+    return;
   }
 
   // 2. Direct Audio Streaming & Download (/api/audio/stream, /api/audio/download)
@@ -1819,4 +1877,10 @@ server.on('error', (err) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[Spotifree Backend] Running on http://0.0.0.0:${PORT}`);
+  // Automatically connect Discord RPC on desktop environments
+  if (process.platform === 'win32' || process.platform === 'darwin' || process.platform === 'linux') {
+    try {
+      discordRpc.connect();
+    } catch {}
+  }
 });

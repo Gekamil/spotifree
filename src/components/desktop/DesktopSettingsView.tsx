@@ -7,6 +7,7 @@ import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
 import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
+import { DiscordPresenceSection } from '../common/DiscordPresenceSection';
 import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
 import { CloudSyncBadge } from '../common/CloudSyncBadge';
 import { RecoverPlaylistsSection } from '../common/RecoverPlaylistsSection';
@@ -1108,7 +1109,12 @@ export const DesktopSettingsView: React.FC = () => {
   );
 
   const renderSocial = () => (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Discord Rich Presence */}
+      <div className="p-4 rounded-2xl bg-[#181818]/60 border border-white/[0.06]">
+        <DiscordPresenceSection variant="desktop" />
+      </div>
+
       {/* Listening with friends */}
       <div className="py-1">
         <ListeningFriendsSection variant="desktop" />

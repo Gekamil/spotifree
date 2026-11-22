@@ -6,6 +6,7 @@ import { DJVoicePicker } from '../common/DJVoicePicker';
 import { MotionCoverSetting } from '../common/MotionCoverSetting';
 import { AboutAppSection } from '../common/AboutAppSection';
 import { ListeningFriendsSection } from '../common/ListeningFriendsSection';
+import { DiscordPresenceSection } from '../common/DiscordPresenceSection';
 import { AdvancedSettingsSection } from '../common/AdvancedSettingsSection';
 import { CloudSyncBadge } from '../common/CloudSyncBadge';
 import { RecoverPlaylistsSection } from '../common/RecoverPlaylistsSection';
@@ -719,6 +720,10 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         </>)}
 
         {page === 'social' && (<>
+        <div className="p-3.5 rounded-2xl bg-[#181818] border border-white/[0.06] mb-4">
+          <DiscordPresenceSection variant="mobile" />
+        </div>
+
         {/* Escuchar juntos: friends listening now / before */}
         <ListeningFriendsSection variant="mobile" />
 

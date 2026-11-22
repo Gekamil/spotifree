@@ -10,6 +10,7 @@
   "scripts": {
     "start": "node server.mjs",
     "server": "node server.mjs",
+    "discord": "node scripts/discordBridge.mjs",
     "dev": "vite",
     "build": "tsc -b && vite build",
     "render-build": "npm install --include=dev && npm run build",
