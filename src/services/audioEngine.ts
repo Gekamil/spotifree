@@ -302,6 +302,8 @@ class AudioEngine {
   };
   private karaokeListeners = new Set<() => void>();
   private karaokeSwapDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private secondaryKaraokeLoadedSource: string | null = null;
+  public isSecondaryKaraokePreparing = false;
 
   public get isTransitionActive(): boolean {
     return this.isCrossfading || this.isTransitioning || (Date.now() - this.lastCrossfadeFinishTime < 3000);
@@ -1973,7 +1975,16 @@ class AudioEngine {
     const code = typeof event === 'number' ? event : (event?.data ?? event);
     // 1: PLAYING, 2: PAUSED, 0: ENDED, 3: BUFFERING, -1: UNSTARTED
     if (playerIndex !== this.activeYtIndex) {
-      // Secondary player state change during crossfade
+      // Secondary player state change during crossfade or karaoke dual-deck
+      if (code === 1 && this.karaokeState.active && this.activeEngine === 'youtube') {
+        this.isSecondaryKaraokePreparing = false;
+        const curLevel = this.karaokeState.vocalLevel ?? 100;
+        const masterVol = this.getEffectiveVolume();
+        const vocalVol = Math.round(masterVol * (curLevel / 100) * 100);
+        if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+          this.ytPlayer.setVolume(vocalVol);
+        }
+      }
       return;
     }
 
@@ -2649,6 +2660,18 @@ class AudioEngine {
       clearTimeout(this.karaokeSwapDebounceTimer);
       this.karaokeSwapDebounceTimer = null;
     }
+    this.secondaryKaraokeLoadedSource = null;
+    this.isSecondaryKaraokePreparing = false;
+    if (this.secondaryYtPlayer && typeof this.secondaryYtPlayer.setVolume === 'function') {
+      try { this.secondaryYtPlayer.setVolume(0); } catch {}
+      try { this.secondaryYtPlayer.pauseVideo(); } catch {}
+    }
+    if (this.secondaryAudio && !this.secondaryAudio.paused) {
+      try {
+        this.secondaryAudio.volume = 0;
+        this.secondaryAudio.pause();
+      } catch {}
+    }
     const clean = AudioEngine.cleanId(trackId);
     const cached = clean ? this.instrumentalCache.get(clean) ?? null : null;
     this.karaokeState = {
@@ -2660,6 +2683,65 @@ class AudioEngine {
       vocalLevel: 100,
     };
     this.emitKaraokeChange();
+  }
+
+  /**
+   * Pre-warms and synchronizes secondary audio/video deck in background at volume 0.
+   * Ensures instant, zero-latency dual-deck volume blending without stutter, buffering or silence.
+   */
+  public async prepareKaraokeDeck(trackArg?: Track | null): Promise<boolean> {
+    const track = trackArg || usePlayerStore.getState().currentTrack;
+    if (!track?.id) return false;
+    const clean = AudioEngine.cleanId(track.id);
+    if (!clean) return false;
+
+    const inst = await this.checkInstrumentalSource(track);
+    if (!inst?.sourceId) return false;
+
+    if (this.activeEngine === 'youtube') {
+      const activeYt = this.ytPlayer;
+      const secYt = this.secondaryYtPlayer;
+      if (!activeYt || !secYt || typeof secYt.loadVideoById !== 'function') return false;
+
+      if (this.secondaryKaraokeLoadedSource === inst.sourceId) {
+        const secState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
+        if (secState !== 1 && secState !== 3 && typeof secYt.playVideo === 'function') {
+          try { secYt.playVideo(); } catch {}
+        }
+        return true;
+      }
+
+      this.secondaryKaraokeLoadedSource = inst.sourceId;
+      this.isSecondaryKaraokePreparing = true;
+
+      const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+      const masterVol = this.getEffectiveVolume();
+      const currentLevel = this.karaokeState.vocalLevel ?? 100;
+      const instRatio = (100 - currentLevel) / 100;
+      const targetInstVol = Math.round(masterVol * instRatio * 100);
+
+      try {
+        if (typeof secYt.setVolume === 'function') secYt.setVolume(targetInstVol);
+        if (typeof secYt.unMute === 'function') secYt.unMute();
+        secYt.loadVideoById({ videoId: inst.sourceId, startSeconds: curTime });
+        if (typeof secYt.playVideo === 'function') secYt.playVideo();
+      } catch (e) {
+        console.warn('[AudioEngine] prepareKaraokeDeck load error:', e);
+      }
+      return true;
+    } else if (this.audio && this.secondaryAudio) {
+      if (inst.sourceId && this.secondaryKaraokeLoadedSource !== inst.sourceId) {
+        this.secondaryKaraokeLoadedSource = inst.sourceId;
+        this.secondaryAudio.src = inst.sourceId;
+        this.secondaryAudio.currentTime = this.audio.currentTime;
+        const currentLevel = this.karaokeState.vocalLevel ?? 100;
+        const instRatio = (100 - currentLevel) / 100;
+        this.secondaryAudio.volume = this.getEffectiveVolume() * instRatio;
+        this.secondaryAudio.play().catch(() => {});
+      }
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -3110,7 +3192,7 @@ class AudioEngine {
    * 100% = original full vocals with singer's full volume
    * Blends dual tracks seamlessly in real-time without buffering, pausing or sudden discrete track hops.
    */
-  public setKaraokeLevel(level: number, track?: Track): void {
+  public async setKaraokeLevel(level: number, track?: Track): Promise<void> {
     const targetTrack = track || usePlayerStore.getState().currentTrack;
     if (!targetTrack) return;
     const clean = AudioEngine.cleanId(targetTrack.id);
@@ -3129,54 +3211,59 @@ class AudioEngine {
     const vocalRatio = clamped / 100;
     const instRatio = (100 - clamped) / 100;
 
-    const vocalVol = Math.round(masterVol * vocalRatio * 100);
-    const instVol = Math.round(masterVol * instRatio * 100);
-
     const activeYt = this.ytPlayer;
     const secYt = this.secondaryYtPlayer;
     const instSource = this.karaokeState.instrumental?.sourceId;
 
+    // Check secondary player status
+    const secState = secYt && typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
+    const isSecPlaying = secState === 1;
+
+    // Vocal volume on primary deck:
+    // If secondary deck is confirmed playing OR vocal level is comfortable (>=40%), scale directly to vocalRatio.
+    // If secondary deck is still buffering/loading, maintain safe floor (0.35 + 0.65*vocalRatio) so music NEVER goes silent!
+    const effectiveVocalRatio = (isSecPlaying || clamped >= 40) ? vocalRatio : (0.35 + 0.65 * vocalRatio);
+    const vocalVol = Math.round(masterVol * effectiveVocalRatio * 100);
+    const instVol = Math.round(masterVol * instRatio * 100);
+    const targetVol = vocalVol;
+
     // 1. YouTube Dual-Deck Synchronized Crossfade
     if (this.activeEngine === 'youtube' && activeYt) {
       if (instSource && secYt) {
-        // Dual audio playback: blend between vocal deck and instrumental deck
+        // Start secondary player ONCE if not already loaded or queued
+        if (this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
+          this.secondaryKaraokeLoadedSource = instSource;
+          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
+          if (typeof secYt.setVolume === 'function') secYt.setVolume(instVol);
+          if (typeof secYt.unMute === 'function') secYt.unMute();
+          if (typeof secYt.loadVideoById === 'function') {
+            secYt.loadVideoById({ videoId: instSource, startSeconds: curTime });
+            if (typeof secYt.playVideo === 'function') secYt.playVideo();
+          }
+        }
+
+        // Real-time simultaneous volume modulation
         if (typeof activeYt.setVolume === 'function') {
           activeYt.setVolume(vocalVol);
         }
+        if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+          this.ytPlayer.setVolume(targetVol);
+        }
+        if (typeof secYt.setVolume === 'function') {
+          secYt.setVolume(instVol);
+        }
 
-        if (clamped < 100) {
-          // If secondary player is not running, start it synchronized to active player's currentTime
-          const secState = typeof secYt.getPlayerState === 'function' ? secYt.getPlayerState() : -1;
-          const curTime = typeof activeYt.getCurrentTime === 'function' ? activeYt.getCurrentTime() : 0;
-          if (secState !== 1 && secState !== 3) {
-            if (typeof secYt.loadVideoById === 'function') {
-              secYt.loadVideoById({ videoId: instSource, startSeconds: curTime });
-              if (typeof secYt.unMute === 'function') secYt.unMute();
-              if (typeof secYt.playVideo === 'function') secYt.playVideo();
-            }
-          } else {
-            // Keep in tight sync if drift > 0.35s
-            const secTime = typeof secYt.getCurrentTime === 'function' ? secYt.getCurrentTime() : curTime;
-            if (Math.abs(curTime - secTime) > 0.35 && typeof secYt.seekTo === 'function') {
-              try { secYt.seekTo(curTime, true); } catch {}
-            }
-          }
-          if (typeof secYt.setVolume === 'function') {
-            secYt.setVolume(instVol);
-          }
-        } else {
-          // At 100% (full original vocals), silence secondary deck
-          if (typeof secYt.setVolume === 'function') secYt.setVolume(0);
-          if (typeof secYt.pauseVideo === 'function') {
-            try { secYt.pauseVideo(); } catch {}
-          }
+        // At 100% full original vocals, silence secondary deck
+        if (clamped === 100 && typeof secYt.setVolume === 'function') {
+          secYt.setVolume(0);
         }
       } else {
-        // Single player mode: attenuate volume smoothly down to a continuous floor (35%)
+        // Single player mode / No secondary instrumental: attenuate volume smoothly down to continuous floor (35%)
         if (typeof activeYt.setVolume === 'function') {
-          const minFloor = 0.35;
-          const targetVol = Math.round(masterVol * (minFloor + (1 - minFloor) * vocalRatio) * 100);
           activeYt.setVolume(targetVol);
+        }
+        if (this.ytPlayer && typeof this.ytPlayer.setVolume === 'function') {
+          this.ytPlayer.setVolume(targetVol);
         }
       }
     }
@@ -3184,14 +3271,19 @@ class AudioEngine {
     // 2. HTML5 Dual-Deck / Audio Elements
     if (this.audio) {
       if (this.secondaryAudio && this.karaokeState.instrumental) {
-        this.audio.volume = masterVol * vocalRatio;
-        this.secondaryAudio.volume = masterVol * instRatio;
-        if (clamped < 100 && this.secondaryAudio.paused) {
+        if (instSource && this.secondaryKaraokeLoadedSource !== instSource && clamped < 100) {
+          this.secondaryKaraokeLoadedSource = instSource;
+          this.secondaryAudio.src = instSource;
           this.secondaryAudio.currentTime = this.audio.currentTime;
           this.secondaryAudio.play().catch(() => {});
-        } else if (clamped === 100 && !this.secondaryAudio.paused) {
-          this.secondaryAudio.pause();
         }
+        this.audio.volume = masterVol * effectiveVocalRatio;
+        this.secondaryAudio.volume = masterVol * instRatio;
+        if (clamped === 100 && !this.secondaryAudio.paused) {
+          this.secondaryAudio.volume = 0;
+        }
+      } else {
+        this.audio.volume = masterVol * effectiveVocalRatio;
       }
     }
 
@@ -3868,10 +3960,20 @@ class AudioEngine {
             this.ytPlayer.unMute();
           }
           if (!this.isCrossfading && typeof this.ytPlayer.setVolume === 'function') {
-            this.ytPlayer.setVolume(Math.round(targetVol * 100));
+            if (this.karaokeState.active) {
+              const curLevel = this.karaokeState.vocalLevel ?? 100;
+              const curVocalVol = Math.round(targetVol * (curLevel / 100) * 100);
+              this.ytPlayer.setVolume(curVocalVol);
+            } else {
+              this.ytPlayer.setVolume(Math.round(targetVol * 100));
+            }
           }
           this.ytPlayer.playVideo();
-          if (this.isCrossfading && this.secondaryYtPlayer && typeof this.secondaryYtPlayer.playVideo === 'function') {
+          if (
+            (this.isCrossfading || (this.karaokeState.active && this.secondaryKaraokeLoadedSource)) &&
+            this.secondaryYtPlayer &&
+            typeof this.secondaryYtPlayer.playVideo === 'function'
+          ) {
             this.secondaryYtPlayer.playVideo();
           }
           this.startProgressTicker();
@@ -3886,10 +3988,18 @@ class AudioEngine {
 
     if (this.audio) {
       if (!this.isCrossfading) {
-        this.audio.volume = targetVol;
+        if (this.karaokeState.active) {
+          const curLevel = this.karaokeState.vocalLevel ?? 100;
+          this.audio.volume = targetVol * (curLevel / 100);
+        } else {
+          this.audio.volume = targetVol;
+        }
       }
       this.audio.play().catch(() => {});
-      if (this.isCrossfading && this.secondaryAudio) {
+      if (
+        (this.isCrossfading || (this.karaokeState.active && this.secondaryKaraokeLoadedSource)) &&
+        this.secondaryAudio
+      ) {
         this.secondaryAudio.play().catch(() => {});
       }
     }

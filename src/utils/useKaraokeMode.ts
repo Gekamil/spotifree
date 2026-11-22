@@ -19,9 +19,12 @@ export function useKaraokeMode(track: Track | null | undefined, enabled: boolean
   useEffect(() => {
     if (!enabled || !track?.id || !track?.name) return;
     let cancelled = false;
-    audioEngine.checkInstrumentalSource(track).then(() => {
+    audioEngine.checkInstrumentalSource(track).then((cand) => {
       if (!cancelled) {
         setState(audioEngine.getKaraokeState(track.id));
+        if (cand?.sourceId) {
+          void audioEngine.prepareKaraokeDeck(track);
+        }
       }
     });
     return () => {

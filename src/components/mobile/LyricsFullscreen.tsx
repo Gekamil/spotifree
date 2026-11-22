@@ -9,6 +9,7 @@ import type { Track } from '../../types/spotify';
 import { useKaraokeMode } from '../../utils/useKaraokeMode';
 import { getSynchronizedLyricProgress } from '../../utils/lyricsService';
 import { usePlayerStore } from '../../store/usePlayerStore';
+import { audioEngine } from '../../services/audioEngine';
 
 export interface LyricLine {
   timeMs: number;
@@ -71,10 +72,15 @@ export function LyricsFullscreen(p: Props) {
     return () => clearTimeout(t);
   }, [p.open, p.activeIndex, following]);
 
-  // Opening always starts following the song
+  // Opening always starts following the song and pre-warms karaoke deck
   useEffect(() => {
-    if (p.open) setFollowing(true);
-  }, [p.open]);
+    if (p.open) {
+      setFollowing(true);
+      if (p.track?.id) {
+        void audioEngine.prepareKaraokeDeck(p.track);
+      }
+    }
+  }, [p.open, p.track?.id]);
 
   useEffect(() => () => {
     if (resumeTimer.current) clearTimeout(resumeTimer.current);
@@ -108,15 +114,15 @@ export function LyricsFullscreen(p: Props) {
     const ratio = 1 - Math.max(0, Math.min(1, relY / rect.height));
     const newLevel = Math.round(ratio * 100);
     setDragLevel(newLevel);
-    if (sliderRafId.current) cancelAnimationFrame(sliderRafId.current);
-    sliderRafId.current = requestAnimationFrame(() => {
-      karaoke.setLevel(newLevel);
-    });
+    void karaoke.setLevel(newLevel);
   };
 
   const handleSliderPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     setIsDraggingSlider(true);
-    try { (e.target as HTMLElement).setPointerCapture?.(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId); } catch {}
+    if (p.track) {
+      void audioEngine.prepareKaraokeDeck(p.track);
+    }
     updateSliderFromClientY(e.clientY);
   };
 
@@ -128,11 +134,17 @@ export function LyricsFullscreen(p: Props) {
   const handleSliderPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     setIsDraggingSlider(false);
     setDragLevel(null);
-    try { (e.target as HTMLElement).releasePointerCapture?.(e.pointerId); } catch {}
+    try { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); } catch {}
   };
 
   const handleToggleKaraoke = () => {
-    setShowKaraokeSlider((prev) => !prev);
+    setShowKaraokeSlider((prev) => {
+      const next = !prev;
+      if (next && p.track) {
+        void audioEngine.prepareKaraokeDeck(p.track);
+      }
+      return next;
+    });
   };
 
   return createPortal(
