@@ -72,4 +72,17 @@ describe('Spotifree v0.6.8: Spotify Live Sessions DJ Interface & Instant Thinkin
     assert.ok(aiDJServiceFile.includes('if (isDJSessionStarting)'), 'Guards against actual concurrent startup without blocking UI isThinking');
     assert.ok(musicTaggingFile.includes('if (shuffledUser.length >= count)'), 'Instant return from user library tracks without network search');
   });
+
+  it('7. Style Selector & Cambiar Rollo Improvements: No stars, diverse vibes & enlarged banner typography', () => {
+    // Zero stars on Cambiar rollo
+    assert.ok(!aidjViewFile.includes('text-[#1ed760] text-xs">✦'), 'Cambiar rollo must NOT have sparkle/star icon');
+    assert.ok(aidjViewFile.includes('showVibeDrawer'), 'Cambiar rollo opens vibe selector drawer');
+    assert.ok(aidjViewFile.includes('DJ_VIBE_PRESETS'), 'Uses clean vibe presets');
+
+    // Mobile layout banner text size
+    assert.ok(
+      mobileLayoutFile.includes('text-[16px]') || mobileLayoutFile.includes('text-[17px]') || mobileLayoutFile.includes('text-base') || mobileLayoutFile.includes('text-lg'),
+      'Mobile DJ banner text must be visibly enlarged'
+    );
+  });
 });

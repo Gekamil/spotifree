@@ -84,15 +84,18 @@ export interface AIDJState {
   nextSegment: () => Promise<void>;
 }
 
-// Preset vibes for clean Spotify chips (NO EMOJIS, pure Spotify aesthetic)
+// Preset vibes for clean Spotify chips (pure Spotify aesthetic)
 export const DJ_VIBE_PRESETS = [
-  { id: 'descubrimiento', label: 'Descubrimiento', query: 'descubrimiento novedades recomendaciones' },
-  { id: 'pop', label: 'Pop actual', query: 'pop exitos pop en espanol' },
+  { id: 'sorprendeme', label: 'Sorpréndeme', query: 'sorprendeme variedad novedades exitos' },
   { id: 'urbano', label: 'Urbano latino', query: 'reggaeton trap urbano latino para bailar' },
+  { id: 'pop', label: 'Pop actual', query: 'pop exitos pop en espanol' },
+  { id: 'descubrimiento', label: 'Descubrimiento', query: 'descubrimiento novedades recomendaciones' },
   { id: 'entreno', label: 'Para entrenar', query: 'gym motivacion entrenamiento a tope' },
-  { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
   { id: 'chill', label: 'Chill out', query: 'novo amor cigarettes after sex indie folk acustico calma' },
   { id: 'clasicos', label: 'Clásicos', query: 'clasicos canciones de siempre exitos de siempre' },
+  { id: 'enfoque', label: 'Concentración', query: 'lofi instrumental para concentrarme y estudiar' },
+  { id: 'rock', label: 'Rock & Indie', query: 'rock indie clasicos guitarras' },
+  { id: 'electro', label: 'Electrónica', query: 'electronic edm house techno club dance' },
 ];
 
 let speechRecognitionInstance: any = null;
@@ -1472,8 +1475,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     const targetTag = resolveHashtagFromPrompt(promptText);
     set({ currentHashtag: targetTag });
 
+    const previousIds = new Set(get().djTracks.map((t) => t.id));
     const [hashtagSet, groqResult] = await Promise.all([
-      getCuratedSetForHashtag(targetTag, 15),
+      getCuratedSetForHashtag(targetTag, 15, previousIds),
       callGroqDJ({
         action: 'recommend',
         prompt: promptText,

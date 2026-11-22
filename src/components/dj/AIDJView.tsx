@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import type { Track } from '../../types/spotify';
 import { SpotifyDJVisualizer } from './SpotifyDJVisualizer';
 import { InteractiveMusicWaves } from './InteractiveMusicWaves';
-import { useAIDJStore, prefetchQuickVibeVoices } from '../../services/aiDJService';
+import { useAIDJStore, prefetchQuickVibeVoices, DJ_VIBE_PRESETS } from '../../services/aiDJService';
 import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { getUserDynamicVibeChips } from '../../services/musicTaggingService';
 import { usePlayerStore } from '../../store/usePlayerStore';
@@ -16,6 +16,7 @@ import {
   CloseNativeIcon,
   AddTrackNativeIcon,
   CheckTrackNativeIcon,
+  ShuffleNativeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
@@ -74,23 +75,23 @@ const DJPlaybackScrubber: React.FC<{ fallbackDurationMs?: number }> = ({ fallbac
   };
 
   return (
-    <div className="space-y-1 w-full px-0.5" onClick={(e) => e.stopPropagation()}>
+    <div className="space-y-1.5 w-full px-0.5" onClick={(e) => e.stopPropagation()}>
       <div
         onClick={handleSeek}
-        className="group relative w-full h-2.5 flex items-center cursor-pointer touch-none"
+        className="group relative w-full h-3 flex items-center cursor-pointer touch-none py-1"
       >
-        <div className="w-full h-1 bg-white/20 rounded-full overflow-hidden">
+        <div className="w-full h-1 sm:h-1.5 bg-white/20 rounded-full overflow-hidden">
           <div
             className="h-full bg-white group-hover:bg-[#1ed760] transition-colors rounded-full"
             style={{ width: `${pct}%` }}
           />
         </div>
         <div
-          className="absolute w-2.5 h-2.5 bg-white rounded-full shadow -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="absolute w-3 h-3 bg-white rounded-full shadow-md -ml-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
           style={{ left: `${pct}%` }}
         />
       </div>
-      <div className="flex items-center justify-between text-[10.5px] font-mono tabular-nums text-white/50 px-0.5">
+      <div className="flex items-center justify-between text-[11px] font-['SpotifyMixUI'] tabular-nums text-[#b3b3b3] font-medium px-0.5">
         <span>{formatDuration(progressMs)}</span>
         <span>{formatDuration(duration)}</span>
       </div>
@@ -168,6 +169,27 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
   const djQueueStartYRef = useRef(0);
   const djQueueCurrentYRef = useRef(0);
   const djQueueScrollRef = useRef<HTMLDivElement>(null);
+
+  const [showVibeDrawer, setShowVibeDrawer] = useState(false);
+  const [isVibeRendered, setIsVibeRendered] = useState(false);
+  const [isVibeAnimated, setIsVibeAnimated] = useState(false);
+
+  // Smooth bottom sheet glide transition for the vibe selector
+  useEffect(() => {
+    if (showVibeDrawer) {
+      setIsVibeRendered(true);
+      const raf = requestAnimationFrame(() => {
+        setIsVibeAnimated(true);
+      });
+      return () => cancelAnimationFrame(raf);
+    } else {
+      setIsVibeAnimated(false);
+      const timer = setTimeout(() => {
+        setIsVibeRendered(false);
+      }, 350);
+      return () => clearTimeout(timer);
+    }
+  }, [showVibeDrawer]);
 
   const handleDJQueueTouchStart = (e: React.TouchEvent) => {
     djQueueStartYRef.current = e.touches[0].clientY;
@@ -503,14 +525,14 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
         {/* =========================================================================
             SPOTIFY LIVE SESSIONS INTEGRATED PLAYER CARD
             ========================================================================= */}
-        <div className="w-full max-w-md sm:max-w-lg mx-auto bg-[#181818]/90 sm:bg-[#181818]/80 backdrop-blur-2xl border border-white/10 rounded-2xl p-3 sm:p-4 shadow-[0_16px_40px_rgba(0,0,0,0.65)] shrink-0 z-20 space-y-3 transition-all mb-1 sm:mb-2">
+        <div className="w-full max-w-md sm:max-w-lg mx-auto bg-[#181818]/95 sm:bg-[#181818]/90 backdrop-blur-3xl border border-white/[0.08] rounded-2xl p-3.5 sm:p-4 shadow-[0_20px_50px_rgba(0,0,0,0.7)] shrink-0 z-20 space-y-3 transition-all mb-1 sm:mb-2">
           {/* Top Row: Track Artwork + Name/Artist + Like Button */}
           <div className="flex items-center justify-between gap-3">
             <div
               onClick={handleOpenPlayer}
               className="flex items-center min-w-0 flex-1 cursor-pointer group"
             >
-              <div className="w-12 h-12 rounded-[8px] overflow-hidden bg-[#242424] shrink-0 shadow-md mr-3 relative">
+              <div className="w-13 h-13 sm:w-14 sm:h-14 rounded-[10px] overflow-hidden bg-[#242424] shrink-0 shadow-lg mr-3 relative border border-white/10">
                 <img
                   src={activeArtwork}
                   alt={currentTrack?.name || 'DJ'}
@@ -519,10 +541,10 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 />
               </div>
               <div className="flex flex-col justify-center min-w-0 text-left">
-                <span className="font-bold text-white text-[13.5px] sm:text-[14px] leading-tight truncate font-['SpotifyMixUITitle'] group-hover:underline">
+                <span className="font-bold text-white text-[15px] sm:text-base leading-snug truncate font-['SpotifyMixUITitle'] group-hover:underline">
                   {currentTrack?.name || (isThinking ? 'Preparando música...' : 'DJ Spotifree')}
                 </span>
-                <span className="text-[11.5px] sm:text-xs text-[#b3b3b3] truncate leading-tight mt-0.5 font-['SpotifyMixUI']">
+                <span className="text-xs sm:text-[13px] text-[#b3b3b3] group-hover:text-white transition-colors truncate leading-tight mt-0.5 font-['SpotifyMixUI']">
                   {currentTrack?.artists?.map((a) => a.name).join(', ') || 'Spotifree DJ'}
                 </span>
               </div>
@@ -532,13 +554,13 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               <button
                 type="button"
                 onClick={() => toggleLike(currentTrack.id, currentTrack)}
-                className="w-8 h-8 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer shrink-0"
+                className="w-9 h-9 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-95 transition-transform cursor-pointer shrink-0"
                 title={isCurrentLiked ? 'Quitar de tus Me Gusta' : 'Añadir a tus Me Gusta'}
               >
                 {isCurrentLiked ? (
-                  <CheckTrackNativeIcon size={20} className="text-[#1ed760]" />
+                  <CheckTrackNativeIcon size={22} className="text-[#1ed760]" />
                 ) : (
-                  <AddTrackNativeIcon size={20} className="text-white/80" />
+                  <AddTrackNativeIcon size={22} className="text-[#b3b3b3] hover:text-white transition-colors" />
                 )}
               </button>
             )}
@@ -552,11 +574,11 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
             {/* Left: Cambiar rollo button */}
             <button
               type="button"
-              onClick={() => void nextSegment()}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-[11px] sm:text-xs font-bold text-white transition-all cursor-pointer border border-white/10 shrink-0"
-              title={upcomingSegment ? `Siguiente: ${upcomingSegment.title}` : 'Cambiar de rollo'}
+              onClick={() => setShowVibeDrawer(true)}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/20 active:scale-95 text-xs font-bold text-white transition-all cursor-pointer border border-white/10 shrink-0 group"
+              title="Cambiar rollo y elegir estilo"
             >
-              <span className="text-[#1ed760] text-xs">✦</span>
+              <ShuffleNativeIcon size={14} className="text-[#b3b3b3] group-hover:text-white transition-colors" />
               <span>Cambiar rollo</span>
             </button>
 
@@ -568,19 +590,19 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 className="w-9 h-9 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-all cursor-pointer"
                 title="Anterior"
               >
-                <PrevNativeIcon size={20} />
+                <PrevNativeIcon size={22} />
               </button>
 
               <button
                 type="button"
                 onClick={togglePlay}
-                className="w-11 h-11 sm:w-12 sm:h-12 rounded-full bg-white hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-lg transition-transform cursor-pointer"
+                className="w-12 h-12 sm:w-13 sm:h-13 rounded-full bg-white hover:scale-105 active:scale-95 text-black flex items-center justify-center shadow-xl transition-transform cursor-pointer"
                 title={isPlaying ? 'Pausar' : 'Reproducir'}
               >
                 {isPlaying ? (
-                  <PauseNativeIcon size={22} className="text-black" />
+                  <PauseNativeIcon size={24} className="text-black" />
                 ) : (
-                  <PlayNativeIcon size={22} className="text-black ml-0.5" />
+                  <PlayNativeIcon size={24} className="text-black ml-0.5" />
                 )}
               </button>
 
@@ -590,7 +612,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 className="w-9 h-9 flex items-center justify-center text-[#b3b3b3] hover:text-white active:scale-90 transition-all cursor-pointer"
                 title="Siguiente"
               >
-                <NextNativeIcon size={20} />
+                <NextNativeIcon size={22} />
               </button>
             </div>
 
@@ -599,15 +621,96 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
               type="button"
               onClick={() => setShowQueueDrawer(true)}
               className={`w-9 h-9 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-95 shrink-0 ${
-                showQueueDrawer ? 'text-[#1ed760] bg-white/15' : 'text-white/70 hover:text-white hover:bg-white/10'
+                showQueueDrawer ? 'text-[#1ed760] bg-white/15' : 'text-[#b3b3b3] hover:text-white hover:bg-white/10'
               }`}
               title="Ver cola del DJ"
             >
-              <QueueNativeIcon size={19} />
+              <QueueNativeIcon size={20} />
             </button>
           </div>
         </div>
       </main>
+
+      {/* Vibe / Style Selector Drawer */}
+      {isVibeRendered && (
+        <div
+          className={`fixed inset-0 z-50 bg-black/75 backdrop-blur-sm sm:backdrop-blur-none sm:bg-black/50 flex flex-col justify-end sm:block select-none transition-opacity duration-350 ease-out ${
+            isVibeAnimated ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+          onClick={() => setShowVibeDrawer(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className={`bg-[#181818] sm:bg-[#181818]/95 sm:backdrop-blur-2xl rounded-t-3xl sm:rounded-2xl max-h-[82vh] sm:max-h-[580px] sm:w-[440px] sm:absolute sm:bottom-20 sm:left-1/2 sm:-translate-x-1/2 sm:border sm:border-white/15 sm:shadow-[0_24px_70px_rgba(0,0,0,0.9)] flex flex-col p-4 sm:p-5 pb-8 sm:pb-5 transform transition-all duration-400 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+              isVibeAnimated
+                ? 'translate-y-0 opacity-100 scale-100'
+                : 'translate-y-full opacity-50 scale-[0.98] sm:translate-y-4 sm:opacity-0 sm:scale-95'
+            }`}
+          >
+            {/* Top Drag Indicator Pill (Mobile only) */}
+            <div
+              className="w-10 h-1 bg-white/30 hover:bg-white/50 rounded-full mx-auto mb-3 cursor-grab active:cursor-grabbing transition-all sm:hidden"
+              onClick={() => setShowVibeDrawer(false)}
+              title="Cerrar"
+            />
+
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3.5 border-b border-white/10">
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-white font-['SpotifyMixUITitle']">
+                  Cambiar de rollo
+                </h3>
+                <p className="text-xs text-[#b3b3b3] mt-0.5 font-['SpotifyMixUI']">
+                  Elige qué estilo te apetece o déjate sorprender
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVibeDrawer(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-[#b3b3b3] hover:text-white hover:bg-white/10 active:scale-95 transition-all"
+                title="Cerrar"
+              >
+                <CloseNativeIcon size={16} />
+              </button>
+            </div>
+
+            {/* Vibes List */}
+            <div className="overflow-y-auto mt-3 space-y-2 pr-1 max-h-[52vh] sm:max-h-[420px] scrollbar-thin">
+              {DJ_VIBE_PRESETS.map((vibe) => {
+                const isSurprise = vibe.id === 'sorprendeme';
+                return (
+                  <button
+                    key={vibe.id}
+                    type="button"
+                    onClick={() => {
+                      setShowVibeDrawer(false);
+                      void useAIDJStore.getState().handleUserPrompt(vibe.label);
+                    }}
+                    className={`w-full flex items-center justify-between p-3 rounded-xl transition-all cursor-pointer text-left active:scale-[0.98] ${
+                      isSurprise
+                        ? 'bg-[#1ed760]/15 border border-[#1ed760]/40 hover:bg-[#1ed760]/25'
+                        : 'bg-white/5 hover:bg-white/10 border border-white/5'
+                    }`}
+                  >
+                    <div className="min-w-0 pr-2">
+                      <span className={`block font-bold text-sm sm:text-base font-['SpotifyMixUITitle'] truncate ${
+                        isSurprise ? 'text-[#1ed760]' : 'text-white'
+                      }`}>
+                        {vibe.label}
+                      </span>
+                    </div>
+                    <div className={`w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${
+                      isSurprise ? 'bg-[#1ed760] text-black' : 'bg-white/10 text-white'
+                    }`}>
+                      <ShuffleNativeIcon size={13} className={isSurprise ? 'text-black' : 'text-white'} />
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Queue Drawer */}
       {isQueueRendered && (

@@ -488,6 +488,18 @@ export function analyzeUserLibraryByHashtags(): Map<MusicHashtag, Track[]> {
 export function resolveHashtagFromPrompt(prompt: string): MusicHashtag {
   const p = prompt.toLowerCase();
 
+  // If user says "sorpréndeme" / "sorpresa" / "aleatorio", pick a diverse genre that changes the vibe genuinely
+  if (/sorpr[eé]ndeme|sorpresa|aleatorio|random|otra\s+cosa/i.test(p)) {
+    const surpriseTags: MusicHashtag[] = ['#reggaeton', '#chill', '#trap', '#electro', '#indie', '#clasicos', '#rock', '#entreno', '#corridos'];
+    return surpriseTags[Math.floor(Math.random() * surpriseTags.length)];
+  }
+
+  if (/descubrimiento|novedades|recomendaciones/i.test(p)) {
+    const discoveryTags: MusicHashtag[] = ['#indie', '#trap', '#reggaeton', '#electro', '#chill'];
+    return discoveryTags[Math.floor(Math.random() * discoveryTags.length)];
+  }
+
+  if (/pop|exitos|top/i.test(p)) return '#reggaeton';
   if (/reggaeton|perreo|bailar|fiesta|dembow|bellakeo|latino/i.test(p)) return '#reggaeton';
   if (/chill|relax|tranquil|calma|suave|acustico|desconectar/i.test(p)) return '#chill';
   if (/trap|drill|phonk|barras|duro/i.test(p)) return '#trap';
