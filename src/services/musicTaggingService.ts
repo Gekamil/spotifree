@@ -1364,6 +1364,10 @@ export async function getInitialDJLibraryRemix(count: number = 15): Promise<Trac
   // If user has tracks in their library:
   if (allUserTracks.length > 0) {
     const shuffledUser = [...allUserTracks].sort(() => Math.random() - 0.5);
+    // Instant return if user already has enough tracks, avoiding slow network searches
+    if (shuffledUser.length >= count) {
+      return filterMusicTracksOnly(shuffledUser).slice(0, count);
+    }
     const userQuota = Math.min(Math.floor(count * 0.75), shuffledUser.length);
     const result: Track[] = shuffledUser.slice(0, userQuota);
     const resultSetIds = new Set(result.map((t) => t.id));

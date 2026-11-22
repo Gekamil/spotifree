@@ -96,6 +96,7 @@ export const DJ_VIBE_PRESETS = [
 ];
 
 let speechRecognitionInstance: any = null;
+let isDJSessionStarting = false;
 
 interface IntentAnalysis {
   speech: string;
@@ -205,12 +206,12 @@ async function djSpeak(text: string, set: (p: Partial<AIDJState>) => void) {
   audioEngine.setDuckedVolume(0.18);
   let voiceTimer: any = null;
   try {
-    // If voice has not started outputting sound within 2.5s, restore music volume so user never waits in low volume
+    // If voice has not started outputting sound within 1.2s, restore music volume so user never waits in low volume
     voiceTimer = setTimeout(() => {
       if (!introVoiceHeard) {
         audioEngine.restoreDuckedVolume(800);
       }
-    }, 2500);
+    }, 1200);
 
     const speakPromise = aiDJVoiceService.speak(text, {
       onWord: (_w, partial) => set({ displayedTranscript: partial }),
@@ -815,172 +816,176 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
    */
   startDJSession: async (forceReset = false, options?: { speakFirst?: boolean }) => {
     const currentState = get();
-    // Guard against simultaneous initializations
-    if (currentState.isThinking) {
-      return;
-    }
     if (!forceReset && currentState.isDJModeActive && currentState.djTracks.length > 0) {
       // Session already active! Ensure music is playing if paused
       const p = usePlayerStore.getState();
-      if (!p.isPlaying) {
-        const trackToPlay = currentState.djTracks[0];
-        if (trackToPlay) {
-          p.playTrack(trackToPlay, currentState.djTracks, 'dj-session');
-        }
+      if (!p.isPlaying && currentState.djTracks[0]) {
+        p.playTrack(currentState.djTracks[0], currentState.djTracks, 'dj-session');
       }
+      set({ isThinking: false });
       return;
     }
 
-    // Mutual Exclusivity: Starting DJ session turns off shuffle mode
-    try {
-      const pState = usePlayerStore.getState();
-      if (pState.isShuffle || pState.shuffleMode !== 'off') {
-        usePlayerStore.setState({
-          shuffleMode: 'off',
-          isShuffle: false,
-          playedInShuffle: [],
-          preselectedNextTrackId: null,
-        });
-      }
-    } catch {}
-
-    const dominantTag = getDominantUserHashtag();
-    const cleanName = firstName();
-    const run = ++introRun;
-    introPending = true;
-    introVoiceHeard = false;
-
-    set({
-      isDJModeActive: true,
-      visualizerState: 'speaking',
-      voiceLevel: 0.35,
-      songsPlayedInSet: 0,
-      currentHashtag: dominantTag,
-      isThinking: true,
-      setMode: 'personal',
-      currentMessage: '',
-      displayedTranscript: '',
-    });
-    // Defer prefetching quick vibe voices to leave 100% network bandwidth and audio channels for the initial track & greeting
-    setTimeout(() => {
-      prefetchQuickVibeVoices(cleanName);
-    }, 4000);
-
-    // 1. Build the set in blocks from the user's real listening (fresh order every time)
-    let tracks: Track[] = [];
-    let segments: DJSegment[] = [];
-    try {
-      const built = await buildSegmentedDJSet({ userName: cleanName });
-      tracks = filterMusicTracksOnly(built.tracks);
-      segments = built.segments;
-    } catch (e) {
-      console.warn('[AIDJ] Segmented set failed, using library remix:', e);
+    // Guard against simultaneous initializations
+    if (isDJSessionStarting) {
+      return;
     }
-    if (run !== introRun) return; // user left or restarted
+    isDJSessionStarting = true;
 
-    if (tracks.length < 3) {
+    try {
+      // Mutual Exclusivity: Starting DJ session turns off shuffle mode
       try {
-        tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
-      } catch (e) {
-        console.warn('[AIDJ] Remix fallback failed:', e);
-      }
-      if (run !== introRun) return;
-    }
-
-    // Comprehensive fallback: If tracks are still empty, gather from all available playlists and cache
-    if (tracks.length === 0) {
-      try {
-        const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
-        for (const pl of playlists) {
-          if (pl.tracks?.items?.length) {
-            tracks.push(...filterMusicTracksOnly(pl.tracks.items));
-            if (tracks.length >= 10) break;
-          }
-        }
-        if (tracks.length === 0) {
-          Object.values(playlistDetailsCache).forEach((pl: any) => {
-            if (pl?.tracks?.items?.length) {
-              tracks.push(...(filterMusicTracksOnly(pl.tracks.items as Track[]) as Track[]));
-            }
+        const pState = usePlayerStore.getState();
+        if (pState.isShuffle || pState.shuffleMode !== 'off') {
+          usePlayerStore.setState({
+            shuffleMode: 'off',
+            isShuffle: false,
+            playedInShuffle: [],
+            preselectedNextTrackId: null,
           });
         }
       } catch {}
-    }
 
-    if (segments.length === 0 && tracks.length > 0) {
-      segments = [
-        {
-          id: `seg-${Date.now()}`,
-          kind: 'liked',
-          title: 'Tu mezcla',
-          reason: 'canciones de su biblioteca',
-          startIndex: 0,
-          length: tracks.length,
-          intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true),
-        },
-      ];
-    }
-    // If filtering removed songs, keep block boundaries inside the list
-    segments = segments.filter((s) => s.startIndex < tracks.length);
+      const dominantTag = getDominantUserHashtag();
+      const cleanName = firstName();
+      const run = ++introRun;
+      introPending = true;
+      introVoiceHeard = false;
 
-    const firstTrack = tracks[0];
-    const introText = cleanTextForNaturalTTS(segments[0]?.intro || buildSegmentIntro({ kind: 'liked' }, firstTrack, cleanName, true));
-    announcedSegments.clear();
-    if (segments[0]) announcedSegments.add(segments[0].id);
+      set({
+        isDJModeActive: true,
+        visualizerState: 'speaking',
+        voiceLevel: 0.35,
+        songsPlayedInSet: 0,
+        currentHashtag: dominantTag,
+        isThinking: true,
+        setMode: 'personal',
+        currentMessage: '',
+        displayedTranscript: '',
+      });
+      // Defer prefetching quick vibe voices to leave 100% network bandwidth and audio channels for the initial track & greeting
+      setTimeout(() => {
+        prefetchQuickVibeVoices(cleanName);
+      }, 4000);
 
-    set({
-      djTracks: tracks,
-      segments,
-      activeSegmentId: segments[0]?.id || null,
-      currentSetTitle: segments[0]?.title || 'Tu mezcla',
-      isThinking: false,
-    });
-    polishSegmentIntros(segments, tracks, set as any);
-    resolveTrackCoversBatch(tracks).catch(() => {});
-
-    const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    set({
-      chatHistory: [
-        {
-          id: 'msg-initial',
-          sender: 'dj',
-          text: introText,
-          timestamp: timeStr,
-          curatedSetTitle: segments[0]?.title || 'Tu mezcla',
-          trackCount: tracks.length,
-        },
-      ],
-    });
-
-    get().stopVoiceListening();
-    const shouldSpeak = options?.speakFirst ?? true;
-
-    // Start music playback immediately with ducked volume so user NEVER experiences dead silence!
-    if (tracks.length > 0) {
-      if (shouldSpeak) {
-        audioEngine.setDuckedVolume(0.18);
-      }
-      usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
-    }
-
-    // Speak intro greeting seamlessly over the ducked track intro
-    if (shouldSpeak) {
+      // 1. Build the set in blocks from the user's real listening (fresh order every time)
+      let tracks: Track[] = [];
+      let segments: DJSegment[] = [];
       try {
-        await djSpeak(introText, set);
-      } catch (err) {
-        console.warn('[AIDJ] Greeting error:', err);
-      } finally {
-        if (run === introRun) {
-          introPending = false;
-          audioEngine.restoreDuckedVolume(1200);
-          set({
-            visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle',
-            voiceLevel: 0,
-          });
-        }
+        const built = await buildSegmentedDJSet({ userName: cleanName });
+        tracks = filterMusicTracksOnly(built.tracks);
+        segments = built.segments;
+      } catch (e) {
+        console.warn('[AIDJ] Segmented set failed, using library remix:', e);
       }
-    } else {
-      if (run === introRun) introPending = false;
+      if (run !== introRun) return; // user left or restarted
+
+      if (tracks.length < 3) {
+        try {
+          tracks = filterMusicTracksOnly(await getInitialDJLibraryRemix(15));
+        } catch (e) {
+          console.warn('[AIDJ] Remix fallback failed:', e);
+        }
+        if (run !== introRun) return;
+      }
+
+      // Comprehensive fallback: If tracks are still empty, gather from all available playlists and cache
+      if (tracks.length === 0) {
+        try {
+          const { playlists, playlistDetailsCache } = useSpotifyDataStore.getState();
+          for (const pl of playlists) {
+            if (pl.tracks?.items?.length) {
+              tracks.push(...filterMusicTracksOnly(pl.tracks.items));
+              if (tracks.length >= 10) break;
+            }
+          }
+          if (tracks.length === 0) {
+            Object.values(playlistDetailsCache).forEach((pl: any) => {
+              if (pl?.tracks?.items?.length) {
+                tracks.push(...(filterMusicTracksOnly(pl.tracks.items as Track[]) as Track[]));
+              }
+            });
+          }
+        } catch {}
+      }
+
+      if (segments.length === 0 && tracks.length > 0) {
+        segments = [
+          {
+            id: `seg-${Date.now()}`,
+            kind: 'liked',
+            title: 'Tu mezcla',
+            reason: 'canciones de su biblioteca',
+            startIndex: 0,
+            length: tracks.length,
+            intro: buildSegmentIntro({ kind: 'liked' }, tracks[0], cleanName, true),
+          },
+        ];
+      }
+      // If filtering removed songs, keep block boundaries inside the list
+      segments = segments.filter((s) => s.startIndex < tracks.length);
+
+      const firstTrack = tracks[0];
+      const introText = cleanTextForNaturalTTS(segments[0]?.intro || buildSegmentIntro({ kind: 'liked' }, firstTrack, cleanName, true));
+      announcedSegments.clear();
+      if (segments[0]) announcedSegments.add(segments[0].id);
+
+      set({
+        djTracks: tracks,
+        segments,
+        activeSegmentId: segments[0]?.id || null,
+        currentSetTitle: segments[0]?.title || 'Tu mezcla',
+        isThinking: false,
+      });
+      polishSegmentIntros(segments, tracks, set as any);
+      resolveTrackCoversBatch(tracks).catch(() => {});
+
+      const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      set({
+        chatHistory: [
+          {
+            id: 'msg-initial',
+            sender: 'dj',
+            text: introText,
+            timestamp: timeStr,
+            curatedSetTitle: segments[0]?.title || 'Tu mezcla',
+            trackCount: tracks.length,
+          },
+        ],
+      });
+
+      get().stopVoiceListening();
+      const shouldSpeak = options?.speakFirst ?? true;
+
+      // Start music playback immediately with ducked volume so user NEVER experiences dead silence!
+      if (tracks.length > 0) {
+        if (shouldSpeak) {
+          audioEngine.setDuckedVolume(0.18);
+        }
+        usePlayerStore.getState().playTrack(tracks[0], tracks, 'dj-session');
+      }
+
+      // Speak intro greeting seamlessly over the ducked track intro
+      if (shouldSpeak) {
+        try {
+          await djSpeak(introText, set);
+        } catch (err) {
+          console.warn('[AIDJ] Greeting error:', err);
+        } finally {
+          if (run === introRun) {
+            introPending = false;
+            audioEngine.restoreDuckedVolume(1200);
+            set({
+              visualizerState: usePlayerStore.getState().isPlaying ? 'playing' : 'idle',
+              voiceLevel: 0,
+            });
+          }
+        }
+      } else {
+        if (run === introRun) introPending = false;
+      }
+    } finally {
+      isDJSessionStarting = false;
     }
   },
 
@@ -1009,10 +1014,12 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
    * Stop DJ voice and speech listening
    */
   stopDJSession: () => {
+    isDJSessionStarting = false;
     aiDJVoiceService.stopSpeaking();
     get().stopVoiceListening();
     set({
       isDJModeActive: false,
+      isThinking: false,
       visualizerState: 'idle',
       voiceLevel: 0,
       isMicListening: false,

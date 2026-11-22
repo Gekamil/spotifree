@@ -219,7 +219,7 @@ class AIDJVoiceService {
 
   /** Audio (blob URL) + word timings; works with the JSON answer and with plain audio */
   private async fetchSpeech(text: string, lang: string, voice: DJVoiceId, signal?: AbortSignal): Promise<{ url: string; words: WordTiming[] } | null> {
-    const fetchSignal = signal || (AbortSignal.timeout ? AbortSignal.timeout(2800) : undefined);
+    const fetchSignal = signal || (AbortSignal.timeout ? AbortSignal.timeout(1500) : undefined);
     const res = await fetch(`/api/tts?${this.ttsParams(text, lang, voice).toString()}`, { signal: fetchSignal });
     if (!res.ok) throw new Error(`TTS API returned ${res.status}`);
     if ((res.headers.get('content-type') || '').includes('json')) {

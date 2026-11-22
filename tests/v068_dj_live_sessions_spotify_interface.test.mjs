@@ -51,8 +51,8 @@ describe('Spotifree v0.6.8: Spotify Live Sessions DJ Interface & Instant Thinkin
 
   it('4. djSegments avoids blocking network delays when local library tracks exist', () => {
     assert.ok(
-      djSegmentsFile.includes('library.length < 12 && blocks.length < 2'),
-      'djSegments should only query external discovery if library lacks sufficient blocks'
+      djSegmentsFile.includes('library.length < 4 && blocks.length === 0'),
+      'djSegments should only query external discovery if library is nearly empty and has no blocks'
     );
   });
 
@@ -62,5 +62,14 @@ describe('Spotifree v0.6.8: Spotify Live Sessions DJ Interface & Instant Thinkin
     assert.ok(!aidjViewFile.includes('isChatRendered'), 'Should NOT render chat drawer in AIDJView');
     assert.ok(aidjViewFile.includes('DJPlaybackScrubber'), 'Should keep integrated player scrubber');
     assert.ok(aidjViewFile.includes('Cambiar rollo'), 'Should keep native Cambiar rollo button');
+  });
+
+  it('6. Deadlock prevention: startDJSession does not deadlock on isThinking and starts instantly', () => {
+    const aiDJServiceFile = fs.readFileSync(path.join(root, 'src/services/aiDJService.ts'), 'utf-8');
+    const musicTaggingFile = fs.readFileSync(path.join(root, 'src/services/musicTaggingService.ts'), 'utf-8');
+
+    assert.ok(aiDJServiceFile.includes('let isDJSessionStarting = false;'), 'Uses module lock instead of aborting when isThinking is preset');
+    assert.ok(aiDJServiceFile.includes('if (isDJSessionStarting)'), 'Guards against actual concurrent startup without blocking UI isThinking');
+    assert.ok(musicTaggingFile.includes('if (shuffledUser.length >= count)'), 'Instant return from user library tracks without network search');
   });
 });

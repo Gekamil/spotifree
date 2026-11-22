@@ -67,9 +67,9 @@ describe('Spotifree v0.6.1: DJ Card Tap Responsiveness & Bulletproof Session Sta
   });
 
   it('3. aiDJService: Concurrency guard, instant ducked playback, and speech safety timeout', () => {
-    // isThinking guard
+    // isThinking / isDJSessionStarting concurrency guard
     assert.ok(
-      aidjServiceSource.includes('if (currentState.isThinking)'),
+      aidjServiceSource.includes('if (currentState.isThinking)') || aidjServiceSource.includes('if (isDJSessionStarting)'),
       'startDJSession must guard against simultaneous concurrent executions'
     );
 

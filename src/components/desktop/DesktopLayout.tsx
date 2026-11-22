@@ -52,7 +52,7 @@ export const DesktopLayout: React.FC = () => {
       }
       setActiveMainTab('dj');
       const dj = useAIDJStore.getState();
-      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
+      if (!dj.isDJModeActive || dj.djTracks.length === 0) {
         useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
         void dj.startDJSession(false, { speakFirst: true });
       }
@@ -83,7 +83,7 @@ export const DesktopLayout: React.FC = () => {
       }
       setActiveMainTab('dj');
       const dj = useAIDJStore.getState();
-      if ((!dj.isDJModeActive || dj.djTracks.length === 0) && !dj.isThinking) {
+      if (!dj.isDJModeActive || dj.djTracks.length === 0) {
         useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
         void dj.startDJSession(false, { speakFirst: true });
       }
