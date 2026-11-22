@@ -835,6 +835,9 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     }
     isDJSessionStarting = true;
 
+    // Yield immediately to let React mount and paint AIDJView with "Pensando tu sesión..." in 0ms
+    await new Promise((r) => setTimeout(r, 40));
+
     try {
       // Mutual Exclusivity: Starting DJ session turns off shuffle mode
       try {

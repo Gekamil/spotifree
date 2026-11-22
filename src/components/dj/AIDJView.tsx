@@ -22,6 +22,7 @@ import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
 import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 
 interface AIDJViewProps {
   onBack: () => void;
@@ -30,7 +31,7 @@ interface AIDJViewProps {
 }
 
 const getBestTrackArtwork = (track: Track | null | undefined): string => {
-  if (!track) return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
+  if (!track) return SPOTIFY_DJ_COVER_IMAGE;
   const cached = getTrackCoverUrl(track);
   if (cached && !cached.includes('liked-songs')) return cached;
   if (track.album?.images?.[0]?.url && !track.album.images[0].url.includes('liked-songs')) {

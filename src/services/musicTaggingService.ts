@@ -1399,23 +1399,30 @@ export async function getInitialDJLibraryRemix(count: number = 15): Promise<Trac
     const result: Track[] = shuffledUser.slice(0, userQuota);
     const resultSetIds = new Set(result.map((t) => t.id));
 
-    // Fill remaining slots with songs from the exact same artists
+    // Fill remaining slots with songs from the exact same artists in parallel with timeout to avoid multi-second freezes
     const userArtists = Array.from(
       new Set(allUserTracks.map((t) => t.artists?.[0]?.name).filter(Boolean) as string[])
     ).sort(() => Math.random() - 0.5);
 
-    for (const artist of userArtists.slice(0, 4)) {
-      if (result.length >= count) break;
+    const searchPromises = userArtists.slice(0, 4).map(async (artist) => {
       try {
-        const res = await searchSpotify(`artist:"${artist}"`);
-        for (const t of res?.tracks?.items || []) {
-          if (result.length >= count) break;
-          if (!resultSetIds.has(t.id)) {
-            resultSetIds.add(t.id);
-            result.push(t);
-          }
+        const searchPromise = searchSpotify(`artist:"${artist}"`);
+        const timeoutPromise = new Promise<null>((r) => setTimeout(() => r(null), 1200));
+        const res = await Promise.race([searchPromise, timeoutPromise]);
+        return (res as any)?.tracks?.items || [];
+      } catch {
+        return [];
+      }
+    });
+    const searchResults = await Promise.all(searchPromises);
+    for (const items of searchResults) {
+      for (const t of items) {
+        if (result.length >= count) break;
+        if (!resultSetIds.has(t.id)) {
+          resultSetIds.add(t.id);
+          result.push(t);
         }
-      } catch {}
+      }
     }
 
     // Safety fill with remaining user tracks if needed

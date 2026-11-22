@@ -309,7 +309,12 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       const dj = useAIDJStore.getState();
       if (!dj.isDJModeActive || dj.djTracks.length === 0) {
         useAIDJStore.setState({ isDJModeActive: true, isThinking: true, visualizerState: 'speaking', voiceLevel: 0.35 });
-        void dj.startDJSession(false, { speakFirst: true });
+        setTimeout(() => {
+          const currentDJ = useAIDJStore.getState();
+          if (!currentDJ.isDJModeActive || currentDJ.djTracks.length === 0) {
+            void currentDJ.startDJSession(false, { speakFirst: true });
+          }
+        }, 30);
       }
       return;
     }
