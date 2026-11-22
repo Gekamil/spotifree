@@ -144,22 +144,21 @@ export function LyricsFullscreen(p: Props) {
       sliderRafId.current = null;
     }
     if (dragLevel !== null) {
-      void karaoke.setLevel(dragLevel);
+      if (dragLevel === 0) {
+        void karaoke.setLevel(0);
+      } else if (dragLevel === 100) {
+        void karaoke.setLevel(100);
+      } else {
+        void karaoke.setLevel(dragLevel);
+      }
     }
     setDragLevel(null);
     try { (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId); } catch {}
   };
 
   const handleToggleKaraoke = () => {
-    if (!karaoke.active) {
-      setShowKaraokeSlider(false);
-      void karaoke.setLevel(0);
-      void karaoke.toggle();
-    } else {
-      setShowKaraokeSlider(false);
-      void karaoke.setLevel(100);
-      void karaoke.toggle();
-    }
+    setShowKaraokeSlider(false);
+    void karaoke.toggle();
   };
 
   return createPortal(

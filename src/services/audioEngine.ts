@@ -3357,6 +3357,15 @@ class AudioEngine {
     this.activeEngine = 'youtube';
     this.currentVideoId = sourceId;
     this.lastTrackStartTime = Date.now();
+    this.secondaryKaraokeLoadedSource = null;
+    this.isSecondaryKaraokePreparing = false;
+    if (this.secondaryYtPlayer && typeof this.secondaryYtPlayer.pauseVideo === 'function') {
+      try {
+        this.secondaryYtPlayer.setVolume(0);
+        this.secondaryYtPlayer.mute?.();
+        this.secondaryYtPlayer.pauseVideo();
+      } catch {}
+    }
     if (typeof p.unMute === 'function') p.unMute();
     if (typeof p.setVolume === 'function') p.setVolume(isMuted ? 0 : Math.round(this.getEffectiveVolume() * 100));
     const safeSec = startSeconds > 1 ? startSeconds : 0;
@@ -3404,7 +3413,10 @@ class AudioEngine {
         const origId = this.karaokeState.originalSourceId || this.currentVideoId;
         this.karaokeState.originalSourceId = origId;
         if (inst?.sourceId && this.currentVideoId !== inst.sourceId) {
-          await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
+          const ok = await this.seamlessAudioSourceSwap(inst.sourceId, posSec, wasPlaying, track);
+          if (!ok) {
+            await this.loadAudioSourceAtPosition(inst.sourceId, posSec, wasPlaying, track);
+          }
         }
       } else {
         // Turning off Karaoke ("Con voz"): restore original vocal track
@@ -3418,7 +3430,10 @@ class AudioEngine {
           '';
         this.karaokeState.originalSourceId = null;
         if (restoreId && this.currentVideoId !== restoreId) {
-          await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
+          const ok = await this.seamlessAudioSourceSwap(restoreId, posSec, wasPlaying, track);
+          if (!ok) {
+            await this.loadAudioSourceAtPosition(restoreId, posSec, wasPlaying, track);
+          }
         }
       }
     } finally {
