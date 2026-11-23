@@ -121,22 +121,29 @@ export async function findExactCover(t: Track): Promise<string | null> {
       }
     } catch {}
   }
+
+  const cleanYt = (t.id || '').replace(/^yt-/i, '').trim();
+  const isYouTube = /^[a-zA-Z0-9_-]{11}$/.test(cleanYt);
+
   const artists = artistNames(t);
-  if (!artists.length || artists[0].toLowerCase() === 'spotify') return null;
+  if (!artists.length || artists[0].toLowerCase() === 'spotify') {
+    return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
+  }
+
   try {
     const q = `${normCover(t.name)} ${normCover(artists[0])}`.trim();
     const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=10`, {
       signal: AbortSignal.timeout(3000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
     const data = await res.json();
     const hits = (data.results || []).filter((r: any) => r?.artworkUrl100 && sameTitle(r.trackName, t.name) && sameArtist(artists, r.artistName));
-    if (!hits.length) return null;
+    if (!hits.length) return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
     const album = normCover(t.album?.name);
     const best = (album && hits.find((r: any) => normCover(r.collectionName) === album)) || hits[0];
     return String(best.artworkUrl100).replace('100x100bb', '600x600bb');
   } catch {
-    return null;
+    return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
   }
 }
 
@@ -147,6 +154,19 @@ export async function findExactCover(t: Track): Promise<string | null> {
  */
 export function getTrackCoverUrl(track: Track, _fallbackPlaylistCover?: string): string | undefined {
   if (!track) return undefined;
+
+  // 0. Dedicated check for YouTube tracks: guaranteed high quality thumbnail fallback
+  const ytMatch = (track.id || '').replace(/^yt-/i, '').trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(ytMatch)) {
+    if (TRACK_COVER_CACHE.has(track.id)) {
+      const cached = TRACK_COVER_CACHE.get(track.id);
+      if (cached && !isPlaylistOrGenericCover(cached)) return cached;
+    }
+    const albumCover = track.album?.images?.[0]?.url;
+    if (albumCover && !isPlaylistOrGenericCover(albumCover)) return albumCover;
+    return `https://i.ytimg.com/vi/${ytMatch}/hqdefault.jpg`;
+  }
+
   // 1. The cover the song itself comes with (its real album) always wins
   const albumCover = track.album?.images?.[0]?.url;
   if (albumCover && !isPlaylistOrGenericCover(albumCover)) {

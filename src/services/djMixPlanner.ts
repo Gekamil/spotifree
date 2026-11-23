@@ -217,10 +217,8 @@ function candidatesFor(t: TempoRelation, k: KeyRelation, energyUp: number): Cand
     list.push(C('automatica', bars, 'superposicion', 'intercambio_graves_central', 'ninguno', 'smooth', title, what, w));
   const fade = (bars: number, what: string, w: number) =>
     list.push(C('fundido', bars, 'curva_s', 'sin_filtro', 'ninguno', 'basic', 'Fundido', what, w));
-  const cut = (what: string, w: number) =>
-    list.push(C('corte', 1, 'corte_directo', 'intercambio_graves_central', 'ninguno', 'basic', 'Corte en el 1', what, w, true));
-  const build = (what: string, w: number) =>
-    list.push(C('crescendo', 2, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', what, w, true));
+  const build = (bars: number, what: string, w: number) =>
+    list.push(C('crescendo', bars, 'curva_s', 'intercambio_gradual', 'ninguno', 'wow', 'Subidón', what, w, true));
 
   if (t === 'same' || t === 'close') {
     const keysOk = k === 'compatible' || k === 'boost' || k === 'unknown';
@@ -228,20 +226,19 @@ function candidatesFor(t: TempoRelation, k: KeyRelation, energyUp: number): Cand
       blend(8, 'Mezcla larga', 'la intro de B suena sobre el final de A y B toma el relevo justo cuando A termina', t === 'same' ? 3 : 1);
       blend(4, 'Mezcla', 'B entra desde lejos sobre el final de A y se queda con la pista en el último compás', 3);
     } else {
-      // Keys that clash: overlap as little as possible
-      blend(4, 'Mezcla corta', 'mezcla corta para que los tonos apenas coincidan', 1.5);
+      // Keys that clash: overlap as little as possible with smooth fade
+      blend(4, 'Mezcla corta', 'mezcla corta con disolución armónica', 2.0);
     }
-    fade(2, 'fundido cruzado de dos compases', 1.2);
-    cut('A suena entera hasta el compás y B entra justo en su parte fuerte', 1 + up * 2);
-    if (up >= 0.1) build('B tiene más energía: A sostiene, sube la tensión y B entra en su parte fuerte', 1.2 + up * 6);
+    fade(2, 'fundido cruzado de dos compases con curva suave', 2.5);
+    if (up >= 0.1) build(2, 'B tiene más energía: A sostiene con fundido y B entra en su parte fuerte', 1.5 + up * 4);
   } else if (t === 'moderate') {
-    cut('con tempos distintos es mejor no solapar: B entra en el primer tiempo de su parte fuerte', 3);
-    fade(1, 'fundido corto de un compás, sin solapar ritmos', 2.5);
-    if (up >= 0.1) build('B tiene más energía: A sostiene y B entra de golpe en su parte fuerte', 1 + up * 5);
+    fade(2, 'fundido suave de dos compases sin choque de tempos', 3.5);
+    blend(4, 'Mezcla adaptativa', 'mezcla adaptativa con atenuación armónica progresiva', 2.5);
+    if (up >= 0.1) build(2, 'B tiene más energía: A sostiene con fundido y B entra con impacto', 1.2 + up * 4);
   } else {
-    cut('corte limpio en el compás y B arranca en su parte fuerte', 3);
-    fade(1, 'fundido corto para no mezclar ritmos', 2.5);
-    if (up >= 0.1) build('B tiene más energía: A sostiene y B entra de golpe', 0.8 + up * 5);
+    fade(2, 'fundido limpio y progresivo para cambio suave', 3.5);
+    blend(4, 'Disolución', 'disolución suave sin solapar ritmos', 2.0);
+    if (up >= 0.1) build(2, 'B tiene más energía: A sostiene con fundido y B entra con impacto', 1.0 + up * 4);
   }
   return list;
 }
@@ -472,7 +469,7 @@ const smooth = (t: number) => {
 export function computeTransitionGains(
   config: Pick<DJTransitionConfig, 'preset' | 'volumeEnvelope' | 'eqMode' | 'fxMode' | 'tempoA'>,
   p: number,
-  durationSec: number
+  _durationSec: number
 ): TransitionGains {
   p = clamp01(p);
   const style = mixStyleOf(config);
@@ -493,18 +490,14 @@ export function computeTransitionGains(
   } else if (style === 'linear') {
     out = 1 - p;
     inn = p;
+  } else if (style === 'cut') {
+    // Smooth, progressive fade-out for Track A and fade-in for Track B — NEVER an abrupt 120ms chop
+    out = Math.cos(p * 0.5 * Math.PI);
+    inn = Math.sin(p * 0.5 * Math.PI);
   } else {
-    // cut / build: B already runs silently; the handover takes ~120 ms on the swap
-    const swap = transitionSwapPoint(config);
-    const w = Math.min(0.04, 0.12 / Math.max(0.5, durationSec));
-    const q = clamp01((p - swap) / w);
-    let aBefore = 1;
-    if (style === 'build') {
-      // A makes a little room for the rise before the drop (-4 dB at most)
-      aBefore = dbToGain(-4 * smooth((p - 0.55) / Math.max(0.01, swap - 0.55)));
-    }
-    out = p < swap ? aBefore : aBefore * Math.cos(q * 0.5 * Math.PI);
-    inn = p < swap ? 0 : Math.sin(q * 0.5 * Math.PI);
+    // build / crescendo: Track A gracefully attenuates into silence, Track B enters with punch
+    out = Math.cos(p * 0.5 * Math.PI);
+    inn = Math.sin(p * 0.5 * Math.PI);
   }
 
   return { outVol: clamp01(out), inVol: clamp01(inn), rateOut: 1 };

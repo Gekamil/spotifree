@@ -20,7 +20,7 @@ import {
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { handleImageError } from '../../utils/imageFallback';
-import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
 import { SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 
 interface AIDJViewProps {
@@ -32,8 +32,8 @@ interface AIDJViewProps {
 const getBestTrackArtwork = (track: Track | null | undefined): string => {
   if (!track) return SPOTIFY_DJ_COVER_IMAGE;
   const cached = getTrackCoverUrl(track);
-  if (cached && !cached.includes('liked-songs')) return cached;
-  if (track.album?.images?.[0]?.url && !track.album.images[0].url.includes('liked-songs')) {
+  if (cached && !isPlaylistOrGenericCover(cached)) return cached;
+  if (track.album?.images?.[0]?.url && !isPlaylistOrGenericCover(track.album.images[0].url)) {
     return track.album.images[0].url;
   }
   const anyT = track as any;
@@ -50,7 +50,14 @@ const getBestTrackArtwork = (track: Track | null | undefined): string => {
     anyT.albumArt ||
     anyT.album_cover_url ||
     anyT.thumbnail;
-  if (directCover && !directCover.includes('liked-songs')) return directCover;
+  if (directCover && !isPlaylistOrGenericCover(directCover)) return directCover;
+
+  // YouTube thumbnail fallback
+  const ytId = (track.id || '').replace(/^yt-/i, '').trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(ytId)) {
+    return `https://i.ytimg.com/vi/${ytId}/hqdefault.jpg`;
+  }
+
   return 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg';
 };
 

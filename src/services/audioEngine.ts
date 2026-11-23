@@ -93,6 +93,14 @@ function persistVideoId(query: string, videoId: string) {
   }
 }
 
+export function getVideoIdFromCache(query: string): string | null {
+  if (!query) return null;
+  const clean = query.trim();
+  if (VIDEO_ID_CACHE.has(clean)) return VIDEO_ID_CACHE.get(clean) || null;
+  if (VIDEO_ID_CACHE.has(clean.toLowerCase())) return VIDEO_ID_CACHE.get(clean.toLowerCase()) || null;
+  return null;
+}
+
 /** One upload of a song, as ranked by /api/audio/candidates */
 export interface SourceCandidate {
   videoId: string;
@@ -561,7 +569,7 @@ class AudioEngine {
       const bar = 240 / curAnalysis.tempo;
       const onBar = barAlignedStart;
       if (onBar > 10 && curSec >= onBar && remaining > 0) {
-        this.executeCrossfade(Math.min(effectiveCrossfade, Math.max(1.5, remaining)), djConfig);
+        this.executeCrossfade(Math.min(effectiveCrossfade, Math.max(2.8, remaining)), djConfig);
         return;
       }
       if (remaining > effectiveCrossfade + bar) return; // wait for the bar line
@@ -570,7 +578,7 @@ class AudioEngine {
     // Start simultaneous dual-engine crossfade when remaining reaches effectiveCrossfade
     // If remaining time is shorter than calculated phrase, clamp duration without altering preset
     if (!this.isCrossfading && remaining > 0 && remaining <= effectiveCrossfade) {
-      const clampedDuration = Math.min(effectiveCrossfade, Math.max(1.5, remaining));
+      const clampedDuration = Math.min(effectiveCrossfade, Math.max(2.8, remaining));
       this.executeCrossfade(clampedDuration, djConfig);
     }
   }

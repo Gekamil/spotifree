@@ -13,6 +13,7 @@ import { filterMusicTracksOnly, isNonMusicOrNoise } from '../utils/trackFilter';
 import { searchSpotify } from './spotifyApi';
 import { useLanguageStore } from '../utils/i18n';
 import { AUTHENTIC_FLAGSHIP_TRACKS, getDominantUserHashtag } from './musicTaggingService';
+import { getVideoIdFromCache } from './audioEngine';
 
 export type DJSegmentKind = 'heavy-rotation' | 'throwback' | 'artist-focus' | 'discovery' | 'liked' | 'request';
 
@@ -213,7 +214,7 @@ const SEGMENT_TITLES: Record<DJSegmentKind, string> = {
 async function searchArtistTracks(artist: string, limit = 8): Promise<Track[]> {
   try {
     const searchPromise = searchSpotify(`artist:"${artist}"`);
-    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 400));
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 2500));
     const res = await Promise.race([searchPromise, timeoutPromise]);
     const items: Track[] = (res as any)?.tracks?.items || [];
     return filterMusicTracksOnly(items).filter((t) => (t.artists || []).some((a) => (a.name || '').toLowerCase() === artist.toLowerCase())).slice(0, limit);
@@ -270,22 +271,63 @@ export async function fetchSmartDJRecommendations(
     seen.add(sig);
     seen.add(clean);
     seen.add(t.id);
-    recs.push({ ...t, isSmartRecommendation: true } as any);
+
+    // Guarantee that every recommended track has a valid artwork thumbnail
+    const vId = (t.id || '').replace(/^yt-/i, '').trim();
+    let hydrated = { ...t, isSmartRecommendation: true } as Track;
+    if (/^[a-zA-Z0-9_-]{11}$/.test(vId) && (!hydrated.album?.images || !hydrated.album.images.length || !hydrated.album.images[0]?.url)) {
+      hydrated = {
+        ...hydrated,
+        album: {
+          ...hydrated.album,
+          id: hydrated.album?.id || `alb-${vId}`,
+          name: hydrated.album?.name || hydrated.name,
+          images: [{ url: `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`, height: 300, width: 300 }],
+        },
+      };
+    }
+    recs.push(hydrated);
     return true;
   };
 
   // 1. YouTube Music Radio (Smart Shuffle's core recommendation engine)
-  const topSeeds = seedTracks.slice(0, 2);
-  const ytmPromises = topSeeds.map(async (seed) => {
+  // Gather up to 4 diverse seed tracks (prioritizing distinct artists from user's favorites)
+  const diverseSeeds: Track[] = [];
+  const seedArtistsSeen = new Set<string>();
+  for (const s of seedTracks) {
+    if (!s || !s.name) continue;
+    const art = (s.artists?.[0]?.name || '').toLowerCase();
+    if (!seedArtistsSeen.has(art)) {
+      seedArtistsSeen.add(art);
+      diverseSeeds.push(s);
+      if (diverseSeeds.length >= 4) break;
+    }
+  }
+  if (diverseSeeds.length < 3 && seedTracks.length > diverseSeeds.length) {
+    for (const s of seedTracks) {
+      if (!diverseSeeds.includes(s)) {
+        diverseSeeds.push(s);
+        if (diverseSeeds.length >= 4) break;
+      }
+    }
+  }
+
+  const ytmPromises = diverseSeeds.map(async (seed) => {
     if (!seed || !seed.name) return [];
     try {
       const isYtId = (id: string) => /^[a-zA-Z0-9_-]{11}$/.test(id);
-      const rawVideoId = isYtId(seed.id || '') ? seed.id : (seed.id || '').startsWith('yt-') ? seed.id.replace(/^yt-/i, '') : '';
       const title = seed.name || '';
       const artist = seed.artists?.[0]?.name || '';
+      const query = `${title} ${artist}`.trim();
+
+      let rawVideoId = isYtId(seed.id || '') ? seed.id : (seed.id || '').startsWith('yt-') ? seed.id.replace(/^yt-/i, '') : '';
+      if (!rawVideoId) {
+        rawVideoId = getVideoIdFromCache(query) || getVideoIdFromCache(title) || '';
+      }
+
       const res = await fetch(
         `/api/audio/recommendations?videoId=${encodeURIComponent(rawVideoId)}&title=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&limit=10`,
-        { signal: AbortSignal.timeout ? AbortSignal.timeout(1200) : undefined }
+        { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined }
       );
       if (res.ok) {
         const data = await res.json();
@@ -302,7 +344,30 @@ export async function fetchSmartDJRecommendations(
     ytmBatches.flat().forEach(add);
   } catch {}
 
-  // 2. Discoveries from user's favorite artists that are not in their library
+  // 2. Discoveries based on user's favorite artists via YouTube Music Radio mixes
+  if (recs.length < targetCount && artists.length > 0) {
+    try {
+      const artistYtmPromises = artists.slice(0, 3).map(async (art) => {
+        try {
+          const res = await fetch(
+            `/api/audio/recommendations?artist=${encodeURIComponent(art)}&q=${encodeURIComponent(art + ' radio')}&limit=8`,
+            { signal: AbortSignal.timeout ? AbortSignal.timeout(4500) : undefined }
+          );
+          if (res.ok) {
+            const data = await res.json();
+            if (data.success && Array.isArray(data.tracks)) {
+              return data.tracks as Track[];
+            }
+          }
+        } catch {}
+        return [];
+      });
+      const artistBatches = await Promise.all(artistYtmPromises);
+      artistBatches.flat().forEach(add);
+    } catch {}
+  }
+
+  // 3. Spotify catalog discoveries from user's favorite artists
   if (recs.length < targetCount && artists.length > 0) {
     try {
       const artistPromises = artists.slice(0, 3).map((a) => searchArtistTracks(a, 6));
@@ -311,8 +376,8 @@ export async function fetchSmartDJRecommendations(
     } catch {}
   }
 
-  // 3. Flagship authentic chart tracks from dominant genre
-  if (recs.length < targetCount) {
+  // 4. Fallback ONLY if the library was completely empty (e.g. brand new user with no listening history)
+  if (recs.length < targetCount && artists.length === 0) {
     try {
       const dominantTag = getDominantUserHashtag();
       const flagship = AUTHENTIC_FLAGSHIP_TRACKS[dominantTag] || [];
@@ -361,9 +426,22 @@ export async function buildSegmentedDJSet(opts: { blockSize?: number; exclude?: 
   const libraryIds = new Set(library.map((e) => cleanId(e.track.id)));
   const combinedExclude = new Set<string>([...exclude, ...librarySigs, ...libraryIds]);
 
+  // Priority seeds: heavy rotation tracks, liked songs, then user library
+  const seedCandidates = [...heavy.map((e) => e.track), ...library.filter((e) => e.liked).map((e) => e.track), ...library.map((e) => e.track)];
+  const seenSeeds = new Set<string>();
+  const prioritySeeds: Track[] = [];
+  for (const t of seedCandidates) {
+    const sig = sigOf(t);
+    if (!seenSeeds.has(sig)) {
+      seenSeeds.add(sig);
+      prioritySeeds.push(t);
+      if (prioritySeeds.length >= 10) break;
+    }
+  }
+
   // Fetch smart shuffle recommendations (50/50 balance)
   const smartRecs = await fetchSmartDJRecommendations(
-    heavy.map((e) => e.track),
+    prioritySeeds,
     artists,
     combinedExclude,
     blockSize * 4

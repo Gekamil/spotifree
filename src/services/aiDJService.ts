@@ -270,6 +270,65 @@ function polishSegmentIntros(segments: DJSegment[], tracks: Track[], set: (fn: (
   segments.forEach((s) => aiDJVoiceService.prefetchPhrase(s.intro));
 }
 
+function hydrateAndSyncDJCovers(tracks: Track[], set: any) {
+  if (!tracks || tracks.length === 0) return;
+  resolveTrackCoversBatch(tracks, undefined, (updates) => {
+    if (!updates || updates.size === 0) return;
+    set((s: any) => ({
+      djTracks: s.djTracks.map((t: Track) => {
+        const url = updates.get(t.id);
+        if (!url) return t;
+        return {
+          ...t,
+          album: {
+            ...t.album,
+            id: t.album?.id || `alb-${t.id}`,
+            name: t.album?.name || t.name,
+            images: [{ url, height: 300, width: 300 }],
+          },
+        };
+      }),
+    }));
+
+    const player = usePlayerStore.getState();
+    const patch = (t: Track): Track => {
+      const url = updates.get(t.id);
+      if (!url) return t;
+      return {
+        ...t,
+        album: {
+          ...t.album,
+          id: t.album?.id || `alb-${t.id}`,
+          name: t.album?.name || t.name,
+          images: [{ url, height: 300, width: 300 }],
+        },
+      };
+    };
+
+    if (player.currentTrack && updates.has(player.currentTrack.id)) {
+      const updatedTrack = patch(player.currentTrack);
+      usePlayerStore.setState({
+        currentTrack: updatedTrack,
+        queue: player.queue.map(patch),
+      });
+      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        const cover = updates.get(player.currentTrack.id);
+        if (cover) {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: updatedTrack.name,
+            artist: updatedTrack.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+            album: updatedTrack.album?.name || 'Spotifree',
+            artwork: [
+              { src: cover, sizes: '300x300', type: 'image/jpeg' },
+              { src: cover, sizes: '512x512', type: 'image/jpeg' },
+            ],
+          });
+        }
+      }
+    }
+  }).catch(() => {});
+}
+
 export interface UserListeningProfile {
   topArtists: string[];
   recentTracks: { name: string; artist: string }[];
@@ -933,6 +992,23 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         ];
       }
       // If filtering removed songs, keep block boundaries inside the list
+      // Ensure all YouTube tracks have guaranteed thumbnails so no song ever plays without artwork
+      tracks = tracks.map((t) => {
+        const vId = (t.id || '').replace(/^yt-/i, '').trim();
+        if (/^[a-zA-Z0-9_-]{11}$/.test(vId) && (!t.album?.images || !t.album.images.length || !t.album.images[0]?.url)) {
+          return {
+            ...t,
+            album: {
+              ...t.album,
+              id: t.album?.id || `alb-${vId}`,
+              name: t.album?.name || t.name,
+              images: [{ url: `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`, height: 300, width: 300 }],
+            },
+          };
+        }
+        return t;
+      });
+
       segments = segments.filter((s) => s.startIndex < tracks.length);
 
       const firstTrack = tracks[0];
@@ -948,7 +1024,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         isThinking: false,
       });
       polishSegmentIntros(segments, tracks, set as any);
-      resolveTrackCoversBatch(tracks).catch(() => {});
+      hydrateAndSyncDJCovers(tracks, set);
 
       const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       set({
@@ -1436,7 +1512,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
       announcedSegments.clear();
       announcedSegments.add(requestSegment.id);
 
-      resolveTrackCoversBatch(finalSet).catch(() => {});
+      hydrateAndSyncDJCovers(finalSet, set);
       if (typeof window !== 'undefined' && (window as any).__audioEngine) {
         try {
           (window as any).__audioEngine.warmupInitialTracks(finalSet.slice(0, 6));
@@ -1581,7 +1657,7 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
     set({ segments: [requestSegment], activeSegmentId: requestSegment.id, setMode: 'request', isThinking: false });
 
     // Pre-resolve artwork for all tracks in parallel
-    resolveTrackCoversBatch(finalSet).catch(() => {});
+    hydrateAndSyncDJCovers(finalSet, set);
 
     // Pre-warm audio streams for top tracks so playback is instantaneous
     if (typeof window !== 'undefined' && (window as any).__audioEngine) {
@@ -1682,10 +1758,26 @@ export const useAIDJStore = create<AIDJState>((set, get) => ({
         : [];
     }
 
+    nextSet = nextSet.map((t) => {
+      const vId = (t.id || '').replace(/^yt-/i, '').trim();
+      if (/^[a-zA-Z0-9_-]{11}$/.test(vId) && (!t.album?.images || !t.album.images.length || !t.album.images[0]?.url)) {
+        return {
+          ...t,
+          album: {
+            ...t.album,
+            id: t.album?.id || `alb-${vId}`,
+            name: t.album?.name || t.name,
+            images: [{ url: `https://i.ytimg.com/vi/${vId}/hqdefault.jpg`, height: 300, width: 300 }],
+          },
+        };
+      }
+      return t;
+    });
+
     announcedSegments.clear();
     if (segments[0]) announcedSegments.add(segments[0].id);
     set({ djTracks: nextSet, segments, activeSegmentId: segments[0]?.id || null, currentSetTitle: segments[0]?.title || state.currentSetTitle, isThinking: false });
-    resolveTrackCoversBatch(nextSet).catch(() => {});
+    hydrateAndSyncDJCovers(nextSet, set);
     if (state.setMode === 'personal') polishSegmentIntros(segments, nextSet, set as any);
 
     if (nextSet.length > 0) {

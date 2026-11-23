@@ -107,6 +107,13 @@ export function resolveTrackCover(track: any): string {
       }
     } catch {}
   }
+
+  // 5. Guaranteed fallback for YouTube tracks
+  const ytMatch = (rawId || '').replace(/^yt-/i, '').trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(ytMatch)) {
+    return `https://i.ytimg.com/vi/${ytMatch}/hqdefault.jpg`;
+  }
+
   return '';
 }
 
@@ -1087,6 +1094,32 @@ const store = create<PlayerState>((set, get) => ({
     });
 
     updateMediaSessionTrack(track, initialProgressMs / 1000);
+
+    // Resolve crisp artwork for incoming track if missing or generic
+    const hasValidCover = track.album?.images?.[0]?.url && !isPlaylistOrGenericCover(track.album.images[0].url);
+    if (!hasValidCover && track.name) {
+      resolveTrackCoversBatch([track], undefined, (updates) => {
+        const fresh = updates?.get(track.id);
+        if (fresh && !isPlaylistOrGenericCover(fresh)) {
+          set((s) => {
+            if (s.currentTrack?.id === track.id) {
+              const patched = {
+                ...s.currentTrack,
+                album: {
+                  ...s.currentTrack.album,
+                  id: s.currentTrack.album?.id || `alb-${track.id}`,
+                  name: s.currentTrack.album?.name || track.name,
+                  images: [{ url: fresh, height: 300, width: 300 }],
+                },
+              };
+              updateMediaSessionTrack(patched, s.progressMs / 1000);
+              return { currentTrack: patched };
+            }
+            return s;
+          });
+        }
+      }).catch(() => {});
+    }
 
     // Preload next upcoming tracks N+1 and N+2
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
