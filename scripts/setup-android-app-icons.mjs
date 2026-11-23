@@ -68,11 +68,15 @@ const xxxhdpi = path.join(res, 'mipmap-xxxhdpi');
 fs.mkdirSync(anydpi, { recursive: true });
 fs.mkdirSync(xxxhdpi, { recursive: true });
 
-// Discover any existing mipmap density folders created by Capacitor (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+// Discover any existing mipmap density folders and ensure all standard densities (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+// exist so car head units of all screen densities always resolve Spotifree's actual icon
+const ALL_DENSITIES = ['mipmap-mdpi', 'mipmap-hdpi', 'mipmap-xhdpi', 'mipmap-xxhdpi', 'mipmap-xxxhdpi'];
 const targetMipmapDirs = fs.existsSync(res)
   ? fs.readdirSync(res).filter((d) => d.startsWith('mipmap-') && !d.includes('anydpi'))
   : ['mipmap-xxxhdpi'];
-if (!targetMipmapDirs.includes('mipmap-xxxhdpi')) targetMipmapDirs.push('mipmap-xxxhdpi');
+for (const d of ALL_DENSITIES) {
+  if (!targetMipmapDirs.includes(d)) targetMipmapDirs.push(d);
+}
 
 for (const icon of ICONS) {
   const src = path.join(root, icon.src);

@@ -37,6 +37,7 @@ dist-ssr
 !public/icon-desktop-192.png
 !public/icon-desktop-512.png
 !public/app-icons/**/*.png
+!native/android/res/drawable/spotifree_logo.png
 .agents
 cookies.txt
 yt_cookies.txt

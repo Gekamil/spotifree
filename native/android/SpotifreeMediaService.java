@@ -566,7 +566,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         }
         boolean hasLyric = lyricLine != null && !lyricLine.trim().isEmpty();
         // Car screens / Bluetooth stereos show title + artist: the lyric line goes in the artist slot
-        String shownArtist = hasLyric ? "♪ " + lyricLine.trim() : artist;
+        String shownArtist = hasLyric ? lyricLine.trim() : artist;
         String shownAlbum = hasLyric ? artist : album;
         Uri artUri = SpotifreeArtProvider.uriFor(this, artworkUrl);
         if (artUri == null) artUri = SpotifreeArtProvider.logoUri(this);
@@ -591,7 +591,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             try {
                 File lf = SpotifreeArtProvider.logoFile(this);
                 if (lf != null && lf.exists()) {
-                    metadataArt = BitmapFactory.decodeFile(lf.getAbsolutePath());
+                    metadataArt = decodeScaledBitmap(lf, 384);
                 }
             } catch (Exception ignored) {}
         }
@@ -705,6 +705,38 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         notifyChildrenChanged("queue");
     }
 
+    @Nullable
+    static Bitmap decodeScaledBitmap(@Nullable File f, int maxSize) {
+        if (f == null || !f.exists()) return null;
+        try {
+            BitmapFactory.Options opts = new BitmapFactory.Options();
+            opts.inJustDecodeBounds = true;
+            BitmapFactory.decodeFile(f.getAbsolutePath(), opts);
+            int w = opts.outWidth;
+            int h = opts.outHeight;
+            if (w <= 0 || h <= 0) return null;
+            int sample = 1;
+            while ((w / sample) > maxSize || (h / sample) > maxSize) {
+                sample *= 2;
+            }
+            opts.inJustDecodeBounds = false;
+            opts.inSampleSize = Math.max(1, sample);
+            opts.inPreferredConfig = Bitmap.Config.RGB_565;
+            Bitmap decoded = BitmapFactory.decodeFile(f.getAbsolutePath(), opts);
+            if (decoded != null && (decoded.getWidth() > maxSize || decoded.getHeight() > maxSize)) {
+                float ratio = Math.min((float) maxSize / decoded.getWidth(), (float) maxSize / decoded.getHeight());
+                int targetW = Math.max(1, Math.round(decoded.getWidth() * ratio));
+                int targetH = Math.max(1, Math.round(decoded.getHeight() * ratio));
+                Bitmap scaled = Bitmap.createScaledBitmap(decoded, targetW, targetH, true);
+                if (scaled != decoded) decoded.recycle();
+                return scaled;
+            }
+            return decoded;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
     private void maybeLoadArt() {
         final String url = artworkUrl;
         if (url == null || url.isEmpty() || url.equals(loadedArtUrl)) return;
@@ -714,7 +746,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             Bitmap bmp = null;
             try {
                 File f = SpotifreeArtProvider.cachedFile(getApplicationContext(), url);
-                if (f != null) bmp = BitmapFactory.decodeFile(f.getAbsolutePath());
+                if (f != null) bmp = decodeScaledBitmap(f, 384);
             } catch (Exception ignored) {}
             final Bitmap result = bmp;
             main.post(() -> {
@@ -745,13 +777,13 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         if (notifArt == null) {
             try {
                 File lf = SpotifreeArtProvider.logoFile(this);
-                if (lf != null && lf.exists()) notifArt = BitmapFactory.decodeFile(lf.getAbsolutePath());
+                if (lf != null && lf.exists()) notifArt = decodeScaledBitmap(lf, 256);
             } catch (Exception ignored) {}
         }
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_spotifree)
             .setContentTitle(title == null || title.isEmpty() ? "Spotifree" : title)
-            .setContentText(hasLyric ? "♪ " + lyricLine.trim() : artist)
+            .setContentText(hasLyric ? lyricLine.trim() : artist)
             .setSubText(hasLyric ? artist : null)
             .setLargeIcon(notifArt)
             .setOnlyAlertOnce(true)

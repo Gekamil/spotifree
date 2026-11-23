@@ -34,9 +34,11 @@ import java.security.MessageDigest;
 public class SpotifreeArtProvider extends ContentProvider {
 
     private static final String[] ALLOWED_HOST_SUFFIXES = {
-        "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com",
-        "mzstatic.com", "wikimedia.org", "githubusercontent.com", "imgur.com", "twimg.com",
-        "vercel.app", "vercel-storage.com", "blob.vercel-storage.com", "spotify.com", "apple.com", "sndcdn.com"
+        "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "googlevideo.com",
+        "deezer.com", "mzstatic.com", "wikimedia.org", "githubusercontent.com", "imgur.com", "twimg.com",
+        "vercel.app", "vercel-storage.com", "blob.vercel-storage.com", "spotify.com", "apple.com", "sndcdn.com",
+        "soundcloud.com", "fastly.net", "cloudfront.net", "akamaihd.net", "akamaized.net", "tidal.com",
+        "qobuz.com", "bandcamp.com", "last.fm"
     };
 
     /** A drawable of the app (tab icons) served as a PNG: content://<pkg>.art/res/<id> */
@@ -69,6 +71,7 @@ public class SpotifreeArtProvider extends ContentProvider {
             try (OutputStream out = new FileOutputStream(f)) {
                 b.compress(Bitmap.CompressFormat.PNG, 100, out);
             }
+            b.recycle();
             return f.length() > 0 ? f : null;
         } catch (Exception e) {
             return null;
@@ -81,13 +84,33 @@ public class SpotifreeArtProvider extends ContentProvider {
         if (!dir.exists()) dir.mkdirs();
         File f = new File(dir, "app_logo.png");
         if (f.exists() && f.length() > 0) return f;
+        if (f.exists()) f.delete();
         try {
-            Drawable d = null;
-            int iconRes = ctx.getResources().getIdentifier("ic_launcher_app_default", "mipmap", ctx.getPackageName());
-            if (iconRes == 0) iconRes = ctx.getResources().getIdentifier("ic_launcher", "mipmap", ctx.getPackageName());
-            if (iconRes != 0) {
-                d = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes);
+            // 1. Try dedicated high-res spotifree_logo drawable first
+            int logoRes = ctx.getResources().getIdentifier("spotifree_logo", "drawable", ctx.getPackageName());
+            if (logoRes != 0) {
+                try (InputStream in = ctx.getResources().openRawResource(logoRes);
+                     OutputStream out = new FileOutputStream(f)) {
+                    byte[] buf = new byte[8192];
+                    int n;
+                    while ((n = in.read(buf)) > 0) out.write(buf, 0, n);
+                    if (f.exists() && f.length() > 0) return f;
+                } catch (Exception ignored) {}
             }
+
+            Drawable d = null;
+            if (logoRes != 0) {
+                d = androidx.core.content.ContextCompat.getDrawable(ctx, logoRes);
+            }
+            // 2. Try default mipmap launcher icons
+            if (d == null) {
+                int iconRes = ctx.getResources().getIdentifier("ic_launcher_app_default", "mipmap", ctx.getPackageName());
+                if (iconRes == 0) iconRes = ctx.getResources().getIdentifier("ic_launcher", "mipmap", ctx.getPackageName());
+                if (iconRes != 0) {
+                    d = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes);
+                }
+            }
+            // 3. Fallback to package manager application icon
             if (d == null) {
                 d = ctx.getPackageManager().getApplicationIcon(ctx.getPackageName());
             }
@@ -106,10 +129,13 @@ public class SpotifreeArtProvider extends ContentProvider {
 
     @Nullable
     static Uri uriFor(Context ctx, @Nullable String url) {
-        if (url == null || url.isEmpty()) return null;
-        if (!url.startsWith("https://") && !url.startsWith("local:")) return null;
+        if (url == null || url.trim().isEmpty()) return logoUri(ctx);
+        String targetUrl = url.trim();
+        if (targetUrl.startsWith("http://")) targetUrl = "https://" + targetUrl.substring(7);
+        else if (targetUrl.startsWith("//")) targetUrl = "https:" + targetUrl;
+        if (!targetUrl.startsWith("https://") && !targetUrl.startsWith("local:")) return logoUri(ctx);
         return new Uri.Builder().scheme("content").authority(ctx.getPackageName() + ".art")
-            .appendPath("img").appendQueryParameter("u", url).build();
+            .appendPath("img").appendQueryParameter("u", targetUrl).build();
     }
 
     private static boolean allowed(String url) {
@@ -117,7 +143,15 @@ public class SpotifreeArtProvider extends ContentProvider {
             URL u = new URL(url);
             if (!"https".equals(u.getProtocol())) return false;
             String host = u.getHost().toLowerCase();
-            for (String s : ALLOWED_HOST_SUFFIXES) if (host.equals(s) || host.endsWith("." + s)) return true;
+            if (host.isEmpty() || host.equals("localhost") || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return false;
+            if (host.startsWith("127.") || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.") || host.startsWith("172.")) return false;
+            if (host.startsWith("[") || host.contains(":")) return false;
+            for (String s : ALLOWED_HOST_SUFFIXES) {
+                if (host.equals(s) || host.endsWith("." + s)) return true;
+            }
+            if (host.contains(".") && !host.startsWith(".") && !host.endsWith(".")) {
+                return true;
+            }
         } catch (Exception ignored) {}
         return false;
     }
@@ -200,11 +234,13 @@ public class SpotifreeArtProvider extends ContentProvider {
             f = logoFile(ctx);
         } else {
             String url = uri.getQueryParameter("u");
-            if (url == null) throw new FileNotFoundException("no url");
-            f = cachedFile(ctx, url);
+            if (url != null && !url.trim().isEmpty()) {
+                f = cachedFile(ctx, url.trim());
+            }
             if (f == null) f = logoFile(ctx); // cover not available: the app's logo instead of nothing
         }
-        if (f == null) throw new FileNotFoundException("not available: " + uri);
+        if (f == null) f = logoFile(ctx);
+        if (f == null || !f.exists()) throw new FileNotFoundException("not available: " + uri);
         return ParcelFileDescriptor.open(f, ParcelFileDescriptor.MODE_READ_ONLY);
     }
 

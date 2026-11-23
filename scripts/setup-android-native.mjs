@@ -41,6 +41,13 @@ function copyDir(src, dst) {
   }
 }
 copyDir(path.join(nativeDir, 'res'), path.join(androidMain, 'res'));
+const logoSrc = path.join(root, 'public', 'icon-mobile-512.png');
+if (fs.existsSync(logoSrc)) {
+  fs.mkdirSync(path.join(androidMain, 'res', 'drawable'), { recursive: true });
+  fs.copyFileSync(logoSrc, path.join(androidMain, 'res', 'drawable', 'spotifree_logo.png'));
+  fs.mkdirSync(path.join(nativeDir, 'res', 'drawable'), { recursive: true });
+  fs.copyFileSync(logoSrc, path.join(nativeDir, 'res', 'drawable', 'spotifree_logo.png'));
+}
 
 // 3. MainActivity: every plugin of the app + voice intent & deep links handling
 const plugins = ['SpotifreeAppIconPlugin', 'SpotifreeLoginPlugin', 'SpotifreeMediaPlugin', 'SpotifreeAudioFxPlugin', 'SpotifreeAudioOutputPlugin', 'SpotifreeSpeechPlugin', 'SpotifreeLocalMusicPlugin'].filter((p) =>
