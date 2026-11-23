@@ -337,7 +337,8 @@ const mediaService = `        <service
             android:label="@string/app_name"
             android:enabled="true"
             android:exported="true"
-            android:icon="@mipmap/ic_launcher"
+            android:icon="@mipmap/ic_launcher_app_default"
+            android:roundIcon="@mipmap/ic_launcher_app_default"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />

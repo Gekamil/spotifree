@@ -586,10 +586,19 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             mb.putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON_URI, artUri.toString());
             mb.putString(MediaMetadataCompat.METADATA_KEY_ART_URI, artUri.toString());
         }
-        if (art != null && artworkUrl != null && artworkUrl.equals(loadedArtUrl)) {
-            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, art);
-            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, art);
-            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, art);
+        Bitmap metadataArt = (art != null && artworkUrl != null && artworkUrl.equals(loadedArtUrl)) ? art : null;
+        if (metadataArt == null) {
+            try {
+                File lf = SpotifreeArtProvider.logoFile(this);
+                if (lf != null && lf.exists()) {
+                    metadataArt = BitmapFactory.decodeFile(lf.getAbsolutePath());
+                }
+            } catch (Exception ignored) {}
+        }
+        if (metadataArt != null) {
+            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, metadataArt);
+            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, metadataArt);
+            mb.putBitmap(MediaMetadataCompat.METADATA_KEY_ART, metadataArt);
         }
         session.setMetadata(mb.build());
 
@@ -732,12 +741,19 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
 
     private Notification buildNotification() {
         boolean hasLyric = lyricLine != null && !lyricLine.trim().isEmpty();
+        Bitmap notifArt = art;
+        if (notifArt == null) {
+            try {
+                File lf = SpotifreeArtProvider.logoFile(this);
+                if (lf != null && lf.exists()) notifArt = BitmapFactory.decodeFile(lf.getAbsolutePath());
+            } catch (Exception ignored) {}
+        }
         NotificationCompat.Builder b = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_stat_spotifree)
             .setContentTitle(title == null || title.isEmpty() ? "Spotifree" : title)
             .setContentText(hasLyric ? "♪ " + lyricLine.trim() : artist)
             .setSubText(hasLyric ? artist : null)
-            .setLargeIcon(art)
+            .setLargeIcon(notifArt)
             .setOnlyAlertOnce(true)
             .setShowWhen(false)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
@@ -1028,7 +1044,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                         .setMediaId("pl:" + plId)
                         .setTitle(tr("Reproducir Tu DJ", "Play Your DJ"))
                         .setSubtitle(tr("Sesión personalizada con voz", "Personalized session with voice"))
-                        .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                        .setIconUri(SpotifreeArtProvider.logoUri(this));
                     out.add(new MediaBrowserCompat.MediaItem(djAction.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
                     JSONArray tracks = playlistTracks.get(plId);
                     if (tracks != null) {
@@ -1059,7 +1075,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                         .setMediaId("pl:" + plId)
                         .setTitle(tr("Reproducir lista", "Play playlist"))
                         .setSubtitle(tr("Toca para empezar la reproducción", "Tap to start playing"))
-                        .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                        .setIconUri(SpotifreeArtProvider.logoUri(this));
                     out.add(new MediaBrowserCompat.MediaItem(playNow.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
                 } else {
                     out.addAll(playlistChildren(plId, tracks));
@@ -1091,7 +1107,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                     .setMediaId("pl:" + plId)
                     .setTitle(tr("Reproducir Tu DJ", "Play Your DJ"))
                     .setSubtitle(tr("Sesión personalizada con voz", "Personalized session with voice"))
-                    .setIconUri(SpotifreeArtProvider.uriFor(this, null));
+                    .setIconUri(SpotifreeArtProvider.logoUri(this));
                 out.add(new MediaBrowserCompat.MediaItem(djAction.build(), MediaBrowserCompat.MediaItem.FLAG_PLAYABLE));
             } else {
                 out.add(item("noop", tr("Esta playlist está vacía", "This playlist is empty"), "", null, false, null));

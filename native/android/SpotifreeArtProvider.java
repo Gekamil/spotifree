@@ -35,7 +35,8 @@ public class SpotifreeArtProvider extends ContentProvider {
 
     private static final String[] ALLOWED_HOST_SUFFIXES = {
         "scdn.co", "spotifycdn.com", "dzcdn.net", "ytimg.com", "ggpht.com", "googleusercontent.com", "deezer.com",
-        "mzstatic.com", "wikimedia.org", "githubusercontent.com", "imgur.com", "twimg.com"
+        "mzstatic.com", "wikimedia.org", "githubusercontent.com", "imgur.com", "twimg.com",
+        "vercel.app", "vercel-storage.com", "blob.vercel-storage.com", "spotify.com", "apple.com", "sndcdn.com"
     };
 
     /** A drawable of the app (tab icons) served as a PNG: content://<pkg>.art/res/<id> */
@@ -75,9 +76,22 @@ public class SpotifreeArtProvider extends ContentProvider {
     }
 
     @Nullable
-    private static File logoFile(Context ctx) {
+    static File logoFile(Context ctx) {
+        File dir = new File(ctx.getCacheDir(), "car_art");
+        if (!dir.exists()) dir.mkdirs();
+        File f = new File(dir, "app_logo.png");
+        if (f.exists() && f.length() > 0) return f;
         try {
-            return renderDrawable(ctx, ctx.getPackageManager().getApplicationIcon(ctx.getPackageName()), "app_logo.png", 512);
+            Drawable d = null;
+            int iconRes = ctx.getResources().getIdentifier("ic_launcher_app_default", "mipmap", ctx.getPackageName());
+            if (iconRes == 0) iconRes = ctx.getResources().getIdentifier("ic_launcher", "mipmap", ctx.getPackageName());
+            if (iconRes != 0) {
+                d = androidx.core.content.ContextCompat.getDrawable(ctx, iconRes);
+            }
+            if (d == null) {
+                d = ctx.getPackageManager().getApplicationIcon(ctx.getPackageName());
+            }
+            return renderDrawable(ctx, d, "app_logo.png", 512);
         } catch (Exception e) {
             return null;
         }
@@ -201,6 +215,12 @@ public class SpotifreeArtProvider extends ContentProvider {
         if ("res".equals(first) || "logo".equals(first)) {
             return "image/png";
         }
+        Context ctx = getContext();
+        if (ctx != null) {
+            String url = uri.getQueryParameter("u");
+            File f = url != null ? cachedFile(ctx, url) : null;
+            if (f != null && f.getName().endsWith(".png")) return "image/png";
+        }
         return "image/jpeg";
     }
 
@@ -210,8 +230,41 @@ public class SpotifreeArtProvider extends ContentProvider {
         // Some car / media apps ask for the openable columns before opening the image
         String[] cols = projection != null ? projection : new String[] { OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE };
         MatrixCursor mc = new MatrixCursor(cols);
+        Context ctx = getContext();
+        File f = null;
+        if (ctx != null) {
+            String first = uri.getPathSegments().isEmpty() ? "" : uri.getPathSegments().get(0);
+            if ("res".equals(first) && uri.getPathSegments().size() > 1) {
+                try {
+                    String seg = uri.getPathSegments().get(1);
+                    int id = 0;
+                    try {
+                        id = Integer.parseInt(seg);
+                    } catch (NumberFormatException ignored) {
+                        id = ctx.getResources().getIdentifier(seg, "drawable", ctx.getPackageName());
+                    }
+                    if (id != 0) {
+                        Drawable d = androidx.core.content.ContextCompat.getDrawable(ctx, id);
+                        if (d == null) d = ctx.getDrawable(id);
+                        f = renderDrawable(ctx, d, "res_" + id + ".png", 192);
+                    }
+                } catch (Exception ignored) {}
+            } else if ("logo".equals(first)) {
+                f = logoFile(ctx);
+            } else {
+                String url = uri.getQueryParameter("u");
+                if (url != null) f = cachedFile(ctx, url);
+                if (f == null) f = logoFile(ctx);
+            }
+        }
         Object[] row = new Object[cols.length];
-        for (int i = 0; i < cols.length; i++) if (OpenableColumns.DISPLAY_NAME.equals(cols[i])) row[i] = "cover.img";
+        for (int i = 0; i < cols.length; i++) {
+            if (OpenableColumns.DISPLAY_NAME.equals(cols[i])) {
+                row[i] = f != null ? f.getName() : "cover.img";
+            } else if (OpenableColumns.SIZE.equals(cols[i])) {
+                row[i] = (f != null && f.exists()) ? f.length() : 0L;
+            }
+        }
         mc.addRow(row);
         return mc;
     }

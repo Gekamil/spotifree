@@ -67,12 +67,23 @@ const anydpi = path.join(res, 'mipmap-anydpi-v26');
 const xxxhdpi = path.join(res, 'mipmap-xxxhdpi');
 fs.mkdirSync(anydpi, { recursive: true });
 fs.mkdirSync(xxxhdpi, { recursive: true });
+
+// Discover any existing mipmap density folders created by Capacitor (mdpi, hdpi, xhdpi, xxhdpi, xxxhdpi)
+const targetMipmapDirs = fs.existsSync(res)
+  ? fs.readdirSync(res).filter((d) => d.startsWith('mipmap-') && !d.includes('anydpi'))
+  : ['mipmap-xxxhdpi'];
+if (!targetMipmapDirs.includes('mipmap-xxxhdpi')) targetMipmapDirs.push('mipmap-xxxhdpi');
+
 for (const icon of ICONS) {
   const src = path.join(root, icon.src);
   if (!fs.existsSync(src)) throw new Error(`[app-icons] Falta ${icon.src}`);
   const name = resName(icon.id);
-  fs.copyFileSync(src, path.join(xxxhdpi, `${name}.png`)); // legacy (API < 26)
-  fs.copyFileSync(src, path.join(xxxhdpi, `${name}_fg.png`));
+  for (const dirName of targetMipmapDirs) {
+    const dir = path.join(res, dirName);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.copyFileSync(src, path.join(dir, `${name}.png`)); // legacy (API < 26)
+    fs.copyFileSync(src, path.join(dir, `${name}_fg.png`));
+  }
   fs.writeFileSync(
     path.join(anydpi, `${name}.xml`),
     `<?xml version="1.0" encoding="utf-8"?>
@@ -86,6 +97,40 @@ for (const icon of ICONS) {
     'utf8'
   );
 }
+
+// Ensure default ic_launcher and ic_launcher_round are also Spotifree so any car head units,
+// system launchers or Android Auto services querying @mipmap/ic_launcher get Spotifree's actual photo/icon
+const defaultIconSrc = path.join(root, ICONS[0].src);
+for (const dirName of targetMipmapDirs) {
+  const dir = path.join(res, dirName);
+  fs.copyFileSync(defaultIconSrc, path.join(dir, 'ic_launcher.png'));
+  fs.copyFileSync(defaultIconSrc, path.join(dir, 'ic_launcher_round.png'));
+  fs.copyFileSync(defaultIconSrc, path.join(dir, 'ic_launcher_foreground.png'));
+}
+fs.writeFileSync(
+  path.join(anydpi, 'ic_launcher.xml'),
+  `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground>
+        <inset android:drawable="@mipmap/${resName('default')}_fg" android:inset="10%" />
+    </foreground>
+</adaptive-icon>
+`,
+  'utf8'
+);
+fs.writeFileSync(
+  path.join(anydpi, 'ic_launcher_round.xml'),
+  `<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground>
+        <inset android:drawable="@mipmap/${resName('default')}_fg" android:inset="10%" />
+    </foreground>
+</adaptive-icon>
+`,
+  'utf8'
+);
 
 // 4. Manifest aliases
 const manifestPath = path.join(androidMain, 'AndroidManifest.xml');
