@@ -26,6 +26,7 @@ import { useUIStore } from './store/useUIStore';
 import { usePlayerStore } from './store/usePlayerStore';
 import { useIsMobile } from './utils/useIsMobile';
 import { initAuthListener } from './services/spotifreeAuth';
+import { initPlaybackSync } from './services/playbackSync';
 import { useSharedSessionStore, getIsApplyingRemoteSync } from './services/sharedSessionService';
 import { initSpotifreeMixes } from './services/spotifreeMixes';
 import { initListenFriends } from './services/listenFriends';
@@ -57,6 +58,9 @@ function App() {
 
     // Collaborative playlists stay in sync between everyone who joined them
     void import('./services/sharedPlaylists').then((m) => m.initSharedPlaylists()).catch(() => {});
+
+    // Initialize local/cross-device playback continuity before cloud auth listener hydrates
+    const unsubscribePlaybackSync = initPlaybackSync();
 
     // Initialize real-time cloud session listener
     const unsubscribeAuth = initAuthListener();
@@ -201,6 +205,7 @@ function App() {
     return () => {
       removeBackListener?.();
       removeUrlListener?.();
+      unsubscribePlaybackSync();
       unsubscribeAuth();
       unsubscribePlayer();
       window.removeEventListener('focus', handleFocus);

@@ -19,8 +19,7 @@ import {
 } from '../icons/SpotifyNativeIcons';
 import { formatDuration } from '../../utils/formatters';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
-import { handleImageError } from '../../utils/imageFallback';
-import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover, handleTrackCoverError } from '../../utils/trackCovers';
 import { SPOTIFY_DJ_COVER_IMAGE } from '../../store/useSpotifyDataStore';
 
 interface AIDJViewProps {
@@ -298,11 +297,11 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
     });
   }, [currentTrack]);
 
-  // Resolve album covers for all DJ tracks in background
+  // Resolve album covers for all DJ tracks in background with per-chunk incremental updates
   useEffect(() => {
     const list = djTracks && djTracks.length > 0 ? djTracks : queue;
     if (list && list.length > 0) {
-      resolveTrackCoversBatch(list).then(() => {
+      resolveTrackCoversBatch(list, undefined, () => {
         setCoversVersion((v) => v + 1);
       }).catch(() => {});
     }
@@ -540,7 +539,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                 <img
                   src={activeArtwork}
                   alt={currentTrack?.name || 'DJ'}
-                  onError={handleImageError}
+                  onError={(e) => handleTrackCoverError(e, currentTrack, () => setCoversVersion((v) => v + 1))}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 />
               </div>
@@ -833,7 +832,7 @@ export const AIDJView: React.FC<AIDJViewProps> = ({ onBack, isMobile = false, on
                         alt={track.name}
                         referrerPolicy="no-referrer"
                         crossOrigin="anonymous"
-                        onError={handleImageError}
+                        onError={(e) => handleTrackCoverError(e, track, () => setCoversVersion((v) => v + 1))}
                         loading="lazy"
                         className="w-10 h-10 rounded-md object-cover shrink-0 bg-[#282828]"
                       />

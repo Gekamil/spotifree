@@ -183,6 +183,88 @@ export function sanitizeTrack(track: any): Track {
   } as Track;
 }
 
+export function hydrateTrackCoverSync(track: Track): Track {
+  const s = sanitizeTrack(track);
+  const curUrl = s.album?.images?.[0]?.url;
+  if (curUrl && !isPlaylistOrGenericCover(curUrl)) return s;
+  const resolved = resolveTrackCover(s);
+  if (!resolved) return s;
+  return {
+    ...s,
+    album: {
+      ...s.album,
+      id: s.album?.id || `alb-${s.id}`,
+      name: s.album?.name || s.name,
+      images: [{ url: resolved }],
+    },
+  };
+}
+
+function patchTrackCoverUrl(t: Track, url: string): Track {
+  return {
+    ...t,
+    album: {
+      ...t.album,
+      id: t.album?.id || `alb-${t.id}`,
+      name: t.album?.name || t.name,
+      images: [{ url, height: 300, width: 300 }],
+    },
+  };
+}
+
+function hydrateCoversAndSyncStores(
+  targets: Track[],
+  setState: (fn: (s: PlayerState) => Partial<PlayerState> | PlayerState) => void,
+  getState: () => PlayerState
+) {
+  const deduped = deduplicateTracks(targets).filter(Boolean);
+  if (deduped.length === 0) return;
+
+  resolveTrackCoversBatch(deduped, undefined, (updates) => {
+    if (!updates || updates.size === 0) return;
+
+    const patchIfUpdated = (t: Track): Track => {
+      const url = updates.get(t.id);
+      if (!url || isPlaylistOrGenericCover(url)) return t;
+      return patchTrackCoverUrl(t, url);
+    };
+
+    let updatedCurrent: Track | null = null;
+    setState((s) => {
+      const nextCurrent = s.currentTrack && updates.has(s.currentTrack.id)
+        ? patchIfUpdated(s.currentTrack)
+        : s.currentTrack;
+      if (nextCurrent && nextCurrent !== s.currentTrack) {
+        updatedCurrent = nextCurrent;
+      }
+      const nextQueue = s.queue.some((t) => updates.has(t.id)) ? s.queue.map(patchIfUpdated) : s.queue;
+      const nextOriginal = s.originalQueue.some((t) => updates.has(t.id)) ? s.originalQueue.map(patchIfUpdated) : s.originalQueue;
+      return {
+        currentTrack: nextCurrent,
+        queue: nextQueue,
+        originalQueue: nextOriginal,
+      };
+    });
+
+    if (updatedCurrent) {
+      const snap = getState();
+      updateMediaSessionTrack(updatedCurrent, (snap.progressMs || 0) / 1000, snap.isPlaying);
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const aiDjStore = (window as any).__useAIDJStore;
+        const djState = aiDjStore?.getState?.();
+        if (djState?.djTracks?.some((t: Track) => updates.has(t.id))) {
+          aiDjStore.setState({
+            djTracks: djState.djTracks.map(patchIfUpdated),
+          });
+        }
+      } catch {}
+    }
+  }).catch(() => {});
+}
+
 export function updateDocumentTitle(track?: Track | null, isPlaying: boolean = true) {
   if (typeof document === 'undefined') return;
   try {
@@ -195,8 +277,8 @@ export function updateDocumentTitle(track?: Track | null, isPlaying: boolean = t
   } catch {}
 }
 
-function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
-  updateDocumentTitle(track, true);
+function updateMediaSessionTrack(track: Track, positionSec: number = 0, isPlaying: boolean = true) {
+  updateDocumentTitle(track, isPlaying);
   if (typeof navigator === 'undefined' || !('mediaSession' in navigator) || !track) return;
   try {
     registerMediaSessionHandlers();
@@ -207,7 +289,7 @@ function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
       album: track.album?.name || 'Spotifree',
       artwork: getMediaSessionArtwork(coverUrl),
     });
-    navigator.mediaSession.playbackState = 'playing';
+    navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
     if ((navigator.mediaSession as any).setPositionState && track.duration_ms > 0) {
       (navigator.mediaSession as any).setPositionState({
         duration: Math.max(1, track.duration_ms / 1000),
@@ -235,6 +317,21 @@ function updateMediaSessionTrack(track: Track, positionSec: number = 0) {
 }
 let lastMediaSessionPositionUpdate = 0;
 
+export interface HydratedPlaybackSession {
+  currentTrack: Track;
+  progressMs?: number;
+  durationMs?: number;
+  queue?: Track[];
+  originalQueue?: Track[];
+  shuffleMode?: 'off' | 'all' | 'smart';
+  isShuffle?: boolean;
+  repeatMode?: 'off' | 'all' | 'one';
+  currentContextId?: string | null;
+  currentContextName?: string | null;
+  playedInShuffle?: string[];
+  preselectedNextTrackId?: string | null;
+}
+
 interface PlayerState {
   currentTrack: Track | null;
   isPlaying: boolean;
@@ -258,6 +355,7 @@ interface PlayerState {
 
   // Actions
   playTrack: (track: Track, newQueue?: Track[], contextId?: string, contextName?: string, isNavigatingHistory?: boolean) => void;
+  hydratePlaybackSession: (session: HydratedPlaybackSession) => void;
   setContextId: (id: string | null, name?: string | null) => void;
   togglePlay: () => void;
   nextTrack: () => void;
@@ -388,29 +486,11 @@ const store = create<PlayerState>((set, get) => ({
       }
     }
     const state = get();
-    const safeTrack = sanitizeTrack(track);
-    const hydrateCoverSync = (t: Track): Track => {
-      const s = sanitizeTrack(t);
-      const curUrl = s.album?.images?.[0]?.url;
-      if (curUrl && !isPlaylistOrGenericCover(curUrl)) return s;
-      const resolved = resolveTrackCover(s);
-      if (!resolved) return s;
-      return {
-        ...s,
-        album: {
-          ...s.album,
-          id: s.album?.id || `alb-${s.id}`,
-          name: s.album?.name || s.name,
-          images: [{ url: resolved }],
-        },
-      };
-    };
-
-    const hydratedTrack = hydrateCoverSync(safeTrack);
+    const hydratedTrack = hydrateTrackCoverSync(sanitizeTrack(track));
     const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanNew = (hydratedTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
-    const rawOriginal = (newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue)).map(hydrateCoverSync);
+    const rawOriginal = (newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue)).map(hydrateTrackCoverSync);
     let activeQueue: Track[];
     if (newQueue) {
       if (state.isShuffle) {
@@ -422,9 +502,9 @@ const store = create<PlayerState>((set, get) => ({
     } else {
       const exists = state.queue.some((t) => t && (t.id === hydratedTrack.id || matchTrackId(t.id, hydratedTrack.id)));
       if (!exists && hydratedTrack) {
-        activeQueue = [hydratedTrack, ...state.queue.map(hydrateCoverSync)];
+        activeQueue = [hydratedTrack, ...state.queue.map(hydrateTrackCoverSync)];
       } else {
-        activeQueue = state.queue.map(hydrateCoverSync);
+        activeQueue = state.queue.map(hydrateTrackCoverSync);
       }
     }
 
@@ -499,36 +579,12 @@ const store = create<PlayerState>((set, get) => ({
       }
     }
 
-    // Resolve exact album covers for current track + upcoming queue so sidebars & players always show crisp artwork
-    const coverTargets = [hydratedTrack, ...activeQueue.slice(0, 6)].filter(Boolean);
-    if (coverTargets.length > 0) {
-      resolveTrackCoversBatch(coverTargets, undefined, (updates) => {
-        if (!updates || updates.size === 0) return;
-        set((s) => {
-          const patchTrack = (t: Track): Track => {
-            const url = updates.get(t.id);
-            if (!url) return t;
-            return {
-              ...t,
-              album: {
-                ...t.album,
-                id: t.album?.id || `alb-${t.id}`,
-                name: t.album?.name || t.name,
-                images: [{ url }],
-              },
-            };
-          };
-          const nextCurrent = s.currentTrack && updates.has(s.currentTrack.id) ? patchTrack(s.currentTrack) : s.currentTrack;
-          const nextQueue = s.queue.some((t) => updates.has(t.id)) ? s.queue.map(patchTrack) : s.queue;
-          const nextOriginal = s.originalQueue.some((t) => updates.has(t.id)) ? s.originalQueue.map(patchTrack) : s.originalQueue;
-          return {
-            currentTrack: nextCurrent,
-            queue: nextQueue,
-            originalQueue: nextOriginal,
-          };
-        });
-      }).catch(() => {});
-    }
+    // Resolve exact album covers for current track + upcoming queue slice starting after current index
+    const curPlayIdx = activeQueue.findIndex((t) => t.id === hydratedTrack.id || matchTrackId(t.id, hydratedTrack.id));
+    const upcomingCoverSlice = curPlayIdx >= 0
+      ? [...activeQueue.slice(curPlayIdx + 1, curPlayIdx + 7), ...activeQueue.slice(0, Math.min(curPlayIdx, 2))]
+      : activeQueue.slice(0, 6);
+    hydrateCoversAndSyncStores([hydratedTrack, ...upcomingCoverSlice], set, get);
 
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
     if (engine) {
@@ -555,6 +611,70 @@ const store = create<PlayerState>((set, get) => ({
     }
 
     updateMediaSessionTrack(hydratedTrack, 0);
+  },
+
+  hydratePlaybackSession: (session: HydratedPlaybackSession) => {
+    if (!session?.currentTrack?.id) return;
+    const safeCurrent = hydrateTrackCoverSync(sanitizeTrack(session.currentTrack));
+    const rawQueue = Array.isArray(session.queue) && session.queue.length > 0
+      ? deduplicateTracks(session.queue.map(hydrateTrackCoverSync))
+      : [safeCurrent];
+    const hasCurrentInQueue = rawQueue.some((t) => matchTrackId(t.id, safeCurrent.id));
+    const finalQueue = hasCurrentInQueue ? rawQueue : [safeCurrent, ...rawQueue];
+
+    const rawOrig = Array.isArray(session.originalQueue) && session.originalQueue.length > 0
+      ? deduplicateTracks(session.originalQueue.map(hydrateTrackCoverSync))
+      : finalQueue;
+
+    const shuffleMode: 'off' | 'all' | 'smart' =
+      session.shuffleMode === 'smart' || session.shuffleMode === 'all'
+        ? session.shuffleMode
+        : session.isShuffle
+        ? 'all'
+        : 'off';
+    const isShuffle = shuffleMode !== 'off';
+    const repeatMode: 'off' | 'all' | 'one' =
+      session.repeatMode === 'one' || session.repeatMode === 'all' ? session.repeatMode : 'off';
+
+    const durationMs = Math.max(0, Number(session.durationMs) || safeCurrent.duration_ms || 180000);
+    const progressMs = Math.max(0, Math.min(Number(session.progressMs) || 0, durationMs));
+
+    statCarryMs = 0;
+    statLastMs = -1;
+
+    set((s) => ({
+      currentTrack: safeCurrent,
+      isPlaying: false,
+      progressMs,
+      durationMs,
+      queue: finalQueue,
+      originalQueue: rawOrig,
+      shuffleMode,
+      isShuffle,
+      shuffleVersion: s.shuffleVersion + 1,
+      repeatMode,
+      currentContextId: session.currentContextId !== undefined ? session.currentContextId : (safeCurrent.album?.id || null),
+      currentContextName: session.currentContextName !== undefined ? session.currentContextName : (safeCurrent.album?.name || null),
+      playedInShuffle: Array.isArray(session.playedInShuffle) ? session.playedInShuffle : [],
+      preselectedNextTrackId: session.preselectedNextTrackId ?? null,
+    }));
+
+    const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;
+    if (engine) {
+      if (typeof engine.resetForRestoredTrack === 'function') {
+        engine.resetForRestoredTrack();
+      } else if (typeof engine.pause === 'function') {
+        engine.pause();
+      }
+    }
+
+    updateMediaSessionTrack(safeCurrent, progressMs / 1000, false);
+
+    const curIdx = finalQueue.findIndex((t) => matchTrackId(t.id, safeCurrent.id));
+    const upcomingSlice = curIdx >= 0
+      ? finalQueue.slice(curIdx + 1, curIdx + 7)
+      : finalQueue.slice(0, 6);
+    hydrateCoversAndSyncStores([safeCurrent, ...upcomingSlice], set, get);
   },
 
   togglePlay: () => {
@@ -1049,21 +1169,22 @@ const store = create<PlayerState>((set, get) => ({
 
   completeCrossfadeTrack: (track: Track, initialProgressMs: number = 0) => {
     const state = get();
-    const updatedHistory = [track, ...state.history.filter((t) => t.id !== track.id)].slice(0, 50);
+    const hydratedTrack = hydrateTrackCoverSync(sanitizeTrack(track));
+    const updatedHistory = [hydratedTrack, ...state.history.filter((t) => t.id !== hydratedTrack.id)].slice(0, 50);
     try {
-      useStatsStore.getState().recordTrackPlayed(track);
+      useStatsStore.getState().recordTrackPlayed(hydratedTrack);
       recordHistoryItem({
-        id: track.id,
-        name: track.name || 'Canción',
-        subtitle: track.artists?.[0]?.name ? `Canción • ${track.artists[0].name}` : 'Canción',
-        image: track.album?.images?.[0]?.url || '',
+        id: hydratedTrack.id,
+        name: hydratedTrack.name || 'Canción',
+        subtitle: hydratedTrack.artists?.[0]?.name ? `Canción • ${hydratedTrack.artists[0].name}` : 'Canción',
+        image: hydratedTrack.album?.images?.[0]?.url || '',
         type: 'track',
-        track,
+        track: hydratedTrack,
       });
     } catch {}
 
     const updatedShuffle = state.isShuffle
-      ? [...state.playedInShuffle.filter((id) => id !== track.id), track.id]
+      ? [...state.playedInShuffle.filter((id) => id !== hydratedTrack.id), hydratedTrack.id]
       : [];
 
     let nextPreselectedId: string | null = null;
@@ -1073,7 +1194,7 @@ const store = create<PlayerState>((set, get) => ({
         const rnd = Math.floor(Math.random() * unplayed.length);
         nextPreselectedId = unplayed[rnd].id;
       } else {
-        const candidates = state.queue.filter((t) => t.id !== track.id);
+        const candidates = state.queue.filter((t) => t.id !== hydratedTrack.id);
         if (candidates.length > 0) {
           const rnd = Math.floor(Math.random() * candidates.length);
           nextPreselectedId = candidates[rnd].id;
@@ -1081,45 +1202,29 @@ const store = create<PlayerState>((set, get) => ({
       }
     }
 
+    const patchQueueCover = (list: Track[]) =>
+      hydratedTrack.album?.images?.[0]?.url && list.some((t) => t.id === hydratedTrack.id && isPlaylistOrGenericCover(t.album?.images?.[0]?.url))
+        ? list.map((t) => (t.id === hydratedTrack.id ? hydratedTrack : t))
+        : list;
+
     set({
-      currentTrack: track,
-      currentContextId: state.currentContextId || track.album?.id,
-      currentContextName: state.currentContextName || track.album?.name || null,
+      currentTrack: hydratedTrack,
+      currentContextId: state.currentContextId || hydratedTrack.album?.id,
+      currentContextName: state.currentContextName || hydratedTrack.album?.name || null,
       isPlaying: true,
       progressMs: Math.max(0, initialProgressMs),
-      durationMs: track.duration_ms,
+      durationMs: hydratedTrack.duration_ms,
+      queue: patchQueueCover(state.queue),
+      originalQueue: patchQueueCover(state.originalQueue),
       history: updatedHistory,
       playedInShuffle: updatedShuffle,
       preselectedNextTrackId: nextPreselectedId,
     });
 
-    updateMediaSessionTrack(track, initialProgressMs / 1000);
+    updateMediaSessionTrack(hydratedTrack, initialProgressMs / 1000, true);
 
-    // Resolve crisp artwork for incoming track if missing or generic
-    const hasValidCover = track.album?.images?.[0]?.url && !isPlaylistOrGenericCover(track.album.images[0].url);
-    if (!hasValidCover && track.name) {
-      resolveTrackCoversBatch([track], undefined, (updates) => {
-        const fresh = updates?.get(track.id);
-        if (fresh && !isPlaylistOrGenericCover(fresh)) {
-          set((s) => {
-            if (s.currentTrack?.id === track.id) {
-              const patched = {
-                ...s.currentTrack,
-                album: {
-                  ...s.currentTrack.album,
-                  id: s.currentTrack.album?.id || `alb-${track.id}`,
-                  name: s.currentTrack.album?.name || track.name,
-                  images: [{ url: fresh, height: 300, width: 300 }],
-                },
-              };
-              updateMediaSessionTrack(patched, s.progressMs / 1000);
-              return { currentTrack: patched };
-            }
-            return s;
-          });
-        }
-      }).catch(() => {});
-    }
+    // Resolve crisp artwork for incoming track + next queued songs across player UI, DJ drawer & lockscreen
+    hydrateCoversAndSyncStores([hydratedTrack, ...get().getUpcomingTracks(6)], set, get);
 
     // Preload next upcoming tracks N+1 and N+2
     const engine = typeof window !== 'undefined' ? (window as any).__audioEngine : null;

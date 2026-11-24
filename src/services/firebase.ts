@@ -15,6 +15,7 @@ import {
   getFirestore,
   doc,
   setDoc,
+  updateDoc,
   getDoc,
   onSnapshot,
   type Firestore,
@@ -274,6 +275,10 @@ function slimTrack(t: any): any {
       images: t.album?.images?.[0]?.url && !String(t.album.images[0].url).startsWith('data:') ? [{ url: t.album.images[0].url }] : [],
     },
   };
+  if (t.uri) out.uri = t.uri;
+  if (t.isSmartRecommendation) out.isSmartRecommendation = true;
+  if (t.isAutoplayRecommendation) out.isAutoplayRecommendation = true;
+  if (t.queueId) out.queueId = t.queueId;
   if (t.added_at) out.added_at = t.added_at;
   if (t.added_by && typeof t.added_by === 'string') out.added_by = t.added_by;
   return out;
@@ -391,6 +396,12 @@ export function prepareUserDocForFirestore(uid: string, data: Partial<CloudUserD
       while (byteSize(payload) > BUDGET && Array.isArray(payload.stats.playlistTrash) && payload.stats.playlistTrash.length) {
         payload.stats.playlistTrash = payload.stats.playlistTrash.slice(0, -1);
       }
+      if (byteSize(payload) > BUDGET && payload.stats.lastPlayback) {
+        const lp = { ...payload.stats.lastPlayback };
+        if (Array.isArray(lp.queue)) lp.queue = lp.queue.slice(0, 40);
+        if (Array.isArray(lp.originalQueue)) lp.originalQueue = [];
+        payload.stats.lastPlayback = lp;
+      }
       if (byteSize(payload) > BUDGET) delete payload.stats.bannerImage;
       if (byteSize(payload) > BUDGET) delete payload.stats.avatarImage;
       if (byteSize(payload) > BUDGET && payload.stats.taste?.signals) payload.stats.taste = { ...payload.stats.taste, signals: payload.stats.taste.signals.slice(-400) };
@@ -418,6 +429,108 @@ export async function getUserDataFromFirestore(uid: string): Promise<CloudUserDa
 /** updatedAt of the documents this device wrote lately (their echo from the server is not a remote change) */
 const writtenUpdatedAts = new Set<number>();
 export let lastWrittenUpdatedAt = 0;
+
+function trackWrittenUpdatedAt(ts: number): void {
+  lastWrittenUpdatedAt = ts;
+  writtenUpdatedAts.add(ts);
+  if (writtenUpdatedAts.size > 40) {
+    const first = writtenUpdatedAts.values().next().value;
+    if (first !== undefined) writtenUpdatedAts.delete(first);
+  }
+}
+
+function sliceWindowAroundCurrent(list: any[], currentTrackId: string | undefined, maxItems: number): any[] {
+  if (!Array.isArray(list)) return [];
+  if (list.length <= maxItems) return list;
+  const cleanTarget = String(currentTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+  const idx = cleanTarget
+    ? list.findIndex((t) => {
+        const cid = String(t?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+        return cid === cleanTarget;
+      })
+    : -1;
+  if (idx < 0) return list.slice(0, maxItems);
+  const keepBefore = Math.min(idx, Math.max(10, Math.floor(maxItems * 0.25)));
+  const start = Math.max(0, idx - keepBefore);
+  const end = Math.min(list.length, start + maxItems);
+  const adjustedStart = Math.max(0, end - maxItems);
+  return list.slice(adjustedStart, end);
+}
+
+export function slimPlaybackSnapshotForCloud(snapshot: any): any {
+  if (!snapshot || typeof snapshot !== 'object') return null;
+  const currentTrack = snapshot.currentTrack ? slimTrack(snapshot.currentTrack) : null;
+  if (!currentTrack?.id) return null;
+
+  const slimList = (list: any[], maxItems: number) =>
+    sliceWindowAroundCurrent(
+      Array.isArray(list) ? list.filter((t) => t && t.id) : [],
+      currentTrack.id,
+      maxItems
+    ).map(slimTrack);
+
+  const queueLimit = 120;
+  const origLimit = 120;
+  const updatedAt = Math.max(Date.now(), Number(snapshot.updatedAt) || 0);
+  const compact: any = {
+    version: snapshot.version || 1,
+    updatedAt,
+    deviceId: String(snapshot.deviceId || ''),
+    wasPlaying: Boolean(snapshot.wasPlaying),
+    progressMs: Math.max(0, Math.round(Number(snapshot.progressMs) || 0)),
+    durationMs: Math.max(0, Math.round(Number(snapshot.durationMs) || 0)),
+    currentContextId: snapshot.currentContextId || null,
+    currentContextName: snapshot.currentContextName || null,
+    shuffleMode: snapshot.shuffleMode === 'smart' || snapshot.shuffleMode === 'all' ? snapshot.shuffleMode : 'off',
+    isShuffle: Boolean(snapshot.isShuffle),
+    repeatMode: snapshot.repeatMode === 'one' || snapshot.repeatMode === 'all' ? snapshot.repeatMode : 'off',
+    playedInShuffle: Array.isArray(snapshot.playedInShuffle) ? snapshot.playedInShuffle.slice(-150) : [],
+    preselectedNextTrackId: snapshot.preselectedNextTrackId || null,
+    currentTrack,
+    queue: slimList(snapshot.queue, queueLimit),
+    originalQueue: slimList(snapshot.originalQueue, origLimit),
+    djState: snapshot.djState && typeof snapshot.djState === 'object' ? {
+      isDJModeActive: Boolean(snapshot.djState.isDJModeActive),
+      currentSetTitle: String(snapshot.djState.currentSetTitle || ''),
+      activeSegmentId: snapshot.djState.activeSegmentId || null,
+      djTracks: slimList(snapshot.djState.djTracks, 60),
+    } : null,
+  };
+
+  // Keep payload compact inside Firestore stats map (~65 KB ceiling for lastPlayback)
+  const MAX_PLAYBACK_BYTES = 65_000;
+  if (byteSize(compact) > MAX_PLAYBACK_BYTES) {
+    compact.originalQueue = [];
+  }
+  while (byteSize(compact) > MAX_PLAYBACK_BYTES && compact.queue.length > 20) {
+    compact.queue = sliceWindowAroundCurrent(compact.queue, currentTrack.id, Math.max(20, Math.floor(compact.queue.length * 0.6)));
+  }
+  if (byteSize(compact) > MAX_PLAYBACK_BYTES && compact.djState?.djTracks?.length > 15) {
+    compact.djState.djTracks = sliceWindowAroundCurrent(compact.djState.djTracks, currentTrack.id, 15);
+  }
+  return compact;
+}
+
+export async function saveLastPlaybackToFirestore(uid: string, lastPlayback: any): Promise<boolean> {
+  if (!uid) return false;
+  try {
+    initFirebase();
+    if (!isFirebaseConfigured() || !db) return false;
+    const compact = slimPlaybackSnapshotForCloud(lastPlayback);
+    if (!compact) return false;
+    const cleaned = cleanDataForFirestore(compact);
+    const updatedAt = compact.updatedAt;
+    trackWrittenUpdatedAt(updatedAt);
+    const userRef = doc(db, 'users', uid);
+    await updateDoc(userRef, {
+      'stats.lastPlayback': cleaned,
+      updatedAt,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function subscribeToUserDataFirestore(
   uid: string,

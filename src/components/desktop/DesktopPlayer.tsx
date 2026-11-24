@@ -19,8 +19,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { formatDuration, toHDImage } from '../../utils/formatters';
 import { audioEngine } from '../../services/audioEngine';
-import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover } from '../../utils/trackCovers';
-import { handleImageError } from '../../utils/imageFallback';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover, handleTrackCoverError } from '../../utils/trackCovers';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openSleepTimerSheet, useSleepTimer } from '../../services/sleepTimer';
 import { DevicePickerButton, MiniPlayerButton, restoreAudioOutput } from './PlayerExtras';
@@ -64,17 +63,24 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
   });
 
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack) {
+      setResolvedDesktopCover(undefined);
+      return;
+    }
     const direct = getTrackCoverUrl(currentTrack);
     if (direct && !isPlaylistOrGenericCover(direct)) {
       setResolvedDesktopCover(direct);
       return;
     }
+    setResolvedDesktopCover(undefined);
+    let cancelled = false;
     resolveTrackCoversBatch([currentTrack]).then((updates) => {
+      if (cancelled) return;
       const fresh = updates.get(currentTrack.id) || getTrackCoverUrl(currentTrack);
       if (fresh && !isPlaylistOrGenericCover(fresh)) setResolvedDesktopCover(fresh);
     }).catch(() => {});
-  }, [currentTrack?.id, currentTrack?.name]);
+    return () => { cancelled = true; };
+  }, [currentTrack?.id, currentTrack?.name, currentTrack?.album?.images?.[0]?.url]);
 
   const activeArtworkUrl =
     (resolvedDesktopCover && !isPlaylistOrGenericCover(resolvedDesktopCover) ? resolvedDesktopCover : undefined) ||
@@ -262,7 +268,7 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
               <img
                 src={toHDImage(activeArtworkUrl)}
                 alt={currentTrack.name}
-                onError={handleImageError}
+                onError={(e) => handleTrackCoverError(e, currentTrack, (url) => setResolvedDesktopCover(url))}
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
               />
             </div>

@@ -8,6 +8,7 @@ import { audioEngine } from '../../services/audioEngine';
  */
 export const AudioController: React.FC = () => {
   const currentTrack = usePlayerStore((s) => s.currentTrack);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const volume = usePlayerStore((s) => s.volume);
   const isMuted = usePlayerStore((s) => s.isMuted);
   const queue = usePlayerStore((s) => s.queue);
@@ -29,6 +30,9 @@ export const AudioController: React.FC = () => {
     if (lastTrackIdRef.current === cleanCurrent) return;
     lastTrackIdRef.current = cleanCurrent;
 
+    // Restored or hydrated paused session (e.g. from another device or reload): keep paused at saved progressMs
+    if (!isPlaying) return;
+
     const artistName = currentTrack.artists?.[0]?.name || '';
     const query = `${currentTrack.name} ${artistName}`.trim();
     const cleanEngine = (audioEngine.getCurrentTrackId() || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -48,7 +52,7 @@ export const AudioController: React.FC = () => {
         }
       }
     }
-  }, [currentTrack, queue]);
+  }, [currentTrack, queue, isPlaying]);
 
   // 2b. When the queue order changes (shuffle toggled, smart shuffle inserts, reorder), make sure the
   // song preloaded for the next crossfade is the real next one (fixes crossfade in shuffle mode)

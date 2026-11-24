@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import type { Track } from '../types/spotify';
+import { API_BASE } from '../config';
 import { toThumbnailImage } from './formatters';
 
 export const TRACK_COVER_CACHE = new Map<string, string>();
@@ -67,23 +68,26 @@ export function persistTrackCover(id: string, url: string, playlistCover?: strin
 // ---------------------------------------------------------------------------
 // Exact cover search: the right song or nothing (a placeholder is better than a wrong cover)
 // ---------------------------------------------------------------------------
-const normCover = (s = '') =>
+export const normCover = (s = '') =>
   s
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '')
     .replace(/\s*[([].*?[)\]]/g, '')
+    .replace(/\s*\|.*$/g, '')
     .replace(/\s+-\s+.*$/, '')
+    .replace(/\b(official\s*(music\s*)?(video|audio|lyric\s*video|visualizer)|video\s*oficial|audio\s*oficial|letra|lyrics)\b/gi, '')
     .replace(/\b(feat|ft|featuring|with)\b\.?.*$/, '')
     .replace(/[^a-z0-9]+/g, ' ')
     .trim();
 
-function sameTitle(a: string, b: string): boolean {
+export function sameTitle(a: string, b: string): boolean {
   const x = normCover(a);
   const y = normCover(b);
   if (!x || !y) return false;
   if (x === y) return true;
   const [short, long] = x.length <= y.length ? [x, y] : [y, x];
+  if (short.length >= 3 && (long === short || long.startsWith(`${short} `))) return true;
   return short.length >= 6 && long.startsWith(short);
 }
 
@@ -130,21 +134,92 @@ export async function findExactCover(t: Track): Promise<string | null> {
     return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
   }
 
-  try {
-    const q = `${normCover(t.name)} ${normCover(artists[0])}`.trim();
-    const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=10`, {
-      signal: AbortSignal.timeout(3000),
-    });
-    if (!res.ok) return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
-    const data = await res.json();
-    const hits = (data.results || []).filter((r: any) => r?.artworkUrl100 && sameTitle(r.trackName, t.name) && sameArtist(artists, r.artistName));
-    if (!hits.length) return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
-    const album = normCover(t.album?.name);
-    const best = (album && hits.find((r: any) => normCover(r.collectionName) === album)) || hits[0];
-    return String(best.artworkUrl100).replace('100x100bb', '600x600bb');
-  } catch {
-    return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
+  const q = `${normCover(t.name)} ${normCover(artists[0])}`.trim();
+  const album = normCover(t.album?.name);
+
+  if (q) {
+    try {
+      const res = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(q)}&media=music&entity=song&limit=10`, {
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const hits = (data.results || []).filter((r: any) => r?.artworkUrl100 && sameTitle(r.trackName, t.name) && sameArtist(artists, r.artistName));
+        if (hits.length > 0) {
+          const best = (album && hits.find((r: any) => normCover(r.collectionName) === album)) || hits[0];
+          const url = String(best.artworkUrl100).replace('100x100bb', '600x600bb');
+          if (!isPlaylistOrGenericCover(url)) return url;
+        }
+      }
+    } catch {}
+
+    // Fallback to Spotifree catalog search (Deezer + iTunes) before dropping to YouTube thumbnail
+    if (API_BASE || typeof window !== 'undefined') {
+      try {
+        const searchRes = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(q)}&fast=1&limit=8`, {
+          signal: AbortSignal.timeout(3500),
+        });
+        if (searchRes.ok) {
+          const searchData = await searchRes.json();
+          const tracks: any[] = searchData?.tracks?.items || [];
+          const matched = tracks.filter((r) => {
+            const rUrl = r?.album?.images?.[0]?.url;
+            if (!rUrl || isPlaylistOrGenericCover(rUrl)) return false;
+            const rArtists = artistNames(r);
+            return sameTitle(r?.name || '', t.name) && (rArtists.length > 0 ? sameArtist(artists, rArtists.join(' ')) : true);
+          });
+          if (matched.length > 0) {
+            const best = (album && matched.find((r) => normCover(r.album?.name) === album)) || matched[0];
+            return best.album.images[0].url;
+          }
+        }
+      } catch {}
+    }
   }
+
+  return isYouTube ? `https://i.ytimg.com/vi/${cleanYt}/hqdefault.jpg` : null;
+}
+
+const retriedCoverErrors = new WeakMap<HTMLImageElement, string>();
+
+function applyFallbackCover(img: HTMLImageElement) {
+  img.onerror = null;
+  img.referrerPolicy = 'no-referrer';
+  void import('./imageFallback')
+    .then(({ DEFAULT_FALLBACK_COVER }) => {
+      if (img.isConnected && img.src !== DEFAULT_FALLBACK_COVER) {
+        img.src = DEFAULT_FALLBACK_COVER;
+      }
+    })
+    .catch(() => {});
+}
+
+/** Retries exact song artwork resolution once on image load failure before falling back to placeholder. */
+export function handleTrackCoverError(
+  e: React.SyntheticEvent<HTMLImageElement, Event>,
+  track?: Track | null,
+  onResolved?: (url: string) => void
+) {
+  const img = e.currentTarget;
+  const failedSrc = img.currentSrc || img.src || '';
+  if (!track?.id || retriedCoverErrors.get(img) === track.id) {
+    applyFallbackCover(img);
+    return;
+  }
+  retriedCoverErrors.set(img, track.id);
+  findExactCover(track)
+    .then((exact) => {
+      if (exact && !isPlaylistOrGenericCover(exact) && exact !== failedSrc) {
+        persistTrackCover(track.id, exact);
+        onResolved?.(exact);
+        if (img.isConnected) img.src = exact;
+      } else {
+        applyFallbackCover(img);
+      }
+    })
+    .catch(() => {
+      applyFallbackCover(img);
+    });
 }
 
 /**

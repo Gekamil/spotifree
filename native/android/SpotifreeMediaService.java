@@ -182,6 +182,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static volatile boolean dislikeEnabled = true;
     static volatile boolean disliked = false;
     static volatile boolean shuffle = false;
+    static volatile String shuffleMode = "off";
     static volatile String repeat = "off";
     static volatile boolean loggedIn = true;
     static volatile String language = "es";
@@ -641,9 +642,21 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
                 tr("No me gusta", "Dislike"),
                 R.drawable.ic_car_dislike).build());
         }
-        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_SHUFFLE + (shuffle ? ":on" : ":off"),
-            shuffle ? tr("Desactivar aleatorio", "Shuffle off") : tr("Aleatorio", "Shuffle"),
-            shuffle ? R.drawable.ic_car_shuffle_on : R.drawable.ic_car_shuffle).build());
+        String shufMode = (shuffleMode != null && !shuffleMode.isEmpty()) ? shuffleMode : (shuffle ? "all" : "off");
+        boolean shufActive = "all".equals(shufMode) || "smart".equals(shufMode);
+        String shufLabel = "smart".equals(shufMode)
+            ? tr("Aleatorio inteligente (desactivar)", "Smart Shuffle (off)")
+            : "all".equals(shufMode)
+                ? tr("Aleatorio (activar inteligente)", "Shuffle on (Smart Shuffle)")
+                : tr("Activar aleatorio", "Shuffle off");
+        int shufIcon = "smart".equals(shufMode)
+            ? R.drawable.ic_car_shuffle_smart
+            : "all".equals(shufMode)
+                ? R.drawable.ic_car_shuffle_on
+                : R.drawable.ic_car_shuffle_off;
+        sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_SHUFFLE + ":" + shufMode,
+            shufLabel,
+            shufIcon).build());
         sb.addCustomAction(new PlaybackStateCompat.CustomAction.Builder(ACT_REPEAT + ":" + repeat,
             "one".equals(repeat) ? tr("Repetir una", "Repeat one") : "all".equals(repeat) ? tr("Repetir todo", "Repeat all") : tr("Repetir", "Repeat"),
             "one".equals(repeat) ? R.drawable.ic_car_repeat_one : "all".equals(repeat) ? R.drawable.ic_car_repeat_on : R.drawable.ic_car_repeat).build());
@@ -659,7 +672,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
             sb.setExtras(stateExtras);
         }
         session.setPlaybackState(sb.build());
-        session.setShuffleMode(shuffle ? PlaybackStateCompat.SHUFFLE_MODE_ALL : PlaybackStateCompat.SHUFFLE_MODE_NONE);
+        session.setShuffleMode(shufActive ? PlaybackStateCompat.SHUFFLE_MODE_ALL : PlaybackStateCompat.SHUFFLE_MODE_NONE);
         session.setRepeatMode("one".equals(repeat) ? PlaybackStateCompat.REPEAT_MODE_ONE
             : "all".equals(repeat) ? PlaybackStateCompat.REPEAT_MODE_ALL : PlaybackStateCompat.REPEAT_MODE_NONE);
 

@@ -8,9 +8,8 @@ import {
   CheckTrackNativeIcon,
   SpotifyConnectNativeIcon,
 } from '../icons/SpotifyNativeIcons';
-import { handleImageError } from '../../utils/imageFallback';
 import { resolveVibrantColor } from '../../utils/spotifyColor';
-import { getTrackCoverUrl, resolveTrackCoversBatch } from '../../utils/trackCovers';
+import { getTrackCoverUrl, resolveTrackCoversBatch, isPlaylistOrGenericCover, handleTrackCoverError } from '../../utils/trackCovers';
 import { useUIStore } from '../../store/useUIStore';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { openDevicePickerSheet, useAudioOutputStore } from '../../services/audioOutputService';
@@ -74,18 +73,25 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
   });
 
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack) {
+      setResolvedCover(undefined);
+      return;
+    }
     const direct = getTrackCoverUrl(currentTrack);
-    if (direct && !direct.includes('liked-songs')) {
+    if (direct && !isPlaylistOrGenericCover(direct)) {
       setResolvedCover(direct);
       return;
     }
+    setResolvedCover(undefined);
+    let cancelled = false;
     // Auto-resolve missing or unindexed DJ track artwork
     resolveTrackCoversBatch([currentTrack]).then((updates) => {
+      if (cancelled) return;
       const fresh = updates.get(currentTrack.id) || getTrackCoverUrl(currentTrack);
-      if (fresh) setResolvedCover(fresh);
+      if (fresh && !isPlaylistOrGenericCover(fresh)) setResolvedCover(fresh);
     }).catch(() => {});
-  }, [currentTrack?.id, currentTrack?.name]);
+    return () => { cancelled = true; };
+  }, [currentTrack?.id, currentTrack?.name, currentTrack?.album?.images?.[0]?.url]);
 
   if (!currentTrack) return null;
 
@@ -147,7 +153,7 @@ export const MobileMiniPlayer: React.FC<MobileMiniPlayerProps> = ({ onOpenFullPl
             <img
               src={coverUrl}
               alt={currentTrack.name || 'Cover'}
-              onError={handleImageError}
+              onError={(e) => handleTrackCoverError(e, currentTrack, (url) => setResolvedCover(url))}
               className="w-full h-full object-cover"
               loading="eager"
             />

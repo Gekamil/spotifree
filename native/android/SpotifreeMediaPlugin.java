@@ -204,7 +204,10 @@ public class SpotifreeMediaPlugin extends Plugin {
         SpotifreeMediaService.useStar = Boolean.TRUE.equals(call.getBoolean("useStar", false));
         SpotifreeMediaService.dislikeEnabled = Boolean.TRUE.equals(call.getBoolean("dislikeEnabled", true));
         SpotifreeMediaService.disliked = Boolean.TRUE.equals(call.getBoolean("disliked", false));
-        SpotifreeMediaService.shuffle = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
+        boolean shuf = Boolean.TRUE.equals(call.getBoolean("shuffle", false));
+        SpotifreeMediaService.shuffle = shuf;
+        String shufMode = call.getString("shuffleMode", "");
+        SpotifreeMediaService.shuffleMode = (shufMode != null && !shufMode.isEmpty()) ? shufMode : (shuf ? "all" : "off");
         SpotifreeMediaService.explicit = Boolean.TRUE.equals(call.getBoolean("explicit", false));
         Double dur = call.getDouble("durationMs");
         Double pos = call.getDouble("positionMs");

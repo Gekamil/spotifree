@@ -17,6 +17,7 @@ import { usePlayerStore } from '../store/usePlayerStore';
 import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { applyRemoteSettings } from './settingsSync';
+import { applyRemotePlayback } from './playbackSync';
 import { showGlobalToast } from '../utils/globalToast';
 import { create } from 'zustand';
 import { mergeCloudTrash } from './playlistTrash';
@@ -235,6 +236,7 @@ export async function loginSpotifreeAccount(
       playlists: hasCloudPlaylists ? (cloudData!.playlists || []) : local.playlists,
       deletedPlaylistIds: cloudData?.deletedPlaylistIds || [],
       likedTracks: hasCloudLikes ? (cloudData!.likedTracks || []) : local.likedTracks,
+      stats: (cloudData as any)?.stats,
       updatedAt: Date.now(),
     };
 
@@ -303,6 +305,7 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
     spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
     playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
     likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
+    stats: (cloudData as any)?.stats,
     updatedAt: Date.now(),
   };
 
@@ -470,6 +473,11 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   const candidates = [acc.settings, (acc as any).stats?.appSettings].filter((x) => x && x.values);
   const syncedSettings = candidates.sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
   if (syncedSettings) applyRemoteSettings(syncedSettings);
+
+  // 1a-ter. Playback continuity from another device (exact song, second, queue & Smart Shuffle tracks)
+  if (st.lastPlayback) {
+    applyRemotePlayback(st.lastPlayback);
+  }
 
   // 1a-bis. Trash of deleted playlists and the ones restored on another device: a restored playlist
   // must stop being "deleted" here too, or this device would keep hiding it
@@ -716,6 +724,11 @@ export function initAuthListener(): () => void {
           firstSnapshot = false;
           return;
         }
+        const isPurePlaybackUpdate = Boolean(
+          (fresh as any)?.stats?.lastPlayback?.updatedAt &&
+          (fresh as any).stats.lastPlayback.updatedAt === fresh.updatedAt
+        );
+        if (isPurePlaybackUpdate) return;
         useCloudSync.setState({ receivedAt: Date.now() });
         if (Date.now() - lastRemoteNotice > 30000) {
           lastRemoteNotice = Date.now();

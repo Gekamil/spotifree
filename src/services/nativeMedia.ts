@@ -13,6 +13,7 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { getPlaylistCover } from '../utils/playlistCover';
+import { getTrackCoverUrl } from '../utils/trackCovers';
 import { getDownloadedTracks, isPlaylistDownloaded, onDownloadsChanged } from '../utils/offlineStorage';
 import { useLanguageStore } from '../utils/i18n';
 import { fetchLyricsUnified, parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../utils/lyricsService';
@@ -215,7 +216,7 @@ function img(url?: string | null, hd = false): string {
   }
   return '';
 }
-const coverOf = (t?: Track | null, hd = false) => img(t?.album?.images?.[0]?.url, hd);
+const coverOf = (t?: Track | null, hd = false) => img((t ? getTrackCoverUrl(t) : undefined) || t?.album?.images?.[0]?.url, hd);
 const tracksOf = (p?: Playlist | null): Track[] =>
   ((p?.tracks?.items || []) as any[]).map((x) => x?.track || x).filter((t: any) => t?.id && t?.name);
 let downloadedTrackIds = new Set<string>();
@@ -789,11 +790,13 @@ function pushNowPlaying(force = false) {
   const line = currentLyricLine(s.progressMs || 0, s.durationMs || t.duration_ms || 0);
   const liked = (s.likedTrackIds || []).includes(t.id);
   const useStar = Boolean((s as any).useStarFavorite);
-  const shuffle = Boolean(s.isShuffle);
+  const shuffleMode = s.shuffleMode || (s.isShuffle ? 'all' : 'off');
+  const shuffle = shuffleMode !== 'off';
   const repeat = s.repeatMode || 'off';
   const dislikeEnabled = isTasteRatingActive();
   const disliked = Boolean((t ? isNotInterested(t) : false) || isTrackDisliked(t));
-  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${useStar}|${dislikeEnabled}|${disliked}|${shuffle}|${repeat}|${useLanguageStore.getState().language}`;
+  const artworkUrl = coverOf(t, true);
+  const key = `${t.id}|${s.isPlaying}|${line}|${liked}|${useStar}|${dislikeEnabled}|${disliked}|${shuffleMode}|${repeat}|${artworkUrl}|${useLanguageStore.getState().language}`;
   const now = Date.now();
   // The system extrapolates the position while playing: resend on changes, or every 8 s for widget progress sync
   if (!force && key === lastSent && now - lastPushAt < (s.isPlaying ? 8000 : 15000)) return;
@@ -808,7 +811,7 @@ function pushNowPlaying(force = false) {
     title: t.name || '',
     artist: artistOf(t),
     album: t.album?.name || '',
-    artworkUrl: coverOf(t, true), // the big background of the car's player: HD
+    artworkUrl, // the big background of the car's player: HD
     durationMs: s.durationMs || t.duration_ms || 0,
     positionMs: s.progressMs || 0,
     isPlaying: Boolean(s.isPlaying),
@@ -818,6 +821,7 @@ function pushNowPlaying(force = false) {
     dislikeEnabled,
     disliked,
     shuffle,
+    shuffleMode,
     repeat,
     explicit: Boolean((t as any).explicit),
     language: useLanguageStore.getState().language,
@@ -1127,7 +1131,9 @@ export function initNativeMedia() {
       s.queue !== prev.queue ||
       s.likedTrackIds !== prev.likedTrackIds ||
       s.isShuffle !== prev.isShuffle ||
-      s.repeatMode !== prev.repeatMode
+      s.shuffleMode !== prev.shuffleMode ||
+      s.repeatMode !== prev.repeatMode ||
+      s.currentTrack?.album?.images?.[0]?.url !== prev.currentTrack?.album?.images?.[0]?.url
     ) {
       pushNowPlaying(true);
       return;

@@ -31,7 +31,7 @@ import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/
 import { handleImageError, DEFAULT_FALLBACK_COVER } from '../../utils/imageFallback';
 import { getArtistPicture } from '../../utils/artistImage';
 import { fetchLyricsUnified, parseEnhancedLyrics, getSynchronizedLyricProgress, type SyncedLine } from '../../utils/lyricsService';
-import { findExactCover, getTrackCoverUrl, persistTrackCover } from '../../utils/trackCovers';
+import { findExactCover, getTrackCoverUrl, persistTrackCover, isPlaylistOrGenericCover } from '../../utils/trackCovers';
 import { fetchTrackCanvas } from '../../services/spotifyApi';
 import { useLabsStore, openSpeedControlSheet, isTrackDisliked } from '../../services/labsService';
 import { useDragToDismiss } from '../../hooks/useDragToDismiss';
@@ -282,18 +282,21 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     return getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image || null;
   });
 
+  const failedCoverUrlRef = useRef<string | null>(null);
+
   const handleCoverError = async () => {
     if (!currentTrack) return;
     const targetId = currentTrack.id;
+    failedCoverUrlRef.current = displayCover || null;
     const direct = getTrackCoverUrl(currentTrack);
-    if (direct && !direct.includes('liked-songs')) {
+    if (direct && !isPlaylistOrGenericCover(direct) && direct !== failedCoverUrlRef.current) {
       setDisplayCover(direct);
       return;
     }
 
     // Only this exact song's cover (same title and artist), never another song's
     const exact = await findExactCover(currentTrack);
-    if (exact && currentTrackIdRef.current === targetId) {
+    if (exact && !isPlaylistOrGenericCover(exact) && exact !== failedCoverUrlRef.current && currentTrackIdRef.current === targetId) {
       persistTrackCover(targetId, exact);
       setDisplayCover(exact);
       extractDominantColorFromImage(exact).then((hex) => {
@@ -309,15 +312,30 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   };
 
   useEffect(() => {
+    const updatedUrl = currentTrack?.album?.images?.[0]?.url;
+    if (!currentTrack?.id || !updatedUrl || isPlaylistOrGenericCover(updatedUrl)) return;
+    if (updatedUrl === failedCoverUrlRef.current) return;
+    if (!displayCover || isPlaylistOrGenericCover(displayCover) || displayCover === DEFAULT_FALLBACK_COVER) {
+      setDisplayCover(updatedUrl);
+      extractDominantColorFromImage(updatedUrl).then((hex) => {
+        if (hex && currentTrackIdRef.current === currentTrack.id) {
+          setExtractedModalColor(hex);
+        }
+      });
+    }
+  }, [currentTrack?.id, currentTrack?.album?.images?.[0]?.url]);
+
+  useEffect(() => {
     let cancelled = false;
     let vidPollInterval: any;
     const trackId = currentTrack?.id;
     currentTrackIdRef.current = trackId || null;
+    failedCoverUrlRef.current = null;
 
     if (currentTrack) {
       // Instantly synchronize cover, clear stale lyrics, and reset canvas to prevent leakage
       const immediateCover = getTrackCoverUrl(currentTrack) || currentTrack.album?.images?.[0]?.url || (currentTrack as any).image;
-      if (immediateCover && !immediateCover.includes('liked-songs')) {
+      if (immediateCover && !isPlaylistOrGenericCover(immediateCover)) {
         setDisplayCover(immediateCover);
         extractDominantColorFromImage(immediateCover).then((hex) => {
           if (!cancelled && hex && currentTrackIdRef.current === trackId) {

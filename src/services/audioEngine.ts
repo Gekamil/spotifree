@@ -2461,6 +2461,19 @@ class AudioEngine {
           usePlayerStore.setState({ isPlaying: false });
         }
       });
+
+      audioEl.addEventListener('error', () => {
+        if (this.activeEngine !== 'html5' || this.activeAudioIndex !== idx) return;
+        if (!audioEl.currentSrc || !this.currentTrackId || this.isExplicitlyPaused || this.isCrossfading) return;
+        if (!audioEl.error || this.stuckRecoveryAttempts >= 2) return;
+        this.stuckRecoveryAttempts++;
+        const track = usePlayerStore.getState().currentTrack;
+        const query = this.currentTrackQuery || (track ? `${track.name} ${track.artists?.[0]?.name || ''}`.trim() : '');
+        if (query) {
+          console.warn('[AudioEngine] HTML5 audio error, trying alternate source for:', query);
+          this.resolveAndPlayAlternate(query, this.currentVideoId || undefined);
+        }
+      });
     });
   }
 
@@ -3780,7 +3793,15 @@ class AudioEngine {
     // A source the user chose by hand for this song always wins; then the one the app switched to
     // by itself (after finding the first one didn't match the song)
     const override = getSourceOverride(trackId) || getAutoSource(trackId);
-    if (override) return override;
+    if (override && !this.failedVideoIds.has(override)) return override;
+
+    // Direct yt-<11-char> IDs from YouTube / AI DJ recommendations already identify the exact video
+    const cleanTrackRef = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const directYtMatch = cleanTrackRef.match(/^(?:yt-|rec-ytm?-)([a-zA-Z0-9_-]{11})$/i);
+    if (directYtMatch && !this.failedVideoIds.has(directYtMatch[1])) {
+      persistVideoId(cleanQuery, directYtMatch[1]);
+      return directYtMatch[1];
+    }
 
     const verified = getVerifiedVideoId(cleanQuery, trackTitle, trackArtist);
     if (verified) {
@@ -3992,6 +4013,7 @@ class AudioEngine {
     this.currentTrackId = trackId;
     this.currentTrackQuery = query;
     this.failedVideoIds.clear();
+    this.stuckRecoveryAttempts = 0;
     this.isSeeking = false;
     this.isTransitioning = true;
     this.isExplicitlyPaused = false;
@@ -4339,21 +4361,59 @@ class AudioEngine {
     }
   }
 
+  public resetForRestoredTrack() {
+    this.isExplicitlyPaused = true;
+    this.isTransitioning = false;
+    this.isCrossfading = false;
+    this.preloadedNext = null;
+    this.currentTrackId = null;
+    this.currentTrackQuery = null;
+    this.currentVideoId = null;
+    this.stuckRecoveryAttempts = 0;
+    if (this.crossfadeInterval !== null) {
+      clearInterval(this.crossfadeInterval);
+      this.crossfadeInterval = null;
+    }
+    this.stopCarrier();
+    this.stopProgressTicker();
+    this.stopAuxiliaryTransitionFX();
+    for (const p of this.ytPlayers) {
+      if (p && typeof p.pauseVideo === 'function') {
+        try { p.pauseVideo(); } catch {}
+      }
+    }
+    for (const a of this.audios) {
+      if (a) {
+        try {
+          a.pause();
+          a.removeAttribute('src');
+          a.load();
+        } catch {}
+      }
+    }
+  }
+
   public resume() {
     this.isExplicitlyPaused = false;
     this.startCarrier();
     const { volume, isMuted } = usePlayerStore.getState();
     const targetVol = isMuted ? 0 : volume;
 
+    const currentTrack = usePlayerStore.getState().currentTrack;
+    const cleanCurrent = currentTrack ? AudioEngine.cleanId(currentTrack.id) : '';
+    const cleanEngine = this.currentTrackId ? AudioEngine.cleanId(this.currentTrackId) : '';
+    const missingSource =
+      this.activeEngine === 'youtube' ? !this.currentVideoId : !this.audio?.currentSrc;
+
+    if (currentTrack && ((cleanCurrent && cleanEngine !== cleanCurrent) || missingSource)) {
+      const artistName = currentTrack.artists?.[0]?.name || '';
+      const query = `${currentTrack.name} ${artistName}`.trim();
+      const startSec = Math.floor((usePlayerStore.getState().progressMs || 0) / 1000);
+      this.playTrack(currentTrack.id, query, startSec);
+      return;
+    }
+
     if (this.activeEngine === 'youtube') {
-      const currentTrack = usePlayerStore.getState().currentTrack;
-      if (!this.currentVideoId && currentTrack) {
-        const artistName = currentTrack.artists?.[0]?.name || '';
-        const query = `${currentTrack.name} ${artistName}`.trim();
-        const startSec = Math.floor((usePlayerStore.getState().progressMs || 0) / 1000);
-        this.playTrack(currentTrack.id, query, startSec);
-        return;
-      }
       if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
         try {
           if (this.ensureActiveVideoMatches()) {

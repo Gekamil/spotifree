@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
+import { API_BASE } from '../config';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { audioEngine } from './audioEngine';
 import { aiDJVoiceService, cleanTextForNaturalTTS } from './aiDJVoiceService';
 import { isNativeSpeechAvailable, nativeListen, nativeStopListening } from './nativeSpeech';
 import { useLanguageStore } from '../utils/i18n';
-import { resolveTrackCoversBatch } from '../utils/trackCovers';
+import { resolveTrackCoversBatch, isPlaylistOrGenericCover, getTrackCoverUrl } from '../utils/trackCovers';
 import {
   type MusicHashtag,
   resolveHashtagFromPrompt,
@@ -181,21 +182,36 @@ function firstName(): string {
 
 /** Turns an AI recommendation into a real catalog track (real id + cover) when possible. */
 async function resolveRecommendedTrack(title: string, artist: string): Promise<Track | null> {
+  const a = artist.toLowerCase().trim();
+  const t = title.toLowerCase().trim();
+  const pickHit = (items: Track[]) =>
+    items.find((it) => (it.name || '').toLowerCase().includes(t) && (it.artists || []).some((x) => (x.name || '').toLowerCase().includes(a) || a.includes((x.name || '').toLowerCase()))) ||
+    items.find((it) => (it.artists || []).some((x) => (x.name || '').toLowerCase() === a));
+
   try {
     const res = await Promise.race([
       searchSpotify(`${title} ${artist}`),
       new Promise<null>((r) => setTimeout(() => r(null), 3500)),
     ]);
     const items: Track[] = (res as any)?.tracks?.items || [];
-    const a = artist.toLowerCase();
-    const t = title.toLowerCase();
-    const hit =
-      items.find((it) => (it.name || '').toLowerCase().includes(t) && (it.artists || []).some((x) => (x.name || '').toLowerCase().includes(a) || a.includes((x.name || '').toLowerCase()))) ||
-      items.find((it) => (it.artists || []).some((x) => (x.name || '').toLowerCase() === a));
-    return hit || null;
-  } catch {
-    return null;
-  }
+    const hit = pickHit(items);
+    if (hit) return hit;
+  } catch {}
+
+  // Fallback to Spotifree catalog API (Deezer + iTunes) so recommendations always get real covers & durations
+  try {
+    const res = await fetch(`${API_BASE}/api/search?q=${encodeURIComponent(`${title} ${artist}`)}&fast=1&limit=6`, {
+      signal: AbortSignal.timeout(3500),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const items: Track[] = data?.tracks?.items || [];
+      const hit = pickHit(items) || items.find((it) => (it.name || '').toLowerCase().includes(t));
+      if (hit) return hit;
+    }
+  } catch {}
+
+  return null;
 }
 
 /** Speaks a DJ line over the music (ducked), with live captions. */
@@ -274,26 +290,9 @@ function hydrateAndSyncDJCovers(tracks: Track[], set: any) {
   if (!tracks || tracks.length === 0) return;
   resolveTrackCoversBatch(tracks, undefined, (updates) => {
     if (!updates || updates.size === 0) return;
-    set((s: any) => ({
-      djTracks: s.djTracks.map((t: Track) => {
-        const url = updates.get(t.id);
-        if (!url) return t;
-        return {
-          ...t,
-          album: {
-            ...t.album,
-            id: t.album?.id || `alb-${t.id}`,
-            name: t.album?.name || t.name,
-            images: [{ url, height: 300, width: 300 }],
-          },
-        };
-      }),
-    }));
-
-    const player = usePlayerStore.getState();
     const patch = (t: Track): Track => {
       const url = updates.get(t.id);
-      if (!url) return t;
+      if (!url || isPlaylistOrGenericCover(url)) return t;
       return {
         ...t,
         album: {
@@ -305,24 +304,35 @@ function hydrateAndSyncDJCovers(tracks: Track[], set: any) {
       };
     };
 
-    if (player.currentTrack && updates.has(player.currentTrack.id)) {
-      const updatedTrack = patch(player.currentTrack);
+    set((s: any) => ({
+      djTracks: s.djTracks.some((t: Track) => updates.has(t.id)) ? s.djTracks.map(patch) : s.djTracks,
+    }));
+
+    const player = usePlayerStore.getState();
+    const hasCurrent = Boolean(player.currentTrack && updates.has(player.currentTrack.id));
+    const hasQueue = player.queue.some((t) => updates.has(t.id));
+    const hasOrig = player.originalQueue.some((t) => updates.has(t.id));
+    if (hasCurrent || hasQueue || hasOrig) {
+      const updatedTrack = hasCurrent && player.currentTrack ? patch(player.currentTrack) : player.currentTrack;
       usePlayerStore.setState({
-        currentTrack: updatedTrack,
-        queue: player.queue.map(patch),
+        ...(updatedTrack ? { currentTrack: updatedTrack } : {}),
+        ...(hasQueue ? { queue: player.queue.map(patch) } : {}),
+        ...(hasOrig ? { originalQueue: player.originalQueue.map(patch) } : {}),
       });
-      if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-        const cover = updates.get(player.currentTrack.id);
+      if (hasCurrent && updatedTrack && typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+        const cover = updates.get(updatedTrack.id);
         if (cover) {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: updatedTrack.name,
-            artist: updatedTrack.artists?.map((a) => a.name).join(', ') || 'Spotifree',
-            album: updatedTrack.album?.name || 'Spotifree',
-            artwork: [
-              { src: cover, sizes: '300x300', type: 'image/jpeg' },
-              { src: cover, sizes: '512x512', type: 'image/jpeg' },
-            ],
-          });
+          try {
+            navigator.mediaSession.metadata = new MediaMetadata({
+              title: updatedTrack.name,
+              artist: updatedTrack.artists?.map((a) => a.name).join(', ') || 'Spotifree',
+              album: updatedTrack.album?.name || 'Spotifree',
+              artwork: [
+                { src: cover, sizes: '300x300', type: 'image/jpeg' },
+                { src: cover, sizes: '512x512', type: 'image/jpeg' },
+              ],
+            });
+          } catch {}
         }
       }
     }
@@ -1939,6 +1949,24 @@ if (typeof window !== 'undefined') {
     const current = state.currentTrack;
     const idx = dj.djTracks.findIndex((t) => t.id === current.id);
     if (idx < 0) return;
+
+    // Ensure current + next 3 DJ tracks always resolve crisp artwork and preload next audio source
+    const upcomingWindow = dj.djTracks.slice(idx, idx + 4);
+    const missingArtwork = upcomingWindow.filter((t) => {
+      const c = getTrackCoverUrl(t);
+      return !c || isPlaylistOrGenericCover(c);
+    });
+    if (missingArtwork.length > 0) {
+      hydrateAndSyncDJCovers(missingArtwork, useAIDJStore.setState);
+    }
+    const nextAudioTrack = dj.djTracks[idx + 1];
+    if (nextAudioTrack) {
+      const qNext = `${nextAudioTrack.name} ${nextAudioTrack.artists?.[0]?.name || ''}`.trim();
+      try {
+        (window as any).__audioEngine?.preloadTrack?.(nextAudioTrack.id, qNext);
+      } catch {}
+    }
+
     const seg = segmentAt(dj.segments, idx);
     if (!seg) return;
     if (seg.id !== dj.activeSegmentId) {
