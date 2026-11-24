@@ -48,7 +48,7 @@ export const GROUPS: Array<{ title: string; items: Array<{ id: SettingsPage; sub
     items: [
       { id: 'storage', subtitle: 'Espacio usado y caché' },
       { id: 'social', subtitle: 'Amigos que escuchan contigo' },
-      { id: 'about', subtitle: 'Versión y novedades' },
+      { id: 'about', subtitle: 'Versión, novedades y créditos' },
     ],
   },
 ];

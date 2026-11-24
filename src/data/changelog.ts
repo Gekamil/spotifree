@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '0.5.3';
+export const APP_VERSION = '1.0';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.0',
+    date: '24 de noviembre, 2026',
+    title: 'Spotifree 1.0: Lanzamiento oficial con continuidad multidispositivo, Android Auto diferenciado, Modo DJ refinado y sección de Créditos',
+    isLatest: true,
+    highlights: [
+      'Continuidad de reproducción entre móvil, coche y ordenador: al pausar o cambiar de dispositivo con la misma cuenta, Spotifree retoma la playlist, canción, segundo exacto y las canciones añadidas por el Aleatorio inteligente.',
+      'Android Auto mejorado: iconos visuales diferenciados para aleatorio desactivado, aleatorio normal (con punto inferior) y aleatorio inteligente (con destello), además de carátulas fiables.',
+      'Modo DJ perfeccionado: transiciones suaves y progresivas sin cortes bruscos, extracción garantizada de carátulas y pistas al avanzar canciones, y recomendaciones más fieles a tus gustos reales.',
+      'Nueva pestaña de Créditos en Acerca de con la información del proyecto, autor y repositorio oficial en GitHub.',
+    ],
+  },
   {
     version: '0.5.3',
     date: '20 de noviembre, 2026',
     title: 'Spotifree 0.5.3: Transición instantánea de karaoke (0ms de silencio), biblioteca móvil con espaciado nativo Spotify y carátulas fotográficas en playlists temáticas',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Transición instantánea de karaoke sin pausas (0ms de silencio): el reproductor secundario precarga la pista instrumental en segundo plano y realiza un crossfade gapless sin interrupción audible al alternar el modo karaoke o ajustar la voz.',
       'Biblioteca móvil rediseñada con espaciado nativo de Spotify: eliminación de paddings excesivos, fila de filtros horizontales deslizables con botón de limpieza, carátulas compactas de 48x48px y tipografía ajustada idéntica a la app oficial.',

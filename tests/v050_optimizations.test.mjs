@@ -5,15 +5,15 @@ import path from 'node:path';
 
 describe('Spotifree v0.5 Optimizations, Live Extraction & Mood Shelves', () => {
   describe('1. Version Bump Verification', () => {
-    it('package.json version is 0.5.x', () => {
+    it('package.json version is 0.5.x or >= 1.0.0', () => {
       const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf-8'));
-      assert.ok(pkg.version.startsWith('0.5.'));
+      assert.ok(/^(0\.5\.|1\.0(\.|$))/.test(pkg.version));
     });
 
-    it('src/data/changelog.ts declares APP_VERSION 0.5.x and has latest 0.5 entry', () => {
+    it('src/data/changelog.ts declares current APP_VERSION and keeps 0.5 release history', () => {
       const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf-8');
-      assert.ok(changelog.includes("export const APP_VERSION = '0.5."));
-      assert.ok(changelog.includes("version: '0.5."));
+      assert.ok(/export const APP_VERSION = '(0\.5\.|1\.0)/.test(changelog));
+      assert.ok(changelog.includes("version: '0.5"));
       assert.ok(changelog.includes('120 FPS'));
     });
   });

@@ -306,4 +306,17 @@ describe('v081: Cross-Device Sync, Car Shuffle Icons & DJ Cover/Audio Reliabilit
     assert.ok(modalSrc.includes('failedCoverUrlRef') && modalSrc.includes('isPlaylistOrGenericCover(immediateCover)'), 'MobileNowPlayingModal must track failed URLs and reject generic covers');
     assert.ok(djViewSrc.includes('handleTrackCoverError'), 'AIDJView must retry exact cover lookup on image load error');
   });
+
+  it('8. Version 1.0 release metadata & Créditos tab in About section', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+    const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
+    const aboutSrc = fs.readFileSync(path.resolve('src/components/common/AboutAppSection.tsx'), 'utf8');
+
+    assert.equal(pkg.version, '1.0.0');
+    assert.ok(changelog.includes("export const APP_VERSION = '1.0';"));
+    assert.ok(changelog.includes("version: '1.0'"));
+    assert.ok(aboutSrc.includes('Versiones') && aboutSrc.includes('Créditos'));
+    assert.ok(aboutSrc.includes('Jorge Pérez'));
+    assert.ok(aboutSrc.includes('https://github.com/Gekamil'));
+  });
 });

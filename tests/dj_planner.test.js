@@ -127,16 +127,20 @@ describe('Transition planner', () => {
     const p1 = P.planTransition(a, b, { seed: 42, recent: [] });
     const p2 = P.planTransition(a, b, { seed: 42, recent: [] });
     assert.equal(p1.preset, p2.preset);
+    assert.equal(p1.compases, p2.compases);
     const seen = new Set();
-    for (let s = 1; s <= 40; s++) seen.add(P.planTransition(a, b, { seed: s, recent: [] }).preset);
+    for (let s = 1; s <= 40; s++) {
+      const p = P.planTransition(a, b, { seed: s, recent: [] });
+      seen.add(`${p.preset}:${p.compases}`);
+    }
     assert.ok(seen.size >= 3, `only ${[...seen].join(',')}`);
   });
 
-  it('P.3: big tempo gaps never overlap two rhythms (cut, one-bar fade or build only)', () => {
+  it('P.3: big tempo gaps use smooth progressive fades or builds without prolonged rhythm overlap', () => {
     for (let s = 1; s <= 60; s++) {
       const p = P.planTransition(info('a', 96, '8A', 0.5), info('b', 128, '8A', 0.7), { seed: s, recent: [] });
-      assert.ok(['corte', 'fundido', 'crescendo'].includes(p.preset), p.preset);
-      if (p.preset === 'fundido') assert.ok(p.compases <= 1, `fade of ${p.compases} bars`);
+      assert.ok(['fundido', 'automatica', 'crescendo'].includes(p.preset), p.preset);
+      assert.ok(p.compases <= 4, `excessive bars ${p.compases}`);
     }
   });
 
@@ -206,9 +210,14 @@ describe('Transition planner', () => {
     const a = { ...info('a', 124, undefined, 0.5), keyReliable: false };
     const b = { ...info('b', 125, undefined, 0.55), keyReliable: false };
     const presets = new Set();
-    for (let seed = 1; seed <= 60; seed++) presets.add(P.planTransition(a, b, { seed, recent: [] }).preset);
+    const plans = new Set();
+    for (let seed = 1; seed <= 60; seed++) {
+      const p = P.planTransition(a, b, { seed, recent: [] });
+      presets.add(p.preset);
+      plans.add(`${p.preset}:${p.compases}`);
+    }
     assert.ok(presets.has('automatica') || presets.has('filtro'), `presets: ${[...presets]}`);
-    assert.ok(presets.size >= 3, `variety: ${[...presets]}`);
+    assert.ok(plans.size >= 3, `variety: ${[...plans]}`);
   });
 
   it('P.10: a "clash" from our own key measurement is not trusted as a clash', () => {
@@ -241,11 +250,14 @@ describe('Unified transition renderer (live mix == preview)', () => {
     }
   });
 
-  it('R.2: "corte" keeps A at full volume until the last beat, then hands over', () => {
+  it('R.2: "corte" fades A out and B in progressively with smooth equal-power curves', () => {
     const cfg = { preset: 'corte', volumeEnvelope: 'corte_directo', eqMode: 'intercambio_graves_central', fxMode: 'ninguno', tempoA: 128 };
-    assert.equal(P.computeTransitionGains(cfg, 0.9, 2).outVol, 1);
-    assert.equal(P.computeTransitionGains(cfg, 0.9, 2).inVol, 0);
-    assert.equal(P.computeTransitionGains(cfg, 0.99, 2).inVol, 1);
+    const early = P.computeTransitionGains(cfg, 0.1, 2);
+    const mid = P.computeTransitionGains(cfg, 0.5, 2);
+    const late = P.computeTransitionGains(cfg, 0.95, 2);
+    assert.ok(early.outVol > 0.95 && early.inVol < 0.25, `early: ${JSON.stringify(early)}`);
+    assert.ok(mid.outVol > 0.65 && mid.inVol > 0.65, `mid: ${JSON.stringify(mid)}`);
+    assert.ok(late.inVol > 0.98 && late.outVol < 0.1, `late: ${JSON.stringify(late)}`);
   });
 
   it('R.3: no fake effects: the playback speed of the songs is never touched', () => {
@@ -270,16 +282,19 @@ describe('Unified transition renderer (live mix == preview)', () => {
     assert.ok(layers[0].level <= 0.6, 'soft');
   });
 
-  it('R.5: "Subidón": A holds (at most -4 dB) and B stays silent until the drop, then B takes over at full level', () => {
+  it('R.5: "Subidón": A attenuates smoothly into silence while B rises progressively without abrupt chop', () => {
     const cfg = { preset: 'crescendo', volumeEnvelope: 'curva_s', eqMode: 'intercambio_gradual', fxMode: 'ninguno', tempoA: 120 };
-    const swap = P.transitionSwapPoint(cfg);
     const dur = 8;
-    for (let i = 0; i < Math.floor(swap * 100); i++) {
+    let prevOut = 1.1;
+    let prevIn = -0.1;
+    for (let i = 0; i <= 100; i += 10) {
       const g = P.computeTransitionGains(cfg, i / 100, dur);
-      assert.ok(g.outVol >= 0.63 && g.inVol === 0, `${i}% ${JSON.stringify(g)}`);
+      assert.ok(g.outVol <= prevOut + 1e-9 && g.inVol >= prevIn - 1e-9, `${i}% ${JSON.stringify(g)}`);
+      prevOut = g.outVol;
+      prevIn = g.inVol;
     }
-    const after = P.computeTransitionGains(cfg, Math.min(1, swap + 0.06), dur);
-    assert.ok(after.inVol > 0.99 && after.outVol < 0.01, JSON.stringify(after));
+    const end = P.computeTransitionGains(cfg, 1, dur);
+    assert.ok(end.inVol > 0.99 && end.outVol < 0.01, JSON.stringify(end));
   });
 
   it('R.6: "Mezcla": both songs are loud only for a short moment around the middle', () => {

@@ -478,12 +478,6 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     }
   }, [activeLineIndex]);
 
-  if (!isOpen || !currentTrack) return null;
-
-  const isLiked = likedTrackIds.includes(currentTrack.id);
-  const coverUrl = currentTrack.album?.images?.[0]?.url;
-  const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
-
   const contextName = React.useMemo(() => {
     if (isDJActive) return currentSetTitle || 'DJ de Spotify';
     if (currentContextId === 'collection:tracks' || currentContextId === 'liked-songs') return 'Canciones que te gustan';
@@ -494,6 +488,12 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
     if (currentTrack?.album?.name) return currentTrack.album.name;
     return 'Lista de reproducción';
   }, [currentContextId, currentContextName, isDJActive, currentSetTitle, currentTrack?.album?.name]);
+
+  if (!isOpen || !currentTrack) return null;
+
+  const isLiked = likedTrackIds.includes(currentTrack.id);
+  const coverUrl = currentTrack.album?.images?.[0]?.url;
+  const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = Number(e.target.value);

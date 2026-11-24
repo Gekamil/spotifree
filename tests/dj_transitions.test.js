@@ -603,15 +603,15 @@ describe('Tier 1: Feature Coverage', () => {
       assert.strictEqual(fetched.preset, 'automatica');
     });
 
-    it('F5.2: Preset "corte": 1-compás quantized downbeat direct cut with 20ms anti-click ramp', () => {
+    it('F5.2: Preset "corte": 2-compases progressive smooth crossfade with bass swap', () => {
       const def = djTransitionServiceModule.DJ_PRESET_DEFINITIONS.corte;
       assert.ok(def, 'Preset definition must exist');
       assert.strictEqual(def.preset, 'corte');
-      assert.strictEqual(def.compases, 1, 'Corte must be 1 compás for instant rhythmic drop');
-      assert.strictEqual(def.volumeEnvelope, 'corte_directo');
+      assert.strictEqual(def.compases, 2, 'Corte uses smooth 2-compases fade without abrupt cuts');
+      assert.strictEqual(def.volumeEnvelope, 'curva_s');
       assert.strictEqual(def.eqMode, 'intercambio_graves_central');
       assert.strictEqual(def.fxMode, 'ninguno');
-      assert.ok(def.detail.includes('20ms'));
+      assert.ok(def.detail.includes('Fundido progresivo'));
     });
 
     it('F5.3: Preset "filtro": resonant HPF sweep (20Hz to 18kHz) with superposition volume curve', () => {

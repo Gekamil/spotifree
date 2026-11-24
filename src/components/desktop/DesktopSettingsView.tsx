@@ -1258,7 +1258,7 @@ export const DesktopSettingsView: React.FC = () => {
             </section>
           )}
 
-          {matchesSearch('acerca de versión novedades changelog about spotifree') && (
+          {matchesSearch('acerca de versión novedades changelog about spotifree creditos créditos jorge perez pérez github') && (
             <section className="space-y-4">
               <h2 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">Acerca de</h2>
               {renderAbout()}
