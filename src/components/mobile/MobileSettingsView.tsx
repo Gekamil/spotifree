@@ -21,6 +21,7 @@ import {
 import { getAppIconPlatform } from '../../utils/appIcon';
 import React, { useState, useEffect } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { logoutSpotifreeAccount } from '../../services/spotifreeAuth';
 import { useUIStore } from '../../store/useUIStore';
 import { handleImageError } from '../../utils/imageFallback';
 import { audioEngine } from '../../services/audioEngine';
@@ -739,7 +740,10 @@ export const MobileSettingsView: React.FC<MobileSettingsViewProps> = ({
         {page === null && isAuthenticated && (
           <div className="pt-4 pb-8 flex flex-col items-center">
             <button
-              onClick={logout}
+              onClick={async () => {
+                await logoutSpotifreeAccount();
+                logout();
+              }}
               className="px-8 py-3 rounded-full bg-white text-black font-bold text-xs uppercase tracking-wider active:scale-95 hover:bg-white/90 transition-all shadow-lg cursor-pointer font-black"
             >
               Cerrar sesión

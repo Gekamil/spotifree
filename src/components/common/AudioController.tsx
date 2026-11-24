@@ -25,7 +25,10 @@ export const AudioController: React.FC = () => {
 
   // 2. Play track when currentTrack changes (Desktop + Mobile parity)
   useEffect(() => {
-    if (!currentTrack) return;
+    if (!currentTrack) {
+      lastTrackIdRef.current = null;
+      return;
+    }
     const cleanCurrent = (currentTrack.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     if (lastTrackIdRef.current === cleanCurrent) return;
     lastTrackIdRef.current = cleanCurrent;

@@ -1870,6 +1870,8 @@ const store = create<SpotifyDataState>((set, get) => ({
       window.localStorage.removeItem('spotifree_playlist_cache_active');
       window.localStorage.removeItem('spotifree_liked_tracks');
       window.localStorage.removeItem('spotifree_guest_liked_songs');
+      window.localStorage.removeItem('spotifree_last_playback_local');
+      window.localStorage.removeItem('spotifree_last_playback_guest');
       window.localStorage.setItem('spotify_logged_out', 'true');
       window.sessionStorage.removeItem('spotify_403_premium');
     }
@@ -1881,11 +1883,16 @@ const store = create<SpotifyDataState>((set, get) => ({
       quickAccessCards: [],
       authWarning: null,
       isLoading: false,
+      recentlyPlayed: [],
+      topArtists: [],
+      topTracks: [],
+      playlistDetailsCache: {},
     });
     // Immediately stop audio engine and reset player store so music CANNOT continue playing
     try {
       import('../services/audioEngine').then(({ audioEngine }) => {
         audioEngine.pause();
+        audioEngine.resetForRestoredTrack?.();
       });
       import('./usePlayerStore').then(({ usePlayerStore }) => {
         usePlayerStore.setState({
@@ -1894,11 +1901,28 @@ const store = create<SpotifyDataState>((set, get) => ({
           queue: [],
           originalQueue: [],
           likedTrackIds: [],
+          progressMs: 0,
+          playedInShuffle: [],
+          currentContextId: null,
+          currentContextName: null,
+          preselectedNextTrackId: null,
         });
       });
       import('./useUIStore').then(({ useUIStore }) => {
         useUIStore.getState().setActiveMainTab('home');
         useUIStore.getState().openLoginModal();
+      });
+      import('../services/spotifreeMixes').then(({ resetSpotifreeMixes }) => {
+        resetSpotifreeMixes();
+      });
+      import('../utils/recentSearches').then(({ notifyRecentSearchesUpdated }) => {
+        notifyRecentSearchesUpdated([]);
+      });
+      import('../services/aiDJService').then(({ useAIDJStore }) => {
+        useAIDJStore.getState().stopDJSession?.();
+      });
+      import('../utils/notInterested').then(({ resetNotInterestedCache }) => {
+        resetNotInterestedCache();
       });
     } catch {}
     try { useStatsStore.getState().resetStats(); } catch {}

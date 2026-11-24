@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.0';
+export const APP_VERSION = '1.1';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.1',
+    date: '25 de noviembre, 2026',
+    title: 'Spotifree 1.1: Aislamiento completo multicuenta, historial y recomendaciones independientes y eliminación de audio fantasma',
+    isLatest: true,
+    highlights: [
+      'Aislamiento estricto multicuenta: búsquedas recientes, perfil de gustos (taste), recomendaciones, artistas sugeridos y estadísticas de escucha 100% independientes y únicos para cada cuenta en el mismo dispositivo.',
+      'Eliminación de audio fantasma: cierre y parada sincronizada del motor de audio al cerrar sesión o cambiar de cuenta, evitando reproducciones residuales o colas cruzadas.',
+      'Persistencia de reproducción local aislada: las sesiones de escucha guardadas se asocian de forma segura al UID del usuario activo, previniendo fugas entre diferentes cuentas en el mismo navegador.',
+      'Cierre de sesión integral: desconexión completa y coordinada en móvil y escritorio con reseteo de almacenamiento en caché, perfiles y colas de reproducción.',
+    ],
+  },
   {
     version: '1.0',
     date: '24 de noviembre, 2026',
     title: 'Spotifree 1.0: Lanzamiento oficial con continuidad multidispositivo, Android Auto diferenciado, Modo DJ refinado y sección de Créditos',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Continuidad de reproducción entre móvil, coche y ordenador: al pausar o cambiar de dispositivo con la misma cuenta, Spotifree retoma la playlist, canción, segundo exacto y las canciones añadidas por el Aleatorio inteligente.',
       'Android Auto mejorado: iconos visuales diferenciados para aleatorio desactivado, aleatorio normal (con punto inferior) y aleatorio inteligente (con destello), además de carátulas fiables.',

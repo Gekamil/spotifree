@@ -6,15 +6,16 @@ import { deduplicateTracks } from './trackDeduplication';
  * Returns 'guest' for unauthenticated visitors so no private user data ever leaks.
  */
 export function getActiveUserId(): string {
-  if (typeof window === 'undefined') return 'guest';
   try {
-    const savedId = window.localStorage.getItem('spotifree_active_user_id');
+    const storage = typeof window !== 'undefined' && window.localStorage ? window.localStorage : (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (!storage) return 'guest';
+    const savedId = storage.getItem('spotifree_active_user_id');
     if (savedId && savedId.trim() && savedId !== 'undefined' && savedId !== 'null' && savedId !== 'guest') {
       return savedId.trim();
     }
 
     // Check cloud account
-    const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+    const rawCloud = storage.getItem('spotifree_current_cloud_account');
     if (rawCloud) {
       const cloud = JSON.parse(rawCloud);
       if (cloud?.uid) return cloud.uid;
@@ -22,11 +23,11 @@ export function getActiveUserId(): string {
     }
 
     // Check if there is an active session
-    const sessionRaw = window.localStorage.getItem('spotify_extracted_session');
+    const sessionRaw = storage.getItem('spotify_extracted_session');
     if (sessionRaw) {
       const parsed = JSON.parse(sessionRaw);
       if (parsed.user?.id) {
-        window.localStorage.setItem('spotifree_active_user_id', parsed.user.id);
+        storage.setItem('spotifree_active_user_id', parsed.user.id);
         return parsed.user.id;
       }
     }
@@ -41,6 +42,16 @@ export function setActiveUserId(userId: string): void {
   if (typeof window === 'undefined' || !userId) return;
   try {
     window.localStorage.setItem('spotifree_active_user_id', userId.trim());
+  } catch {}
+}
+
+/**
+ * Clears the active user ID from localStorage.
+ */
+export function clearActiveUserId(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem('spotifree_active_user_id');
   } catch {}
 }
 

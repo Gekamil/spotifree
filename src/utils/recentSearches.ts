@@ -1,3 +1,5 @@
+import { getActiveUserId } from './userStorage';
+
 export interface RecentSearchItem {
   id: string;
   type: 'track' | 'artist' | 'album' | 'playlist' | 'query';
@@ -8,13 +10,28 @@ export interface RecentSearchItem {
   timestamp: number;
 }
 
-const STORAGE_KEY = 'spotifree_recent_searches';
+const STORAGE_KEY_PREFIX = 'spotifree_recent_searches';
 const MAX_RECENT_ITEMS = 20;
 
-export function getRecentSearches(): RecentSearchItem[] {
+export function getRecentSearchesStorageKey(userId?: string): string {
+  const uid = (userId || getActiveUserId() || 'guest').trim();
+  const safeUid = uid && uid !== 'undefined' && uid !== 'null' ? uid : 'guest';
+  return `${STORAGE_KEY_PREFIX}_${safeUid}`;
+}
+
+export function notifyRecentSearchesUpdated(items?: RecentSearchItem[]): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const detail = items || getRecentSearches();
+    window.dispatchEvent(new CustomEvent('spotifree_recent_searches_updated', { detail }));
+  } catch {}
+}
+
+export function getRecentSearches(userId?: string): RecentSearchItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const key = getRecentSearchesStorageKey(userId);
+    const raw = window.localStorage.getItem(key);
     if (!raw) return [];
     const list = JSON.parse(raw);
     if (Array.isArray(list)) {
@@ -24,16 +41,18 @@ export function getRecentSearches(): RecentSearchItem[] {
   return [];
 }
 
-export function saveRecentSearches(items: RecentSearchItem[]): void {
+export function saveRecentSearches(items: RecentSearchItem[], userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items.slice(0, MAX_RECENT_ITEMS)));
-    window.dispatchEvent(new CustomEvent('spotifree_recent_searches_updated', { detail: items }));
+    const key = getRecentSearchesStorageKey(userId);
+    const slice = items.slice(0, MAX_RECENT_ITEMS);
+    window.localStorage.setItem(key, JSON.stringify(slice));
+    notifyRecentSearchesUpdated(slice);
   } catch {}
 }
 
-export function addRecentSearch(item: Omit<RecentSearchItem, 'timestamp'>): RecentSearchItem[] {
-  const current = getRecentSearches();
+export function addRecentSearch(item: Omit<RecentSearchItem, 'timestamp'>, userId?: string): RecentSearchItem[] {
+  const current = getRecentSearches(userId);
   const cleanTitle = (item.title || '').trim().toLowerCase();
   
   // Filter out existing duplicates with same id or title + type
@@ -47,21 +66,22 @@ export function addRecentSearch(item: Omit<RecentSearchItem, 'timestamp'>): Rece
   };
 
   const updated = [newItem, ...filtered].slice(0, MAX_RECENT_ITEMS);
-  saveRecentSearches(updated);
+  saveRecentSearches(updated, userId);
   return updated;
 }
 
-export function removeRecentSearch(id: string): RecentSearchItem[] {
-  const current = getRecentSearches();
+export function removeRecentSearch(id: string, userId?: string): RecentSearchItem[] {
+  const current = getRecentSearches(userId);
   const updated = current.filter((item) => item.id !== id);
-  saveRecentSearches(updated);
+  saveRecentSearches(updated, userId);
   return updated;
 }
 
-export function clearRecentSearches(): void {
+export function clearRecentSearches(userId?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new CustomEvent('spotifree_recent_searches_updated', { detail: [] }));
+    const key = getRecentSearchesStorageKey(userId);
+    window.localStorage.removeItem(key);
+    notifyRecentSearchesUpdated([]);
   } catch {}
 }

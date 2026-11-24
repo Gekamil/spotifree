@@ -3,6 +3,7 @@ import { App as CapApp } from '@capacitor/app';
 import type { Track } from '../types/spotify';
 import { usePlayerStore, sanitizeTrack, hydrateTrackCoverSync } from '../store/usePlayerStore';
 import { saveLastPlaybackToFirestore, slimPlaybackSnapshotForCloud } from './firebase';
+import { getActiveUserId } from '../utils/userStorage';
 
 export interface SyncedDJState {
   isDJModeActive: boolean;
@@ -15,6 +16,7 @@ export interface SyncedPlaybackSnapshot {
   version: 1;
   updatedAt: number;
   deviceId: string;
+  uid?: string;
   wasPlaying: boolean;
   progressMs: number;
   durationMs: number;
@@ -33,7 +35,6 @@ export interface SyncedPlaybackSnapshot {
 
 const LOCAL_PLAYBACK_PREFIX = 'spotifree_last_playback_';
 const DEVICE_ID_KEY = 'spotifree_device_id';
-const ACCOUNT_KEY = 'spotifree_account_v1';
 const BROADCAST_CHANNEL = 'spotifree_playback_sync';
 
 let cachedDeviceId = '';
@@ -46,6 +47,19 @@ let initialized = false;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
 let broadcastCh: BroadcastChannel | null = null;
 let cachedAccountSnapshot: { uid?: string } | null = null;
+
+export function resetPlaybackSyncCoordinator(): void {
+  if (flushTimer) {
+    clearTimeout(flushTimer);
+    flushTimer = null;
+  }
+  cachedAccountSnapshot = null;
+  lastLocalInteractionAt = 0;
+  lastAppliedRemoteAt = 0;
+  lastCloudPushAt = 0;
+  lastLocalSaveAt = 0;
+  isApplyingRemote = false;
+}
 
 export function getPlaybackDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId;
@@ -69,53 +83,66 @@ export function getPlaybackDeviceId(): string {
 function getActiveAccountIdentity(): { uid?: string; email?: string } | null {
   if (typeof window === 'undefined') return cachedAccountSnapshot;
   try {
-    const raw = window.localStorage.getItem(ACCOUNT_KEY);
-    if (!raw) return cachedAccountSnapshot;
-    const parsed = JSON.parse(raw);
-    if (parsed && (parsed.uid || parsed.email)) return parsed;
+    const rawCloud = window.localStorage.getItem('spotifree_current_cloud_account');
+    if (rawCloud) {
+      const parsed = JSON.parse(rawCloud);
+      if (parsed && (parsed.uid || parsed.email)) return parsed;
+    }
+    const rawAcc = window.localStorage.getItem('spotifree_account');
+    if (rawAcc) {
+      const parsed = JSON.parse(rawAcc);
+      if (parsed && (parsed.uid || parsed.email)) return parsed;
+    }
+    const activeUid = getActiveUserId();
+    if (activeUid && activeUid !== 'guest') {
+      return { uid: activeUid };
+    }
   } catch {}
   return cachedAccountSnapshot;
 }
 
 function getLocalStorageKey(uid?: string): string {
-  const scope = (uid || getActiveAccountIdentity()?.uid || 'local').trim() || 'local';
+  const activeUid = (uid || getActiveAccountIdentity()?.uid || '').trim();
+  const scope = activeUid && activeUid !== 'guest' ? activeUid : 'guest';
   return `${LOCAL_PLAYBACK_PREFIX}${scope}`;
 }
 
 function readLocalPlaybackSnapshot(uid?: string): SyncedPlaybackSnapshot | null {
   if (typeof window === 'undefined') return null;
-  const keys = [getLocalStorageKey(uid)];
-  if (uid && getLocalStorageKey('local') !== keys[0]) {
-    keys.push(getLocalStorageKey('local'));
-  }
-  let best: SyncedPlaybackSnapshot | null = null;
-  for (const k of keys) {
-    try {
-      const raw = window.localStorage.getItem(k);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw);
-      if (parsed?.currentTrack?.id && (!best || (parsed.updatedAt || 0) > (best.updatedAt || 0))) {
-        best = parsed as SyncedPlaybackSnapshot;
+  const key = getLocalStorageKey(uid);
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed?.currentTrack?.id) {
+      const expectedUid = uid || getActiveAccountIdentity()?.uid;
+      if (expectedUid && parsed.uid && parsed.uid !== expectedUid) {
+        return null;
       }
-    } catch {}
-  }
-  return best;
+      return parsed as SyncedPlaybackSnapshot;
+    }
+  } catch {}
+  return null;
 }
 
 function writeLocalPlaybackSnapshot(snapshot: SyncedPlaybackSnapshot, uid?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    const json = JSON.stringify(snapshot);
-    window.localStorage.setItem(getLocalStorageKey(uid), json);
-    if (uid) {
-      window.localStorage.setItem(`${LOCAL_PLAYBACK_PREFIX}local`, json);
+    const targetUid = uid || getActiveAccountIdentity()?.uid;
+    if (targetUid) {
+      snapshot.uid = targetUid;
     }
-    const rawAcc = window.localStorage.getItem(ACCOUNT_KEY);
+    const json = JSON.stringify(snapshot);
+    window.localStorage.setItem(getLocalStorageKey(targetUid), json);
+    if (!targetUid || targetUid === 'guest') {
+      window.localStorage.setItem(`${LOCAL_PLAYBACK_PREFIX}guest`, json);
+    }
+    const rawAcc = window.localStorage.getItem('spotifree_current_cloud_account');
     if (rawAcc) {
       const acc = JSON.parse(rawAcc);
-      if (acc && (!uid || acc.uid === uid)) {
+      if (acc && (!targetUid || acc.uid === targetUid)) {
         acc.stats = { ...(acc.stats || {}), lastPlayback: snapshot };
-        window.localStorage.setItem(ACCOUNT_KEY, JSON.stringify(acc));
+        window.localStorage.setItem('spotifree_current_cloud_account', JSON.stringify(acc));
       }
     }
   } catch {}
@@ -201,6 +228,10 @@ export function shouldApplyRemotePlayback(params: {
 
 export function applyRemotePlayback(remote?: SyncedPlaybackSnapshot | null, forceOnColdStart = false): boolean {
   if (!remote || !remote.currentTrack?.id) return false;
+  const activeUid = getActiveAccountIdentity()?.uid;
+  if (remote.uid && activeUid && remote.uid !== activeUid) {
+    return false;
+  }
   const ps = usePlayerStore.getState();
   const localDeviceId = getPlaybackDeviceId();
 
@@ -339,7 +370,12 @@ export function initPlaybackSync(): () => void {
       broadcastCh = new BroadcastChannel(BROADCAST_CHANNEL);
       broadcastCh.onmessage = (ev) => {
         if (ev?.data?.type === 'playback_update' && ev.data.snapshot) {
-          applyRemotePlayback(ev.data.snapshot);
+          const snap = ev.data.snapshot as SyncedPlaybackSnapshot;
+          const currentUid = getActiveAccountIdentity()?.uid;
+          if (snap.uid && currentUid && snap.uid !== currentUid) {
+            return;
+          }
+          applyRemotePlayback(snap);
         }
       };
     } catch {}

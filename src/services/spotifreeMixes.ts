@@ -399,11 +399,18 @@ interface Signal {
   ts: number;
 }
 
+import { getActiveUserId } from '../utils/userStorage';
+
 const WEIGHT: Record<SignalKind, number> = { play: 1, skip: -0.6, like: 4, unlike: -4, search: 1.5, spotify: 0.8, hide: -5 };
 const HALF_LIFE_DAYS: Record<SignalKind, number> = { play: 60, skip: 30, like: 240, unlike: 120, search: 30, spotify: 90, hide: 365 };
 const MAX_SIGNALS = 4000;
 
-const uid = () => useSpotifyDataStore.getState().user?.id || 'local';
+const uid = () => {
+  const storeId = useSpotifyDataStore.getState().user?.id;
+  if (storeId && storeId !== 'undefined' && storeId !== 'null' && storeId !== 'guest') return storeId;
+  const activeId = getActiveUserId();
+  return activeId && activeId !== 'guest' ? activeId : 'local';
+};
 const signalsKey = () => `spotifree_taste_${uid()}`;
 const firstSeenKey = () => `spotifree_taste_since_${uid()}`;
 const onboardingKey = () => `spotifree_onboarding_artists_${uid()}`;
@@ -425,7 +432,7 @@ export function getOnboardingArtistSeeds(): OnboardingArtistSeed[] {
 export function saveOnboardingArtistSeeds(artists: OnboardingArtistSeed[]): void {
   try {
     localStorage.setItem(onboardingKey(), JSON.stringify(artists));
-    localStorage.setItem('spotifree_taste_onboarding_completed', 'true');
+    localStorage.setItem(`spotifree_taste_onboarding_completed_${uid()}`, 'true');
     // Log as high-affinity like signals
     for (const art of artists) {
       logSignal({ k: 'like', t: '', a: art.name, img: art.image });
@@ -546,8 +553,15 @@ function installSignalHooks() {
   });
 
   // Searches (artists and songs the user looked for)
+  let lastSearchUser = uid();
   let lastSearchTs = Math.max(0, ...getRecentSearches().map((x) => x.timestamp || 0));
   window.addEventListener('spotifree_recent_searches_updated', () => {
+    const curUid = uid();
+    if (curUid !== lastSearchUser) {
+      lastSearchUser = curUid;
+      lastSearchTs = Math.max(0, ...getRecentSearches().map((x) => x.timestamp || 0));
+      return;
+    }
     for (const it of getRecentSearches()) {
       if ((it.timestamp || 0) <= lastSearchTs) continue;
       if (it.type === 'artist') logSignal({ k: 'search', t: '', a: it.title, img: it.image, ts: it.timestamp });
@@ -3268,6 +3282,10 @@ export interface SuggestedArtist {
   picture: string | null;
 }
 export const useSpotifreeMixes = create<MixesState>(() => ({ mixes: [], builtDay: null, building: false, suggestedArtists: [] }));
+
+export function resetSpotifreeMixes(): void {
+  useSpotifreeMixes.setState({ mixes: [], builtDay: null, building: false, suggestedArtists: [] });
+}
 
 function publish(mixes: SpotifreeMix[], builtDay: string | null, suggestedArtists: SuggestedArtist[] = []) {
   useSpotifreeMixes.setState({ mixes, builtDay, suggestedArtists });

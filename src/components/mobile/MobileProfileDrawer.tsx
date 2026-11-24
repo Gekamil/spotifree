@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
+import { logoutSpotifreeAccount } from '../../services/spotifreeAuth';
 import { handleImageError } from '../../utils/imageFallback';
 import { hasUnseenChanges } from '../modals/MessagesNotificationsModal';
 
@@ -435,7 +436,10 @@ export const MobileProfileDrawer: React.FC<MobileProfileDrawerProps> = ({
           <div className="pt-4 pb-1">
             <button
               type="button"
-              onClick={() => handleAction(() => logout())}
+              onClick={() => handleAction(async () => {
+                await logoutSpotifreeAccount();
+                logout();
+              })}
               className="w-full py-2.5 rounded-full border border-[#727272] hover:border-white text-white font-bold text-xs uppercase tracking-wider active:scale-95 transition-all text-center cursor-pointer hover:bg-white/5"
             >
               Cerrar sesión

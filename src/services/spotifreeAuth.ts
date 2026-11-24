@@ -14,10 +14,17 @@ import {
 } from './firebase';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
-import { getRemovedTrackIdsForPlaylist } from '../utils/userStorage';
+import { useStatsStore } from '../store/useStatsStore';
+import { useLabsStore } from './labsService';
+import { useAIDJStore } from './aiDJService';
+import { audioEngine } from './audioEngine';
+import { getRemovedTrackIdsForPlaylist, setActiveUserId, clearActiveUserId } from '../utils/userStorage';
 import { deduplicateTracks } from '../utils/trackDeduplication';
 import { applyRemoteSettings } from './settingsSync';
-import { applyRemotePlayback } from './playbackSync';
+import { applyRemotePlayback, resetPlaybackSyncCoordinator } from './playbackSync';
+import { resetSpotifreeMixes, refreshSpotifreeMixes } from './spotifreeMixes';
+import { resetNotInterestedCache } from '../utils/notInterested';
+import { notifyRecentSearchesUpdated, getRecentSearches } from '../utils/recentSearches';
 import { showGlobalToast } from '../utils/globalToast';
 import { create } from 'zustand';
 import { mergeCloudTrash } from './playlistTrash';
@@ -95,7 +102,7 @@ export function saveCurrentSpotifreeAccount(account: SpotifreeAccount | null): v
   } catch {}
 }
 
-function getLocalDataToMerge() {
+function getLocalDataToMerge(targetUid?: string) {
   let cookie = '';
   let playlists: any[] = [];
   let likedTracks: string[] = [];
@@ -104,6 +111,12 @@ function getLocalDataToMerge() {
 
   if (typeof window !== 'undefined') {
     try {
+      const activeUser = window.localStorage.getItem('spotifree_active_user_id');
+      // If local data belongs to another user (not guest, and not targetUid), DO NOT leak it!
+      if (activeUser && activeUser !== 'guest' && targetUid && activeUser !== targetUid) {
+        return { cookie: '', playlists: [], likedTracks: [], avatarUrl: null, bannerUrl: null };
+      }
+
       cookie = window.localStorage.getItem('user_spotify_cookie') || '';
       const rawPl = window.localStorage.getItem('user_imported_playlists');
       if (rawPl) playlists = JSON.parse(rawPl);
@@ -209,7 +222,6 @@ export async function loginSpotifreeAccount(
   email: string,
   password: string
 ): Promise<{ success: boolean; account?: SpotifreeAccount; error?: string }> {
-  const local = getLocalDataToMerge();
   const cleanEmail = email.trim().toLowerCase();
 
   // 1. Firebase Authentication
@@ -220,6 +232,7 @@ export async function loginSpotifreeAccount(
     }
 
     const uid = fbRes.user.uid;
+    const local = getLocalDataToMerge(uid);
     const cloudData = await getUserDataFromFirestore(uid);
 
     // If cloud data exists, it is authoritative! Only use local data as fallback if cloud has no record
@@ -251,6 +264,7 @@ export async function loginSpotifreeAccount(
 
   // 2. Server API fallback
   try {
+    const local = getLocalDataToMerge();
     const res = await fetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -293,7 +307,7 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
   }
 
   const uid = fbRes.user.uid;
-  const local = getLocalDataToMerge();
+  const local = getLocalDataToMerge(uid);
   const cloudData = await getUserDataFromFirestore(uid);
 
   const acc: SpotifreeAccount = {
@@ -304,7 +318,7 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
     bannerUrl: cloudData?.bannerUrl || local.bannerUrl || null,
     spotifyCookie: cloudData?.spotifyCookie || local.cookie || undefined,
     playlists: Array.isArray(cloudData?.playlists) && cloudData.playlists.length > 0 ? cloudData.playlists : local.playlists,
-    likedTracks: Array.from(new Set([...(cloudData?.likedTracks || []), ...local.likedTracks])),
+    likedTracks: Array.isArray(cloudData?.likedTracks) && cloudData.likedTracks.length > 0 ? cloudData.likedTracks : local.likedTracks,
     stats: (cloudData as any)?.stats,
     updatedAt: Date.now(),
   };
@@ -322,19 +336,85 @@ export async function loginWithGoogleAccount(): Promise<{ success: boolean; acco
 
 export async function logoutSpotifreeAccount(): Promise<void> {
   saveCurrentSpotifreeAccount(null);
+
+  // 1. Immediately and synchronously stop audio engine to eliminate ghost audio
+  try {
+    audioEngine.pause();
+    audioEngine.resetForRestoredTrack();
+  } catch {}
+
+  // 2. Synchronously clear player store state
+  try {
+    usePlayerStore.setState({
+      isPlaying: false,
+      currentTrack: null,
+      queue: [],
+      originalQueue: [],
+      likedTrackIds: [],
+      progressMs: 0,
+      playedInShuffle: [],
+      currentContextId: null,
+      currentContextName: null,
+      preselectedNextTrackId: null,
+    });
+  } catch {}
+
+  // 3. Stop AI DJ session
+  try {
+    useAIDJStore.getState().stopDJSession?.();
+  } catch {}
+
+  // 4. Reset playback sync coordinator
+  try {
+    resetPlaybackSyncCoordinator();
+  } catch {}
+
+  // 5. Reset mixes, stats, and taste
+  try {
+    resetSpotifreeMixes();
+  } catch {}
+  try {
+    useStatsStore.getState().resetStats();
+  } catch {}
+  try {
+    useLabsStore.getState().resetTasteKeys?.();
+  } catch {}
+  try {
+    resetNotInterestedCache();
+  } catch {}
+
+  // 6. Clean localStorage
   if (typeof window !== 'undefined') {
     window.localStorage.removeItem('spotifree_current_cloud_account');
     window.localStorage.removeItem('spotifree_account');
     window.localStorage.removeItem('user_spotify_cookie');
     window.localStorage.removeItem('spotify_access_token');
     window.localStorage.removeItem('spotify_refresh_token');
+    window.localStorage.removeItem('spotify_expires_at');
+    window.localStorage.removeItem('spotify_session_synced');
+    window.localStorage.removeItem('spotify_sp_dc');
+    window.localStorage.removeItem('user_imported_playlists');
+    window.localStorage.removeItem('spotifree_saved_library_playlists');
     window.localStorage.removeItem('spotify_extracted_session');
-    window.localStorage.removeItem('spotifree_saved_accounts');
     window.localStorage.removeItem('spotifree_active_user_id');
     window.localStorage.removeItem('spotifree_custom_profile');
+    window.localStorage.removeItem('spotifree_playlist_cache_active');
+    window.localStorage.removeItem('spotifree_liked_tracks');
+    window.localStorage.removeItem('spotifree_guest_liked_songs');
+    window.localStorage.removeItem('spotifree_last_playback_local');
+    window.localStorage.removeItem('spotifree_last_playback_guest');
     window.localStorage.setItem('spotify_logged_out', 'true');
+    window.sessionStorage.removeItem('spotify_403_premium');
   }
+
+  // 7. Clear active user ID and notify search views
+  clearActiveUserId();
+  notifyRecentSearchesUpdated([]);
+
+  // 8. Logout Firebase
   await logoutFirebase();
+
+  // 9. Reset Spotify Data Store
   try {
     useSpotifyDataStore.getState().logout?.();
   } catch {}
@@ -458,6 +538,46 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   const displayName = acc.displayName || acc.email.split('@')[0] || 'Usuario';
   const images = acc.avatarUrl ? [{ url: acc.avatarUrl, height: 300, width: 300 }] : [];
 
+  const previousUserId = useSpotifyDataStore.getState().user?.id;
+  const isDifferentUser = Boolean(previousUserId && previousUserId !== userId);
+
+  // 0. Set active user identity and load per-user stores
+  setActiveUserId(userId);
+  try {
+    useStatsStore.getState().loadStatsForUser(userId);
+  } catch {}
+  try {
+    useLabsStore.getState().loadTasteKeysForUser(userId);
+  } catch {}
+  try {
+    resetNotInterestedCache();
+  } catch {}
+
+  // If switching accounts: stop audio and reset player if no remote playback
+  if (isDifferentUser) {
+    if (!st.lastPlayback) {
+      try {
+        audioEngine.pause();
+        audioEngine.resetForRestoredTrack();
+        usePlayerStore.setState({
+          isPlaying: false,
+          currentTrack: null,
+          queue: [],
+          originalQueue: [],
+          likedTrackIds: [],
+          progressMs: 0,
+          playedInShuffle: [],
+          currentContextId: null,
+          currentContextName: null,
+          preselectedNextTrackId: null,
+        });
+      } catch {}
+    }
+    try {
+      useAIDJStore.getState().stopDJSession?.();
+    } catch {}
+  }
+
   // 1. Sync Spotify cookie to localStorage and reinitialize store if new
   if (acc.spotifyCookie && typeof window !== 'undefined') {
     const currentCookie = window.localStorage.getItem('user_spotify_cookie');
@@ -530,6 +650,7 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       bannerUrl: acc.bannerUrl || (s.user as any)?.bannerUrl || null,
       followers: s.user?.followers || { total: 0 },
     } as any,
+    ...(isDifferentUser ? { recentlyPlayed: [], topArtists: [], topTracks: [] } : {}),
   }));
 
   // 4. Sync playlists to local storage, cache, and store (authoritative from cloud, filtering deleted IDs)
@@ -666,6 +787,13 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
       likedTrackIds: cleanLikedIds,
     });
   }
+
+  // 6. Reset and rebuild mixes for the active user
+  resetSpotifreeMixes();
+  void refreshSpotifreeMixes(true);
+
+  // 7. Notify search views with the active user's searches
+  notifyRecentSearchesUpdated(getRecentSearches(userId));
 }
 
 /**

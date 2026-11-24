@@ -5,6 +5,7 @@
  * Kept per account on this device.
  */
 import type { Track } from '../types/spotify';
+import { getActiveUserId } from './userStorage';
 
 const norm = (s: string) =>
   String(s || '')
@@ -17,13 +18,19 @@ const norm = (s: string) =>
 const keyOf = (t: Pick<Track, 'name' | 'artists'>) => `${norm(t.name)}|${norm(t.artists?.[0]?.name || '')}`;
 const storeKey = () => {
   try {
-    return `spotifree_not_interested_${localStorage.getItem('spotifree_active_user_id') || 'active'}`;
+    const rawLocal = typeof localStorage !== 'undefined' ? localStorage.getItem('spotifree_active_user_id') : null;
+    const uid = (rawLocal || getActiveUserId() || 'active').trim();
+    return `spotifree_not_interested_${uid}`;
   } catch {
     return 'spotifree_not_interested_active';
   }
 };
 
 let cache: { key: string; set: Set<string> } | null = null;
+
+export function resetNotInterestedCache(): void {
+  cache = null;
+}
 function load(): Set<string> {
   const k = storeKey();
   if (cache?.key === k) return cache.set;

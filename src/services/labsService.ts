@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import type { Track } from '../types/spotify';
+import { getActiveUserId } from '../utils/userStorage';
 
 const KEYS = {
   labs: 'spotifree_labs_enabled',
@@ -11,9 +12,17 @@ const KEYS = {
   spatialX: 'spotifree_spatial_x',
   spatialY: 'spotifree_spatial_y',
   tasteEnabled: 'spotifree_taste_rating_enabled',
-  tasteLikes: 'spotifree_taste_likes',
-  tasteDislikes: 'spotifree_taste_dislikes',
 } as const;
+
+function tasteLikesKey(userId?: string): string {
+  const uid = (userId || getActiveUserId() || 'guest').trim();
+  return `spotifree_taste_likes_${uid}`;
+}
+
+function tasteDislikesKey(userId?: string): string {
+  const uid = (userId || getActiveUserId() || 'guest').trim();
+  return `spotifree_taste_dislikes_${uid}`;
+}
 
 export const SPEED_SHEET_EVENT = 'spotifree:open-speed-sheet';
 
@@ -107,6 +116,8 @@ export interface LabsState {
   likedTasteKeys: string[];
   dislikedTasteKeys: string[];
 
+  loadTasteKeysForUser: (userId: string) => void;
+  resetTasteKeys: () => void;
   setLabsEnabled: (enabled: boolean) => void;
   setSpeedControlEnabled: (enabled: boolean) => void;
   setPlaybackSpeed: (rate: number) => void;
@@ -156,8 +167,22 @@ export const useLabsStore = create<LabsState>((set, get) => ({
   spatialX: readNum(KEYS.spatialX, 0, -1, 1),
   spatialY: readNum(KEYS.spatialY, 0, -1, 1),
   tasteRatingEnabled: readBool(KEYS.tasteEnabled, false),
-  likedTasteKeys: readStringArray(KEYS.tasteLikes),
-  dislikedTasteKeys: readStringArray(KEYS.tasteDislikes),
+  likedTasteKeys: readStringArray(tasteLikesKey()),
+  dislikedTasteKeys: readStringArray(tasteDislikesKey()),
+
+  loadTasteKeysForUser: (userId: string) => {
+    set({
+      likedTasteKeys: readStringArray(tasteLikesKey(userId)),
+      dislikedTasteKeys: readStringArray(tasteDislikesKey(userId)),
+    });
+  },
+
+  resetTasteKeys: () => {
+    set({
+      likedTasteKeys: [],
+      dislikedTasteKeys: [],
+    });
+  },
 
   setLabsEnabled: (enabled) => {
     writeStorage(KEYS.labs, String(enabled));
@@ -253,8 +278,8 @@ export const useLabsStore = create<LabsState>((set, get) => ({
       result = 'like';
     }
 
-    writeStorage(KEYS.tasteLikes, JSON.stringify(nextLikes));
-    writeStorage(KEYS.tasteDislikes, JSON.stringify(nextDislikes));
+    writeStorage(tasteLikesKey(), JSON.stringify(nextLikes));
+    writeStorage(tasteDislikesKey(), JSON.stringify(nextDislikes));
     set({ likedTasteKeys: nextLikes, dislikedTasteKeys: nextDislikes });
     return result;
   },
@@ -266,14 +291,14 @@ export const useLabsStore = create<LabsState>((set, get) => ({
     const nextLikes = state.likedTasteKeys.filter((s) => !sigs.includes(s));
     const nextDislikes = Array.from(new Set([...state.dislikedTasteKeys, ...sigs]));
 
-    writeStorage(KEYS.tasteLikes, JSON.stringify(nextLikes));
-    writeStorage(KEYS.tasteDislikes, JSON.stringify(nextDislikes));
+    writeStorage(tasteLikesKey(), JSON.stringify(nextLikes));
+    writeStorage(tasteDislikesKey(), JSON.stringify(nextDislikes));
     set({ likedTasteKeys: nextLikes, dislikedTasteKeys: nextDislikes });
     return 'dislike';
   },
 
   clearAllDislikes: () => {
-    writeStorage(KEYS.tasteDislikes, '[]');
+    writeStorage(tasteDislikesKey(), '[]');
     set({ dislikedTasteKeys: [] });
   },
 }));
