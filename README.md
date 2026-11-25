@@ -137,24 +137,13 @@ Spotifree detecta el dispositivo y carga una interfaz propia para cada uno:
 ## Arquitectura
 
 ```mermaid
-flowchart LR
-    subgraph Clientes
-        W[Web y PWA]
-        A[App Android<br/>Capacitor + plugins Java]
-    end
-    subgraph Backend
-        API[Funciones serverless<br/>Vercel]
-        S[Servidor Node<br/>server.mjs]
-    end
-    W --> API
-    A --> API
-    W -.-> S
-    API --> M[Metadatos<br/>Spotify · Deezer · iTunes]
-    API --> AU[Audio<br/>YouTube · SoundCloud]
-    S --> AU
-    W <--> F[(Firebase)]
-    W <-. escuchar juntos .-> P[PeerJS]
+flowchart TD
+    C["Web, PWA y app Android"] --> B["Backend: Vercel o server.mjs"]
+    B --> M["Metadatos"]
+    B --> A["Audio"]
 ```
+
+Los metadatos y el audio llegan a través del backend. La sincronización usa Firebase y las sesiones compartidas, PeerJS.
 
 | Capa | Tecnologías |
 | :--- | :--- |
