@@ -33,6 +33,11 @@ import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TR
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
 import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
 import { fetchAlbumTracks } from '../../services/albumService';
+import {
+  MobileArtistDiscoverySections,
+  type ArtistReleaseItem,
+  type ArtistPlaylistItem,
+} from '../common/ArtistDiscoverySections';
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import {
@@ -162,10 +167,18 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
 
   const [similarArtists, setSimilarArtists] = useState<Array<{ id?: string; name: string; picture?: string | null; fans?: number }>>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+  const [artistDiscography, setArtistDiscography] = useState<ArtistReleaseItem[]>([]);
+  const [artistPlaylists, setArtistPlaylists] = useState<ArtistPlaylistItem[]>([]);
+  const [artistBio, setArtistBio] = useState<string | null>(null);
+  const [showAllArtistTracks, setShowAllArtistTracks] = useState(false);
 
   useEffect(() => {
+    setShowAllArtistTracks(false);
     if (!isArtist) {
       setSimilarArtists([]);
+      setArtistDiscography([]);
+      setArtistPlaylists([]);
+      setArtistBio(null);
       return;
     }
     let cancelled = false;
@@ -175,9 +188,21 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
     fetch(`/api/discover?artist=${encodeURIComponent(cleanArtistName)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!cancelled && data && Array.isArray(data.related)) {
+        if (cancelled || !data) return;
+        if (Array.isArray(data.related)) {
           setSimilarArtists(data.related.filter((r: any) => r && r.name));
         }
+        if (Array.isArray(data.discography)) {
+          setArtistDiscography(data.discography);
+        } else {
+          setArtistDiscography([]);
+        }
+        if (Array.isArray(data.playlists)) {
+          setArtistPlaylists(data.playlists);
+        } else {
+          setArtistPlaylists([]);
+        }
+        setArtistBio(typeof data.bio === 'string' && data.bio.trim() ? data.bio.trim() : null);
       })
       .catch(() => {})
       .finally(() => {
@@ -2095,7 +2120,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           </div>
         ) : (
           <>
-            {displayTracks.map((track, idx) => {
+            {(isArtist && !showAllArtistTracks && !showRemixesOnly ? displayTracks.slice(0, 5) : displayTracks).map((track, idx) => {
               const isThisPlaying = isPlaying && currentTrack?.id === track.id;
               const trackCover = getTrackCoverUrl(track, isLikedPlaylist ? undefined : playlist.images?.[0]?.url);
               const isLiked = isTrackLiked(track.id, track);
@@ -2277,6 +2302,31 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 </React.Fragment>
               );
             })}
+
+            {isArtist && !showRemixesOnly && displayTracks.length > 5 && (
+              <div className="pt-2 pb-1 px-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAllArtistTracks((v) => !v)}
+                  className="text-xs font-bold text-[#b3b3b3] hover:text-white active:scale-95 transition-all cursor-pointer"
+                >
+                  {showAllArtistTracks ? 'Mostrar menos' : 'Ver más'}
+                </button>
+              </div>
+            )}
+
+            {/* Mobile Artist Releases ("Títulos populares"), Bio & Artist Playlists ("Listas del artista") */}
+            {isArtist && (
+              <MobileArtistDiscoverySections
+                artistName={resolveArtistName(cleanId, playlist.name)}
+                discography={artistDiscography}
+                isLoadingDiscography={isLoadingSimilar}
+                playlists={artistPlaylists}
+                bio={artistBio}
+                onSelectAlbum={(item) => onSelectPlaylistById?.(item.id, item.name, item.cover || undefined)}
+                onSelectPlaylist={(pl) => onSelectPlaylistById?.(pl.id, pl.name, pl.image || undefined)}
+              />
+            )}
 
             {/* Similar Artists Shelf ("Fans también escuchan") - Spotify Mobile Carousel */}
             {isArtist && (similarArtists.length > 0 || isLoadingSimilar) && (

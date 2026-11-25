@@ -68,6 +68,13 @@ import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtw
 import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
 import { fetchAlbumTracks } from '../../services/albumService';
 import { getArtistPicture, ARTIST_IMAGE_CACHE } from '../../utils/artistImage';
+import {
+  DesktopArtistDiscographySection,
+  DesktopArtistPlaylistsSection,
+  DesktopArtistAboutCard,
+  type ArtistReleaseItem,
+  type ArtistPlaylistItem,
+} from '../common/ArtistDiscoverySections';
 import { toHDImage } from '../../utils/formatters';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
 import { deduplicateTracks } from '../../utils/trackDeduplication';
@@ -1540,10 +1547,18 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const [similarArtists, setSimilarArtists] = useState<Array<{ id?: string; name: string; picture?: string | null; fans?: number }>>([]);
   const [isLoadingSimilar, setIsLoadingSimilar] = useState(false);
+  const [artistDiscography, setArtistDiscography] = useState<ArtistReleaseItem[]>([]);
+  const [artistPlaylists, setArtistPlaylists] = useState<ArtistPlaylistItem[]>([]);
+  const [artistBio, setArtistBio] = useState<string | null>(null);
+  const [showAllArtistTracks, setShowAllArtistTracks] = useState(false);
 
   useEffect(() => {
+    setShowAllArtistTracks(false);
     if (!isArtist) {
       setSimilarArtists([]);
+      setArtistDiscography([]);
+      setArtistPlaylists([]);
+      setArtistBio(null);
       return;
     }
     let cancelled = false;
@@ -1553,9 +1568,21 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     fetch(`/api/discover?artist=${encodeURIComponent(cleanArtistName)}`)
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
-        if (!cancelled && data && Array.isArray(data.related)) {
+        if (cancelled || !data) return;
+        if (Array.isArray(data.related)) {
           setSimilarArtists(data.related.filter((r: any) => r && r.name));
         }
+        if (Array.isArray(data.discography)) {
+          setArtistDiscography(data.discography);
+        } else {
+          setArtistDiscography([]);
+        }
+        if (Array.isArray(data.playlists)) {
+          setArtistPlaylists(data.playlists);
+        } else {
+          setArtistPlaylists([]);
+        }
+        setArtistBio(typeof data.bio === 'string' && data.bio.trim() ? data.bio.trim() : null);
       })
       .catch(() => {})
       .finally(() => {
@@ -1566,6 +1593,34 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       cancelled = true;
     };
   }, [dynamicPlaylist.id, dynamicPlaylist.name, isArtist]);
+
+  const handlePlayDiscographyAlbum = async (item: ArtistReleaseItem) => {
+    showGlobalToast(`Reproduciendo ${item.name}...`);
+    try {
+      const res = await fetchAlbumTracks(item.id, item.name, dynamicPlaylist.name, item.cover || undefined);
+      if (res.tracks && res.tracks.length > 0) {
+        playTrack(res.tracks[0], res.tracks, item.id, item.name);
+        return;
+      }
+    } catch {}
+    onSelectPlaylistById?.(item.id, item.name, item.cover || undefined);
+  };
+
+  const handlePlayDiscoveredPlaylist = async (pl: ArtistPlaylistItem) => {
+    showGlobalToast(`Cargando ${pl.name}...`);
+    try {
+      const res = await fetch(`/api/spotify/playlist/${encodeURIComponent(pl.id)}`);
+      if (res.ok) {
+        const data = await res.json();
+        const items = Array.isArray(data?.tracks?.items) ? data.tracks.items : [];
+        if (items.length > 0) {
+          playTrack(items[0], items, pl.id, pl.name);
+          return;
+        }
+      }
+    } catch {}
+    onSelectPlaylistById?.(pl.id, pl.name, pl.image || undefined);
+  };
 
   const themeColor = extractedThemeColor;
 
@@ -2379,7 +2434,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         {/* Track Rows */}
         {tracks.length > 0 && (
           <div className="space-y-0.5">
-            {tracks.map((track, index) => {
+            {(isArtist && !showAllArtistTracks && !showRemixesOnly && !filterQuery.trim() ? tracks.slice(0, 5) : tracks).map((track, index) => {
               const isThisTrackPlaying = isPlaying && currentTrack?.id === track.id;
               const isThisTrackSelected = currentTrack?.id === track.id;
               const isLiked = isTrackLiked(track.id, track);
@@ -2657,9 +2712,38 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 </React.Fragment>
               );
             })}
+            {isArtist && !showRemixesOnly && !filterQuery.trim() && tracks.length > 5 && (
+              <div className="pt-2 px-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAllArtistTracks((v) => !v)}
+                  className="text-xs font-bold text-[#b3b3b3] hover:text-white cursor-pointer transition-colors"
+                >
+                  {showAllArtistTracks ? 'Mostrar menos' : 'Ver más'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
+
+      {/* Artist Discography & Featuring Playlists Shelves - Only on Artist Profiles */}
+      {isArtist && (
+        <>
+          <DesktopArtistDiscographySection
+            items={artistDiscography}
+            isLoading={isLoadingSimilar}
+            onSelectAlbum={(item) => onSelectPlaylistById?.(item.id, item.name, item.cover || undefined)}
+            onPlayAlbum={handlePlayDiscographyAlbum}
+          />
+          <DesktopArtistPlaylistsSection
+            artistName={dynamicPlaylist.name}
+            playlists={artistPlaylists}
+            onSelectPlaylist={(pl) => onSelectPlaylistById?.(pl.id, pl.name, pl.image || undefined)}
+            onPlayPlaylist={handlePlayDiscoveredPlaylist}
+          />
+        </>
+      )}
 
       {/* Similar Artists Shelf ("Fans también escuchan") - Only on Artist Profiles */}
       {isArtist && (similarArtists.length > 0 || isLoadingSimilar) && (
@@ -2729,6 +2813,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 })}
           </div>
         </div>
+      )}
+
+      {/* Artist About / Biography Card - Only on Artist Profiles when verified bio exists */}
+      {isArtist && artistBio && (
+        <DesktopArtistAboutCard
+          artistName={dynamicPlaylist.name}
+          image={dynamicPlaylist.images?.[0]?.url}
+          listenersLabel={getArtistMonthlyListeners(dynamicPlaylist.name)}
+          bio={artistBio}
+        />
       )}
 
       {/* Spotify "Busquemos algo para tu lista" Section (Only shown if user can add tracks: saved or owned playlist, never on artists) */}

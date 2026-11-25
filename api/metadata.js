@@ -4,7 +4,7 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
-import { getWebPlayerAuth } from './_lib/extract-session.js';
+import { getWebPlayerAuth, searchSpotifyPublicPlaylists, toHDImage } from './_lib/extract-session.js';
 
 const CANVAS_CACHE = new Map();
 const AUDIO_FEATURES_CACHE = new Map();
@@ -506,6 +506,86 @@ function dzTrack(t, fallbackArtist) {
   };
 }
 
+const MUSIC_BIO_HINT = /\b(cantante|m[uú]sic[oa]|raper[oa]|banda|grupo musical|productor\w*|compositor\w*|discogr[aá]f\w*|d[uú]o|dj|int[eé]rprete|singer|musician|rapper|band|songwriter|producer)\b/i;
+
+async function fetchArtistBio(artistName) {
+  const clean = String(artistName || '').trim();
+  if (!clean || clean.length < 2) return null;
+  const slug = clean.replace(/\s+/g, '_');
+  const candidates = [
+    `https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(`${slug}_(cantante)`)}`,
+    `https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(`${slug}_(músico)`)}`,
+    `https://es.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`,
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(`${slug}_(singer)`)}`,
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(`${slug}_(musician)`)}`,
+    `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(slug)}`,
+  ];
+
+  for (const url of candidates) {
+    try {
+      const r = await fetch(url, {
+        headers: { 'User-Agent': 'Spotifree/1.1' },
+        signal: AbortSignal.timeout ? AbortSignal.timeout(1600) : undefined,
+      });
+      if (!r.ok) continue;
+      const data = await r.json();
+      if (!data || data.type !== 'standard' || !data.extract) continue;
+      const checkText = `${data.description || ''} ${(data.extract || '').slice(0, 240)}`;
+      if (!MUSIC_BIO_HINT.test(checkText)) continue;
+      return String(data.extract).replace(/\s+/g, ' ').trim();
+    } catch {}
+  }
+  return null;
+}
+
+function buildArtistDiscography(rawAlbums, artistName) {
+  if (!Array.isArray(rawAlbums) || rawAlbums.length === 0) return [];
+  const byTitle = new Map();
+  const typeWeight = { album: 4, ep: 3, single: 2, compile: 1 };
+
+  for (const a of rawAlbums) {
+    if (!a?.id || !a?.title) continue;
+    const normTitle = dzNorm(a.title);
+    if (!normTitle) continue;
+    const rawCover = a.cover_xl || a.cover_big || a.cover_medium || '';
+    const cover = !isInvalidDzPic(rawCover) ? toHDImage(rawCover) : null;
+    const rType = String(a.record_type || 'album').toLowerCase();
+    const fans = Number(a.fans || 0);
+    const prev = byTitle.get(normTitle);
+    const prevScore = prev ? (typeWeight[prev.recordType] || 1) * 1_000_000 + prev.fans : -1;
+    const curScore = (typeWeight[rType] || 1) * 1_000_000 + fans;
+
+    if (!prev || curScore > prevScore) {
+      const relDate = String(a.release_date || '');
+      const parsedMs = relDate ? Date.parse(relDate) : NaN;
+      byTitle.set(normTitle, {
+        id: `alb-${a.id}`,
+        name: a.title,
+        cover: cover || prev?.cover || null,
+        releaseDate: relDate,
+        year: /^\d{4}/.test(relDate) ? relDate.slice(0, 4) : '',
+        recordType: ['album', 'single', 'ep', 'compile'].includes(rType) ? rType : 'album',
+        fans,
+        artistName,
+        _ts: Number.isFinite(parsedMs) ? parsedMs : 0,
+      });
+    }
+  }
+
+  const now = Date.now();
+  const items = Array.from(byTitle.values()).sort((a, b) => (b._ts || 0) - (a._ts || 0) || b.fans - a.fans);
+  const newestIdx = items.findIndex((it) => it._ts > 0 && it._ts <= now + 7 * 24 * 3600 * 1000);
+
+  return items.map((it, idx) => {
+    const { _ts, ...rest } = it;
+    void _ts;
+    return {
+      ...rest,
+      isLatest: idx === newestIdx,
+    };
+  });
+}
+
 async function handleDiscover(req, res) {
   const name = String(req.query?.artist || '').trim();
   if (!name) return res.status(400).json({ error: 'Missing artist' });
@@ -520,13 +600,19 @@ async function handleDiscover(req, res) {
     const artist = (candidates.length ? candidates : found.data || []).sort((a, b) => (b.nb_fan || 0) - (a.nb_fan || 0))[0];
     if (!artist) {
       res.setHeader('Cache-Control', 'public, max-age=3600, s-maxage=86400');
-      return res.status(200).json({ artist: null, top: [], related: [], recent: [] });
+      return res.status(200).json({ artist: null, top: [], related: [], recent: [], discography: [], playlists: [], bio: null });
     }
-    const [top, related, albums] = await Promise.all([
+    const cookie = req.headers?.['x-spotify-cookie'] || '';
+    const [top, related, albums, spPlaylists, bioText] = await Promise.all([
       dz(`/artist/${artist.id}/top?limit=15`).catch(() => ({ data: [] })),
       dz(`/artist/${artist.id}/related?limit=8`).catch(() => ({ data: [] })),
       // Deezer doesn't list albums by date: ask for many and sort them below
       dz(`/artist/${artist.id}/albums?limit=100`).catch(() => ({ data: [] })),
+      Promise.race([
+        searchSpotifyPublicPlaylists(artist.name, 10, cookie).catch(() => []),
+        new Promise((resolve) => setTimeout(() => resolve([]), 2600)),
+      ]),
+      fetchArtistBio(artist.name).catch(() => null),
     ]);
     const rel = (related.data || []).slice(0, 6);
     const relTops = await Promise.all(rel.map((r) => dz(`/artist/${r.id}/top?limit=6`).catch(() => ({ data: [] }))));
@@ -539,6 +625,42 @@ async function handleDiscover(req, res) {
       .filter((a, i, list) => list.findIndex((b) => dzNorm(b.title) === dzNorm(a.title)) === i)
       .slice(0, 4);
     const freshTracks = await Promise.all(fresh.map((a) => dz(`/album/${a.id}/tracks?limit=6`).catch(() => ({ data: [] }))));
+    const discography = buildArtistDiscography(albums.data || [], artist.name);
+
+    const normArtistKey = dzNorm(artist.name);
+    let mappedPlaylists = (Array.isArray(spPlaylists) ? spPlaylists : [])
+      .filter((p) => p && p.id && p.name && (p.owner?.id === 'spotify' || dzNorm(p.name).includes(normArtistKey)))
+      .slice(0, 8)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        image: p.images?.[0]?.url ? toHDImage(p.images[0].url) : null,
+        owner: p.owner?.display_name || 'Spotify',
+        description: p.description || '',
+      }));
+
+    if (mappedPlaylists.length < 3) {
+      try {
+        const dzPls = await dz(`/search/playlist?q=${encodeURIComponent(artist.name)}&limit=8`);
+        const existingIds = new Set(mappedPlaylists.map((p) => p.id));
+        for (const p of (dzPls.data || [])) {
+          if (!p?.id || !p?.title) continue;
+          const pid = `dz-pl-${p.id}`;
+          if (existingIds.has(pid)) continue;
+          if (!dzNorm(p.title).includes(normArtistKey)) continue;
+          const img = p.picture_xl || p.picture_big || p.picture_medium || null;
+          mappedPlaylists.push({
+            id: pid,
+            name: p.title,
+            image: img ? toHDImage(img) : null,
+            owner: p.user?.name || 'Spotify',
+            description: '',
+          });
+          if (mappedPlaylists.length >= 8) break;
+        }
+      } catch {}
+    }
+
     const artistPic = artist.picture_xl || artist.picture_big || null;
     const out = {
       artist: { id: artist.id, name: artist.name, picture: !isInvalidDzPic(artistPic) ? artistPic : null, fans: artist.nb_fan || 0 },
@@ -561,12 +683,15 @@ async function handleDiscover(req, res) {
           .map((t) => dzTrack({ ...t, album: { id: a.id, title: a.title, cover_xl: a.cover_xl, cover_big: a.cover_big } }, artist.name))
           .filter(Boolean),
       })),
+      discography,
+      playlists: mappedPlaylists,
+      bio: bioText || null,
     };
     DISCOVER_CACHE.set(key, out);
     res.setHeader('Cache-Control', 'public, max-age=21600, s-maxage=86400');
     return res.status(200).json(out);
   } catch (e) {
-    return res.status(200).json({ artist: null, top: [], related: [], recent: [], error: String(e?.message || e) });
+    return res.status(200).json({ artist: null, top: [], related: [], recent: [], discography: [], playlists: [], bio: null, error: String(e?.message || e) });
   }
 }
 

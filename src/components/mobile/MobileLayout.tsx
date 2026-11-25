@@ -588,12 +588,17 @@ export const MobileLayout: React.FC = () => {
       setLastVibrantColor(color);
       setSelectedPlaylist(sfMix);
       setMobileTab('playlist');
+      if (mobileScrollRef.current) mobileScrollRef.current.scrollTop = 0;
       return;
     }
 
     if (!isAuthenticated) {
       openLoginModal();
       return;
+    }
+
+    if (mobileScrollRef.current) {
+      mobileScrollRef.current.scrollTop = 0;
     }
 
     const color = resolveVibrantColor(cleanId, customName || cleanId);
