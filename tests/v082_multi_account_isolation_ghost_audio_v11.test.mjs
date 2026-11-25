@@ -126,8 +126,8 @@ describe('Spotifree v1.1 Multi-Account Isolation and Ghost Audio Elimination', (
     const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
     const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
 
-    assert.equal(pkg.version, '1.1.0');
-    assert.ok(changelog.includes("export const APP_VERSION = '1.1';"));
+    assert.ok(['1.1.0', '1.2.0'].includes(pkg.version));
+    assert.ok(/export const APP_VERSION = '1\.[1-9]+';/.test(changelog));
     assert.ok(changelog.includes("version: '1.1'"));
     assert.ok(changelog.includes('Aislamiento estricto multicuenta'));
     assert.ok(changelog.includes('Eliminación de audio fantasma'));

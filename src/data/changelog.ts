@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.1';
+export const APP_VERSION = '1.2';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.2',
+    date: '25 de noviembre, 2026',
+    title: 'Spotifree 1.2: Perfiles de artista con discografía completa, álbumes fiables y guardado persistente en APK',
+    isLatest: true,
+    highlights: [
+      'Perfiles de artista completos en móvil y ordenador: añade Títulos populares y Discografía con filtros (Álbumes, Sencillos y EP, Recopilatorios), vista completa «Ver discografía», «Listas del artista» / «Incluye a...», biografía verificada y botón «Ver más» en canciones populares manteniendo todos los botones existentes.',
+      'Álbumes siempre cargados desde cualquier canción: nueva resolución multiorigen para que entrar en un álbum desde el reproductor, tabla o menú móvil muestre siempre todas sus canciones.',
+      'Guardado persistente en Android (APK): las playlists guardadas en Tu biblioteca se conservan tras cerrar y reabrir la app con almacenamiento optimizado y sincronización segura.',
+      'Rendimiento web limpio: integración de Vercel Web Analytics y eliminación del sondeo innecesario a localhost en reposo sin afectar a Discord Rich Presence.',
+    ],
+  },
   {
     version: '1.1',
     date: '25 de noviembre, 2026',
     title: 'Spotifree 1.1: Aislamiento completo multicuenta, historial y recomendaciones independientes y eliminación de audio fantasma',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Aislamiento estricto multicuenta: búsquedas recientes, perfil de gustos (taste), recomendaciones, artistas sugeridos y estadísticas de escucha 100% independientes y únicos para cada cuenta en el mismo dispositivo.',
       'Eliminación de audio fantasma: cierre y parada sincronizada del motor de audio al cerrar sesión o cambiar de cuenta, evitando reproducciones residuales o colas cruzadas.',

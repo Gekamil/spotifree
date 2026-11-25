@@ -219,4 +219,13 @@ describe('v083: Artist Discography, Playlists & Bio Sections (Desktop + Mobile)'
     assert.ok(sectionsCode.includes('Incluye a {artistName}'));
     assert.ok(sectionsCode.includes('Discografía'));
   });
+
+  it('5. Version 1.2 release metadata and changelog entry are valid', () => {
+    const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
+    const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
+
+    assert.equal(pkg.version, '1.2.0');
+    assert.ok(changelog.includes("export const APP_VERSION = '1.2';"));
+    assert.ok(changelog.includes("version: '1.2'"));
+  });
 });

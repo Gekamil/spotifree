@@ -7,12 +7,12 @@ describe('Spotifree v0.5 Optimizations, Live Extraction & Mood Shelves', () => {
   describe('1. Version Bump Verification', () => {
     it('package.json version is 0.5.x or >= 1.0.0', () => {
       const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf-8'));
-      assert.ok(/^(0\.5\.|1\.[01](\.|$))/.test(pkg.version));
+      assert.ok(/^(0\.5\.|1\.[0-9]+(\.|$))/.test(pkg.version));
     });
 
     it('src/data/changelog.ts declares current APP_VERSION and keeps 0.5 release history', () => {
       const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf-8');
-      assert.ok(/export const APP_VERSION = '(0\.5\.|1\.[01])/.test(changelog));
+      assert.ok(/export const APP_VERSION = '(0\.5\.|1\.[0-9]+)/.test(changelog));
       assert.ok(changelog.includes("version: '0.5"));
       assert.ok(changelog.includes('120 FPS'));
     });
