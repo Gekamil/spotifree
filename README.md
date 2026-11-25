@@ -1,229 +1,280 @@
 <div align="center">
 
-<img src="./public/icon-512.png" alt="Logo de Spotifree" width="128" />
+<a href="https://spotifreeweb.vercel.app"><img src="./docs/media/banner.jpg" alt="Spotifree en ordenador y móvil: tu música, sin anuncios y totalmente gratis" width="100%" /></a>
 
-# Spotifree
+<br />
+<br />
 
-**Reproductor de música gratuito con la experiencia de Spotify: en el navegador, en Android y en Android Auto. Con modo DJ, karaoke, escucha sin conexión y sesiones compartidas.**
+**Reproductor de música gratuito con la experiencia de Spotify en el navegador, Android y Android Auto.**<br />
+Modo DJ, karaoke, escucha sin conexión y sesiones compartidas.
 
-[![Version](https://img.shields.io/badge/versión-1.2-1DB954?style=for-the-badge)](./src/data/changelog.ts)
-[![Web Live](https://img.shields.io/badge/Web-spotifreeweb.vercel.app-000000?style=for-the-badge&logo=vercel)](https://spotifreeweb.vercel.app)
-[![Android APK](https://img.shields.io/badge/Android-Descargar%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
-[![CI APK](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml/badge.svg)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
+<br />
 
-![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
-![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![Capacitor](https://img.shields.io/badge/Capacitor-8-119EFF?style=flat-square&logo=capacitor&logoColor=white)
-![Android Auto](https://img.shields.io/badge/Android_Auto-4285F4?style=flat-square&logo=androidauto&logoColor=white)
-![Estilo Spotify](https://img.shields.io/badge/UI_estilo-Spotify-1ED760?style=flat-square&logo=spotify&logoColor=white)
+[![Abrir la web](https://img.shields.io/badge/Abrir_la_web-1ED760?style=for-the-badge&logo=spotify&logoColor=black)](https://spotifreeweb.vercel.app)
+[![Descargar APK](https://img.shields.io/badge/Descargar_APK-181818?style=for-the-badge&logo=android&logoColor=3DDC84)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 
-[Abrir Web App](https://spotifreeweb.vercel.app) · [Página de instalación Android](https://spotifreeweb.vercel.app/instalar) · [Última Release APK](https://github.com/Gekamil/spotifree/releases/tag/android-latest)
+[![Versión](https://img.shields.io/badge/versión-1.2-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
+[![Build APK](https://img.shields.io/github/actions/workflow/status/Gekamil/spotifree/android-apk.yml?branch=main&style=flat-square&label=build%20apk&labelColor=181818)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
+[![Último commit](https://img.shields.io/github/last-commit/Gekamil/spotifree?style=flat-square&label=último%20commit&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/commits/main)
+[![Stars](https://img.shields.io/github/stars/Gekamil/spotifree?style=flat-square&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/stargazers)
 
-[Demo](#-demo) · [Capturas](#-capturas) · [Funciones](#-qué-incluye-spotifree) · [Instalación](#-puesta-en-marcha-en-local)
+<br />
+
+[**Demo**](#demo) &nbsp;·&nbsp; [**Características**](#características) &nbsp;·&nbsp; [**Capturas**](#capturas) &nbsp;·&nbsp; [**Arquitectura**](#arquitectura) &nbsp;·&nbsp; [**Instalación**](#instalación)
 
 </div>
 
----
+<br />
 
-## 🎬 Demo
+## Demo
 
 <div align="center">
 
-### 💻 Ordenador
+<img src="./docs/media/ordenador.webp" alt="Demo en ordenador: inicio, perfil de artista, letra sincronizada y DJ" width="100%" />
 
-<img src="./docs/media/ordenador.webp" alt="Demo de Spotifree en ordenador: inicio, perfil de artista, letra sincronizada y DJ" width="100%" />
+<sub><b>Ordenador</b> &nbsp;·&nbsp; <a href="./docs/media/ordenador.mp4">Ver en MP4</a></sub>
 
-[▶ Ver en MP4 a mayor calidad](./docs/media/ordenador.mp4)
+<br />
+<br />
 
-### 📱 Móvil
+<img src="./docs/media/movil.webp" alt="Demo en móvil: inicio, biblioteca, artista, reproductor y buscador" width="320" />
 
-<img src="./docs/media/movil.webp" alt="Demo de Spotifree en móvil: inicio, biblioteca, artista, reproductor y buscador" width="300" />
-
-[▶ Ver en MP4 a mayor calidad](./docs/media/movil.mp4)
+<sub><b>Móvil</b> &nbsp;·&nbsp; <a href="./docs/media/movil.mp4">Ver en MP4</a></sub>
 
 </div>
 
----
+<br />
 
-## 📸 Capturas
+## Características
 
-### 💻 Ordenador
+<table>
+<tr>
+<td width="50%" valign="top">
+<h3>Catálogo unificado</h3>
+Una sola búsqueda en Spotify, Deezer, iTunes, SoundCloud y YouTube. Álbumes, perfiles de artista con discografía completa, carátulas HD y portadas animadas. Los remixes oficiales tienen prioridad.
+</td>
+<td width="50%" valign="top">
+<h3>Modo DJ</h3>
+Mezcla armónica con rueda Camelot y emparejamiento de BPM, incluido doble y mitad de tempo. Siete estilos de transición, orbe animado y control por texto o voz.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<h3>Letras y karaoke</h3>
+Letra sincronizada línea a línea en ordenador y móvil, con modo sin voces y control del volumen de la voz.
+</td>
+<td width="50%" valign="top">
+<h3>Offline y biblioteca</h3>
+Descarga de canciones y listas, archivos locales, playlists colaborativas en tiempo real, historial de versiones y sincronización con Firebase.
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<h3>Audio y sesiones</h3>
+Ecualizador, selector de salida (altavoz, auriculares, Bluetooth o USB), sesiones para escuchar juntos con PeerJS y estadísticas de escucha.
+</td>
+<td width="50%" valign="top">
+<h3>Android Auto y widgets</h3>
+Pestañas de Inicio, Recientes, Tu biblioteca y Explorar en el coche, con letra y comandos de voz. Dos widgets, incluido un tocadiscos animado.
+</td>
+</tr>
+</table>
 
-| Inicio | Perfil de artista |
-| :---: | :---: |
-| ![Inicio en ordenador](./docs/media/ordenador-inicio.jpg) | ![Perfil de artista en ordenador](./docs/media/ordenador-artista.jpg) |
-| **Letra sincronizada** | **Modo DJ** |
-| ![Letra sincronizada en ordenador](./docs/media/ordenador-letra.jpg) | ![Modo DJ en ordenador](./docs/media/ordenador-dj.jpg) |
+<br />
 
-### 📱 Móvil
+## Capturas
 
-| Inicio | Reproductor | Artista | Buscar | Biblioteca |
-| :---: | :---: | :---: | :---: | :---: |
-| <img src="./docs/media/movil-inicio.jpg" alt="Inicio en móvil" width="170" /> | <img src="./docs/media/movil-reproductor.jpg" alt="Reproductor en móvil" width="170" /> | <img src="./docs/media/movil-artista.jpg" alt="Artista en móvil" width="170" /> | <img src="./docs/media/movil-buscar.jpg" alt="Buscador en móvil" width="170" /> | <img src="./docs/media/movil-biblioteca.jpg" alt="Biblioteca en móvil" width="170" /> |
+### Ordenador
 
----
+<table>
+<tr>
+<td width="50%"><img src="./docs/media/ordenador-inicio.jpg" alt="Inicio en ordenador" /></td>
+<td width="50%"><img src="./docs/media/ordenador-artista.jpg" alt="Perfil de artista en ordenador" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Inicio</sub></td>
+<td align="center"><sub>Perfil de artista</sub></td>
+</tr>
+<tr>
+<td width="50%"><img src="./docs/media/ordenador-letra.jpg" alt="Letra sincronizada en ordenador" /></td>
+<td width="50%"><img src="./docs/media/ordenador-dj.jpg" alt="Modo DJ en ordenador" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Letra sincronizada</sub></td>
+<td align="center"><sub>Modo DJ</sub></td>
+</tr>
+</table>
 
-## 💻📱 Ordenador y móvil
+### Móvil
 
-Spotifree detecta el dispositivo y carga una interfaz propia para cada uno.
+<table>
+<tr>
+<td width="20%"><img src="./docs/media/movil-inicio.jpg" alt="Inicio en móvil" /></td>
+<td width="20%"><img src="./docs/media/movil-reproductor.jpg" alt="Reproductor en móvil" /></td>
+<td width="20%"><img src="./docs/media/movil-artista.jpg" alt="Artista en móvil" /></td>
+<td width="20%"><img src="./docs/media/movil-buscar.jpg" alt="Buscador en móvil" /></td>
+<td width="20%"><img src="./docs/media/movil-biblioteca.jpg" alt="Biblioteca en móvil" /></td>
+</tr>
+<tr>
+<td align="center"><sub>Inicio</sub></td>
+<td align="center"><sub>Reproductor</sub></td>
+<td align="center"><sub>Artista</sub></td>
+<td align="center"><sub>Buscar</sub></td>
+<td align="center"><sub>Biblioteca</sub></td>
+</tr>
+</table>
+
+Spotifree detecta el dispositivo y carga una interfaz propia para cada uno:
 
 | | Ordenador | Móvil |
 | :--- | :--- | :--- |
 | **Navegación** | Biblioteca en barra lateral, buscador superior y panel «Sonando ahora» | Barra inferior: Inicio, Buscar, Tu biblioteca y Crear |
-| **Reproductor** | Barra inferior fija con letra, cola y minirreproductor | Mini-reproductor flotante que se amplía a pantalla completa |
+| **Reproductor** | Barra inferior fija con letra, cola y minirreproductor | Mini-reproductor que se amplía a pantalla completa |
 | **Instalación** | Se usa desde el navegador | Navegador, web instalable o APK para Android |
 
-## ✨ Qué incluye Spotifree
+<br />
 
-| Área | Funcionalidades principales |
-| :--- | :--- |
-| **🎵 Reproducción y Catálogo** | Búsqueda unificada (Spotify, Deezer, iTunes, SoundCloud y YouTube), apartado dedicado de **Álbumes**, prioridad para **remixes oficiales** antes que leaks/SoundCloud, carátulas HD y portadas animadas (*motion covers*). |
-| **🎛️ Modo DJ IA & Web Audio** | Planificador armónico con **rueda Camelot** y emparejamiento de **BPM / doble-mitad**, 7 presets de mezcla (`automatica`, `corte`, `filtro`, `eco_out`, `freno_vinilo`, `beat_roll`, `crescendo`), orbe dinámico de 3 capas e interacción por texto/voz con síntesis neural (`msedge-tts`). |
-| **📶 Offline & Biblioteca** | Descarga de listas y canciones para escucha sin conexión, reproducción desde almacenamiento local, playlists colaborativas en tiempo real, papelera/historial de versiones, prevención de autoguardado al explorar listas externas y sincronización con Firebase. |
-| **🔊 Audio & Sesiones** | Selector de **salida de audio** en ordenador, móvil web y Android APK (altavoz, auriculares, Bluetooth, USB), además de sesiones para **Escuchar juntos** (`PeerJS`) y estadísticas de escucha. |
-| **🚗 Android Auto & Widgets** | 4 pestañas nativas en el coche (**Inicio**, **Recientes**, **Tu biblioteca** y **Explorar**), reproducción aleatoria, cola, letra en el salpicadero, comandos de voz y **2 widgets** con carátula difuminada, gradiente dinámico, `<Chronometer>` y Tocadiscos fluido a 60 FPS. |
+## Arquitectura
 
----
-
-## 🧱 Stack Tecnológico
-
-- **Frontend:** React 19, TypeScript, Vite 8, Tailwind CSS, Zustand
-- **Audio & DSP:** Web Audio API (channel strip de 10 nodos, ecualizador, sweeps resonantes, delay sincronizado), `hls.js`, Web Workers (`audioAnalysis.worker`)
-- **Backend / Serverless:** Vercel Serverless Functions (`api/*.js`) + servidor Node/HTTP (`server.mjs`) con resolución multimedia (`yt-dlp`, `youtubei.js`, `play-dl`, SoundCloud fallback)
-- **Móvil y Nativo:** Capacitor 8 (`com.spotifree.music`), plugins nativos Java para Android, MediaBrowserService para Android Auto y widgets `AppWidgetProvider`
-- **Datos y Tiempo Real:** Firebase, `PeerJS`
-
----
-
-## 📂 Estructura del Proyecto
-
-```text
-delightful-borg/
-├── api/                         # Endpoints serverless (Vercel): búsqueda, playlists, audio, letras, auth, TTS
-├── native/android/              # Código nativo Java y recursos XML de Android / Android Auto / Widgets
-│   ├── SpotifreeMediaService.java
-│   ├── SpotifreeMediaPlugin.java
-│   ├── SpotifreeAudioOutputPlugin.java
-│   ├── SpotifreeAudioFxPlugin.java
-│   ├── SpotifreeLocalMusicPlugin.java
-│   ├── SpotifreeWidget.java
-│   ├── SpotifreeTurntableWidget.java
-│   └── res/                     # Layouts, drawables vectoriales e iconos de pestañas y widgets
-├── scripts/                     # Workers de audio (audioService.mjs, audio_resolver.py), setup Android y fetch APK
-├── src/
-│   ├── components/              # Vistas Desktop, Mobile, DJ IA, Widgets, Modales y Reproductor
-│   ├── services/                # API Spotify/Deezer, motor de audio, historial, salidas de audio, sesiones
-│   ├── store/                   # Stores Zustand (player, datos, UI, estadísticas)
-│   └── utils/                   # Almacenamiento offline, orden aleatorio, letras, carátulas y deep links
-├── tests/                       # Suites de tests unitarios, integración y E2E (node:test)
-├── .github/workflows/           # Pipeline automático de compilación, firma y release del APK
-├── Dockerfile                   # Imagen Node 20 + Python 3 + ffmpeg + yt-dlp para backend de audio
-├── server.mjs                   # Servidor HTTP standalone (puerto 10000 por defecto)
-└── vercel.json                  # Configuración de build, rewrites y cabeceras en Vercel
+```mermaid
+flowchart LR
+    subgraph Clientes
+        W[Web y PWA]
+        A[App Android<br/>Capacitor + plugins Java]
+    end
+    subgraph Backend
+        API[Funciones serverless<br/>Vercel]
+        S[Servidor Node<br/>server.mjs]
+    end
+    W --> API
+    A --> API
+    W -.-> S
+    API --> M[Metadatos<br/>Spotify · Deezer · iTunes]
+    API --> AU[Audio<br/>YouTube · SoundCloud]
+    S --> AU
+    W <--> F[(Firebase)]
+    W <-. escuchar juntos .-> P[PeerJS]
 ```
 
----
+| Capa | Tecnologías |
+| :--- | :--- |
+| **Frontend** | React 19, TypeScript, Vite 8, Tailwind CSS, Zustand |
+| **Audio y DSP** | Web Audio API (cadena de 10 nodos, ecualizador, barridos resonantes, delay sincronizado), `hls.js`, Web Workers |
+| **Backend** | Funciones serverless en Vercel y servidor Node (`server.mjs`) con `yt-dlp`, `youtubei.js`, `play-dl` y SoundCloud como respaldo |
+| **Android** | Capacitor 8, plugins nativos en Java, `MediaBrowserService` para Android Auto, widgets `AppWidgetProvider` |
+| **Datos y tiempo real** | Firebase, PeerJS |
 
-## 🚀 Puesta en Marcha en Local
+<br />
 
-### Requisitos previos
-- **Node.js 20+** (en CI se utiliza Node 22)
-- **Python 3 + `ffmpeg` + `yt-dlp`** (para el resolver completo de audio en el backend local)
+## Instalación
 
-### Instalación y desarrollo
+**Requisitos:** Node.js 20 o superior. Para el audio completo en el backend local, además Python 3, `ffmpeg` y `yt-dlp`.
 
 ```bash
-# 1. Clonar el repositorio
 git clone https://github.com/Gekamil/spotifree.git
 cd spotifree
-
-# 2. Instalar dependencias
 npm install
-
-# 3. Arrancar el frontend en modo desarrollo (Vite)
 npm run dev
 ```
 
-Si quieres levantar también el servidor backend de audio/API en local:
+Para levantar también el backend de audio, que escucha en `http://localhost:10000` (configurable con `PORT`):
 
 ```bash
 node server.mjs
 ```
 
-> Por defecto escucha en `http://localhost:10000` (configurable mediante `PORT`).
+<details>
+<summary><b>Docker</b></summary>
+<br />
 
----
-
-## 🐳 Ejecutar Backend + Web con Docker
-
-El `Dockerfile` incluido instala `node:20-slim`, `python3`, `ffmpeg` y `yt-dlp[default,deno]`, compila el frontend y arranca `server.mjs` en el puerto `10000`:
+El `Dockerfile` instala Node 20, Python 3, `ffmpeg` y `yt-dlp`, compila el frontend y arranca `server.mjs` en el puerto `10000`.
 
 ```bash
 docker build -t spotifree .
 docker run -p 10000:10000 spotifree
 ```
 
----
+</details>
 
-## 🧪 Tests y Calidad de Código
+<details>
+<summary><b>Compilar el APK de Android</b></summary>
+<br />
 
-El proyecto utiliza el runner nativo `node:test` y `oxlint`:
-
-```bash
-# Comprobación de tipos TypeScript y build de producción
-npm run build
-
-# Linter rápido
-npm run lint
-
-# Suite principal (transiciones DJ, planificador, offline, karaoke, letras, biblioteca y más)
-npm test
-
-# Suites adicionales E2E y nativas
-node tests/e2e_spotifree_r1_r5.test.mjs
-node tests/audio_output_and_covers.test.mjs
-node tests/android_auto_and_widgets.test.mjs
-```
-
----
-
-## 📱 Compilación del APK Android
-
-La app Android usa **Capacitor 8** cargando la web desplegada (con `offline.html` como respaldo sin conexión) e inyectando los plugins nativos de Android Auto, efectos de audio, selector de salida, archivos locales y widgets.
-
-### De forma local (requiere Android SDK / Android Studio)
+La app carga la web desplegada, con `offline.html` como respaldo, y añade los plugins nativos. En local requiere Android SDK o Android Studio:
 
 ```bash
 npx cap add android
 npm run build:apk
 ```
 
-### Automática en GitHub Actions
+En GitHub Actions, [`android-apk.yml`](./.github/workflows/android-apk.yml) se ejecuta con cada `push` a `main` que toque código nativo, la configuración de Capacitor, las dependencias o los recursos de la app. Compila, firma y publica `Spotifree.apk` en la release [`android-latest`](https://github.com/Gekamil/spotifree/releases/tag/android-latest).
 
-Cada `push` a `main` que modifique `native/**`, `scripts/setup-android-*.mjs`, `capacitor.config.ts`, `package.json` o recursos de la app dispara [`.github/workflows/android-apk.yml`](./.github/workflows/android-apk.yml), que:
+En Vercel, el build descarga el último APK para servirlo desde [`/instalar`](https://spotifreeweb.vercel.app/instalar).
 
-1. Compila la web (`npm run build`).
-2. Sincroniza el proyecto Capacitor y copia clases/recursos nativos (`scripts/setup-android-native.mjs`).
-3. Genera y firma `Spotifree.apk` con `./gradlew assembleRelease` y `apksigner`.
-4. Publica el binario en la release [`android-latest`](https://github.com/Gekamil/spotifree/releases/tag/android-latest).
+</details>
 
-> En **Vercel**, `vercel.json` ejecuta `npm run build && node scripts/fetch-latest-apk.mjs` para servir siempre la web actualizada junto con `/Spotifree.apk` y `/instalar` desde el mismo dominio.
+<details>
+<summary><b>Tests y calidad de código</b></summary>
+<br />
+
+```bash
+npm run build   # tipos y build de producción
+npm run lint    # oxlint
+npm test        # suite principal
+
+# Suites adicionales
+node tests/e2e_spotifree_r1_r5.test.mjs
+node tests/audio_output_and_covers.test.mjs
+node tests/android_auto_and_widgets.test.mjs
+```
+
+</details>
+
+<details>
+<summary><b>Estructura del proyecto</b></summary>
+<br />
+
+```text
+spotifree/
+├── api/                 # Endpoints serverless: búsqueda, playlists, audio, letras, auth, TTS
+├── native/android/      # Java y recursos de Android, Android Auto y widgets
+├── scripts/             # Resolución de audio y preparación del proyecto Android
+├── src/
+│   ├── components/      # Vistas de ordenador, móvil, DJ, modales y reproductor
+│   ├── services/        # APIs, motor de audio, historial, salidas y sesiones
+│   ├── store/           # Estado global con Zustand
+│   └── utils/           # Offline, letras, carátulas, enlaces
+├── tests/               # Tests unitarios, de integración y E2E
+├── Dockerfile
+├── server.mjs           # Servidor HTTP independiente
+└── vercel.json
+```
+
+</details>
+
+<br />
+
+## Novedades de la 1.2
+
+- **Perfiles de artista completos:** títulos populares, discografía con filtros, listas y biografía.
+- **Álbumes más fiables:** se resuelven con varias fuentes para mostrar todas sus pistas.
+- **Guardado persistente en Android:** tu biblioteca se conserva al reabrir la app.
+- **Web más limpia:** Vercel Web Analytics y sin sondeos innecesarios en reposo.
+
+[Historial completo de versiones](./src/data/changelog.ts)
+
+<br />
 
 ---
 
-## 📌 Novedades Recientes (`v1.2`)
+<div align="center">
 
-- **Perfiles de artista completos:** títulos populares, discografía con filtros (álbumes, sencillos y EP, recopilatorios), listas del artista y biografía, en móvil y ordenador.
-- **Álbumes más fiables:** al entrar en un álbum desde cualquier canción, se resuelve con varias fuentes para mostrar todas sus pistas.
-- **Guardado persistente en Android:** las playlists de Tu biblioteca se conservan al cerrar y reabrir la app.
-- **Web más limpia:** analítica con Vercel Web Analytics y sin sondeos innecesarios en reposo.
+<sub>Proyecto personal e independiente. <b>No está afiliado, patrocinado ni respaldado por Spotify.</b><br />
+«Spotify» y su logotipo, la música, las carátulas y demás contenidos pertenecen a sus respectivos propietarios.</sub>
 
-Consulta el historial completo de versiones en [`src/data/changelog.ts`](./src/data/changelog.ts).
+<br />
+<br />
 
----
+<a href="#demo">Volver arriba</a>
 
-## ⚠️ Aviso
-
-Proyecto personal e independiente. **No está afiliado, patrocinado ni respaldado por Spotify.** «Spotify» y su logotipo son marcas de sus respectivos propietarios, igual que la música, las carátulas y el resto de contenidos que se muestran.
+</div>
