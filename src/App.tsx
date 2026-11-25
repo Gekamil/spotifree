@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Capacitor } from '@capacitor/core';
 import { App as CapApp } from '@capacitor/app';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -231,6 +232,7 @@ function App() {
       <ApkUpdateBanner />
       <PlaylistVersionsHost />
       <ConfirmDialogHost />
+      {!Capacitor.isNativePlatform() && <Analytics />}
     </ErrorBoundary>
   );
 }
