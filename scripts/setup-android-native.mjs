@@ -349,6 +349,8 @@ const mediaService = `        <service
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
                 <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+            <intent-filter>
                 <action android:name="android.intent.action.MEDIA_BUTTON" />
                 <action android:name="com.spotifree.music.ACTION_PLAY" />
                 <action android:name="com.spotifree.music.ACTION_PAUSE" />

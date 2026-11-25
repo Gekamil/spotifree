@@ -118,6 +118,18 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     static void closeSession() {
         sessionOpen = false;
         SpotifreeWebView.sync();
+        if (current != null) {
+            current.exitForeground();
+        }
+    }
+
+    void exitForeground() {
+        if (foreground) {
+            try {
+                ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_DETACH);
+            } catch (Exception ignored) {}
+            foreground = false;
+        }
     }
 
     public static final String ACTION_UPDATE = "com.spotifree.music.MEDIA_UPDATE";
@@ -466,6 +478,8 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     }
 
     private void sendOrOpen(String action, JSONObject data) {
+        sessionOpen = true;
+        SpotifreeWebView.sync();
         if (session != null) {
             session.setPlaybackState(new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE |
@@ -560,6 +574,10 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
     /** Re-reads the static state into the session, the notification and the foreground status. */
     void refresh() {
         if (session == null) return;
+        if (playing || (title != null && !title.isEmpty())) {
+            sessionOpen = true;
+            SpotifreeWebView.sync();
+        }
         if (!loggedIn && (title == null || title.isEmpty())) {
             setError(tr("Inicia sesión en Spotifree en el móvil", "Sign in to Spotifree on your phone"),
                 PlaybackStateCompat.ERROR_CODE_AUTHENTICATION_EXPIRED);
@@ -823,7 +841,7 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
         if (title == null || title.isEmpty()) return;
         Notification n = buildNotification();
         NotificationManager nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        if (playing) {
+        if (playing || (foreground && keepAlive() && title != null && !title.isEmpty())) {
             try {
                 int type = Build.VERSION.SDK_INT >= 29 ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK : 0;
                 ServiceCompat.startForeground(this, NOTIF_ID, n, type);
@@ -1301,6 +1319,9 @@ public class SpotifreeMediaService extends MediaBrowserServiceCompat {
 
     @Override
     public void onDestroy() {
+        sessionOpen = false;
+        SpotifreeWebView.sync();
+        exitForeground();
         main.removeCallbacks(releaseLocks);
         releaseLocksNow();
         if (current == this) current = null;

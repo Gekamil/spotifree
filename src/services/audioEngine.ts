@@ -2057,35 +2057,24 @@ class AudioEngine {
       if (this.isExplicitlyPaused) {
         this.stopCarrier();
         this.stopProgressTicker();
-        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-          try { navigator.mediaSession.playbackState = 'paused'; } catch {}
-        }
-        return;
-      }
-
-      // App is in background / screen is locked: keep carrier alive so Android/iOS does not kill playback!
-      if (typeof document !== 'undefined' && document.hidden) {
-        this.startCarrier();
-        try {
-          if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
-            this.ytPlayer.playVideo();
-          }
-          if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
-            navigator.mediaSession.playbackState = 'playing';
-          }
-        } catch (_) {}
-        return;
-      }
-
-      // Only stop if visible, user didn't request playback, and not in transition
-      if (!this.isTransitioning && !this.isCrossfading) {
-        this.stopCarrier();
         usePlayerStore.setState({ isPlaying: false });
-        this.stopProgressTicker();
         if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
           try { navigator.mediaSession.playbackState = 'paused'; } catch {}
         }
+        return;
       }
+
+      // Involuntary pause (YouTube internal buffering, network hiccup, or background interruption):
+      // Keep carrier alive, maintain isPlaying in store and attempt immediate resume.
+      this.startCarrier();
+      try {
+        if (this.ytPlayer && typeof this.ytPlayer.playVideo === 'function') {
+          this.ytPlayer.playVideo();
+        }
+        if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
+          navigator.mediaSession.playbackState = 'playing';
+        }
+      } catch (_) {}
     } else if (code === 3) {
       this.checkAndSkipAd();
     } else if (code === 0) {
@@ -2276,6 +2265,12 @@ class AudioEngine {
       if (this.currentTrackQuery) {
         this.resolveAndPlayAlternate(this.currentTrackQuery, this.currentVideoId || undefined);
       }
+    } else if (stuckDurationMs > 28000 && this.stuckRecoveryAttempts >= 3) {
+      // If alternate source is also stuck after 28s, advance cleanly to next track
+      console.warn('[AudioEngine] Playback stalled for >28s across multiple attempts. Advancing to next track...');
+      this.stuckRecoveryAttempts = 0;
+      this.lastObservedAdvanceTime = now;
+      state.nextTrack();
     }
   }
 
@@ -4257,6 +4252,10 @@ class AudioEngine {
       }
     } catch (e) {
       console.warn('[AudioEngine] Alternate resolve error:', e);
+      if (!isStale() && !usePlayerStore.getState().isPlaying) {
+        console.warn('[AudioEngine] Alternate resolve exhausted or failed, advancing to next song');
+        usePlayerStore.getState().nextTrack();
+      }
     }
   }
 
