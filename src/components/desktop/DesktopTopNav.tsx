@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { Capacitor } from '@capacitor/core';
 import {
   SpotifyLogoNativeIcon,
   HomeNativeIcon,
@@ -37,8 +38,12 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
   const { isAuthenticated, user } = useSpotifyDataStore();
 
   useEffect(() => {
-    // Attempt local Chrome dev session synchronization only when developing locally
-    if (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+    // Attempt local Chrome dev session synchronization only when developing locally (never on Capacitor APK)
+    if (
+      typeof window !== 'undefined' &&
+      !Capacitor.isNativePlatform() &&
+      (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ) {
       syncChromeSession().catch((err) => {
         console.warn('[DesktopTopNav] Auto session sync notice:', err);
       });

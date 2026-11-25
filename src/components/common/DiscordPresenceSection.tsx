@@ -25,6 +25,12 @@ export const DiscordPresenceSection: React.FC<{ variant?: 'mobile' | 'desktop' }
     setCustomIdInput(clientId || '');
   }, [clientId]);
 
+  useEffect(() => {
+    if (enabled) {
+      checkStatus().catch(() => {});
+    }
+  }, [enabled, checkStatus]);
+
   const handleManualCheck = async () => {
     setIsChecking(true);
     await checkStatus();

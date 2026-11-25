@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { Capacitor } from '@capacitor/core';
 import { usePlayerStore, resolveTrackCover } from '../store/usePlayerStore';
 
 interface DiscordBridgeStatus {
@@ -36,6 +37,8 @@ const CANDIDATE_BRIDGE_URLS = [
   'http://127.0.0.1:10000',
   'http://localhost:10000',
 ];
+
+let lastProbeAttemptAt = 0;
 
 export const useDiscordPresenceStore = create<DiscordPresenceState>((set, get) => ({
   enabled: typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY_ENABLED) !== 'false' : true,
@@ -75,7 +78,16 @@ export const useDiscordPresenceStore = create<DiscordPresenceState>((set, get) =
   },
 
   checkStatus: async () => {
-    for (const base of CANDIDATE_BRIDGE_URLS) {
+    if (typeof window === 'undefined' || Capacitor.isNativePlatform()) {
+      return false;
+    }
+    const isLocalHostOrigin =
+      window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const candidates = isLocalHostOrigin
+      ? CANDIDATE_BRIDGE_URLS
+      : CANDIDATE_BRIDGE_URLS.filter((base) => base !== '');
+
+    for (const base of candidates) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 1200);
@@ -106,7 +118,7 @@ export const useDiscordPresenceStore = create<DiscordPresenceState>((set, get) =
   },
 
   syncPresence: async () => {
-    if (!get().enabled) return;
+    if (!get().enabled || Capacitor.isNativePlatform()) return;
 
     const playerState = usePlayerStore.getState();
     const currentTrack = playerState.currentTrack;
@@ -119,6 +131,9 @@ export const useDiscordPresenceStore = create<DiscordPresenceState>((set, get) =
 
     let baseUrl = get().workingBaseUrl;
     if (baseUrl === null) {
+      const now = Date.now();
+      if (now - lastProbeAttemptAt < 30000) return;
+      lastProbeAttemptAt = now;
       await get().checkStatus();
       baseUrl = get().workingBaseUrl;
     }
@@ -185,14 +200,22 @@ let lastSyncedTrackId: string | null = null;
 let lastSyncedPlayingState: boolean | null = null;
 
 export function initDiscordPresenceSync() {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || Capacitor.isNativePlatform()) return;
 
-  // Initial connection probe
-  useDiscordPresenceStore.getState().checkStatus().catch(() => {});
+  const isLocalHostOrigin =
+    window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
 
-  // Periodic health check every 15 seconds
-  setInterval(() => {
+  // Only probe immediately at startup when developing/running on localhost;
+  // on deployed HTTPS web we wait until playback starts or user opens Discord settings.
+  if (isLocalHostOrigin) {
     useDiscordPresenceStore.getState().checkStatus().catch(() => {});
+  }
+
+  // Periodic health check every 15 seconds only if a bridge connection is active
+  setInterval(() => {
+    if (useDiscordPresenceStore.getState().workingBaseUrl !== null) {
+      useDiscordPresenceStore.getState().checkStatus().catch(() => {});
+    }
   }, 15000);
 
   // Subscribe to player store changes
