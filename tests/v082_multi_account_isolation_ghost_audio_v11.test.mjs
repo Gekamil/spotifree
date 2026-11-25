@@ -27,6 +27,36 @@ if (!globalThis.window) {
     dispatchEvent: () => true,
   };
 }
+if (!globalThis.localStorage) {
+  globalThis.localStorage = globalThis.window.localStorage;
+}
+if (!globalThis.document) {
+  globalThis.document = {
+    hidden: false,
+    title: 'Spotifree',
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    createElement: () => ({}),
+  };
+}
+if (!globalThis.Audio) {
+  globalThis.Audio = class MockAudio {
+    constructor() {
+      this.volume = 1;
+      this.muted = false;
+      this.paused = true;
+      this.currentTime = 0;
+      this.duration = 0;
+      this.src = '';
+    }
+    addEventListener() {}
+    removeEventListener() {}
+    pause() { this.paused = true; }
+    play() { this.paused = false; return Promise.resolve(); }
+    load() {}
+    removeAttribute() {}
+  };
+}
 if (!globalThis.CustomEvent) {
   globalThis.CustomEvent = class CustomEvent extends Event {
     constructor(type, params) {
@@ -51,6 +81,14 @@ registerHooks({
     return nextResolve(specifier, context);
   },
   load(url, context, nextLoad) {
+    if (url.endsWith('.json') && !url.includes('/node_modules/')) {
+      const jsonContent = fs.readFileSync(fileURLToPath(url), 'utf8');
+      return {
+        format: 'module',
+        shortCircuit: true,
+        source: `export default ${jsonContent};`,
+      };
+    }
     if ((url.endsWith('.tsx') || url.endsWith('.ts')) && !url.includes('/node_modules/')) {
       const source = fs
         .readFileSync(fileURLToPath(url), 'utf8')
@@ -76,6 +114,8 @@ registerHooks({
 const { getRecentSearches, addRecentSearch, clearRecentSearches, getRecentSearchesStorageKey } = await import('../src/utils/recentSearches');
 const { getActiveUserId, setActiveUserId, clearActiveUserId } = await import('../src/utils/userStorage');
 const { shouldApplyRemotePlayback } = await import('../src/services/playbackSync');
+const { useSpotifyDataStore, sanitizeImportedPlaylists, slimPlaylistForStorage } = await import('../src/store/useSpotifyDataStore');
+const { reconcileAccountWithLocalSnapshot } = await import('../src/services/spotifreeAuth');
 
 describe('Spotifree v1.1 Multi-Account Isolation and Ghost Audio Elimination', () => {
   beforeEach(() => {
@@ -276,5 +316,127 @@ describe('Spotifree v1.1 Multi-Account Isolation and Ghost Audio Elimination', (
     // Check AudioController null safety to prevent ghost audio
     assert.ok(audioControllerSrc.includes('if (!currentTrack) {'));
     assert.ok(audioControllerSrc.includes('lastTrackIdRef.current = null;'));
+  });
+
+  it('6. APK library playlist persistence survives close/reopen via synchronous storage and slimming', () => {
+    window.localStorage.setItem('spotifree_active_user_id', 'apk_user_1');
+    window.localStorage.setItem(
+      'spotifree_current_cloud_account',
+      JSON.stringify({
+        uid: 'apk_user_1',
+        email: 'user@example.com',
+        displayName: 'User',
+        playlists: [],
+        likedTracks: [],
+        updatedAt: 1000,
+      })
+    );
+
+    const externalPlaylist = {
+      id: '37i9dQZF1DXcBWIGoYBM5M',
+      name: 'Exitos Espana',
+      description: 'Editorial playlist',
+      images: [{ url: 'https://example.com/cover.jpg' }],
+      owner: { id: 'spotify', display_name: 'Spotify' },
+      tracks: {
+        total: 1,
+        items: [
+          {
+            id: 'trk_1',
+            name: 'Track One',
+            duration_ms: 195000,
+            available_markets: new Array(180).fill('ES'),
+            artists: [{ id: 'art_1', name: 'Artist One', external_urls: { spotify: 'x' } }],
+            album: {
+              id: 'alb_1',
+              name: 'Album One',
+              available_markets: new Array(180).fill('ES'),
+              images: [{ url: 'https://example.com/t1.jpg' }],
+            },
+          },
+        ],
+      },
+    };
+
+    useSpotifyDataStore.getState().addCustomPlaylist(externalPlaylist);
+
+    const savedIds = JSON.parse(window.localStorage.getItem('spotifree_saved_library_playlists') || '[]');
+    assert.ok(savedIds.includes('37i9dQZF1DXcBWIGoYBM5M'));
+
+    const imported = JSON.parse(window.localStorage.getItem('user_imported_playlists') || '[]');
+    assert.equal(imported.length, 1);
+    assert.equal(imported[0].id, '37i9dQZF1DXcBWIGoYBM5M');
+    assert.equal(imported[0].is_saved_in_library, true);
+    assert.equal(imported[0].tracks.items[0].available_markets, undefined);
+
+    const cloudAcc = JSON.parse(window.localStorage.getItem('spotifree_current_cloud_account') || '{}');
+    assert.equal(cloudAcc.playlists.length, 1);
+    assert.equal(cloudAcc.playlists[0].id, '37i9dQZF1DXcBWIGoYBM5M');
+    assert.ok(cloudAcc.updatedAt > 1000);
+  });
+
+  it('7. sanitizeImportedPlaylists keeps saved external playlists and drops unsaved previews', () => {
+    window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(['sf-daily-mix-1', 'ext-pl-99']));
+    const raw = [
+      { id: 'sf-daily-mix-1', name: 'Daily Mix 1', tracks: { total: 0, items: [] } },
+      { id: 'spotify:playlist:ext-pl-99', name: 'External Saved', tracks: { total: 0, items: [] } },
+      { id: 'marked-saved', name: 'Marked Saved', is_saved_in_library: true, tracks: { total: 0, items: [] } },
+      { id: 'unsaved-preview-123', name: 'Just Browsed', tracks: { total: 0, items: [] } },
+    ];
+
+    const kept = sanitizeImportedPlaylists(raw).map((p) => p.id);
+    assert.deepEqual(kept, ['sf-daily-mix-1', 'spotify:playlist:ext-pl-99', 'marked-saved']);
+
+    const slimmed = slimPlaylistForStorage({
+      id: 'pl-slim',
+      name: 'Slim Test',
+      images: [{ url: 'https://img.test/a.jpg' }, { url: 'https://img.test/b.jpg' }],
+      tracks: {
+        total: 1,
+        items: [
+          {
+            id: 't1',
+            name: 'Song',
+            duration_ms: 120000,
+            available_markets: ['US', 'ES'],
+            artists: [{ id: 'a1', name: 'Artist' }],
+            album: { id: 'al1', name: 'Alb', images: [{ url: 'https://img.test/c.jpg' }] },
+          },
+        ],
+      },
+    });
+    assert.equal(slimmed.images.length, 1);
+    assert.equal(slimmed.tracks.items[0].available_markets, undefined);
+  });
+
+  it('8. Reconcile keeps newer local playlist saves when APK reopens before cloud caught up', () => {
+    const cloudOlder = {
+      uid: 'apk_user_1',
+      email: 'user@example.com',
+      displayName: 'User',
+      playlists: [],
+      deletedPlaylistIds: [],
+      likedTracks: [],
+      updatedAt: 1000,
+    };
+    const localNewer = {
+      uid: 'apk_user_1',
+      email: 'user@example.com',
+      displayName: 'User',
+      playlists: [{ id: 'saved-before-exit', name: 'Saved Right Before Close', tracks: { total: 0, items: [] } }],
+      deletedPlaylistIds: [],
+      likedTracks: [],
+      updatedAt: 5000,
+    };
+
+    const resNewerLocal = reconcileAccountWithLocalSnapshot(cloudOlder, localNewer);
+    assert.equal(resNewerLocal.hasNewerLocal, true);
+    assert.equal(resNewerLocal.account.playlists.length, 1);
+    assert.equal(resNewerLocal.account.playlists[0].id, 'saved-before-exit');
+
+    const cloudNewer = { ...cloudOlder, playlists: [{ id: 'cloud-pl', name: 'Cloud', tracks: { total: 0, items: [] } }], updatedAt: 9000 };
+    const resNewerCloud = reconcileAccountWithLocalSnapshot(cloudNewer, localNewer);
+    assert.equal(resNewerCloud.hasNewerLocal, false);
+    assert.equal(resNewerCloud.account.playlists[0].id, 'cloud-pl');
   });
 });

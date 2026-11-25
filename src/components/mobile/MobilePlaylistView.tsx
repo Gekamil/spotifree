@@ -382,18 +382,19 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   const checkIsInLibrary = (id: string, clean: string): boolean => {
     if (!id) return false;
     if (id === 'liked-songs' || id === 'collection:tracks' || clean === 'liked-songs') return true;
-    if (allUserPlaylists && allUserPlaylists.some((p) => p.id === id || p.id === clean)) return true;
+    const normId = (val: string) => (val || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+    if (allUserPlaylists && allUserPlaylists.some((p) => p.id === id || p.id === clean || normId(p.id) === clean)) return true;
     if (typeof window !== 'undefined') {
       try {
         const saved = window.localStorage.getItem('spotifree_saved_library_playlists');
         if (saved) {
           const list: string[] = JSON.parse(saved);
-          if (list.includes(id) || list.includes(clean)) return true;
+          if (list.some((x) => x === id || x === clean || normId(x) === clean)) return true;
         }
         const userPlaylistsRaw = window.localStorage.getItem('spotifree_user_playlists');
         if (userPlaylistsRaw) {
           const list = JSON.parse(userPlaylistsRaw);
-          if (Array.isArray(list) && list.some((p: any) => p.id === id || p.id === clean)) return true;
+          if (Array.isArray(list) && list.some((p: any) => p.id === id || p.id === clean || normId(p.id) === clean)) return true;
         }
       } catch {}
     }
@@ -815,25 +816,34 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
         const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
         let list: string[] = raw ? JSON.parse(raw) : [];
         if (next) {
-          if (!list.includes(playlist.id)) list.push(playlist.id);
-          // Pass the playlist with its loaded tracks preserved
+          const resolvedTracks =
+            tracks.length > 0
+              ? tracks
+              : activePlaylist.tracks?.items?.length
+              ? activePlaylist.tracks.items
+              : playlist.tracks?.items || [];
           const fullToSave: Playlist = {
             ...playlist,
             ...activePlaylist,
+            is_saved_in_library: true,
             tracks: {
-              total: tracks.length,
-              items: tracks,
+              total: resolvedTracks.length || activePlaylist.tracks?.total || playlist.tracks?.total || 0,
+              items: resolvedTracks,
             },
-          };
+          } as Playlist;
+          if (fullToSave.id && !list.includes(fullToSave.id)) list.push(fullToSave.id);
+          if (playlist.id && !list.includes(playlist.id)) list.push(playlist.id);
+          if (cleanId && !list.includes(cleanId)) list.push(cleanId);
+          window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
           useSpotifyDataStore.getState().addCustomPlaylist(fullToSave);
-          try {
-            window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(tracks));
-          } catch {}
         } else {
-          list = list.filter((id) => id !== playlist.id && id !== cleanId);
-          useSpotifyDataStore.getState().deletePlaylist(playlist.id);
+          list = list.filter((id) => {
+            const c = (id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+            return id !== playlist.id && id !== cleanId && c !== cleanId;
+          });
+          window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+          useSpotifyDataStore.getState().deletePlaylist(activePlaylist.id || playlist.id);
         }
-        window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
       } catch {}
     }
   };

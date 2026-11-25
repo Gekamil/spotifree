@@ -360,20 +360,21 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                 } catch {}
 
                 if (isSavedInLibrary) {
-                  useSpotifyDataStore.getState().deletePlaylist(plId);
                   list = list.filter((id) => id !== plId && id !== cleanId);
                   try {
                     localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
                   } catch {}
+                  useSpotifyDataStore.getState().deletePlaylist(plId);
                   showGlobalToast('Eliminada de Tu biblioteca');
                 } else {
-                  if (targetPlaylist) {
-                    useSpotifyDataStore.getState().addCustomPlaylist(targetPlaylist);
-                  }
                   if (!list.includes(plId)) list.push(plId);
+                  if (cleanId && !list.includes(cleanId)) list.push(cleanId);
                   try {
                     localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
                   } catch {}
+                  if (targetPlaylist) {
+                    useSpotifyDataStore.getState().addCustomPlaylist(targetPlaylist);
+                  }
                   showGlobalToast('Añadida a Tu biblioteca');
                 }
                 closeContextMenu();

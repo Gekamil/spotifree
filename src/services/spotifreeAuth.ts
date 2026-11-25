@@ -12,7 +12,7 @@ import {
   subscribeToUserDataFirestore,
   onFirebaseAuthStateChanged,
 } from './firebase';
-import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
+import { useSpotifyDataStore, slimPlaylistForStorage } from '../store/useSpotifyDataStore';
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useStatsStore } from '../store/useStatsStore';
 import { useLabsStore } from './labsService';
@@ -91,11 +91,74 @@ export function getSavedSpotifreeAccount(): SpotifreeAccount | null {
   return null;
 }
 
+function safeSetLocalStorage(key: string, value: string, fallbackValue?: () => string): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    try {
+      window.localStorage.removeItem('spotifree_playlist_cache_active');
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      if (fallbackValue) {
+        try {
+          window.localStorage.setItem(key, fallbackValue());
+          return true;
+        } catch {}
+      }
+      return false;
+    }
+  }
+}
+
+function syncSavedLibraryIdsFromPlaylists(playlists: Playlist[], deletedSet: Set<string>): void {
+  if (typeof window === 'undefined' || !Array.isArray(playlists)) return;
+  try {
+    const cleanPid = (id: string) => (id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+    const isDeleted = (id: string) => {
+      if (!id) return false;
+      const c = cleanPid(id);
+      return deletedSet.has(id) || deletedSet.has(c) || deletedSet.has(`spotify:playlist:${c}`);
+    };
+    const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
+    const existing: string[] = raw ? JSON.parse(raw) : [];
+    const nextSet = new Set<string>(existing.filter((id) => id && !isDeleted(id)));
+    for (const p of playlists) {
+      if (!p?.id || isDeleted(p.id)) continue;
+      if (p.id === 'liked-songs' || p.id === 'user-liked-songs' || p.id === 'spotify-dj' || p.id.includes('collection:tracks')) {
+        continue;
+      }
+      nextSet.add(p.id);
+      const c = cleanPid(p.id);
+      if (c) nextSet.add(c);
+    }
+    window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(Array.from(nextSet)));
+  } catch {}
+}
+
 export function saveCurrentSpotifreeAccount(account: SpotifreeAccount | null): void {
   if (typeof window === 'undefined') return;
   try {
     if (account) {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(account));
+      const slimPlaylists = Array.isArray(account.playlists)
+        ? account.playlists.map(slimPlaylistForStorage)
+        : account.playlists;
+      const slimAccount: SpotifreeAccount = {
+        ...account,
+        playlists: slimPlaylists,
+      };
+      safeSetLocalStorage(STORAGE_KEY, JSON.stringify(slimAccount), () => {
+        const ultraSlim = Array.isArray(slimPlaylists)
+          ? slimPlaylists.map((p: any) =>
+              p?.is_custom || p?.id === 'liked-songs'
+                ? { ...p, tracks: { total: p.tracks?.total || 0, items: (p.tracks?.items || []).slice(0, 120) } }
+                : { ...p, tracks: { total: p.tracks?.total || 0, items: [] } }
+            )
+          : slimPlaylists;
+        return JSON.stringify({ ...slimAccount, playlists: ultraSlim });
+      });
     } else {
       window.localStorage.removeItem(STORAGE_KEY);
     }
@@ -458,7 +521,13 @@ export async function syncSpotifreeAccount(
   }
 
   // Source of playlists
-  const rawPlaylists = payload.playlists || current?.playlists || [];
+  const storeState = useSpotifyDataStore.getState();
+  const sameStoreUser = storeState.isAuthenticated && (storeState.user?.id === uid || storeState.user?.email === email);
+  const rawPlaylists =
+    payload.playlists ||
+    (sameStoreUser && storeState.playlists.length > (current?.playlists?.length || 0) ? storeState.playlists : null) ||
+    current?.playlists ||
+    [];
   const cleanPlaylists = rawPlaylists
     .filter((p) => p && p.id && !deletedSet.has(p.id))
     .map((p) => {
@@ -495,7 +564,7 @@ export async function syncSpotifreeAccount(
   const merged: SpotifreeAccount = {
     ...(current || {}),
     ...payload,
-    // stats is a map of independent parts (settings, taste, trash…): a payload adds to it
+    // stats is a map of independent parts (settings, taste, taste, trash…): a payload adds to it
     ...(payload.stats ? { stats: { ...((current as any)?.stats || {}), ...payload.stats } } : {}),
     playlists: cleanPlaylists,
     deletedPlaylistIds: Array.from(deletedSet),
@@ -504,6 +573,11 @@ export async function syncSpotifreeAccount(
     uid,
     updatedAt: Date.now(),
   } as SpotifreeAccount;
+
+  // 0. Persist synchronously to localStorage BEFORE async network Firestore save
+  // so swiping/closing the Android APK right after saving never loses changes
+  saveCurrentSpotifreeAccount(merged);
+  syncSavedLibraryIdsFromPlaylists(cleanPlaylists, deletedSet);
 
   // 1. Sync to Cloud Firestore if user is authenticated with Firebase
   if (uid && isFirebaseConfigured()) {
@@ -520,8 +594,16 @@ export async function syncSpotifreeAccount(
     }
   }
 
-  saveCurrentSpotifreeAccount(merged);
-  applyAccountToAppStores(merged);
+  // Only re-apply stores if profile metadata / cookie / settings changed
+  if (
+    payload.displayName !== undefined ||
+    payload.avatarUrl !== undefined ||
+    payload.bannerUrl !== undefined ||
+    payload.spotifyCookie !== undefined ||
+    payload.settings !== undefined
+  ) {
+    applyAccountToAppStores(merged);
+  }
   return merged;
 }
 
@@ -690,18 +772,25 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
 
     if (typeof window !== 'undefined') {
       try {
-        window.localStorage.setItem('user_imported_playlists', JSON.stringify(cleanPlaylists));
+        const slimClean = cleanPlaylists.map(slimPlaylistForStorage);
+        safeSetLocalStorage('user_imported_playlists', JSON.stringify(slimClean), () =>
+          JSON.stringify(slimClean.map((p: any) =>
+            p.is_custom || p.id === 'liked-songs'
+              ? { ...p, tracks: { total: p.tracks?.total || 0, items: (p.tracks?.items || []).slice(0, 120) } }
+              : { ...p, tracks: { total: p.tracks?.total || 0, items: [] } }
+          ))
+        );
+        syncSavedLibraryIdsFromPlaylists(cleanPlaylists, deletedSet);
 
         // Prime cache for each playlist so tracks and items are instantly accessible
         const rawCache = window.localStorage.getItem(`spotifree_playlist_cache_${userId}`);
         const cacheObj: Record<string, Playlist> = rawCache ? JSON.parse(rawCache) : {};
-        cleanPlaylists.forEach((p) => {
+        slimClean.forEach((p) => {
           if (p && p.id) {
             cacheObj[p.id] = p;
           }
         });
-        window.localStorage.setItem(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
-        window.localStorage.setItem('spotifree_playlist_cache_active', JSON.stringify(cacheObj));
+        safeSetLocalStorage(`spotifree_playlist_cache_${userId}`, JSON.stringify(cacheObj));
 
         // If liked-songs has tracks, prime custom liked songs for this user (filtering blacklisted items)
         const isLikedPl = (p: any) =>
@@ -788,12 +877,41 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
     });
   }
 
-  // 6. Reset and rebuild mixes for the active user
-  resetSpotifreeMixes();
-  void refreshSpotifreeMixes(true);
+  if (isDifferentUser || !previousUserId) {
+    // 6. Reset and rebuild mixes for the active user
+    resetSpotifreeMixes();
+    void refreshSpotifreeMixes(true);
 
-  // 7. Notify search views with the active user's searches
-  notifyRecentSearchesUpdated(getRecentSearches(userId));
+    // 7. Notify search views with the active user's searches
+    notifyRecentSearchesUpdated(getRecentSearches(userId));
+  }
+}
+
+/**
+ * Reconciles initial Firestore user document with any newer local changes
+ * made right before closing the app (e.g. offline or Android APK quick swipe-close).
+ */
+export function reconcileAccountWithLocalSnapshot(
+  baseCloudAcc: SpotifreeAccount,
+  localSaved: SpotifreeAccount | null
+): { account: SpotifreeAccount; hasNewerLocal: boolean } {
+  const cloudTs = Number(baseCloudAcc.updatedAt || 0);
+  const localTs = Number(localSaved?.updatedAt || 0);
+  if (localSaved && localSaved.uid && localSaved.uid === baseCloudAcc.uid && localTs > cloudTs) {
+    return {
+      account: {
+        ...baseCloudAcc,
+        ...localSaved,
+        stats: {
+          ...((baseCloudAcc as any).stats || {}),
+          ...((localSaved as any).stats || {}),
+        },
+        updatedAt: localTs,
+      },
+      hasNewerLocal: true,
+    };
+  }
+  return { account: baseCloudAcc, hasNewerLocal: false };
 }
 
 /**
@@ -812,26 +930,49 @@ export function initAuthListener(): () => void {
 
     if (user) {
       const cloudData = await getUserDataFromFirestore(user.uid);
-      const acc: SpotifreeAccount = {
+      const localSaved = getSavedSpotifreeAccount();
+      const baseAcc: SpotifreeAccount = {
         uid: user.uid,
-        email: user.email || cloudData?.email || '',
-        displayName: cloudData?.displayName || user.displayName || 'Usuario',
-        avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || user.photoURL || null,
-        bannerUrl: cloudData?.bannerUrl || null,
-        spotifyCookie: cloudData?.spotifyCookie,
+        email: user.email || cloudData?.email || localSaved?.email || '',
+        displayName: cloudData?.displayName || user.displayName || localSaved?.displayName || 'Usuario',
+        avatarUrl: cloudData?.avatarUrl || cloudData?.photoURL || user.photoURL || localSaved?.avatarUrl || null,
+        bannerUrl: cloudData?.bannerUrl || localSaved?.bannerUrl || null,
+        spotifyCookie: cloudData?.spotifyCookie || localSaved?.spotifyCookie,
         playlists: cloudData?.playlists || [],
         deletedPlaylistIds: cloudData?.deletedPlaylistIds || [],
         likedTracks: cloudData?.likedTracks || [],
         stats: (cloudData as any)?.stats,
-        updatedAt: cloudData?.updatedAt || Date.now(),
+        updatedAt: cloudData?.updatedAt || 0,
       };
-      saveCurrentSpotifreeAccount(acc);
-      applyAccountToAppStores(acc);
+
+      const { account: reconciledAcc, hasNewerLocal } = reconcileAccountWithLocalSnapshot(baseAcc, localSaved);
+      if (!reconciledAcc.updatedAt) {
+        reconciledAcc.updatedAt = Date.now();
+      }
+      saveCurrentSpotifreeAccount(reconciledAcc);
+      applyAccountToAppStores(reconciledAcc);
+
+      // Push unsynced local changes to Firestore so other devices receive them
+      if (hasNewerLocal) {
+        void saveUserDataToFirestore(user.uid, reconciledAcc).catch(() => {});
+      }
 
       // Realtime listener for cross-device updates (PC <-> Mobile)
       let firstSnapshot = true;
       unsubscribeFirestore = subscribeToUserDataFirestore(user.uid, (fresh) => {
         if (!fresh) return;
+        const currentLocal = getSavedSpotifreeAccount();
+        const freshTs = Number(fresh.updatedAt || 0);
+        const localTs = Number(currentLocal?.updatedAt || 0);
+        // Never overwrite newer local edits with an older cloud snapshot / initial echo
+        if (currentLocal && currentLocal.uid === user.uid && localTs > freshTs) {
+          if (firstSnapshot) {
+            firstSnapshot = false;
+            void saveUserDataToFirestore(user.uid, currentLocal).catch(() => {});
+          }
+          return;
+        }
+
         const freshAcc: SpotifreeAccount = {
           uid: user.uid,
           email: fresh.email || user.email || '',
@@ -864,11 +1005,12 @@ export function initAuthListener(): () => void {
         }
       });
     } else {
-      // Never wipe out a locally stored account/cookie just because Firebase user is null
+      // Never wipe out a locally stored account/cookie just because Firebase user is null (e.g. offline/APK)
       if (typeof window !== 'undefined') {
+        const explicitLoggedOut = window.localStorage.getItem('spotify_logged_out') === 'true';
         const current = getSavedSpotifreeAccount();
         const hasLocalCookie = window.localStorage.getItem('user_spotify_cookie');
-        if (!current?.spotifyCookie && !hasLocalCookie) {
+        if (explicitLoggedOut || (!current?.uid && !current?.spotifyCookie && !hasLocalCookie)) {
           saveCurrentSpotifreeAccount(null);
         }
       }

@@ -683,6 +683,13 @@ export const MobileLayout: React.FC = () => {
       if (!savedList.includes(item.id)) {
         savedList.push(item.id);
       }
+    });
+
+    try {
+      window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(savedList));
+    } catch {}
+
+    items.forEach((item) => {
       if (!currentPlaylists.some((p) => p.id === item.id)) {
         const isArt = item.type === 'artist';
         const newPl: Playlist = {
@@ -697,14 +704,11 @@ export const MobileLayout: React.FC = () => {
           tracks: { href: '', total: 20, items: [] },
           type: (isArt ? 'artist' : 'playlist') as any,
           uri: `spotify:${isArt ? 'artist' : 'playlist'}:${item.id}`,
+          is_saved_in_library: true,
         } as any;
         useSpotifyDataStore.getState().addCustomPlaylist(newPl);
       }
     });
-
-    try {
-      window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(savedList));
-    } catch {}
   };
 
   return (

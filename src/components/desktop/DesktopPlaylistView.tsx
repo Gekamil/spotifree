@@ -688,27 +688,34 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setIsSavedInLibrary(next);
     if (typeof window !== 'undefined') {
       try {
-        const cleanId = dynamicPlaylist.id.replace(/^custom-|^playlist-/, '');
+        const cleanId = dynamicPlaylist.id.replace(/^spotify:(playlist|album):/i, '').replace(/^custom-|^playlist-/, '').split('?')[0].trim();
         const raw = window.localStorage.getItem('spotifree_saved_library_playlists');
         let list: string[] = raw ? JSON.parse(raw) : [];
         if (next) {
-          if (!list.includes(dynamicPlaylist.id)) list.push(dynamicPlaylist.id);
+          const resolvedTracks =
+            dynamicTracks.length > 0
+              ? dynamicTracks
+              : dynamicPlaylist.tracks?.items || [];
           const fullToSave: Playlist = {
             ...dynamicPlaylist,
+            is_saved_in_library: true,
             tracks: {
-              total: dynamicTracks.length,
-              items: dynamicTracks,
+              total: resolvedTracks.length || dynamicPlaylist.tracks?.total || 0,
+              items: resolvedTracks,
             },
-          };
+          } as Playlist;
+          if (!list.includes(dynamicPlaylist.id)) list.push(dynamicPlaylist.id);
+          if (cleanId && !list.includes(cleanId)) list.push(cleanId);
+          window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
           useSpotifyDataStore.getState().addCustomPlaylist(fullToSave);
-          try {
-            window.localStorage.setItem(`spotifree_playlist_tracks_${cleanId}`, JSON.stringify(dynamicTracks));
-          } catch {}
         } else {
-          list = list.filter((id) => id !== dynamicPlaylist.id && id !== cleanId);
+          list = list.filter((id) => {
+            const c = (id || '').replace(/^spotify:(playlist|album):/i, '').split('?')[0].trim();
+            return id !== dynamicPlaylist.id && id !== cleanId && c !== cleanId;
+          });
+          window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
           useSpotifyDataStore.getState().deletePlaylist(dynamicPlaylist.id);
         }
-        window.localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
       } catch {}
     }
     showGlobalToast(next ? 'Añadida a Tu biblioteca' : 'Eliminada de Tu biblioteca');
