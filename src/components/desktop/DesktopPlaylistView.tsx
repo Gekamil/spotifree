@@ -66,6 +66,7 @@ import { handleImageError } from '../../utils/imageFallback';
 import { parseTrackArtists } from '../../utils/trackArtists';
 import { getTrackCoverUrl, resolveTrackCoversBatch, TRACK_COVER_CACHE, TrackArtwork } from '../../utils/trackCovers';
 import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
+import { fetchAlbumTracks } from '../../services/albumService';
 import { getArtistPicture, ARTIST_IMAGE_CACHE } from '../../utils/artistImage';
 import { toHDImage } from '../../utils/formatters';
 import { EMPTY_PLAYLIST_COVER, getAutoPlaylistCover, useAutoCovers } from '../../utils/playlistCover';
@@ -936,6 +937,48 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           if (!cancelled) setLoading(false);
         }
         return;
+      }
+
+      const isAlbum =
+        playlist.type === 'album' ||
+        playlist.description === 'Álbum' ||
+        playlist.description === 'Album' ||
+        cleanInitId.startsWith('alb-') ||
+        cleanInitId.startsWith('album-') ||
+        playlist.id.startsWith('alb-') ||
+        playlist.id.startsWith('album-');
+
+      if (isAlbum) {
+        setLoading(true);
+        try {
+          const albumRes = await fetchAlbumTracks(
+            playlist.id,
+            playlist.name,
+            playlist.owner?.display_name && playlist.owner.display_name !== 'Spotify'
+              ? playlist.owner.display_name
+              : undefined,
+            playlist.images?.[0]?.url
+          );
+          if (!cancelled && albumRes.tracks && albumRes.tracks.length > 0) {
+            const updatedAlbum: Playlist = {
+              ...playlist,
+              ...(albumRes.album || {}),
+              type: 'album',
+              tracks: {
+                total: albumRes.tracks.length,
+                items: albumRes.tracks,
+              },
+            };
+            setDynamicTracks(albumRes.tracks);
+            setDynamicPlaylist(updatedAlbum);
+            setLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.warn('Error loading album tracks:', err);
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
       }
 
       if (playlist.id.startsWith('sf-')) {
@@ -2459,10 +2502,13 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                     {/* Album Name */}
                     <div
                       onClick={(e) => {
-                        if (track.album?.id && onSelectPlaylistById) {
+                        const albName = track.album?.name || dynamicPlaylist.name;
+                        if (albName && onSelectPlaylistById) {
                           e.stopPropagation();
-                          const albId = track.album.id.startsWith('alb-') ? track.album.id : `alb-${track.album.id}`;
-                          onSelectPlaylistById(albId, track.album.name, track.album.images?.[0]?.url);
+                          const rawAlbId = track.album?.id || `alb-name-${encodeURIComponent(albName)}`;
+                          const albId = rawAlbId.startsWith('alb-') || rawAlbId.startsWith('album-') ? rawAlbId : `alb-${rawAlbId}`;
+                          const albCover = track.album?.images?.[0]?.url;
+                          onSelectPlaylistById(albId, albName, albCover);
                         }
                       }}
                       className="text-xs text-[#b3b3b3] truncate group-hover:text-white hover:underline cursor-pointer transition-colors"

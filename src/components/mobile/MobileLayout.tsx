@@ -620,13 +620,18 @@ export const MobileLayout: React.FC = () => {
     }
 
     const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-');
-    const resolvedName = customName || (isArtist ? resolveArtistName(cleanId) : cleanId === 'liked-songs' ? 'Canciones que te gustan' : 'Playlist');
+    const isAlbum = cleanId.startsWith('alb-') || cleanId.startsWith('album-');
+    let fallbackAlbumName = '';
+    if (cleanId.startsWith('alb-name-')) {
+      try { fallbackAlbumName = decodeURIComponent(cleanId.replace(/^alb-name-/, '')); } catch {}
+    }
+    const resolvedName = customName || fallbackAlbumName || (isArtist ? resolveArtistName(cleanId) : isAlbum ? 'Álbum' : cleanId === 'liked-songs' ? 'Canciones que te gustan' : 'Playlist');
 
     const placeholder: Playlist = {
       id: cleanId,
       name: resolvedName,
-      description: isArtist ? 'Artista' : '',
-      type: isArtist ? 'artist' : cleanId.startsWith('alb-') ? 'album' : 'playlist',
+      description: isArtist ? 'Artista' : isAlbum ? 'Álbum' : '',
+      type: isArtist ? 'artist' : isAlbum ? 'album' : 'playlist',
       images: customImage ? [{ url: customImage }] : [],
       owner: { display_name: 'Spotify', id: 'spotify' },
       tracks: { total: 0, items: [] },

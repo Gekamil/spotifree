@@ -32,6 +32,7 @@ import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifr
 import { cleanTrackId, fetchAudioFeaturesBatch, resolveClientSideRealFeature, TRACK_ANALYSIS_EVENT, type AudioFeature } from '../../utils/audioFeatures';
 import { searchSpotify, fetchPlaylistRecommendations } from '../../services/spotifyApi';
 import { fetchArtistTopTracks, resolveArtistName } from '../../services/artistService';
+import { fetchAlbumTracks } from '../../services/albumService';
 import { handleImageError } from '../../utils/imageFallback';
 import { PlaylistClipsMiniPlayer } from '../playlist/PlaylistClipsMiniPlayer';
 import {
@@ -522,6 +523,53 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               tracks: { total: songs.length, items: songs },
             });
           }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    // A2. ALBUM: Fetch real album songs via dedicated album service immediately
+    const isAlbum =
+      playlist.type === 'album' ||
+      playlist.description === 'Álbum' ||
+      playlist.description === 'Album' ||
+      cleanId.startsWith('alb-') ||
+      cleanId.startsWith('album-') ||
+      playlist.id.startsWith('alb-') ||
+      playlist.id.startsWith('album-');
+
+    if (isAlbum) {
+      setLoading(true);
+      (async () => {
+        try {
+          const albumRes = await fetchAlbumTracks(
+            playlist.id,
+            playlist.name,
+            playlist.owner?.display_name && playlist.owner.display_name !== 'Spotify'
+              ? playlist.owner.display_name
+              : undefined,
+            playlist.images?.[0]?.url
+          );
+          if (!cancelled && albumRes.tracks && albumRes.tracks.length > 0) {
+            const updatedAlbum: Playlist = {
+              ...playlist,
+              ...(albumRes.album || {}),
+              type: 'album',
+              tracks: {
+                total: albumRes.tracks.length,
+                items: albumRes.tracks,
+              },
+            };
+            setTracks(albumRes.tracks);
+            setActivePlaylist(updatedAlbum);
+            useSpotifyDataStore.getState().cachePlaylistDetails(updatedAlbum);
+          }
+        } catch (err) {
+          console.warn('Error loading mobile album tracks:', err);
         } finally {
           if (!cancelled) setLoading(false);
         }

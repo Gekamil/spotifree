@@ -1379,11 +1379,15 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               <button
                 onClick={() => {
                   dismissMenu();
-                  if (currentTrack.album?.id && onSelectPlaylistById) {
+                  const albName = currentTrack.album?.name || currentTrack.name;
+                  const rawAlbId = currentTrack.album?.id || `alb-name-${encodeURIComponent(albName)}`;
+                  const albId = rawAlbId.startsWith('alb-') || rawAlbId.startsWith('album-') ? rawAlbId : `alb-${rawAlbId}`;
+                  const albCover = currentTrack.album?.images?.[0]?.url || displayCover || undefined;
+                  if (onSelectPlaylistById && albName) {
                     onClose();
-                    onSelectPlaylistById(currentTrack.album.id, currentTrack.album.name);
+                    onSelectPlaylistById(albId, albName, albCover);
                   } else {
-                    showGlobalToast(`Álbum: ${currentTrack.album?.name || currentTrack.name}`);
+                    showGlobalToast(`Álbum: ${albName}`);
                   }
                 }}
                 className="w-full flex items-center gap-4 py-3.5 px-2 rounded-xl text-white hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer"

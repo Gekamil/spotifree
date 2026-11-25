@@ -105,14 +105,16 @@ export const DesktopLayout: React.FC = () => {
     }
 
     // If artist or album id is passed, load directly with formatted name
-    if (cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('alb-')) {
+    if (cleanId.startsWith('art-') || cleanId.startsWith('artist-') || cleanId.startsWith('alb-') || cleanId.startsWith('album-')) {
       const isArtist = cleanId.startsWith('art-') || cleanId.startsWith('artist-');
-      const formattedName =
-        customName ||
-        cleanId
-          .replace(/^(art-|artist-|alb-)/i, '')
-          .replace(/[-_]/g, ' ')
-          .replace(/\b\w/g, (c) => c.toUpperCase());
+      let fallbackName = cleanId
+        .replace(/^(art-|artist-|album-|alb-)/i, '');
+      if (fallbackName.startsWith('name-')) {
+        try { fallbackName = decodeURIComponent(fallbackName.replace(/^name-/, '')); } catch {}
+      } else {
+        fallbackName = fallbackName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      }
+      const formattedName = customName || fallbackName;
 
       handleSelectPlaylist({
         id: cleanId,

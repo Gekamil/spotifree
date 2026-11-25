@@ -260,8 +260,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
           <>
             <div
               onClick={() => {
-                const albId = currentTrack.album?.id || (currentTrack as any).playlistId;
-                if (albId) onSelectPlaylistById?.(albId, currentTrack.album?.name);
+                const albName = currentTrack.album?.name || currentTrack.name;
+                const rawAlbId = currentTrack.album?.id || (currentTrack as any).playlistId || `alb-name-${encodeURIComponent(albName)}`;
+                const albId = rawAlbId.startsWith('alb-') || rawAlbId.startsWith('album-') ? rawAlbId : `alb-${rawAlbId}`;
+                if (albId) onSelectPlaylistById?.(albId, albName, toHDImage(activeArtworkUrl));
               }}
               className="w-14 h-14 rounded overflow-hidden shrink-0 shadow cursor-pointer group"
             >
@@ -275,8 +277,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
             <div className="flex flex-col min-w-0 mr-1">
               <span
                 onClick={() => {
-                  const albId = currentTrack.album?.id || (currentTrack as any).playlistId;
-                  if (albId) onSelectPlaylistById?.(albId, currentTrack.album?.name);
+                  const albName = currentTrack.album?.name || currentTrack.name;
+                  const rawAlbId = currentTrack.album?.id || (currentTrack as any).playlistId || `alb-name-${encodeURIComponent(albName)}`;
+                  const albId = rawAlbId.startsWith('alb-') || rawAlbId.startsWith('album-') ? rawAlbId : `alb-${rawAlbId}`;
+                  if (albId) onSelectPlaylistById?.(albId, albName, toHDImage(activeArtworkUrl));
                 }}
                 className="text-white text-[13px] font-medium hover:underline cursor-pointer truncate leading-tight"
               >

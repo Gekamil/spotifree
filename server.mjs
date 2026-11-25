@@ -1503,52 +1503,98 @@ const server = http.createServer(async (req, res) => {
 
     // Deezer Album fast-path
     if (rawId.startsWith('alb-') || rawId.startsWith('album-')) {
-      const dzId = rawId.replace(/^(alb-|album-)/, '');
-      try {
-        const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
-          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        });
-        if (dzRes.ok) {
-          const data = await dzRes.json();
-          if (data && data.title) {
-            const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
-            const artistName = data.artist?.name || 'Artista';
-            const tracks = (data.tracks?.data || []).map((t, idx) => ({
-              id: `dz-${t.id}`,
-              name: t.title || t.title_short,
-              artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
-              album: {
+      const cleanAlbId = rawId.replace(/^(alb-|album-)/, '');
+      const dzId = cleanAlbId.replace(/^dz-/, '');
+      if (/^\d+$/.test(dzId)) {
+        try {
+          const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          });
+          if (dzRes.ok) {
+            const data = await dzRes.json();
+            if (data && data.title) {
+              const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
+              const artistName = data.artist?.name || 'Artista';
+              const tracks = (data.tracks?.data || []).map((t, idx) => ({
+                id: `dz-${t.id}`,
+                name: t.title || t.title_short,
+                artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
+                album: {
+                  id: rawId,
+                  name: data.title,
+                  images: cover ? [{ url: cover }] : [],
+                },
+                duration_ms: (t.duration || 210) * 1000,
+                preview_url: null,
+                added_at: 'Reciente',
+              }));
+
+              res.statusCode = 200;
+              return res.end(JSON.stringify({
                 id: rawId,
                 name: data.title,
+                description: data.description || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
+                type: 'album',
                 images: cover ? [{ url: cover }] : [],
-              },
-              duration_ms: (t.duration || 210) * 1000,
-              preview_url: null,
-              added_at: 'Reciente',
-            }));
+                owner: {
+                  display_name: artistName,
+                  id: `user-${data.artist?.id || 'dz'}`,
+                },
+                release_date: data.release_date || '',
+                color: '#303030',
+                tracks: {
+                  total: data.nb_tracks || tracks.length,
+                  items: tracks,
+                },
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn(`Deezer album fetch notice ${rawId}:`, err.message);
+        }
+      } else if (cleanAlbId.startsWith('itunes-')) {
+        const itunesId = cleanAlbId.replace(/^itunes-/, '');
+        if (/^\d+$/.test(itunesId)) {
+          try {
+            const itRes = await fetch(`https://itunes.apple.com/lookup?id=${itunesId}&entity=song`);
+            if (itRes.ok) {
+              const itData = await itRes.json();
+              if (Array.isArray(itData.results) && itData.results.length > 1) {
+                const coll = itData.results[0];
+                const songItems = itData.results.slice(1);
+                const cover = toHDImage((coll.artworkUrl100 || '').replace('100x100bb', '600x600bb'));
+                const artistName = coll.artistName || 'Artista';
+                const tracks = songItems.map((t, idx) => ({
+                  id: `itunes-${t.trackId}`,
+                  name: t.trackName || 'Canción',
+                  duration_ms: t.trackTimeMillis || 210000,
+                  preview_url: t.previewUrl || null,
+                  artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || artistName }],
+                  album: {
+                    id: rawId,
+                    name: coll.collectionName || 'Álbum',
+                    images: cover ? [{ url: cover }] : [],
+                  },
+                  added_at: 'Reciente',
+                }));
 
-            res.statusCode = 200;
-            return res.end(JSON.stringify({
-              id: rawId,
-              name: data.title,
-              description: data.description || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
-              type: 'album',
-              images: cover ? [{ url: cover }] : [],
-              owner: {
-                display_name: artistName,
-                id: `user-${data.artist?.id || 'dz'}`,
-              },
-              release_date: data.release_date || '',
-              color: '#303030',
-              tracks: {
-                total: data.nb_tracks || tracks.length,
-                items: tracks,
-              },
-            }));
+                res.statusCode = 200;
+                return res.end(JSON.stringify({
+                  id: rawId,
+                  name: coll.collectionName || 'Álbum',
+                  description: `Álbum de ${artistName} • ${coll.releaseDate?.split('-')[0] || ''}`,
+                  type: 'album',
+                  images: cover ? [{ url: cover }] : [],
+                  owner: { display_name: artistName, id: 'itunes' },
+                  color: '#303030',
+                  tracks: { total: tracks.length, items: tracks },
+                }));
+              }
+            }
+          } catch (err) {
+            console.warn(`iTunes album fetch notice ${rawId}:`, err.message);
           }
         }
-      } catch (err) {
-        console.warn(`Deezer album fetch notice ${rawId}:`, err.message);
       }
     }
 
@@ -1684,17 +1730,23 @@ const server = http.createServer(async (req, res) => {
     }
 
     try {
-      const embedUrl = `https://open.spotify.com/embed/playlist/${rawId}`;
-      const response = await fetch(embedUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        },
-      });
-      if (response.ok) {
-        const html = await response.text();
-        const playlist = parseEmbedHtml(html, rawId);
-        res.statusCode = 200;
-        return res.end(JSON.stringify(playlist));
+      const cleanTargetId = rawId.replace(/^(alb-|album-)/, '');
+      const embedTypes = rawId.startsWith('alb-') || rawId.startsWith('album-') ? ['album', 'playlist'] : ['playlist', 'album'];
+      for (const et of embedTypes) {
+        const embedUrl = `https://open.spotify.com/embed/${et}/${cleanTargetId}`;
+        const response = await fetch(embedUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (response.ok) {
+          const html = await response.text();
+          const playlist = parseEmbedHtml(html, rawId);
+          if (playlist?.tracks?.items?.length > 0) {
+            res.statusCode = 200;
+            return res.end(JSON.stringify(playlist));
+          }
+        }
       }
     } catch (err) {
       console.error(`Playlist scrape error ${rawId}:`, err.message);

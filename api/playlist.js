@@ -124,54 +124,101 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
 
   // Deezer album direct fast-path
   if (cleanId.startsWith('alb-') || cleanId.startsWith('album-')) {
-    const dzId = cleanId.replace(/^(alb-|album-)/, '');
-    try {
-      const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-        signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
-      });
-      if (dzRes.ok) {
-        const data = await dzRes.json();
-        if (data && data.title) {
-          const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
-          const artistName = data.artist?.name || 'Artista';
-          const tracks = (data.tracks?.data || []).map((t, idx) => ({
-            id: `dz-${t.id}`,
-            name: t.title || t.title_short,
-            artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
-            album: {
+    const rawDzId = cleanId.replace(/^(alb-|album-)/, '');
+    const dzId = rawDzId.replace(/^dz-/, '');
+    if (/^\d+$/.test(dzId)) {
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/album/${dzId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+          signal: AbortSignal.timeout ? AbortSignal.timeout(4000) : undefined,
+        });
+        if (dzRes.ok) {
+          const data = await dzRes.json();
+          if (data && data.title) {
+            const cover = toHDImage(data.cover_xl || data.cover_big || data.cover_medium || data.cover);
+            const artistName = data.artist?.name || 'Artista';
+            const tracks = (data.tracks?.data || []).map((t, idx) => ({
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              artists: [{ id: `art-${t.artist?.id || data.artist?.id || idx}`, name: t.artist?.name || artistName }],
+              album: {
+                id: cleanId,
+                name: data.title,
+                images: cover ? [{ url: cover }] : [],
+              },
+              duration_ms: (t.duration || 210) * 1000,
+              preview_url: null,
+              added_at: 'Reciente',
+            }));
+
+            const mapped = {
               id: cleanId,
               name: data.title,
+              description: stripHtml(data.description || '') || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
+              type: 'album',
               images: cover ? [{ url: cover }] : [],
-            },
-            duration_ms: (t.duration || 210) * 1000,
-            preview_url: null,
-            added_at: 'Reciente',
-          }));
+              owner: {
+                display_name: artistName,
+                id: `user-${data.artist?.id || 'dz'}`,
+              },
+              release_date: data.release_date || '',
+              color: '#303030',
+              tracks: {
+                total: data.nb_tracks || tracks.length,
+                items: tracks,
+              },
+            };
+            MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
+            return mapped;
+          }
+        }
+      } catch (e) {
+        console.warn('[Playlist API] Deezer album fetch error:', e.message);
+      }
+    } else if (rawDzId.startsWith('itunes-')) {
+      const itunesId = rawDzId.replace(/^itunes-/, '');
+      if (/^\d+$/.test(itunesId)) {
+        try {
+          const itRes = await fetch(`https://itunes.apple.com/lookup?id=${itunesId}&entity=song`);
+          if (itRes.ok) {
+            const itData = await itRes.json();
+            if (Array.isArray(itData.results) && itData.results.length > 1) {
+              const coll = itData.results[0];
+              const songItems = itData.results.slice(1);
+              const cover = toHDImage((coll.artworkUrl100 || '').replace('100x100bb', '600x600bb'));
+              const artistName = coll.artistName || 'Artista';
+              const tracks = songItems.map((t, idx) => ({
+                id: `itunes-${t.trackId}`,
+                name: t.trackName || 'Canción',
+                duration_ms: t.trackTimeMillis || 210000,
+                preview_url: t.previewUrl || null,
+                artists: [{ id: `art-${t.artistId || idx}`, name: t.artistName || artistName }],
+                album: {
+                  id: cleanId,
+                  name: coll.collectionName || 'Álbum',
+                  images: cover ? [{ url: cover }] : [],
+                },
+                added_at: 'Reciente',
+              }));
 
-          const mapped = {
-            id: cleanId,
-            name: data.title,
-            description: stripHtml(data.description || '') || `Álbum de ${artistName} • ${data.release_date?.split('-')[0] || ''}`,
-            type: 'album',
-            images: cover ? [{ url: cover }] : [],
-            owner: {
-              display_name: artistName,
-              id: `user-${data.artist?.id || 'dz'}`,
-            },
-            release_date: data.release_date || '',
-            color: '#303030',
-            tracks: {
-              total: data.nb_tracks || tracks.length,
-              items: tracks,
-            },
-          };
-          MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
-          return mapped;
+              const mapped = {
+                id: cleanId,
+                name: coll.collectionName || 'Álbum',
+                description: `Álbum de ${artistName} • ${coll.releaseDate?.split('-')[0] || ''}`,
+                type: 'album',
+                images: cover ? [{ url: cover }] : [],
+                owner: { display_name: artistName, id: 'itunes' },
+                color: '#303030',
+                tracks: { total: tracks.length, items: tracks },
+              };
+              MEMORY_PLAYLIST_CACHE.set(cleanId, mapped);
+              return mapped;
+            }
+          }
+        } catch (e) {
+          console.warn('[Playlist API] iTunes album fetch error:', e.message);
         }
       }
-    } catch (e) {
-      console.warn('[Playlist API] Deezer album fetch error:', e.message);
     }
   }
 
@@ -328,9 +375,12 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   let embedFallback = null;
   // Instant fast-path for public playlists: resolve in < 700ms via embed instead of slow auth handshake
   if (!cleanCookie && !isLikedCheck) {
-    for (const et of ['playlist', 'album', 'artist']) {
+    const spotifyCleanId = cleanId.replace(/^(alb-|album-)/, '');
+    const isAlb = cleanId.startsWith('alb-') || cleanId.startsWith('album-');
+    const fastEmbedTypes = isAlb ? ['album', 'playlist', 'artist'] : ['playlist', 'album', 'artist'];
+    for (const et of fastEmbedTypes) {
       try {
-        const res = await fetch(`https://open.spotify.com/embed/${et}/${cleanId}`, {
+        const res = await fetch(`https://open.spotify.com/embed/${et}/${spotifyCleanId}`, {
           headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
           signal: AbortSignal.timeout ? AbortSignal.timeout(3000) : undefined,
         });
@@ -856,13 +906,14 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
 
     // 4. Album Resolution via Pathfinder getAlbum
     try {
+      const spotifyAlbumId = cleanId.replace(/^(alb-|album-)/, '');
       const albRes = await fetch('https://api-partner.spotify.com/pathfinder/v2/query', {
         method: 'POST',
         headers: pathfinderHeaders,
         body: JSON.stringify({
           operationName: 'getAlbum',
           variables: {
-            uri: `spotify:album:${cleanId}`,
+            uri: `spotify:album:${spotifyAlbumId}`,
             locale: '',
             offset: 0,
             limit: 50,
@@ -933,7 +984,9 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
   }
 
   // 5. Authenticated / Public Spotify Embed Scraper Fallback
-  const embedTypes = ['playlist', 'album', 'artist'];
+  const spotifyEmbedId = cleanId.replace(/^(alb-|album-)/, '');
+  const isAlb = cleanId.startsWith('alb-') || cleanId.startsWith('album-');
+  const embedTypes = isAlb ? ['album', 'playlist', 'artist'] : ['playlist', 'album', 'artist'];
   for (const et of embedTypes) {
     try {
       const embedHeaders = {
@@ -942,7 +995,7 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
       if (cleanCookie) {
         embedHeaders['Cookie'] = `sp_dc=${cleanCookie}`;
       }
-      const res = await fetch(`https://open.spotify.com/embed/${et}/${cleanId}`, {
+      const res = await fetch(`https://open.spotify.com/embed/${et}/${spotifyEmbedId}`, {
         headers: embedHeaders,
       });
       if (res.ok) {
