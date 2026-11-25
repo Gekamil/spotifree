@@ -241,16 +241,16 @@ export const DesktopArtistAboutCard: React.FC<DesktopArtistAboutProps> = ({
 }) => {
   const [expanded, setExpanded] = useState(false);
 
-  if (!bio) return null;
-
   return (
-    <div className="px-8 pt-6 pb-8">
+    <div className="px-8 pt-8 pb-10 mt-6 border-t border-white/10">
       <h2 className="text-2xl font-black text-white font-['SpotifyMixUITitle'] mb-4">
         Información
       </h2>
       <div
-        onClick={() => setExpanded((v) => !v)}
-        className="rounded-xl bg-[#181818] hover:bg-[#222222] transition-colors p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6 cursor-pointer max-w-4xl"
+        onClick={() => (bio && bio.length > 180 ? setExpanded((v) => !v) : undefined)}
+        className={`rounded-xl bg-[#181818] hover:bg-[#222222] transition-colors p-6 flex flex-col sm:flex-row items-start sm:items-center gap-6 max-w-4xl ${
+          bio && bio.length > 180 ? 'cursor-pointer' : ''
+        }`}
       >
         {image && (
           <img
@@ -264,9 +264,9 @@ export const DesktopArtistAboutCard: React.FC<DesktopArtistAboutProps> = ({
         <div className="min-w-0 flex-1 space-y-2">
           <p className="text-base font-bold text-white">{listenersLabel}</p>
           <p className={`text-sm text-[#d4d4d4] leading-relaxed ${expanded ? '' : 'line-clamp-3'}`}>
-            {bio}
+            {bio || `Perfil oficial de ${artistName} en Spotifree. Disfruta de toda su discografía, sencillos, recopilatorios y mezclas recomendadas.`}
           </p>
-          {bio.length > 180 && (
+          {bio && bio.length > 180 && (
             <span className="inline-block text-xs font-bold text-white/90 hover:underline">
               {expanded ? 'Ver menos' : 'Ver más'}
             </span>

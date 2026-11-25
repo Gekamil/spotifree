@@ -78,6 +78,7 @@ export const DesktopLayout: React.FC = () => {
     const cleanId = id
       .replace(/^spotify:playlist:/, '')
       .replace(/^spotify:album:/, '')
+      .replace(/^spotify:artist:/, 'art-')
       .replace(/^spotify:collection:/, '')
       .split('?')[0];
 
@@ -208,7 +209,7 @@ export const DesktopLayout: React.FC = () => {
       desc = 'Carpetas';
     }
 
-    const isArtist = (foundCard as any)?.type === 'artist' || desc?.toLowerCase() === 'artista' || cleanId.startsWith('art-') || cleanId.startsWith('artist-');
+    const isArtist = (foundCard as any)?.type === 'artist' || desc?.toLowerCase() === 'artista' || desc?.toLowerCase().includes('artista') || cleanId.startsWith('art-') || cleanId.startsWith('artist-');
     const isAlbum = (foundCard as any)?.type === 'album' || cleanId.startsWith('alb-') || cleanId.startsWith('album-');
     const isUser = ownerName === currentUserDisplayName && !isArtist && !isAlbum && cleanId !== 'nueva-carpeta';
 

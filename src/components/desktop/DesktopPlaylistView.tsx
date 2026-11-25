@@ -656,8 +656,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const checkIsInLibrary = (id: string): boolean => {
     if (!id) return false;
     const clean = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
-    const isTargetArtist = (
+    const isTargetArtist = Boolean(
       dynamicPlaylist?.description?.toLowerCase() === 'artista' ||
+      dynamicPlaylist?.description?.toLowerCase().includes('artista') ||
       (dynamicPlaylist as any)?.type === 'artist' ||
       (dynamicPlaylist as any)?.is_artist === true ||
       id.startsWith('art-') ||
@@ -896,11 +897,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setDynamicPlaylist(playlist);
 
     async function loadTracks() {
-      const isArtist =
+      const isArtist = Boolean(
         playlist.type === 'artist' ||
         playlist.description === 'Artista' ||
+        playlist.description?.toLowerCase().includes('artista') ||
+        (playlist as any).is_artist === true ||
         playlist.id.startsWith('art-') ||
-        playlist.id.startsWith('artist-');
+        playlist.id.startsWith('artist-')
+      );
 
       if (isArtist) {
         setLoading(true);
@@ -923,6 +927,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               ...playlist,
               name: cleanArtistName,
               description: 'Artista oficial • Verificado en Spotify',
+              type: 'artist',
               images: [{ url: artistImg }],
               tracks: {
                 total: artistTracks.length,
@@ -1299,8 +1304,9 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   // A playlist saved in the library (e.g. imported) is never shown as an artist page
   const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
-  const isArtist = !isLibraryPlaylist && (
+  const isArtist = !isLibraryPlaylist && Boolean(
     dynamicPlaylist.description?.toLowerCase() === 'artista' ||
+    dynamicPlaylist.description?.toLowerCase().includes('artista') ||
     (dynamicPlaylist as any).type === 'artist' ||
     (dynamicPlaylist as any).is_artist === true ||
     dynamicPlaylist.id.startsWith('art-') ||
@@ -1593,6 +1599,52 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       cancelled = true;
     };
   }, [dynamicPlaylist.id, dynamicPlaylist.name, isArtist]);
+
+  const fallbackDiscography = useMemo<ArtistReleaseItem[]>(() => {
+    if (!isArtist || dynamicTracks.length === 0) return [];
+    const seen = new Set<string>();
+    const items: ArtistReleaseItem[] = [];
+    for (const t of dynamicTracks) {
+      const albName = t.album?.name?.trim();
+      if (!albName || seen.has(albName.toLowerCase())) continue;
+      seen.add(albName.toLowerCase());
+      const rawAlbId = t.album?.id;
+      const albId = rawAlbId ? (rawAlbId.startsWith('alb-') ? rawAlbId : `alb-${rawAlbId}`) : `alb-${albName.toLowerCase().replace(/[\s&]+/g, '-')}`;
+      const cover = t.album?.images?.[0]?.url || (t.album as any)?.cover || '';
+      const year = (t.album as any)?.release_date ? String((t.album as any).release_date).substring(0, 4) : undefined;
+      items.push({
+        id: albId,
+        name: albName,
+        cover,
+        year,
+        recordType: 'album',
+      });
+    }
+    return items;
+  }, [isArtist, dynamicTracks]);
+
+  const fallbackArtistPlaylists = useMemo<ArtistPlaylistItem[]>(() => {
+    if (!isArtist) return [];
+    const name = resolveArtistName(dynamicPlaylist.id, dynamicPlaylist.name);
+    const cover = dynamicPlaylist.images?.[0]?.url || dynamicTracks[0]?.album?.images?.[0]?.url || '';
+    return [
+      {
+        id: `pl-this-is-${name.toLowerCase().replace(/[\s&]+/g, '-')}`,
+        name: `This Is ${name}`,
+        image: cover,
+        owner: 'Spotify',
+      },
+      {
+        id: `pl-radio-${name.toLowerCase().replace(/[\s&]+/g, '-')}`,
+        name: `Radio de ${name}`,
+        image: cover,
+        owner: 'Spotify',
+      },
+    ];
+  }, [isArtist, dynamicPlaylist.id, dynamicPlaylist.name, dynamicPlaylist.images, dynamicTracks]);
+
+  const effectiveDiscography = artistDiscography.length > 0 ? artistDiscography : fallbackDiscography;
+  const effectiveArtistPlaylists = artistPlaylists.length > 0 ? artistPlaylists : fallbackArtistPlaylists;
 
   const handlePlayDiscographyAlbum = async (item: ArtistReleaseItem) => {
     showGlobalToast(`Reproduciendo ${item.name}...`);
@@ -2540,7 +2592,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (onSelectPlaylistById) {
-                                    onSelectPlaylistById(a.id, a.name);
+                                    const artId = a.id?.startsWith('art-')
+                                      ? a.id
+                                      : `art-${(a.name || '').toLowerCase().replace(/[\s&]+/g, '-')}`;
+                                    onSelectPlaylistById(artId, a.name);
                                   }
                                 }}
                                 className="hover:underline hover:text-white cursor-pointer"
@@ -2731,14 +2786,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       {isArtist && (
         <>
           <DesktopArtistDiscographySection
-            items={artistDiscography}
-            isLoading={isLoadingSimilar}
+            items={effectiveDiscography}
+            isLoading={isLoadingSimilar && effectiveDiscography.length === 0}
             onSelectAlbum={(item) => onSelectPlaylistById?.(item.id, item.name, item.cover || undefined)}
             onPlayAlbum={handlePlayDiscographyAlbum}
           />
           <DesktopArtistPlaylistsSection
             artistName={dynamicPlaylist.name}
-            playlists={artistPlaylists}
+            playlists={effectiveArtistPlaylists}
             onSelectPlaylist={(pl) => onSelectPlaylistById?.(pl.id, pl.name, pl.image || undefined)}
             onPlayPlaylist={handlePlayDiscoveredPlaylist}
           />
@@ -2815,11 +2870,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         </div>
       )}
 
-      {/* Artist About / Biography Card - Only on Artist Profiles when verified bio exists */}
-      {isArtist && artistBio && (
+      {/* Artist About / Biography Card - Always shown on Artist Profiles matching Real Spotify */}
+      {isArtist && (
         <DesktopArtistAboutCard
           artistName={dynamicPlaylist.name}
-          image={dynamicPlaylist.images?.[0]?.url}
+          image={dynamicPlaylist.images?.[0]?.url || dynamicTracks[0]?.album?.images?.[0]?.url}
           listenersLabel={getArtistMonthlyListeners(dynamicPlaylist.name)}
           bio={artistBio}
         />

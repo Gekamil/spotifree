@@ -454,8 +454,9 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
   };
 
   const handleArtistClick = (artist: any) => {
+    const artId = artist.id?.startsWith('art-') ? artist.id : `art-${artist.id || artist.name.toLowerCase().replace(/[\s&]+/g, '-')}`;
     addRecentSearch({
-      id: artist.id,
+      id: artId,
       type: 'artist',
       title: artist.name,
       subtitle: 'Artista',
@@ -463,13 +464,14 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       data: artist,
     });
     if (onSelectPlaylistById) {
-      onSelectPlaylistById(artist.id, artist.name, artist.images?.[0]?.url);
+      onSelectPlaylistById(artId, artist.name, artist.images?.[0]?.url);
     }
   };
 
   const handleAlbumClick = (album: any) => {
+    const albId = album.id?.startsWith('alb-') ? album.id : `alb-${album.id || album.name.toLowerCase().replace(/[\s&]+/g, '-')}`;
     addRecentSearch({
-      id: album.id,
+      id: albId,
       type: 'album',
       title: album.name,
       subtitle: `Álbum • ${album.artists?.[0]?.name || ''}`,
@@ -477,7 +479,7 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       data: album,
     });
     if (onSelectPlaylistById) {
-      onSelectPlaylistById(album.id, album.name, album.images?.[0]?.url);
+      onSelectPlaylistById(albId, album.name, album.images?.[0]?.url);
     }
   };
 
@@ -542,7 +544,12 @@ export const DesktopSearchView: React.FC<DesktopSearchViewProps> = ({ onSelectPl
       playTrack(trackData, [trackData]);
     } else if (item.type === 'artist' || item.type === 'album' || item.type === 'playlist') {
       if (onSelectPlaylistById) {
-        onSelectPlaylistById(item.id, item.title, item.image);
+        const targetId = item.type === 'artist' && !item.id.startsWith('art-')
+          ? `art-${item.id}`
+          : item.type === 'album' && !item.id.startsWith('alb-')
+          ? `alb-${item.id}`
+          : item.id;
+        onSelectPlaylistById(targetId, item.title, item.image);
       }
     } else if (item.type === 'query') {
       useUIStore.getState().setSearchQuery(item.title);

@@ -294,7 +294,10 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
                       key={a.id || i}
                       onClick={(e) => {
                         e.stopPropagation();
-                        onSelectPlaylistById?.(a.id, a.name);
+                        const artId = a.id?.startsWith('art-')
+                          ? a.id
+                          : `art-${(a.name || '').toLowerCase().replace(/[\s&]+/g, '-')}`;
+                        onSelectPlaylistById?.(artId, a.name);
                       }}
                       className="hover:underline hover:text-white cursor-pointer"
                     >
