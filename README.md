@@ -1,19 +1,79 @@
 <div align="center">
 
-# 🎧 Spotifree
+<img src="./public/icon-512.png" alt="Logo de Spotifree" width="128" />
 
-**Reproductor musical web y app nativa para Android / Android Auto con modo DJ inteligente, reproducción offline, widgets animados y soporte SoundCloud/remixes.**
+# Spotifree
 
-[![Version](https://img.shields.io/badge/versión-0.2.4-1DB954?style=for-the-badge)](./package.json)
+**Reproductor de música gratuito con la experiencia de Spotify: en el navegador, en Android y en Android Auto. Con modo DJ, karaoke, escucha sin conexión y sesiones compartidas.**
+
+[![Version](https://img.shields.io/badge/versión-1.2-1DB954?style=for-the-badge)](./src/data/changelog.ts)
 [![Web Live](https://img.shields.io/badge/Web-spotifreeweb.vercel.app-000000?style=for-the-badge&logo=vercel)](https://spotifreeweb.vercel.app)
 [![Android APK](https://img.shields.io/badge/Android-Descargar%20APK-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 [![CI APK](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml/badge.svg)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
 
+![React](https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)
+![Vite](https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Capacitor](https://img.shields.io/badge/Capacitor-8-119EFF?style=flat-square&logo=capacitor&logoColor=white)
+![Android Auto](https://img.shields.io/badge/Android_Auto-4285F4?style=flat-square&logo=androidauto&logoColor=white)
+![Estilo Spotify](https://img.shields.io/badge/UI_estilo-Spotify-1ED760?style=flat-square&logo=spotify&logoColor=white)
+
 [Abrir Web App](https://spotifreeweb.vercel.app) · [Página de instalación Android](https://spotifreeweb.vercel.app/instalar) · [Última Release APK](https://github.com/Gekamil/spotifree/releases/tag/android-latest)
+
+[Demo](#-demo) · [Capturas](#-capturas) · [Funciones](#-qué-incluye-spotifree) · [Instalación](#-puesta-en-marcha-en-local)
 
 </div>
 
 ---
+
+## 🎬 Demo
+
+<div align="center">
+
+### 💻 Ordenador
+
+<img src="./docs/media/ordenador.webp" alt="Demo de Spotifree en ordenador: inicio, perfil de artista, letra sincronizada y DJ" width="100%" />
+
+[▶ Ver en MP4 a mayor calidad](./docs/media/ordenador.mp4)
+
+### 📱 Móvil
+
+<img src="./docs/media/movil.webp" alt="Demo de Spotifree en móvil: inicio, biblioteca, artista, reproductor y buscador" width="300" />
+
+[▶ Ver en MP4 a mayor calidad](./docs/media/movil.mp4)
+
+</div>
+
+---
+
+## 📸 Capturas
+
+### 💻 Ordenador
+
+| Inicio | Perfil de artista |
+| :---: | :---: |
+| ![Inicio en ordenador](./docs/media/ordenador-inicio.jpg) | ![Perfil de artista en ordenador](./docs/media/ordenador-artista.jpg) |
+| **Letra sincronizada** | **Modo DJ** |
+| ![Letra sincronizada en ordenador](./docs/media/ordenador-letra.jpg) | ![Modo DJ en ordenador](./docs/media/ordenador-dj.jpg) |
+
+### 📱 Móvil
+
+| Inicio | Reproductor | Artista | Buscar | Biblioteca |
+| :---: | :---: | :---: | :---: | :---: |
+| <img src="./docs/media/movil-inicio.jpg" alt="Inicio en móvil" width="170" /> | <img src="./docs/media/movil-reproductor.jpg" alt="Reproductor en móvil" width="170" /> | <img src="./docs/media/movil-artista.jpg" alt="Artista en móvil" width="170" /> | <img src="./docs/media/movil-buscar.jpg" alt="Buscador en móvil" width="170" /> | <img src="./docs/media/movil-biblioteca.jpg" alt="Biblioteca en móvil" width="170" /> |
+
+---
+
+## 💻📱 Ordenador y móvil
+
+Spotifree detecta el dispositivo y carga una interfaz propia para cada uno.
+
+| | Ordenador | Móvil |
+| :--- | :--- | :--- |
+| **Navegación** | Biblioteca en barra lateral, buscador superior y panel «Sonando ahora» | Barra inferior: Inicio, Buscar, Tu biblioteca y Crear |
+| **Reproductor** | Barra inferior fija con letra, cola y minirreproductor | Mini-reproductor flotante que se amplía a pantalla completa |
+| **Instalación** | Se usa desde el navegador | Navegador, web instalable o APK para Android |
 
 ## ✨ Qué incluye Spotifree
 
@@ -118,7 +178,7 @@ npm run build
 # Linter rápido
 npm run lint
 
-# Suite principal (12 baterías: transiciones DJ, planificador, offline, karaoke, letras, biblioteca, orbe)
+# Suite principal (transiciones DJ, planificador, offline, karaoke, letras, biblioteca y más)
 npm test
 
 # Suites adicionales E2E y nativas
@@ -153,10 +213,17 @@ Cada `push` a `main` que modifique `native/**`, `scripts/setup-android-*.mjs`, `
 
 ---
 
-## 📌 Novedades Recientes (`v0.2.4`)
+## 📌 Novedades Recientes (`v1.2`)
 
-- **Android Auto · Pestaña «Recientes»:** acceso directo exclusivamente a las playlists, álbumes, mixes y canciones escuchadas recientemente.
-- **Widgets rediseñados:** fondo con carátula difuminada, gradiente dinámico de doble tono, barra de progreso y temporizador nativo en vivo (`<Chronometer>`).
-- **Tocadiscos fluido a 60 FPS:** plato vinilo y reflejo óptico girando suavemente en el launcher sin saltos de frames, con etiqueta central nítida en HD.
+- **Perfiles de artista completos:** títulos populares, discografía con filtros (álbumes, sencillos y EP, recopilatorios), listas del artista y biografía, en móvil y ordenador.
+- **Álbumes más fiables:** al entrar en un álbum desde cualquier canción, se resuelve con varias fuentes para mostrar todas sus pistas.
+- **Guardado persistente en Android:** las playlists de Tu biblioteca se conservan al cerrar y reabrir la app.
+- **Web más limpia:** analítica con Vercel Web Analytics y sin sondeos innecesarios en reposo.
 
 Consulta el historial completo de versiones en [`src/data/changelog.ts`](./src/data/changelog.ts).
+
+---
+
+## ⚠️ Aviso
+
+Proyecto personal e independiente. **No está afiliado, patrocinado ni respaldado por Spotify.** «Spotify» y su logotipo son marcas de sus respectivos propietarios, igual que la música, las carátulas y el resto de contenidos que se muestran.
