@@ -2274,11 +2274,38 @@ class AudioEngine {
     }
   }
 
+  /**
+   * Safety net: outside a crossfade, a DJ audition or a karaoke voice blend, only the active deck may be
+   * heard. Any other deck that is audibly playing is a leftover (stale preload, interrupted crossfade,
+   * karaoke turned off) and is paused, so two songs never overlap. Muted pre-warmed decks are left alone.
+   */
+  private enforceSingleAudibleDeck() {
+    if (this.isCrossfading || this.isAuditioning) return;
+    const level = this.karaokeState.vocalLevel ?? 100;
+    const karaokeBlend = this.karaokeState.active && level < 100 && !!this.secondaryKaraokeLoadedSource;
+    const ytActive = this.activeEngine === 'youtube' ? this.ytPlayer : null;
+    const audioActive = this.activeEngine === 'html5' ? this.audio : null;
+    for (const p of this.ytPlayers) {
+      if (!p || p === ytActive || typeof p.getPlayerState !== 'function') continue;
+      if (karaokeBlend && p === this.secondaryYtPlayer) continue;
+      try {
+        const muted = (typeof p.isMuted === 'function' && p.isMuted()) || (typeof p.getVolume === 'function' && p.getVolume() === 0);
+        if (p.getPlayerState() === 1 && !muted) p.pauseVideo();
+      } catch {}
+    }
+    for (const a of this.audios) {
+      if (!a || a === audioActive || a.paused || a.muted || a.volume === 0) continue;
+      if (karaokeBlend && a === this.secondaryAudio) continue;
+      try { a.pause(); } catch {}
+    }
+  }
+
   private startProgressTicker() {
     this.stopProgressTicker();
     if (this.isAuditioning) return;
     this.progressInterval = window.setInterval(() => {
       if (this.isSeeking || this.isAuditioning) return;
+      this.enforceSingleAudibleDeck();
       this.checkAudioUiSync();
 
       if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.getCurrentTime === 'function') {
@@ -3782,7 +3809,7 @@ class AudioEngine {
     trackDurationSec?: number
   ): Promise<string | null> {
     if (!query) return null;
-    if (trackId && /^sc-\d+$/.test(AudioEngine.cleanId(trackId))) return null;
+    if (trackId && /^sc-\d+(?:-dup-\d+)?$/.test(AudioEngine.cleanId(trackId))) return null;
     const cleanQuery = query.trim();
 
     // A source the user chose by hand for this song always wins; then the one the app switched to
@@ -3946,11 +3973,6 @@ class AudioEngine {
   }
 
   public async playTrack(trackId: string, query: string, startSeconds = 0) {
-    if (this.isMobileOrPWA()) {
-      this.activeYtIndex = 0;
-      this.activeAudioIndex = 0;
-    }
-
     const cleanNew = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanCur = (this.currentTrackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
@@ -3985,14 +4007,25 @@ class AudioEngine {
       if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
     }
 
-    // Immediately silence outgoing player if changing to a new track so old audio doesn't bleed into the first second
+    // Silence EVERY deck (both YouTube players and both HTML5 decks), not only the "active" one:
+    // after a crossfade or karaoke swap the old song can live on either deck, and pausing only one
+    // left two songs playing at once (dislike, skip, SoundCloud playlists).
     if (cleanNew !== cleanCur) {
-      if (this.activeEngine === 'youtube' && this.ytPlayer && typeof this.ytPlayer.pauseVideo === 'function') {
-        try { this.ytPlayer.pauseVideo(); } catch {}
+      for (const p of this.ytPlayers) {
+        if (p && typeof p.pauseVideo === 'function') {
+          try { p.pauseVideo(); } catch {}
+        }
       }
-      if (this.audio) {
-        try { this.audio.pause(); } catch {}
+      for (const a of this.audios) {
+        if (a) {
+          try { a.pause(); } catch {}
+        }
       }
+    }
+    // Mobile always plays on deck 0; reset only after both decks are silent
+    if (this.isMobileOrPWA()) {
+      this.activeYtIndex = 0;
+      this.activeAudioIndex = 0;
     }
 
     // Stop secondary player
@@ -4074,7 +4107,8 @@ class AudioEngine {
       } catch {}
 
       // 0b. SoundCloud tracks (`sc-<id>`): stream MP3 progressive / HLS fMP4 directly via backend
-      const scDirectMatch = cleanNew.match(/^sc-(\d+)$/);
+      // `-dup-N` is added by the importer to repeated songs in a playlist; it is still the same SoundCloud track
+      const scDirectMatch = cleanNew.match(/^sc-(\d+)(?:-dup-\d+)?$/);
       if (scDirectMatch) {
         const scExplicit = `sc:${scDirectMatch[1]}`;
         this.activeEngine = 'html5';
@@ -4093,10 +4127,8 @@ class AudioEngine {
         setTimeout(() => {
           this.isTransitioning = false;
         }, 2500);
-        setTimeout(() => {
-          const track = usePlayerStore.getState().currentTrack;
-          if (track?.id) void this.prepareKaraokeDeck(track);
-        }, 600);
+        // No karaoke pre-warm for SoundCloud: it downloaded a second full track in parallel and made every
+        // song of a SoundCloud playlist slow to start. Karaoke still loads on demand when the user turns it on.
         return;
       }
 

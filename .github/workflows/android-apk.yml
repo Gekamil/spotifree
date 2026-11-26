@@ -157,6 +157,23 @@ jobs:
           gh release view android-latest
           echo "=== Release publishing finished successfully! ==="
 
+      # Keep every version: the first APK built for a new APP_VERSION is archived as release "vX.Y".
+      # Existing version releases are never touched, so older APKs stay downloadable.
+      - name: Archive as versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION=$(grep -oP "APP_VERSION = '\K[^']+" src/data/changelog.ts || true)
+          if [ -z "$VERSION" ]; then echo "No APP_VERSION found, skipping"; exit 0; fi
+          TAG="v$VERSION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists, keeping it as is"
+            exit 0
+          fi
+          cp Spotifree.apk "Spotifree-$VERSION.apk"
+          gh release create "$TAG" "Spotifree-$VERSION.apk" --title "Spotifree $VERSION" --target "$GITHUB_SHA" --latest=false \
+            --notes "APK de la versión $VERSION, compilado desde ${GITHUB_SHA::7}. La última versión está siempre en https://spotifreeweb.vercel.app/instalar"
+
       # Optional: republish the website so spotifreeweb.vercel.app/Spotifree.apk is the new APK
       # right away (Vercel → Settings → Git → Deploy Hooks, saved as the VERCEL_DEPLOY_HOOK secret).
       # Without it, the site's copy updates with the next web deploy and the page uses GitHub meanwhile.

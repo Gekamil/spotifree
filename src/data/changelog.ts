@@ -11,14 +11,27 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.2';
+export const APP_VERSION = '1.3';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.3',
+    date: '26 de noviembre, 2026',
+    title: 'Spotifree 1.3: Nunca suenan dos canciones a la vez y playlists de SoundCloud más rápidas',
+    isLatest: true,
+    highlights: [
+      'Al dar «No me gusta» o saltar de canción se detienen todos los reproductores internos, así que la canción anterior ya no sigue sonando por debajo de la nueva.',
+      'Protección continua contra solapamientos: si un reproductor sobrante empieza a sonar (precarga o transición interrumpida), se silencia al instante.',
+      'Karaoke: al quitar el modo «Sin voces» deja de sonar la pista instrumental, sin mezclar las versiones con y sin voz.',
+      'Playlists importadas de SoundCloud más rápidas: cada canción ya no descarga en paralelo una versión karaoke que no se ha pedido, y las canciones repetidas se reproducen directamente desde SoundCloud.',
+      'Versiones anteriores del APK conservadas en GitHub Releases.',
+    ],
+  },
   {
     version: '1.2',
     date: '25 de noviembre, 2026',
     title: 'Spotifree 1.2: Perfiles de artista con discografía completa, álbumes fiables y guardado persistente en APK',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Perfiles de artista completos en móvil y ordenador: añade Títulos populares y Discografía con filtros (Álbumes, Sencillos y EP, Recopilatorios), vista completa «Ver discografía», «Listas del artista» / «Incluye a...», biografía verificada y botón «Ver más» en canciones populares manteniendo todos los botones existentes.',
       'Álbumes siempre cargados desde cualquier canción: nueva resolución multiorigen para que entrar en un álbum desde el reproductor, tabla o menú móvil muestre siempre todas sus canciones.',

@@ -13,7 +13,7 @@ Modo DJ, karaoke, escucha sin conexión y sesiones compartidas.
 [![Abrir la web](https://img.shields.io/badge/Abrir_la_web-1ED760?style=for-the-badge&logo=spotify&logoColor=black)](https://spotifreeweb.vercel.app)
 [![Descargar APK](https://img.shields.io/badge/Descargar_APK-181818?style=for-the-badge&logo=android&logoColor=3DDC84)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 
-[![Versión](https://img.shields.io/badge/versión-1.2-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
+[![Versión](https://img.shields.io/badge/versión-1.3-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
 [![Build APK](https://img.shields.io/github/actions/workflow/status/Gekamil/spotifree/android-apk.yml?branch=main&style=flat-square&label=build%20apk&labelColor=181818)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
 [![Último commit](https://img.shields.io/github/last-commit/Gekamil/spotifree?style=flat-square&label=último%20commit&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/commits/main)
 [![Stars](https://img.shields.io/github/stars/Gekamil/spotifree?style=flat-square&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/stargazers)
@@ -243,12 +243,12 @@ spotifree/
 
 <br />
 
-## Novedades de la 1.2
+## Novedades de la 1.3
 
-- **Perfiles de artista completos:** títulos populares, discografía con filtros, listas y biografía.
-- **Álbumes más fiables:** se resuelven con varias fuentes para mostrar todas sus pistas.
-- **Guardado persistente en Android:** tu biblioteca se conserva al reabrir la app.
-- **Web más limpia:** Vercel Web Analytics y sin sondeos innecesarios en reposo.
+- **Nunca suenan dos canciones a la vez:** al saltar o dar «No me gusta» se detienen todos los reproductores, y cualquier reproductor sobrante se silencia al instante.
+- **Karaoke sin mezclas:** al quitar el modo «Sin voces» deja de sonar la versión instrumental.
+- **Playlists de SoundCloud más rápidas:** cada canción carga sin descargas extra en segundo plano.
+- **Versiones conservadas:** cada APK queda archivado en [Releases](https://github.com/Gekamil/spotifree/releases).
 
 [Historial completo de versiones](./src/data/changelog.ts)
 
