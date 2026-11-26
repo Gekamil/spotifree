@@ -821,12 +821,13 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
                   undoNotInterested(targetTrack);
                   showGlobalToast('Podremos volver a ponértela');
                 } else {
-                  markNotInterested(targetTrack);
-                  useLabsStore.getState().markTasteDislike(targetTrack);
-                  showGlobalToast('No volveremos a ponerte esta canción');
                   if (usePlayerStore.getState().currentTrack?.id === targetTrack.id) {
-                    usePlayerStore.getState().nextTrack();
+                    usePlayerStore.getState().dislikeCurrentTrack();
+                  } else {
+                    markNotInterested(targetTrack);
+                    useLabsStore.getState().markTasteDislike(targetTrack);
                   }
+                  showGlobalToast('No volveremos a ponerte esta canción');
                 }
                 closeContextMenu();
               }}

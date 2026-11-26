@@ -1252,7 +1252,38 @@ export default async function handler(req, res) {
 
     try {
       const clientRangeHeader = req.headers.range;
-      const preferCompact = !clientRangeHeader;
+      const preferCompact = action === 'download' && !clientRangeHeader;
+
+      const refreshOrFallbackAudio = async (curVideoId) => {
+        if (/^sc[:\-]\d+$/.test(explicitId)) {
+          const scRefreshed = await extractViaSoundCloud({
+            q,
+            title: rawTitle,
+            artist: rawArtist,
+            expectedDurationSec,
+            explicitId,
+            forceRefresh: true,
+          });
+          if (scRefreshed?.url || scRefreshed?.streamBuffer) return scRefreshed;
+        }
+        if (/^mono:\d{10,25}$/.test(explicitId)) {
+          const monoRefreshed = await extractViaMonochrome({ explicitId, forceRefresh: true });
+          if (monoRefreshed?.url) return monoRefreshed;
+        }
+        const refreshed = (curVideoId && /^[\w-]{11}$/.test(curVideoId))
+          ? await extractBestAudioInfo(curVideoId, preferCompact, true)
+          : null;
+        if (refreshed?.url) return refreshed;
+        const { audioInfo: fallbackInfo } = await resolveBestAudioStreamSource({
+          q,
+          rawTitle,
+          rawArtist,
+          expectedDurationSec,
+          explicitId: '',
+          preferCompact,
+        });
+        return fallbackInfo;
+      };
 
       let { audioInfo, videoId } = await resolveBestAudioStreamSource({
         q,
@@ -1307,17 +1338,29 @@ export default async function handler(req, res) {
           );
 
           if (upstream.ok || upstream.status === 206) {
-            const buf = Buffer.from(await upstream.arrayBuffer());
+            let buf = Buffer.from(await upstream.arrayBuffer());
             if (buf.length > 0 && (parsedRange || buf.length > 10000)) {
               const upRange = upstream.headers.get('content-range') || '';
               const totalMatch = upRange.match(/\/(\d+)$/);
-              const totalLen = totalMatch ? parseInt(totalMatch[1], 10) : audioInfo.clen || buf.length;
+              let totalLen = totalMatch ? parseInt(totalMatch[1], 10) : audioInfo.clen || buf.length;
+              const startOffset = parsedRange ? parsedRange.start : 0;
+
+              if (parsedRange && upstream.status === 200) {
+                totalLen = buf.length;
+                if (parsedRange.start >= totalLen) {
+                  res.setHeader('Content-Range', `bytes */${totalLen}`);
+                  return res.status(416).end();
+                }
+                const endByte = Math.min(totalLen - 1, parsedRange.end);
+                buf = buf.subarray(parsedRange.start, endByte + 1);
+              }
+
               return sendBufferedAudioResponse({
                 req,
                 res,
                 buf,
                 totalLen,
-                startOffset: parsedRange ? parsedRange.start : 0,
+                startOffset,
                 audioInfo,
                 videoId,
                 action,
@@ -1326,28 +1369,16 @@ export default async function handler(req, res) {
               });
             }
           }
-          // Upstream 403/410 -> force refresh cached YouTube URL or fall back to Monochrome/SoundCloud
+          // Upstream 403/410 -> force refresh cached URL or fall back across providers
           if (attempt === 0) {
-            const refreshed = (videoId && /^[\w-]{11}$/.test(videoId))
-              ? await extractBestAudioInfo(videoId, preferCompact, true)
-              : null;
-            audioInfo = refreshed?.url
-              ? refreshed
-              : (await extractViaMonochrome({ q, title: rawTitle, artist: rawArtist, expectedDurationSec })) ||
-                (await extractViaSoundCloud({ q, title: rawTitle, artist: rawArtist, expectedDurationSec }));
+            audioInfo = await refreshOrFallbackAudio(videoId);
             if (audioInfo?.id) videoId = audioInfo.id;
             continue;
           }
         } catch (streamErr) {
           console.warn('[api/audio] Upstream audio proxy failed:', streamErr?.message || streamErr);
           if (attempt === 0) {
-            const refreshed = (videoId && /^[\w-]{11}$/.test(videoId))
-              ? await extractBestAudioInfo(videoId, preferCompact, true)
-              : null;
-            audioInfo = refreshed?.url
-              ? refreshed
-              : (await extractViaMonochrome({ q, title: rawTitle, artist: rawArtist, expectedDurationSec })) ||
-                (await extractViaSoundCloud({ q, title: rawTitle, artist: rawArtist, expectedDurationSec }));
+            audioInfo = await refreshOrFallbackAudio(videoId);
             if (audioInfo?.id) videoId = audioInfo.id;
             continue;
           }

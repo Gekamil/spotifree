@@ -52,6 +52,9 @@ export function LyricsFullscreen(p: Props) {
   const [showKaraokeSlider, setShowKaraokeSlider] = useState(false);
   const [isDraggingSlider, setIsDraggingSlider] = useState(false);
   const [dragLevel, setDragLevel] = useState<number | null>(null);
+  const [dragSeekPercent, setDragSeekPercent] = useState<number | null>(null);
+  const isScrubbingSeekRef = useRef(false);
+  const dragSeekPercentRef = useRef<number | null>(null);
   const sliderRef = useRef<HTMLDivElement>(null);
   const sliderRafId = useRef<number | null>(null);
 
@@ -104,6 +107,8 @@ export function LyricsFullscreen(p: Props) {
     resumeTimer.current = setTimeout(() => setFollowing(true), 5000);
   };
   const percent = p.durationMs > 0 ? Math.min(100, (p.progressMs / p.durationMs) * 100) : 0;
+  const displaySeekPercent = dragSeekPercent !== null ? dragSeekPercent : percent;
+  const displaySeekMs = dragSeekPercent !== null ? (dragSeekPercent / 100) * p.durationMs : p.progressMs;
   const vocalMs = getSynchronizedLyricProgress(p.progressMs, p.durationMs);
 
   const updateSliderFromClientY = (clientY: number) => {
@@ -345,13 +350,63 @@ export function LyricsFullscreen(p: Props) {
           min={0}
           max={100}
           step={0.1}
-          value={percent}
-          onChange={(e) => p.onSeek((Number(e.target.value) / 100) * p.durationMs)}
+          value={displaySeekPercent}
+          onPointerDown={() => {
+            isScrubbingSeekRef.current = true;
+          }}
+          onTouchStart={() => {
+            isScrubbingSeekRef.current = true;
+          }}
+          onMouseDown={() => {
+            isScrubbingSeekRef.current = true;
+          }}
+          onChange={(e) => {
+            const val = Number(e.target.value);
+            if (isScrubbingSeekRef.current) {
+              dragSeekPercentRef.current = val;
+              setDragSeekPercent(val);
+            } else {
+              dragSeekPercentRef.current = null;
+              setDragSeekPercent(null);
+              p.onSeek((val / 100) * p.durationMs);
+            }
+          }}
+          onPointerUp={() => {
+            isScrubbingSeekRef.current = false;
+            const val = dragSeekPercentRef.current;
+            dragSeekPercentRef.current = null;
+            setDragSeekPercent(null);
+            if (val !== null) p.onSeek((val / 100) * p.durationMs);
+          }}
+          onPointerCancel={() => {
+            isScrubbingSeekRef.current = false;
+            dragSeekPercentRef.current = null;
+            setDragSeekPercent(null);
+          }}
+          onTouchEnd={() => {
+            isScrubbingSeekRef.current = false;
+            const val = dragSeekPercentRef.current;
+            dragSeekPercentRef.current = null;
+            setDragSeekPercent(null);
+            if (val !== null) p.onSeek((val / 100) * p.durationMs);
+          }}
+          onTouchCancel={() => {
+            isScrubbingSeekRef.current = false;
+            dragSeekPercentRef.current = null;
+            setDragSeekPercent(null);
+          }}
+          onMouseUp={() => {
+            isScrubbingSeekRef.current = false;
+            const val = dragSeekPercentRef.current;
+            dragSeekPercentRef.current = null;
+            setDragSeekPercent(null);
+            if (val !== null) p.onSeek((val / 100) * p.durationMs);
+          }}
           className="w-full h-1 accent-white cursor-pointer"
           aria-label="Progreso"
         />
         <div className="flex justify-between text-[11px] text-white/70 tabular-nums">
-          <span>{fmt(p.progressMs)}</span>
+          <span>{fmt(displaySeekMs)}</span>
           <span>{fmt(p.durationMs)}</span>
         </div>
         <div className="flex items-center justify-center gap-8 mt-1">

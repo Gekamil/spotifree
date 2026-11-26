@@ -393,8 +393,24 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
           if (req.headers.range) reqHeaders.Range = req.headers.range;
           const up = await fetch(direct.url, { headers: reqHeaders });
           if (up.ok || up.status === 206) {
-            const buf = Buffer.from(await up.arrayBuffer());
+            let buf = Buffer.from(await up.arrayBuffer());
             if (buf.length > 0) {
+              const rangeMatch = String(req.headers.range || '').match(/bytes=(\d+)-(\d*)/i);
+              let outStatus = up.status === 206 ? 206 : 200;
+              let contentRange = up.headers.get('content-range') || '';
+              let totalLen = direct.clen || buf.length;
+              if (rangeMatch && up.status === 200) {
+                totalLen = buf.length;
+                const start = Math.max(0, parseInt(rangeMatch[1], 10));
+                const end = rangeMatch[2] ? Math.min(totalLen - 1, parseInt(rangeMatch[2], 10)) : totalLen - 1;
+                if (start >= totalLen) {
+                  res.writeHead(416, { 'Content-Range': `bytes */${totalLen}`, 'Access-Control-Allow-Origin': '*' });
+                  return res.end();
+                }
+                buf = buf.subarray(start, end + 1);
+                contentRange = `bytes ${start}-${end}/${totalLen}`;
+                outStatus = 206;
+              }
               const outHeaders = {
                 'Content-Type': direct.mime || 'audio/mp4',
                 'Content-Length': String(buf.length),
@@ -405,17 +421,32 @@ export async function streamAudioDirect(target, req, res, startSeconds = 0, opti
                 'X-Audio-Mime': direct.mime || 'audio/mp4',
                 'X-Audio-Ext': direct.ext || 'm4a',
                 'X-Video-Id': resolvedId,
-                'X-Total-Length': String(direct.clen || buf.length),
+                'X-Total-Length': String(totalLen),
                 ...(direct.directCors ? { 'X-Direct-Audio-Url': direct.url } : {}),
                 ...(options.headers || {}),
               };
-              if (up.headers.get('content-range')) outHeaders['Content-Range'] = up.headers.get('content-range');
-              res.writeHead(up.status === 206 ? 206 : 200, outHeaders);
+              if (contentRange) outHeaders['Content-Range'] = contentRange;
+              res.writeHead(outStatus, outHeaders);
               return res.end(buf);
             }
           }
         }
       } catch {}
+    }
+  }
+
+  if (!videoId && (isScId || isMonoId)) {
+    const textQuery = (options.q || [options.title, options.artist].filter(Boolean).join(' ') || '').trim();
+    if (textQuery) {
+      try {
+        videoId = await resolveYouTubeVideoId(textQuery);
+      } catch {}
+      if (!videoId) {
+        cleanTarget = textQuery;
+      }
+    } else if (!res.headersSent) {
+      res.writeHead(404, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+      return res.end(JSON.stringify({ error: 'Track unavailable for direct stream' }));
     }
   }
 

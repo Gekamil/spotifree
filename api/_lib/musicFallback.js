@@ -257,12 +257,12 @@ export async function verifyDirectAudioStream(url, headers = {}) {
   };
 }
 
-export async function extractViaMonochrome({ q = '', title = '', artist = '', expectedDurationSec = 0, explicitId = '' } = {}) {
+export async function extractViaMonochrome({ q = '', title = '', artist = '', expectedDurationSec = 0, explicitId = '', forceRefresh = false } = {}) {
   const monoMatch = String(explicitId || '').match(/^mono:(\d{10,25})$/);
   if (monoMatch) {
     const id = monoMatch[1];
     const cacheKey = `mono:${id}`;
-    const cached = MONO_CACHE.get(cacheKey);
+    const cached = !forceRefresh ? MONO_CACHE.get(cacheKey) : null;
     if (cached && Date.now() - cached.fetchedAt < 6 * 3600_000) return cached;
 
     const url = `https://tracks.monochrome.st/track/${id}`;
@@ -449,17 +449,25 @@ async function fetchSoundCloudJson(urlBuilder) {
   return res.json();
 }
 
-function selectSoundCloudTranscoding(item) {
+function selectSoundCloudTranscodings(item) {
   const transcodings = item?.media?.transcodings || [];
+  const candidates = [];
   const prog = transcodings.find((x) => x?.format?.protocol === 'progressive' && x?.url);
-  if (prog) return { transcoding: prog, mode: 'progressive' };
+  if (prog) candidates.push({ transcoding: prog, mode: 'progressive' });
 
   const hlsMp4 =
     transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.preset || '').includes('160k') && String(x?.format?.mime_type || '').includes('mp4') && x?.url) ||
     transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mp4') && x?.url);
-  if (hlsMp4) return { transcoding: hlsMp4, mode: 'hls-fmp4' };
+  if (hlsMp4) candidates.push({ transcoding: hlsMp4, mode: 'hls-fmp4' });
 
-  return null;
+  const hlsMpeg = transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mpeg') && x?.url);
+  if (hlsMpeg) candidates.push({ transcoding: hlsMpeg, mode: 'hls-mpeg' });
+
+  return candidates;
+}
+
+function selectSoundCloudTranscoding(item) {
+  return selectSoundCloudTranscodings(item)[0] || null;
 }
 
 function storeHlsBuffer(cacheKey, buf) {
@@ -487,11 +495,11 @@ if (typeof setTimeout !== 'undefined') {
   }, 250);
 }
 
-async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
-  const existing = getCachedSoundCloudHlsBuffer(cacheKey);
+async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey, { forceRefresh = false, mode = 'hls-fmp4' } = {}) {
+  const existing = !forceRefresh ? getCachedSoundCloudHlsBuffer(cacheKey) : null;
   if (existing) return existing;
 
-  const m3u8Text = await fetchWithTimeout(m3u8Url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 3500).then((r) => (r.ok ? r.text() : ''));
+  const m3u8Text = await fetchWithTimeout(m3u8Url, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 5000).then((r) => (r.ok ? r.text() : ''));
   if (!m3u8Text || /#EXT-X-KEY/i.test(m3u8Text)) return null;
 
   const mapMatch = m3u8Text.match(/#EXT-X-MAP:URI="([^"]+)"/i);
@@ -500,12 +508,13 @@ async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
     .map((l) => l.trim())
     .filter((l) => l && !l.startsWith('#'));
 
-  if (!mapMatch?.[1] || segUrls.length === 0 || segUrls.length > 160) return null;
+  if (segUrls.length === 0 || segUrls.length > 320) return null;
+  if (mode === 'hls-fmp4' && !mapMatch?.[1]) return null;
 
-  const allUrls = [mapMatch[1], ...segUrls];
+  const allUrls = mapMatch?.[1] ? [mapMatch[1], ...segUrls] : segUrls;
   const fetchSegOnce = async (u, idx) => {
     for (let attempt = 0; attempt < 2; attempt++) {
-      const buf = await fetchWithTimeout(u, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 3500)
+      const buf = await fetchWithTimeout(u, { headers: { 'User-Agent': 'Mozilla/5.0' } }, 5000)
         .then((r) => (r.ok ? r.arrayBuffer().then((ab) => Buffer.from(ab)) : null))
         .catch(() => null);
       if (buf && buf.length > 0) return { idx, buf };
@@ -513,44 +522,78 @@ async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey) {
     return { idx, buf: null };
   };
 
-  // Full parallel segment fetching across all audio chunks
-  const results = await Promise.all(allUrls.map((u, idx) => fetchSegOnce(u, idx)));
-  if (results.some((r) => !r.buf || r.buf.length === 0)) return null;
+  // Batch segment fetches in bounded waves so long tracks do not exhaust sockets
+  const results = [];
+  const batchSize = 24;
+  for (let i = 0; i < allUrls.length; i += batchSize) {
+    const wave = allUrls.slice(i, i + batchSize);
+    const waveResults = await Promise.all(wave.map((u, offset) => fetchSegOnce(u, i + offset)));
+    if (waveResults.some((r) => !r.buf || r.buf.length === 0)) return null;
+    results.push(...waveResults);
+  }
 
   const parts = results.sort((a, b) => a.idx - b.idx).map((r) => r.buf);
   const fullBuf = Buffer.concat(parts);
   const sniff = sniffAudioSignature(fullBuf.subarray(0, 32));
-  if (!sniff.valid || fullBuf.length < 100_000) return null;
+  if (!sniff.valid || fullBuf.length < 40_000) return null;
 
   storeHlsBuffer(cacheKey, fullBuf);
-  return fullBuf;
+  return {
+    buf: fullBuf,
+    mime: sniff.mime || (mode === 'hls-mpeg' ? 'audio/mpeg' : 'audio/mp4'),
+    ext: sniff.ext || (mode === 'hls-mpeg' ? 'mp3' : 'm4a'),
+  };
 }
 
-async function resolveSoundCloudItemToStream(item) {
+async function resolveSoundCloudItemToStream(item, { allowShort = false, forceRefresh = false } = {}) {
   if (!item?.id || item.policy === 'SNIP') return null;
   const durSec = Math.round((Number(item.duration) || 0) / 1000);
-  if (durSec > 0 && durSec < 45) return null;
+  const minDurSec = allowShort ? 10 : 45;
+  if (durSec > 0 && durSec < minDurSec) return null;
 
-  const picked = selectSoundCloudTranscoding(item);
-  if (!picked) return null;
-
-  const streamMeta = await fetchSoundCloudJson(
-    (cid) => `${picked.transcoding.url}?client_id=${cid}${item.track_authorization ? `&track_authorization=${encodeURIComponent(item.track_authorization)}` : ''}`
-  ).catch(() => null);
-  if (!streamMeta?.url) return null;
+  const candidates = selectSoundCloudTranscodings(item);
+  if (candidates.length === 0) return null;
 
   const idKey = `sc:${item.id}`;
 
-  if (picked.mode === 'progressive') {
-    const verified = await verifyDirectAudioStream(streamMeta.url).catch(() => null);
-    if (!verified) return null;
+  for (const picked of candidates) {
+    const streamMeta = await fetchSoundCloudJson(
+      (cid) => `${picked.transcoding.url}?client_id=${cid}${item.track_authorization ? `&track_authorization=${encodeURIComponent(item.track_authorization)}` : ''}`
+    ).catch(() => null);
+    if (!streamMeta?.url) continue;
+
+    if (picked.mode === 'progressive') {
+      const verified = await verifyDirectAudioStream(streamMeta.url).catch(() => null);
+      if (!verified) continue;
+      const entry = {
+        id: idKey,
+        url: streamMeta.url,
+        mime: verified.mime || 'audio/mpeg',
+        ext: verified.ext || 'mp3',
+        clen: verified.clen,
+        source: 'soundcloud-mp3',
+        directCors: false,
+        fetchedAt: Date.now(),
+      };
+      SC_TRACK_CACHE.set(idKey, entry);
+      return entry;
+    }
+
+    // HLS fMP4 / MP3: assemble segments cleanly into contiguous audio buffer
+    const hlsRes = await fetchSoundCloudHlsBuffer(streamMeta.url, idKey, { forceRefresh, mode: picked.mode });
+    if (!hlsRes) continue;
+    const fullBuf = Buffer.isBuffer(hlsRes) ? hlsRes : hlsRes.buf;
+    const hlsMime = Buffer.isBuffer(hlsRes) ? 'audio/mp4' : hlsRes.mime;
+    const hlsExt = Buffer.isBuffer(hlsRes) ? 'm4a' : hlsRes.ext;
+
     const entry = {
       id: idKey,
-      url: streamMeta.url,
-      mime: verified.mime || 'audio/mpeg',
-      ext: verified.ext || 'mp3',
-      clen: verified.clen,
-      source: 'soundcloud-mp3',
+      url: `sc-hls:${item.id}`,
+      streamBuffer: fullBuf,
+      mime: hlsMime,
+      ext: hlsExt,
+      clen: fullBuf.length,
+      source: picked.mode === 'hls-mpeg' ? 'soundcloud-hls-mp3' : 'soundcloud-hls',
       directCors: false,
       fetchedAt: Date.now(),
     };
@@ -558,31 +601,15 @@ async function resolveSoundCloudItemToStream(item) {
     return entry;
   }
 
-  // HLS fMP4: assemble init segment + media segments cleanly into contiguous audio/mp4
-  const fullBuf = await fetchSoundCloudHlsBuffer(streamMeta.url, idKey);
-  if (!fullBuf) return null;
-
-  const entry = {
-    id: idKey,
-    url: `sc-hls:${item.id}`,
-    streamBuffer: fullBuf,
-    mime: 'audio/mp4',
-    ext: 'm4a',
-    clen: fullBuf.length,
-    source: 'soundcloud-hls',
-    directCors: false,
-    fetchedAt: Date.now(),
-  };
-  SC_TRACK_CACHE.set(idKey, entry);
-  return entry;
+  return null;
 }
 
-export async function extractViaSoundCloud({ q = '', title = '', artist = '', expectedDurationSec = 0, explicitId = '' } = {}) {
+export async function extractViaSoundCloud({ q = '', title = '', artist = '', expectedDurationSec = 0, explicitId = '', forceRefresh = false } = {}) {
   const scMatch = String(explicitId || '').match(/^sc[:\-](\d+)$/);
   if (scMatch) {
     const trackNum = scMatch[1];
     const idKey = `sc:${trackNum}`;
-    const cached = SC_TRACK_CACHE.get(idKey);
+    const cached = !forceRefresh ? SC_TRACK_CACHE.get(idKey) : null;
     if (cached && Date.now() - cached.fetchedAt < 3600_000) {
       if (cached.streamBuffer || !String(cached.url).startsWith('sc-hls:')) return cached;
       const buf = getCachedSoundCloudHlsBuffer(idKey);
@@ -592,7 +619,7 @@ export async function extractViaSoundCloud({ q = '', title = '', artist = '', ex
     try {
       const item = await fetchSoundCloudJson((cid) => `https://api-v2.soundcloud.com/tracks/${trackNum}?client_id=${cid}`);
       if (item?.id) {
-        const directEntry = await resolveSoundCloudItemToStream(item);
+        const directEntry = await resolveSoundCloudItemToStream(item, { allowShort: true, forceRefresh });
         if (directEntry) return directEntry;
       }
     } catch {}

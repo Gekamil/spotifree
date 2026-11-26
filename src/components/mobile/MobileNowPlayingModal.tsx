@@ -86,6 +86,9 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   );
 
   const [isQueueOpen, setIsQueueOpen] = useState(false);
+  const [dragPercent, setDragPercent] = useState<number | null>(null);
+  const isScrubbingRef = useRef(false);
+  const dragPercentRef = useRef<number | null>(null);
   const queueScrollRef = useRef<HTMLDivElement>(null);
   const queueScrollTopRef = useRef<number>(0);
   const {
@@ -494,12 +497,40 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
   const isLiked = likedTrackIds.includes(currentTrack.id);
   const coverUrl = currentTrack.album?.images?.[0]?.url;
   const percent = durationMs > 0 ? Math.min(100, Math.max(0, (progressMs / durationMs) * 100)) : 0;
+  const displayPercent = dragPercent !== null ? dragPercent : percent;
+  const displayProgressMs = dragPercent !== null ? (dragPercent / 100) * durationMs : progressMs;
 
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = Number(e.target.value);
+  const commitSeekPercent = (val: number) => {
     const newMs = (val / 100) * durationMs;
     setProgress(newMs);
     audioEngine.seek(newMs / 1000);
+  };
+
+  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = Number(e.target.value);
+    if (isScrubbingRef.current) {
+      dragPercentRef.current = val;
+      setDragPercent(val);
+      return;
+    }
+    dragPercentRef.current = null;
+    setDragPercent(null);
+    commitSeekPercent(val);
+  };
+
+  const handleSeekStart = () => {
+    isScrubbingRef.current = true;
+  };
+
+  const handleSeekEnd = () => {
+    if (!isScrubbingRef.current) return;
+    isScrubbingRef.current = false;
+    const pendingVal = dragPercentRef.current;
+    dragPercentRef.current = null;
+    setDragPercent(null);
+    if (pendingVal !== null) {
+      commitSeekPercent(pendingVal);
+    }
   };
 
   // The Canvas only takes over once its video is really playing (it loads in the background as
@@ -780,15 +811,23 @@ export const MobileNowPlayingModal: React.FC<MobileNowPlayingModalProps> = ({
               min="0"
               max="100"
               step="0.1"
-              value={percent}
+              value={displayPercent}
+              onPointerDown={handleSeekStart}
+              onTouchStart={handleSeekStart}
+              onMouseDown={handleSeekStart}
               onChange={handleSeek}
+              onPointerUp={handleSeekEnd}
+              onPointerCancel={handleSeekEnd}
+              onTouchEnd={handleSeekEnd}
+              onTouchCancel={handleSeekEnd}
+              onMouseUp={handleSeekEnd}
               style={{
-                background: `linear-gradient(to right, #ffffff ${percent}%, rgba(255, 255, 255, 0.2) ${percent}%)`,
+                background: `linear-gradient(to right, #ffffff ${displayPercent}%, rgba(255, 255, 255, 0.2) ${displayPercent}%)`,
               }}
               className="w-full h-1 rounded-lg appearance-none cursor-pointer accent-white hover:accent-[#1ed760] transition-all"
             />
             <div className="flex justify-between font-['SpotifyMixUI'] tabular-nums text-[11px] font-normal text-[#b3b3b3]">
-              <span className="select-none tracking-normal">{formatDuration(progressMs)}</span>
+              <span className="select-none tracking-normal">{formatDuration(displayProgressMs)}</span>
               {labsEnabled && speedControlEnabled && (
                 <button
                   type="button"

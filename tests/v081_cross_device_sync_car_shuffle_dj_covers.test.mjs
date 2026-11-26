@@ -312,7 +312,7 @@ describe('v081: Cross-Device Sync, Car Shuffle Icons & DJ Cover/Audio Reliabilit
     const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
     const aboutSrc = fs.readFileSync(path.resolve('src/components/common/AboutAppSection.tsx'), 'utf8');
 
-    assert.ok(['1.0.0', '1.1.0', '1.2.0', '1.3.0'].includes(pkg.version));
+    assert.ok(['1.0.0', '1.1.0', '1.2.0', '1.3.0', '1.4.0'].includes(pkg.version));
     assert.ok(/export const APP_VERSION = '1\.[0-9]+';/.test(changelog));
     assert.ok(changelog.includes("version: '1.0'"));
     assert.ok(aboutSrc.includes('Versiones') && aboutSrc.includes('Créditos'));

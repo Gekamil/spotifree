@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.3';
+export const APP_VERSION = '1.4';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.4',
+    date: '26 de noviembre, 2026',
+    title: 'Spotifree 1.4: Reproducción fluida en SoundCloud y listas importadas, saltos al avanzar sin cortes y cero solapamientos',
+    isLatest: true,
+    highlights: [
+      'Playlists importadas y de SoundCloud sin canciones mudas: envío completo de metadatos de respaldo, soporte ampliado para mezclas HLS largas y pistas cortas, y salto automático limpio si una pista no está disponible.',
+      'Avance y arrastre de barra fluidos en todo momento: eliminados los parones totales al adelantar o rebobinar en streams HTML5 y móviles (seek confirmado al soltar y Range consistente en el servidor).',
+      'Karaoke y dislike aún más estrictos: silenciado total entre motores (YouTube y HTML5) para que nunca vuelvan a sonar dos pistas a la vez al cambiar de canción o activar «Sin voces».',
+      'Crossfade protegido contra errores de duración y anuncios cortos para evitar inicios anticipados del siguiente tema.',
+    ],
+  },
   {
     version: '1.3',
     date: '26 de noviembre, 2026',
     title: 'Spotifree 1.3: Nunca suenan dos canciones a la vez y playlists de SoundCloud más rápidas',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Al dar «No me gusta» o saltar de canción se detienen todos los reproductores internos, así que la canción anterior ya no sigue sonando por debajo de la nueva.',
       'Protección continua contra solapamientos: si un reproductor sobrante empieza a sonar (precarga o transición interrumpida), se silencia al instante.',
