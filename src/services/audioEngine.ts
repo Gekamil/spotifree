@@ -2787,6 +2787,26 @@ class AudioEngine {
           };
           audioEl.addEventListener('timeupdate', onTimeUpdate, { once: true });
         }
+
+        // Guard against 30s preview snippet: if audio duration <= 36s but the song's expected studio length is > 45s
+        if (this.activeEngine === 'html5' && this.activeAudioIndex === idx) {
+          const curTrk = usePlayerStore.getState().currentTrack;
+          const expectedDurSec = curTrk?.duration_ms ? curTrk.duration_ms / 1000 : 0;
+          if (audioEl.duration > 0 && audioEl.duration <= 36 && expectedDurSec > 45 && !srcStr.startsWith('blob:')) {
+            console.warn(`[AudioEngine] Detected 30s preview snippet (${audioEl.duration.toFixed(1)}s) for "${curTrk?.name}". Rejecting and switching to full studio audio.`);
+            audioEl.pause();
+            const curSeq = this.playSequenceId;
+            const curQuery = `${curTrk?.name || ''} ${curTrk?.artists?.[0]?.name || ''}`.trim();
+            const currentVid = this.currentVideoId;
+            if (currentVid) this.failedVideoIds.add(currentVid);
+            setTimeout(() => {
+              if (this.playSequenceId === curSeq && this.currentTrackId === curTrk?.id) {
+                void this.resolveAndPlayAlternate(curQuery, currentVid || undefined);
+              }
+            }, 50);
+            return;
+          }
+        }
       });
 
       audioEl.addEventListener('canplay', () => {
@@ -4736,8 +4756,18 @@ class AudioEngine {
           query,
           scExplicit
         );
+        const otherDeckIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
+        const otherDeck = this.audios[otherDeckIdx];
+        const hasOtherPrecuedMatch = startSeconds === 0 && otherDeck?.getAttribute('data-precued-src') === scStreamUrl && otherDeck.readyState >= 1;
         const hasPrecuedMatch = startSeconds === 0 && this.audio.getAttribute('data-precued-src') === scStreamUrl && this.audio.readyState >= 1;
-        if (hasPrecuedMatch) {
+
+        if (hasOtherPrecuedMatch) {
+          otherDeck.removeAttribute('data-precued-src');
+          this.silenceHtml5Deck(this.audio, true);
+          this.activeAudioIndex = otherDeckIdx;
+          this.audio.muted = isMuted;
+          this.audio.volume = isMuted ? 0 : this.getEffectiveVolume();
+        } else if (hasPrecuedMatch) {
           this.audio.removeAttribute('data-precued-src');
         } else {
           this.setHtml5DeckSource(this.activeAudioIndex, scStreamUrl, startSeconds);

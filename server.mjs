@@ -373,11 +373,17 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 3c. Audio Candidates, Warm & Prepare-SC Endpoints (/api/audio/candidates, /api/audio/warm, /api/audio/prepare-sc)
-  if (pathname === '/api/audio/candidates' || pathname === '/api/audio/warm' || pathname === '/api/audio/prepare-sc') {
+  // 3c. Audio Candidates, Warm, Prepare-SC & Recommendations Endpoints (/api/audio/candidates, /api/audio/warm, /api/audio/prepare-sc, /api/audio/recommendations)
+  if (pathname === '/api/audio/candidates' || pathname === '/api/audio/warm' || pathname === '/api/audio/prepare-sc' || pathname === '/api/audio/recommendations') {
     const { default: audioHandler } = await import('./api/audio.js');
     req.query = Object.fromEntries(reqUrl.searchParams.entries());
-    req.query.action = pathname.endsWith('/warm') ? 'warm' : pathname.endsWith('/prepare-sc') ? 'prepare-sc' : 'candidates';
+    req.query.action = pathname.endsWith('/warm')
+      ? 'warm'
+      : pathname.endsWith('/prepare-sc')
+      ? 'prepare-sc'
+      : pathname.endsWith('/recommendations')
+      ? 'recommendations'
+      : 'candidates';
     res.status = (code) => { res.statusCode = code; return res; };
     res.json = (data) => {
       res.setHeader('Content-Type', 'application/json');

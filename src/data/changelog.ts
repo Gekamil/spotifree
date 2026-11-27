@@ -11,14 +11,28 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.6.1';
+export const APP_VERSION = '1.7.0';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.7',
+    date: '27 de noviembre, 2026',
+    title: 'Spotifree 1.7: Eliminacion de previews de 30s en SoundCloud, transiciones fluidas y restauracion de cola en aleatorio inteligente',
+    isLatest: true,
+    highlights: [
+      'Eliminacion definitiva de snippets de 30 segundos en canciones de SoundCloud: se detectan y descartan los previews recortados de 30 segundos de SoundCloud tanto en el servidor como en el reproductor de audio, asegurando siempre la pista completa de estudio.',
+      'Resolucion y transiciones ultrarrapidas en SoundCloud: optimizado el montaje de HLS fMP4 y aprovechada la precarga en el reproductor inactivo para que cambiar entre canciones de SoundCloud sea instantaneo y sin demoras de 4 segundos.',
+      'Prioridad de catalogo Spotifree: si una cancion de SoundCloud existe en nuestro catalogo nativo, se reproduce directamente la version oficial de alta fidelidad sin esperas.',
+      'Restauracion limpia de la cola al desactivar el aleatorio inteligente: al apagar el aleatorio inteligente (modo normal), se eliminan todas las canciones recomendadas y se recupera el orden y la lista original exacta de la playlist sin temas residuales.',
+      'Deteccion automatica de idioma y pais: la interfaz detecta la ubicacion y zona horaria del usuario para mostrar todo en espanol o ingles de forma nativa.',
+      'Fraseo abierto de inicio de sesion: interfaz clarificada para registrarse o iniciar sesion directamente con Spotifree tanto en web como en movil.',
+    ],
+  },
   {
     version: '1.6.1',
     date: '27 de noviembre, 2026',
     title: 'Spotifree 1.6.1: Correccion de carga y reproduccion en playlists de cantantes y aislamiento de musica descargada',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Carga y reproduccion inmediata de playlists de artistas en ordenador: eliminada la condicion que bloqueaba el boton de reproducir con el aviso de cargando canciones cuando la lista ya tiene temas listos o cuando se trata de un mix de artista.',
       'Reproduccion pendiente automatica: si pulsas reproducir mientras se cargan los temas de un cantante o lista, se inicia la reproduccion automaticamente en cuanto termina de cargar sin requerir pulsar de nuevo.',

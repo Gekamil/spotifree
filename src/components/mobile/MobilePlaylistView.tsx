@@ -1452,6 +1452,7 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
           playedInShuffle: [],
           preselectedNextTrackId: null,
           queue: deduplicateTracks(finalOrder),
+          originalQueue: deduplicateTracks(finalOrder),
         });
       } else if (pState.isPlaying) {
         // Keep upcoming tracks in DJ set order without interrupting current playback

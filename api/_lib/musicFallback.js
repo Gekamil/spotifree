@@ -476,17 +476,29 @@ async function fetchSoundCloudJson(urlBuilder) {
 }
 
 function selectSoundCloudTranscodings(item) {
+  if (item?.policy === 'SNIP') return [];
+  const itemDur = Number(item?.duration) || 0;
   const transcodings = item?.media?.transcodings || [];
   const candidates = [];
-  const prog = transcodings.find((x) => x?.format?.protocol === 'progressive' && x?.url);
+
+  const isValidTranscoding = (x) => {
+    if (!x?.url) return false;
+    if (x?.snipped === true) return false;
+    if (String(x?.preset || '').toLowerCase().includes('snippet')) return false;
+    const xDur = Number(x?.duration) || 0;
+    if (xDur > 0 && xDur <= 35000 && itemDur > 45000) return false;
+    return true;
+  };
+
+  const prog = transcodings.find((x) => x?.format?.protocol === 'progressive' && isValidTranscoding(x));
   if (prog) candidates.push({ transcoding: prog, mode: 'progressive' });
 
   const hlsMp4 =
-    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.preset || '').includes('160k') && String(x?.format?.mime_type || '').includes('mp4') && x?.url) ||
-    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mp4') && x?.url);
+    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.preset || '').includes('160k') && String(x?.format?.mime_type || '').includes('mp4') && isValidTranscoding(x)) ||
+    transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mp4') && isValidTranscoding(x));
   if (hlsMp4) candidates.push({ transcoding: hlsMp4, mode: 'hls-fmp4' });
 
-  const hlsMpeg = transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mpeg') && x?.url);
+  const hlsMpeg = transcodings.find((x) => x?.format?.protocol === 'hls' && String(x?.format?.mime_type || '').includes('mpeg') && isValidTranscoding(x));
   if (hlsMpeg) candidates.push({ transcoding: hlsMpeg, mode: 'hls-mpeg' });
 
   return candidates;
@@ -548,18 +560,28 @@ async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey, { forceRefresh = fals
     return { idx, buf: null };
   };
 
-  // Batch segment fetches in bounded waves so long tracks do not exhaust sockets
-  const results = [];
-  const batchSize = 24;
-  for (let i = 0; i < allUrls.length; i += batchSize) {
-    const wave = allUrls.slice(i, i + batchSize);
-    const waveResults = await Promise.all(wave.map((u, offset) => fetchSegOnce(u, i + offset)));
-    if (waveResults.some((r) => !r.buf || r.buf.length === 0)) return null;
-    results.push(...waveResults);
-  }
+  // Concurrently fetch HLS segments in parallel bounded pool to maximize throughput and minimize latency
+  const results = new Array(allUrls.length);
+  let hasFailed = false;
+  let activeIndex = 0;
+  const concurrency = Math.min(32, allUrls.length);
 
-  const parts = results.sort((a, b) => a.idx - b.idx).map((r) => r.buf);
-  const fullBuf = Buffer.concat(parts);
+  const worker = async () => {
+    while (activeIndex < allUrls.length && !hasFailed) {
+      const idx = activeIndex++;
+      const res = await fetchSegOnce(allUrls[idx], idx);
+      if (!res.buf || res.buf.length === 0) {
+        hasFailed = true;
+        return;
+      }
+      results[idx] = res.buf;
+    }
+  };
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  if (hasFailed || results.some((b) => !b)) return null;
+
+  const fullBuf = Buffer.concat(results);
   const sniff = sniffAudioSignature(fullBuf.subarray(0, 32));
   if (!sniff.valid || fullBuf.length < 40_000) return null;
 
@@ -586,7 +608,7 @@ async function resolveSoundCloudItemToStream(item, { allowShort = false, forceRe
     const streamMeta = await fetchSoundCloudJson(
       (cid) => `${picked.transcoding.url}?client_id=${cid}${item.track_authorization ? `&track_authorization=${encodeURIComponent(item.track_authorization)}` : ''}`
     ).catch(() => null);
-    if (!streamMeta?.url) continue;
+    if (!streamMeta?.url || streamMeta.url.includes('/preview/') || streamMeta.url.includes('/snippet/')) continue;
 
     if (picked.mode === 'progressive') {
       if (skipPreVerify) {
@@ -661,7 +683,7 @@ export async function extractViaSoundCloud({ q = '', title = '', artist = '', ex
     try {
       const item = await fetchSoundCloudJson((cid) => `https://api-v2.soundcloud.com/tracks/${trackNum}?client_id=${cid}`);
       if (item?.id) {
-        const directEntry = await resolveSoundCloudItemToStream(item, { allowShort: true, forceRefresh, skipPreVerify: true });
+        const directEntry = await resolveSoundCloudItemToStream(item, { allowShort: false, forceRefresh, skipPreVerify: true });
         if (directEntry) return directEntry;
       }
     } catch {}

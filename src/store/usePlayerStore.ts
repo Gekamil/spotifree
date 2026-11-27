@@ -25,6 +25,14 @@ export function matchTrackId(a?: string | null, b?: string | null): boolean {
   return Boolean(ca && cb && ca === cb);
 }
 
+export function isSmartOrInjectedTrack(t?: any): boolean {
+  if (!t) return false;
+  if (t.isSmartRecommendation || t.isSmartTrack || t.isSmart || t.isAutoplayRecommendation || t.isRecommended) return true;
+  if (typeof t.queueId === 'string' && (t.queueId.startsWith('smart-rec-') || t.queueId.startsWith('autoplay-rec-'))) return true;
+  if (typeof t.id === 'string' && (t.id.startsWith('smart-rec-') || t.id.startsWith('autoplay-rec-'))) return true;
+  return false;
+}
+
 export function findTrackIndexInQueue(queue: Track[], currentTrack: Track | null | undefined): number {
   if (!currentTrack || !queue || queue.length === 0) return -1;
   // 1. Direct ID or stripped ID match
@@ -371,6 +379,7 @@ interface PlayerState {
   setVolume: (volume: number) => void;
   toggleMute: () => void;
   toggleShuffle: () => void;
+  setShuffleMode: (mode: 'off' | 'all' | 'smart') => void;
   toggleRepeat: () => void;
   toggleLike: (trackId: string, trackObj?: Track) => void;
   dislikeCurrentTrack: () => void;
@@ -446,15 +455,20 @@ const store = create<PlayerState>((set, get) => ({
 
   addToQueue: (tracks: Track | Track[]) => {
     const list = Array.isArray(tracks) ? tracks : [tracks];
+    const cleanList = list.filter((t: any) => !isSmartOrInjectedTrack(t));
     set((s) => ({
       queue: deduplicateTracks([...s.queue, ...list]),
-      originalQueue: deduplicateTracks([...s.originalQueue, ...list]),
+      originalQueue: deduplicateTracks([...s.originalQueue.filter((t: any) => !isSmartOrInjectedTrack(t)), ...cleanList]),
     }));
   },
 
   setQueue: (tracks: Track[]) => {
     const deduped = deduplicateTracks(tracks);
-    set({ queue: deduped, originalQueue: deduped });
+    const cleanOriginal = deduplicateTracks(tracks.filter((t: any) => !isSmartOrInjectedTrack(t)));
+    set({
+      queue: deduped,
+      originalQueue: cleanOriginal.length > 0 ? cleanOriginal : deduped,
+    });
   },
 
   reorderQueue: (fromIndex: number, toIndex: number) => {
@@ -490,14 +504,27 @@ const store = create<PlayerState>((set, get) => ({
     const cleanCur = (state.currentTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const cleanNew = (hydratedTrack?.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
 
-    const rawOriginal = (newQueue ? deduplicateTracks(newQueue) : (state.originalQueue.length > 0 ? state.originalQueue : state.queue)).map(hydrateTrackCoverSync);
+    // Guard originalQueue against smart recommendations and preserve original un-shuffled playlist order
+    const isClickFromActiveQueue = Boolean(
+      newQueue &&
+      (newQueue === state.queue ||
+        (newQueue.length === state.queue.length && newQueue.length > 0 && newQueue.every((t, i) => t.id === state.queue[i]?.id)))
+    );
+    const baseSource = (newQueue && !isClickFromActiveQueue
+      ? newQueue
+      : state.originalQueue.length > 0
+      ? state.originalQueue
+      : (newQueue || state.queue)
+    ).filter((t: any) => !isSmartOrInjectedTrack(t));
+
+    const rawOriginal = deduplicateTracks(baseSource).map(hydrateTrackCoverSync);
     let activeQueue: Track[];
     if (newQueue) {
       if (state.isShuffle) {
         const others = shuffleTracks(rawOriginal.filter((t) => t.id !== hydratedTrack.id), lastPlayedAt);
         activeQueue = [hydratedTrack, ...others];
       } else {
-        activeQueue = rawOriginal;
+        activeQueue = (isClickFromActiveQueue ? newQueue : rawOriginal).map(hydrateTrackCoverSync);
       }
     } else {
       const exists = state.queue.some((t) => t && (t.id === hydratedTrack.id || matchTrackId(t.id, hydratedTrack.id)));
@@ -1352,9 +1379,14 @@ const store = create<PlayerState>((set, get) => ({
   toggleShuffle: () => {
     const state = get();
     const nextShuffle = state.shuffleMode === 'off' ? 'all' : state.shuffleMode === 'all' ? 'smart' : 'off';
+    get().setShuffleMode(nextShuffle);
+  },
+
+  setShuffleMode: (mode: 'off' | 'all' | 'smart') => {
+    const state = get();
 
     // Mutual exclusivity: Activating shuffle automatically deactivates DJ mode
-    if (nextShuffle !== 'off' && typeof window !== 'undefined') {
+    if (mode !== 'off' && typeof window !== 'undefined') {
       window.localStorage.setItem('spotifree_dj_mode', 'false');
       window.localStorage.setItem('spotifree_dj_mode_desktop', 'false');
       window.dispatchEvent(new CustomEvent('spotifree_dj_mode_changed', { detail: { enabled: false } }));
@@ -1367,11 +1399,11 @@ const store = create<PlayerState>((set, get) => ({
       } catch {}
     }
 
-    if (nextShuffle === 'off') {
+    if (mode === 'off') {
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
-      const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+      const cleanQueue = deduplicateTracks(source.filter((t: any) => !isSmartOrInjectedTrack(t)));
       set({
-        shuffleMode: nextShuffle,
+        shuffleMode: 'off',
         isShuffle: false,
         shuffleVersion: state.shuffleVersion + 1,
         playedInShuffle: [],
@@ -1382,15 +1414,15 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    if (nextShuffle === 'all') {
+    if (mode === 'all') {
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
-      const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+      const baseTracks = deduplicateTracks(source.filter((t: any) => !isSmartOrInjectedTrack(t)));
       const curr = state.currentTrack;
       // Order from Settings › Ajustes avanzados (balanced by artist, recent songs at the end)
       const others = shuffleTracks(baseTracks.filter((t) => t.id !== curr?.id), lastPlayedAt);
       const shuffledQueue = curr ? [curr, ...others] : others;
       set({
-        shuffleMode: nextShuffle,
+        shuffleMode: 'all',
         isShuffle: true,
         shuffleVersion: state.shuffleVersion + 1,
         playedInShuffle: curr ? [curr.id] : [],
@@ -1401,14 +1433,14 @@ const store = create<PlayerState>((set, get) => ({
       return;
     }
 
-    if (nextShuffle === 'smart') {
+    if (mode === 'smart') {
       const source = state.originalQueue.length > 0 ? state.originalQueue : state.queue;
-      const baseTracks = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+      const baseTracks = deduplicateTracks(source.filter((t: any) => !isSmartOrInjectedTrack(t)));
       const curr = state.currentTrack;
       const others = shuffleTracks(baseTracks.filter((t) => t.id !== curr?.id), lastPlayedAt);
       const shuffledQueue = curr ? [curr, ...others] : others;
       set({
-        shuffleMode: nextShuffle,
+        shuffleMode: 'smart',
         isShuffle: true,
         shuffleVersion: state.shuffleVersion + 1,
         playedInShuffle: curr ? [curr.id] : [],

@@ -14,7 +14,7 @@ import {
   SpotifyBadgeIcon,
 } from '../icons/SpotifyNativeIcons';
 import { ClockIcon } from '../icons/SpotifyIcons';
-import { usePlayerStore, matchTrackId, findTrackIndexInQueue } from '../../store/usePlayerStore';
+import { usePlayerStore, matchTrackId, findTrackIndexInQueue, isSmartOrInjectedTrack } from '../../store/usePlayerStore';
 import { useShallow } from 'zustand/react/shallow';
 import { useUIStore } from '../../store/useUIStore';
 import { showGlobalToast } from '../../utils/globalToast';
@@ -22,7 +22,6 @@ import { isFollowingArtist, toggleFollowArtist } from '../../utils/artistFollow'
 import { useSpotifyDataStore } from '../../store/useSpotifyDataStore';
 import { useSpotifreeMixes, refreshSpotifreeMixes } from '../../services/spotifreeMixes';
 import { formatDuration, stripHtml } from '../../utils/formatters';
-import { shuffleTracks } from '../../utils/shuffleOrder';
 import { resolveVibrantColor, extractDominantColorFromImage } from '../../utils/spotifyColor';
 import { getSavedCustomTracks, saveCustomTrackToStorage, saveCustomLikedSong, removeCustomLikedSong, getCustomLikedSongs, getRemovedTrackIdsForPlaylist } from '../../utils/userStorage';
 import { audioEngine } from '../../services/audioEngine';
@@ -555,7 +554,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
       const pState = usePlayerStore.getState();
       if (pState.isShuffle || pState.shuffleMode !== 'off') {
         const source = pState.originalQueue.length > 0 ? pState.originalQueue : pState.queue;
-        const cleanQueue = deduplicateTracks(source.filter((t: any) => !t.isSmartRecommendation));
+        const cleanQueue = deduplicateTracks(source.filter((t: any) => !isSmartOrInjectedTrack(t)));
         usePlayerStore.setState({
           shuffleMode: 'off',
           isShuffle: false,
@@ -563,6 +562,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
           playedInShuffle: [],
           preselectedNextTrackId: null,
           queue: cleanQueue,
+          originalQueue: cleanQueue,
         });
       }
 
@@ -1518,19 +1518,16 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
     const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
     let startTrack: Track;
-    let sequentialQueue: Track[];
     if (isShuffleActive && tracksWithPlaylistId.length > 1) {
       const rndIdx = Math.floor(Math.random() * tracksWithPlaylistId.length);
       startTrack = tracksWithPlaylistId[rndIdx];
-      const remaining = tracksWithPlaylistId.filter((t) => t.id !== startTrack.id && !matchTrackId(t.id, startTrack.id));
-      sequentialQueue = [startTrack, ...shuffleTracks(remaining)];
     } else {
       startTrack = tracksWithPlaylistId[0];
-      sequentialQueue = tracksWithPlaylistId;
     }
-    playTrack(startTrack, sequentialQueue, playlist.id);
+    // Pass clean un-shuffled playlist tracks as context so originalQueue is preserved for toggling shuffle off
+    playTrack(startTrack, tracksWithPlaylistId, playlist.id);
     if (shuffleMode === 'smart') {
-      usePlayerStore.getState().populateSmartShuffleRecommendations(sequentialQueue);
+      usePlayerStore.getState().populateSmartShuffleRecommendations(tracksWithPlaylistId);
     }
   };
 
