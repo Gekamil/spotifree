@@ -173,6 +173,36 @@ const server = http.createServer(async (req, res) => {
     return res.end(JSON.stringify({ status: 'ok', service: 'Spotifree Cloud Backend', version: '1.0.3', cookiesLoaded: !!process.env.YOUTUBE_COOKIES }));
   }
 
+  // 1.05 Geolocation & Preferred Locale Detection
+  if (pathname === '/api/locale') {
+    setCorsHeaders(res);
+    const country = (
+      req.headers['x-vercel-ip-country'] ||
+      req.headers['cf-ipcountry'] ||
+      req.headers['x-country-code'] ||
+      req.headers['geoip-country-code'] ||
+      ''
+    ).toString().toUpperCase();
+
+    const acceptLang = (req.headers['accept-language'] || '').toLowerCase();
+    const spanishCountries = [
+      'ES', 'MX', 'AR', 'CO', 'CL', 'PE', 'VE', 'EC', 'GT', 'CU',
+      'BO', 'DO', 'HN', 'PY', 'SV', 'NI', 'CR', 'PA', 'UY', 'PR', 'GQ'
+    ];
+
+    const isSpanishCountry = spanishCountries.includes(country);
+    const isSpanishLanguage = acceptLang.startsWith('es') || /\bes[-,;]/.test(acceptLang);
+    const detectedLanguage = isSpanishCountry || isSpanishLanguage ? 'es' : 'en';
+
+    res.setHeader('Content-Type', 'application/json');
+    res.statusCode = 200;
+    return res.end(JSON.stringify({
+      country: country || null,
+      acceptLanguage: acceptLang || null,
+      detectedLanguage,
+    }));
+  }
+
   // 1.1 Discord RPC Bridge Endpoints
   if (pathname === '/api/discord/status' && req.method === 'GET') {
     res.setHeader('Content-Type', 'application/json');

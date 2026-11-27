@@ -7,7 +7,7 @@ import { initDomTranslator } from './utils/domTranslator';
 import { initNativeMedia } from './services/nativeMedia';
 import { initNativeAudioFx } from './services/nativeAudioFx';
 import { startSettingsSync, SETTINGS_SYNCED_EVENT } from './services/settingsSync';
-import { useLanguageStore } from './utils/i18n';
+import { useLanguageStore, initAutoLanguageDetection } from './utils/i18n';
 import { EQ_CHANGED_EVENT } from './utils/eqSettings';
 import { audioEngine } from './services/audioEngine';
 
@@ -18,6 +18,7 @@ if (typeof window !== 'undefined') {
 
 // Whole-interface English/Spanish switch (Settings → Language)
 initDomTranslator();
+initAutoLanguageDetection();
 // APK: Android Auto, playback notification, lock screen and car/Bluetooth controls
 initNativeMedia();
 // APK: real equalizer / DJ filters on the phone's audio output

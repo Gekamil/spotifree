@@ -163,32 +163,150 @@ export const TRANSLATIONS = {
 
 export type TranslationKey = keyof typeof TRANSLATIONS.es;
 
+export const SPANISH_TIMEZONES = [
+  'Europe/Madrid',
+  'Atlantic/Canary',
+  'Europe/Ceuta',
+  'America/Mexico_City',
+  'America/Cancun',
+  'America/Merida',
+  'America/Monterrey',
+  'America/Mazatlan',
+  'America/Chihuahua',
+  'America/Hermosillo',
+  'America/Tijuana',
+  'America/Matamoros',
+  'America/Ojinaga',
+  'America/Bahia_Banderas',
+  'America/Bogota',
+  'America/Buenos_Aires',
+  'America/Argentina',
+  'America/Santiago',
+  'Pacific/Easter',
+  'America/Lima',
+  'America/Caracas',
+  'America/Guayaquil',
+  'Pacific/Galapagos',
+  'America/Montevideo',
+  'America/Asuncion',
+  'America/La_Paz',
+  'America/Santo_Domingo',
+  'America/Havana',
+  'America/Guatemala',
+  'America/Tegucigalpa',
+  'America/El_Salvador',
+  'America/Managua',
+  'America/Costa_Rica',
+  'America/Panama',
+  'America/Puerto_Rico',
+  'Africa/Malabo',
+];
+
+export function isSpanishTimeZone(tz?: string): boolean {
+  if (!tz) return false;
+  const lower = tz.toLowerCase();
+  return SPANISH_TIMEZONES.some((stz) => lower.startsWith(stz.toLowerCase()));
+}
+
+export function isSpanishLocale(localeStr?: string): boolean {
+  if (!localeStr) return false;
+  const clean = localeStr.trim().toLowerCase();
+  return clean === 'es' || clean.startsWith('es-') || clean.startsWith('es_');
+}
+
+export function detectUserLanguage(): Language {
+  if (typeof window === 'undefined') return 'es';
+
+  // 1. If user previously chose a language manually, respect it
+  try {
+    const isManual = window.localStorage.getItem('spotifree_language_manual') === 'true';
+    if (isManual) {
+      const saved = window.localStorage.getItem('spotifree_language');
+      if (saved === 'en' || saved === 'es') return saved;
+      if (saved && saved.startsWith('en')) return 'en';
+    }
+  } catch {}
+
+  // 2. Browser preferred languages
+  let primaryLang = '';
+  const allLanguages: string[] = [];
+  try {
+    if (Array.isArray(navigator.languages) && navigator.languages.length > 0) {
+      for (const l of navigator.languages) {
+        if (l) allLanguages.push(l.trim().toLowerCase());
+      }
+      primaryLang = allLanguages[0] || '';
+    } else if (navigator.language) {
+      primaryLang = navigator.language.trim().toLowerCase();
+      allLanguages.push(primaryLang);
+    }
+  } catch {}
+
+  // 3. User geographic timezone
+  let userTimeZone = '';
+  try {
+    userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch {}
+
+  const inSpanishZone = isSpanishTimeZone(userTimeZone);
+  const speaksSpanish = allLanguages.some((l) => isSpanishLocale(l));
+
+  // If user is located in a Spanish-speaking region or uses Spanish in browser:
+  if (inSpanishZone || isSpanishLocale(primaryLang) || speaksSpanish) {
+    return 'es';
+  }
+
+  // Universal international default for all other regions (US, UK, Europe, Asia, etc.)
+  return 'en';
+}
+
 interface LanguageStore {
   language: Language;
-  setLanguage: (lang: Language) => void;
+  setLanguage: (lang: Language, isManual?: boolean) => void;
 }
 
 export const useLanguageStore = create<LanguageStore>((set) => {
-  let initial: Language = 'es';
-  if (typeof window !== 'undefined') {
-    try {
-      const saved = window.localStorage.getItem('spotifree_language');
-      if (saved === 'en' || saved === 'es') initial = saved;
-      else if (saved && saved.startsWith('en')) initial = 'en';
-    } catch {}
-  }
+  const initial: Language = detectUserLanguage();
   return {
     language: initial,
-    setLanguage: (lang) => {
+    setLanguage: (lang: Language, isManual = true) => {
       if (typeof window !== 'undefined') {
         try {
           window.localStorage.setItem('spotifree_language', lang);
+          if (isManual) {
+            window.localStorage.setItem('spotifree_language_manual', 'true');
+          }
         } catch {}
       }
       set({ language: lang });
     },
   };
 });
+
+export function initAutoLanguageDetection(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    if (window.localStorage.getItem('spotifree_language_manual') === 'true') return;
+  } catch {}
+
+  // Non-blocking query to backend locale endpoint to check IP headers (Vercel, Cloudflare, proxies)
+  fetch('/api/locale')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((data) => {
+      if (!data || !data.detectedLanguage) return;
+      try {
+        if (window.localStorage.getItem('spotifree_language_manual') === 'true') return;
+      } catch {}
+
+      const current = useLanguageStore.getState().language;
+      const target: Language = data.detectedLanguage === 'es' ? 'es' : 'en';
+      if (current !== target) {
+        useLanguageStore.getState().setLanguage(target, false);
+      }
+    })
+    .catch(() => {});
+}
 
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
   const lang = useLanguageStore.getState().language;
