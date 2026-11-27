@@ -122,6 +122,60 @@ export async function resolveSpotifyPlaylist(playlistId, { cookie = '', token = 
     }
   }
 
+  // Live Dynamic Charts (Top 50 España, Top 50 Global, Virales)
+  if (cleanId === 'sf-trend-spain' || cleanId === 'sf-trend-global' || cleanId === 'sf-trend-viral') {
+    const dzChartId = cleanId === 'sf-trend-spain'
+      ? '1116189381'
+      : cleanId === 'sf-trend-global'
+        ? '3155776882'
+        : '1313621765';
+    try {
+      const dzRes = await fetch(`https://api.deezer.com/playlist/${dzChartId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+      });
+      if (dzRes.ok) {
+        const data = await dzRes.json();
+        if (Array.isArray(data?.tracks?.data) && data.tracks.data.length > 0) {
+          const chartName = cleanId === 'sf-trend-spain' ? 'Top 50 España' : cleanId === 'sf-trend-global' ? 'Top 50 Global' : 'Virales España';
+          const chartDesc = cleanId === 'sf-trend-spain'
+            ? 'Los mayores éxitos y números 1 en España hoy, actualizados a diario.'
+            : 'Los 50 temas más escuchados del planeta hoy.';
+          const chartCover = toHDImage(data.picture_xl || data.picture_big || data.picture_medium || data.picture);
+          const tracks = data.tracks.data.map((t, idx) => ({
+            id: `dz-${t.id}`,
+            name: t.title || t.title_short,
+            artists: [{ id: `art-${t.artist?.id || idx}`, name: t.artist?.name || 'Artista' }],
+            album: {
+              id: cleanId,
+              name: chartName,
+              images: t.album?.cover_big ? [{ url: toHDImage(t.album.cover_big) }] : (chartCover ? [{ url: chartCover }] : []),
+            },
+            duration_ms: (t.duration || 180) * 1000,
+            preview_url: null,
+            added_at: 'Hoy',
+          }));
+
+          const resolvedChart = {
+            id: cleanId,
+            name: chartName,
+            description: chartDesc,
+            type: 'playlist',
+            images: chartCover ? [{ url: chartCover }] : [],
+            owner: { display_name: 'Spotifree Charts', id: 'spotifree-charts' },
+            color: cleanId === 'sf-trend-spain' ? '#e63946' : '#2a9d8f',
+            tracks: {
+              total: tracks.length,
+              items: tracks,
+            },
+            _cachedAt: Date.now(),
+          };
+          MEMORY_PLAYLIST_CACHE.set(cleanId, resolvedChart);
+          return resolvedChart;
+        }
+      }
+    } catch {}
+  }
+
   // Deezer album direct fast-path
   if (cleanId.startsWith('alb-') || cleanId.startsWith('album-')) {
     const rawDzId = cleanId.replace(/^(alb-|album-)/, '');

@@ -574,6 +574,14 @@ export async function syncSpotifreeAccount(
     updatedAt: Date.now(),
   } as SpotifreeAccount;
 
+  try {
+    const localStatsExport = useStatsStore.getState().getExportableStats();
+    if (localStatsExport.totalSeconds > 0) {
+      if (!merged.stats) (merged as any).stats = {};
+      (merged as any).stats.listeningStats = localStatsExport;
+    }
+  } catch {}
+
   // 0. Persist synchronously to localStorage BEFORE async network Firestore save
   // so swiping/closing the Android APK right after saving never loses changes
   saveCurrentSpotifreeAccount(merged);
@@ -607,6 +615,26 @@ export async function syncSpotifreeAccount(
   return merged;
 }
 
+let statsPushTimer: any = null;
+export function scheduleCloudStatsSync(): void {
+  if (statsPushTimer) return;
+  statsPushTimer = setTimeout(() => {
+    statsPushTimer = null;
+    const current = getSavedSpotifreeAccount();
+    if (!current?.uid) return;
+    const statsExport = useStatsStore.getState().getExportableStats();
+    if (statsExport.totalSeconds > 0) {
+      void syncSpotifreeAccount({
+        stats: { listeningStats: statsExport },
+      });
+    }
+  }, 8000);
+}
+
+if (typeof window !== 'undefined') {
+  (window as any).__spotifree_syncStats = scheduleCloudStatsSync;
+}
+
 /**
  * Pushes account data into live React stores (Spotify Store, Player Store, Library)
  * and ensures any cloud-synced Spotify cookie and custom profile are applied.
@@ -627,6 +655,9 @@ export function applyAccountToAppStores(acc: SpotifreeAccount): void {
   setActiveUserId(userId);
   try {
     useStatsStore.getState().loadStatsForUser(userId);
+    if (st.listeningStats) {
+      useStatsStore.getState().syncWithCloudStats(st.listeningStats);
+    }
   } catch {}
   try {
     useLabsStore.getState().loadTasteKeysForUser(userId);

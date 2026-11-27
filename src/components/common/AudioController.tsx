@@ -1,4 +1,6 @@
 import React, { useEffect, useRef } from 'react';
+import { App as CapApp } from '@capacitor/app';
+import { Capacitor } from '@capacitor/core';
 import { usePlayerStore, registerMediaSessionHandlers } from '../../store/usePlayerStore';
 import { audioEngine } from '../../services/audioEngine';
 
@@ -79,6 +81,63 @@ export const AudioController: React.FC = () => {
   // 4. Ensure MediaSession handlers are registered without destructive cleanup
   useEffect(() => {
     registerMediaSessionHandlers();
+  }, []);
+
+  // 5. Automatic recovery from phone call & car audio focus interruptions
+  useEffect(() => {
+    let removeCapAppListener: (() => void) | null = null;
+
+    const handleResumeFromInterruption = () => {
+      if (audioEngine.wasPlayingBeforeInterruption) {
+        setTimeout(() => {
+          audioEngine.recoverFromSystemInterruption();
+        }, 400);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleResumeFromInterruption);
+      window.addEventListener('pageshow', handleResumeFromInterruption);
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) {
+          handleResumeFromInterruption();
+        }
+      });
+    }
+
+    try {
+      if (Capacitor.isPluginAvailable('App')) {
+        CapApp.addListener('appStateChange', ({ isActive }) => {
+          if (!isActive) {
+            if (usePlayerStore.getState().isPlaying) {
+              audioEngine.markInterruptedBySystem();
+            }
+          } else {
+            handleResumeFromInterruption();
+          }
+        }).then((h) => {
+          removeCapAppListener = () => h.remove();
+        }).catch(() => {});
+      }
+    } catch {}
+
+    const interval = setInterval(() => {
+      if (audioEngine.wasPlayingBeforeInterruption) {
+        const timeSince = Date.now() - audioEngine.interruptionTimestamp;
+        if (timeSince > 2500) {
+          audioEngine.recoverFromSystemInterruption();
+        }
+      }
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      removeCapAppListener?.();
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleResumeFromInterruption);
+        window.removeEventListener('pageshow', handleResumeFromInterruption);
+      }
+    };
   }, []);
 
   return null;

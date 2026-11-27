@@ -40,6 +40,10 @@ interface StatsState {
   getTopTracks: (limit?: number) => TrackStat[];
   /** Load and activate stats for a specific userId (call on account switch/init) */
   loadStatsForUser: (userId: string) => void;
+  /** Sync and merge cloud stats with local stats without overwriting with zeros */
+  syncWithCloudStats: (cloudStats?: any) => void;
+  /** Extract clean, bounded stats payload for Firestore cloud sync */
+  getExportableStats: () => Record<string, any>;
   /** Reset stats in memory and localStorage for current user (call on logout) */
   resetStats: () => void;
 }
@@ -137,6 +141,110 @@ export const useStatsStore = create<StatsState>((set, get) => ({
     });
   },
 
+  syncWithCloudStats: (cloudStats?: any) => {
+    if (!cloudStats || typeof cloudStats !== 'object') return;
+    set((state) => {
+      const mergedTotalSeconds = Math.max(state.totalSeconds || 0, Number(cloudStats.totalSeconds || 0));
+      const mergedTotalTracksPlayed = Math.max(state.totalTracksPlayed || 0, Number(cloudStats.totalTracksPlayed || 0));
+
+      const mergedArtists: Record<string, ArtistStat> = { ...(cloudStats.artists || {}), ...state.artists };
+      if (cloudStats.artists && typeof cloudStats.artists === 'object') {
+        for (const [key, cArt] of Object.entries(cloudStats.artists as Record<string, any>)) {
+          const lArt = state.artists[key];
+          if (lArt && cArt) {
+            mergedArtists[key] = {
+              ...lArt,
+              plays: Math.max(lArt.plays || 0, Number(cArt.plays || 0)),
+              minutes: Math.max(lArt.minutes || 0, Number(cArt.minutes || 0)),
+              image: lArt.image || cArt.image || '',
+            };
+          } else if (cArt) {
+            mergedArtists[key] = {
+              id: cArt.id || key,
+              name: cArt.name || key,
+              image: cArt.image || '',
+              plays: Number(cArt.plays || 0),
+              minutes: Number(cArt.minutes || 0),
+            };
+          }
+        }
+      }
+
+      const mergedTracks: Record<string, TrackStat> = { ...(cloudStats.tracks || {}), ...state.tracks };
+      if (cloudStats.tracks && typeof cloudStats.tracks === 'object') {
+        for (const [key, cTrk] of Object.entries(cloudStats.tracks as Record<string, any>)) {
+          const lTrk = state.tracks[key];
+          if (lTrk && cTrk) {
+            mergedTracks[key] = {
+              ...lTrk,
+              plays: Math.max(lTrk.plays || 0, Number(cTrk.plays || 0)),
+              lastPlayedAt: Math.max(lTrk.lastPlayedAt || 0, Number(cTrk.lastPlayedAt || 0)),
+              image: lTrk.image || cTrk.image || '',
+            };
+          } else if (cTrk) {
+            mergedTracks[key] = {
+              id: cTrk.id || key,
+              name: cTrk.name || 'Cancion',
+              artist: cTrk.artist || 'Artista',
+              image: cTrk.image || '',
+              plays: Number(cTrk.plays || 0),
+              lastPlayedAt: Number(cTrk.lastPlayedAt || 0),
+            };
+          }
+        }
+      }
+
+      const mergedDaily: Record<string, number> = { ...(cloudStats.daily || {}), ...state.daily };
+      if (cloudStats.daily && typeof cloudStats.daily === 'object') {
+        for (const [day, secs] of Object.entries(cloudStats.daily as Record<string, number>)) {
+          mergedDaily[day] = Math.max(state.daily[day] || 0, Number(secs || 0));
+        }
+      }
+
+      const mergedHourly = (state.hourly || new Array(24).fill(0)).map((val, idx) => {
+        const cVal = Array.isArray(cloudStats.hourly) ? Number(cloudStats.hourly[idx] || 0) : 0;
+        return Math.max(val || 0, cVal);
+      });
+
+      const next = {
+        totalSeconds: mergedTotalSeconds,
+        totalTracksPlayed: mergedTotalTracksPlayed,
+        artists: mergedArtists,
+        tracks: mergedTracks,
+        daily: mergedDaily,
+        hourly: mergedHourly,
+        audioPersonality: state.audioPersonality !== 'Oyente Musical' ? state.audioPersonality : (cloudStats.audioPersonality || state.audioPersonality),
+      };
+
+      persistStats({ ...state, ...next }, state.currentUserId);
+      try {
+        (window as any).__spotifree_syncStats?.();
+      } catch {}
+      return next;
+    });
+  },
+
+  getExportableStats: () => {
+    const s = get();
+    const topArtistEntries = Object.entries(s.artists || {})
+      .sort(([, a], [, b]) => (b.plays || 0) - (a.plays || 0))
+      .slice(0, 100);
+    const topTrackEntries = Object.entries(s.tracks || {})
+      .sort(([, a], [, b]) => (b.plays || 0) - (a.plays || 0))
+      .slice(0, 100);
+
+    return {
+      totalSeconds: s.totalSeconds || 0,
+      totalTracksPlayed: s.totalTracksPlayed || 0,
+      artists: Object.fromEntries(topArtistEntries),
+      tracks: Object.fromEntries(topTrackEntries),
+      daily: s.daily || {},
+      hourly: s.hourly || new Array(24).fill(0),
+      audioPersonality: s.audioPersonality || 'Oyente Musical',
+      updatedAt: Date.now(),
+    };
+  },
+
   resetStats: () => {
     set({
       currentUserId: null,
@@ -193,6 +301,11 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       if (newSec % 10 === 0) {
         persistStats({ ...state, ...updated }, state.currentUserId);
       }
+      if (newSec % 30 === 0) {
+        try {
+          (window as any).__spotifree_syncStats?.();
+        } catch {}
+      }
 
       return updated;
     });
@@ -241,6 +354,9 @@ export const useStatsStore = create<StatsState>((set, get) => ({
       };
 
       persistStats({ ...state, ...next }, state.currentUserId);
+      try {
+        (window as any).__spotifree_syncStats?.();
+      } catch {}
       return next;
     });
   },

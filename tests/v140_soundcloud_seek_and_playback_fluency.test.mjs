@@ -82,7 +82,7 @@ describe('Spotifree v1.4 Playback Fluency, Seek Stability, and Overlap Preventio
     const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
     const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
 
-    assert.ok(['1.4.0', '1.5.0'].includes(pkg.version));
+    assert.ok(['1.4.0', '1.5.0', '1.6.0'].includes(pkg.version));
     assert.ok(/export const APP_VERSION = '1\.[4-9]+';/.test(changelog));
     assert.ok(changelog.includes("version: '1.4'"));
   });

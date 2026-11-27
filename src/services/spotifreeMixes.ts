@@ -916,17 +916,101 @@ export function makeGeometricCoverSvg(title: string, color: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-export type CoverStyle = 'banner' | 'badge' | 'collage' | 'geometric' | 'artist' | 'single';
+export function makeRadioCoverSvg(title: string, color: string = '#70a6f4', images: string[] = []): string {
+  const S = 600;
+  const cleanColor = color || '#70a6f4';
+  const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const validImages = (images || []).filter((u) => u && !isPlaceholderOrAvatar(u));
+  const imgCenter = validImages[0] || resolveArtistPhoto(title);
+  const imgLeft = validImages[1] || validImages[0] || resolveArtistPhoto(title);
+  const imgRight = validImages[2] || validImages[0] || resolveArtistPhoto(title);
+  const fontSize = cleanTitle.length > 22 ? 34 : cleanTitle.length > 16 ? 40 : 46;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <defs>
+      <clipPath id="clipLeft"><circle cx="170" cy="285" r="110"/></clipPath>
+      <clipPath id="clipRight"><circle cx="430" cy="285" r="110"/></clipPath>
+      <clipPath id="clipCenter"><circle cx="300" cy="265" r="145"/></clipPath>
+    </defs>
+    <rect width="${S}" height="${S}" fill="${cleanColor}"/>
+    <circle cx="48" cy="48" r="18" fill="#000000"/>
+    <path d="M 40 43 Q 48 39 56 42" stroke="${cleanColor}" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+    <path d="M 41 48 Q 48 45 55 47" stroke="${cleanColor}" stroke-width="2.3" stroke-linecap="round" fill="none"/>
+    <path d="M 42 53 Q 48 51 54 52" stroke="${cleanColor}" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+    <text x="${S - 42}" y="56" text-anchor="end" fill="#000000" font-family="'SpotifyMixUITitle', 'Circular', -apple-system, sans-serif" font-weight="900" font-size="28" letter-spacing="2">RADIO</text>
+    <circle cx="170" cy="285" r="112" fill="#ffffff"/>
+    <g clip-path="url(#clipLeft)">
+      ${imgLeft ? `<image href="${imgLeft}" x="60" y="175" width="220" height="220" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="60" y="175" width="220" height="220" fill="#303030"/>`}
+    </g>
+    <circle cx="170" cy="285" r="110" fill="none" stroke="#ffffff" stroke-width="4"/>
+    <circle cx="430" cy="285" r="112" fill="#ffffff"/>
+    <g clip-path="url(#clipRight)">
+      ${imgRight ? `<image href="${imgRight}" x="320" y="175" width="220" height="220" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="320" y="175" width="220" height="220" fill="#252525"/>`}
+    </g>
+    <circle cx="430" cy="285" r="110" fill="none" stroke="#ffffff" stroke-width="4"/>
+    <circle cx="300" cy="265" r="148" fill="#ffffff"/>
+    <g clip-path="url(#clipCenter)">
+      ${imgCenter ? `<image href="${imgCenter}" x="155" y="120" width="290" height="290" preserveAspectRatio="xMidYMid slice"/>` : `<rect x="155" y="120" width="290" height="290" fill="#181818"/>`}
+    </g>
+    <circle cx="300" cy="265" r="145" fill="none" stroke="#ffffff" stroke-width="5"/>
+    <text x="38" y="${S - 42}" fill="#0a0a0a" font-family="'SpotifyMixUITitle', 'Circular', -apple-system, sans-serif" font-weight="900" font-size="${fontSize}" letter-spacing="-1">${cleanTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export function makeVinylCoverSvg(title: string, color: string = '#1ed760', images: string[] = []): string {
+  const S = 600;
+  const cleanColor = color || '#1ed760';
+  const cleanTitle = title.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const validImages = (images || []).filter((u) => u && !isPlaceholderOrAvatar(u));
+  const imgUrl = validImages[0] || resolveArtistPhoto(title);
+  const fontSize = cleanTitle.length > 20 ? 32 : cleanTitle.length > 15 ? 38 : 44;
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
+    <defs>
+      <radialGradient id="vinylBg" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#1c1c1c"/>
+        <stop offset="60%" stop-color="#0f0f0f"/>
+        <stop offset="100%" stop-color="#050505"/>
+      </radialGradient>
+      <clipPath id="vinylHole"><circle cx="300" cy="270" r="105"/></clipPath>
+    </defs>
+    <rect width="${S}" height="${S}" fill="url(#vinylBg)"/>
+    <circle cx="300" cy="270" r="245" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+    <circle cx="300" cy="270" r="225" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="1.2"/>
+    <circle cx="300" cy="270" r="200" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+    <circle cx="300" cy="270" r="175" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1.2"/>
+    <circle cx="300" cy="270" r="145" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="1.5"/>
+    <circle cx="300" cy="270" r="120" fill="none" stroke="${cleanColor}" stroke-width="2.5" opacity="0.6"/>
+    <circle cx="300" cy="270" r="107" fill="${cleanColor}"/>
+    <g clip-path="url(#vinylHole)">
+      ${imgUrl ? `<image href="${imgUrl}" x="195" y="165" width="210" height="210" preserveAspectRatio="xMidYMid slice"/>` : ''}
+    </g>
+    <circle cx="300" cy="270" r="18" fill="#000000"/>
+    <circle cx="300" cy="270" r="6" fill="#444444"/>
+    <circle cx="48" cy="48" r="16" fill="rgba(255,255,255,0.92)"/>
+    <rect x="41" y="42" width="2" height="12" fill="#000000"/>
+    <rect x="47" y="39" width="2" height="18" fill="#000000"/>
+    <rect x="53" y="41" width="2" height="14" fill="#000000"/>
+    <text x="74" y="54" fill="#ffffff" font-family="'SpotifyMixUI', sans-serif" font-weight="700" font-size="14" letter-spacing="1">SPOTIFREE VINYL</text>
+    <text x="38" y="${S - 42}" fill="#ffffff" font-family="'SpotifyMixUITitle', 'Circular', sans-serif" font-weight="900" font-size="${fontSize}" letter-spacing="-0.5">${cleanTitle}</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+export type CoverStyle = 'banner' | 'badge' | 'collage' | 'geometric' | 'artist' | 'single' | 'radio' | 'vinyl' | 'editorial' | 'duotone';
 
 async function makeCover(title: string, style: CoverStyle, images: string[], accent?: string): Promise<string | null> {
-  const normStyle: 'banner' | 'badge' | 'collage' | 'geometric' =
-    style === 'artist' ? 'badge' : style === 'single' ? 'banner' : style;
+  const normStyle: 'banner' | 'badge' | 'collage' | 'geometric' | 'radio' | 'vinyl' =
+    style === 'artist' ? 'badge' : style === 'single' ? 'banner' : style === 'editorial' ? 'banner' : style === 'duotone' ? 'geometric' : style;
 
   const hue = hash(title) % 360;
   const defaultColor = `hsl(${hue}, 68%, 38%)`;
   let baseColor = accent || defaultColor;
 
   if (typeof document === 'undefined') {
+    if (normStyle === 'radio') return makeRadioCoverSvg(title, '#70a6f4', images);
+    if (normStyle === 'vinyl') return makeVinylCoverSvg(title, baseColor, images);
     if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
     if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
     if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
@@ -939,6 +1023,8 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
     c.width = c.height = S;
     const ctx = c.getContext('2d');
     if (!ctx) {
+      if (normStyle === 'radio') return makeRadioCoverSvg(title, '#70a6f4', images);
+      if (normStyle === 'vinyl') return makeVinylCoverSvg(title, baseColor, images);
       if (normStyle === 'banner') return makeBannerCoverSvg(title, baseColor, images);
       if (normStyle === 'badge') return makeEraCoverSvg(title, baseColor, title, images, 'Spotifree Mix');
       if (normStyle === 'collage') return makeCollageCoverSvg(title, baseColor, images);
@@ -950,6 +1036,175 @@ async function makeCover(title: string, style: CoverStyle, images: string[], acc
         const loaded = await loadImg(images[0]);
         if (loaded) baseColor = avgColor(loaded);
       } catch {}
+    }
+
+    // 0. STYLE: RADIO (Screenshot 3 classic Spotify Radio: blue background, Spotify logo top-left, RADIO top-right, 3 circles, bottom artist text)
+    if (normStyle === 'radio') {
+      const radioBg = '#70a6f4';
+      ctx.fillStyle = radioBg;
+      ctx.fillRect(0, 0, S, S);
+
+      ctx.save();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(42, 42, 16, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = radioBg;
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(40, 47, 10, -0.6 * Math.PI, -0.1 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(39, 49, 7.5, -0.6 * Math.PI, -0.1 * Math.PI);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(38, 51, 5, -0.6 * Math.PI, -0.1 * Math.PI);
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.save();
+      ctx.font = '900 24px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif';
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'right';
+      ctx.fillText('RADIO', S - 34, 49);
+      ctx.restore();
+
+      const loadedPortraits = await Promise.all([
+        (images[1] ? loadImg(images[1]).catch(() => null) : null),
+        (images[2] ? loadImg(images[2]).catch(() => null) : null),
+        (images[0] ? loadImg(images[0]).catch(() => null) : loadImg(resolveArtistPhoto(title)).catch(() => null)),
+      ]);
+      const leftImg = loadedPortraits[0] || loadedPortraits[2];
+      const rightImg = loadedPortraits[1] || loadedPortraits[2];
+      const centerImg = loadedPortraits[2];
+
+      const cy = S * 0.44;
+      const rFlank = S * 0.19;
+      const rCenter = S * 0.24;
+
+      if (leftImg) {
+        const lx = S * 0.28;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(lx, cy + 10, rFlank, 0, Math.PI * 2);
+        ctx.clip();
+        drawImageAspectCover(ctx, leftImg, lx - rFlank, cy + 10 - rFlank, rFlank * 2, rFlank * 2);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(lx, cy + 10, rFlank + 1, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      if (rightImg) {
+        const rx = S * 0.72;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(rx, cy + 10, rFlank, 0, Math.PI * 2);
+        ctx.clip();
+        drawImageAspectCover(ctx, rightImg, rx - rFlank, cy + 10 - rFlank, rFlank * 2, rFlank * 2);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(rx, cy + 10, rFlank + 1, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      if (centerImg) {
+        const cx = S * 0.50;
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.35)';
+        ctx.shadowBlur = 12;
+        ctx.beginPath();
+        ctx.arc(cx, cy, rCenter + 2, 0, Math.PI * 2);
+        ctx.fillStyle = '#ffffff';
+        ctx.fill();
+        ctx.restore();
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, rCenter, 0, Math.PI * 2);
+        ctx.clip();
+        drawImageAspectCover(ctx, centerImg, cx - rCenter, cy - rCenter, rCenter * 2, rCenter * 2);
+        ctx.restore();
+        ctx.beginPath();
+        ctx.arc(cx, cy, rCenter + 1, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+      }
+
+      ctx.save();
+      const fontSize = title.length > 20 ? 30 : title.length > 14 ? 34 : 38;
+      ctx.font = `900 ${fontSize}px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif`;
+      ctx.fillStyle = '#0a0a0a';
+      const lines = wrapTitle(ctx, title, S - 68);
+      lines.forEach((l, i) => ctx.fillText(l, 34, S - 34 - (lines.length - 1 - i) * (fontSize + 4)));
+      ctx.restore();
+
+      return c.toDataURL('image/jpeg', 0.88);
+    }
+
+    // 0b. STYLE: VINYL
+    if (normStyle === 'vinyl') {
+      const g = ctx.createRadialGradient(S * 0.5, S * 0.44, 20, S * 0.5, S * 0.44, S * 0.55);
+      g.addColorStop(0, '#1c1c1c');
+      g.addColorStop(0.7, '#0f0f0f');
+      g.addColorStop(1, '#050505');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, S, S);
+
+      const cx = S * 0.5;
+      const cy = S * 0.44;
+      const r = S * 0.22;
+
+      for (const rad of [r * 1.8, r * 1.6, r * 1.4, r * 1.2]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, rad, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.07)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, r + 2, 0, Math.PI * 2);
+      ctx.fillStyle = baseColor;
+      ctx.fill();
+
+      let imgLoaded: HTMLImageElement | null = null;
+      try { imgLoaded = await loadImg(images[0] || resolveArtistPhoto(title)); } catch {}
+      if (imgLoaded) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.clip();
+        drawImageAspectCover(ctx, imgLoaded, cx - r, cy - r, r * 2, r * 2);
+        ctx.restore();
+      }
+
+      ctx.beginPath();
+      ctx.arc(cx, cy, 14, 0, Math.PI * 2);
+      ctx.fillStyle = '#000000';
+      ctx.fill();
+
+      ctx.save();
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.font = '700 13px "SpotifyMixUI", system-ui, sans-serif';
+      ctx.fillText('SPOTIFREE VINYL', 34, 46);
+      ctx.restore();
+
+      ctx.save();
+      const fontSize = title.length > 20 ? 28 : title.length > 14 ? 32 : 36;
+      ctx.font = `900 ${fontSize}px "SpotifyMixUITitle", "Montserrat", system-ui, sans-serif`;
+      ctx.fillStyle = '#ffffff';
+      const lines = wrapTitle(ctx, title, S - 68);
+      lines.forEach((l, i) => ctx.fillText(l, 34, S - 34 - (lines.length - 1 - i) * (fontSize + 4)));
+      ctx.restore();
+
+      return c.toDataURL('image/jpeg', 0.88);
     }
 
     // 1. STYLE: BANNER (Daddy Yankee Top Mixes style: foto completa + barra flotante inferior con acento vertical)
@@ -3047,7 +3302,38 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     }
   }
 
-  for (const a of artistPool.slice(0, 15)) {
+  // Also include top artists from listening stats store
+  try {
+    const topStatsArtists = useStatsStore.getState().getTopArtists(30);
+    for (const sa of topStatsArtists) {
+      if (sa?.name && !artistPool.some((a) => norm(a.name) === norm(sa.name))) {
+        artistPool.push({ name: sa.name, score: 8, recent: 8 });
+      }
+    }
+  } catch {}
+
+  // Also include artists from user's playlists
+  try {
+    const userPlaylists = useSpotifyDataStore.getState().playlists || [];
+    for (const pl of userPlaylists.slice(0, 15)) {
+      if (Array.isArray(pl.tracks?.items)) {
+        for (const trk of pl.tracks.items.slice(0, 10)) {
+          const artName = trk?.artists?.[0]?.name;
+          if (artName && !artistPool.some((a) => norm(a.name) === norm(artName))) {
+            artistPool.push({ name: artName, score: 6, recent: 6 });
+          }
+        }
+      }
+    }
+  } catch {}
+
+  // Deterministic daily rotation seed so artists change every day
+  const todayDate = new Date();
+  const dayOfYear = Math.floor((Date.UTC(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate()) - Date.UTC(todayDate.getFullYear(), 0, 0)) / (24 * 3600 * 1000));
+  const dailyArtistSeed = hash(`${todayDate.toISOString().slice(0, 10)}:${dayOfYear}:artist_rotation`);
+  const rotatedPool = shuffle([...artistPool], rng(dailyArtistSeed));
+
+  for (const a of rotatedPool.slice(0, 16)) {
     const d = disc.get(norm(a.name));
     const displayName = d?.artist?.name || a.name;
     const r = rng(hash(`${uid()}:${every(2)}:artist:${a.name}`));
@@ -3067,13 +3353,51 @@ async function buildMixes(): Promise<{ mixes: SpotifreeMix[]; artists: Suggested
     if (items.length < 5) continue;
     const title = `Mix de ${displayName}`;
     if (taken.has(norm(title))) continue;
-    const style: CoverStyle = hash(`${a.name}:${every(2)}`) % 4 === 0 ? 'badge' : 'banner';
+    // Rotate cover styles deterministically per artist and day:
+    const styleHash = Math.abs(hash(`${a.name}:${dayOfYear}`));
+    const availableStyles: CoverStyle[] = ['radio', 'banner', 'badge', 'vinyl', 'banner'];
+    const style: CoverStyle = availableStyles[styleHash % availableStyles.length];
     const artistPic = pictureOf(a.name);
     const songCovers = shuffle(items.map(coverOf).filter(Boolean), r);
     const imgs = [artistPic, ...songCovers].filter((u) => u && !isPlaceholderOrAvatar(u));
     const cover = (await makeCover(title, style, imgs)) || imgs[0] || artistPic || '';
     out.push(mix(`sf-artist-${norm(a.name).replace(/\s+/g, '-')}`, 'artist', title, `${displayName} y artistas parecidos`, items, cover, userName));
   }
+
+  // Mixes inspirados en tus playlists / similares a tus gustos:
+  try {
+    const userPls = (useSpotifyDataStore.getState().playlists || []).filter(
+      (p) => !p.id.includes('collection:tracks') && p.id !== 'liked-songs' && p.type !== 'folder' && (p.tracks?.items?.length || 0) > 0
+    );
+    for (const pl of userPls.slice(0, 4)) {
+      const plTracks = pl.tracks?.items || [];
+      const plArtists = [...new Set(plTracks.map((t) => t.artists?.[0]?.name).filter(Boolean))] as string[];
+      if (plArtists.length === 0) continue;
+      const mixTitle = `Similar a: ${pl.name.slice(0, 24)}`;
+      if (taken.has(norm(mixTitle))) continue;
+
+      const relatedTracks = plArtists.slice(0, 3).flatMap((art) => {
+        const d = disc.get(norm(art));
+        return (d?.related || []).flatMap((r) => r.top.slice(0, 4));
+      });
+      const combinedTracks = dedupe([...plTracks.slice(0, 10), ...relatedTracks], undefined, 10);
+      if (combinedTracks.length < 5) continue;
+
+      const inspiredImgs = combinedTracks.map(coverOf).filter(Boolean);
+      const inspiredCover = (await makeCover(mixTitle, 'radio', inspiredImgs, '#70a6f4')) || pl.images?.[0]?.url || '';
+      out.push(
+        mix(
+          `sf-inspired-${norm(pl.id || pl.name).replace(/\s+/g, '-')}`,
+          'inspired' as any,
+          mixTitle,
+          `Inspirada en tu lista "${pl.name}" con ${plArtists.slice(0, 2).join(', ')} y más`,
+          combinedTracks.slice(0, 35),
+          inspiredCover,
+          userName
+        )
+      );
+    }
+  } catch {}
 
   // SoundCloud Vault playlists: expanded to guaranteed MINIMUM 10 artists
   const vaultArtistNames = [
@@ -3485,8 +3809,9 @@ export function withSpotifreeShelves(
   suggestedArtists: SuggestedArtist[] = []
 ): DynamicShelf[] {
   if (!mixes.length) return dedupeHomeShelves(base);
-  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era' && m.sfKind !== 'genre' && m.sfKind !== 'mood' && m.sfKind !== 'trending').map(cardOf);
+  const made = mixes.filter((m) => m.sfKind !== 'artist' && m.sfKind !== 'soundcloud' && m.sfKind !== 'era' && m.sfKind !== 'genre' && m.sfKind !== 'mood' && m.sfKind !== 'trending' && (m as any).sfKind !== 'inspired').map(cardOf);
   const artists = mixes.filter((m) => m.sfKind === 'artist').map(cardOf);
+  const inspiredMixes = mixes.filter((m) => (m as any).sfKind === 'inspired').map(cardOf);
   const soundcloudMixes = mixes.filter((m) => m.sfKind === 'soundcloud').map(cardOf);
   const eraMixes = mixes.filter((m) => m.sfKind === 'era').map(cardOf);
   const genreMixes = mixes.filter((m) => m.sfKind === 'genre').map(cardOf);
@@ -3494,20 +3819,17 @@ export function withSpotifreeShelves(
   const trendingMixes = mixes.filter((m) => m.sfKind === 'trending').map(cardOf);
   const name = (userName || '').split(' ')[0];
 
-  // Extend Spotify's first "Hecho para / Made for" section, only that one
   const madeForIdx = base.findIndex((s) => s.type === 'made_for' || /hecho para|made for/i.test(`${s.prefix || ''} ${s.title}`));
   let shelves = base.slice();
-  const ours: DynamicShelf[] = [];
 
-  // 1. "Tus mixes principales": Guaranteed 12 cards (3 Eras, 3 Moods, 3 Genres, 3 Artists)
-  const topMixPicks: any[] = [];
-  for (const e of eraMixes.slice(0, 3)) topMixPicks.push(e);
-  for (const m of moodMixes.slice(0, 3)) topMixPicks.push(m);
-  for (const g of genreMixes.slice(0, 3)) topMixPicks.push(g);
-  for (const a of artists.slice(0, 3)) topMixPicks.push(a);
-
-  if (topMixPicks.length >= 6) {
-    ours.push({
+  const shelfTopMixes: DynamicShelf | null = (() => {
+    const topMixPicks: any[] = [];
+    for (const e of eraMixes.slice(0, 3)) topMixPicks.push(e);
+    for (const m of moodMixes.slice(0, 3)) topMixPicks.push(m);
+    for (const g of genreMixes.slice(0, 3)) topMixPicks.push(g);
+    for (const a of artists.slice(0, 3)) topMixPicks.push(a);
+    if (topMixPicks.length < 6) return null;
+    return {
       id: 'sf-top-mixes',
       title: 'Tus mixes principales',
       prefix: 'TUS FAVORITOS',
@@ -3515,54 +3837,67 @@ export function withSpotifreeShelves(
       type: 'mixes',
       cards: topMixPicks,
       hasSeeAll: true,
-    });
+    };
+  })();
+
+  const shelfMadeFor: DynamicShelf | null = made.length > 0 ? {
+    id: 'sf-made-for',
+    title: name ? `Hecho para ${name}` : 'Hecho para ti',
+    subtitle: 'Por Spotifree, con lo que escuchas',
+    type: 'made_for',
+    cards: made,
+    hasSeeAll: true,
+  } : null;
+
+  if (made.length && madeForIdx >= 0) {
+    const s = shelves[madeForIdx];
+    shelves[madeForIdx] = { ...s, cards: [...made, ...s.cards], hasSeeAll: true };
   }
 
-  if (made.length) {
-    if (madeForIdx >= 0) {
-      const s = shelves[madeForIdx];
-      shelves[madeForIdx] = { ...s, cards: [...made, ...s.cards], hasSeeAll: true };
-    } else {
-      ours.push({ id: 'sf-made-for', title: name ? `Hecho para ${name}` : 'Hecho para ti', subtitle: 'Por Spotifree, con lo que escuchas', type: 'made_for', cards: made, hasSeeAll: true });
-    }
-  }
+  const shelfInspired: DynamicShelf | null = inspiredMixes.length > 0 ? {
+    id: 'sf-inspired-shelves',
+    title: 'Inspiradas en tus playlists',
+    prefix: 'SIMILARES A TUS GUSTOS',
+    subtitle: 'Recomendaciones basadas en las listas de tu biblioteca',
+    type: 'mixes',
+    cards: inspiredMixes,
+    hasSeeAll: true,
+  } : null;
 
-  if (artists.length) {
-    ours.push({ id: 'sf-artist-mixes', title: 'Tus artistas, en mix', type: 'mixes', cards: artists, hasSeeAll: true });
-  }
+  const shelfArtists: DynamicShelf | null = artists.length > 0 ? {
+    id: 'sf-artist-mixes',
+    title: 'Tus artistas, en mix',
+    type: 'mixes',
+    cards: artists,
+    hasSeeAll: true,
+  } : null;
 
-  if (moodMixes.length) {
-    ours.push({
-      id: 'sf-mood-mixes',
-      title: 'Estados de ánimo y Momentos',
-      prefix: 'PARA CADA MOMENTO',
-      subtitle: 'Playlists diseñadas según tu energía y actividad',
-      type: 'mixes',
-      cards: moodMixes,
-      hasSeeAll: true,
-    });
-  }
+  const shelfMoods: DynamicShelf | null = moodMixes.length > 0 ? {
+    id: 'sf-mood-mixes',
+    title: 'Estados de ánimo y Momentos',
+    prefix: 'PARA CADA MOMENTO',
+    subtitle: 'Playlists diseñadas según tu energía y actividad',
+    type: 'mixes',
+    cards: moodMixes,
+    hasSeeAll: true,
+  } : null;
 
-  // Playlists por género
-  if (genreMixes.length) {
-    ours.push({
-      id: 'sf-genre-mixes',
-      title: 'Playlists por género', // title: 'Playlists genéricas'
-      prefix: 'GÉNEROS Y ESTILOS', // prefix: 'GRANDES GÉNEROS'
-      subtitle: 'Grandes éxitos de Rock, Pop, Urbano, Electrónica y más',
-      type: 'mixes',
-      cards: genreMixes,
-      hasSeeAll: true,
-    });
-  }
+  const shelfGenres: DynamicShelf | null = genreMixes.length > 0 ? {
+    id: 'sf-genre-mixes',
+    title: 'Playlists por género', // title: 'Playlists genéricas'
+    prefix: 'GÉNEROS Y ESTILOS', // prefix: 'GRANDES GÉNEROS'
+    subtitle: 'Grandes éxitos de Rock, Pop, Urbano, Electrónica y más',
+    type: 'mixes',
+    cards: genreMixes,
+    hasSeeAll: true,
+  } : null;
 
-  // Mixes por época ("Viaje en el tiempo" / Nostalgia de las décadas)
-  if (eraMixes.length) {
+  const shelfEras: DynamicShelf | null = eraMixes.length > 0 ? (() => {
     const eraCycle = Math.floor(Date.now() / (18 * 3600 * 1000));
     const showEraShelf = true;
+    if (!showEraShelf) return null;
     let rotatedCards = eraMixes;
     let shelfTitle = 'Mixes por época';
-    let shelfPrefix = 'VIAJE EN EL TIEMPO';
     const triStep = eraCycle % 3;
     if (triStep === 0) {
       rotatedCards = [
@@ -3583,41 +3918,81 @@ export function withSpotifreeShelves(
       ];
       shelfTitle = 'Clásicos de los 70s y 80s';
     }
-    if (showEraShelf) {
-      ours.push({
-        id: 'sf-era-mixes',
-        title: shelfTitle,
-        prefix: shelfPrefix,
-        subtitle: 'Lo mejor de cada época adaptado a tu estilo',
-        type: 'mixes',
-        cards: rotatedCards,
-        hasSeeAll: true,
-      });
-    }
-  }
-
-  if (trendingMixes.length) {
-    ours.push({
-      id: 'sf-trending-mixes',
-      title: 'Tendencias & Virales del Momento',
-      prefix: 'LO MÁS ESCUCHADO',
-      subtitle: 'Los mayores éxitos en España y el mundo',
+    return {
+      id: 'sf-era-mixes',
+      title: shelfTitle,
+      prefix: 'VIAJE EN EL TIEMPO',
+      subtitle: 'Lo mejor de cada época adaptado a tu estilo',
       type: 'mixes',
-      cards: trendingMixes,
+      cards: rotatedCards,
       hasSeeAll: true,
-    });
+    };
+  })() : null;
+
+  const shelfTrending: DynamicShelf | null = trendingMixes.length > 0 ? {
+    id: 'sf-trending-mixes',
+    title: 'Tendencias & Virales del Momento',
+    prefix: 'LO MÁS ESCUCHADO',
+    subtitle: 'Los mayores éxitos en España y el mundo',
+    type: 'mixes',
+    cards: trendingMixes,
+    hasSeeAll: true,
+  } : null;
+
+  const shelfSoundcloud: DynamicShelf | null = soundcloudMixes.length > 0 ? {
+    id: 'sf-sc-vaults',
+    title: 'Remixes, Slowed e Inéditas · SoundCloud',
+    subtitle: 'Basado en los artistas que más escuchas',
+    type: 'mixes',
+    cards: soundcloudMixes,
+    hasSeeAll: true,
+  } : null;
+
+  // Dynamic daily rotation of shelf layout so Home feels fresh every day:
+  const now = new Date();
+  const dayOfYear = Math.floor((Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) - Date.UTC(now.getFullYear(), 0, 0)) / (24 * 3600 * 1000));
+  const dayCycle = dayOfYear % 3;
+
+  let candidateShelves: (DynamicShelf | null)[] = [];
+  if (dayCycle === 0) {
+    candidateShelves = [
+      shelfTopMixes,
+      madeForIdx < 0 ? shelfMadeFor : null,
+      shelfInspired,
+      shelfArtists,
+      shelfMoods,
+      shelfTrending,
+      shelfGenres,
+      shelfEras,
+      shelfSoundcloud,
+    ];
+  } else if (dayCycle === 1) {
+    candidateShelves = [
+      madeForIdx < 0 ? shelfMadeFor : null,
+      shelfInspired,
+      shelfGenres,
+      shelfArtists,
+      shelfTopMixes,
+      shelfEras,
+      shelfMoods,
+      shelfTrending,
+      shelfSoundcloud,
+    ];
+  } else {
+    candidateShelves = [
+      madeForIdx < 0 ? shelfMadeFor : null,
+      shelfInspired,
+      shelfEras,
+      shelfArtists,
+      shelfMoods,
+      shelfGenres,
+      shelfTrending,
+      shelfTopMixes,
+      shelfSoundcloud,
+    ];
   }
 
-  if (soundcloudMixes.length) {
-    ours.push({
-      id: 'sf-sc-vaults',
-      title: 'Remixes, Slowed e Inéditas · SoundCloud',
-      subtitle: 'Basado en los artistas que más escuchas',
-      type: 'mixes',
-      cards: soundcloudMixes,
-      hasSeeAll: true
-    });
-  }
+  const ours: DynamicShelf[] = candidateShelves.filter(Boolean) as DynamicShelf[];
 
   // Strict Guarantee: EVERY Spotifree shelf must have AT LEAST 9 PLAYLISTS (MINIMO 9)
   const allCardPool = mixes.map(cardOf);

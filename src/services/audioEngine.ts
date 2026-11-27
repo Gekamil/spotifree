@@ -248,6 +248,9 @@ class AudioEngine {
   private activeAudioIndex: 0 | 1 = 0;
   private carrierAudio: HTMLAudioElement | null = null;
   private isExplicitlyPaused = false;
+  /** Tracks whether audio was active right before an incoming phone call or car audio focus loss */
+  public wasPlayingBeforeInterruption = false;
+  public interruptionTimestamp = 0;
   private wakeLockSentinel: any = null;
 
   private audioContext: AudioContext | null = null;
@@ -2127,7 +2130,7 @@ class AudioEngine {
               width: '64',
               host: 'https://www.youtube.com',
               playerVars: {
-                autoplay: 1,
+                autoplay: 0,
                 controls: 0,
                 disablekb: 1,
                 fs: 0,
@@ -2299,6 +2302,13 @@ class AudioEngine {
     }
 
     if (code === 1) {
+      if (this.isExplicitlyPaused || !usePlayerStore.getState().isPlaying) {
+        try {
+          this.ytPlayers[playerIndex]?.pauseVideo?.();
+        } catch {}
+        this.silenceYtDeck(this.ytPlayers[playerIndex], true);
+        return;
+      }
       this.consecutiveEndedCount = 0;
       this.consecutiveFailedTracks = 0;
       this.isTransitioning = false;
@@ -2859,6 +2869,10 @@ class AudioEngine {
             audioEl.readyState < 3
           ) {
             return;
+          }
+          if (usePlayerStore.getState().isPlaying) {
+            this.wasPlayingBeforeInterruption = true;
+            this.interruptionTimestamp = Date.now();
           }
         }
         if (usePlayerStore.getState().isPlaying && !this.isCrossfading && !this.isTransitioning) {
@@ -5041,6 +5055,8 @@ class AudioEngine {
   }
 
   public pause() {
+    this.wasPlayingBeforeInterruption = false;
+    this.interruptionTimestamp = 0;
     this.isExplicitlyPaused = true;
     this.stopSoundCloudWarmTimer();
     this.stopCarrier();
@@ -5112,6 +5128,8 @@ class AudioEngine {
   }
 
   public resume() {
+    this.wasPlayingBeforeInterruption = false;
+    this.interruptionTimestamp = 0;
     this.isExplicitlyPaused = false;
     this.startCarrier();
     const { volume, isMuted } = usePlayerStore.getState();
@@ -5216,6 +5234,21 @@ class AudioEngine {
     }
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = 'playing'; } catch {}
+    }
+  }
+
+  public markInterruptedBySystem() {
+    if (usePlayerStore.getState().isPlaying && !this.isExplicitlyPaused) {
+      this.wasPlayingBeforeInterruption = true;
+      this.interruptionTimestamp = Date.now();
+    }
+  }
+
+  public recoverFromSystemInterruption() {
+    if (this.wasPlayingBeforeInterruption && !this.isExplicitlyPaused) {
+      this.wasPlayingBeforeInterruption = false;
+      this.interruptionTimestamp = 0;
+      this.resume();
     }
   }
 

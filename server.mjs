@@ -1494,6 +1494,59 @@ const server = http.createServer(async (req, res) => {
     const rawId = pathname.replace('/api/spotify/playlist/', '').split('/')[0];
     res.setHeader('Content-Type', 'application/json');
 
+    if (rawId === 'sf-trend-spain' || rawId === 'sf-trend-global' || rawId === 'sf-trend-viral') {
+      const dzChartId = rawId === 'sf-trend-spain'
+        ? '1116189381'
+        : rawId === 'sf-trend-global'
+          ? '3155776882'
+          : '1313621765';
+      try {
+        const dzRes = await fetch(`https://api.deezer.com/playlist/${dzChartId}`, {
+          headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+        });
+        if (dzRes.ok) {
+          const data = await dzRes.json();
+          if (Array.isArray(data?.tracks?.data) && data.tracks.data.length > 0) {
+            const chartName = rawId === 'sf-trend-spain' ? 'Top 50 España' : rawId === 'sf-trend-global' ? 'Top 50 Global' : 'Virales España';
+            const chartDesc = rawId === 'sf-trend-spain'
+              ? 'Los mayores éxitos y números 1 en España hoy, actualizados a diario.'
+              : 'Los 50 temas más escuchados del planeta hoy.';
+            const chartCover = toHDImage(data.picture_xl || data.picture_big || data.picture_medium || data.picture);
+            const tracks = data.tracks.data.map((t, idx) => ({
+              id: `dz-${t.id}`,
+              name: t.title || t.title_short,
+              artists: [{ id: `art-${t.artist?.id || idx}`, name: t.artist?.name || 'Artista' }],
+              album: {
+                id: rawId,
+                name: chartName,
+                images: t.album?.cover_big ? [{ url: toHDImage(t.album.cover_big) }] : (chartCover ? [{ url: chartCover }] : []),
+              },
+              duration_ms: (t.duration || 180) * 1000,
+              preview_url: null,
+              added_at: 'Hoy',
+            }));
+
+            res.statusCode = 200;
+            return res.end(JSON.stringify({
+              id: rawId,
+              name: chartName,
+              description: chartDesc,
+              type: 'playlist',
+              images: chartCover ? [{ url: chartCover }] : [],
+              owner: { display_name: 'Spotifree Charts', id: 'spotifree-charts' },
+              color: rawId === 'sf-trend-spain' ? '#e63946' : '#2a9d8f',
+              tracks: {
+                total: tracks.length,
+                items: tracks,
+              },
+            }));
+          }
+        }
+      } catch (err) {
+        console.warn(`Chart fetch notice ${rawId}:`, err.message);
+      }
+    }
+
     if (rawId.startsWith('sc-vault-')) {
       let artistName = rawId.slice('sc-vault-'.length);
       try { artistName = decodeURIComponent(artistName); } catch {}

@@ -574,13 +574,16 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             );
           })()}
 
-          {/* Compartir: copies this playlist's link */}
+          {/* Compartir: copies this playlist's link (includes snapshot when custom) */}
           <button
             onClick={async () => {
               const plId = targetPlaylist?.id || contextMenu.playlistId;
               closeContextMenu();
               if (!plId) return;
-              const link = `${window.location.origin}/?playlist=${encodeURIComponent(plId.replace(/^spotify:playlist:/i, ''))}`;
+              const { createPlaylistShareLink } = await import('../../services/sharedPlaylists');
+              const link = await createPlaylistShareLink(plId).catch(
+                () => `${window.location.origin}/?playlist=${encodeURIComponent(plId.replace(/^spotify:playlist:/i, ''))}`
+              );
               try {
                 await navigator.clipboard.writeText(link);
                 showGlobalToast('Enlace copiado al portapapeles');

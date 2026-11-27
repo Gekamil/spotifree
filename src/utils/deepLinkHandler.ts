@@ -1,6 +1,7 @@
 import { usePlayerStore } from '../store/usePlayerStore';
 import { useSpotifyDataStore } from '../store/useSpotifyDataStore';
 import { useUIStore } from '../store/useUIStore';
+import { usePlaylistInviteStore } from '../store/usePlaylistInviteStore';
 import { searchSpotify, fetchPlaylistDetails } from '../services/spotifyApi';
 import { showGlobalToast } from './globalToast';
 import { playVoiceSearch } from '../services/nativeMedia';
@@ -96,8 +97,9 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
       return true;
     }
 
-    // Invitation to a shared playlist: ?collab=PL…
+    // Invitation to a shared/collaborative playlist: ?collab=PL…
     const collabParam = parsedUrl.searchParams.get('collab');
+    const shareParam = parsedUrl.searchParams.get('share');
     if (collabParam) {
       return await openSharedInvite(collabParam.trim());
     }
@@ -121,7 +123,11 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
 
     const playlistParam = parsedUrl.searchParams.get('playlist');
     if (playlistParam) {
-      return await routeEntity('playlist', playlistParam);
+      return await openPlaylistInviteModal(playlistParam, shareParam);
+    }
+
+    if (shareParam) {
+      return await openSharedInvite(shareParam.trim());
     }
 
     const albumParam = parsedUrl.searchParams.get('album');
@@ -138,6 +144,9 @@ export async function handleDeepLink(rawInput: string): Promise<boolean> {
       const match = /\/(track|playlist|album|artist)\/([a-zA-Z0-9]+)/i.exec(parsedUrl.pathname);
       if (match) {
         const [, kind, id] = match;
+        if (kind.toLowerCase() === 'playlist') {
+          return await openPlaylistInviteModal(id, shareParam);
+        }
         return await routeEntity(kind.toLowerCase(), id);
       }
     }
@@ -166,7 +175,7 @@ async function routeEntity(kind: string, id: string): Promise<boolean> {
     case 'track':
       return await playTrackById(cleanId);
     case 'playlist':
-      return await playPlaylistById(cleanId);
+      return await openPlaylistInviteModal(cleanId);
     case 'album':
       return await playPlaylistById(`alb-${cleanId}`);
     case 'artist':
@@ -270,32 +279,112 @@ async function playPlaylistById(playlistId: string): Promise<boolean> {
   return false;
 }
 
-async function openSharedInvite(code: string): Promise<boolean> {
-  const { joinSharedPlaylist } = await import('../services/sharedPlaylists');
-  let localId: string | null = null;
+async function openPlaylistInviteModal(playlistId: string, shareCode?: string | null): Promise<boolean> {
+  const cleanId = playlistId.replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+  if (!cleanId && !shareCode) return false;
+  const inviteStore = usePlaylistInviteStore.getState();
+  inviteStore.openInviteLoading({ playlistId: cleanId || null, shareCode: shareCode || null });
+
   try {
-    localId = await joinSharedPlaylist(code);
-  } catch (err) {
-    console.warn('[DeepLink] Could not join shared playlist', err);
-  }
-  try {
-    if (window.location.search.includes('collab=')) {
-      window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+    if (shareCode) {
+      const { previewSharedPlaylist } = await import('../services/sharedPlaylists');
+      const snapPreview = await previewSharedPlaylist(shareCode);
+      if (snapPreview) {
+        const existingLocal = useSpotifyDataStore.getState().playlists.some(
+          (p) =>
+            p.id === cleanId ||
+            p.id === `shared-copy-${shareCode}` ||
+            (snapPreview.localId && p.id === snapPreview.localId)
+        );
+        inviteStore.setInvitePreview({
+          code: snapPreview.code,
+          kind: snapPreview.kind,
+          playlistId: cleanId || `shared-copy-${shareCode}`,
+          name: snapPreview.name,
+          description: snapPreview.description,
+          image: snapPreview.image,
+          ownerId: snapPreview.ownerId,
+          ownerName: snapPreview.ownerName,
+          memberCount: snapPreview.memberCount,
+          tracks: snapPreview.tracks,
+          collaborative: snapPreview.collaborative,
+          alreadyInLibrary: existingLocal,
+        });
+        return true;
+      }
     }
-  } catch {}
-  if (!localId) {
-    showGlobalToast('No se ha podido abrir la playlist compartida');
+
+    const dataStore = useSpotifyDataStore.getState();
+    const localPlaylist = dataStore.playlists.find(
+      (p) => p.id === cleanId || p.id === `spotify:playlist:${cleanId}` || p.id.replace(/^spotify:playlist:/, '') === cleanId
+    );
+    let resolved = localPlaylist || dataStore.playlistDetailsCache[cleanId];
+    if (!resolved || !resolved.tracks?.items?.length) {
+      resolved = (await fetchPlaylistDetails(cleanId).catch(() => null)) || resolved;
+    }
+
+    if (!resolved || (!resolved.name && !resolved.tracks?.items?.length)) {
+      inviteStore.setInviteError('No se pudo encontrar esta playlist o su enlace ha caducado.');
+      return false;
+    }
+
+    inviteStore.setInvitePreview({
+      kind: 'public',
+      playlistId: cleanId,
+      name: resolved.name || 'Playlist compartida',
+      description: resolved.description || '',
+      image: resolved.images?.[0]?.url || '',
+      ownerId: resolved.owner?.id || 'spotify',
+      ownerName: resolved.owner?.display_name || 'Spotifree',
+      memberCount: 1,
+      tracks: resolved.tracks?.items || [],
+      collaborative: Boolean((resolved as any).collaborative),
+      alreadyInLibrary: Boolean(localPlaylist),
+    });
+    return true;
+  } catch (err) {
+    console.warn('[DeepLink] Could not load playlist invite preview', err);
+    inviteStore.setInviteError('Error al cargar los detalles de la playlist compartida.');
     return false;
   }
-  const playlist = useSpotifyDataStore.getState().playlists.find((p) => p.id === localId);
-  if (playlist) {
-    window.dispatchEvent(new CustomEvent('spotifree_open_playlist', { detail: playlist }));
-    (window as any).__mobileSelectPlaylist?.(playlist);
-    (window as any).__desktopSelectPlaylist?.(playlist);
-    useUIStore.getState().setActiveMainTab('playlist');
+}
+
+async function openSharedInvite(code: string): Promise<boolean> {
+  const cleanCode = code.trim().toUpperCase();
+  if (!cleanCode) return false;
+  const inviteStore = usePlaylistInviteStore.getState();
+  inviteStore.openInviteLoading({ collabCode: cleanCode });
+
+  try {
+    const { previewSharedPlaylist } = await import('../services/sharedPlaylists');
+    const preview = await previewSharedPlaylist(cleanCode);
+    if (!preview) {
+      inviteStore.setInviteError('La invitación a esta playlist no existe o ya no está disponible.');
+      return false;
+    }
+    const existingLocal = preview.localId
+      ? useSpotifyDataStore.getState().playlists.some((p) => p.id === preview.localId)
+      : false;
+    inviteStore.setInvitePreview({
+      code: preview.code,
+      kind: preview.kind,
+      playlistId: preview.localId || `shared-${preview.code}`,
+      name: preview.name,
+      description: preview.description,
+      image: preview.image,
+      ownerId: preview.ownerId,
+      ownerName: preview.ownerName,
+      memberCount: preview.memberCount,
+      tracks: preview.tracks,
+      collaborative: preview.collaborative,
+      alreadyInLibrary: existingLocal,
+    });
+    return true;
+  } catch (err) {
+    console.warn('[DeepLink] Could not preview shared playlist', err);
+    inviteStore.setInviteError('No se ha podido cargar la invitación a la playlist.');
+    return false;
   }
-  showGlobalToast('Te has unido a la playlist colaborativa');
-  return true;
 }
 
 async function openArtistById(artistId: string): Promise<boolean> {
@@ -328,14 +417,23 @@ async function openArtistById(artistId: string): Promise<boolean> {
 export function initDeepLinks() {
   if (typeof window === 'undefined') return;
 
-  // 1. Initial URL parameters check (for PWA / Web / App launch)
+  // Check URL parameters shortly after mount so invite modals appear promptly even before login finishes
   window.setTimeout(() => {
     try {
       const fullUrl = window.location.href;
       const params = new URLSearchParams(window.location.search);
-      if (params.has('play') || params.has('q') || params.has('track') || params.has('playlist') || params.has('album') || params.has('collab')) {
+      if (
+        params.has('play') ||
+        params.has('q') ||
+        params.has('track') ||
+        params.has('playlist') ||
+        params.has('album') ||
+        params.has('collab') ||
+        params.has('share') ||
+        /\/(track|playlist|album|artist)\/[a-zA-Z0-9]+/i.test(window.location.pathname)
+      ) {
         void handleDeepLink(fullUrl);
       }
     } catch {}
-  }, 1000);
+  }, 250);
 }

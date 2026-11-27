@@ -11,14 +11,30 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.5';
+export const APP_VERSION = '1.6';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.6',
+    date: '27 de noviembre, 2026',
+    title: 'Spotifree 1.6: Compartir e importar playlists con vista previa, sincronizacion cloud de estadisticas, recuperacion de llamadas y rotacion dinamica',
+    isLatest: true,
+    highlights: [
+      'Ventana de vista previa e importacion al compartir playlists: al abrir cualquier enlace compartido (?playlist=, ?collab= o ?share=) aparece un modal con portada, creador y canciones para aceptar e importar a tu biblioteca o solo abrir.',
+      'Reanudacion automatica tras llamadas en coche y movil: si entra una llamada conduciendo o usando auriculares, la musica se pausa limpiamente y se reanuda sola al terminar la llamada sin quedarse silenciada para siempre.',
+      'Sincronizacion bidireccional de tiempo de escucha y artistas en Firestore: tus horas escuchadas, canciones reproducidas y artistas del APK y la web se combinan en la nube para alimentar las recomendaciones y el perfil sin perder datos ni sobreescribir con ceros.',
+      'Inicio pausado en escritorio al cambiar de dispositivo: al abrir la app en ordenador se restaura tu sesion y cancion pero permanece en pausa hasta que tu decidas darle al play.',
+      'Listas de exitos y Top 50 dinamicas cada dia: Top 50 Espana, Top 50 Global y Novedades se nutren de listas reales actualizadas a diario en vez de canciones estaticas.',
+      'Portada clasica Radio de 3 circulos y variedad visual: anadido el diseno azul clasico de Radio de Spotify con 3 circulos superpuestos, logos y estilos vinilo y editorial.',
+      'Rotacion diaria de artistas y estantes: la fila de Tus artistas, en mix rota de artistas cada dia segun tus gustos y biblioteca, y la pantalla de inicio alterna estantes de animo, epocas y generos para no verse nunca igual.',
+      'Nueva seccion Inspiradas en tus playlists: recomendaciones inteligentes generadas a partir de las listas creadas y guardadas por cada usuario.',
+    ],
+  },
   {
     version: '1.5',
     date: '27 de noviembre, 2026',
     title: 'Spotifree 1.5: Prioridad al catálogo propio en listas importadas y arranque instantáneo en SoundCloud',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Detección automática global en importación, búsqueda y reproductor: si una canción de SoundCloud o lista externa ya existe en Spotifree (sin alterar remixes, slowed o inéditas exclusivas), se reproduce directamente con nuestro catálogo nativo sin extraer de SoundCloud.',
       'Inicio ultrarrápido de canciones exclusivas de SoundCloud (especialmente en APK): fragmento inicial compacto de streaming, búsqueda paralela de cliente y omisión de sondeos CDN redundantes.',

@@ -55,7 +55,7 @@ import { PlaylistEditScreen } from './PlaylistEditScreen';
 import { confirmDialog } from '../common/ConfirmDialog';
 import { openPlaylistVersions } from '../common/PlaylistVersionsDialog';
 import { AddedByAvatar, SharedMembersRow, useSharedCode, useSharedMembers } from '../common/SharedPlaylistBits';
-import { shareAsCollaborative } from '../../services/sharedPlaylists';
+import { createPlaylistShareLink, shareAsCollaborative } from '../../services/sharedPlaylists';
 import { isNotInterested, markNotInterested, undoNotInterested } from '../../utils/notInterested';
 import { showGlobalToast } from '../../utils/globalToast';
 import { findDeviceMatch } from '../../utils/nativeLocalMusic';
@@ -1472,7 +1472,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
   };
 
   const handleSharePlaylist = async () => {
-    const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+    const fallbackUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+    const shareUrl = await createPlaylistShareLink(cleanId).catch(() => fallbackUrl);
     const shareData = {
       title: playlist.name,
       text: `Escucha ${playlist.name} en Spotifree`,
@@ -2577,7 +2578,8 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
                 label="Copiar enlace"
                 onClick={async () => {
                   setIsOptionsOpen(false);
-                  const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+                  const fallbackUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+                  const shareUrl = await createPlaylistShareLink(cleanId).catch(() => fallbackUrl);
                   try {
                     await navigator.clipboard.writeText(shareUrl);
                     setToastMessage('¡Enlace copiado al portapapeles!');

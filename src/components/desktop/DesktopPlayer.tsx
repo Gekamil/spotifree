@@ -116,6 +116,9 @@ export const DesktopPlayer: React.FC<DesktopPlayerProps> = ({ onSelectPlaylistBy
     if (lastPlayedTrackIdRef.current === currentTrack.id) return;
     lastPlayedTrackIdRef.current = currentTrack.id;
 
+    // Do not auto-play if playback is paused (e.g. restored session from cross-device sync)
+    if (!usePlayerStore.getState().isPlaying) return;
+
     setProgress(0);
     const artistName = currentTrack.artists?.[0]?.name || '';
     const query = `${currentTrack.name} ${artistName}`;

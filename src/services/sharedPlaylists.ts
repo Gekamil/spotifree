@@ -24,7 +24,7 @@ export interface SharedMember {
   joinedAt: number;
 }
 interface SharedDoc {
-  kind: 'playlist';
+  kind: 'playlist' | 'snapshot';
   name: string;
   description?: string;
   image?: string;
@@ -34,6 +34,21 @@ interface SharedDoc {
   tracks: Track[];
   updatedAt: number;
   updatedBy: string;
+  sourcePlaylistId?: string;
+}
+
+export interface SharedPlaylistPreview {
+  code: string;
+  kind: 'collab' | 'snapshot';
+  name: string;
+  description: string;
+  image: string;
+  ownerId: string;
+  ownerName: string;
+  memberCount: number;
+  tracks: Track[];
+  collaborative: boolean;
+  localId: string | null;
 }
 
 const COLLECTION = 'shared_sessions';
@@ -82,8 +97,11 @@ const slim = (t: any, fallbackBy?: { id: string; name: string }): Track => {
 };
 const ids = (items: Track[] = []) => items.map((t) => t.id);
 const newCode = () => `PL${Math.random().toString(36).slice(2, 7).toUpperCase()}${Date.now().toString(36).slice(-4).toUpperCase()}`;
+const newShareCode = () => `SP${Math.random().toString(36).slice(2, 7).toUpperCase()}${Date.now().toString(36).slice(-4).toUpperCase()}`;
 
 export const inviteLink = (code: string) => `${window.location.origin}/?collab=${encodeURIComponent(code)}`;
+export const sharedSnapshotLink = (playlistId: string, shareCode: string) =>
+  `${window.location.origin}/?playlist=${encodeURIComponent(playlistId)}&share=${encodeURIComponent(shareCode)}`;
 
 // ---------------------------------------------------------------------------
 // Live sync of every shared playlist in the library
@@ -274,39 +292,145 @@ export async function shareAsCollaborative(playlistId: string): Promise<string |
   return inviteLink(code);
 }
 
-/** Opens an invitation: joins the playlist and adds it to the library. Returns its local id. */
+/** Reads a shared playlist or snapshot invitation without joining or modifying the library */
+export async function previewSharedPlaylist(code: string): Promise<SharedPlaylistPreview | null> {
+  if (!isFirebaseConfigured() || !db || !/^(PL|SP)[A-Z0-9]{4,20}$/.test(code)) return null;
+  try {
+    const snap = await getDoc(doc(db, COLLECTION, code));
+    if (!snap.exists()) return null;
+    const data = snap.data() as SharedDoc;
+    if (data.kind !== 'playlist' && data.kind !== 'snapshot') return null;
+    const isCollab = data.kind === 'playlist';
+    const existingLocal = isCollab ? localIdFor(code) : null;
+    const memberCount = data.members && typeof data.members === 'object' ? Object.keys(data.members).length : 1;
+    return {
+      code,
+      kind: isCollab ? 'collab' : 'snapshot',
+      name: data.name || 'Playlist compartida',
+      description: data.description || '',
+      image: data.image || '',
+      ownerId: data.ownerId || 'spotifree',
+      ownerName: data.ownerName || 'Usuario',
+      memberCount: Math.max(1, memberCount),
+      tracks: Array.isArray(data.tracks) ? data.tracks : [],
+      collaborative: isCollab,
+      localId: existingLocal,
+    };
+  } catch (err) {
+    console.warn('[SharedPlaylists] preview error', err);
+    return null;
+  }
+}
+
+/** Creates or reuses a public snapshot share link so any playlist (including custom or local ones) opens cleanly for recipients */
+export async function createPlaylistShareLink(playlistId: string): Promise<string> {
+  const cleanId = playlistId.replace(/^spotify:playlist:/i, '').split('?')[0].trim();
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const fallbackUrl = `${origin}/?playlist=${encodeURIComponent(cleanId)}`;
+  if (!cleanId) return fallbackUrl;
+
+  const st = useSpotifyDataStore.getState();
+  const p: any =
+    st.playlistDetailsCache[playlistId] ||
+    st.playlistDetailsCache[cleanId] ||
+    st.playlists.find((x) => x.id === playlistId || x.id === cleanId);
+
+  if (p?.shared_id) {
+    return inviteLink(p.shared_id);
+  }
+
+  if (!isFirebaseConfigured() || !db || !p) {
+    return fallbackUrl;
+  }
+
+  const tracks = Array.isArray(p.tracks?.items) ? p.tracks.items : [];
+  const shouldPublishSnapshot =
+    Boolean(p.is_custom) ||
+    cleanId.startsWith('custom_') ||
+    cleanId.startsWith('sf-') ||
+    cleanId.startsWith('shared-') ||
+    cleanId.startsWith('sc-') ||
+    tracks.length > 0;
+
+  if (!shouldPublishSnapshot) {
+    return fallbackUrl;
+  }
+
+  try {
+    const existingCode = String(p.share_snapshot_id || '').trim();
+    const code = /^(SP)[A-Z0-9]{4,20}$/.test(existingCode) ? existingCode : newShareCode();
+    const me = myMemberId();
+    const member = myMember();
+    const slimTracks = tracks.slice(0, MAX_TRACKS).map((t: any) => slim(t, { id: me, name: member.name }));
+    const rawImg = p.images?.[0]?.url || '';
+    const image = rawImg && !String(rawImg).startsWith('data:') ? rawImg : '';
+    const data: SharedDoc = {
+      kind: 'snapshot',
+      name: p.name || 'Playlist',
+      description: p.description || '',
+      image,
+      ownerId: p.owner?.id || me,
+      ownerName: p.owner?.display_name || member.name,
+      members: { [me]: member },
+      tracks: slimTracks,
+      updatedAt: Date.now(),
+      updatedBy: me,
+      sourcePlaylistId: cleanId,
+    };
+    await setDoc(doc(db, COLLECTION, code), data);
+    if (!existingCode && st.playlists.some((x) => x.id === p.id)) {
+      st.updatePlaylist(p.id, { share_snapshot_id: code } as any);
+    }
+    return sharedSnapshotLink(cleanId, code);
+  } catch (err) {
+    console.warn('[SharedPlaylists] Snapshot publish fallback:', err);
+    return fallbackUrl;
+  }
+}
+
+/** Opens an invitation: joins the playlist or imports the snapshot and adds it to the library. Returns its local id. */
 export async function joinSharedPlaylist(code: string): Promise<string | null> {
-  if (!isFirebaseConfigured() || !db || !/^PL[A-Z0-9]{4,20}$/.test(code)) return null;
-  const existing = localIdFor(code);
+  if (!isFirebaseConfigured() || !db || !/^(PL|SP)[A-Z0-9]{4,20}$/.test(code)) return null;
+  const isCollab = code.startsWith('PL');
+  const existing = isCollab ? localIdFor(code) : null;
   if (existing) return existing;
   const ref = doc(db, COLLECTION, code);
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
   const data = snap.data() as SharedDoc;
-  if (data.kind !== 'playlist') return null;
+  if (data.kind !== 'playlist' && data.kind !== 'snapshot') return null;
+  const collabMode = data.kind === 'playlist';
   const me = myMemberId();
-  if (!data.members?.[me]) {
+  if (collabMode && !data.members?.[me]) {
     await runTransaction(db, async (tx) => {
       const s = await tx.get(ref);
       if (!s.exists()) return;
       tx.update(ref, { [`members.${me}`]: myMember(), updatedAt: Date.now(), updatedBy: me });
     }).catch(() => {});
   }
-  const localId = `shared-${code}`;
-  lastSeen.set(code, data.tracks || []);
-  members.set(code, { ...(data.members || {}), [me]: myMember() });
+  const localId = collabMode ? `shared-${code}` : `shared-copy-${code}`;
+  if (collabMode) {
+    lastSeen.set(code, data.tracks || []);
+    members.set(code, { ...(data.members || {}), [me]: myMember() });
+  }
   useSpotifyDataStore.getState().addCustomPlaylist({
     id: localId,
     name: data.name,
-    description: data.description || `Playlist colaborativa de ${data.ownerName}`,
+    description:
+      data.description ||
+      (collabMode ? `Playlist colaborativa de ${data.ownerName}` : `Compartida por ${data.ownerName}`),
     images: data.image ? [{ url: data.image }] : [],
     owner: { id: data.ownerId, display_name: data.ownerName },
     tracks: { total: (data.tracks || []).length, items: data.tracks || [] },
     is_custom: true,
-    shared_id: code,
-    collaborative: true,
+    ...(collabMode ? { shared_id: code, collaborative: true } : {}),
   } as any);
-  subscribe(code);
+  if (collabMode) subscribe(code);
+  try {
+    const { syncSpotifreeAccount } = await import('./spotifreeAuth');
+    const st = useSpotifyDataStore.getState();
+    void syncSpotifreeAccount({ playlists: st.playlists }).catch(() => {});
+  } catch {}
   return localId;
 }
 

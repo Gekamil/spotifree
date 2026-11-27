@@ -13,7 +13,7 @@ Modo DJ, karaoke, escucha sin conexión y sesiones compartidas.
 [![Abrir la web](https://img.shields.io/badge/Abrir_la_web-1ED760?style=for-the-badge&logo=spotify&logoColor=black)](https://spotifreeweb.vercel.app)
 [![Descargar APK](https://img.shields.io/badge/Descargar_APK-181818?style=for-the-badge&logo=android&logoColor=3DDC84)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 
-[![Versión](https://img.shields.io/badge/versión-1.5-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
+[![Versión](https://img.shields.io/badge/versión-1.6-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
 [![Build APK](https://img.shields.io/github/actions/workflow/status/Gekamil/spotifree/android-apk.yml?branch=main&style=flat-square&label=build%20apk&labelColor=181818)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
 [![Último commit](https://img.shields.io/github/last-commit/Gekamil/spotifree?style=flat-square&label=último%20commit&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/commits/main)
 [![Stars](https://img.shields.io/github/stars/Gekamil/spotifree?style=flat-square&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/stargazers)
@@ -242,6 +242,15 @@ spotifree/
 </details>
 
 <br />
+
+## Novedades de la 1.6
+
+- **Modal de vista previa e importación de playlists compartidas:** al abrir un enlace compartido (`?playlist=`, `?collab=` o `?share=`), la app muestra una ventana modal interactiva con la carátula, autor y canciones de la lista para aceptarla e importarla a tu biblioteca directamente o abrirla.
+- **Recuperación automática tras llamadas en coche y móvil:** si te llaman mientras escuchas música en el coche o con el móvil bloqueado, la reproducción se pausa suavemente y se reanuda de forma automática al colgar la llamada.
+- **Sincronización cloud bidireccional de estadísticas en Firestore:** tus horas de escucha, reproducciones y artistas del APK y de la web se combinan sin sobreescribirse con ceros, manteniendo sincronizado el perfil y alimentando las recomendaciones.
+- **Continuidad de reproducción entre dispositivos pausada en escritorio:** al iniciar sesión en el ordenador, el tema se restaura donde lo dejaste pero pausado, para que empiece a sonar solo cuando tú lo decidas.
+- **Rotación diaria dinámica de mixes y portadas:** los artistas de «Tus artistas, en mix» rotan a diario, las portadas incorporan el diseño clásico de Radio de 3 círculos y vinilos, y la pantalla de inicio alterna estantes temáticos día a día junto a la nueva sección «Inspiradas en tus playlists».
+- **Listas de éxitos y Top 50 dinámicas:** listas como Top 50 España y Global se nutren de listas reales actualizadas a diario.
 
 ## Novedades de la 1.5
 

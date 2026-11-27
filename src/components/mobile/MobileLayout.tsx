@@ -266,7 +266,10 @@ export const MobileLayout: React.FC = () => {
 
   const handleSharePlaylistTarget = async () => {
     if (!playlistMenuTarget) return;
-    const shareUrl = `${window.location.origin}/?playlist=${encodeURIComponent(playlistMenuTarget.id)}`;
+    const { createPlaylistShareLink } = await import('../../services/sharedPlaylists');
+    const shareUrl = await createPlaylistShareLink(playlistMenuTarget.id).catch(
+      () => `${window.location.origin}/?playlist=${encodeURIComponent(playlistMenuTarget.id)}`
+    );
     if (navigator.share) {
       try {
         await navigator.share({

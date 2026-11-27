@@ -22,6 +22,8 @@ import SleepTimerSheet from './components/common/SleepTimerSheet';
 import { SpeedControlModal } from './components/common/SpeedControlModal';
 import ImportPlaylistDialog from './components/common/ImportPlaylistDialog';
 import StoryCardSheet from './components/common/StoryCardSheet';
+import { SharedPlaylistInviteModal } from './components/common/SharedPlaylistInviteModal';
+import { usePlaylistInviteStore } from './store/usePlaylistInviteStore';
 import { useSpotifyDataStore } from './store/useSpotifyDataStore';
 import { useUIStore } from './store/useUIStore';
 import { usePlayerStore } from './store/usePlayerStore';
@@ -148,6 +150,11 @@ function App() {
             ui.closeImportModal();
             return;
           }
+          const inviteStore = usePlaylistInviteStore.getState();
+          if (inviteStore.isOpen) {
+            inviteStore.closeInvite();
+            return;
+          }
           if (ui.isEditPlaylistModalOpen) {
             ui.closeEditPlaylistModal();
             return;
@@ -227,6 +234,7 @@ function App() {
       <SleepTimerSheet />
       <SpeedControlModal />
       <ImportPlaylistDialog />
+      <SharedPlaylistInviteModal />
       <StoryCardSheet />
       <GlobalToast />
       <ApkUpdateBanner />
