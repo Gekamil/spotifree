@@ -235,6 +235,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
   const [loading, setLoading] = useState(false);
   const [networkError, setNetworkError] = useState(false);
   const [reloadCounter, setReloadCounter] = useState(0);
+  const pendingPlayAllRef = useRef(false);
   const isLikedInitially =
     playlist.id === 'liked-songs' ||
     playlist.id === 'tracks' ||
@@ -852,7 +853,18 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     let cancelled = false;
     const currentCustom = getSavedCustomTracks(playlist.id, isLikedInitially, user?.id);
     const customIds = new Set(currentCustom.map((t) => t.id));
-    const baseItems = playlist.tracks?.items || [];
+    const cachedDetailsEarly = useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
+    const foundMixEarly = playlist.id.startsWith('sf-')
+      ? useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id)
+      : null;
+    const baseItems =
+      (playlist.tracks?.items && playlist.tracks.items.length > 0)
+        ? playlist.tracks.items
+        : (cachedDetailsEarly?.tracks?.items && cachedDetailsEarly.tracks.items.length > 0)
+        ? cachedDetailsEarly.tracks.items
+        : (foundMixEarly?.tracks?.items && foundMixEarly.tracks.items.length > 0)
+        ? foundMixEarly.tracks.items
+        : [];
     const removedSet = getRemovedTrackIdsForPlaylist(playlist.id);
     const isNotRemoved = (t: Track) => {
       const c = (t.id || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
@@ -897,19 +909,66 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     setDynamicPlaylist(playlist);
 
     async function loadTracks() {
+      if (playlist.id.startsWith('sf-')) {
+        const foundMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
+        if (foundMix?.tracks?.items && foundMix.tracks.items.length > 0) {
+          setDynamicTracks(foundMix.tracks.items);
+          setDynamicPlaylist((prev) => ({ ...prev, ...foundMix, tracks: foundMix.tracks }));
+          setLoading(false);
+          if (pendingPlayAllRef.current) {
+            pendingPlayAllRef.current = false;
+            handlePlayAll();
+          }
+          return;
+        }
+        setLoading(true);
+        refreshSpotifreeMixes(true)
+          .then(() => {
+            if (cancelled) return;
+            const fresh = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
+            if (fresh?.tracks?.items && fresh.tracks.items.length > 0) {
+              setDynamicTracks(fresh.tracks.items);
+              setDynamicPlaylist((prev) => ({ ...prev, ...fresh, tracks: fresh.tracks }));
+            }
+            setLoading(false);
+            if (pendingPlayAllRef.current) {
+              pendingPlayAllRef.current = false;
+              handlePlayAll();
+            }
+          })
+          .catch(() => {
+            if (!cancelled) setLoading(false);
+          });
+        return;
+      }
+
       const isArtist = Boolean(
-        playlist.type === 'artist' ||
-        playlist.description === 'Artista' ||
-        playlist.description?.toLowerCase().includes('artista') ||
-        (playlist as any).is_artist === true ||
-        playlist.id.startsWith('art-') ||
-        playlist.id.startsWith('artist-')
+        !playlist.id.startsWith('sf-') &&
+        (playlist.type === 'artist' ||
+          playlist.description === 'Artista' ||
+          playlist.description?.toLowerCase().includes('artista') ||
+          (playlist as any).is_artist === true ||
+          playlist.id.startsWith('art-') ||
+          playlist.id.startsWith('artist-'))
       );
 
       if (isArtist) {
-        setLoading(true);
+        const cleanArtistName = resolveArtistName(playlist.id, playlist.name);
+        const cachedDetails = useSpotifyDataStore.getState().playlistDetailsCache[playlist.id];
+        if (cachedDetails?.tracks?.items && cachedDetails.tracks.items.length > 0) {
+          setDynamicTracks(cachedDetails.tracks.items);
+          setDynamicPlaylist((prev) => ({
+            ...prev,
+            ...cachedDetails,
+            type: 'artist',
+            tracks: cachedDetails.tracks,
+          }));
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
+
         try {
-          const cleanArtistName = resolveArtistName(playlist.id, playlist.name);
           const cachedPic = ARTIST_IMAGE_CACHE.get(cleanArtistName.toLowerCase());
           const resolvedPic = cachedPic || (await getArtistPicture(cleanArtistName));
           const artistTracks = await fetchArtistTopTracks(playlist.id, cleanArtistName);
@@ -937,6 +996,14 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             setDynamicTracks(artistTracks);
             setDynamicPlaylist(updatedArtistPlaylist);
             setLoading(false);
+            if (pendingPlayAllRef.current) {
+              pendingPlayAllRef.current = false;
+              const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+              const start = isShuffleActive && artistTracks.length > 1
+                ? artistTracks[Math.floor(Math.random() * artistTracks.length)]
+                : artistTracks[0];
+              playTrack(start, artistTracks, playlist.id);
+            }
             artistTracks.slice(0, 3).forEach((t) => {
               const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
               audioEngine.prefetchTrack(q, t.id);
@@ -984,6 +1051,10 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
             setDynamicTracks(albumRes.tracks);
             setDynamicPlaylist(updatedAlbum);
             setLoading(false);
+            if (pendingPlayAllRef.current) {
+              pendingPlayAllRef.current = false;
+              handlePlayAll();
+            }
             return;
           }
         } catch (err) {
@@ -991,31 +1062,6 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
         } finally {
           if (!cancelled) setLoading(false);
         }
-      }
-
-      if (playlist.id.startsWith('sf-')) {
-        const foundMix = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
-        if (foundMix?.tracks?.items && foundMix.tracks.items.length > 0) {
-          setDynamicTracks(foundMix.tracks.items);
-          setDynamicPlaylist((prev) => ({ ...prev, ...foundMix, tracks: foundMix.tracks }));
-          setLoading(false);
-          return;
-        }
-        setLoading(true);
-        refreshSpotifreeMixes(true)
-          .then(() => {
-            if (cancelled) return;
-            const fresh = useSpotifreeMixes.getState().mixes.find((m) => m.id === playlist.id);
-            if (fresh?.tracks?.items && fresh.tracks.items.length > 0) {
-              setDynamicTracks(fresh.tracks.items);
-              setDynamicPlaylist((prev) => ({ ...prev, ...fresh, tracks: fresh.tracks }));
-            }
-            setLoading(false);
-          })
-          .catch(() => {
-            if (!cancelled) setLoading(false);
-          });
-        return;
       }
 
       const hasExistingTracks = Boolean(playlist.tracks?.items && playlist.tracks.items.length > 0);
@@ -1304,7 +1350,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   // A playlist saved in the library (e.g. imported) is never shown as an artist page
   const isLibraryPlaylist = allUserPlaylists.some((p) => p.id === dynamicPlaylist.id && (p as any).type !== 'artist');
-  const isArtist = !isLibraryPlaylist && Boolean(
+  const isArtist = !dynamicPlaylist.id.startsWith('sf-') && !isLibraryPlaylist && Boolean(
     dynamicPlaylist.description?.toLowerCase() === 'artista' ||
     dynamicPlaylist.description?.toLowerCase().includes('artista') ||
     (dynamicPlaylist as any).type === 'artist' ||
@@ -1453,8 +1499,11 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
 
   const handlePlayAll = () => {
     if (loading) {
-      showGlobalToast('Cargando canciones de la lista...');
-      return;
+      if (tracks.length === 0) {
+        pendingPlayAllRef.current = true;
+        showGlobalToast('Cargando canciones de la lista...');
+        return;
+      }
     }
     if (tracks.length === 0) {
       showGlobalToast('La lista no tiene canciones disponibles');

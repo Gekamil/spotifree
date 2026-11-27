@@ -7,9 +7,10 @@
 import { usePlayerStore } from '../store/usePlayerStore';
 import type { Track } from '../types/spotify';
 import { API_BASE } from '../config';
-import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio } from '../utils/offlineStorage';
-import { getLocalTrackUrl, isLocalTrackId } from '../utils/localFiles';
+import { getDownloadedTrackBlobUrl, purgeCorruptedPreviewAudio, isPlaylistDownloaded } from '../utils/offlineStorage';
+import { getLocalTrackUrl, isLocalTrackId, LOCAL_FILES_PLAYLIST_ID } from '../utils/localFiles';
 import { DEVICE_PREFIX, findDeviceMatch, getDeviceTrackUrl } from '../utils/nativeLocalMusic';
+import { FOLDER_DOWNLOADS_ID, FOLDER_DEVICE_ID } from '../utils/downloadFolders';
 import { djTransitionService, type DJTransitionConfig } from './djTransitionService';
 import { getTrackAnalysis, snapToBarGrid } from '../utils/audioFeatures';
 import { EQ_CHANGED_EVENT, effectiveEqGains } from '../utils/eqSettings';
@@ -451,14 +452,39 @@ class AudioEngine {
     return AudioEngine.cleanId(a.id) === AudioEngine.cleanId(b.id);
   }
 
-  private async resolveOfflinePlaybackUrl(track?: Track | null): Promise<string | null> {
+  private isDownloadedContextActive(): boolean {
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+    try {
+      const state = usePlayerStore.getState();
+      const ctx = state.currentContextId || (state.currentTrack as any)?.playlistId;
+      if (!ctx) return false;
+      if (
+        ctx === LOCAL_FILES_PLAYLIST_ID ||
+        ctx === FOLDER_DOWNLOADS_ID ||
+        ctx === FOLDER_DEVICE_ID ||
+        ctx === 'spotifree-downloaded' ||
+        ctx === 'offline-downloads' ||
+        ctx === 'downloaded-songs'
+      ) {
+        return true;
+      }
+      return isPlaylistDownloaded(ctx);
+    } catch {
+      return false;
+    }
+  }
+
+  private async resolveOfflinePlaybackUrl(track?: Track | null, allowDownloaded = false): Promise<string | null> {
     if (!track?.id) return null;
     try {
       const deviceCopy = !isLocalTrackId(track.id) ? findDeviceMatch(track) : null;
       if (track.id.startsWith(DEVICE_PREFIX)) return getDeviceTrackUrl(track.id);
       if (deviceCopy) return getDeviceTrackUrl(deviceCopy);
       if (isLocalTrackId(track.id)) return await getLocalTrackUrl(track.id);
-      return await getDownloadedTrackBlobUrl(track.id);
+      if (allowDownloaded || this.isDownloadedContextActive()) {
+        return await getDownloadedTrackBlobUrl(track.id);
+      }
+      return null;
     } catch {
       return null;
     }
@@ -4612,13 +4638,16 @@ class AudioEngine {
         const playing = usePlayerStore.getState().currentTrack;
         const deviceCopy = !isLocalTrackId(trackId) && playing?.id === trackId ? findDeviceMatch(playing) : null;
         if (deviceCopy) console.info('[AudioEngine] Playing the copy on this phone:', playing?.name);
+        const shouldCheckDownloaded = this.isDownloadedContextActive();
         const offlineBlobUrl = trackId.startsWith(DEVICE_PREFIX)
           ? getDeviceTrackUrl(trackId)
           : deviceCopy
           ? getDeviceTrackUrl(deviceCopy)
           : isLocalTrackId(trackId)
           ? await getLocalTrackUrl(trackId)
-          : await getDownloadedTrackBlobUrl(trackId);
+          : shouldCheckDownloaded
+          ? await getDownloadedTrackBlobUrl(trackId)
+          : null;
         if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) return;
         if (isLocalTrackId(trackId) && !offlineBlobUrl) {
           console.warn('[AudioEngine] Local file not found on this device:', trackId);
@@ -4972,6 +5001,23 @@ class AudioEngine {
     } catch (e) {
       console.warn('[AudioEngine] Alternate resolve error:', e);
       if (!isStale()) {
+        try {
+          const fallbackBlob = ownerTrackId ? await getDownloadedTrackBlobUrl(ownerTrackId) : null;
+          if (fallbackBlob && !isStale()) {
+            console.info('[AudioEngine] Rescuing playback with cached offline audio track:', ownerTrackId);
+            this.setHtml5DeckSource(this.activeAudioIndex, fallbackBlob, 0);
+            await this.audio.play();
+            if (!isStale()) {
+              this.consecutiveFailedTracks = 0;
+              this.startCarrier();
+              usePlayerStore.setState({ isPlaying: true });
+              this.startProgressTicker();
+              this.isTransitioning = false;
+              return;
+            }
+          }
+        } catch {}
+
         this.isTransitioning = false;
         this.consecutiveFailedTracks += 1;
         if (this.consecutiveFailedTracks < 3 && !this.isExplicitlyPaused) {

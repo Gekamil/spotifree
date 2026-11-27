@@ -8,9 +8,17 @@ import { isStrictArtistMatch, trackMatchesArtist } from '../utils/trackArtists';
  */
 export function resolveArtistName(artistId: string, fallbackName?: string): string {
   if (fallbackName && fallbackName.trim() && !/^playlist$/i.test(fallbackName.trim())) {
-    return fallbackName.replace(/^(art-|artist-|sf-artist-)/i, '').trim();
+    const cleanedFallback = fallbackName
+      .replace(/^(art-|artist-|sf-artist-)/i, '')
+      .replace(/^(mix de|this is|radio de|éxitos de|lo mejor de)\s+/i, '')
+      .trim();
+    if (cleanedFallback) return cleanedFallback;
   }
-  const clean = artistId.replace(/^(art-|artist-|sf-artist-|spotify:artist:)/i, '').replace(/[-_]+/g, ' ').trim();
+  let clean = artistId
+    .replace(/^(art-|artist-|sf-artist-|spotify:artist:)/i, '')
+    .replace(/^(mix de|this is|radio de|éxitos de|lo mejor de)\s+/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
   // Capitalize words nicely if derived from slug
   return clean.replace(/\b\w/g, (c) => c.toUpperCase()) || 'Artista';
 }
@@ -89,7 +97,7 @@ export async function fetchArtistTopTracks(artistId: string, artistNameHint?: st
 
   // 1. Check existing deep cache
   const cached = useSpotifyDataStore.getState().playlistDetailsCache[artistId];
-  if (cached && Array.isArray(cached.tracks?.items) && cached.tracks.items.length >= 45) {
+  if (cached && Array.isArray(cached.tracks?.items) && cached.tracks.items.length > 0) {
     const items = (cached.tracks.items as any[]).map((x) => (x.track ? x.track : x)).filter(Boolean);
     if (items.length > 0) return items;
   }

@@ -11,14 +11,27 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.6';
+export const APP_VERSION = '1.6.1';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.6.1',
+    date: '27 de noviembre, 2026',
+    title: 'Spotifree 1.6.1: Correccion de carga y reproduccion en playlists de cantantes y aislamiento de musica descargada',
+    isLatest: true,
+    highlights: [
+      'Carga y reproduccion inmediata de playlists de artistas en ordenador: eliminada la condicion que bloqueaba el boton de reproducir con el aviso de cargando canciones cuando la lista ya tiene temas listos o cuando se trata de un mix de artista.',
+      'Reproduccion pendiente automatica: si pulsas reproducir mientras se cargan los temas de un cantante o lista, se inicia la reproduccion automaticamente en cuanto termina de cargar sin requerir pulsar de nuevo.',
+      'Aislamiento de musica descargada: la reproduccion offline almacenada solo se activa cuando te encuentras en la playlist de canciones descargadas o en modo avion sin conexion; el resto de playlists y perfiles de artistas se reproducen via streaming normal sin conflictos entre cuentas.',
+      'Boton de reproduccion rapida en tarjetas de artistas: pulsar el boton de reproducir sobre la tarjeta de un cantante en la pantalla de inicio de escritorio reproduce sus canciones directamente.',
+      'Prioridad de mixes Spotifree frente a perfiles de artista: las listas con formato sf- se cargan de inmediato sin busquedas redundantes ni bloqueos de estado.',
+    ],
+  },
   {
     version: '1.6',
     date: '27 de noviembre, 2026',
     title: 'Spotifree 1.6: Compartir e importar playlists con vista previa, sincronizacion cloud de estadisticas, recuperacion de llamadas y rotacion dinamica',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Ventana de vista previa e importacion al compartir playlists: al abrir cualquier enlace compartido (?playlist=, ?collab= o ?share=) aparece un modal con portada, creador y canciones para aceptar e importar a tu biblioteca o solo abrir.',
       'Reanudacion automatica tras llamadas en coche y movil: si entra una llamada conduciendo o usando auriculares, la musica se pausa limpiamente y se reanuda sola al terminar la llamada sin quedarse silenciada para siempre.',

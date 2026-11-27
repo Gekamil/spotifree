@@ -19,6 +19,8 @@ import { aiDJVoiceService } from '../../services/aiDJVoiceService';
 import { SpotifyImage } from '../common/SpotifyImage';
 import { SpotifyHomeSkeleton } from '../common/SpotifyHomeSkeleton';
 import { isAIDJPlaylist } from '../../utils/djIdentifiers';
+import { fetchArtistTopTracks } from '../../services/artistService';
+import { showGlobalToast } from '../../utils/globalToast';
 
 const DOMINANT_COLOR_CACHE = new Map<string, string>();
 
@@ -355,6 +357,19 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
       return;
     }
 
+    if (card.id.startsWith('art-') || card.id.startsWith('artist-')) {
+      showGlobalToast('Cargando canciones del artista...');
+      try {
+        const artistTracks = await fetchArtistTopTracks(card.id, (card as any).title || card.name);
+        if (artistTracks && artistTracks.length > 0) {
+          const items = artistTracks.map((t: any) => ({ ...t, playlistId: card.id }));
+          const start = isShuffleActive && items.length > 1 ? items[Math.floor(Math.random() * items.length)] : items[0];
+          playTrack(start, items, card.id);
+          return;
+        }
+      } catch {}
+    }
+
     try {
       const userCookie = typeof window !== 'undefined' ? window.localStorage.getItem('user_spotify_cookie') || '' : '';
       const accessToken = typeof window !== 'undefined' ? window.localStorage.getItem('spotify_access_token') || '' : '';
@@ -548,7 +563,7 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
         ) : (
           /* Filtered state: "Música" with clear button + attached "Siguiendo" sub-filter */
           <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2 duration-200">
-            {/* Active Música parent button with '✕' icon */}
+            {/* Active Musica parent button with 'x' icon */}
             <button
               onClick={() => setActiveTab('todo')}
               className="h-8 px-3 rounded-full text-sm font-semibold flex items-center gap-1.5 bg-white text-black shadow-md hover:scale-104 active:scale-96 transition-all cursor-pointer"
