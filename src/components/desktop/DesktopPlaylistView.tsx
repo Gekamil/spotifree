@@ -653,7 +653,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
     }
   };
 
-  // Library Saved status (+ / ✓)
+  // Library Saved status (add / check)
   const checkIsInLibrary = (id: string): boolean => {
     if (!id) return false;
     const clean = id.replace(/^spotify:(playlist|album):/, '').split('?')[0];
@@ -2145,7 +2145,7 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
               />
             </button>
 
-            {/* Add to Library / Checkmark toggle button (+ / ✓) */}
+            {/* Add to Library / Checkmark toggle button (+ / check) */}
             {!isLikedPlaylist && !isFolder && !isArtist && (
               <button
                 onClick={handleToggleLibrary}
@@ -2193,8 +2193,8 @@ export const DesktopPlaylistView: React.FC<DesktopPlaylistViewProps> = ({ playli
                 const rect = e.currentTarget.getBoundingClientRect();
                 openContextMenu(e.clientX || rect.left, rect.bottom + 8, undefined, dynamicPlaylist.id);
               }}
-              className="text-[#b3b3b3] hover:text-white hover:scale-106 transition-all p-1"
-              title="Más opciones para esta lista"
+              className="text-[#b3b3b3] hover:text-white hover:scale-106 transition-all p-1 cursor-pointer"
+              title={isArtist ? "Más opciones del artista" : "Más opciones para esta lista"}
             >
               <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M4.5 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m15 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3m-7.5 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3" />

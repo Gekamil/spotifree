@@ -217,14 +217,27 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
     : false;
 
   const isArtist = Boolean(
-    targetPlaylist && (
+    (targetPlaylist && (
       targetPlaylist.description?.toLowerCase() === 'artista' ||
       (targetPlaylist as any).type === 'artist' ||
       (targetPlaylist as any).is_artist === true ||
       targetPlaylist.id?.startsWith('art-') ||
-      targetPlaylist.id?.startsWith('artist-')
-    )
+      targetPlaylist.id?.startsWith('artist-') ||
+      targetPlaylist.id?.includes('spotify:artist:')
+    )) ||
+    contextMenu.playlistId?.startsWith('art-') ||
+    contextMenu.playlistId?.startsWith('artist-') ||
+    contextMenu.playlistId?.startsWith('spotify:artist:') ||
+    contextMenu.playlistId?.startsWith('sc-vault-')
   );
+
+  const artistName =
+    targetPlaylist?.name ||
+    (contextMenu.playlistId?.startsWith('art-')
+      ? contextMenu.playlistId.replace(/^art-/, '').replace(/-/g, ' ')
+      : contextMenu.playlistId?.startsWith('artist-')
+      ? contextMenu.playlistId.replace(/^artist-/, '').replace(/-/g, ' ')
+      : 'Artista');
 
   const isFolder = Boolean(
     targetPlaylist && (
@@ -302,8 +315,123 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
       }}
     >
       {!isTrackMenu ? (
-        /* Playlist Context Menu (Exact 1:1 match to Spotify Image 5 & User Screenshot) */
-        <div className="space-y-0.5">
+        isArtist ? (
+          /* Artist Context Menu (Spotify-accurate desktop menu) */
+          <div className="space-y-0.5">
+            {/* 1. Seguir / Dejar de seguir artista */}
+            <button
+              onClick={() => {
+                const plId = targetPlaylist?.id || contextMenu.playlistId;
+                if (!plId) return;
+                const cleanId = plId.replace(/^spotify:(playlist|album|artist):/i, '').split('?')[0].trim();
+                let list: string[] = [];
+                try {
+                  list = JSON.parse(localStorage.getItem('spotifree_saved_library_playlists') || '[]');
+                } catch {}
+
+                if (isSavedInLibrary) {
+                  list = list.filter((id) => id !== plId && id !== cleanId);
+                  try {
+                    localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+                  } catch {}
+                  useSpotifyDataStore.getState().deletePlaylist(plId);
+                  showGlobalToast(`Has dejado de seguir a ${artistName}`);
+                } else {
+                  if (!list.includes(plId)) list.push(plId);
+                  if (cleanId && !list.includes(cleanId)) list.push(cleanId);
+                  try {
+                    localStorage.setItem('spotifree_saved_library_playlists', JSON.stringify(list));
+                  } catch {}
+                  if (targetPlaylist) {
+                    useSpotifyDataStore.getState().addCustomPlaylist(targetPlaylist);
+                  } else {
+                    useSpotifyDataStore.getState().addCustomPlaylist({
+                      id: plId,
+                      name: artistName,
+                      description: 'Artista',
+                      images: [],
+                      tracks: { total: 0, items: [] },
+                      owner: { id: 'spotify', display_name: 'Spotify' },
+                    } as any);
+                  }
+                  showGlobalToast(`Siguiendo a ${artistName}`);
+                }
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              {isSavedInLibrary ? (
+                <CheckTrackNativeIcon size={16} className="text-[#1ed760] shrink-0" />
+              ) : (
+                <AddTrackNativeIcon size={16} className="text-[#a7a7a7] shrink-0" />
+              )}
+              <span className="truncate">{isSavedInLibrary ? 'Dejar de seguir' : 'Seguir'}</span>
+            </button>
+
+            {/* 2. Añadir a la cola */}
+            <button
+              onClick={() => {
+                if (targetPlaylist?.tracks?.items && targetPlaylist.tracks.items.length > 0) {
+                  usePlayerStore.getState().addToQueue(targetPlaylist.tracks.items);
+                  showGlobalToast(`Canciones de ${artistName} añadidas a la cola`);
+                } else {
+                  showGlobalToast('No hay canciones para añadir a la cola');
+                }
+                closeContextMenu();
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" className="text-[#a7a7a7] shrink-0">
+                <path d="M16 15H2v-1.5h14zm0-4.5H2V9h14zm-8.034-6A5.5 5.5 0 0 1 7.187 6H13.5a2.5 2.5 0 0 0 0-5H7.966c.159.474.255.978.278 1.5H13.5a1 1 0 1 1 0 2zM2 2V0h1.5v2h2v1.5h-2v2H2v-2H0V2z" />
+              </svg>
+              <span className="truncate">Añadir a la cola</span>
+            </button>
+
+            {/* 3. Ir a la radio del artista */}
+            <button
+              onClick={() => {
+                closeContextMenu();
+                const radioId = `radio-artist-${encodeURIComponent(artistName)}`;
+                window.dispatchEvent(new CustomEvent('spotifree:navigate-playlist', {
+                  detail: { id: radioId, name: `Radio de ${artistName}` }
+                }));
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5M12 12h.01M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5M19.1 4.9c3.9 3.9 3.9 10.2 0 14.2" />
+              </svg>
+              <span className="truncate">Ir a la radio del artista</span>
+            </button>
+
+            <div className="h-[1px] bg-white/10 my-1 mx-1" />
+
+            {/* 4. Compartir / Copiar enlace del artista */}
+            <button
+              onClick={async () => {
+                closeContextMenu();
+                const plId = targetPlaylist?.id || contextMenu.playlistId || '';
+                const cleanId = plId.replace(/^spotify:artist:/i, '').split('?')[0].trim();
+                const shareUrl = `${window.location.origin}/?artist=${encodeURIComponent(cleanId)}`;
+                try {
+                  await navigator.clipboard.writeText(shareUrl);
+                  showGlobalToast('Enlace de artista copiado al portapapeles');
+                } catch {
+                  showGlobalToast('Enlace listo');
+                }
+              }}
+              className="w-full px-3 py-2.5 rounded-[2px] hover:bg-[#3e3e3e] transition-colors text-left flex items-center gap-3 text-[13px] text-white"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#a7a7a7] shrink-0">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+              <span className="truncate">Copiar enlace del artista</span>
+            </button>
+          </div>
+        ) : (
+          /* Playlist Context Menu (Exact 1:1 match to Spotify Image 5 & User Screenshot) */
+          <div className="space-y-0.5">
           {/* 0. Fijar / Desfijar en tu biblioteca */}
           {!isLikedPlaylist && (
             <button
@@ -600,6 +728,7 @@ export const ContextMenu: React.FC<ContextMenuProps> = ({ onSelectPlaylistById }
             <span className="truncate">Copiar enlace de la playlist</span>
           </button>
         </div>
+        )
       ) : (
         /* Track Context Menu (Spotify 1:1 Parity) */
         <div className="space-y-0.5">

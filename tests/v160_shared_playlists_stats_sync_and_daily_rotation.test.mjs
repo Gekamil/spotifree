@@ -107,7 +107,7 @@ describe('Spotifree v1.6 Shared Playlist Modal, Stats Cloud Sync, Car Call Recov
 
   it('9. Version 1.6 / 1.6.0 metadata is consistent and strictly zero emojis in new files', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf-8'));
-    assert.ok(['1.6.0', '1.6.1', '1.7.0'].includes(pkg.version), 'package.json version must be 1.6.0, 1.6.1 or 1.7.0');
+    assert.ok(['1.6.0', '1.6.1', '1.7.0', '1.7.1'].includes(pkg.version), 'package.json version must be 1.6.0, 1.6.1, 1.7.0 or 1.7.1');
 
     const changelog = fs.readFileSync(path.join(root, 'src/data/changelog.ts'), 'utf-8');
     assert.ok(changelog.includes("export const APP_VERSION = '1.6") || changelog.includes("export const APP_VERSION = '1.7"), 'APP_VERSION must start with 1.6 or 1.7');

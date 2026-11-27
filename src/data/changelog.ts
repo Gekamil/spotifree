@@ -11,14 +11,26 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.7.0';
+export const APP_VERSION = '1.7.1';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.7.1',
+    date: '28 de noviembre, 2026',
+    title: 'Spotifree 1.7.1: Menu de tres puntos en artistas, descargas predeterminadas en dispositivo, seleccion multiple y correccion de aleatorio en descargadas',
+    isLatest: true,
+    highlights: [
+      'Boton de 3 puntitos y menu de opciones en perfiles de artistas: tanto en la barra de acciones de escritorio como en movil, los artistas cuentan con menu de 3 puntos con acciones exclusivas para seguir/dejar de seguir, anadir sus temas destacados a la cola, ir a su radio y copiar su enlace.',
+      'Descargas predeterminadas en el dispositivo: las canciones descargadas ahora se guardan por defecto en la carpeta del dispositivo y se escriben directamente en el almacenamiento fisico del movil (Music/Spotifree) sin pasos intermedios.',
+      'Seleccion multiple y movimiento por lotes entre carpetas: anadido modo de seleccion con casillas para mover multiples canciones a cualquier carpeta de una sola vez, o guardarlas en bloque en el dispositivo.',
+      'Correccion de aleatorio en lista de descargadas: al pulsar el boton de aleatorio en "Descargas y Archivos locales", el reproductor ya no resetea la lista a la pista 0, sino que conmuta limpiamente entre los modos de aleatorio (normal, inteligente y desactivado) manteniendo la reproduccion en curso.',
+    ],
+  },
   {
     version: '1.7',
     date: '27 de noviembre, 2026',
     title: 'Spotifree 1.7: Eliminacion de previews de 30s en SoundCloud, transiciones fluidas y restauracion de cola en aleatorio inteligente',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Eliminacion definitiva de snippets de 30 segundos en canciones de SoundCloud: se detectan y descartan los previews recortados de 30 segundos de SoundCloud tanto en el servidor como en el reproductor de audio, asegurando siempre la pista completa de estudio.',
       'Resolucion y transiciones ultrarrapidas en SoundCloud: optimizado el montaje de HLS fMP4 y aprovechada la precarga en el reproductor inactivo para que cambiar entre canciones de SoundCloud sea instantaneo y sin demoras de 4 segundos.',

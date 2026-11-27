@@ -1795,6 +1795,15 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
               )}
             </button>
           )}
+
+          {/* 3-dots More options button (...) */}
+          <button
+            onClick={() => setIsOptionsOpen(true)}
+            className="text-white/80 hover:text-white active:scale-90 transition-transform cursor-pointer p-0.5"
+            title={isArtist ? 'Más opciones del artista' : 'Más opciones de la playlist'}
+          >
+            <OptionsNativeIcon size={20} className="text-white/80 hover:text-white" />
+          </button>
         </div>
 
         {/* Subtle spacing gap between left tools and playback controls */}
@@ -2519,149 +2528,236 @@ export const MobilePlaylistView: React.FC<MobilePlaylistViewProps> = ({
             <SheetHeader
               image={coverUrl || 'https://misc.scdn.co/liked-songs/liked-songs-640.jpg'}
               title={playlist.name}
-              subtitle={playlist.owner?.display_name || 'Spotify'}
+              subtitle={isArtist ? 'Artista' : (playlist.owner?.display_name || 'Spotify')}
             />
 
             <SheetList>
-              <SheetItem
-                icon={<ShareNativeIcon size={20} className="text-white" />}
-                label="Compartir playlist"
-                onClick={() => {
-                  setIsOptionsOpen(false);
-                  handleSharePlaylist();
-                }}
-              />
+              {isArtist ? (
+                <>
+                  <SheetItem
+                    icon={isSavedInLibrary ? <CheckTrackNativeIcon size={22} className="text-[#1ed760]" /> : <AddTrackNativeIcon size={22} className="text-white" />}
+                    label={isSavedInLibrary ? 'Siguiendo (dejar de seguir)' : 'Seguir artista'}
+                    onClick={() => {
+                      handleToggleLibrary();
+                      setIsOptionsOpen(false);
+                      setToastMessage(isSavedInLibrary ? 'Has dejado de seguir al artista' : 'Siguiendo al artista');
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                  />
 
-              <SheetItem
-                icon={isSavedInLibrary ? <CheckTrackNativeIcon size={22} className="text-[#1ed760]" /> : <AddTrackNativeIcon size={22} className="text-white" />}
-                label={isSavedInLibrary ? 'Eliminar de tu biblioteca' : 'Añadir a tu biblioteca'}
-                onClick={() => {
-                  handleToggleLibrary();
-                  setIsOptionsOpen(false);
-                  setToastMessage(isSavedInLibrary ? 'Eliminada de tu biblioteca' : 'Añadida a tu biblioteca');
-                  setTimeout(() => setToastMessage(null), 2500);
-                }}
-              />
-
-              {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
-                <SheetItem
-                  icon={<EditNativeIcon size={20} className="text-white" />}
-                  label="Editar detalles de la playlist"
-                  onClick={() => {
-                    setIsOptionsOpen(false);
-                    setIsEditModalOpen(true);
-                  }}
-                />
-              )}
-
-              {!isArtist && (
-                <SheetItem
-                  icon={
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isRefreshingTracks ? 'animate-spin text-[#1ed760]' : 'text-white'}>
-                      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16" />
-                    </svg>
-                  }
-                  label="Actualizar canciones de la lista"
-                  onClick={() => {
-                    setIsOptionsOpen(false);
-                    handleSyncPlaylistSongs();
-                  }}
-                />
-              )}
-
-              <SheetItem
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                  </svg>
-                }
-                label="Copiar enlace"
-                onClick={async () => {
-                  setIsOptionsOpen(false);
-                  const fallbackUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
-                  const shareUrl = await createPlaylistShareLink(cleanId).catch(() => fallbackUrl);
-                  try {
-                    await navigator.clipboard.writeText(shareUrl);
-                    setToastMessage('¡Enlace copiado al portapapeles!');
-                  } catch {
-                    setToastMessage('Enlace listo');
-                  }
-                  setTimeout(() => setToastMessage(null), 2500);
-                }}
-              />
-
-              {isOwnPlaylist && canAddTracksToThisList && !isLikedPlaylist && (
-                <SheetItem
-                  icon={
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="9" cy="8" r="3.5" />
-                      <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
-                      <path d="M19 8v6M16 11h6" />
-                    </svg>
-                  }
-                  label={sharedCode ? 'Invitar a más personas' : 'Invitar a colaborar'}
-                  sublabel={sharedCode ? 'Comparte el enlace de esta playlist colaborativa' : 'Tus amigos podrán añadir y quitar canciones'}
-                  onClick={async () => {
-                    setIsOptionsOpen(false);
-                    const link = await shareAsCollaborative(activePlaylist.id).catch(() => null);
-                    if (!link) {
-                      showGlobalToast('No se ha podido crear la invitación');
-                      return;
+                  <SheetItem
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M15 15H1v-1.5h14zm0-4.5H1V9h14zm-14-7A2.5 2.5 0 0 1 3.5 1h9a2.5 2.5 0 0 1 0 5h-9A2.5 2.5 0 0 1 1 3.5m2.5-1a1 1 0 0 0 0 2h9a1 1 0 1 0 0-2z" />
+                      </svg>
                     }
-                    try {
-                      if (navigator.share) {
-                        await navigator.share({ title: activePlaylist.name || playlist.name, text: `Añade canciones a «${activePlaylist.name || playlist.name}» conmigo`, url: link });
-                        return;
+                    label="Añadir canciones a la cola"
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      if (tracks.length > 0) {
+                        usePlayerStore.getState().addToQueue(tracks.slice(0, 20));
+                        setToastMessage('Canciones del artista añadidas a la cola');
+                      } else {
+                        setToastMessage('No hay canciones disponibles');
                       }
-                    } catch {
-                      return; // share sheet closed
-                    }
-                    try {
-                      await navigator.clipboard.writeText(link);
-                      showGlobalToast('Enlace de invitación copiado');
-                    } catch {
-                      showGlobalToast(link);
-                    }
-                  }}
-                />
-              )}
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                  />
 
-              {canAddTracksToThisList && !isLikedPlaylist && (
-                <SheetItem
-                  icon={
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" />
-                      <path d="M12 7v5l3 2" />
-                    </svg>
-                  }
-                  label="Historial de versiones"
-                  sublabel="Vuelve a como estaba antes"
-                  onClick={() => {
-                    setIsOptionsOpen(false);
-                    openPlaylistVersions(activePlaylist.id, activePlaylist.name || playlist.name);
-                  }}
-                />
-              )}
+                  <SheetItem
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5M12 12h.01M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5M19.1 4.9c3.9 3.9 3.9 10.2 0 14.2" />
+                      </svg>
+                    }
+                    label="Ir a la radio del artista"
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      const radioId = `radio-artist-${encodeURIComponent(playlist.name)}`;
+                      const radioName = `Radio de ${playlist.name}`;
+                      if (onSelectPlaylistById) {
+                        onSelectPlaylistById(radioId, radioName);
+                      } else {
+                        window.dispatchEvent(new CustomEvent('spotifree:navigate-playlist', {
+                          detail: { id: radioId, name: radioName }
+                        }));
+                      }
+                    }}
+                  />
 
-              {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
-                <SheetItem
-                  icon={<TrashNativeIcon size={20} />}
-                  label="Eliminar playlist"
-                  onClick={async () => {
-                    setIsOptionsOpen(false);
-                    const ok = await confirmDialog({
-                      title: '¿Eliminar de Tu biblioteca?',
-                      body: `Se eliminará «${activePlaylist.name}» de Tu biblioteca. Podrás recuperarla durante 90 días en Ajustes › Recuperar playlists.`,
-                      confirmLabel: 'Eliminar',
-                    });
-                    if (!ok) return;
-                    deletePlaylist(activePlaylist.id);
-                    deletePlaylist(cleanId);
-                    showGlobalToast(`Se ha eliminado «${activePlaylist.name}» de Tu biblioteca`);
-                    onBack();
-                  }}
-                />
+                  <SheetItem
+                    icon={<ShareNativeIcon size={20} className="text-white" />}
+                    label="Compartir artista"
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      handleSharePlaylist();
+                    }}
+                  />
+
+                  <SheetItem
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                      </svg>
+                    }
+                    label="Copiar enlace del artista"
+                    onClick={async () => {
+                      setIsOptionsOpen(false);
+                      const shareUrl = `${window.location.origin}/?artist=${encodeURIComponent(cleanId)}`;
+                      try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        setToastMessage('Enlace del artista copiado al portapapeles');
+                      } catch {
+                        setToastMessage('Enlace listo');
+                      }
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <SheetItem
+                    icon={<ShareNativeIcon size={20} className="text-white" />}
+                    label="Compartir playlist"
+                    onClick={() => {
+                      setIsOptionsOpen(false);
+                      handleSharePlaylist();
+                    }}
+                  />
+
+                  <SheetItem
+                    icon={isSavedInLibrary ? <CheckTrackNativeIcon size={22} className="text-[#1ed760]" /> : <AddTrackNativeIcon size={22} className="text-white" />}
+                    label={isSavedInLibrary ? 'Eliminar de tu biblioteca' : 'Añadir a tu biblioteca'}
+                    onClick={() => {
+                      handleToggleLibrary();
+                      setIsOptionsOpen(false);
+                      setToastMessage(isSavedInLibrary ? 'Eliminada de tu biblioteca' : 'Añadida a tu biblioteca');
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                  />
+
+                  {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
+                    <SheetItem
+                      icon={<EditNativeIcon size={20} className="text-white" />}
+                      label="Editar detalles de la playlist"
+                      onClick={() => {
+                        setIsOptionsOpen(false);
+                        setIsEditModalOpen(true);
+                      }}
+                    />
+                  )}
+
+                  {!isArtist && (
+                    <SheetItem
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isRefreshingTracks ? 'animate-spin text-[#1ed760]' : 'text-white'}>
+                          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3L21.5 8M22 12.5a10 10 0 0 1-18.8 4.2L2.5 16" />
+                        </svg>
+                      }
+                      label="Actualizar canciones de la lista"
+                      onClick={() => {
+                        setIsOptionsOpen(false);
+                        handleSyncPlaylistSongs();
+                      }}
+                    />
+                  )}
+
+                  <SheetItem
+                    icon={
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                      </svg>
+                    }
+                    label="Copiar enlace"
+                    onClick={async () => {
+                      setIsOptionsOpen(false);
+                      const fallbackUrl = `${window.location.origin}/?playlist=${encodeURIComponent(cleanId)}`;
+                      const shareUrl = await createPlaylistShareLink(cleanId).catch(() => fallbackUrl);
+                      try {
+                        await navigator.clipboard.writeText(shareUrl);
+                        setToastMessage('¡Enlace copiado al portapapeles!');
+                      } catch {
+                        setToastMessage('Enlace listo');
+                      }
+                      setTimeout(() => setToastMessage(null), 2500);
+                    }}
+                  />
+
+                  {isOwnPlaylist && canAddTracksToThisList && !isLikedPlaylist && (
+                    <SheetItem
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="9" cy="8" r="3.5" />
+                          <path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5" />
+                          <path d="M19 8v6M16 11h6" />
+                        </svg>
+                      }
+                      label={sharedCode ? 'Invitar a más personas' : 'Invitar a colaborar'}
+                      sublabel={sharedCode ? 'Comparte el enlace de esta playlist colaborativa' : 'Tus amigos podrán añadir y quitar canciones'}
+                      onClick={async () => {
+                        setIsOptionsOpen(false);
+                        const link = await shareAsCollaborative(activePlaylist.id).catch(() => null);
+                        if (!link) {
+                          showGlobalToast('No se ha podido crear la invitación');
+                          return;
+                        }
+                        try {
+                          if (navigator.share) {
+                            await navigator.share({ title: activePlaylist.name || playlist.name, text: `Añade canciones a «${activePlaylist.name || playlist.name}» conmigo`, url: link });
+                            return;
+                          }
+                        } catch {
+                          return; // share sheet closed
+                        }
+                        try {
+                          await navigator.clipboard.writeText(link);
+                          showGlobalToast('Enlace de invitación copiado');
+                        } catch {
+                          showGlobalToast(link);
+                        }
+                      }}
+                    />
+                  )}
+
+                  {canAddTracksToThisList && !isLikedPlaylist && (
+                    <SheetItem
+                      icon={
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 12a9 9 0 1 0 3-6.7M3 4v4h4" />
+                          <path d="M12 7v5l3 2" />
+                        </svg>
+                      }
+                      label="Historial de versiones"
+                      sublabel="Vuelve a como estaba antes"
+                      onClick={() => {
+                        setIsOptionsOpen(false);
+                        openPlaylistVersions(activePlaylist.id, activePlaylist.name || playlist.name);
+                      }}
+                    />
+                  )}
+
+                  {cleanId !== 'liked-songs' && cleanId !== 'collection:tracks' && (
+                    <SheetItem
+                      icon={<TrashNativeIcon size={20} />}
+                      label="Eliminar playlist"
+                      onClick={async () => {
+                        setIsOptionsOpen(false);
+                        const ok = await confirmDialog({
+                          title: '¿Eliminar de Tu biblioteca?',
+                          body: `Se eliminará «${activePlaylist.name}» de Tu biblioteca. Podrás recuperarla durante 90 días en Ajustes › Recuperar playlists.`,
+                          confirmLabel: 'Eliminar',
+                        });
+                        if (!ok) return;
+                        deletePlaylist(activePlaylist.id);
+                        deletePlaylist(cleanId);
+                        showGlobalToast(`Se ha eliminado «${activePlaylist.name}» de Tu biblioteca`);
+                        onBack();
+                      }}
+                    />
+                  )}
+                </>
               )}
             </SheetList>
       </MobileSheet>

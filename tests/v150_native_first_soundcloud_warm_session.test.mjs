@@ -54,9 +54,9 @@ describe('Spotifree v1.5 Native-First Catalog Priority & Sustainable SoundCloud 
     const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
     const readme = fs.readFileSync(path.resolve('README.md'), 'utf8');
 
-    assert.ok(['1.5.0', '1.6.0', '1.6.1', '1.7.0'].includes(pkg.version));
+    assert.ok(['1.5.0', '1.6.0', '1.6.1', '1.7.0', '1.7.1'].includes(pkg.version));
     assert.ok(changelog.includes("version: '1.5'"));
-    assert.ok(readme.includes('versión-1.5') || readme.includes('versión-1.6') || readme.includes('versión-1.6.1') || readme.includes('versión-1.7.0'));
+    assert.ok(readme.includes('versión-1.5') || readme.includes('versión-1.6') || readme.includes('versión-1.6.1') || readme.includes('versión-1.7'));
     assert.ok(readme.includes('## Novedades de la 1.5'));
   });
 });

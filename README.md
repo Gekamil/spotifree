@@ -13,7 +13,7 @@ Modo DJ, karaoke, escucha sin conexión y sesiones compartidas.
 [![Abrir la web](https://img.shields.io/badge/Abrir_la_web-1ED760?style=for-the-badge&logo=spotify&logoColor=black)](https://spotifreeweb.vercel.app)
 [![Descargar APK](https://img.shields.io/badge/Descargar_APK-181818?style=for-the-badge&logo=android&logoColor=3DDC84)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 
-[![Versión](https://img.shields.io/badge/versión-1.7.0-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
+[![Versión](https://img.shields.io/badge/versión-1.7.1-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
 [![Build APK](https://img.shields.io/github/actions/workflow/status/Gekamil/spotifree/android-apk.yml?branch=main&style=flat-square&label=build%20apk&labelColor=181818)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
 [![Último commit](https://img.shields.io/github/last-commit/Gekamil/spotifree?style=flat-square&label=último%20commit&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/commits/main)
 [![Stars](https://img.shields.io/github/stars/Gekamil/spotifree?style=flat-square&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/stargazers)
@@ -242,6 +242,13 @@ spotifree/
 </details>
 
 <br />
+
+## Novedades de la 1.7.1
+
+- **Menu de 3 puntos en artistas:** boton de tres puntos (...) en el perfil y cabecera de artistas con opciones de seguir/dejar de seguir, anadir sus temas destacados a la cola, ir a su radio y copiar su enlace.
+- **Descargas predeterminadas en el dispositivo:** las canciones descargadas se asignan por defecto a la carpeta del dispositivo y se guardan directamente en el almacenamiento fisico del telefono (`Music/Spotifree`) mediante el plugin nativo.
+- **Seleccion multiple y movimiento masivo de carpetas:** modo de seleccion con casillas para mover muchas canciones de una sola vez a otra carpeta o guardarlas en bloque en el dispositivo.
+- **Correccion de aleatorio en canciones descargadas:** al pulsar el boton de aleatorio en "Descargas y Archivos locales", el reproductor ya no reinicia la lista en la pista 0, sino que rota correctamente los modos de aleatorio (normal, inteligente y desactivado) manteniendo la pista activa.
 
 ## Novedades de la 1.7
 

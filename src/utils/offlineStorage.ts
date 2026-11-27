@@ -1059,7 +1059,12 @@ export async function downloadPlaylist(
           successful++;
         } else {
           const ok = await downloadTrackAudio(track);
-          if (ok) successful++;
+          if (ok) {
+            successful++;
+            if (isDeviceMusicAvailable()) {
+              await saveTrackAsMp3File(track).catch(() => false);
+            }
+          }
         }
       } catch {}
       completed++;

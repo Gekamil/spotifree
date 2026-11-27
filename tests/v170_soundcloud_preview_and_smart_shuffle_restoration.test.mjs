@@ -89,14 +89,14 @@ test('Spotifree v1.7: SoundCloud Preview Prevention and Smart Shuffle Queue Rest
 
   await t.test('7. Version 1.7 / 1.7.0 metadata is consistent across package.json, README and changelog', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
-    assert.equal(pkg.version, '1.7.0', 'package.json version must be 1.7.0');
+    assert.ok(['1.7.0', '1.7.1'].includes(pkg.version), 'package.json version must be 1.7.0 or 1.7.1');
 
     const changelog = fs.readFileSync(path.join(rootDir, 'src', 'data', 'changelog.ts'), 'utf8');
-    assert.ok(changelog.includes("export const APP_VERSION = '1.7.0'"), 'changelog.ts APP_VERSION must be 1.7.0');
+    assert.ok(changelog.includes("export const APP_VERSION = '1.7.0'") || changelog.includes("export const APP_VERSION = '1.7.1'"), 'changelog.ts APP_VERSION must be 1.7.0 or 1.7.1');
     assert.ok(changelog.includes("version: '1.7'"), 'changelog.ts must contain 1.7 release entry');
 
     const readme = fs.readFileSync(path.join(rootDir, 'README.md'), 'utf8');
-    assert.ok(readme.includes('versión-1.7.0'), 'README badge must reference 1.7.0');
+    assert.ok(readme.includes('versión-1.7.0') || readme.includes('versión-1.7.1'), 'README badge must reference 1.7.x');
     assert.ok(readme.includes('## Novedades de la 1.7'), 'README must contain Novedades de la 1.7 section');
   });
 

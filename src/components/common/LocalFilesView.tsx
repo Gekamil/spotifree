@@ -23,7 +23,7 @@ import {
   isDeviceMusicAvailable,
   scanDeviceMusic,
 } from '../../utils/nativeLocalMusic';
-import { getAllDownloadedTrackIds, getDownloadedTracks, onDownloadsChanged } from '../../utils/offlineStorage';
+import { getAllDownloadedTrackIds, getDownloadedTracks, onDownloadsChanged, saveTrackAsMp3File } from '../../utils/offlineStorage';
 import {
   type DownloadFolder,
   createDownloadFolder,
@@ -31,10 +31,12 @@ import {
   getDownloadFolders,
   getTrackFolderId,
   moveTrackToFolder,
+  moveTracksToFolder,
   onFoldersChanged,
   renameDownloadFolder,
 } from '../../utils/downloadFolders';
 import { MobileSheet, SheetHeader, SheetItem, SheetList } from '../mobile/MobileSheet';
+import { ShuffleNativeIcon, SmartShuffleNativeIcon } from '../icons/SpotifyNativeIcons';
 
 export const LOCAL_FILES_COVER_GRADIENT = 'linear-gradient(135deg, #1e3264 0%, #1ed760 100%)';
 
@@ -111,13 +113,20 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
   const [renamingFolder, setRenamingFolder] = useState<DownloadFolder | null>(null);
   const [renameInput, setRenameInput] = useState('');
 
-  const { currentTrack, isPlaying, playTrack, togglePlay, addToQueue } = usePlayerStore(
+  // Batch multi-select state
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedTrackIds, setSelectedTrackIds] = useState<Set<string>>(new Set());
+  const [isBatchMoveOpen, setIsBatchMoveOpen] = useState(false);
+
+  const { currentTrack, isPlaying, playTrack, togglePlay, addToQueue, shuffleMode, toggleShuffle } = usePlayerStore(
     useShallow((s) => ({
       currentTrack: s.currentTrack,
       isPlaying: s.isPlaying,
       playTrack: s.playTrack,
       togglePlay: s.togglePlay,
       addToQueue: s.addToQueue,
+      shuffleMode: s.shuffleMode,
+      toggleShuffle: s.toggleShuffle,
     }))
   );
 
@@ -225,19 +234,83 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
 
   const isThisContextPlaying = Boolean(currentTrack && displayedTracks.some((t) => t.id === currentTrack.id));
 
+  const handleToggleShuffle = () => {
+    if (!displayedTracks.length) return;
+    if (isThisContextPlaying) {
+      // Toggle shuffle mode in place without resetting playback!
+      toggleShuffle();
+    } else {
+      // If shuffle was off, switch to shuffle and start playback cleanly
+      const isShuffleActive = shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+      if (!isShuffleActive) {
+        toggleShuffle();
+      }
+      const rndIdx = Math.floor(Math.random() * displayedTracks.length);
+      const startTrack = displayedTracks[rndIdx] || displayedTracks[0];
+      playTrack(startTrack, displayedTracks, LOCAL_FILES_PLAYLIST_ID, 'Descargas y Archivos');
+    }
+  };
+
   const playAll = (shuffle = false) => {
     if (!displayedTracks.length) return;
     if (isThisContextPlaying && !shuffle) {
       togglePlay();
       return;
     }
-    const list = shuffle ? [...displayedTracks].sort(() => Math.random() - 0.5) : displayedTracks;
-    playTrack(list[0], list, LOCAL_FILES_PLAYLIST_ID);
+    const isShuffleActive = shuffle || shuffleMode !== 'off' || usePlayerStore.getState().isShuffle;
+    let startTrack: Track;
+    if (isShuffleActive && displayedTracks.length > 1) {
+      const rndIdx = Math.floor(Math.random() * displayedTracks.length);
+      startTrack = displayedTracks[rndIdx];
+    } else {
+      startTrack = displayedTracks[0];
+    }
+    playTrack(startTrack, displayedTracks, LOCAL_FILES_PLAYLIST_ID, 'Descargas y Archivos');
   };
 
   const playOne = (t: Track) => {
     if (currentTrack?.id === t.id) togglePlay();
-    else playTrack(t, displayedTracks, LOCAL_FILES_PLAYLIST_ID);
+    else playTrack(t, displayedTracks, LOCAL_FILES_PLAYLIST_ID, 'Descargas y Archivos');
+  };
+
+  const toggleSelectTrack = (trackId: string) => {
+    setSelectedTrackIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(trackId)) next.delete(trackId);
+      else next.add(trackId);
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTrackIds.size === displayedTracks.length) {
+      setSelectedTrackIds(new Set());
+    } else {
+      setSelectedTrackIds(new Set(displayedTracks.map((t) => t.id)));
+    }
+  };
+
+  const handleBatchMoveToFolder = (targetFolderId: string) => {
+    if (selectedTrackIds.size === 0) return;
+    const targetFolder = folders.find((f) => f.id === targetFolderId);
+    moveTracksToFolder(Array.from(selectedTrackIds), targetFolderId);
+    showToast(`${selectedTrackIds.size} canciones movidas a «${targetFolder?.name || 'carpeta'}»`);
+    setSelectedTrackIds(new Set());
+    setIsSelectMode(false);
+    setIsBatchMoveOpen(false);
+    setFolderVersion((v) => v + 1);
+  };
+
+  const handleBatchSaveToDevice = async () => {
+    if (selectedTrackIds.size === 0) return;
+    const selectedTracks = displayedTracks.filter((t) => selectedTrackIds.has(t.id));
+    showToast(`Guardando ${selectedTracks.length} canciones en el dispositivo…`);
+    let count = 0;
+    for (const track of selectedTracks) {
+      const ok = await saveTrackAsMp3File(track).catch(() => false);
+      if (ok) count++;
+    }
+    showToast(`${count} canciones guardadas en el dispositivo`);
   };
 
   const handleCreateFolder = () => {
@@ -401,15 +474,34 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
           )}
         </button>
         <button
-          onClick={() => playAll(true)}
+          onClick={handleToggleShuffle}
           disabled={!displayedTracks.length}
-          className="w-10 h-10 flex items-center justify-center text-[#b3b3b3] hover:text-white disabled:opacity-40 cursor-pointer active:scale-90 transition-all"
-          aria-label="Reproducir en aleatorio"
+          className={`w-10 h-10 flex flex-col items-center justify-center transition-all disabled:opacity-40 cursor-pointer active:scale-90 relative ${
+            shuffleMode !== 'off' ? 'text-[#1ed760]' : 'text-[#b3b3b3] hover:text-white'
+          }`}
+          aria-label={
+            shuffleMode === 'smart'
+              ? 'Aleatorio inteligente activado'
+              : shuffleMode === 'all'
+              ? 'Aleatorio activado'
+              : 'Activar aleatorio'
+          }
+          title={
+            shuffleMode === 'smart'
+              ? 'Aleatorio inteligente'
+              : shuffleMode === 'all'
+              ? 'Aleatorio activado'
+              : 'Activar aleatorio'
+          }
         >
-          <svg width="22" height="22" viewBox="0 0 16 16" fill="currentColor">
-            <path d="M13.151.922a.75.75 0 1 0-1.06 1.06L13.109 3H11.16a3.75 3.75 0 0 0-2.873 1.34l-6.173 7.356A2.25 2.25 0 0 1 .39 12.5H0V14h.391a3.75 3.75 0 0 0 2.873-1.34l6.173-7.356a2.25 2.25 0 0 1 1.724-.804h1.947l-1.017 1.018a.75.75 0 0 0 1.06 1.06L15.98 3.75zM.391 3.5H0V2h.391c1.109 0 2.16.49 2.873 1.34L4.89 5.277l-.979 1.167-1.796-2.14A2.25 2.25 0 0 0 .39 3.5z" />
-            <path d="m7.5 10.723.98-1.167.957 1.14a2.25 2.25 0 0 0 1.724.804h1.947l-1.017-1.018a.75.75 0 1 1 1.06-1.06l2.829 2.828-2.829 2.828a.75.75 0 1 1-1.06-1.06L13.109 13H11.16a3.75 3.75 0 0 1-2.873-1.34l-.787-.938z" />
-          </svg>
+          {shuffleMode === 'smart' ? (
+            <SmartShuffleNativeIcon size={20} className="text-[#1ed760]" />
+          ) : (
+            <ShuffleNativeIcon size={20} className={shuffleMode === 'all' ? 'text-[#1ed760]' : 'text-current'} />
+          )}
+          {shuffleMode !== 'off' && (
+            <span className="w-1 h-1 rounded-full bg-[#1ed760] absolute bottom-1" />
+          )}
         </button>
 
         <div className="flex-1" />
@@ -434,6 +526,30 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
             </button>
           </div>
         )}
+
+        {/* Toggle Multi-select mode for moving multiple tracks */}
+        <button
+          onClick={() => {
+            if (isSelectMode) {
+              setSelectedTrackIds(new Set());
+              setIsSelectMode(false);
+            } else {
+              setIsSelectMode(true);
+            }
+          }}
+          disabled={!displayedTracks.length}
+          className={`h-9 px-3.5 rounded-full text-xs font-bold flex items-center gap-2 cursor-pointer active:scale-95 transition-all border ${
+            isSelectMode || selectedTrackIds.size > 0
+              ? 'bg-white text-black border-white shadow-md'
+              : 'border-[#7c7c7c] text-white hover:border-white'
+          }`}
+          title={isSelectMode ? 'Cerrar selección' : 'Seleccionar varias canciones para mover'}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2m-9 14-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8z" />
+          </svg>
+          {isSelectMode ? 'Cancelar selección' : 'Seleccionar varias'}
+        </button>
 
         {/* Add audio files / folder */}
         <button
@@ -581,8 +697,27 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
         /* Track List */
         <div className={`${isMobile ? 'px-2' : 'px-4'} mt-2`}>
           {!isMobile && displayedTracks.length > 0 && (
-            <div className="grid grid-cols-[16px_1fr_1fr_120px_72px] gap-4 px-4 py-2 mb-2 border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-[#a7a7a7]">
-              <span>#</span>
+            <div className="grid grid-cols-[20px_1fr_1fr_120px_72px] gap-4 px-4 py-2 mb-2 border-b border-white/10 text-xs font-semibold uppercase tracking-wider text-[#a7a7a7] items-center">
+              {isSelectMode || selectedTrackIds.size > 0 ? (
+                <button
+                  type="button"
+                  onClick={handleSelectAll}
+                  className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${
+                    selectedTrackIds.size === displayedTracks.length && displayedTracks.length > 0
+                      ? 'bg-[#1ed760] border-[#1ed760] text-black'
+                      : 'border-white/40 hover:border-white'
+                  }`}
+                  title={selectedTrackIds.size === displayedTracks.length ? 'Deseleccionar todas' : 'Seleccionar todas'}
+                >
+                  {selectedTrackIds.size === displayedTracks.length && displayedTracks.length > 0 && (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
+                  )}
+                </button>
+              ) : (
+                <span>#</span>
+              )}
               <span>Título</span>
               <span>Álbum / Origen</span>
               <span>Carpeta</span>
@@ -595,14 +730,35 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
             const artist = t.artists?.[0]?.name || 'Artista desconocido';
             const trackFolderId = getTrackFolderId(t.id);
             const trackFolder = folders.find((f) => f.id === trackFolderId);
+            const isSelected = selectedTrackIds.has(t.id);
 
             return isMobile ? (
               /* Mobile Track Row */
               <div
                 key={t.id}
-                className="flex items-center gap-3 px-2 py-2 rounded-md active:bg-white/10 transition-colors"
-                onClick={() => playOne(t)}
+                className={`flex items-center gap-3 px-2 py-2 rounded-md active:bg-white/10 transition-colors ${
+                  isSelected ? 'bg-white/10' : ''
+                }`}
+                onClick={() => (isSelectMode ? toggleSelectTrack(t.id) : playOne(t))}
               >
+                {(isSelectMode || selectedTrackIds.size > 0) && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelectTrack(t.id);
+                    }}
+                    className={`w-6 h-6 rounded border flex items-center justify-center shrink-0 cursor-pointer transition-colors ${
+                      isSelected ? 'bg-[#1ed760] border-[#1ed760] text-black' : 'border-white/30 bg-black/40'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                      </svg>
+                    )}
+                  </button>
+                )}
                 {cover(t, 'w-12 h-12')}
                 <div className="flex-1 min-w-0">
                   <p className={`text-[15px] font-medium truncate ${active ? 'text-[#1ed760]' : 'text-white'}`}>
@@ -635,17 +791,41 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
               <div
                 key={t.id}
                 onDoubleClick={() => playOne(t)}
-                className="group grid grid-cols-[16px_1fr_1fr_120px_72px] gap-4 items-center px-4 py-2 rounded-md hover:bg-white/10 transition-colors"
+                onClick={() => {
+                  if (isSelectMode) toggleSelectTrack(t.id);
+                }}
+                className={`group grid grid-cols-[20px_1fr_1fr_120px_72px] gap-4 items-center px-4 py-2 rounded-md hover:bg-white/10 transition-colors ${
+                  isSelected ? 'bg-white/10' : ''
+                }`}
               >
-                <button
-                  onClick={() => playOne(t)}
-                  className={`text-sm tabular-nums cursor-pointer ${active ? 'text-[#1ed760]' : 'text-[#a7a7a7]'}`}
-                >
-                  <span className="group-hover:hidden">{i + 1}</span>
-                  <svg className="hidden group-hover:block text-white" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                    <path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z" />
-                  </svg>
-                </button>
+                {isSelectMode || selectedTrackIds.size > 0 ? (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleSelectTrack(t.id);
+                    }}
+                    className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${
+                      isSelected ? 'bg-[#1ed760] border-[#1ed760] text-black' : 'border-white/40 hover:border-white'
+                    }`}
+                  >
+                    {isSelected && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                      </svg>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => playOne(t)}
+                    className={`text-sm tabular-nums cursor-pointer ${active ? 'text-[#1ed760]' : 'text-[#a7a7a7]'}`}
+                  >
+                    <span className="group-hover:hidden">{i + 1}</span>
+                    <svg className="hidden group-hover:block text-white" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                      <path d="M3 1.713a.7.7 0 0 1 1.05-.607l10.89 6.288a.7.7 0 0 1 0 1.212L4.05 14.894A.7.7 0 0 1 3 14.288z" />
+                    </svg>
+                  </button>
+                )}
 
                 <div className="flex items-center gap-3 min-w-0">
                   {cover(t, 'w-10 h-10')}
@@ -660,7 +840,10 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
                 {/* Folder indicator & Quick move button */}
                 <div className="flex items-center">
                   <button
-                    onClick={() => setMovingTrack(t)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMovingTrack(t);
+                    }}
                     title="Mover a otra carpeta"
                     className="text-xs px-2 py-0.5 rounded-full bg-white/5 group-hover:bg-white/15 text-white/80 group-hover:text-white flex items-center gap-1.5 transition-all truncate cursor-pointer hover:border-white/30 border border-transparent"
                   >
@@ -671,7 +854,10 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
 
                 <div className="flex items-center justify-end gap-3">
                   <button
-                    onClick={() => setMovingTrack(t)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMovingTrack(t);
+                    }}
                     className="opacity-0 group-hover:opacity-100 text-[#a7a7a7] hover:text-white transition-opacity cursor-pointer"
                     title="Mover a carpeta…"
                   >
@@ -853,6 +1039,124 @@ export const LocalFilesView: React.FC<LocalFilesViewProps> = ({ onBack, isMobile
             </div>
           </div>
         </div>
+      )}
+
+      {/* Floating Batch Selection Action Bar */}
+      {(isSelectMode || selectedTrackIds.size > 0) && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40 bg-[#282828] border border-white/10 shadow-[0_16px_36px_rgba(0,0,0,0.8)] rounded-full px-4 py-2.5 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200 max-w-[94vw] flex-wrap justify-center text-sm font-semibold">
+          <button
+            onClick={handleSelectAll}
+            className="text-xs px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+          >
+            {selectedTrackIds.size === displayedTracks.length && displayedTracks.length > 0
+              ? 'Deseleccionar todas'
+              : 'Seleccionar todas'}
+          </button>
+          <span className="text-xs text-[#1ed760] font-bold">
+            {selectedTrackIds.size} seleccionadas
+          </span>
+          <button
+            onClick={() => setIsBatchMoveOpen(true)}
+            disabled={selectedTrackIds.size === 0}
+            className="h-8 px-4 rounded-full bg-[#1ed760] text-black font-bold text-xs hover:scale-105 active:scale-95 transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+          >
+            <FolderIcon className="w-3.5 h-3.5 text-black" />
+            Mover a carpeta…
+          </button>
+          <button
+            onClick={handleBatchSaveToDevice}
+            disabled={selectedTrackIds.size === 0}
+            className="h-8 px-3 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold transition-all disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
+            title="Guardar archivos en el dispositivo"
+          >
+            <DownloadIcon className="w-3.5 h-3.5 text-white" />
+            Guardar en dispositivo
+          </button>
+          <button
+            onClick={() => {
+              setSelectedTrackIds(new Set());
+              setIsSelectMode(false);
+            }}
+            className="text-xs text-[#a7a7a7] hover:text-white px-2 py-1 cursor-pointer"
+          >
+            Cerrar
+          </button>
+        </div>
+      )}
+
+      {/* Batch Move Modal / Sheet */}
+      {isBatchMoveOpen && (
+        isMobile ? (
+          <MobileSheet open={isBatchMoveOpen} onClose={() => setIsBatchMoveOpen(false)}>
+            <SheetHeader title={`Mover ${selectedTrackIds.size} canciones`} subtitle="Elige la carpeta de destino" />
+            <SheetList>
+              {folders.map((f) => (
+                <SheetItem
+                  key={f.id}
+                  icon={<FolderIcon className="w-5 h-5 text-[#1ed760]" />}
+                  label={f.name}
+                  sublabel={f.isDefault ? 'Carpeta del sistema' : 'Subcarpeta personalizada'}
+                  onClick={() => handleBatchMoveToFolder(f.id)}
+                />
+              ))}
+              <SheetItem
+                icon={
+                  <div className="w-5 h-5 rounded-full bg-white/10 flex items-center justify-center text-white text-xs font-bold">
+                    +
+                  </div>
+                }
+                label="Crear nueva subcarpeta…"
+                onClick={() => {
+                  setIsBatchMoveOpen(false);
+                  setIsCreatingFolder(true);
+                }}
+              />
+            </SheetList>
+          </MobileSheet>
+        ) : (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-[#282828] rounded-xl p-6 w-full max-w-md border border-white/10 shadow-2xl animate-in zoom-in-95 duration-150">
+              <h3 className="text-lg font-bold text-white font-['SpotifyMixUITitle']">
+                Mover {selectedTrackIds.size} canciones a carpeta
+              </h3>
+              <p className="text-xs text-[#a7a7a7] mt-1 mb-4">
+                Elige la carpeta de destino para las canciones seleccionadas.
+              </p>
+              <div className="space-y-1 max-h-60 overflow-y-auto no-scrollbar mb-4">
+                {folders.map((f) => (
+                  <button
+                    key={f.id}
+                    onClick={() => handleBatchMoveToFolder(f.id)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 text-left transition-colors cursor-pointer"
+                  >
+                    <FolderIcon className="w-4 h-4 text-[#1ed760] shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{f.name}</p>
+                      <p className="text-[11px] text-[#a7a7a7]">{f.isDefault ? 'Carpeta predeterminada' : 'Personalizada'}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center justify-between border-t border-white/10 pt-4">
+                <button
+                  onClick={() => {
+                    setIsBatchMoveOpen(false);
+                    setIsCreatingFolder(true);
+                  }}
+                  className="text-xs font-bold text-[#1ed760] hover:underline cursor-pointer"
+                >
+                  + Nueva subcarpeta
+                </button>
+                <button
+                  onClick={() => setIsBatchMoveOpen(false)}
+                  className="px-4 py-2 rounded-full text-xs font-bold border border-white/20 hover:border-white text-white transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          </div>
+        )
       )}
 
       {/* Toast Notification */}

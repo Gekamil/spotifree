@@ -179,11 +179,10 @@ function saveTrackFolderMap(map: Record<string, string>): void {
 /**
  * Determine which folder a track currently belongs to:
  * 1. Explicit folder assignment from user
- * 2. Default: Device audio -> "Música del dispositivo"
- * 3. Default: Online downloaded tracks -> "Descargas de Spotifree"
+ * 2. Default: All downloaded tracks and device audio -> "Música del dispositivo" (FOLDER_DEVICE_ID)
  */
 export function getTrackFolderId(trackId: string): string {
-  if (!trackId) return FOLDER_DOWNLOADS_ID;
+  if (!trackId) return FOLDER_DEVICE_ID;
   const map = readTrackFolderMap();
   const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
   
@@ -196,22 +195,29 @@ export function getTrackFolderId(trackId: string): string {
     }
   }
 
-  // Fallback defaults
-  if (trackId.startsWith('local-dev-') || trackId.startsWith('local-')) {
-    return FOLDER_DEVICE_ID;
-  }
-  return FOLDER_DOWNLOADS_ID;
+  // Fallback default: directly into device music folder
+  return FOLDER_DEVICE_ID;
 }
 
 /**
  * Move a track to a specific folder
  */
 export function moveTrackToFolder(trackId: string, folderId: string): void {
-  if (!trackId || !folderId) return;
-  const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+  moveTracksToFolder([trackId], folderId);
+}
+
+/**
+ * Move multiple tracks to a specific folder simultaneously (batch move)
+ */
+export function moveTracksToFolder(trackIds: string[], folderId: string): void {
+  if (!trackIds || trackIds.length === 0 || !folderId) return;
   const map = readTrackFolderMap();
-  map[clean] = folderId;
-  map[trackId] = folderId;
+  for (const trackId of trackIds) {
+    if (!trackId) continue;
+    const clean = trackId.replace(/^spotify:track:/i, '').split('?')[0].trim();
+    map[clean] = folderId;
+    map[trackId] = folderId;
+  }
   saveTrackFolderMap(map);
   notifyFoldersChanged();
 }
