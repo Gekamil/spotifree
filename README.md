@@ -13,7 +13,7 @@ Modo DJ, karaoke, escucha sin conexión y sesiones compartidas.
 [![Abrir la web](https://img.shields.io/badge/Abrir_la_web-1ED760?style=for-the-badge&logo=spotify&logoColor=black)](https://spotifreeweb.vercel.app)
 [![Descargar APK](https://img.shields.io/badge/Descargar_APK-181818?style=for-the-badge&logo=android&logoColor=3DDC84)](https://github.com/Gekamil/spotifree/releases/download/android-latest/Spotifree.apk)
 
-[![Versión](https://img.shields.io/badge/versión-1.4-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
+[![Versión](https://img.shields.io/badge/versión-1.5-1ED760?style=flat-square&labelColor=181818)](./src/data/changelog.ts)
 [![Build APK](https://img.shields.io/github/actions/workflow/status/Gekamil/spotifree/android-apk.yml?branch=main&style=flat-square&label=build%20apk&labelColor=181818)](https://github.com/Gekamil/spotifree/actions/workflows/android-apk.yml)
 [![Último commit](https://img.shields.io/github/last-commit/Gekamil/spotifree?style=flat-square&label=último%20commit&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/commits/main)
 [![Stars](https://img.shields.io/github/stars/Gekamil/spotifree?style=flat-square&labelColor=181818&color=2a2a2a)](https://github.com/Gekamil/spotifree/stargazers)
@@ -243,11 +243,11 @@ spotifree/
 
 <br />
 
-## Novedades de la 1.4
+## Novedades de la 1.5
 
-- **SoundCloud y playlists importadas fluidas:** metadatos de respaldo en streaming, soporte ampliado de HLS para mezclas largas o pistas cortas, y recuperación automática sin bloqueos.
-- **Adelantar y tocar controles sin cortes:** buscador fluido al arrastrar en móvil, soporte Range sólido en servidor y eliminación de parones totales al hacer seek en pistas HTML5.
-- **Sin solapamientos entre motores ni en Karaoke:** bloqueo estricto de reproductores secundarios entre YouTube y HTML5 en dislike, crossfade y «Sin voces».
+- **Detección automática Spotifree en todos los puntos:** tanto al importar playlists como en canciones guardadas o compartidas, si un tema ya está en Spotifree se reproduce directamente de nuestro catálogo sin pasar por SoundCloud, respetando remixes, slowed e inéditas exclusivas.
+- **Arranque rápido en SoundCloud y APK:** streaming inicial ligero de 384 KB, obtención paralela de cliente SoundCloud y reutilización del deck precargado al cambiar de canción.
+- **Sesión SoundCloud activa bajo demanda y sostenible:** preparación anticipada del siguiente tema y mantenimiento ligero limitado temporalmente mientras escuchas pistas exclusivas de SoundCloud, sin gasto extra en reproducción normal.
 - **Versiones conservadas:** cada APK queda archivado en [Releases](https://github.com/Gekamil/spotifree/releases).
 
 [Historial completo de versiones](./src/data/changelog.ts)

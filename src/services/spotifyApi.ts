@@ -286,6 +286,7 @@ export interface SearchSpotifyOptions {
   signal?: AbortSignal;
   offset?: number;
   limit?: number;
+  fastOnly?: boolean;
 }
 
 const CLIENT_SEARCH_CACHE = new Map<string, { data: any; timestamp: number }>();
@@ -328,7 +329,8 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   // Normalized query removing parentheses, brackets, and extra punctuation
   // so queries like "body(remix) eladio carrion" cleanly match "body remix eladio carrion"
   const normalizedQ = cleanQ.replace(/[()[\]{}_-]/g, ' ').replace(/\s+/g, ' ').trim();
-  const cacheKey = `${(normalizedQ || cleanQ).toLowerCase()}:${offset}:${limit}`;
+  const isFastOnly = Boolean(options?.fastOnly);
+  const cacheKey = `${(normalizedQ || cleanQ).toLowerCase()}:${offset}:${limit}${isFastOnly ? ':fast' : ''}`;
 
   // 0. Instant memory cache hit (0ms)
   const cachedEntry = CLIENT_SEARCH_CACHE.get(cacheKey);
@@ -514,9 +516,9 @@ export async function searchSpotify(query: string, options?: SearchSpotifyOption
   let fullSettled = false;
 
   // 2. Query Backend Search API (/api/spotify/search) — progressive fast pass + full pass in parallel
-  const fullSignal = createSearchSignal(7500, options?.signal);
+  const fullSignal = createSearchSignal(isFastOnly ? 3200 : 7500, options?.signal);
   const fullPromise = fetch(
-    `/api/spotify/search?q=${encodeURIComponent(cleanQ)}&offset=${offset}&limit=${limit}`,
+    `/api/spotify/search?q=${encodeURIComponent(cleanQ)}&offset=${offset}&limit=${limit}${isFastOnly ? '&fast=1' : ''}`,
     { signal: fullSignal.signal }
   )
     .then(async (res) => (res.ok ? await res.json() : null))

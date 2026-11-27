@@ -5,8 +5,11 @@
 import {
   extractViaMonochrome,
   extractViaSoundCloud,
+  getSoundCloudClientId,
+  invalidateSoundCloudTrackCache,
   mimeToAudioExt,
   scoreInstrumentalCandidate,
+  sniffAudioSignature,
   findInstrumentalOnMonochrome,
   findInstrumentalOnSoundCloud,
 } from './_lib/musicFallback.js';
@@ -900,14 +903,84 @@ async function extractBestAudioInfo(videoId, preferCompact = false, forceFresh =
   return null;
 }
 
-function parseByteRangeHeader(rangeHeader, totalLength) {
+function extractVariantTagTokens(text = '') {
+  const norm = normForMatch(text);
+  const found = new Set();
+  const re = /\b(remix|rmx|slowed|sped up|speed up|nightcore|8d|chopped|screwed|mashup|bootleg|hardstyle|live|en vivo|acoustic|acustico|acustica|instrumental|karaoke)\b/g;
+  let m;
+  while ((m = re.exec(norm))) {
+    let tok = m[1];
+    if (tok === 'rmx') tok = 'remix';
+    if (tok === 'speed up') tok = 'sped up';
+    if (tok === 'en vivo') tok = 'live';
+    if (tok === 'acustico' || tok === 'acustica') tok = 'acoustic';
+    found.add(tok);
+  }
+  return found;
+}
+
+function normalizeTrackMetaForStrictMatch(q = '', rawTitle = '', rawArtist = '') {
+  let title = String(rawTitle || '').trim();
+  let artist = String(rawArtist || '').trim();
+  if (artist.toLowerCase() === 'soundcloud') artist = '';
+  const splitMatch = title.match(/^([^-–—]{2,60}?)\s*[-–—]\s*(.{2,})$/);
+  if (splitMatch) {
+    const leftNorm = normForMatch(splitMatch[1]);
+    const artistNorm = normForMatch(artist);
+    if (!artistNorm || !normForMatch(title).includes(artistNorm) || artistNorm.includes(leftNorm) || leftNorm.includes(artistNorm)) {
+      artist = splitMatch[1].trim();
+      title = splitMatch[2].trim();
+    }
+  }
+  const cleanEffQ = cleanQuery(`${title} ${artist}`.trim() || q);
+  return { effQ: cleanEffQ, effTitle: title, effArtist: artist };
+}
+
+async function findStrictNativeYouTubeMatch(q = '', rawTitle = '', rawArtist = '', excludeSet = new Set(), expectedDurationSec = 0) {
+  const { effQ, effTitle, effArtist } = normalizeTrackMetaForStrictMatch(q, rawTitle, rawArtist);
+  if (!effQ && !effTitle) return null;
+
+  const verified = getVerifiedVideoId(effQ, effTitle, effArtist) || getVerifiedVideoId(q, rawTitle, rawArtist);
+  if (verified && !excludeSet.has(verified)) {
+    return { videoId: verified, title: effTitle || rawTitle || effQ, artist: effArtist || rawArtist || '', kind: 'audio', verified: true };
+  }
+
+  const cands = await collectCandidates(effQ, effTitle, effArtist, excludeSet, expectedDurationSec);
+  const reqVariants = extractVariantTagTokens(`${effTitle} ${rawTitle}`);
+  for (const cand of cands) {
+    if (!cand || !cand.match || cand.score < 55) continue;
+    const candVariants = extractVariantTagTokens(cand.title || '');
+    if (reqVariants.size === 0 && candVariants.size > 0) continue;
+    if (reqVariants.size > 0) {
+      let allMatched = true;
+      for (const rv of reqVariants) {
+        if (!candVariants.has(rv)) {
+          allMatched = false;
+          break;
+        }
+      }
+      if (!allMatched) continue;
+    }
+    return {
+      videoId: cand.videoId,
+      title: cand.title,
+      artist: cand.artist,
+      kind: cand.kind,
+      score: cand.score,
+    };
+  }
+  return null;
+}
+
+function parseByteRangeHeader(rangeHeader, totalLength, { initialChunkCap = 3_145_728, openTailChunkCap = 3_145_728 } = {}) {
   if (!rangeHeader || typeof rangeHeader !== 'string') return null;
   const m = rangeHeader.match(/bytes=(\d+)-(\d*)/i);
   if (!m) return null;
   const start = parseInt(m[1], 10);
   if (isNaN(start) || start < 0) return null;
   const MAX_VERCEL_CHUNK = 3_145_728; // 3 MB safe under Vercel 4.5 MB payload cap
-  let end = m[2] ? parseInt(m[2], 10) : start + MAX_VERCEL_CHUNK - 1;
+  const openCap = start === 0 ? Math.min(MAX_VERCEL_CHUNK, initialChunkCap) : Math.min(MAX_VERCEL_CHUNK, openTailChunkCap);
+  let end = m[2] ? parseInt(m[2], 10) : start + openCap - 1;
   if (end - start + 1 > MAX_VERCEL_CHUNK) {
     end = start + MAX_VERCEL_CHUNK - 1;
   }
@@ -1227,8 +1300,65 @@ export default async function handler(req, res) {
     url.pathname.includes('/download') ? 'download' :
     url.pathname.includes('/recommendations') ? 'recommendations' :
     url.pathname.includes('/candidates') ? 'candidates' :
+    url.pathname.includes('/prepare-sc') ? 'prepare-sc' :
+    url.pathname.includes('/warm') ? 'warm' :
     'resolve'
   );
+
+  // 0. WARM KEEPALIVE ACTION (only called during active SoundCloud sessions to avoid cold starts)
+  if (action === 'warm') {
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(204).end();
+  }
+
+  // 0b. PREPARE-SC ACTION: checks Spotifree native match strictly first, otherwise pre-warms SoundCloud cache in RAM
+  if (action === 'prepare-sc') {
+    const rawQ = (req.query?.q || req.query?.query || '').trim();
+    const rawTitle = (req.query?.title || '').trim();
+    const rawArtist = (req.query?.artist || '').trim();
+    const explicitId = (req.query?.videoId || req.query?.id || '').trim();
+    const rawDuration = req.query?.duration || req.query?.duration_ms || req.query?.durationSec;
+    let expectedDurationSec = rawDuration
+      ? Number(rawDuration) > 1000
+        ? Math.round(Number(rawDuration) / 1000)
+        : Math.round(Number(rawDuration))
+      : 0;
+    if (expectedDurationSec <= 35) expectedDurationSec = 0;
+    const q = cleanQuery(rawQ || `${rawTitle} ${rawArtist}`.trim());
+    const isStrict = req.query?.strict !== '0';
+
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      if (isStrict && (q || rawTitle) && !/\b(leak|leaked|unreleased|in[eé]dit[ao]|demo|snippet|slowed|sped\s*up|speed\s*up|nightcore|mashup|bootleg)\b/i.test(`${rawTitle} ${q}`)) {
+        const nativeMatch = await findStrictNativeYouTubeMatch(q, rawTitle, rawArtist, new Set(), expectedDurationSec).catch(() => null);
+        if (nativeMatch?.videoId) {
+          return res.status(200).json({ success: true, engine: 'youtube', ...nativeMatch });
+        }
+      }
+
+      if (/^sc[:\-]\d+$/.test(explicitId)) {
+        const scEntry = await extractViaSoundCloud({
+          q,
+          title: rawTitle,
+          artist: rawArtist,
+          expectedDurationSec,
+          explicitId,
+        }).catch(() => null);
+        return res.status(200).json({
+          success: true,
+          engine: 'html5',
+          ready: Boolean(scEntry),
+          source: scEntry?.source || null,
+          clen: scEntry?.clen || 0,
+        });
+      }
+
+      await getSoundCloudClientId().catch(() => {});
+      return res.status(200).json({ success: true, engine: 'html5', ready: true });
+    } catch (err) {
+      return res.status(200).json({ success: false, error: err?.message });
+    }
+  }
 
   // 1. STREAM OR DOWNLOAD ACTION
   if (action === 'stream' || action === 'download') {
@@ -1253,6 +1383,8 @@ export default async function handler(req, res) {
     try {
       const clientRangeHeader = req.headers.range;
       const preferCompact = action === 'download' && !clientRangeHeader;
+      const initialChunkCap = action === 'stream' ? 393_216 : 3_145_728;
+      const openTailChunkCap = action === 'stream' ? 1_048_576 : 3_145_728;
 
       const refreshOrFallbackAudio = async (curVideoId) => {
         if (/^sc[:\-]\d+$/.test(explicitId)) {
@@ -1298,10 +1430,11 @@ export default async function handler(req, res) {
       for (let attempt = 0; attempt < 2 && audioInfo; attempt++) {
         if (audioInfo.streamBuffer && Buffer.isBuffer(audioInfo.streamBuffer)) {
           const fullLen = audioInfo.streamBuffer.length;
-          const parsedRange = parseByteRangeHeader(clientRangeHeader, fullLen);
+          const parsedRange = parseByteRangeHeader(clientRangeHeader, fullLen, { initialChunkCap, openTailChunkCap });
           const sliceStart = parsedRange ? parsedRange.start : 0;
-          const defaultSliceEnd = Math.min(fullLen - 1, 3_145_727);
-          const sliceEnd = parsedRange ? parsedRange.end : (fullLen > 3_800_000 ? defaultSliceEnd : fullLen - 1);
+          const streamInitCap = action === 'stream' ? initialChunkCap : 3_145_728;
+          const defaultSliceEnd = Math.min(fullLen - 1, streamInitCap - 1);
+          const sliceEnd = parsedRange ? parsedRange.end : (fullLen > streamInitCap ? defaultSliceEnd : fullLen - 1);
           const sliceBuf = audioInfo.streamBuffer.subarray(sliceStart, sliceEnd + 1);
           return sendBufferedAudioResponse({
             req,
@@ -1318,8 +1451,8 @@ export default async function handler(req, res) {
         }
         if (!audioInfo.url) break;
 
-        const parsedRange = parseByteRangeHeader(clientRangeHeader, audioInfo.clen);
-        const defaultCap = 3_800_000;
+        const parsedRange = parseByteRangeHeader(clientRangeHeader, audioInfo.clen, { initialChunkCap, openTailChunkCap });
+        const defaultCap = action === 'stream' ? initialChunkCap : 3_800_000;
         const upstreamRange = parsedRange
           ? `bytes=${parsedRange.start}-${parsedRange.end}`
           : audioInfo.clen > 0
@@ -1353,6 +1486,31 @@ export default async function handler(req, res) {
                 }
                 const endByte = Math.min(totalLen - 1, parsedRange.end);
                 buf = buf.subarray(parsedRange.start, endByte + 1);
+              }
+
+              if (audioInfo.unverifiedDirect && startOffset === 0) {
+                const sniff = sniffAudioSignature(buf.subarray(0, 32));
+                if (!sniff.valid || totalLen < 40_000) {
+                  invalidateSoundCloudTrackCache(audioInfo.id);
+                  if (attempt === 0) {
+                    const { audioInfo: crossFallback } = await resolveBestAudioStreamSource({
+                      q,
+                      rawTitle,
+                      rawArtist,
+                      expectedDurationSec,
+                      explicitId: '',
+                      preferCompact,
+                    });
+                    audioInfo = crossFallback || (await refreshOrFallbackAudio(videoId));
+                    if (audioInfo?.id) videoId = audioInfo.id;
+                    continue;
+                  }
+                  break;
+                }
+                audioInfo.mime = sniff.mime || audioInfo.mime;
+                audioInfo.ext = sniff.ext || audioInfo.ext;
+                audioInfo.clen = totalLen;
+                audioInfo.unverifiedDirect = false;
               }
 
               return sendBufferedAudioResponse({
@@ -1532,9 +1690,10 @@ export default async function handler(req, res) {
 
   const excludeParam = (req.query?.exclude || '').trim();
   const excludeSet = new Set(excludeParam ? excludeParam.split(',').map((s) => s.trim()) : []);
+  const isStrict = req.query?.strict === '1' || req.query?.strict === 'true';
 
   const q = cleanQuery(rawQ || `${rawTitle} ${rawArtist}`.trim());
-  const cacheKey = `${q.toLowerCase()}__${expectedDurationSec}`;
+  const cacheKey = `${q.toLowerCase()}__${expectedDurationSec}${isStrict ? '__strict' : ''}`;
 
   const verifiedId =
     getVerifiedVideoId(q) ||
@@ -1547,7 +1706,28 @@ export default async function handler(req, res) {
 
   if (excludeSet.size === 0 && RESOLVE_CACHE.has(cacheKey)) {
     const cached = RESOLVE_CACHE.get(cacheKey);
-    return res.status(200).json({ success: true, ...cached, cached: true });
+    if (cached && cached.found === false) {
+      if (Date.now() - (cached.cachedAt || 0) < 600_000) {
+        return res.status(200).json({ success: false, found: false, videoId: null, cached: true });
+      }
+      RESOLVE_CACHE.delete(cacheKey);
+    } else if (cached) {
+      return res.status(200).json({ success: true, ...cached, cached: true });
+    }
+  }
+
+  if (isStrict) {
+    try {
+      const strictHit = await findStrictNativeYouTubeMatch(q, rawTitle, rawArtist, excludeSet, expectedDurationSec);
+      if (strictHit?.videoId) {
+        if (excludeSet.size === 0) RESOLVE_CACHE.set(cacheKey, strictHit);
+        return res.status(200).json({ success: true, found: true, ...strictHit });
+      }
+    } catch {}
+    if (excludeSet.size === 0) {
+      RESOLVE_CACHE.set(cacheKey, { found: false, videoId: null, cachedAt: Date.now() });
+    }
+    return res.status(200).json({ success: false, found: false, videoId: null });
   }
 
   try {

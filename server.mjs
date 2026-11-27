@@ -268,6 +268,17 @@ const server = http.createServer(async (req, res) => {
 
   // 3. Audio Resolve Endpoint (/api/audio/resolve)
   if (pathname === '/api/audio/resolve') {
+    if (reqUrl.searchParams.get('strict') === '1' || reqUrl.searchParams.get('strict') === 'true') {
+      const { default: audioHandler } = await import('./api/audio.js');
+      req.query = Object.fromEntries(reqUrl.searchParams.entries());
+      req.query.action = 'resolve';
+      res.status = (code) => { res.statusCode = code; return res; };
+      res.json = (data) => {
+        res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify(data));
+      };
+      return audioHandler(req, res);
+    }
     const title = reqUrl.searchParams.get('title') || '';
     const artist = reqUrl.searchParams.get('artist') || '';
     const q = reqUrl.searchParams.get('q') || `${title} ${artist}`.trim();
@@ -332,11 +343,11 @@ const server = http.createServer(async (req, res) => {
     }
   }
 
-  // 3c. Audio Candidates Endpoint (/api/audio/candidates)
-  if (pathname === '/api/audio/candidates') {
+  // 3c. Audio Candidates, Warm & Prepare-SC Endpoints (/api/audio/candidates, /api/audio/warm, /api/audio/prepare-sc)
+  if (pathname === '/api/audio/candidates' || pathname === '/api/audio/warm' || pathname === '/api/audio/prepare-sc') {
     const { default: audioHandler } = await import('./api/audio.js');
     req.query = Object.fromEntries(reqUrl.searchParams.entries());
-    req.query.action = 'candidates';
+    req.query.action = pathname.endsWith('/warm') ? 'warm' : pathname.endsWith('/prepare-sc') ? 'prepare-sc' : 'candidates';
     res.status = (code) => { res.statusCode = code; return res; };
     res.json = (data) => {
       res.setHeader('Content-Type', 'application/json');

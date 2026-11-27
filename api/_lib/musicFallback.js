@@ -6,7 +6,13 @@
 const MONO_CACHE = new Map();
 const SC_TRACK_CACHE = new Map();
 const SC_HLS_BUFFER_CACHE = new Map();
-const SC_HLS_MAX_ENTRIES = 4;
+const SC_HLS_MAX_ENTRIES = 8;
+
+export function invalidateSoundCloudTrackCache(idKey) {
+  if (!idKey) return;
+  SC_TRACK_CACHE.delete(idKey);
+  SC_HLS_BUFFER_CACHE.delete(idKey);
+}
 
 const UNWANTED_TAGS = ['karaoke', 'instrumental', 'tribute', 'backing track', '8d audio', 'slowed', 'sped up', 'nightcore', 'acapella', 'piano cover', 'guitar cover'];
 const VARIANT_TAGS = ['remix', 'live', 'en vivo', 'acoustic', 'acustico'];
@@ -417,14 +423,34 @@ export async function getSoundCloudClientId(force = false) {
         4500
       ).then((r) => (r.ok ? r.text() : ''));
       const scripts = [...html.matchAll(/src="(https:\/\/a-v2\.sndcdn\.com\/assets\/[^"]+\.js)"/g)].map((m) => m[1]);
-      for (const sUrl of scripts.slice(-6).reverse()) {
-        const js = await fetchWithTimeout(sUrl, {}, 4000).then((r) => (r.ok ? r.text() : '')).catch(() => '');
-        const m = js.match(/client_id\s*:\s*"([a-zA-Z0-9]{20,40})"/);
-        if (m?.[1]) {
-          SC_CLIENT_CACHE = { value: m[1], fetchedAt: Date.now() };
-          return m[1];
+      const targets = scripts.slice(-5).reverse();
+      if (targets.length === 0) return '';
+
+      const raceCtrl = new AbortController();
+      try {
+        const cid = await Promise.any(
+          targets.map(async (sUrl) => {
+            const timeoutId = setTimeout(() => {
+              try { raceCtrl.abort(); } catch {}
+            }, 3500);
+            try {
+              const res = await fetch(sUrl, { signal: raceCtrl.signal });
+              if (!res.ok) throw new Error('status');
+              const js = await res.text();
+              const m = js.match(/client_id\s*:\s*"([a-zA-Z0-9]{20,40})"/);
+              if (m?.[1]) return m[1];
+              throw new Error('no client_id');
+            } finally {
+              clearTimeout(timeoutId);
+            }
+          })
+        );
+        if (cid) {
+          try { raceCtrl.abort(); } catch {}
+          SC_CLIENT_CACHE = { value: cid, fetchedAt: Date.now() };
+          return cid;
         }
-      }
+      } catch {}
     } catch {}
     return '';
   })();
@@ -545,7 +571,7 @@ async function fetchSoundCloudHlsBuffer(m3u8Url, cacheKey, { forceRefresh = fals
   };
 }
 
-async function resolveSoundCloudItemToStream(item, { allowShort = false, forceRefresh = false } = {}) {
+async function resolveSoundCloudItemToStream(item, { allowShort = false, forceRefresh = false, skipPreVerify = false } = {}) {
   if (!item?.id || item.policy === 'SNIP') return null;
   const durSec = Math.round((Number(item.duration) || 0) / 1000);
   const minDurSec = allowShort ? 10 : 45;
@@ -563,6 +589,22 @@ async function resolveSoundCloudItemToStream(item, { allowShort = false, forceRe
     if (!streamMeta?.url) continue;
 
     if (picked.mode === 'progressive') {
+      if (skipPreVerify) {
+        const rawMime = String(picked.transcoding?.format?.mime_type || 'audio/mpeg').split(';')[0].trim() || 'audio/mpeg';
+        const entry = {
+          id: idKey,
+          url: streamMeta.url,
+          mime: rawMime,
+          ext: mimeToAudioExt(rawMime),
+          clen: 0,
+          unverifiedDirect: true,
+          source: 'soundcloud-mp3',
+          directCors: false,
+          fetchedAt: Date.now(),
+        };
+        SC_TRACK_CACHE.set(idKey, entry);
+        return entry;
+      }
       const verified = await verifyDirectAudioStream(streamMeta.url).catch(() => null);
       if (!verified) continue;
       const entry = {
@@ -619,7 +661,7 @@ export async function extractViaSoundCloud({ q = '', title = '', artist = '', ex
     try {
       const item = await fetchSoundCloudJson((cid) => `https://api-v2.soundcloud.com/tracks/${trackNum}?client_id=${cid}`);
       if (item?.id) {
-        const directEntry = await resolveSoundCloudItemToStream(item, { allowShort: true, forceRefresh });
+        const directEntry = await resolveSoundCloudItemToStream(item, { allowShort: true, forceRefresh, skipPreVerify: true });
         if (directEntry) return directEntry;
       }
     } catch {}

@@ -320,6 +320,11 @@ class AudioEngine {
   private secondaryKaraokeLoadedSource: string | null = null;
   public isSecondaryKaraokePreparing = false;
   private lastSecondarySyncTime = 0;
+  private notInSpotifreeCache = new Map<string, number>();
+  private preparedScIds = new Map<string, number>();
+  private scWarmUntil = 0;
+  private scWarmTimer: ReturnType<typeof setInterval> | null = null;
+  private lastScNetworkTouch = 0;
 
   // Dedicated Web Audio Real-Time Karaoke Center-Channel DSP with Bass Crossover
   private karaokeBassFilter: BiquadFilterNode | null = null;
@@ -454,6 +459,119 @@ class AudioEngine {
     } catch {
       return null;
     }
+  }
+
+  private isExclusiveSoundCloudTrack(track?: Track | null, query = ''): boolean {
+    if (track?.scVariant === 'leak' || track?.scVariant === 'slowed') return true;
+    const raw = `${track?.name || ''} ${track?.album?.name || ''} ${query || ''}`;
+    return /\b(leak|leaked|unreleased|in[eé]dit[ao]s?|demo|snippet|outtake|filtrad[ao]s?|slowed|sped\s*up|speed\s*up|nightcore|8d|chopped|screwed|mashup|bootleg|hardstyle|flip|rework)\b/i.test(raw);
+  }
+
+  private parseLookupMeta(query: string, trackTitle?: string, trackArtist?: string): { title: string; artist: string; query: string } {
+    let title = String(trackTitle || '').trim();
+    let artist = String(trackArtist || '').trim();
+    if (/^(soundcloud|artista|desconocido)$/i.test(artist)) artist = '';
+    const splitMatch = title.match(/^([^-–—]{2,55}?)\s*[-–—]\s*(.{2,})$/);
+    if (splitMatch && !/\b(remix|rmx|live|en\s*vivo|acoustic|ac[uú]stic[ao]|slowed|sped\s*up|nightcore|instrumental)\b/i.test(splitMatch[2])) {
+      const leftNorm = splitMatch[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const artNorm = artist.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const titleNorm = title.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (!artNorm || !titleNorm.includes(artNorm) || artNorm.includes(leftNorm) || leftNorm.includes(artNorm)) {
+        artist = splitMatch[1].trim();
+        title = splitMatch[2].trim();
+      }
+    }
+    const cleanQ = (`${title} ${artist}`.trim() || query || '').trim();
+    return { title, artist, query: cleanQ };
+  }
+
+  private stopSoundCloudWarmTimer() {
+    if (this.scWarmTimer !== null) {
+      clearInterval(this.scWarmTimer);
+      this.scWarmTimer = null;
+    }
+  }
+
+  private activateSoundCloudWarmSession(ttlMs = 8 * 60 * 1000) {
+    const now = Date.now();
+    this.scWarmUntil = Math.max(this.scWarmUntil, now + ttlMs);
+    this.lastScNetworkTouch = now;
+    if (this.scWarmTimer !== null || typeof window === 'undefined') return;
+    this.scWarmTimer = setInterval(() => {
+      const tNow = Date.now();
+      const { isPlaying } = usePlayerStore.getState();
+      if (!isPlaying || this.isExplicitlyPaused || tNow >= this.scWarmUntil) {
+        this.stopSoundCloudWarmTimer();
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+      if (tNow - this.lastScNetworkTouch < 85_000) return;
+      this.lastScNetworkTouch = tNow;
+      fetch(`${API_BASE}/api/audio/warm`, { method: 'GET' }).catch(() => {});
+    }, 30_000);
+  }
+
+  private async prepareSoundCloudTrack(track?: Track | null): Promise<string | null> {
+    if (!track?.id) return null;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return null;
+    const cleanTId = AudioEngine.cleanId(track.id);
+    const scMatch = cleanTId.match(/^sc-(\d+)(?:-dup-\d+)?$/);
+    const explicitId = scMatch ? `sc:${scMatch[1]}` : (track.scAltId || '');
+    if (!explicitId) return null;
+
+    const now = Date.now();
+    const lastPrep = this.preparedScIds.get(explicitId) || 0;
+    if (now - lastPrep < 240_000) return null;
+    this.preparedScIds.set(explicitId, now);
+    if (this.preparedScIds.size > 120) {
+      const firstKey = this.preparedScIds.keys().next().value;
+      if (firstKey) this.preparedScIds.delete(firstKey);
+    }
+
+    const parsed = this.parseLookupMeta(`${track.name} ${track.artists?.[0]?.name || ''}`.trim(), track.name, track.artists?.[0]?.name);
+    const params = new URLSearchParams();
+    params.set('videoId', explicitId);
+    if (parsed.query) params.set('q', parsed.query);
+    if (parsed.title) params.set('title', parsed.title);
+    if (parsed.artist) params.set('artist', parsed.artist);
+    if (track.duration_ms && track.duration_ms > 35000) {
+      params.set('duration', String(Math.round(track.duration_ms / 1000)));
+    }
+    if (this.isExclusiveSoundCloudTrack(track, parsed.query) || this.notInSpotifreeCache.has(cleanTId)) {
+      params.set('strict', '0');
+    } else {
+      params.set('strict', '1');
+    }
+
+    this.lastScNetworkTouch = now;
+    try {
+      const res = await fetch(`${API_BASE}/api/audio/prepare-sc?${params.toString()}`, {
+        signal: AbortSignal.timeout ? AbortSignal.timeout(4500) : undefined,
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (data?.engine === 'youtube' && data?.videoId) {
+        const verdict = judgeSource(
+          {
+            ...track,
+            name: parsed.title || track.name,
+            artists: parsed.artist ? [{ id: '', name: parsed.artist }] : track.artists,
+          },
+          String(data.title || ''),
+          String(data.artist || ''),
+          Number(data.duration || 0)
+        );
+        if (verdict.ok) {
+          persistVideoId(`${track.name} ${track.artists?.[0]?.name || ''}`.trim(), data.videoId);
+          persistVideoId(parsed.query, data.videoId);
+          setAutoSource(track.id, data.videoId);
+          return data.videoId as string;
+        }
+      }
+      this.notInSpotifreeCache.set(cleanTId, Date.now());
+      this.activateSoundCloudWarmSession();
+    } catch {}
+    return null;
   }
 
   private buildStreamUrl(track: Track | null | undefined, query: string, explicitVideoId?: string | null): string {
@@ -698,7 +816,11 @@ class AudioEngine {
         const query1 = `${next1.name} ${artist1}`.trim();
         const offlineUrl1 = await this.resolveOfflinePlaybackUrl(next1);
 
-        let videoId1: string | null | undefined = VIDEO_ID_CACHE.get(query1);
+        let videoId1: string | null | undefined =
+          getSourceOverride(next1.id) ||
+          getAutoSource(next1.id) ||
+          VIDEO_ID_CACHE.get(query1);
+        if (videoId1 && videoId1.startsWith('sc:')) videoId1 = undefined;
         if (!offlineUrl1 && !videoId1 && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
           const dur1 = next1.duration_ms ? next1.duration_ms / 1000 : undefined;
           videoId1 = (await this.resolveVideoId(query1, next1.id, next1.name, artist1, dur1)) || undefined;
@@ -713,6 +835,19 @@ class AudioEngine {
           !AudioEngine.isSameTrack(expectedNext, next1)
         ) {
           return;
+        }
+
+        const next1IsSc = /^sc-(\d+)(?:-dup-\d+)?$/.test(AudioEngine.cleanId(next1.id));
+        if (!offlineUrl1 && !videoId1 && next1IsSc && (typeof navigator === 'undefined' || navigator.onLine !== false)) {
+          // Warm next SoundCloud track in serverless cache after current track settles
+          setTimeout(() => {
+            if (this.currentTrackId !== ownerTrackId || this.playSequenceId !== ownerSeq) return;
+            void this.prepareSoundCloudTrack(next1).then((promotedVid) => {
+              if (promotedVid && this.preloadedNext && AudioEngine.isSameTrack(this.preloadedNext.track, next1)) {
+                this.preloadedNext.videoId = promotedVid;
+              }
+            });
+          }, 1400);
         }
 
         this.preloadedNext = {
@@ -746,27 +881,41 @@ class AudioEngine {
           } catch {}
         }
 
-        // Pre-cue inactive HTML5 audio deck for offline blobs or when approaching crossfade window
-        const secIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
-        const secAudio = this.audios[secIdx];
-        const nearEndForHttp = Date.now() - this.lastTrackStartTime >= 15000;
-        if (
-          secAudio &&
-          !this.isCrossfading &&
-          !this.secondaryKaraokeLoadedSource &&
-          !this.karaokeState.active &&
-          (offlineUrl1 || (this.activeEngine === 'html5' && nearEndForHttp))
-        ) {
+        // Pre-cue inactive HTML5 audio deck for offline blobs or upcoming SoundCloud/HTML5 tracks
+        const cueSecHtml5 = () => {
+          const secIdx: 0 | 1 = this.activeAudioIndex === 0 ? 1 : 0;
+          const secAudio = this.audios[secIdx];
+          if (
+            !secAudio ||
+            this.isCrossfading ||
+            this.isAuditioning ||
+            Boolean(this.secondaryKaraokeLoadedSource) ||
+            this.karaokeState.active ||
+            this.currentTrackId !== ownerTrackId ||
+            this.playSequenceId !== ownerSeq
+          ) {
+            return;
+          }
+          if (this.preloadedNext?.videoId && !offlineUrl1) return;
           const preUrl = offlineUrl1 || this.buildStreamUrl(next1, query1);
           if (secAudio.getAttribute('data-precued-src') !== preUrl) {
             try {
               secAudio.pause();
+              secAudio.muted = true;
               secAudio.volume = 0;
               secAudio.preload = 'auto';
               this.setHtml5DeckSource(secIdx, preUrl, 0);
               secAudio.setAttribute('data-precued-src', preUrl);
             } catch {}
           }
+        };
+
+        if (offlineUrl1) {
+          cueSecHtml5();
+        } else if ((next1IsSc || this.activeEngine === 'html5') && !videoId1) {
+          const waitMs = Math.max(0, 3200 - (Date.now() - this.lastTrackStartTime));
+          if (waitMs === 0) cueSecHtml5();
+          else setTimeout(cueSecHtml5, waitMs);
         }
       }
 
@@ -873,7 +1022,7 @@ class AudioEngine {
 
     const nextIsScDirect = /^sc-(\d+)(?:-dup-\d+)?$/.test(AudioEngine.cleanId(nextTrack.id));
     const outIsHtml5 = this.activeEngine === 'html5';
-    const inIsHtml5 = Boolean(nextOfflineUrl) || nextIsScDirect || outIsHtml5;
+    const inIsHtml5 = Boolean(nextOfflineUrl) || (nextIsScDirect ? !nextVideoId : outIsHtml5);
 
     if (!inIsHtml5 && !nextVideoId) {
       const artistName = nextTrack.artists?.[0]?.name || '';
@@ -1244,7 +1393,7 @@ class AudioEngine {
     const oldAudioIndex = this.activeAudioIndex;
     const isMobile = this.isMobileOrPWA();
     const nextIsScDirect = /^sc-(\d+)(?:-dup-\d+)?$/.test(AudioEngine.cleanId(nextTrack.id));
-    const nextIsHtml5 = Boolean(nextOfflineUrl) || nextIsScDirect || this.activeEngine === 'html5';
+    const nextIsHtml5 = Boolean(nextOfflineUrl) || (nextIsScDirect ? !nextVideoId : this.activeEngine === 'html5');
 
     // Is the secondary deck really outputting the incoming song? On mobile it may have been blocked.
     let secondaryIsPlayingIncoming = false;
@@ -4109,29 +4258,53 @@ class AudioEngine {
     trackDurationSec?: number
   ): Promise<string | null> {
     if (!query) return null;
-    if (trackId && /^sc-\d+(?:-dup-\d+)?$/.test(AudioEngine.cleanId(trackId))) return null;
     const cleanQuery = query.trim();
+    const cleanTrackRef = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
+    const isScTrack = Boolean(cleanTrackRef && /^sc-(\d+)(?:-dup-\d+)?$/.test(cleanTrackRef));
 
     // A source the user chose by hand for this song always wins; then the one the app switched to
     // by itself (after finding the first one didn't match the song)
     const override = getSourceOverride(trackId) || getAutoSource(trackId);
-    if (override && !this.failedVideoIds.has(override)) return override;
+    if (override && !this.failedVideoIds.has(override)) {
+      if (isScTrack && override.startsWith('sc:')) return null;
+      if (!override.startsWith('sc:')) return override;
+    }
+
+    if (isScTrack) {
+      const missAt = this.notInSpotifreeCache.get(cleanTrackRef);
+      if (missAt && Date.now() - missAt < 30 * 60_000) return null;
+      const storeCur = usePlayerStore.getState().currentTrack;
+      const scTrackCtx = storeCur && AudioEngine.cleanId(storeCur.id) === cleanTrackRef ? storeCur : null;
+      if (
+        this.isExclusiveSoundCloudTrack(
+          scTrackCtx || ({ id: trackId || '', name: trackTitle || cleanQuery, artists: trackArtist ? [{ id: '', name: trackArtist }] : [] } as Track),
+          cleanQuery
+        )
+      ) {
+        return null;
+      }
+    }
 
     // Direct yt-<11-char> IDs from YouTube / AI DJ recommendations already identify the exact video
-    const cleanTrackRef = (trackId || '').replace(/^spotify:track:/i, '').split('?')[0].trim();
     const directYtMatch = cleanTrackRef.match(/^(?:yt-|rec-ytm?-)([a-zA-Z0-9_-]{11})$/i);
     if (directYtMatch && !this.failedVideoIds.has(directYtMatch[1])) {
       persistVideoId(cleanQuery, directYtMatch[1]);
       return directYtMatch[1];
     }
 
-    const verified = getVerifiedVideoId(cleanQuery, trackTitle, trackArtist);
+    const parsedMeta = isScTrack
+      ? this.parseLookupMeta(cleanQuery, trackTitle, trackArtist)
+      : { title: trackTitle || '', artist: trackArtist || '', query: cleanQuery };
+
+    const verified =
+      getVerifiedVideoId(cleanQuery, trackTitle, trackArtist) ||
+      getVerifiedVideoId(parsedMeta.query, parsedMeta.title, parsedMeta.artist);
     if (verified) {
       persistVideoId(cleanQuery, verified);
       return verified;
     }
 
-    const cached = VIDEO_ID_CACHE.get(cleanQuery);
+    const cached = VIDEO_ID_CACHE.get(cleanQuery) || VIDEO_ID_CACHE.get(parsedMeta.query);
     if (cached) return cached;
 
     let resolvedId: string | null = null;
@@ -4140,28 +4313,35 @@ class AudioEngine {
     const backendPromise = (async () => {
       try {
         const params = new URLSearchParams();
-        params.set('q', cleanQuery);
+        params.set('q', parsedMeta.query || cleanQuery);
         if (trackId) params.set('trackId', trackId);
-        if (trackTitle) params.set('title', trackTitle);
-        if (trackArtist) params.set('artist', trackArtist);
+        if (parsedMeta.title) params.set('title', parsedMeta.title);
+        if (parsedMeta.artist) params.set('artist', parsedMeta.artist);
         if (trackDurationSec && trackDurationSec > 0) params.set('duration', Math.round(trackDurationSec).toString());
+        if (isScTrack) params.set('strict', '1');
         const url = `${API_BASE}/api/audio/resolve?${params.toString()}`;
-        const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(6500) : undefined });
+        const timeoutMs = isScTrack ? 1350 : 6500;
+        const res = await fetch(url, { signal: AbortSignal.timeout ? AbortSignal.timeout(timeoutMs) : undefined });
         if (res.ok) {
           const data = await res.json();
+          if (isScTrack && data && data.found === false) {
+            return null;
+          }
           if (data && data.videoId) {
             // Pre-validate candidate before cueing/playing to eliminate delay and bad audio blips
-            if (trackTitle && data.title) {
+            const checkTitle = parsedMeta.title || trackTitle;
+            const checkArtist = parsedMeta.artist || trackArtist;
+            if (checkTitle && data.title) {
               const testTrack: Track = {
                 id: trackId || 'temp',
-                name: trackTitle,
-                artists: trackArtist ? [{ id: '', name: trackArtist }] : [],
+                name: checkTitle,
+                artists: checkArtist ? [{ id: '', name: checkArtist }] : [],
                 duration_ms: (trackDurationSec || 0) * 1000,
                 album: { id: '', name: '', images: [] },
               };
               const verdict = judgeSource(testTrack, String(data.title || ''), String(data.artist || ''), data.duration || trackDurationSec || 0);
               if (!verdict.ok) {
-                console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${trackTitle}": ${verdict.reason}`);
+                console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${checkTitle}": ${verdict.reason}`);
                 return null;
               }
             }
@@ -4172,43 +4352,44 @@ class AudioEngine {
       return null;
     })();
 
-    // 2. Retry once if the first request fails (same query: a modified query such as
-    // "<song> Topic" used to win the race with uploads of other artists)
-    const fallbackPromise = (async () => {
-      if (await backendPromise) return null;
-      try {
-        const params = new URLSearchParams();
-        params.set('q', cleanQuery);
-        if (trackId) params.set('trackId', trackId);
-        if (trackTitle) params.set('title', trackTitle);
-        if (trackArtist) params.set('artist', trackArtist);
-        if (trackDurationSec && trackDurationSec > 0) params.set('duration', Math.round(trackDurationSec).toString());
-        const altUrl = `${API_BASE}/api/audio/resolve?${params.toString()}`;
-        const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.videoId) {
-            // Pre-validate candidate before cueing/playing to eliminate delay and bad audio blips
-            if (trackTitle && data.title) {
-              const testTrack: Track = {
-                id: trackId || 'temp',
-                name: trackTitle,
-                artists: trackArtist ? [{ id: '', name: trackArtist }] : [],
-                duration_ms: (trackDurationSec || 0) * 1000,
-                album: { id: '', name: '', images: [] },
-              };
-              const verdict = judgeSource(testTrack, String(data.title || ''), String(data.artist || ''), data.duration || trackDurationSec || 0);
-              if (!verdict.ok) {
-                console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${trackTitle}": ${verdict.reason}`);
-                return null;
+    // 2. Retry once if the first request fails (skipped for SoundCloud catalog probe to keep latency low)
+    const fallbackPromise = isScTrack
+      ? Promise.resolve(null)
+      : (async () => {
+          if (await backendPromise) return null;
+          try {
+            const params = new URLSearchParams();
+            params.set('q', cleanQuery);
+            if (trackId) params.set('trackId', trackId);
+            if (trackTitle) params.set('title', trackTitle);
+            if (trackArtist) params.set('artist', trackArtist);
+            if (trackDurationSec && trackDurationSec > 0) params.set('duration', Math.round(trackDurationSec).toString());
+            const altUrl = `${API_BASE}/api/audio/resolve?${params.toString()}`;
+            const res = await fetch(altUrl, { signal: AbortSignal.timeout ? AbortSignal.timeout(5500) : undefined });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.videoId) {
+                // Pre-validate candidate before cueing/playing to eliminate delay and bad audio blips
+                if (trackTitle && data.title) {
+                  const testTrack: Track = {
+                    id: trackId || 'temp',
+                    name: trackTitle,
+                    artists: trackArtist ? [{ id: '', name: trackArtist }] : [],
+                    duration_ms: (trackDurationSec || 0) * 1000,
+                    album: { id: '', name: '', images: [] },
+                  };
+                  const verdict = judgeSource(testTrack, String(data.title || ''), String(data.artist || ''), data.duration || trackDurationSec || 0);
+                  if (!verdict.ok) {
+                    console.warn(`[AudioEngine] Pre-validation filtered out mismatched source for "${trackTitle}": ${verdict.reason}`);
+                    return null;
+                  }
+                }
+                return data.videoId as string;
               }
             }
-            return data.videoId as string;
-          }
-        }
-      } catch {}
-      return null;
-    })();
+          } catch {}
+          return null;
+        })();
 
     try {
       resolvedId = (await backendPromise) || (await fallbackPromise);
@@ -4216,7 +4397,21 @@ class AudioEngine {
 
     if (resolvedId) {
       persistVideoId(cleanQuery, resolvedId);
+      if (parsedMeta.query && parsedMeta.query !== cleanQuery) {
+        persistVideoId(parsedMeta.query, resolvedId);
+      }
+      if (isScTrack && trackId) {
+        setAutoSource(trackId, resolvedId);
+      }
       return resolvedId;
+    }
+
+    if (isScTrack && cleanTrackRef) {
+      this.notInSpotifreeCache.set(cleanTrackRef, Date.now());
+      if (this.notInSpotifreeCache.size > 400) {
+        const firstMiss = this.notInSpotifreeCache.keys().next().value;
+        if (firstMiss) this.notInSpotifreeCache.delete(firstMiss);
+      }
     }
 
     return null;
@@ -4234,8 +4429,13 @@ class AudioEngine {
     // 1. Resolve and pre-cue first track immediately
     const first = slice[0];
     if (first) {
-      const q = `${first.name} ${first.artists?.[0]?.name || ''}`.trim();
-      this.resolveVideoId(q, first.id).then((vid) => {
+      const a0 = first.artists?.[0]?.name || '';
+      const q = `${first.name} ${a0}`.trim();
+      const d0 = first.duration_ms ? first.duration_ms / 1000 : undefined;
+      this.resolveVideoId(q, first.id, first.name, a0, d0).then((vid) => {
+        if (!vid && /^sc-(\d+)(?:-dup-\d+)?$/.test(AudioEngine.cleanId(first.id)) && !usePlayerStore.getState().isPlaying) {
+          void this.prepareSoundCloudTrack(first);
+        }
         // Only on a cold start. With a paused song in the player, cueing another video here made
         // "play" resume a different song than the one shown.
         if (vid && !usePlayerStore.getState().isPlaying && !usePlayerStore.getState().currentTrack && !this.currentTrackId) {
@@ -4257,9 +4457,11 @@ class AudioEngine {
       slice.slice(1).forEach((t, i) => {
         setTimeout(() => {
           if (usePlayerStore.getState().isPlaying) return;
-          const q = `${t.name} ${t.artists?.[0]?.name || ''}`.trim();
+          const art = t.artists?.[0]?.name || '';
+          const q = `${t.name} ${art}`.trim();
+          const dur = t.duration_ms ? t.duration_ms / 1000 : undefined;
           if (!VIDEO_ID_CACHE.has(q)) {
-            this.resolveVideoId(q, t.id).catch(() => {});
+            this.resolveVideoId(q, t.id, t.name, art, dur).catch(() => {});
           }
         }, 300 + i * 350);
       });
@@ -4307,6 +4509,24 @@ class AudioEngine {
       if (this.deckStrips[1]) cancelScheduledAutomations(this.deckStrips[1], now);
     }
 
+    // Check if an HTML5 deck was pre-cued for this exact incoming track before clearing buffers
+    let preservedPrecuedIdx: 0 | 1 | -1 = -1;
+    if (startSeconds === 0 && cleanNew !== cleanCur) {
+      const preTrk = usePlayerStore.getState().currentTrack;
+      const expectedPreUrl = this.buildStreamUrl(
+        preTrk?.id === trackId ? preTrk : ({ id: trackId, name: query, artists: [], duration_ms: 0, album: { id: '', name: '', images: [] } } as Track),
+        query
+      );
+      for (const idx of [0, 1] as const) {
+        const el = this.audios[idx];
+        const preSrc = el?.getAttribute('data-precued-src') || '';
+        if (el && preSrc && preSrc === expectedPreUrl && el.readyState >= 1) {
+          preservedPrecuedIdx = idx;
+          break;
+        }
+      }
+    }
+
     // Silence EVERY deck (both YouTube players and both HTML5 decks), not only the "active" one:
     // after a crossfade or karaoke swap the old song can live on either deck, and pausing only one
     // left two songs playing at once (dislike, skip, SoundCloud playlists).
@@ -4322,10 +4542,12 @@ class AudioEngine {
         }
       }
     }
-    // Mobile always plays on deck 0; reset only after both decks are silent
+    // Mobile always plays on deck 0 unless deck 1 already holds a verified pre-buffered stream for this track
     if (this.isMobileOrPWA()) {
       this.activeYtIndex = 0;
-      this.activeAudioIndex = 0;
+      this.activeAudioIndex = preservedPrecuedIdx !== -1 ? preservedPrecuedIdx : 0;
+    } else if (preservedPrecuedIdx !== -1) {
+      this.activeAudioIndex = preservedPrecuedIdx;
     }
 
     // Stop secondary player
@@ -4438,10 +4660,21 @@ class AudioEngine {
         }
       } catch {}
 
+      // 0a-bis. Native-first catalog resolution: if a SoundCloud / imported track exists in Spotifree
+      // natively (without being an exclusive leak/slowed/bootleg or forced manually to sc:), play our fast catalog source!
+      let scNativeOverrideId: string | null = null;
+      if (/^sc-(\d+)(?:-dup-\d+)?$/.test(cleanNew)) {
+        const manualSrc = getSourceOverride(trackId);
+        if (!manualSrc || !manualSrc.startsWith('sc:')) {
+          scNativeOverrideId = await this.resolveVideoId(query, trackId, tTitle, tArtist, tDur);
+          if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) return;
+        }
+      }
+
       // 0b. SoundCloud tracks (`sc-<id>`): stream MP3 progressive / HLS fMP4 directly via backend
       // `-dup-N` is added by the importer to repeated songs in a playlist; it is still the same SoundCloud track
       const scDirectMatch = cleanNew.match(/^sc-(\d+)(?:-dup-\d+)?$/);
-      if (scDirectMatch) {
+      if (scDirectMatch && !scNativeOverrideId) {
         const scExplicit = `sc:${scDirectMatch[1]}`;
         for (const yp of this.ytPlayers) this.silenceYtDeck(yp, true);
         for (let i = 0; i < this.audios.length; i++) {
@@ -4460,7 +4693,13 @@ class AudioEngine {
           query,
           scExplicit
         );
-        this.setHtml5DeckSource(this.activeAudioIndex, scStreamUrl, startSeconds);
+        const hasPrecuedMatch = startSeconds === 0 && this.audio.getAttribute('data-precued-src') === scStreamUrl && this.audio.readyState >= 1;
+        if (hasPrecuedMatch) {
+          this.audio.removeAttribute('data-precued-src');
+        } else {
+          this.setHtml5DeckSource(this.activeAudioIndex, scStreamUrl, startSeconds);
+        }
+        this.activateSoundCloudWarmSession();
         try {
           await this.audio.play();
         } catch (playErr: any) {
@@ -4483,13 +4722,16 @@ class AudioEngine {
         setTimeout(() => {
           if (this.playSequenceId === currentSeq) this.isTransitioning = false;
         }, 2500);
+        setTimeout(() => {
+          if (this.playSequenceId === currentSeq) void this.preloadUpcomingTracks();
+        }, 500);
         // No karaoke pre-warm for SoundCloud: it downloaded a second full track in parallel and made every
         // song of a SoundCloud playlist slow to start. Karaoke still loads on demand when the user turns it on.
         return;
       }
 
       // 1. Resolve videoId instantly via unified cache & resolver with accurate track metadata
-      let videoId = await this.resolveVideoId(query, trackId, tTitle, tArtist, tDur);
+      let videoId = scNativeOverrideId || (await this.resolveVideoId(query, trackId, tTitle, tArtist, tDur));
       if (this.playSequenceId !== currentSeq || this.currentTrackId !== trackId) {
         return;
       }
@@ -4800,6 +5042,7 @@ class AudioEngine {
 
   public pause() {
     this.isExplicitlyPaused = true;
+    this.stopSoundCloudWarmTimer();
     this.stopCarrier();
     this.stopAuxiliaryTransitionFX();
     if (this.audioContext) {
@@ -4836,6 +5079,8 @@ class AudioEngine {
 
   public resetForRestoredTrack() {
     this.isExplicitlyPaused = true;
+    this.scWarmUntil = 0;
+    this.stopSoundCloudWarmTimer();
     this.isTransitioning = false;
     this.isCrossfading = false;
     this.preloadedNext = null;
@@ -4966,6 +5211,9 @@ class AudioEngine {
       }
     }
     usePlayerStore.setState({ isPlaying: true });
+    if (Date.now() < this.scWarmUntil || /^sc[:-]/i.test(String(this.currentVideoId || ''))) {
+      this.activateSoundCloudWarmSession();
+    }
     if (typeof navigator !== 'undefined' && 'mediaSession' in navigator) {
       try { navigator.mediaSession.playbackState = 'playing'; } catch {}
     }

@@ -41,45 +41,133 @@ const artistsOf = (s: string) =>
     .filter(Boolean);
 const hasWord = (hay: string, needle: string) => (` ${hay} `).includes(` ${needle} `);
 
-/** The catalog song that is really this song (same title, same performer), or null */
+const VARIANT_TAG_RE = /\b(leak|leaked|unreleased|in[eé]dit[ao]s?|demo|snippet|outtake|filtrad[ao]s?|filtraci[oó]n|slowed|sped\s*up|speed\s*up|nightcore|8d|chopped|screwed|mashup|bootleg|hardstyle|flip|rework|remix|rmx|club\s*mix|extended\s*mix|live|en\s*vivo|en\s*directo|acoustic|ac[uú]stic[ao]|instrumental|karaoke)\b/i;
+
+export type ImportVariantKind = 'leak' | 'slowed' | 'remix' | 'live' | 'instrumental' | 'standard';
+
+export function detectImportVariant(title: string = ''): ImportVariantKind {
+  const s = String(title || '');
+  if (/\b(leak|leaked|unreleased|in[eé]dit[ao]s?|demo|snippet|outtake|filtrad[ao]s?|filtraci[oó]n)\b/i.test(s)) {
+    return 'leak';
+  }
+  if (/\b(slowed|sped\s*up|speed\s*up|nightcore|8d|chopped|screwed|mashup|bootleg|hardstyle|flip|rework)\b/i.test(s)) {
+    return 'slowed';
+  }
+  if (/\b(remix|rmx|club\s*mix|extended\s*mix)\b/i.test(s)) {
+    return 'remix';
+  }
+  if (/\b(live|en\s*vivo|en\s*directo|session|sesi[oó]n|concierto|acoustic|ac[uú]stic[ao])\b/i.test(s)) {
+    return 'live';
+  }
+  if (/\b(instrumental|karaoke|sin\s*voces|off\s*vocal|backing\s*track)\b/i.test(s)) {
+    return 'instrumental';
+  }
+  return 'standard';
+}
+
+function variantTokenSet(title: string = ''): Set<string> {
+  const s = String(title || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  const out = new Set<string>();
+  const re = /\b(slowed|sped\s*up|speed\s*up|nightcore|8d|mashup|bootleg|hardstyle|remix|rmx|live|en\s*vivo|acoustic|acustico|acustica|instrumental|karaoke)\b/g;
+  let m;
+  while ((m = re.exec(s))) {
+    let tok = m[1].replace(/\s+/g, ' ');
+    if (tok === 'rmx') tok = 'remix';
+    if (tok === 'speed up') tok = 'sped up';
+    if (tok === 'en vivo') tok = 'live';
+    if (tok === 'acustico' || tok === 'acustica') tok = 'acoustic';
+    out.add(tok);
+  }
+  return out;
+}
+
+function parseExternalSongMeta(song: ExternalSong): { title: string; artist: string } {
+  let rawTitle = String(song.title || '').trim();
+  let rawArtist = String(song.artist || '').trim();
+  if (/^(soundcloud|artista|desconocido)$/i.test(rawArtist)) rawArtist = '';
+  const split = rawTitle.match(/^([^-–—]{2,55}?)\s*[-–—]\s*(.{2,})$/);
+  if (split && !VARIANT_TAG_RE.test(split[2])) {
+    const leftNorm = norm(split[1]);
+    const artistNorm = norm(rawArtist);
+    if (!artistNorm || artistNorm.includes(leftNorm) || leftNorm.includes(artistNorm) || !norm(rawTitle).includes(artistNorm)) {
+      rawArtist = split[1].trim();
+      rawTitle = split[2].trim();
+    }
+  }
+  return { title: rawTitle || song.title, artist: rawArtist };
+}
+
+/** The catalog song that is really this song (same title, same performer, matching variant), or null */
 async function findInCatalog(song: ExternalSong): Promise<Track | null> {
-  const wanted = artistsOf(song.artist);
-  const q = `${song.title} ${wanted[0] || ''}`.trim();
+  const variant = detectImportVariant(song.title);
+  if (variant === 'leak') return null;
+
+  const parsed = parseExternalSongMeta(song);
+  const wanted = artistsOf(parsed.artist);
+  const q = `${parsed.title} ${wanted[0] || ''}`.trim();
+  const reqVariants = variantTokenSet(parsed.title);
+
   const search = async (): Promise<Track[]> => {
     let res: any = null;
     try {
-      res = await Promise.race([searchSpotify(q), new Promise((r) => setTimeout(() => r(null), 8000))]);
+      res = await Promise.race([
+        searchSpotify(q, { fastOnly: true, limit: 12 }),
+        new Promise((r) => setTimeout(() => r(null), 3500)),
+      ]);
     } catch {
       res = null;
     }
-    return (Array.isArray(res?.tracks) ? res.tracks : res?.tracks?.items || []).filter((t: any) => t?.id && t?.name);
+    return (Array.isArray(res?.tracks) ? res.tracks : res?.tracks?.items || []).filter(
+      (t: any) => t?.id && t?.name && !String(t.id).startsWith('sc-')
+    );
   };
   let list = await search();
-  // Many searches in a row sometimes come back empty: try once more
   if (!list.length) {
-    await new Promise((r) => setTimeout(r, 700));
+    await new Promise((r) => setTimeout(r, 350));
     list = await search();
   }
-  const title = norm(song.title);
+  const title = norm(parsed.title);
   let best: Track | null = null;
   let bestScore = 0;
-  for (const t of list.slice(0, 10)) {
+  for (const t of list.slice(0, 12)) {
     const tName = norm(t.name);
     const tArtists = (t.artists || []).map((a) => norm(a.name));
+    const candVariants = variantTokenSet(`${t.name} ${t.album?.name || ''}`);
+
+    // Prevent replacing an authentic Remix / Slowed / Live version with an unrelated studio track (and vice versa)
+    if (reqVariants.size === 0 && candVariants.size > 0) continue;
+    if (reqVariants.size > 0) {
+      let allMatch = true;
+      for (const rv of reqVariants) {
+        if (!candVariants.has(rv)) {
+          allMatch = false;
+          break;
+        }
+      }
+      if (!allMatch) continue;
+    }
+
+    if (song.durationSec && song.durationSec > 35 && t.duration_ms && Math.abs(t.duration_ms / 1000 - song.durationSec) > 15) {
+      continue;
+    }
+
     let score = 0;
     if (tName === title) score += 5;
     else if (tName.startsWith(title) || title.startsWith(tName)) score += 3;
     else if (tName.includes(title) || title.includes(tName)) score += 2;
     else continue;
     if (wanted.some((w) => tArtists.some((a) => a === w || hasWord(a, w) || hasWord(w, a)))) score += 4;
-    else if (wanted.length) score -= 2;
+    else if (wanted.length) score -= 3;
     if (song.durationSec && t.duration_ms && Math.abs(t.duration_ms / 1000 - song.durationSec) <= 8) score += 1;
     if (score > bestScore) {
       best = t;
       bestScore = score;
     }
   }
-  return bestScore >= 5 ? best : null;
+  return bestScore >= (wanted.length > 0 ? 6 : 5) ? best : null;
 }
 
 /** A song that is not in the catalog: still playable (the player finds it by name and artist) */
@@ -110,13 +198,27 @@ async function matchAll(songs: ExternalSong[], cover: string, onProgress?: Impor
       const i = next++;
       const song = songs[i];
       let track: Track | null = null;
-      if (song.trackObj) {
+      const isSoundCloudObj = Boolean(song.trackObj && String(song.trackObj.id || '').startsWith('sc-'));
+      if (song.trackObj && !isSoundCloudObj) {
         track = song.trackObj;
         matched++;
       } else {
         track = await findInCatalog(song);
-        if (track) matched++;
-        else track = looseTrack(song, i, cover);
+        if (track) {
+          if (isSoundCloudObj && song.trackObj?.id) {
+            const scRaw = String(song.trackObj.id).replace(/^sc-/, '');
+            track = {
+              ...track,
+              scAltId: `sc:${scRaw}`,
+              album: track.album?.images?.length ? track.album : song.trackObj.album,
+            };
+          }
+          matched++;
+        } else if (song.trackObj) {
+          track = song.trackObj;
+        } else {
+          track = looseTrack(song, i, cover);
+        }
       }
       out[i] = track;
       done++;

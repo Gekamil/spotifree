@@ -11,14 +11,25 @@ export interface ChangelogRelease {
   highlights: string[];
 }
 
-export const APP_VERSION = '1.4';
+export const APP_VERSION = '1.5';
 
 export const CHANGELOG_RELEASES: ChangelogRelease[] = [
+  {
+    version: '1.5',
+    date: '27 de noviembre, 2026',
+    title: 'Spotifree 1.5: Prioridad al catálogo propio en listas importadas y arranque instantáneo en SoundCloud',
+    isLatest: true,
+    highlights: [
+      'Detección automática global en importación, búsqueda y reproductor: si una canción de SoundCloud o lista externa ya existe en Spotifree (sin alterar remixes, slowed o inéditas exclusivas), se reproduce directamente con nuestro catálogo nativo sin extraer de SoundCloud.',
+      'Inicio ultrarrápido de canciones exclusivas de SoundCloud (especialmente en APK): fragmento inicial compacto de streaming, búsqueda paralela de cliente y omisión de sondeos CDN redundantes.',
+      'Sesión SoundCloud activa bajo demanda y sostenible: precarga y preparación anticipada del siguiente tema con mantenimiento ligero temporal durante la reproducción de SoundCloud, sin afectar batería ni datos en la reproducción normal.',
+    ],
+  },
   {
     version: '1.4',
     date: '26 de noviembre, 2026',
     title: 'Spotifree 1.4: Reproducción fluida en SoundCloud y listas importadas, saltos al avanzar sin cortes y cero solapamientos',
-    isLatest: true,
+    isLatest: false,
     highlights: [
       'Playlists importadas y de SoundCloud sin canciones mudas: envío completo de metadatos de respaldo, soporte ampliado para mezclas HLS largas y pistas cortas, y salto automático limpio si una pista no está disponible.',
       'Avance y arrastre de barra fluidos en todo momento: eliminados los parones totales al adelantar o rebobinar en streams HTML5 y móviles (seek confirmado al soltar y Range consistente en el servidor).',

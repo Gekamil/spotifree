@@ -224,7 +224,7 @@ describe('v083: Artist Discography, Playlists & Bio Sections (Desktop + Mobile)'
     const pkg = JSON.parse(fs.readFileSync(path.resolve('package.json'), 'utf8'));
     const changelog = fs.readFileSync(path.resolve('src/data/changelog.ts'), 'utf8');
 
-    assert.ok(['1.2.0', '1.3.0', '1.4.0'].includes(pkg.version));
+    assert.ok(['1.2.0', '1.3.0', '1.4.0', '1.5.0'].includes(pkg.version));
     assert.ok(/export const APP_VERSION = '1\.[2-9]+';/.test(changelog));
     assert.ok(changelog.includes("version: '1.2'"));
   });
