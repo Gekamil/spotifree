@@ -414,14 +414,14 @@ export const DesktopHomeView: React.FC<DesktopHomeViewProps> = ({ onSelectPlayli
             Escucha sin límites
           </h1>
           <p className="text-sm text-[#b3b3b3] leading-relaxed">
-            Inicia sesión con tu cuenta de Spotify para acceder a tu biblioteca, playlists y recomendaciones personalizadas.
+            Inicia sesión o crea tu cuenta de Spotifree para acceder a tu biblioteca, playlists y recomendaciones personalizadas.
           </p>
           <div className="pt-2">
             <button
               onClick={() => useUIStore.getState().openLoginModal()}
               className="px-8 py-3.5 rounded-full bg-[#1ed760] hover:bg-[#1fdf64] hover:scale-105 active:scale-95 text-black font-bold text-sm tracking-tight transition-all cursor-pointer shadow-xl inline-flex items-center gap-2"
             >
-              <span>Conectar cuenta de Spotify</span>
+              <span>Iniciar sesión o registrarse</span>
             </button>
           </div>
         </div>

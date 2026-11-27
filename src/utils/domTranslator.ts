@@ -61,6 +61,20 @@ function build() {
     { re: /^Hace (\d+) (minutos?|horas?|días?|semanas?|meses|mes)$/i, to: '{0} {1} ago' },
     { re: /^hace (\d+) (minutos?|horas?|días?|semanas?|meses|mes)$/i, to: '{0} {1} ago' },
     { re: /^(\d+) (minutos?|horas?|días?|semanas?) restantes?$/, to: '{0} {1} left' },
+    { re: /^(\d[\d.,]*) listas públicas$/i, to: '{0} public playlists' },
+    { re: /^(\d[\d.,]*) lista pública$/i, to: '{0} public playlist' },
+    { re: /^(\d[\d.,]*) horas escuchadas$/i, to: '{0} hours listened' },
+    { re: /^(\d[\d.,]*) hora escuchada$/i, to: '{0} hour listened' },
+    { re: /^(\d[\d.,]*) min escuchados$/i, to: '{0} min listened' },
+    { re: /^(\d[\d.,]*) min escuchado$/i, to: '{0} min listened' },
+    { re: /^(\d[\d.,]*) participantes$/i, to: '{0} participants' },
+    { re: /^(\d[\d.,]*) participante$/i, to: '{0} participant' },
+    { re: /^y (\d[\d.,]*) canciones más$/i, to: 'and {0} more songs' },
+    { re: /^y (\d[\d.,]*) canción más$/i, to: 'and {0} more song' },
+    { re: /^(\d[\d.,]*) artistas$/i, to: '{0} artists' },
+    { re: /^(\d[\d.,]*) artista$/i, to: '{0} artist' },
+    { re: /^(\d[\d.,]*) álbumes$/i, to: '{0} albums' },
+    { re: /^(\d[\d.,]*) álbum$/i, to: '{0} album' },
   );
 }
 

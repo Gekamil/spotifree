@@ -826,13 +826,13 @@ export const MobileLayout: React.FC = () => {
                     Música para todos
                   </h2>
                   <p className="text-xs text-[#b3b3b3] leading-relaxed max-w-xs">
-                    Inicia sesión con tu cuenta de Spotify para acceder a tu biblioteca, tus playlists y tus recomendaciones personalizadas.
+                    Inicia sesión o crea tu cuenta de Spotifree para acceder a tu biblioteca, tus playlists y tus recomendaciones personalizadas.
                   </p>
                   <button
                     onClick={openLoginModal}
                     className="px-8 py-3.5 rounded-full bg-[#1ed760] text-black font-bold text-xs uppercase tracking-wider active:scale-95 shadow-xl mt-2 cursor-pointer"
                   >
-                    Conectar cuenta
+                    Iniciar sesión o registrarse
                   </button>
                 </div>
               ) : isAuthenticated && isLoading && (shortcuts.length === 0 && shelves.length === 0) ? (

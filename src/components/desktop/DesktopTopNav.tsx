@@ -227,9 +227,9 @@ export const DesktopTopNav: React.FC<DesktopTopNavProps> = ({ onNavigateHome }) 
             <button
               onClick={() => openLoginModal()}
               className="bg-white hover:scale-104 active:scale-98 text-black text-xs font-bold px-4 py-2 rounded-full transition-transform shrink-0 shadow-sm flex items-center justify-center cursor-pointer"
-              title="Conectar con Spotify"
+              title="Iniciar sesión"
             >
-              <span>Conectar cuenta</span>
+              <span>Iniciar sesión</span>
             </button>
           </div>
         )}
